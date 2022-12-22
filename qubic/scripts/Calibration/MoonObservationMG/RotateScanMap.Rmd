@@ -1,0 +1,575 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0rc0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# Config notebook
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
+```{python}
+from importlib import reload
+import numpy as np
+import matplotlib.pyplot as plt
+import healpy as hp
+
+import sys
+from importlib import reload
+from astropy.visualization import astropy_mpl_style, quantity_support
+plt.style.use(astropy_mpl_style)
+quantity_support()
+import astropy.units as u
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun#, HADec, BaseRADecFrame
+
+import qubic
+from qubicpack.qubicfp import qubicfp
+import qubic.fibtools as ft
+import qubic.plotters as p
+import qubic.lin_lib as ll
+import qubic.demodulation_lib as dl
+#import satorchipy as stpy
+from pysimulators import FitsArray
+
+import glob
+import string
+import datetime as dt
+
+from pyoperators import (
+    Cartesian2SphericalOperator, Rotation3dOperator,
+    Spherical2CartesianOperator, rule_manager)
+from pyoperators.utils import deprecated, isscalarlike
+from pysimulators import (
+    CartesianEquatorial2GalacticOperator,
+    CartesianEquatorial2HorizontalOperator,
+    CartesianHorizontal2EquatorialOperator,
+    CartesianGalactic2EquatorialOperator,
+    SamplingHorizontal,
+    SphericalEquatorial2GalacticOperator,
+    SphericalGalactic2EquatorialOperator,
+    SphericalEquatorial2HorizontalOperator,
+    SphericalHorizontal2EquatorialOperator)
+
+```
+
+## First we will understand
+the different conventions of the coordinate system. We ussually use $\texttt{HEALPix}$ projection, but we could plot our coordinates using some projection ($\emph{e.g.} \texttt{mollweide}$) $\texttt{matplotlib}$.
+
+We have to separate $\texttt{sky reference}$ (SR) system to the one used by the $\texttt{projection reference}$ (PR) software.
+
+1. SR celestial equatorial (SR-CE)
+    + (RA, DEC) ([0h-24h], [-90°,90°]) 
+2. SR horizontal (SR-H)
+    + (a, h) ([0°, 360°], [-90°,90°])
+
+And you may want to project such coordinates in $\texttt{HEALPix}$ ($\phi, \theta$) with ([0, $2\pi$], [0, $\pi$]) or using mollweide projection of $\texttt{matplotlib}$ figure ($lon, lat$) with ([-$\pi$, $\pi$], [-$\pi/2$, $\pi/2$]).
+
+* SR-CE to HEALPix
+
+    $\phi = \alpha * np.pi/12$
+    
+    $\theta$ = ...
+
+```{python}
+Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+utcoffset = -3*u.hour  # Eastern Daylight Time
+door_az = 115.
+az_span = 50.
+el_min = 30.
+el_max = 50.
+```
+
+```{python}
+days = ['2022-07-12']
+day = '2022-07-12'
+```
+
+```{python}
+start_obs_hour = '00:00:00'
+date = Time(day+ ' 00:00:00')
+start_obs_date = day +' '+start_obs_hour
+delta_time = np.linspace(12,30, 1000)*u.hour
+time0 = Time(start_obs_date)-utcoffset
+alltimes = time0 + delta_time
+local_time_hours = ((Time(start_obs_date) + delta_time).cxcsec - date.cxcsec)/3600
+### Local coordinates
+frame_Salta = AltAz(obstime=alltimes, location=Salta)
+### Moon
+moon_Salta = get_moon(alltimes)
+moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+### Moon
+sun_Salta = get_sun(alltimes)
+sunaltazs_Salta = sun_Salta.transform_to(frame_Salta)  
+delta_el = 20
+valid = (moonaltazs_Salta.alt.value < (el_max+delta_el)) & \
+        (moonaltazs_Salta.alt.value > (el_min-delta_el)) & \
+        (moonaltazs_Salta.az.value > 80) & \
+        (moonaltazs_Salta.az.value < 145)
+tstart = np.min(local_time_hours[valid])
+tstop = np.max(local_time_hours[valid])
+local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
+local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
+UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
+UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
+```
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('MoonObservation.dict')
+d['nf_sub'] = 1
+d['date_obs'] = str(Time(start_obs_date)-utcoffset+tstart*u.hour)
+d['latitude'] = -24.731377    ### Salta Regional Noroeste
+d['longitude'] = -65.409546   ### Salta Regional Noroeste
+d['sampling'] = 1.
+moon_ra_mean = np.mean(moon_Salta.ra[valid]/u.deg)
+moon_dec_mean = np.mean(moon_Salta.dec[valid]/u.deg)
+d['RA_center'] = moon_ra_mean #deg
+d['DEC_center'] = moon_dec_mean #deg
+d['duration'] = tstop-tstart # Hours
+d['angspeed'] = 0.8 #deg/s
+d['delta_az'] = az_span #deg
+d['nsweeps_per_elevation'] = 1
+d['angspeed_psi'] = 0. #deg/s
+backforthdt = d['delta_az'] / d['angspeed'] * 2
+print('Scan Duration: ',backforthdt)
+d['dead_time'] = 0.
+print('Dead Time = {}'.format(d['dead_time']))
+print('Sampling strategy, sweep?: {}, rand? {}, repeat? {}'.format(d['sweeping_pointing'],
+                                                                  d['random_pointing'],
+                                                                  d['repeat_pointing']))
+
+```
+
+```{python}
+el_min = 30.
+el_max = 50.
+n_elevations = int(d['duration']*3600/(backforthdt+d['dead_time']))+1
+el_step = np.round((el_max - el_min) / n_elevations * 100) / 100
+d['fix_azimuth'] = {'apply':True,'az':116.4,
+                     'el':40,'el_step':el_step, 'fix_hwp':True, 'fix_pitch':True}
+print(d['fix_azimuth'])
+print('call')
+p = qubic.get_pointing(d)
+print(p.elevation)
+
+el_min_final = np.min(p.elevation)
+el_max_final = np.max(p.elevation)
+```
+
+```{python}
+#d['RA_center'], d['DEC_center'] = 60,45#qubic.gal2equ(60, -45)
+s = qubic.QubicScene(d)
+    
+q = qubic.QubicInstrument(d)
+#q = qubic.QubicMultibandInstrument(d)
+atod = qubic.QubicAcquisition(q, p, s, d)
+
+```
+
+```{python}
+d1 = d.copy()
+d1['sweeping_pointing'] = False
+d1['repeat_pointing'] = True
+d1['npointings'] = 9000
+p1 = qubic.get_pointing(d1)
+s1 = qubic.QubicScene(d1)    
+q1 = qubic.QubicInstrument(d1)
+#q = qubic.QubicMultibandInstrument(d)
+atod1 = qubic.QubicAcquisition(q1, p1, s1, d1)
+cov1 = atod1.get_coverage()
+```
+
+```{python}
+cov = atod.get_coverage()
+```
+
+```{python}
+# quiero ver qué coordenadas de salida tiene usa el mapa healix en cada estrategia de apuntamiento
+# Get the indexes of healpy map of the coverage map of sweeping
+covmask = cov > 0
+covindex = np.arange(0,12*256**2)[covmask] 
+angscov = np.radians(np.array(hp.pix2ang(d['nside'], covindex, lonlat = True))) #theta, phi
+# Same for repeat strategy
+covmask1 = cov1 > 0
+covindex1 = np.arange(0,12*256**2)[covmask1] 
+angscov1 = np.radians(np.array(hp.pix2ang(d['nside'], covindex1, lonlat = True))) #theta, phi
+```
+
+```{python}
+print("center COV (sweep) in (lon, lat) = ", np.degrees(np.mean(angscov[0][:])), np.degrees(np.mean(angscov[1][:])))
+print("center az,el coord input in (az, el)=", d['fix_azimuth']['az'], d['fix_azimuth']['el'])
+```
+
+#### The mean values of the coverage map in $(lon,lat)$ coord (HEALPix) are almost the $(az,el)_{\rm center}$ values
+--> __the coordinates of the coverage map in sweeping pointing is in horizontal coordinates__!!
+
+
+### Before rotation we check that coverage map of the random pointing is in another coordinates (equatorial)
+
+```{python}
+plt.figure(figsize= (12,4))
+plt.subplot(121)
+# convert to 1st and 4th quadrant the coordinates
+fourth = angscov1[0][:] > np.pi
+angscov1[0][fourth] = angscov1[0][fourth]-2*np.pi 
+plt.scatter(angscov[0][:]-np.pi, angscov[1][:], label = 'sweep')
+plt.scatter(angscov1[0][:], angscov1[1][:], label = 'repeat')
+plt.xlabel(r'$long$')
+plt.ylabel(r'$lat$')
+plt.legend()
+plt.subplot(122)
+plt.plot(cov, label = 'sweep')
+plt.plot(cov1, label = 'repeat')
+plt.xlabel('index hp')
+plt.ylabel('coverage')
+plt.legend()
+```
+
+```{python}
+plt.figure(figsize = (14,6))
+hp.mollview(cov, sub = 121, cmap = 'Reds', title = 'COV sweep - Hor coords')
+hp.projscatter(np.pi/2-np.mean(angscov[1][:]), np.mean(angscov[0][:]),
+           color = 'w', marker = '+')
+hp.projtext(np.pi/2-np.mean(angscov[1][:])+0.2, np.mean(angscov[0][:])+0.9, 
+            'mean coords from masked coverage map')
+hp.mollview(cov1, sub = 122, cmap = 'Blues', title = 'COV repeat - Eq coords')
+hp.graticule(dmer = 30)
+
+
+```
+
+Lets plot it in mollweide projection using matplotlib
+
+```{python}
+plt.figure(figsize = (12,8))
+plt.subplot(111, projection = 'mollweide')
+plt.plot(angscov[0][:]-np.pi, angscov[1][:], label = 'sweep cov in H', alpha = 0.6, color = 'm')
+plt.scatter(np.mean(angscov[0][:]-np.pi), np.mean(angscov[1][:]),
+           color = 'k', marker = '+', s = 70, label = 'mean coords masked cov ')
+plt.plot(angscov1[0][:], angscov1[1][:],label = 'repeat -- cov in G', color = 'b', alpha = 0.6)
+plt.scatter(np.radians(qubic.equ2gal(d['RA_center'], d['DEC_center'])[0]), 
+            np.radians(qubic.equ2gal(d['RA_center'], d['DEC_center'])[1]), 
+            color = 'brown', marker = '*', s = 70, label = 'dict(RA,DEC) -> gal')
+plt.legend()
+```
+
+Rotate horizontal coordinates to equatorial
+
+```{python}
+print("Center Random pointing in GalacticCoordinates", qubic.equ2gal(d['RA_center'], d['DEC_center']))
+print("Center Sweep pointing in Horizontal coordinates", )
+```
+
+```{python}
+# Check start observation date and time
+print(d['date_obs'])
+```
+
+Rotate sweeping pointing to (RA, DEC) coordinates using $\texttt{date_obs}$ and $\texttt{p.time}$ using $\texttt{qubicsoft.hor2equ}$
+
+```{python}
+lentime = len(p.time)
+racoord, decoord = np.zeros((lentime,)), np.zeros((lentime,))
+for i in range(lentime):
+    racoord[i], decoord[i] = qubic.hor2equ(p.azimuth[i], p.elevation[i], p.time[i], d['date_obs'] )
+```
+
+```{python}
+plt.plot(racoord*24/360, decoord)
+```
+
+```{python}
+plt.figure(figsize = (12,8))
+plt.subplot(111, projection = 'mollweide')
+plt.plot(np.radians(racoord-180), np.radians(decoord), label = r'($\alpha, \delta$) using qubic.get_sampling', alpha = 0.6, color = 'm')
+plt.plot(np.radians(np.float(d['RA_center'])), np.radians(np.float(d['DEC_center'])), color = 'r', marker = '*')
+plt.legend()
+```
+
+Now read the data from housekeeping data
+
+
+# 2022-07-12 scan
+1) Team: F. Rodriguez, M. Platino, E. Batistelli, M. Piat, G. Ramos, M. Régnier, S. Torchinsky
+
+2) Tasks:
+2.1) The moon scanning script was tested today starting at 17:30 local time. The script used is the StartMoonScan that runs at a preset given time and stores data of the complete scan. The scan was completed at 22:01.
+
+2.2) Before scanning the offset optimizaion script (before starting FLL regulations) and the FLL optimization script (after starting FLL regulations) was performed before the scan.
+
+2.3) Azimuth limits of the sweep were set to +15ª / -35°
+
+3) Materials used: QUBIC Studio
+
+4) Suppliers of the materials: APC
+
+5) Problems encountered: The cooldown was delayed by 1 hour to fit the scanning schedule. 
+
+6) Reference to procedures followed: ATRIUM-425478 "AT-8 Acquisition chain setup"
+
+```{python}
+day = '2022-07-12'
+keyword = '*MoonScan*'
+data_dir = '/home/mgamboa/qubic/QUBIC/qubiccalibration/Data/'+day+'/'
+dirs = np.sort(glob.glob(data_dir+keyword))
+
+print (dirs)
+```
+
+```{python}
+ifile = 0
+thedir = dirs[ifile]
+print(thedir)
+qubicFp = qubicfp()
+qubicFp.read_qubicstudio_dataset(thedir)
+```
+
+```{python}
+#Check plot in az el
+plt.figure(figsize = (12,8))
+time_azel = qubicFp.timeaxis(datatype='hk',axistype='pps')
+az = qubicFp.azimuth()
+el = qubicFp.elevation()
+t0 = time_azel[0]
+
+plt.subplot(2,2,1)
+plt.plot((time_azel-t0)/3600, az,',')
+plt.xlabel('Time [h]')
+plt.ylabel('Az')
+plt.plot((time_azel-t0)/3600, el,',')
+plt.xlabel('Time [h]')
+plt.ylabel('El')
+plt.ylim(30,70)
+
+plt.subplot(2,2,3)
+plt.plot(az*np.cos(np.radians(el)), el,',')
+plt.xlabel('Az')
+plt.ylabel('El')
+```
+
+```{python}
+plt.figure(figsize = (12,6))
+plt.subplot(121)
+plt.plot(time_azel-t0, el)
+plt.subplot(122)
+plt.plot(p.time, p.elevation)
+```
+
+## Rotate to equatorial coordinate real data
+
+```{python}
+#check lengths
+print(len(az)//10, len(el)//10, len(time_azel))
+```
+
+```{python}
+lentime_data = len(time_azel)
+racoord_data, decoord_data = np.zeros((lentime_data,)), np.zeros((lentime_data,))
+for i,j in enumerate(range(0,lentime)):
+    racoord_data[i], decoord_data[i] = qubic.hor2equ(az[i]+115.5, el[i], time_azel[i]-t0, d['date_obs'] )
+```
+
+No matter the reference system you are using, you have to substract 180° in RA coordinate to plot it in mollweide projection (matplotlib) because mollweide project between ()
+
+```{python}
+racoord_data_copy = np.copy(racoord_data)
+decoord_data_copy = np.copy(decoord_data)
+```
+
+```{python}
+# Convert RA coordinate from 3rd and 4th quadrant (angles between 180 and 360) 
+#to negative values to plot with mollweide projection from matplotlib(-180 - 0)
+racoord_data_copy = racoord_data_copy - 360
+```
+
+```{python}
+moon_RA, moon_DEC = np.array([278.57813183, 278.59096645, 278.60380113, 278.61663587,
+            278.62947066, 278.64230551, 278.65514041, 278.66797537,
+            278.68081039, 278.69364546, 278.70648058, 278.71931576,
+            278.73215099, 278.74498628, 278.75782162, 278.77065701,
+            278.78349245, 278.79632795, 278.80916349, 278.82199909,
+            278.83483474, 278.84767044, 278.86050619, 278.87334198,
+            278.88617783, 278.89901373, 278.91184968, 278.92468567,
+            278.93752171, 278.9503578 , 278.96319394, 278.97603012,
+            278.98886636, 279.00170263, 279.01453896, 279.02737533,
+            279.04021174, 279.0530482 , 279.0658847 , 279.07872125,
+            279.09155784, 279.10439448, 279.11723116, 279.13006788,
+            279.14290464, 279.15574145, 279.1685783 , 279.18141519,
+            279.19425212, 279.20708909, 279.2199261 , 279.23276315,
+            279.24560024, 279.25843737, 279.27127454, 279.28411175,
+            279.296949  , 279.30978628, 279.32262361, 279.33546097,
+            279.34829836, 279.3611358 , 279.37397326, 279.38681077,
+            279.39964831, 279.41248589, 279.4253235 , 279.43816114,
+            279.45099882, 279.46383654, 279.47667428, 279.48951206,
+            279.50234988, 279.51518772, 279.5280256 , 279.54086351,
+            279.55370145, 279.56653942, 279.57937742, 279.59221545,
+            279.60505351, 279.6178916 , 279.63072973, 279.64356788,
+            279.65640605, 279.66924426, 279.6820825 , 279.69492076,
+            279.70775905, 279.72059736, 279.73343571, 279.74627408,
+            279.75911247, 279.77195089, 279.78478934, 279.7976278 ,
+            279.8104663 , 279.82330482, 279.83614336, 279.84898192,
+            279.86182051, 279.87465912, 279.88749776, 279.90033641,
+            279.91317509, 279.92601379, 279.93885251, 279.95169125,
+            279.96453001, 279.97736879, 279.99020759, 280.00304641,
+            280.01588524, 280.0287241 , 280.04156297, 280.05440186,
+            280.06724077, 280.0800797 , 280.09291864, 280.1057576 ,
+            280.11859658, 280.13143557, 280.14427458, 280.1571136 ,
+            280.16995263, 280.18279169, 280.19563075, 280.20846983,
+            280.22130892, 280.23414803, 280.24698714, 280.25982627,
+            280.27266541, 280.28550457, 280.29834373, 280.3111829 ,
+            280.32402209, 280.33686128, 280.34970049, 280.3625397 ,
+            280.37537893, 280.38821816, 280.4010574 , 280.41389665,
+            280.42673591, 280.43957517, 280.45241444, 280.46525372,
+            280.478093  , 280.49093229, 280.50377159, 280.51661089,
+            280.52945019, 280.5422895 , 280.55512882, 280.56796814,
+            280.58080746, 280.59364678, 280.60648611, 280.61932544,
+            280.63216477, 280.64500411, 280.65784344, 280.67068278,
+            280.68352212, 280.69636146, 280.70920079, 280.72204013,
+            280.73487947, 280.7477188 , 280.76055814, 280.77339747,
+            280.7862368 , 280.79907613, 280.81191546, 280.82475478,
+            280.8375941 , 280.85043341, 280.86327273, 280.87611203,
+            280.88895133, 280.90179063, 280.91462992, 280.92746921,
+            280.94030849, 280.95314776, 280.96598703, 280.97882628,
+            280.99166553, 281.00450478, 281.01734401, 281.03018324,
+            281.04302245, 281.05586166, 281.06870086, 281.08154005,
+            281.09437923, 281.10721839, 281.12005755, 281.13289669,
+            281.14573582, 281.15857495, 281.17141405, 281.18425315,
+            281.19709223, 281.2099313 , 281.22277035, 281.23560939,
+            281.24844842, 281.26128743, 281.27412642, 281.2869654 ,
+            281.29980437, 281.31264332, 281.32548225, 281.33832116,
+            281.35116006, 281.36399894, 281.3768378 , 281.38967664,
+            281.40251546, 281.41535427, 281.42819305, 281.44103182,
+            281.45387056, 281.46670929, 281.47954799, 281.49238667,
+            281.50522534, 281.51806398, 281.53090259, 281.54374119,
+            281.55657976, 281.56941831, 281.58225683, 281.59509533,
+            281.60793381, 281.62077226, 281.63361069, 281.64644909,
+            281.65928747, 281.67212582, 281.68496414, 281.69780244,
+            281.71064071, 281.72347895, 281.73631716, 281.74915535,
+            281.76199351, 281.77483164, 281.78766974, 281.80050781,
+            281.81334585, 281.82618386, 281.83902184, 281.85185979,
+            281.8646977 , 281.87753559, 281.89037344, 281.90321127,
+            281.91604906, 281.92888681, 281.94172453, 281.95456222]) - 360, np.array([-26.93543675, -26.93544409, -26.93545028, -26.93545529,
+            -26.93545915, -26.93546184, -26.93546337, -26.93546373,
+            -26.93546293, -26.93546097, -26.93545785, -26.93545356,
+            -26.93544811, -26.93544149, -26.93543371, -26.93542477,
+            -26.93541467, -26.9354034 , -26.93539097, -26.93537738,
+            -26.93536262, -26.9353467 , -26.93532961, -26.93531136,
+            -26.93529195, -26.93527138, -26.93524964, -26.93522674,
+            -26.93520267, -26.93517744, -26.93515105, -26.93512349,
+            -26.93509478, -26.93506489, -26.93503385, -26.93500164,
+            -26.93496826, -26.93493373, -26.93489802, -26.93486116,
+            -26.93482313, -26.93478394, -26.93474358, -26.93470207,
+            -26.93465938, -26.93461554, -26.93457053, -26.93452435,
+            -26.93447702, -26.93442851, -26.93437885, -26.93432802,
+            -26.93427603, -26.93422287, -26.93416855, -26.93411307,
+            -26.93405642, -26.93399861, -26.93393964, -26.9338795 ,
+            -26.93381819, -26.93375573, -26.9336921 , -26.9336273 ,
+            -26.93356135, -26.93349422, -26.93342594, -26.93335649,
+            -26.93328588, -26.9332141 , -26.93314116, -26.93306705,
+            -26.93299178, -26.93291535, -26.93283775, -26.93275899,
+            -26.93267907, -26.93259798, -26.93251572, -26.93243231,
+            -26.93234773, -26.93226198, -26.93217507, -26.932087  ,
+            -26.93199776, -26.93190736, -26.9318158 , -26.93172307,
+            -26.93162918, -26.93153412, -26.9314379 , -26.93134051,
+            -26.93124196, -26.93114225, -26.93104137, -26.93093933,
+            -26.93083613, -26.93073176, -26.93062622, -26.93051953,
+            -26.93041166, -26.93030264, -26.93019245, -26.93008109,
+            -26.92996858, -26.92985489, -26.92974005, -26.92962404,
+            -26.92950686, -26.92938852, -26.92926902, -26.92914835,
+            -26.92902652, -26.92890353, -26.92877937, -26.92865404,
+            -26.92852756, -26.9283999 , -26.92827109, -26.92814111,
+            -26.92800996, -26.92787766, -26.92774418, -26.92760955,
+            -26.92747374, -26.92733678, -26.92719865, -26.92705936,
+            -26.9269189 , -26.92677728, -26.92663449, -26.92649054,
+            -26.92634543, -26.92619915, -26.9260517 , -26.9259031 ,
+            -26.92575333, -26.92560239, -26.92545029, -26.92529703,
+            -26.9251426 , -26.92498701, -26.92483025, -26.92467233,
+            -26.92451325, -26.924353  , -26.92419158, -26.92402901,
+            -26.92386527, -26.92370036, -26.92353429, -26.92336706,
+            -26.92319866, -26.9230291 , -26.92285837, -26.92268648,
+            -26.92251342, -26.92233921, -26.92216382, -26.92198727,
+            -26.92180956, -26.92163069, -26.92145065, -26.92126944,
+            -26.92108708, -26.92090354, -26.92071885, -26.92053299,
+            -26.92034596, -26.92015777, -26.91996842, -26.9197779 ,
+            -26.91958622, -26.91939338, -26.91919937, -26.91900419,
+            -26.91880786, -26.91861035, -26.91841169, -26.91821186,
+            -26.91801086, -26.91780871, -26.91760538, -26.9174009 ,
+            -26.91719525, -26.91698843, -26.91678045, -26.91657131,
+            -26.916361  , -26.91614953, -26.9159369 , -26.9157231 ,
+            -26.91550814, -26.91529201, -26.91507472, -26.91485626,
+            -26.91463665, -26.91441586, -26.91419392, -26.9139708 ,
+            -26.91374653, -26.91352109, -26.91329449, -26.91306672,
+            -26.91283779, -26.9126077 , -26.91237644, -26.91214401,
+            -26.91191043, -26.91167568, -26.91143976, -26.91120269,
+            -26.91096444, -26.91072504, -26.91048447, -26.91024273,
+            -26.90999984, -26.90975577, -26.90951055, -26.90926416,
+            -26.90901661, -26.90876789, -26.90851801, -26.90826697,
+            -26.90801476, -26.90776139, -26.90750685, -26.90725115,
+            -26.90699429, -26.90673626, -26.90647707, -26.90621671,
+            -26.9059552 , -26.90569251, -26.90542867, -26.90516366,
+            -26.90489749, -26.90463015, -26.90436165, -26.90409199,
+            -26.90382116, -26.90354917, -26.90327601, -26.9030017 ,
+            -26.90272621, -26.90244957, -26.90217176, -26.90189279,
+            -26.90161265, -26.90133135, -26.90104889, -26.90076526,
+            -26.90048047, -26.90019452, -26.8999074 , -26.89961912,
+            -26.89932968, -26.89903907, -26.8987473 , -26.89845437,
+            -26.89816027, -26.89786501, -26.89756858, -26.897271  ])
+```
+
+```{python}
+fig = plt.figure(figsize = (12,6), facecolor = 'white')
+ax = fig.add_subplot(111, projection = 'mollweide')
+ax.set_title('FOV equatorial coordinates', fontsize = 20)
+ax.scatter(np.radians(racoord_data_copy), np.radians(decoord_data_copy), 
+         alpha = 0.6, color = 'r',)
+          #label = r'FOV in ($\alpha, \delta$)', )
+tick_ = np.array([-150, -120, -90, -60, -30, -0, 30, 60, 90, 120, 150])
+
+xtick_labels = np.array(['14h', '16h', '18h', '20h', '22h', '0h', '2h', '4h', '6h', '8h', '10h'])
+ytick_labels = np.array(['-75°', '-60°', '-45°', '-30°', '-15°', '0°', '15°', '30°', '45°', '60°', '75°'])
+
+ax.set_xticklabels(xtick_labels, **{'weight': 'normal',
+                                   'fontsize': 16,
+                                   'color': 'k'})
+ax.set_yticklabels(ytick_labels, **{'weight': 'normal',
+                                    'fontsize': 16,
+                                    'color': 'k'})
+ax.set_ylabel(r'$\delta$', fontsize = 22, rotation = 0, 
+           fontdict = {'weight': 'bold',
+                      'size': 16})
+ax.set_xlabel(r'$\alpha$', fontsize = 22, rotation = 0, x = 0.5, y = 0.5)
+ax.set_facecolor('lightgrey')
+
+ax.scatter(np.radians(moon_RA), np.radians(moon_DEC), color = 'k', s = 20, label = 'Moon')
+ax.legend(fontsize = 18)
+ax
+```
+
+```{python}
+plt.figure(figsize = (10,4))
+plt.scatter(racoord_data*12/180, decoord_data, 
+            color = 'r', alpha = 0.6,
+           label = 'hor2equ(az,el)')
+plt.xlim(15,20)
+plt.xlabel(r'$\alpha [h]$', fontsize = 14)
+plt.ylabel(r'$\delta [deg]$', fontsize = 14)
+#plt.xticks()
+plt.scatter((moon_RA+360)*24/360, moon_DEC, color = 'k', s = 20, label = 'Moon')
+
+plt.legend(fontsize = 13)
+```
+
+```{python}
+
+```

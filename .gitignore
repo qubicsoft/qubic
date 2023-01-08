@@ -5,6 +5,8 @@
 .idea/
 .coverage
 .f2py_f2cmap
+.venv*/
+.vscode/
 MANIFEST
 build
 dist
@@ -14,3 +16,4 @@ qubic/_flib.so
 src/polarization.f90
 .project
 .pydevproject
+*.egg-info/

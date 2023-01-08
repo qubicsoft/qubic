@@ -904,6 +904,17 @@ NFREQ = 4
 reso = 1.5
 size = 200
 
+fwhm = d['synthbeam_peak150_fwhm'] * 150 / nusfull["4"]
+
+#Calibration parameters
+nsidecal = 512
+hpx = True
+smooth = True
+Ncalmaps = 10
+
+nus_cal = np.linspace(150-150*.125,150+150*.125,Ncalmaps)
+fwhm_cal = d['synthbeam_peak150_fwhm'] * 150 / nus_cal
+
 xscale = np.linspace(- size / 2, size / 2, size) * reso / 60
 
 pixel = hp.pixelfunc.ang2pix(nsidecal, np.deg2rad(90 - center[1]), 
@@ -942,10 +953,17 @@ for j,fwhm_i in enumerate(fwhm):
 ```
 
 ```{python}
-delta_fwhm_g = np.zeros((NFREQ))
-fwhm_measured_g = []
-
-gmodel_calb_g = Model(gaussian2d_b, independent_vars = ['x',], )
+def fwhm_from_calibration(
+    maps, x, nus_cal, th_fwhm, Ncalmaps, center, 
+    reso = 1.5, size = 200, verbose = False):
+    
+    """maps.shape = (Ncalmaps, #pix, 3)"""
+    
+    delta_fwhm_g = np.zeros((Ncalmaps))
+    fwhm_measured_g = []
+    xscalecal = x
+    
+    gmodel_calb_g = Model(gaussian2d_b, independent_vars = ['x'])
 
 t0 = time.time()
 
@@ -1069,9 +1087,30 @@ for j_c, maps_recon_i in enumerate(arrMapsRec):
         fwhm_s0 = np.sqrt(result_s0.best_values['varx'] * result_s0.best_values['vary']) *\
                                                                                 np.sqrt(8 * np.log(2))
 
-        fwhmMeasured[j_c, j] = fwhm_s0
-        print('Done {}/{}, fwhm = {}'.format(j + 1, len(arrMapsRec[0]), fwhm_s0))
-print('All done in {} seconds'.format((time.time() - t1) ) )
+            fwhmMeasured[j_c, j] = fwhm_s0
+            
+            result_fits.append(result_s0)
+            varx.append(result_s0.best_values['varx'])
+            vary.append(result_s0.best_values['vary'])
+            if verbose: print('Done {}/{}, fwhm = {}'.format(j + 1, len(arrMapsRec[0]), fwhm_s0))
+    if verbose: print('All done in {:.4f} seconds'.format((time.time() - t1) ) )
+        
+    diff_fwhm = np.squeeze(np.array(fwhmMeasured - d['synthbeam_peak150_fwhm'] * 150 / nus))
+    d_data = {'frequencies': nus, 
+              'fwhm_th': np.array(d['synthbeam_peak150_fwhm'] * 150 / nus),
+             'fwhm_mes': fwhmMeasured[0],
+             'delta_fwhm': diff_fwhm,
+             'varx': np.array(varx),
+             'vary': np.array(vary)}
+    
+    df_data = pd.DataFrame(data = d_data)
+    
+    return df_data, result_fits
+```
+
+```{python}
+data_df, result_fit = fwhm_from_maps(d, maps_recon_1, nusfull['4'], xscale, center)
+data_sim, result_sim = fwhm_from_maps(d, maps_convo_1, nusfull['4'], xscale, center)
 ```
 
 ```{python}
@@ -1079,42 +1118,112 @@ fig,ax=plt.subplots(nrows = 1, ncols = 1, figsize = (8, 5),
                     sharey = True, gridspec_kw = {'hspace': 0.03})
 ax=[ax,]
 
-plt.rc('font', size = 12)
+vmax = np.nanpercentile(s0map, 99.9)
+vmin = -0.5
+ax = axs[0]
+ax.set_xlim(-1,1)
+ax.set_ylim(-1,1)
+art = ax.pcolor(X, Y, s0map, vmin=vmin, vmax=vmax, shading='auto')
+plt.colorbar(art, ax=ax, label='z')
+ax.set_title('Map')
+
+ax = axs[1]
+ax.set_xlim(-1,1)
+ax.set_ylim(-1,1)
+fit = np.reshape(gaussian2d_b(xscale, **result_fit[jj].best_values), (len(xscale), len(xscale)))
+art = ax.pcolor(X, Y, fit, vmin=vmin, vmax=vmax, shading='auto')
+plt.colorbar(art, ax=ax, label='z')
+ax.set_title('Fit')
+
+ax = axs[2]
+#fit = model.func(X, Y, **result_s0.best_values)
+ax.set_xlim(-1,1)
+ax.set_ylim(-1,1)
+art = ax.pcolor(X, Y, s0map - fit, vmin=0.3*vmin, vmax=0.3*vmax, shading='auto')
+plt.colorbar(art, ax=ax, label='z')
+ax.set_title('Diff')
+fig.tight_layout()
+#plt.savefig("/home/martin/Doctorado/Tesis-Doctoral/Figuras_Tesis_Overleaf/fwhm_sketch")
+```
+
+proj = hp.projector.CartesianProj(rot=center, coord=None, 
+                                  xsize=size, ysize=size, 
+                                  lonra=None, latra=None)
+long,lat = lambda th, ph: np.array([th,ph]) + np.array([360,0])
+hp.gnomview(maps_recon_1[jj,:,0] / 1e5, rot = center, max = 1)
+hp.get_all_neighbours(nside, hp.pix2ang(nside, ))
+#maps_recon_1[jj,:,0] / 1e5
+#hp.boundaries()
+
+
+### Fit the calibration difference 
+and then removes the interpolated value from data maps
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+import matplotlib.patches as patches
+
+```
+
+```{python}
+fig,ax = plt.subplots(nrows = 1, ncols = 1, figsize = (8, 5))
+
+plt.rc('font', size = 14)
 
 fwhmTh = lambda nu: d['synthbeam_peak150_fwhm'] * 150 / nu
 
-ax[0].set_xlabel(r'$\nu~$[GHz]')
-ax[0].set_ylabel(r'$FWHM~$[deg]')
+ax.set_xlabel(r'$\nu~$[GHz]', fontsize = 14)
+ax.set_ylabel(r'FWHM$~$[deg]', fontsize = 14)
 
-for j in range(4):
-    ax[0].plot(nusfull['{}'.format(NFREQ)][j], 
-                   fwhmMeasured[0][j] - model_fwhm(nusfull['{}'.format(NFREQ)][j], 
-                                                                              *parsfwhm_g) ,
-                   color = 'r', marker = '*', ls = "",label = 'FWHM measured' if j == 0 else None)
-    ax[0].plot(nusfull['{}'.format(NFREQ)][j], fwhmTh(nusfull['{}'.format(NFREQ)][j]), 'bo', alpha = 0.5, 
-               label = 'FWHM theoretical' if j == 0 else None)
-    ax[0].legend(fontsize = 14)
-ax[0].tick_params(axis = 'both', bottom = True, top = True, 
-                  left = True, right = True, direction = 'in')
-ax[0].grid()
+ax.plot(nusfull["4"], 
+        data_df["fwhm_mes"],
+        color = 'r', marker = '*', ls = "", ms = 10,
+        alpha = 0.5,
+        label = 'FWHM measured')
+
+ax.plot(nusfull["4"], 
+        data_df["fwhm_mes"] - model_fwhm_diff(nusfull["4"], 
+                                              *parsfwhm_diff) ,
+        color = 'r', marker = '*', ls = "", ms = 10,
+        label = 'FWHM correct')
+
+ax.plot(nusfull["4"], fwhmTh(nusfull["4"]),#  yerr = np.diff(fwhmTh(nusedges['4']))/2,
+        color = 'b', marker = 'o', ms = 10, alpha = 0.5, ls = "",# capsize = 5,
+        label = 'FWHM theoretical')
+for i in range(4):
+    ax.add_patch(
+     patches.Rectangle(
+        (nusedges['4'][i], fwhmTh(nusedges['4'][i+1])),
+        np.diff(nusedges['4'])[i], #ancho
+        fwhmTh(nusedges['4'][i]) - fwhmTh(nusedges['4'][i+1]), #altura
+        edgecolor = 'blue',
+        facecolor = 'blue',
+        fill=True, alpha = 0.1
+     ) )
+
+ax.set_xlim(nusedges['4'][0]*0.99, nusedges['4'][-1]*1.01)
+ax.legend(fontsize = 14)
+ax.tick_params(axis = 'both', bottom = True, top = True, 
+               left = True, right = True, direction = 'in')
+ax.grid()
 #
 plt.tight_layout() #makes subplots nicely fit in the figure.
-#plt.savefig('Angular-Resolution_reso{}_nside{}.pdf'.format(reso, newnside), format = 'pdf')
+#plt.savefig('Angular-Resolution_reso{}_nside{}_rectangles.pdf'.format(reso, nsidecal), format = 'pdf')
 ```
 
 ```{python}
-
+print("Elipticidad")
+#(data_df['varx'] - data_df['vary']) / (data_df['varx'] + data_df['vary']) 
+print(1 - data_df['vary'] / data_df['varx'])
+print(1 - data_sim['vary'] / data_sim['varx'])
+print((1 - data_df['vary'] / data_df['varx'])/(1 - data_sim['vary'] / data_sim['varx']))
 ```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
 
 ```
 

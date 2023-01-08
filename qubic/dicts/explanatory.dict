@@ -1,0 +1,208 @@
+# This example of input file lists all parameters with detailed comments used in qubicsoft.  
+# You can use a more concise version, in which only the arguments in which you are interested would appear.
+#  Only lines containing an equal sign not preceded by a sharp sign "#" are
+# considered by the code. Dictionaries must have an extension ".dict".
+
+#
+# The dictionaries are read it doing
+# 
+#	import qubic
+#	d = qubic.qubicdict.qubicDict()  
+#	d.read_from_file('explanatory.dict')  
+
+############################################# Instrument ################################
+#Deebugging mode for inst. noise [boolean]
+debug = False               
+#Obvious TD or FI # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz     
+config = 'FI' 
+#Frequency (150 or 220) [units Hz]
+filter_nu = 150e9              
+#Δν/ν
+filter_relative_bandwidth = 0.25                     
+#Various assumptions regarding primary beam are available in QubicSoft:
+# -Gaussian => pure gaussian
+# -fitted_beam => fitted from single frequency Maynooth sims
+# -multi_freq => Fitted from Maynooth sims at various frequencies
+# the two first scale with frequency \propto ν while the latter is simulated at each freq
+# possibilities: 'gaussian', 'fitted_beam', 'multi_freq'    
+beam_shape = 'gaussian' 
+
+
+# multifreq instrument 
+#is this monochromatic instrument or multifreq (for Spectral Imaging)
+MultiBand=False        
+#numbber of sub-bands for TOD simulations (the higher the better)        
+nf_sub=1        
+                        
+# If True, this parameter set the center of the detector for each subinsturment in 
+# (x, y, z) = (0, 0, -0.3)
+center_detector=False    
+
+### Noise properties
+# Detector layout. 
+# psd + bandwidth: 
+# The routine can use a PSD (power spectrum density) and the bandwidth of the instrument to generate 
+# a noise realisation. The one-sided or two-sided power spectrum density [signal unit/sqrt Hz]. 
+# bandwidth: float, optional. It is the PSD frequency increment [Hz].
+psd=None                                
+bandwidth=None                                
+#related with psd + bandwidth
+twosided=None                                
+# Standard deviation of the white noise component                            
+sigma=None                                
+## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
+#TES intrinsic NEP [W/sqrt(Hz)]
+detector_nep=4.7e-17 #2.05e-16 (TD), 4.7e-17(FI)            
+#1/f noise fknee [Hz]
+detector_fknee=0                            
+#1/f noise power
+detector_fslope=1                            
+#1/f correlation length
+detector_ncorr=10                            
+#Number of detector grids
+detector_ngrids=1                            
+#detector time constant [sec]
+detector_tau=0.01                            
+#if False => no polarizer
+polarizer=True                                
+# The next two parameters determine the number of peaks we use in the “gaussian peaks” approximation of the synthesized beam. 
+# Kmax determines the number of “squares” around the central peak we keep 
+# (kmax=0 => just the central peak, kmax=1 => 9 peaks, kmax = 2 => 25 peaks, ...
+# synthbeam_fraction is the fraction of the integral of the synthesized beam we keep.
+# at the end we keep the peaks according to the most limiting combination of both
+# If kmax=1 and fraction=1 => we keep 9 peaks although their fraction is < 1
+# If kmax=large and fraction=0.99 => we keep peaks until they represent 99% of the integral of the synthesized beam
+synthbeam_fraction=1.                            
+synthbeam_kmax=1
+
+# Value of the FWHM [degree]at 150GHz from quasi-optical simulation. You can use it to scale the 
+# FWHm for anothers frequency nu doing: fwhm_nu = synthbeam_peak150_fwhm * 150 / nu
+synthbeam_peak150_fwhm=0.39268176 
+# This parameters add the ripples. The ripples are second order features of the synthesized beam. 
+# This are unaccounted features arround the peaks in an axisymmetric forms 
+ripples=False
+# Number of ripples
+nripples=0
+
+# Instrument focal length [m]
+focal_length=0.3
+
+########## Calibration files, should not be edited #####################@
+optics='CalQubic_Optics_v3_CC_FFF.txt'
+primbeam='CalQubic_PrimBeam_v2.fits' # X=2 gaussian, 3 fitted, 4 multi frequency splines
+detarray='CalQubic_DetArray_v4_CC.fits' # This can be used for TD and FI with the old number array
+hornarray='CalQubic_HornArray_CC.fits'
+
+############################################# Scene ################################
+# which is the nside used internally and for output maps. HEALPix parameter
+nside=256        
+# if ‘I’ then we do not consider polarization ‘IQU’ is the normal one
+kind='IQU'        
+# If absolute == True If the scene pixel values include the CMB background and the    fluctuations in
+# units of Kelvin, otherwise it only represents the fluctuations, in microKelvin. (used in scene.py)
+absolute=False
+# The CMB temperature used to convert a temperature fluctuation in power fluctuation (if absolute false). 
+# The default value is taken from Fixsen et al 2009.
+temperature=2.7255 # K for CMB, 300 K for TD in lab # 
+#proably some old DomeC stuff. Check !
+summer=False                            
+
+############################################# Pointing ##############################
+
+# Coordinates of the center of the targeted field [deg]
+RA_center= 0. 
+DEC_center=-57.
+# sampling period for TOD [sec]
+period=1.     
+# Date of the observation
+date_obs='2016-01-01 00:00:00'            
+
+# Coordinates of the site (Argentina)
+latitude= -(24 + 11. / 60)      
+longitude= -(66 + 28. / 60) 
+
+# Angle [deg] between two HWP positions # (degrees) used for random and sweeping pointing
+hwp_stepsize=15 
+
+# random pointing is an approximation we use to perform “fast simulations” we do not use scanning on the sky but 
+# rather randomly placed independent pointings uniformly within the observed field. 
+# This allows to nicely sample the field with few time samples (useful when running on a laptop, when developing). 
+# However, any time correlation in the noise is meaningless with such pointing.
+random_pointing=False   
+
+# A trick in order to bee able to perform relevant small-size simulations: because the synthesized beam is not axisymmetric, coming back on 
+#the same sky pixel with a different pitch angle does not result in the same TOD sample. With many time samples and many angles in each sky 
+#pixel, this is not an issue and inverting the HWP matrix allows recovering I,Q,U optimally. But for small simulations there is a 
+#significant noise penalty that is not realistic. Repeating the eeach pointing sample with three different HWP angles solves this problem. 
+#Once again this is not to be used for real data, nor for largee end-to-end simulations, only for small tests. Repeat_pointing=True is 
+#“random pointings” repeated in order to do as described above.
+repeat_pointing=True
+
+# number of time samples
+npointings=3000                        
+# angular radius of the targeted area explored by the optical axis of the instrument
+dtheta=15.                        
+# number of angles for repeat-pointings (use only for repeat_pointing)
+nhwp_angles=3 
+
+# seed for the random number generator
+seed=1                            
+
+# Below are the parameters for a more realistic (although still rudimentary) scanning strategy based on constant elevation sweeps. 
+# The parameters of the sweeps are described below
+# if True, use the sweeping strategy, 
+sweeping_pointing=False    
+# duration of the scan [h]
+duration=20             
+# angular speed in azimuth [deg/sec]
+angspeed= 0.4 
+# Extension of the scan in azimuth [deg]
+delta_az= 20        
+# how many sweeps do we wait at constant elevation before adjusting    the optical axis elevation to
+# that of the target
+nsweeps_per_elevation= 1    
+# speed for pitch angle motion of the mount [deg/sec]
+angspeed_psi= 0.1 
+# maximum pitch angle allowed by the mount [deg]
+maxpsi= 10             
+
+# Below are keywords used when analyzing data that are not on the sky but “on the fixed wall”, for the calibration source analysis. 
+#The source does not move with sideral time…
+fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
+
+############################################# Acquisition ##############################
+
+# Partition of the samplings (used by pysimulators for paralelization.. check)
+block=None        
+# scales the noise so that we have this effective duration [years]
+effective_duration=4 
+# if True, no noise is added
+noiseless=False        
+# If True, no photon noise is added    
+photon_noise=False    
+# OpenMP configuration [acquisition.py & mapmaking.py]
+# Maximum number of bytes to be allocated for the acquisition's operator
+max_nbytes=None         
+#For a given sampling slice, number of processors dedicated to the instrument
+nprocs_instrument=None    
+#For a given detector slice, number of processors dedicated to the sampling
+nprocs_sampling=None        
+# [mpi4py.MPI.Comm] The acquisition's MPI communicator. Note that it is transformed into a 2d 
+# cartesian communicator before being stored as the 'comm' attribute. The following relationship 
+# must hold: comm.size = nprocs_instrument * nprocs_sampling
+comm=None            
+# Weights of the signal of each observed sub-band. Defalut = np.ones(len(QubicMultibandInstrument) 
+# ...check!
+weights=None            
+
+####################################### Map making #####################################
+# Convergence criterion for map-making (relative change between iterations)
+tol=1e-5    
+# Number of spectral-imaging sub-frequencies to be reconstructed    
+nf_recon = [2,]
+# Maximum numbber iterations for the PCG solver
+maxiter=1e5        
+# Verbosity of the solver
+verbose=True        
+
+

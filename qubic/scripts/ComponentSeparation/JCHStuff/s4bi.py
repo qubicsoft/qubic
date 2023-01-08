@@ -1,5 +1,9 @@
 import numpy as np
+<<<<<<< HEAD
 import healpy as hp
+=======
+import healpy as hp 
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
 import fgbuster
 from fgbuster import CMB, Dust, Synchrotron, AnalyticComponent, ModifiedBlackBody
 import pysm3
@@ -18,23 +22,43 @@ import qubic
 
 warnings.filterwarnings("ignore")
 
+<<<<<<< HEAD
 freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
 bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
 dnu_nu = bandwidth / freqs
+=======
+
+
+
+
+
+freqs = np.array([20., 30., 40., 85., 95., 145., 155., 220., 270.])
+bandwidth = np.array([5., 9., 12., 20.4, 22.8, 31.9, 34.1, 48.4, 59.4])
+dnu_nu = bandwidth/freqs
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
 beam_fwhm = np.array([11., 72.8, 72.8, 25.5, 25.5, 22.7, 22.7, 13., 13.])
 mukarcmin_TT = np.array([16.5, 9.36, 11.85, 2.02, 1.78, 3.89, 4.16, 10.15, 17.4])
 mukarcmin_EE = np.array([10.87, 6.2, 7.85, 1.34, 1.18, 1.8, 1.93, 4.71, 8.08])
 mukarcmin_BB = np.array([10.23, 5.85, 7.4, 1.27, 1.12, 1.76, 1.89, 4.6, 7.89])
 ell_min = np.array([30, 30, 30, 30, 30, 30, 30, 30, 30])
 nside = np.array([512, 512, 512, 512, 512, 512, 512, 512, 512])
+<<<<<<< HEAD
 edges_min = freqs * (1. - dnu_nu / 2)
 edges_max = freqs * (1. + dnu_nu / 2)
+=======
+edges_min = freqs * (1. - dnu_nu/2)
+edges_max = freqs * (1. + dnu_nu/2)
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
 edges = [[edges_min[i], edges_max[i]] for i in range(len(freqs))]
 
 s4_config = {
     'nbands': len(freqs),
     'frequency': freqs,
+<<<<<<< HEAD
     'depth_p': 0.5 * (mukarcmin_EE + mukarcmin_BB),
+=======
+    'depth_p': 0.5*(mukarcmin_EE + mukarcmin_BB),
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
     'depth_i': mukarcmin_TT,
     'depth_e': mukarcmin_EE,
     'depth_b': mukarcmin_BB,
@@ -47,8 +71,15 @@ s4_config = {
     'ntubes': 12,
     'nyears': 7.,
     'edges': edges,
+<<<<<<< HEAD
     'effective_fraction': np.zeros(len(freqs)) + 1.
 }
+=======
+    'effective_fraction': np.zeros(len(freqs))+1.
+            }
+
+
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
 
 
 def fct_subopt(nus):
@@ -57,19 +88,27 @@ def fct_subopt(nus):
     fct_subopt = np.poly1d(np.polyfit(subnus, subval, 1))
     return fct_subopt(nus)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
 def qubicify(config, qp_nsubs, qp_effective_fraction, suboptimality=None):
     nbands = np.sum(qp_nsubs)
     if suboptimality is None:
         suboptimality = np.ones(len(qp_nsubs)).astype(bool)
     qp_config = config.copy()
     for k in qp_config.keys():
+<<<<<<< HEAD
         qp_config[k] = []
+=======
+        qp_config[k]=[]
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
     qp_config['nbands'] = nbands
     qp_config['fsky'] = config['fsky']
     qp_config['ntubes'] = config['ntubes']
     qp_config['nyears'] = config['nyears']
     qp_config['initial_band'] = []
+<<<<<<< HEAD
 
     for i in range(len(config['frequency'])):
         newedges = np.linspace(config['edges'][i][0], config['edges'][i][1], qp_nsubs[i] + 1)
@@ -77,6 +116,15 @@ def qubicify(config, qp_nsubs, qp_effective_fraction, suboptimality=None):
         newbandwidth = newedges[1:] - newedges[0:-1]
         newdnu_nu = newbandwidth / newfreqs
         newfwhm = config['fwhm'][i] * config['frequency'][i] / newfreqs
+=======
+    
+    for i in range(len(config['frequency'])):
+        newedges = np.linspace(config['edges'][i][0], config['edges'][i][1], qp_nsubs[i]+1)
+        newfreqs = (newedges[0:-1]+newedges[1:])/2
+        newbandwidth = newedges[1:] - newedges[0:-1]
+        newdnu_nu = newbandwidth / newfreqs
+        newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
         scalefactor_noise = np.sqrt(qp_nsubs[i]) / qp_effective_fraction[i]
         print(suboptimality[i])
         if suboptimality[i]:
@@ -89,7 +137,11 @@ def qubicify(config, qp_nsubs, qp_effective_fraction, suboptimality=None):
         newnside = np.ones(qp_nsubs[i]) * config['nside'][i]
         neweffective_fraction = np.ones(qp_nsubs[i]) * qp_effective_fraction[i]
         initial_band = np.ones(qp_nsubs[i]) * config['frequency'][i]
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
         for k in range(qp_nsubs[i]):
             if qp_effective_fraction[i] != 0:
                 qp_config['frequency'].append(newfreqs[k])
@@ -105,6 +157,7 @@ def qubicify(config, qp_nsubs, qp_effective_fraction, suboptimality=None):
                 qp_config['effective_fraction'].append(neweffective_fraction[k])
                 qp_config['initial_band'].append(initial_band[k])
 
+<<<<<<< HEAD
         for k in range(qp_nsubs[i] + 1):
             if qp_effective_fraction[i] != 0:
                 qp_config['edges'].append(newedges[k])
@@ -114,12 +167,25 @@ def qubicify(config, qp_nsubs, qp_effective_fraction, suboptimality=None):
     for j in range(len(fields)):
         qp_config[fields[j]] = np.array(qp_config[fields[j]])
 
+=======
+        for k in range(qp_nsubs[i]+1):
+            if qp_effective_fraction[i] != 0:
+                qp_config['edges'].append(newedges[k])
+
+    
+    fields = ['frequency', 'depth_p', 'depth_i', 'depth_e', 'depth_b', 'fwhm', 'bandwidth', 
+              'dnu_nu', 'ell_min', 'nside', 'edges', 'effective_fraction', 'initial_band']
+    for j in range(len(fields)):
+        qp_config[fields[j]] = np.array(qp_config[fields[j]])
+        
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
     return qp_config
 
 
 def get_coverage(fsky, nside, center_radec=[0., -57.]):
     center = qubic.equ2gal(center_radec[0], center_radec[1])
     uvcenter = np.array(hp.ang2vec(center[0], center[1], lonlat=True))
+<<<<<<< HEAD
     uvpix = np.array(hp.pix2vec(nside, np.arange(12 * nside ** 2)))
     ang = np.arccos(np.dot(uvcenter, uvpix))
     indices = np.argsort(ang)
@@ -130,22 +196,46 @@ def get_coverage(fsky, nside, center_radec=[0., -57.]):
     return mask
 
 
+=======
+    uvpix = np.array(hp.pix2vec(nside, np.arange(12*nside**2)))
+    ang = np.arccos(np.dot(uvcenter, uvpix))
+    indices = np.argsort(ang)
+    okpix = ang < -1
+    okpix[indices[0:int(fsky * 12*nside**2)]] = True
+    mask = np.zeros(12*nside**2)
+    mask[okpix] = 1
+    return mask
+
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
 def get_component_maps(components, ref_freqs, nside, fsky, center_radec=[0., -57.]):
     maps = []
     mask = get_coverage(fsky, nside, center_radec=center_radec)
     okpix = mask == 1
+<<<<<<< HEAD
     for c, f in zip(components, ref_freqs):
         print('Doing: ' + c)
         thesky = pysm3.Sky(nside=nside, preset_strings=[c], output_unit="uK_CMB")
         themaps = np.zeros((4, 12 * nside ** 2))  # four are I, Q, U and P
         themaps[0:3, :] = thesky.get_emission(f * u.GHz)  # .to(u.uK_CMB, equivalencies=u.cmb_equivalencies(f*u.GHz))
         themaps[3, :] = np.sqrt(themaps[1, :] ** 2 + themaps[2, :] ** 2)
+=======
+    for c,f in zip(components, ref_freqs):
+        print('Doing: '+c)
+        thesky = pysm3.Sky(nside=nside, preset_strings=[c], output_unit="uK_CMB")
+        themaps = np.zeros((4, 12*nside**2))     # four are I, Q, U and P
+        themaps[0:3,:] = thesky.get_emission(f * u.GHz)                  #.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(f*u.GHz))
+        themaps[3,:] = np.sqrt(themaps[1,:]**2 + themaps[2,:]**2)
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
         themaps[:, ~okpix] = hp.UNSEEN
         maps.append(themaps)
     return maps
 
 
 def double_beta_dust_FGB_Model():
+<<<<<<< HEAD
+=======
+
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9
     H_OVER_K = constants.h * 1e9 / constants.k
     # Conversion factor at frequency nu
     K_RJ2K_CMB = ('(expm1(h_over_k * nu / Tcmb)**2'
@@ -155,6 +245,7 @@ def double_beta_dust_FGB_Model():
     K_RJ2K_CMB_NU0 = K_RJ2K_CMB + ' / ' + K_RJ2K_CMB.replace('nu', 'nu0')
 
     analytic_expr1 = ('(exp(nu0 / temp * h_over_k) -1)'
+<<<<<<< HEAD
                       '/ (exp(nu / temp * h_over_k) - 1)'
                       '* (nu / nu0)**(1 + beta_d0)   * (nu0 / nubreak)**(beta_d0-beta_d1) * ' + K_RJ2K_CMB_NU0 + '* (1-heaviside(nu-nubreak,0.5))')
 
@@ -164,3 +255,17 @@ def double_beta_dust_FGB_Model():
     analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
 
     return analytic_expr
+=======
+                     '/ (exp(nu / temp * h_over_k) - 1)'
+                     '* (nu / nu0)**(1 + beta_d0)   * (nu0 / nubreak)**(beta_d0-beta_d1) * '+K_RJ2K_CMB_NU0 + '* (1-heaviside(nu-nubreak,0.5))')
+
+    analytic_expr2 = ('(exp(nu0 / temp * h_over_k) -1)'
+                     '/ (exp(nu / temp * h_over_k) - 1)'
+                     '* (nu / nu0)**(1 + beta_d1) * '+K_RJ2K_CMB_NU0 + '* heaviside(nu-nubreak,0.5)')
+    analytic_expr = analytic_expr1 + ' + ' + analytic_expr2
+
+    return analytic_expr
+    
+
+
+>>>>>>> a16176f1ec7257d82ca8836656d35244bb3f1be9

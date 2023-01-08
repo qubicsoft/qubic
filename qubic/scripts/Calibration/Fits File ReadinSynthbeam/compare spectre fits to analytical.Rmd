@@ -1,0 +1,130 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.7
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import healpy as hp
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from astropy.io import fits
+```
+
+```{python}
+#open fits file assuming file is in this directory
+hdul = fits.open('Multifreq_Images_From_Instrument.fits')
+```
+
+```{python}
+# use .info command to get basic data for the file
+hdul.info()
+```
+
+```{python}
+freq1=hdul[0].data
+freq2=hdul[1].data
+freq3=hdul[2].data
+```
+
+```{python}
+#open fits file assuming file is in this directory
+hdu2 = fits.open('Multifreq_Images_From_Fits.fits')
+```
+
+```{python}
+# use .info command to get basic data for the file
+hdu2.info()
+```
+
+```{python}
+Ffreq1=hdul[0].data
+Ffreq2=hdul[1].data
+Ffreq3=hdul[2].data
+```
+
+```{python}
+# Repository for dictionary and input maps
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+global_dir = Qubic_DataDir(datafile='instrument.py', datadir='../')
+dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+dictmaps = global_dir + 'doc/'
+
+# Read dictionary chosen
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+```
+
+```{python}
+# Center of the patch observed in galactic coordinates
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+```
+
+```{python}
+rr=15 # Resolution in arcmin
+ifreq=2
+for istokes in [0,1,2]:
+    plt.figure(istokes,figsize=(12,12)) 
+    hp.gnomview(freq1[ifreq, :,istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+    hp.gnomview(freq2[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Output '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+    hp.gnomview(freq3[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='diff '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+plt.show()
+```
+
+```{python}
+rr=15 # Resolution in arcmin
+ifreq=2
+for istokes in [0,1,2]:
+    plt.figure(istokes,figsize=(12,12)) 
+    hp.gnomview(Ffreq1[ifreq, :,istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Input '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+    hp.gnomview(Ffreq2[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Output '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+    hp.gnomview(Ffreq3[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='diff '+d['kind'][istokes]+' SubFreq {}'.format(ifreq))
+plt.show()
+```
+
+```{python}
+diff1=freq1-Ffreq1
+diff2=freq2-Ffreq2
+diff3=freq3-Ffreq3
+
+
+
+```
+
+```{python}
+for istokes in [0,1,2]:
+    plt.figure(istokes,figsize=(12,12)) 
+    hp.gnomview(freq1[ifreq, :,istokes], cmap='jet', rot=center, sub=(3,3,3*istokes+1), reso=rr,
+                title='Instrument '+d['kind'][istokes])
+    hp.gnomview(Ffreq1[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+2), reso=rr,
+                title='Fits '+d['kind'][istokes])
+    hp.gnomview(diff1[ifreq,:,istokes], cmap='jet',rot=center, sub=(3,3,3*istokes+3), reso=rr,
+                title='diff '+d['kind'][istokes])
+plt.show()
+```
+
+```{python}
+fitss=fits.open('Multifreq_Images_From_Fits.fits')
+nofitss=fits.open('Multifreq_Images_From_Sim.fits')
+```
+
+```{python}
+
+```

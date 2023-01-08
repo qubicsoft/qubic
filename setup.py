@@ -9,7 +9,7 @@ from numpy.distutils.extension import Extension
 VERSION = '4.5'
 
 name = 'qubic'
-long_description = open('README.rst').read()
+long_description = open('README.md').read()
 keywords = 'scientific computing'
 platforms = 'MacOS X,Linux,Solaris,Unix,Windows'
 delattr(os, 'link')  # force sdist to copy files
@@ -34,13 +34,26 @@ setup(name=name,
       url='',
       author='Pierre Chanial',
       author_email='pierre.chanial@apc.univ-paris7.fr',
-      install_requires=['progressbar',
-                        'pyoperators>=0.13.2',
-                        'pysimulators>=1.0.8',
-                        'healpy>=0.6.1',
-                        'pyYAML'],
-      packages=['qubic', 'qubic/calfiles', 'qubic/data', 'qubic/io', 'qubic/dicts', 'qubic/data/FastSimulator_version01'],
-      package_data={'qubic': ['calfiles/*', 'data/*', 'scripts/*py', 'dicts/*.dict', 'data/FastSimulator_version01/*.pkl']},
+      install_requires=[
+        'astropy',
+        'corner',
+        'emcee',
+        'GetDist',
+        'healpy>=0.6.1',
+        'iminuit',
+        'numpy',
+        'pandas',
+        'progressbar',
+        'pyfftw',
+        'pyoperators>=0.13.18',
+        'pysimulators>=1.0.8',
+        'pysm3',
+        'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
+        'scipy',
+        'satorchipy @ git+https://github.com/satorchi/mypy@master',
+      ],
+      packages=['qubic', 'qubic/calfiles', 'qubic/data', 'qubic/io', 'qubic/dicts', 'qubic/data/FastSimulator_version01','qubic/TES'],
+      package_data={'qubic': ['calfiles/*', 'data/*', 'scripts/*py', 'dicts/*.dict', 'data/FastSimulator_version01/*.pkl','TES/*']},
       platforms=platforms.split(','),
       keywords=keywords.split(','),
       cmdclass=hooks.get_cmdclass(),

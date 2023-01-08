@@ -186,8 +186,129 @@ ix = 2
 
 MapsArray = [maskmaps_dust[ix], maskmaps_synch[ix], maskmaps_all[ix]]
 fsed._plot_exampleSED(dictionaries[ix], centers[ix], nus_out150, MapsArray, mapsarray = True, 
-                     DeltaTheta = 1, DeltaPhi = 0, savefig = False)
+                     DeltaTheta = 1, DeltaPhi = 0, savefig = True)
 
+```
+
+```{python}
+add_dust = np.zeros((4,2,2,5))
+add_synch = np.zeros((4,2,2,5))
+add_all = np.zeros((4,2,2,5))
+stk = 1
+totalpixs = [26411, 27237, 26310, 27123]
+for reg in range(4):
+    tot = totalpixs[reg]
+    for stk in [0,1]:
+        if reg == 0: #150Q
+            if stk == 0:
+                lims = np.array([[0.37,4],[0.6,19]])
+            else:
+                lims = np.array([[-0.045,-0.75],[0.08,0.7]])
+        elif reg == 1: #220Q
+            if stk == 0:
+                lims = np.array([[0.205,12],[0.34,50]])
+            else:
+                lims = np.array([[-0.025,-2.3],[0.045,2.1]])
+        elif reg == 2: #150G
+            if stk == 0:
+                lims = np.array([[1.7,1e2],[1.25e1,3e3]])
+            else:
+                lims = np.array([[-0.35,-8],[0.48,9]])
+        elif reg == 3: #220G
+            if stk == 0:
+                lims = np.array([[0.95,3e2],[7,6.8e3]])
+            else:
+                lims = np.array([[-0.20,-25],[0.27,27]])
+
+        for j, limlim in enumerate(lims):
+            cov_lims = limlim[0]
+            cov_lim = limlim[1]
+            fig , ax = plt.subplots(nrows = 3, ncols = 5, figsize = (14,10))
+            for fr in range(5):
+                if stk == 0:
+                    mmm = np.copy(maskmaps_dust[reg,fr, :, stk])
+                    mmsk = maskmaps_dust[reg,fr, : ,stk] > cov_lim
+                    mmm[~mmsk] = hp.UNSEEN
+
+                    mmm_s = np.copy(maskmaps_synch[reg,fr, :, stk])
+                    mmsk_s = maskmaps_synch[reg,fr, : ,stk] > cov_lims
+                    mmm_s[~mmsk_s] = hp.UNSEEN
+
+                    mmm_a = np.copy(maskmaps_all[reg,fr, :, stk])
+                    mmsk_a = maskmaps_all[reg,fr, : ,stk] > cov_lim
+                    mmm_a[~mmsk_a] = hp.UNSEEN
+
+                else:
+                    mmm1, mmm2 = np.copy(maskmaps_dust[reg,fr, :, stk]), np.copy(maskmaps_dust[reg,fr, :, stk+1])
+                    mmm = np.sqrt(mmm1**2 + mmm2**2)
+                    mmsk1, mmsk2 = maskmaps_dust[reg,fr, : ,stk] > cov_lim, maskmaps_dust[reg,fr, : ,stk+1] > cov_lim
+                    mmsk = mmsk1 * mmsk2
+                    mmm[~mmsk] = hp.UNSEEN
+                    #print(np.min(mmm[mmsk]), np.sum(coveragesTD[0] > 0)) 
+                    mmm_s1, mmm_s2 = np.copy(maskmaps_synch[reg,fr, :, stk]), np.copy(maskmaps_synch[reg,fr, :, stk+1])
+                    mmm_s = np.sqrt(mmm_s1**2 + mmm_s2**2)
+                    mmsk_s1, mmsk_s2 = maskmaps_synch[reg,fr, : ,stk] > cov_lims, maskmaps_synch[reg,fr, : ,stk+1] > cov_lims
+                    mmsk_s = mmsk_s1 * mmsk_s2
+                    mmm_s[~mmsk_s] = hp.UNSEEN
+                    #print(np.min(mmm_s[mmsk_s]))
+                    mmm_a1, mmm_a2 = np.copy(maskmaps_all[reg,fr, :, stk]), np.copy(maskmaps_all[reg,fr, :, stk+1])
+                    mmm_a = np.sqrt(mmm_a1**2 + mmm_a2**2)
+                    mmsk_a1, mmsk_a2 = maskmaps_all[reg,fr, : ,stk] > cov_lim, maskmaps_all[reg,fr, : ,stk+1] > cov_lim
+                    mmsk_a = mmsk_a1 * mmsk_a2
+                    mmm_a[~mmsk_a] = hp.UNSEEN
+
+                ax[0,fr].cla()
+                plt.axes(ax[0,fr])
+                hp.gnomview(mmm, reso = 14, rot = centers[0], 
+                            title = "Polvo galáctico" if fr == 2 else " ",
+                            max = 6e3 if stk == 0 else 35, hold = True)
+                add_dust[reg,stk,j] =np.sqrt(np.mean(mmm[mmsk]**2)) 
+                if fr == 2: print("Region coverage (dust) {}".format(sum(mmsk)/tot ))
+               
+                ax[1,fr].cla()
+                plt.axes(ax[1,fr])
+                hp.gnomview(mmm_s, reso = 14, rot = centers[0], 
+                            title = "Sincrotrón" if fr == 2 else " ", 
+                            max = 30 if stk == 0 else 9, hold = True)
+                add_synch[reg,stk,j] = np.sqrt(np.mean(mmm_s[mmsk_s]**2)) 
+                if fr == 2: print("Region coverage (synch) {}".format(sum(mmsk_s)/tot ))
+
+                plt.axes(ax[2,fr])
+                hp.gnomview(mmm_a, reso = 14, rot = centers[0], 
+                            title = "Polvo galáctico + sincrotrón" if fr == 2 else " ",
+                            max = 6e3 if stk == 0 else 35, hold = True)
+                add_all[reg,stk,j] = np.sqrt(np.mean(mmm_a[mmsk_a]**2)) 
+                if fr == 2: print("Region coverage (dust+synch) {}".format(sum(mmsk_a)/tot ))
+            plt.tight_layout()
+            #plt.savefig("RegionSky_SED{}".format(j))
+```
+
+```{python}
+plt.figure(figsize = (8,6))
+for reg in range(4):
+    for stk in [0,1]:
+        plt.fill_between(nus_out150 if reg in [0,2] else nus_out220, 
+                         y1 = add_dust[reg,stk,0], y2 = add_dust[reg,stk,1],
+                         color = 'b' if stk == 0 else 'g', alpha = 0.6, 
+                         linestyle = "--", lw = 4,
+                        label = "Temperatura" if stk == 0 else "Polarización")
+
+        plt.fill_between(nus_out150 if reg in [0,2] else nus_out220, 
+                         y1 = add_synch[reg,stk,0], y2 = add_synch[reg,stk,1],
+                         color = 'b' if stk == 0 else 'g', alpha = 0.6, 
+                         linestyle = "--", lw = 4)
+
+        plt.fill_between(nus_out150 if reg in [0,2] else nus_out220, 
+                         y1 = add_all[reg,stk,0], y2 = add_all[reg,stk,1],
+                           color = 'r', alpha = 0.8)
+        plt.ylabel(r"$rms(\nu)~[\mu K_{\rm CMB}]$")# if stk == 0 else r"$P(\nu)~[\mu K_{\rm CMB}]$", fontsize = 18)
+        plt.xlabel(r"$\nu [GHz]$", fontsize = 18)
+        plt.yscale("log")
+
+        #plt.ylim(3e-1,5e4)
+        #plt.legend(loc = "upper center", ncol = 2)
+plt.tight_layout()
+#plt.savefig("rms_Comp-Dust_synch-FI")
 ```
 
 ```{python}

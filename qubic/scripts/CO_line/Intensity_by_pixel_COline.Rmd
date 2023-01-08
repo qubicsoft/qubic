@@ -33,6 +33,9 @@ import qubic
 from qubic.polyacquisition import compute_freq
 from qubic import QubicSkySim as qss
 from qubic import SpectroImLib as si
+import pysm3
+import pysm3.units as u
+from pysm3 import utils
 from pysm3 import COLines
 rc('figure', figsize=(13, 10))
 rc('font', size=13)
@@ -73,6 +76,10 @@ d['DEC_center'] = -28.94 #deg
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 ```
 
+```{python}
+pysm3.__version__
+```
+
 ## Make a sky
 
 ```{python}
@@ -86,50 +93,72 @@ print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(dustsky))
 ### Make CO sky
 
 ```{python}
-# Select the sub-band
+def find_CO_subband(nus_edge_qubic, CO21_GHz):
 
-CO21 = 230.5
+    for i, ed_min in enumerate(nus_edge_qubic[:-1]):
+        ed_max = nus_edge_qubic[i+1]
+        if CO21_GHz > ed_min and CO21_GHz < ed_max:
+            CO_band_idx = i
+            CO_ed_min = ed_min
+            CO_ed_max = ed_max
+    print('Sub-band edges and index:', CO_ed_min, CO_ed_max, CO_band_idx)
+            
+    return CO_ed_min, CO_ed_max, CO_band_idx
+
+def plot_COband(nus_edge_qubic, CO21_GHz):
+    plt.figure(figsize=(8, 6))
+    plt.xlabel('f [GHz]')
+    plt.axvline(CO21_GHz, color='g')
+    for ed in nus_edge_qubic:
+        plt.axvline(ed, linestyle='--')
+    return
+
+def make_CO21_sky(nf_sub, nside):
+    _, nus_edge_qubic, _, _, _, _ = compute_freq(220, nf_sub) # CO21 is contained in the 220GHz focal plane
+    sky = pysm3.Sky(nside=nside, preset_strings=["co1"], output_unit="uK_CMB")
+
+    CO21_GHz = sky.components[0].line_frequency['21'].value
+    print('COband : ', CO21_GHz)
+
+    CO_ed_min, CO_ed_max, CO_band_idx = find_CO_subband(nus_edge_qubic, CO21_GHz)
+
+    # Integrate the CO emission in the QUBIC sub-band that contained the CO line 
+    # so that the CO map is in µK-CMB
+    co_emission = sky.get_emission(freq=[CO_ed_min, CO_ed_max]*u.GHz)
+
+    COsky = np.zeros((nf_sub, 12*nside**2, 3))
+    COsky[CO_band_idx, :, :] += co_emission.value.T
+    return COsky
+```
+
+```{python}
+COsky = make_CO21_sky(nf_sub, d['nside'])
+
+dustCOsky = COsky + dustsky
+```
+
+```{python}
 Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(freq, nf_sub)
 
-def select_subband(nus_edge, CO21=230.5, doplot=True):
-    if doplot:
-        plt.figure(figsize=(8, 6))
+sky = pysm3.Sky(nside=nside, preset_strings=["co1"], output_unit="uK_CMB")
 
-    for i, ed in enumerate(nus_edge):
-        if doplot:
-            plt.axvline(ed, linestyle='--')
-        if CO21 > ed and CO21< nus_edge[i+1]:
-            COband = i
-    if doplot:
-        plt.axvline(CO21, color='r')
-        plt.xlabel('f [GHz]')
-        plt.axvline(nus[COband], color='g')
-    print(f'CO line contained in sub-band {COband}.')
-    return COband
+CO21_GHz = sky.components[0].line_frequency['21'].value
+print('COband : ', CO21_GHz)
+plot_COband(nus_edge, CO21_GHz)
 
-COband = select_subband(nus_edge, CO21=230.5, doplot=True)
+
+
 ```
 
 ```{python}
-co = COLines(target_nside=nside, output_units="uK_CMB", line="21")
-#pysm_map += bandpass_weight * hp.smoothing(co.signal(), fwhm=fwhm)
-COsky = np.zeros_like(dustsky)
-COsky[COband, :, :]+= co.signal().T
-
-dustCOsky = dustsky + COsky
-```
-
-```{python}
-imap = COband
+imap = 17
 istk = 0
 plt.figure(figsize=(13,8))
-plt.subplots_adjust(wspace=0.9)
 hp.mollview(dustsky[imap,:,istk], cmap='jet', sub=(1,3,1),
-            title = 'Dust', min=0, max=1000)
+            title = 'Dust', min=0, max=1000, unit='µK_CMB')
 hp.mollview(COsky[imap,:,istk], cmap='jet', sub=(1,3,2),
             title = 'CO', min=0, max=1000)
-hp.mollview(dustCOsky[imap,:,istk], cmap ='jet', sub=(1,3,3),
-            title = 'dust + CO', min=0, max=1000)
+hp.mollview(dustCOsky[imap,:,istk], cmap ='jet', sub=(1,3,3), title = 'dust + CO', min=0, max=1000)
 ```
 
 ## Plot the SED
@@ -155,7 +184,7 @@ dustCO_conv = np.array(dustCO_conv)
 # Plot the SED of the input sky and input convolved sky
 
 # Choose a pixel
-lon = 10
+lon = 0
 lat = 0
 pix = hp.ang2pix(d['nside'], lon, lat, lonlat=True)
 print(pix)
@@ -172,7 +201,7 @@ ax0.set_title(f'Pixel at [{lon},{lat}], NSIDE={nside}')
 ax0.set_xlabel('Frequency [GHz]')
 ax0.set_ylabel('I (µK)')
 
-hp.mollview(dustCOsky[COband, :, istk], sub=(1, 2, 2), min=0, max=2000, title='Pixel chosen')
+hp.mollview(dustCOsky[17, :, istk], sub=(1, 2, 2), min=0, max=2000, title='Pixel chosen')
 hp.graticule(dpar=30, dmer=30)
 ax1.axis('off')
 hp.projplot(lon, lat, 'ro', lonlat=True)
@@ -354,19 +383,19 @@ hp.projplot(lon, lat, 'ro', lonlat=True)
 ```
 
 ```{python}
-plt.figure()
-plt.title('Sum over pixels')
-plt.plot(nus_rec, np.sum(recon_dustCO[:, pix, 0], axis=1), 'ro', label='Recon with CO')
-#plt.plot(nus_rec, np.sum(maps_recon[:, pix_indices, 0], axis=1), 'go', label='Recon no CO')
-plt.axvline(CO21, color='k', label='CO-21')
-plt.xlabel('Frequency [GHz]')
-plt.ylabel('I (µK)')
-plt.grid()
-plt.legend()
+# plt.figure()
+# plt.title('Sum over pixels')
+# plt.plot(nus_rec, np.sum(recon_dustCO[:, pix, 0], axis=1), 'ro', label='Recon with CO')
+# #plt.plot(nus_rec, np.sum(maps_recon[:, pix_indices, 0], axis=1), 'go', label='Recon no CO')
+# plt.axvline(CO21, color='k', label='CO-21')
+# plt.xlabel('Frequency [GHz]')
+# plt.ylabel('I (µK)')
+# plt.grid()
+# plt.legend()
 ```
 
 ```{python}
-
+bool('True')
 ```
 
 ```{python}

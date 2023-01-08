@@ -1,0 +1,245 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.5.0
+  kernelspec:
+    display_name: Python [conda env:qubic] *
+    language: python
+    name: conda-env-qubic-py
+---
+
+```{python}
+
+```
+
+```{python}
+import os
+import glob
+import numpy as np
+import healpy as hp
+import matplotlib.pyplot as plt
+import pysm3
+import pysm3.units as u
+
+import qubic
+from qubic import QubicSkySim as qss
+from qubic.polyacquisition import compute_freq
+from qubic import ReadMC as rmc
+from qubic import AnalysisMC as amc
+from qubic import QubicSkySim as qss
+```
+
+```{python}
+rep = '/home/lmousset/QUBIC/Qubic_work/COline/NERSC_simu/'
+
+freq = 220
+nfrecon = 5
+
+dictionary = glob.glob(rep + f'*{freq}*{nfrecon}*withCO*.dict')[0]
+print(dictionary)
+
+# Dictionary saved during the simulation
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictionary)
+
+# Coordinates of the zone observed in the sky
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(center)
+nside = d['nside']
+print(nside)
+print('dtheta = ', d['dtheta'])
+
+# Get fits files names in a list
+fits_noiseless_withCO = np.sort(glob.glob(rep + f'*FI{freq}*nfrecon{nfrecon}*withCO*_noiselessTrue*.fits', 
+                              recursive=True))
+fits_noiseless_noCO = np.sort(glob.glob(rep + f'*FI{freq}*nfrecon{nfrecon}*noCO*_noiselessTrue*.fits', 
+                              recursive=True))
+
+# Get seen map (observed pixels)
+#seenmap = rmc.get_seenmap(fits_noiseless_noCO[0])
+#npix = seenmap.size
+#print('Npix:', npix)
+```
+
+```{python}
+# Get the noiseless map
+noiseless_noCO, noiseless_conv_noCO, _ = rmc.get_maps(fits_noiseless_noCO[0])
+noiseless_withCO,noiseless_conv_withCO, _ = rmc.get_maps(fits_noiseless_withCO[0])
+print('Noiseless shape', noiseless_noCO.shape)
+
+```
+
+```{python}
+band = 2
+istk = 0
+
+rr = 15
+plt.figure(figsize=(12, 4))
+hp.gnomview(noiseless_noCO[band, :, istk], 
+            cmap='jet', sub=(1, 3, 1), rot=center, reso=rr,
+            title = 'NoCO', notext=True)
+hp.gnomview(noiseless_withCO[band, :, istk], 
+            cmap='jet', sub=(1, 3, 2), rot=center, reso=rr,
+            title = 'With CO', notext=True)
+```
+
+# Add noise with the fast simulator
+
+```{python}
+##### QubicSkySim instanciation
+seed = None
+sky_config = {'cmb': seed}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+
+##### Getting FastSimulator output maps
+nreals = 80
+npix = 12*nside**2
+maps_noise = np.zeros((nreals, nfrecon, npix, 3))
+for r in range(nreals):
+    maps_noise[r, :, :, :], coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
+                                                                    spatial_noise=False)     
+
+```
+
+```{python}
+#noisy_noCO = maps_noise + noiseless_noCO
+#noisy_withCO = maps_noise + noiseless_withCO
+```
+
+```{python}
+noisy_noCO.shape
+```
+
+# Create the input sky used in simu
+
+```{python}
+def find_CO_subband(nus_edge_qubic, CO21_GHz):
+
+    for i, ed_min in enumerate(nus_edge_qubic[:-1]):
+        ed_max = nus_edge_qubic[i+1]
+        if CO21_GHz > ed_min and CO21_GHz < ed_max:
+            CO_band_idx = i
+            CO_ed_min = ed_min
+            CO_ed_max = ed_max
+    print('Sub-band edges and index:', CO_ed_min, CO_ed_max, CO_band_idx)
+            
+    return CO_ed_min, CO_ed_max, CO_band_idx
+
+def make_CO21_sky(nf_sub, nside):
+    _, nus_edge_qubic, _, _, _, _ = compute_freq(220, nf_sub) # CO21 is contained in the 220GHz focal plane
+    sky = pysm3.Sky(nside=nside, preset_strings=["co1"], output_unit="uK_CMB")
+
+    CO21_GHz = sky.components[0].line_frequency['21'].value
+    print('COband : ', CO21_GHz)
+
+    CO_ed_min, CO_ed_max, CO_band_idx = find_CO_subband(nus_edge_qubic, CO21_GHz)
+
+    # Integrate the CO emission in the QUBIC sub-band that contained the CO line 
+    # so that the CO map is in µK-CMB
+    co_emission = sky.get_emission(freq=[CO_ed_min, CO_ed_max]*u.GHz)
+
+    COsky = np.zeros((nf_sub, 12*nside**2, 3))
+    COsky[CO_band_idx, :, :] += co_emission.value.T
+    return COsky
+```
+
+```{python}
+# Make a sky using PYSM with only dust
+sky_config = {'dust': 'd1'}
+Qubic_sky = qss.Qubic_sky(sky_config, d)
+dustsky = Qubic_sky.get_simple_sky_map()
+print('Input Map with shape (nf_sub, #pixels, #stokes) : ', np.shape(dustsky))
+
+# Add the CO emission
+COsky = make_CO21_sky(d['nf_sub'], d['nside'])
+dustCOsky = COsky + dustsky
+```
+
+```{python}
+imap = 17
+istk = 0
+plt.figure(figsize=(13,8))
+hp.mollview(dustsky[imap,:,istk], cmap='jet', sub=(1,3,1),
+            title = 'Dust', min=0, max=1000, unit='µK_CMB')
+hp.mollview(COsky[imap,:,istk], cmap='jet', sub=(1,3,2),
+            title = 'CO', min=0, max=1000)
+hp.mollview(dustCOsky[imap,:,istk], cmap ='jet', sub=(1,3,3), title = 'dust + CO', min=0, max=1000)
+```
+
+# Compare with and without CO
+
+```{python}
+noiseless_conv_noCO.shape
+```
+
+```{python}
+# Plot the SED of the input sky and input convolved sky
+Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(freq, d['nf_sub'])
+_, nus_edge_rec, nus_rec, _, _, _ = compute_freq(freq, d['nf_recon'])
+
+# Choose a pixel
+lon = 0
+lat = 0
+pix = hp.ang2pix(d['nside'], lon, lat, lonlat=True)
+print(pix)
+
+istk = 0
+a = np.mean((maps_noise + noiseless_withCO)[:, :, pix, istk], axis=0)
+b = np.mean((maps_noise + noiseless_noCO)[:, :, pix, istk], axis=0)
+delta_a = np.std((maps_noise + noiseless_withCO)[:, :, pix, istk], axis=0)/np.sqrt(nreals)
+delta_b = np.std((maps_noise + noiseless_noCO)[:, :, pix, istk], axis=0)/np.sqrt(nreals)
+
+fig, axs = plt.subplots(nrows=2, sharex=True, figsize=(10, 10), gridspec_kw={'height_ratios': [1.2, 1], 'hspace': 0})
+ax0, ax1 = axs.ravel()
+#ax0.plot(nus, dustCOsky[:, pix, istk], 'go-', label='Input sky')
+
+ax0.plot(nus_rec, noiseless_conv_noCO[:, pix, istk],
+       color='b', ls='--', label='Input SED - no CO')
+ax0.plot(nus_rec, noiseless_conv_withCO[:, pix, istk], 'r--', label='Input SED - with CO')
+ax0.errorbar(nus_rec, b,
+             yerr=delta_b,
+             color='b', fmt='o', label='Rec. SED - no CO')
+
+ax0.errorbar(nus_rec, a,
+             yerr=delta_a,
+             color='r', fmt='o', label='Rec. SED - with CO')
+
+ax0.legend(fontsize=14)
+ax0.set_title(f'Pixel at (lon, lat)=({lon}°,{lat}°), NSIDE={nside}', fontsize=16)
+ax0.set_ylabel(r'I [$\mu K_{CMB}$]', fontsize=16)
+ax0.grid()
+
+
+ratio = a/b
+ratio_error = np.sqrt(delta_a**2/b**2 + a**2/b**4*delta_b**2)
+ax1.errorbar(nus_rec, ratio,
+             yerr=ratio_error, color='k', fmt='o')
+ax1.grid()
+ax1.set_xlabel('Frequency [GHz]', fontsize=16)
+ax1.set_ylabel('Rec. ratio', fontsize=16)
+#ax1.set_ylim(1.0125,1.0175)
+
+
+
+#hp.mollview(dustCOsky[17, :, istk], sub=(1, 2, 2), min=0, max=2000, title='Pixel chosen')
+#hp.graticule(dpar=30, dmer=30)
+#ax1.axis('off')
+#hp.projplot(lon, lat, 'ro', lonlat=True)
+```
+
+```{python}
+fig.savefig('/home/lmousset/QUBIC/Papiers/Proceeding_Blois2022/Mousset_Proceeding_Blois2022/figures/CO_line.pdf'
+)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

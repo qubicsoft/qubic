@@ -46,7 +46,7 @@ name = today + '_' + sys.argv[2]
 nreals = int(sys.argv[3])
 
 # Option multFactor x QU
-#multFactor = int(sys.argv[5])
+# multFactor = int(sys.argv[5])
 
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
@@ -87,8 +87,8 @@ else:
 # x0[:, :, 0] = 0.
 
 # Multiply Q, U maps
-#x0[:, :, 1] *= multFactor
-#x0[:, :, 2] *= multFactor
+# x0[:, :, 1] *= multFactor
+# x0[:, :, 2] *= multFactor
 
 
 # ==== Pointing strategy ====

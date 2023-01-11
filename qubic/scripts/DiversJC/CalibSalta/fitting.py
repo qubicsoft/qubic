@@ -137,7 +137,7 @@ def myhist(x, unbinned=True, nsig=4, **kwargs):
         dx = np.diff(xe)
         notzero = yy != 0    
         p=errorbar(xx[notzero], yy[notzero], yerr=np.sqrt(yy[notzero]), fmt='o', color=a[0].get_facecolor(), alpha=1)
-        xm = np.linspace(np.min(xx), np.max(xx), 100)
+        xm = np.linspace(np.min(xx), np.max(xx), 1000)
         plot(xm, gauss_pdf(xm, *m.values) * len(x) * dx[0], color=a[0].get_facecolor(), alpha=1, label = thelabel+' {0:5.2g} $\pm$ {1:5.2g}'.format(mu, sigma))
     else:
         yy, xe, a = hist(x, **kwargs)

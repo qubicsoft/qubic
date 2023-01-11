@@ -16,13 +16,17 @@ jupyter:
 import iminuit
 from importlib import reload
 from IPython.display import display, HTML
+# %matplotlib inline
 # %config InlineBackend.figure_format = 'retina'
 
 display(HTML("<style>.container { width:95% !important; }</style>"))
 
 import fitting as fit
+import mpld3
 
-rc('figure', figsize=(20, 6))
+mpld3.enable_notebook()
+
+rc('figure', figsize=(14, 8))
 rc('font', size=12)
 ```
 
@@ -228,6 +232,7 @@ a = fit.myhist(mymap3 - truey,  color='g',label='Residuals Minuit (Map Domain)')
 
 
 tight_layout()
+
 ```
 
 ```{python}
@@ -838,6 +843,14 @@ print(m.valid)
 
 ```{python}
 myintercals4
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

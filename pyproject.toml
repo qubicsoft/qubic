@@ -1,0 +1,9 @@
+[build-system]
+build-backend = 'setuptools.build_meta'
+requires = [
+    'oldest-supported-numpy',
+    'pchanial-legacy-install-hooks==1.0.1',
+    'setuptools==64.0.3',
+    'setuptools_scm[toml]>=6.2',
+    'wheel',
+]

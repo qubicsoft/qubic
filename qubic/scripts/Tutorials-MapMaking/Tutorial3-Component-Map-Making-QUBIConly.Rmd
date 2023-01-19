@@ -104,7 +104,7 @@ def give_dictionary(dictfilename, Nf, nside, pointing, band):
     return d
 
 nside=256
-pointing=2000
+pointing=1000
 
 d150 = give_dictionary(dictfilename, Nf, nside, pointing, 150)
 d220 = give_dictionary(dictfilename, Nf, nside, pointing, 220)
@@ -171,7 +171,7 @@ pixok = cov > 0
 
 n = Acq.QubicOtherIntegratedComponentsMapMaking(otwo, [], comp=[c.CMB(), c.Dust(nu0=150, temp=20)]).get_noise()
 invN = Acq.QubicOtherIntegratedComponentsMapMaking(otwo, [], comp=[c.CMB(), c.Dust(nu0=150, temp=20)]).get_invntt_operator()
-Pipeline = Acq.PipelineReconstruction(o2, [], comp=[c.CMB(), c.Dust(nu0=150, temp=20)], type='TwoBands', convolution=False)
+Pipeline = Acq.PipelineReconstruction(otwo, [], comp=[c.CMB(), c.Dust(nu0=150, temp=20)], type='TwoBands', convolution=False)
 H = Pipeline.get_operator(np.array([1.54]), False)
 ```
 
@@ -183,16 +183,15 @@ comp_for_pcg[:, ~pixok, :] = 0
 tod = H(components)+n
 A = H.T * invN * H
 b = H.T * invN * tod
-```
-
-Then, we apply the PCG by defining the operator `H`, the `tod` used, the inverse noise covariance matrix `invN`. We need to define also a starting point for spectral index $\beta_d$, we fix the `kmax` to 1 in this notebook to see the convergence of the algorithm, a vlue of `kmax` different to 1 allow to estimate the spectral index every n-iteration.
-
-```{python}
-sol, beta = Pipeline.call_pcg(H, tod, invN, 1.54, tolerance=1e-10, x0=comp_for_pcg, kmax=1, maxiter=500)
+M = Acq.get_preconditioner(np.array([cov]))
 ```
 
 ```{python}
-outputs = sol.copy()
+sol = pcg(A, b, x0=comp_for_pcg, tol=1e-4, M=M, disp=True)
+```
+
+```{python}
+outputs = sol['x'].copy()
 inputs = components.copy()
 #inputs[:, ~pixok, :] = hp.UNSEEN
 ```
@@ -200,7 +199,7 @@ inputs = components.copy()
 ```{python}
 r = 8
 rr = 8
-reso= 10
+reso= 25
 istk = 2
 
 plt.figure(figsize=(15, 5))

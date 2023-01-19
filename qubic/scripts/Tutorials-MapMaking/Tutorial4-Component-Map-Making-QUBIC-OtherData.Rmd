@@ -151,7 +151,7 @@ pixok = cov > 0
 
 
 Pipeline = Acq.PipelineReconstruction(otwo, [143, 217, 353], comp=[c.CMB(), c.Dust(nu0=150, temp=20)], type='TwoBands', convolution=False)
-H = Pipeline.get_operator(np.array([1.54]), False)
+H = Pipeline.get_operator(np.array([1.54]), type='no_convolution')
 n = Pipeline.get_noise()
 invN = Pipeline.get_invN()
 
@@ -163,11 +163,13 @@ b = H.T * invN * tod
 Here we call the PCG as before.
 
 ```{python}
-sol, beta = Pipeline.call_pcg(H, tod, invN, 1.54, tolerance=1e-10, x0=comp_for_pcg, kmax=1, maxiter=500)
+M = Acq.get_preconditioner(np.ones(Pipeline.npix))
+
+sol = pcg(A, b, x0=comp_for_pcg, tol=1e-4, M=M, disp=True)
 ```
 
 ```{python}
-outputs = sol.copy()
+outputs = sol['x'].copy()
 inputs = components.copy()
 #inputs[:, ~pixok, :] = hp.UNSEEN
 ```
@@ -176,7 +178,7 @@ inputs = components.copy()
 r = 8
 rr = 8
 reso= 15
-istk = 2
+istk = 1
 
 plt.figure(figsize=(15, 5))
 hp.mollview(inputs[0, :, istk], cmap='jet', min=-rr, max=rr, sub=(1, 4, 1))

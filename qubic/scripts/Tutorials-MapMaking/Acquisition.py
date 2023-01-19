@@ -953,7 +953,7 @@ class QubicMultibandAcquisition(QubicPolyAcquisition):
         return tod
 class QubicPlanckMultiBandAcquisition:
 
-    def __init__(self, qubic, planck, type):
+    def __init__(self, qubic, planck, type='QubicIntegrated'):
 
         self.qubic = qubic
         self.scene = self.qubic.scene

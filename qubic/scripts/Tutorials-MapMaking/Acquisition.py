@@ -689,7 +689,7 @@ class QubicPlanckAcquisition:
 
         Operator = []
 
-        H_qubic = self.qubic.get_operator(convolution=convolution)
+        H_qubic = self.qubic.get_operator()
         R_qubic = ReshapeOperator(H_qubic.shapeout, H_qubic.shape[0])
         Operator.append(R_qubic(H_qubic))
 
@@ -1793,6 +1793,8 @@ class QubicIntegratedComponentsMapMaking:
         self.d = d
         self.nus_edge = nus_edge
         self.comp = comp
+        self.nc = len(self.comp)
+        self.npix = 12*self.nside**2
         self.Nsub = self.d['nf_sub']
         self.nus = np.array([q.filter.nu / 1e9 for q in multiinstrument])
 
@@ -1833,15 +1835,59 @@ class QubicIntegratedComponentsMapMaking:
         A = A_ev(beta)
 
         return A
+    def get_mixing_operator_verying_beta(self, A):
+        R = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
+        op = []
+        for i in range(self.npix):
+            op.append(DenseOperator(A[i], broadcast='rightward', shapein=(self.nc, 3)))
+        D = R * BlockDiagonalOperator(op, new_axisout=1)
+        #D = R * BlockDiagonalOperator([DenseBlockDiagonalOperator(A, broadcast='rightward'),
+        #                               DenseBlockDiagonalOperator(A, broadcast='rightward'),
+        #                               DenseBlockDiagonalOperator(A, broadcast='rightward')], 
+        #                               shapein=(3, self.npix, self.nc), new_axisin=0, new_axisout=2)
+        return D
+    def get_allA(self, beta, nus):
+
+        beta_npix = len(beta)
+        if beta_npix != self.npix:
+            beta = hp.ud_grade(beta, self.nside)
+    
+        allA = np.zeros((self.npix, 1, self.nc))
+        for i in range(self.npix):
+            allA[i] = self.get_mixingmatrix(beta[i], nus)
+        return allA
     def get_mixing_operator(self, beta, nus):
+        """
+        This function returns a mixing operator based on the input parameters: beta and nus.
+        The mixing operator is either a constant operator, or a varying operator depending on the input.
+        """
 
-        A = self.get_mixingmatrix(beta, nus)
-        nf, nc = A.shape
-        R = ReshapeOperator(((1, 12*self.nside**2, 3)), ((12*self.nside**2, 3)))
-        D = DenseOperator(A[0], broadcast='rightward', shapein=(nc, 12*self.nside**2, 3),
-                            shapeout=(1, 12*self.nside**2, 3))
+        # Check if the length of beta is equal to the number of channels minus 1
+        if len(beta) == self.nc-1:
+            print('constant')
+        
+            # Get the mixing matrix
+            A = self.get_mixingmatrix(beta, nus)
+        
+            # Get the shape of the mixing matrix
+            nf, nc = A.shape
+        
+            # Create a ReshapeOperator
+            R = ReshapeOperator(((1, 12*self.nside**2, 3)), ((12*self.nside**2, 3)))
+        
+            # Create a DenseOperator with the first row of A
+            D = R * DenseOperator(A[0], broadcast='rightward', shapein=(nc, 12*self.nside**2, 3), shapeout=(1, 12*self.nside**2, 3))
+        else:
+            print('not constant')
+        
+            # Get all A matrices
+            A = self.get_allA(beta, nus)
+        
+            # Get the varying mixing operator
+            D = self.get_mixing_operator_verying_beta(A)
 
-        return R * D
+        return D
+
     def give_me_correctedFWHM(self):
 
         fwhm_max = np.max(self.final_fwhm)
@@ -2049,14 +2095,14 @@ class QubicTwoBandsComponentsMapMaking:
             for i in range(2):
                 for j in range(self.Nsub):
                     mytarget_i = HealpixConvolutionGaussianOperator(fwhm=self.alltarget[count])
-                    if i == 0:
-                        if convolution:
-                            self.H150.operands[j] = delete_inside_list(self.H150.operands[j], 5)
-                            self.H150.operands[j] = insert_inside_list(self.H150.operands[j], mytarget_i, 5)
-                    else:
+                    if i == 1:
                         if convolution:
                             self.H220.operands[j] = delete_inside_list(self.H220.operands[j], 5)
                             self.H220.operands[j] = insert_inside_list(self.H220.operands[j], mytarget_i, 5)
+                    else:
+                        if convolution:
+                            self.H150.operands[j] = delete_inside_list(self.H150.operands[j], 5)
+                            self.H150.operands[j] = insert_inside_list(self.H150.operands[j], mytarget_i, 5)
                     count += 1
         elif type == 'no_convolution':
             pass
@@ -2291,6 +2337,7 @@ class OtherData:
             self.bw.append(self.dataset['bw{}'.format(i)])
         self.fwhm = arcmin2rad(create_array('fwhm', self.nus, self.nside))
         self.comp = comp
+        self.nc = len(self.comp)
 
 
     def integrated_convolved_data(self, A, fwhm):
@@ -2307,26 +2354,61 @@ class OtherData:
             - operator: AdditionOperator
                 The operator that integrates the bandpass.
         """
-        nf, nc = A.shape
-        R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
-        operator = []
-        for i in range(nf):
-            D = DenseOperator(A[i], broadcast='rightward', shapein=(nc, 12*self.nside**2, 3), shapeout=(1, 12*self.nside**2, 3))
-            C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
-            operator.append(C * R * D)
+        if len(A) > 2:
+            pass
+        else:
+            nf, _ = A.shape
+            R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
+            operator = []
+            for i in range(nf):
+                D = DenseOperator(A[i], broadcast='rightward', shapein=(self.nc, 12*self.nside**2, 3), shapeout=(1, 12*self.nside**2, 3))
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+                operator.append(C * R * D)
+        
         return AdditionOperator(operator)/nf
 
-    def get_mixingmatrix(self, nu, beta):
+    def get_mixing_operator_verying_beta(self, A):
+        R = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
+        op = []
+        for i in range(self.npix):
+            op.append(DenseOperator(A[i], broadcast='rightward', shapein=(self.nc, 3)))
+        D = R * BlockDiagonalOperator(op, new_axisout=1)
+        
+        #R = ReshapeOperator((self.npix, 1, 3), (self.npix, 3))
+        #D = R * BlockDiagonalOperator([DenseBlockDiagonalOperator(A, broadcast='rightward'),
+        #                               DenseBlockDiagonalOperator(A, broadcast='rightward'),
+        #                               DenseBlockDiagonalOperator(A, broadcast='rightward')], 
+        #                               shapein=(3, self.npix, self.nc), new_axisin=0, new_axisout=2)
+        return D
+    def get_allA(self, beta, nus):
+    
+        beta_npix = len(beta)
+        if beta_npix != self.npix:
+            beta = hp.ud_grade(beta, self.nside)
+
+        allA = np.zeros((self.npix, 1, self.nc))
+        for i in range(self.npix):
+            allA[i] = self.get_mixingmatrix(beta[i], nus)
+        return allA
+    def get_mixing_operator(self, beta, nus):
         """
-        This function calculates the mixing matrix for a given frequency and beta value.
+        This function returns a mixing operator based on the input parameters: beta and nus.
+        The mixing operator is either a constant operator, or a varying operator depending on the input.
         """
-        # Initialize the MixingMatrix object
+        
+        # Get all A matrices
+        A = self.get_mixingmatrix(beta, nus)
+        
+        # Get the varying mixing operator
+        D = self.get_mixing_operator(A)
+
+        return D
+    def get_mixingmatrix(self, beta, nus):
+
         A = mm.MixingMatrix(*self.comp)
-        # Evaluate the MixingMatrix at the given frequency
-        A_ev = A.evaluator(nu)
-        # Calculate the mixing matrix at the given beta value
+        A_ev = A.evaluator(nus)
         A = A_ev(beta)
-        # Return the mixing matrix
+
         return A
     def get_invntt_operator(self, fact=None):
         # Create an empty array to store the values of sigma
@@ -2353,18 +2435,50 @@ class OtherData:
         # Create reshape operator and apply it to the diagonal operator
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
+    
     def get_operator(self, nintegr, beta, convolution, fwhm_max=None):
         R2tod = ReshapeOperator((12*self.nside**2, 3), (3*12*self.nside**2))
+        R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
         op = []
+        Operator=[]
         for ii, i in enumerate(self.nus):
             if nintegr == 1:
                 allnus = np.array([i])
             else:
                 allnus = np.linspace(i-self.bw[ii]/2, i+self.bw[ii]/2, nintegr)
-            A = self.get_mixingmatrix(allnus, beta)
+            
             fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
-            op.append(R2tod(self.integrated_convolved_data(A, fwhm=fwhm)))
+            C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+            for inu, nu in enumerate(allnus):
+                if len(beta.ravel()) > len(self.comp):
+                    print('Varying index')
+                    A = self.get_allA(beta, np.array([nu]))
+                    D = self.get_mixing_operator_verying_beta(A)
+                    Operator.append(C * D)
+                else:
+                    print('Constant index')
+                    A = self.get_mixingmatrix(beta, np.array([nu]))
+                    D = DenseOperator(A, broadcast='rightward', shapein=(self.nc, 12*self.nside**2, 3), shapeout=(1, 12*self.nside**2, 3))
+                    Operator.append(C * R * D)
+
+
+            op.append(R2tod(AdditionOperator(Operator)/nintegr))
+            
         return BlockColumnOperator(op, axisout=0)
+
+    #def get_operator(self, nintegr, beta, convolution, fwhm_max=None):
+    #    R2tod = ReshapeOperator((12*self.nside**2, 3), (3*12*self.nside**2))
+    #    op = []
+    #    for ii, i in enumerate(self.nus):
+    #        if nintegr == 1:
+    #            allnus = np.array([i])
+    #        else:
+    #            allnus = np.linspace(i-self.bw[ii]/2, i+self.bw[ii]/2, nintegr)
+    #        A = self.get_mixingmatrix(allnus, beta)
+    #        print(A.shape)
+    #        fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
+    #        op.append(R2tod(self.integrated_convolved_data(A, fwhm=fwhm)))
+    #    return BlockColumnOperator(op, axisout=0)
 
     def get_noise(self, fact=None):
         state = np.random.get_state()
@@ -2392,6 +2506,8 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         self.convolution = convolution
         self.qubic = qubic
         self.type = type
+        self.comp = comp
+        self.nc = len(self.comp)
         self.external = external_nus
         self.Nsamples = self.qubic.qubic150.sampling.shape[0]
         self.Ndets = 992
@@ -2466,64 +2582,122 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
 
 
         return H
-    def update_H(self, H, beta):
+    def update_H(self, Ope, beta, mask_beta=None, nside_fit=0):
         """
-        This function updates the Mixing Matrix D inside the Operator H. It is used to change spectral indices during the convergence.
+        This function updates the Mixing Matrix D inside the Operator H. It is used to change spectral indices during the convergence. 
 
-        H: Full operators
-        beta: Spectral indices (constant across the sky now)
+        If you're using constant spectral index across the sky, you should let nside_fit=0 and mask_beta=None. If not, the function change beta maps 
+        according to the mask you provided.
         """
-        if self.type == 'QubicIntegrated':
-            # loop through sub-bands
-            for i in range(self.Nsub):
-                # get mixing operator for current sub-band
-                D = self.get_mixing_operator(np.array([self.nueff[i]]), beta)
-                # reshape operator
-                R = ReshapeOperator(D.shapeout, (12*self.nside**2, 3))
-                # update H depending on whether there are external bands
-                if len(self.external) != 0:
-                    if self.Nsub == 1:
-                        H.operands[0].operands[1].operands[-1] = D
-                    else:
-                        H.operands[0].operands[1].operands[i].operands[-1] = D
-                else:
-                    if self.Nsub == 1:
-                        H.operands[-1] = D
-                    else:
-                        H.operands[1].operands[i].operands[-1] = D
-            # loop through external bands
-            for ii, i in enumerate(self.external):
-                D = self.get_mixing_operator(np.array([i]), beta)
-                H.operands[ii+1].operands[-1] = D
-        elif self.type == 'TwoBands' or self.type == 'WideBand':
+        
+
+        if self.type == 'TwoBands':
             k=0
-            # loop through sub-bands
             for i in range(2):
                 for j in range(self.Nsub):
                     # get mixing operator for current sub-band
-                    myope = H.operands[0].operands[i]
-                    D = self.get_mixing_operator(np.array([self.nueff[k]]), beta)
-                    if self.Nsub == 1:
+                    myope = Ope.operands[0].operands[i]
+                    if len(beta.ravel()) > len(self.comp):
+                        if nside_fit == 0:
+                            raise TypeError('Change Nside fit')
+                        A = self.get_A_varying(beta, np.array([self.nueff[k]]), nside_fit=nside_fit)
+                        if self.Nsub == 1 :
+                            allD = myope.operands[-1]
+                        else:
+                            allD = myope.operands[1].operands[j].operands[-1]
+                        
+                        D = self.replace_mixing_operator_varying_beta(allD, A, mask_beta=mask_beta)
+                        #D = self.get_mixing_operator_verying_beta(A)
+                        
+                    else:
+                        D = self.get_mixing_operator(beta, np.array([self.nueff[k]]))
+                    
+                    if self.Nsub == 1 :
                         myope.operands[-1] = D
                     else:
                         myope.operands[1].operands[j].operands[-1] = D
+
                     k+=1
-            # loop through external bands
-            for ii, i in enumerate(self.external):
+            for inu, nu in enumerate(self.external):
                 if self.nintegr == 1:
-                    D = self.get_mixing_operator(np.array([i]), beta)
-                    H.operands[ii+1].operands[-1] = D
+                    if len(beta.ravel()) > len(self.comp):
+                        A = self.get_A_varying(beta, np.array([nu]), nside_fit=nside_fit)
+                        allD = Ope.operands[inu+1].operands[-1]
+                        
+                        D = self.replace_mixing_operator_varying_beta(allD, A, mask_beta=mask_beta)
+                    else:
+                        D = self.get_mixing_operator(beta, np.array([nu]))
+                        Ope.operands[inu+1].operands[-1] = D
                 else:
-                    myope = H.operands[ii+1].operands[2]
-                    allnus = np.linspace(i-self.bw[ii]/2, i+self.bw[ii]/2, self.nintegr)
+                    myope = Ope.operands[inu+1].operands[2]
+                    allnus = np.linspace(nu-self.bw[inu]/2, nu+self.bw[inu]/2, self.nintegr)
                     for j in range(self.nintegr):
-                        D = self.get_mixing_operator(np.array([allnus[j]]), beta)
-                        myope.operands[j].operands[-1] = D
+                        if len(beta.ravel()) > len(self.comp):
+                            #A = self.get_A_varying(beta, np.array([allnus[j]]))
+                            #D = self.get_mixing_operator_verying_beta(A)
+                            #myope.operands[j].operands[-1] = D
+                            pass
+                        else:
+                            D = self.get_mixing_operator(np.array([allnus[j]]), beta)
+                            myope.operands[j].operands[-1] = D
+
         else:
-            raise TypeError('Choose right type (QubicIntegrated, Twobands or WideBand)')
+            raise TypeError('Not yet implemented...')
 
-        return H
 
+        return Ope
+    def replace_mixing_operator_varying_beta(self, allD, A, mask_beta=None):
+
+        if len(allD.operands) != len(mask_beta):
+            raise TypeError('All mixing operator and mask must have the same size')
+        A_npix = np.zeros((self.npix, A.shape[1], A.shape[2]))
+
+        for i in range(A.shape[1]):
+            for j in range(A.shape[2]):
+                A_npix[:, i, j] = hp.ud_grade(A[:, i, j], self.nside)
+
+        indices_beta_to_replace = np.where(mask_beta == True)[0]
+        
+        for i in indices_beta_to_replace:
+            allD.operands[i] = DenseOperator(A_npix[i], broadcast='rightward', shapein=(self.nc, 3))
+        
+        return allD
+    def get_A_varying(self, beta, nus, nside_fit):
+        
+        npix_fit = 12*nside_fit**2
+        allA = np.zeros((npix_fit, 1, self.nc))
+        allA_fit = np.zeros((self.npix, 1, self.nc))
+        for i in range(npix_fit):
+            allA[i] = self.get_mixingmatrix(beta[i], nus)
+        
+
+        for i in range(self.nc):
+            allA_fit[:, 0, i] = hp.ud_grade(allA[:, 0, i], self.nside)
+        return allA
+    def get_mixingmatrix(self, beta, nus):
+
+        A = mm.MixingMatrix(*self.comp)
+        A_ev = A.evaluator(nus)
+        A = A_ev(beta)
+
+        return A
+    def get_mixing_operator(self, beta, nus):
+        """
+        This function returns a mixing operator based on the input parameters: beta and nus.
+        The mixing operator is either a constant operator, or a varying operator depending on the input.
+        """
+
+        # Check if the length of beta is equal to the number of channels minus 1
+        
+        # Get the mixing matrix
+        A = self.get_mixingmatrix(beta, nus)
+        
+        # Create a ReshapeOperator
+        R = ReshapeOperator(((1, 12*self.nside**2, 3)), ((12*self.nside**2, 3)))
+        
+        # Create a DenseOperator with the first row of A
+        D = DenseOperator(A[0], broadcast='rightward', shapein=(self.nc, 12*self.nside**2, 3), shapeout=(1, 12*self.nside**2, 3))
+        return D
     def get_invN(self):
         return self.get_invntt_operator()
     def call_pcg(self, H, tod, invN, beta0, tolerance, x0, kmax=5, disp=True, maxiter=10, mask=None, **kwargs):
@@ -2567,11 +2741,11 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         return mysolution, beta, error
 
 
-    def myChi2(self, beta, H, solution, data, mask=None):
+    def myChi2(self, beta, allbeta, H, solution, data, nside_fit, mask=None):
         """
         This function calculates the chi-squared value for a given beta, H, solution, and data.
         If a mask is provided, it will zero out the corresponding elements in the solution and data.
-        """
+        
         if mask is not None:
             # Make a copy of the solution and zero out the elements specified by the mask
             newsolution = solution.copy()
@@ -2600,7 +2774,26 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         newdata_norm = new_data.copy()
 
         #print(beta)
-        return np.sum((newdata_norm-fakedata_norm)**2)
+        """
+
+        nsidemap = hp.npix2nside(len(solution[0, :, 0]))
+    
+
+        if mask is not None:
+            fix_beta = allbeta.copy()
+            fix_beta[mask] = 0
+            fix_beta[mask] = beta.copy()
+            fix_beta = hp.ud_grade(fix_beta, nsidemap)
+        else:
+            fix_beta = beta.copy()
+    
+        H_for_beta = self.update_H(H, fix_beta, nside_fit=nside_fit, mask_beta=mask)
+        fakedata = H_for_beta(solution)
+        
+        chi2 = np.sum((data-fakedata)**2)
+        print(np.mean(beta), chi2)
+        return chi2
+        #return np.sum((newdata_norm-fakedata_norm)**2)
 
 
 

@@ -80,9 +80,9 @@ d.read_from_file(dictfilename)
 from qubic import SpectroImLib as sp
 from importlib import reload
 
-Nf = 3
+Nf = 2
 relative_bandwidth = 0.25
-Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(150, Nfreq=Nf)
+Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(220, Nfreq=Nf)
 print(nus)
 print(nus_edge)
 
@@ -95,11 +95,11 @@ npix=12*d['nside']**2
 d['RA_center'] = 0
 d['DEC_center'] = -57
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-d['effective_duration'] = 4
+d['effective_duration'] = 3
 #d['dtheta'] = 15
-d['npointings'] = 300
+d['npointings'] = 1000
 d['tol'] = 5e-4
-d['filter_nu'] = 150e9
+d['filter_nu'] = 220e9
 d['photon_noise'] = False
 d['noiseless'] = False
 d['config'] = 'FI'
@@ -138,8 +138,11 @@ qubic_acquisition = Acq.QubicIntegrated(q, p, s, d, nus_edge)
 The acquisition allows you to define the QUBIC operator which tak eas input a sky map with shape ($N_{pix}$, $N_{stk}$) and returns TOD after many rotations and transformations. For the next notebook, it will be very inportant to understand the structure of this operator... To be breaf, this operator can be seen as a list of function.
 
 ```{python}
-H_qubic = qubic_acquisition.get_operator(convolution=False)
-H_qubic
+H_qubic = qubic_acquisition.get_operator(convolution=True)
+```
+
+```{python}
+
 ```
 
 Here we define $N^{-1}$ the inverse noise covariance matrix in time domain.
@@ -156,10 +159,6 @@ n = qubic_acquisition.get_noise()
 tod = H_qubic(mapin) + n
 ```
 
-```{python}
-H_qubic
-```
-
 In a very generic way, all of this work is done to solve this equation :
 
 $$y = (H^t N^{-1} H)^{-1} H^t N^{-1} d$$
@@ -170,6 +169,7 @@ $$A = (H^t N^{-1} H)$$
 $$b = H^t N^{-1} d$$
 
 ```{python}
+H_qubic = qubic_acquisition.get_operator(convolution=False)
 A = H_qubic.T * invntt * H_qubic
 b = H_qubic.T * invntt * tod
 ```
@@ -218,21 +218,20 @@ def display_maps(inputs, outputs, istk, display=True, rot=None, res=None, min=30
         k+=1
         hp.gnomview(r[i], rot=rot, reso=res, cmap='jet', min=minr, max=maxr, sub=(Nf, 3, k), title='Residual')
         k+=1
-    
-    
-plt.figure(figsize=(10, 10))
-display_maps(mapin, solution_qubic['x'], istk=0, display=True, rot=center, res=25, min=-300, max=300, minr=-30, maxr=30)
-plt.show()
+
+        
+for i in range(2):
+    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
+   
+    plt.figure(figsize=(10, 10))
+    display_maps(np.array([C(mapin[i])]), np.array([solution_qubic['x'][i]]), istk=0, display=True, rot=center, res=25, min=-300, max=300, minr=-30, maxr=30)
+    plt.show()
 ```
 
 In the inner part of the coverage, the result is quite good. It seems that the PCG solve correctly the Map-Making equation and so converge to the solution. Unfortunately, on the edge of the coverage the reconstruction is very bad and the error increase a lot... Missing data is the cause and a way to solve this problem is to merge the QUBIC acquisition with the planck aquisition which have seen the whole sky.
 
 
 We define here the PlanckAcquisition which needs the central frequency that you are using (150 or 220 GHz) and the same scene as before.
-
-```{python}
-
-```
 
 ```{python}
 # Planck Acquisition
@@ -258,11 +257,11 @@ qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition,
 Here, we define the QUBIC-Planck Operator. As before, look at this operator is very important for next steps.
 
 ```{python}
-H = qubicplanck_acquisition.get_operator(convolution=False)
+H = qubicplanck_acquisition.get_operator(convolution=True)
 ```
 
 ```{python}
-H
+
 ```
 
 ```{python}
@@ -273,7 +272,7 @@ Here, we take a look of data. The first part of the TOD is the QUBIC part and th
 
 ```{python}
 n = qubicplanck_acquisition.get_noise()
-tod = H(mapin_conv) + n
+tod = H(mapin) + n
 
 plt.figure(figsize=(15, 5))
 plt.plot(tod, ls=':')
@@ -281,6 +280,7 @@ plt.show()
 ```
 
 ```{python}
+H = qubicplanck_acquisition.get_operator(convolution=False)
 A = H.T * invntt * H
 b = H.T * invntt * tod
 ```
@@ -295,14 +295,14 @@ cov = qubic_acquisition.get_coverage()
 ```{python}
 tol=1e-4
 
-solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=tol, disp=True, maxiter=1000)
+solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=tol, disp=True, maxiter=200)
 ```
 
 You can note that the convergence is much faster than before with the QUBIC only acquisition. This is due to the fact that edge effects have disappeared ! Let's take a look of reconstructed maps.
 
 ```{python}
 plt.figure(figsize=(10, 10))
-display_maps(mapin_conv, solution_qubic_planck['x'], istk=1, display=True, rot=center, res=15, min=-8, max=8, minr=-8, maxr=8)
+display_maps(mapin_conv, solution_qubic_planck['x'], istk=2, display=True, rot=center, res=15, min=-8, max=8, minr=-8, maxr=8)
 plt.show()
 ```
 

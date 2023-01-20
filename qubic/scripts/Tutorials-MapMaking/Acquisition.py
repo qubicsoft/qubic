@@ -21,7 +21,8 @@ import component_model as c
 import mixing_matrix as mm
 import pickle
 from scipy.optimize import minimize
-
+import ComponentsMapMakingTools as CMMTools
+reload(CMMTools)
 # PyOperators stuff
 from pysimulators import *
 from pyoperators import *
@@ -35,7 +36,16 @@ __all__ = ['QubicAcquisition',
            'QubicMultiBandAcquisition',
            'QubicPlanckMultiBandAcquisition',
            'QubicAcquisitionTwoBands',
-           'QubicMultiBandAcquisitionTwoBands']
+           'QubicMultiBandAcquisitionTwoBands',
+           'QubicIntegrated',
+           'QubicTwoBands',
+           'QubicWideBand',
+           'QubicOtherIntegrated',
+           'PlanckAcquisitionComponentsMapMaking',
+           'QubicPlanckAcquisitionComponentsMapMaking',
+           'QubicIntegratedComponentsMapMaking',
+           'QubicWideBandComponentsMapMaking',
+           'QubicTwoBandsComponentsMapMaking']
 
 def create_array(name, nus, nside):
 
@@ -982,10 +992,14 @@ class QubicPlanckMultiBandAcquisition:
                 if len(self.nueff) != 1:
                     Operator = [R_qubic(H_qubic.operands[i])]
                 for j in range(self.nfreqs):
-                    if i == j :
-                        Operator.append(R_planck)
+                    if convolution:
+                        C = HealpixConvolutionGaussianOperator(fwhm=self.final_fwhm[i])
                     else:
-                        Operator.append(R_planck*0)
+                        C = IdentityOperator()
+                    if i == j :
+                        Operator.append(R_planck * C)
+                    else:
+                        Operator.append(R_planck*0 * C)
 
                 full_operator.append(BlockColumnOperator(Operator, axisout=0))
                 #for i in range(self.nfreqs):
@@ -1209,7 +1223,8 @@ class QubicIntegrated:
         fact = self.d['nf_sub']/self.d['nf_recon']
         if fact != 1:
             for i in range(self.d['nf_recon']):
-                self.final_fwhm[i] = np.mean(self.allfwhm[int(i*fact):int(fact*(i+1)-1)])
+                print(int(i*fact),int(fact*(i+1)-1))
+                self.final_fwhm[i] = np.mean(self.allfwhm[int(i*fact):int(fact*(i+1))])
         else:
             for i in range(self.d['nf_recon']):
                 self.final_fwhm[i] = self.allfwhm[i]
@@ -1279,23 +1294,27 @@ class QubicIntegrated:
     def get_noise(self):
         a = self._get_average_instrument_acq()
         return a.get_noise()
-    def _get_array_of_operators(self):
-        return [a.get_operator() for a in self.subacqs]
+    def _get_array_of_operators(self, convolution=False):
+        op=[]
+        for ia, a in enumerate(self.subacqs):
+            if convolution:
+                C = HealpixConvolutionGaussianOperator(fwhm=self.allfwhm[ia])
+            else:
+                C = IdentityOperator()
+            op.append(a.get_operator() * C)
+        return op
     def get_operator_to_make_TOD(self):
         operator = self._get_array_of_operators()
         return BlockRowOperator(operator, new_axisin=0)
     def get_operator(self, convolution=False):
 
-        op = np.array(self._get_array_of_operators())
+        op = np.array(self._get_array_of_operators(convolution=convolution))
         op_sum = []
         allnus = np.zeros(len(self.nus_edge)-1)
         for ii, band in enumerate(self.bands):
             print('Making sum from {:.2f} to {:.2f}'.format(band[0], band[1]))
-            if convolution: fwhm = self.final_fwhm[ii]
-            else: fwhm = 0
-            C =  HealpixConvolutionGaussianOperator(fwhm=fwhm)
             op_i = op[(self.nus > band[0]) * (self.nus < band[1])].sum(axis=0)
-            op_sum.append(op_i * C)
+            op_sum.append(op_i)
             allnus[ii]=np.mean(self.nus_edge[ii:ii+2])
 
         return BlockRowOperator(op_sum, new_axisin=0)
@@ -1559,6 +1578,7 @@ class QubicOtherIntegrated:
         Re = ReshapeOperator(invNe.shapeout, invNe.shape[0])
 
         return BlockDiagonalOperator([Rq(invNq(Rq.T)), Re(invNe(Re.T))], axisout=0)
+
 ###############################################################
 ################## Components Map-Making ######################
 ###############################################################
@@ -1807,12 +1827,7 @@ class QubicIntegratedComponentsMapMaking:
         self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
 
         _, _, self.nueff, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=self.d['nf_sub'])
-        #self.nueff = np.zeros(len(self.nus_edge)-1)
-        #for i in range(self.d['nf_recon']):
-        #    self.nueff[i] = np.mean(self.bands[i])
-
-        ### fwhm
-
+        
         self.final_fwhm = np.zeros(len(self.multiinstrument))
         for i in range(len(self.multiinstrument)):
             self.final_fwhm[i] = self.subacqs[i].get_convolution_peak_operator().fwhm
@@ -1828,65 +1843,8 @@ class QubicIntegratedComponentsMapMaking:
         print('Npix : {}'.format(12*self.scene.nside**2))
         print('*****************')
 
-    def get_mixingmatrix(self, beta, nus):
-
-        A = mm.MixingMatrix(*self.comp)
-        A_ev = A.evaluator(nus)
-        A = A_ev(beta)
-
-        return A
-    def get_mixing_operator_verying_beta(self, A):
-        R = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
-        op = []
-        for i in range(self.npix):
-            op.append(DenseOperator(A[i], broadcast='rightward', shapein=(self.nc, 3)))
-        D = R * BlockDiagonalOperator(op, new_axisout=1)
-        #D = R * BlockDiagonalOperator([DenseBlockDiagonalOperator(A, broadcast='rightward'),
-        #                               DenseBlockDiagonalOperator(A, broadcast='rightward'),
-        #                               DenseBlockDiagonalOperator(A, broadcast='rightward')], 
-        #                               shapein=(3, self.npix, self.nc), new_axisin=0, new_axisout=2)
-        return D
-    def get_allA(self, beta, nus):
-
-        beta_npix = len(beta)
-        if beta_npix != self.npix:
-            beta = hp.ud_grade(beta, self.nside)
     
-        allA = np.zeros((self.npix, 1, self.nc))
-        for i in range(self.npix):
-            allA[i] = self.get_mixingmatrix(beta[i], nus)
-        return allA
-    def get_mixing_operator(self, beta, nus):
-        """
-        This function returns a mixing operator based on the input parameters: beta and nus.
-        The mixing operator is either a constant operator, or a varying operator depending on the input.
-        """
-
-        # Check if the length of beta is equal to the number of channels minus 1
-        if len(beta) == self.nc-1:
-            print('constant')
-        
-            # Get the mixing matrix
-            A = self.get_mixingmatrix(beta, nus)
-        
-            # Get the shape of the mixing matrix
-            nf, nc = A.shape
-        
-            # Create a ReshapeOperator
-            R = ReshapeOperator(((1, 12*self.nside**2, 3)), ((12*self.nside**2, 3)))
-        
-            # Create a DenseOperator with the first row of A
-            D = R * DenseOperator(A[0], broadcast='rightward', shapein=(nc, 12*self.nside**2, 3), shapeout=(1, 12*self.nside**2, 3))
-        else:
-            print('not constant')
-        
-            # Get all A matrices
-            A = self.get_allA(beta, nus)
-        
-            # Get the varying mixing operator
-            D = self.get_mixing_operator_verying_beta(A)
-
-        return D
+    
 
     def give_me_correctedFWHM(self):
 
@@ -1960,7 +1918,7 @@ class QubicIntegratedComponentsMapMaking:
             if convolution:
                 C =  HealpixConvolutionGaussianOperator(fwhm=self.final_fwhm[inu])
                 op[inu] *= C
-            D = self.get_mixing_operator(beta, np.array([nu]))
+            D = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside)
             op[inu] = op[inu] * D
 
 
@@ -2041,9 +1999,8 @@ class QubicTwoBandsComponentsMapMaking:
 
     def __init__(self, qubic150, qubic220, scene, comp):
 
-        self.qubic150 = qubic150#QubicIntegratedComponentsMapMaking(self.q150, self.pointing, self.scene, self.d150, nus_edge150, self.comp)
-        self.qubic220 = qubic220#QubicIntegratedComponentsMapMaking(self.q220, self.pointing, self.scene, self.d220, nus_edge220, self.comp)
-
+        self.qubic150 = qubic150
+        self.qubic220 = qubic220
         self.Nsub = self.qubic150.d['nf_sub']
         self.comp = comp
         self.scene = scene
@@ -2064,23 +2021,6 @@ class QubicTwoBandsComponentsMapMaking:
         self.nueff = np.array([])
         self.nueff = np.append(self.nueff, self.qubic150.nueff)
         self.nueff = np.append(self.nueff, self.qubic220.nueff)
-
-    def get_mixingmatrix(self, beta, nus):
-
-        A = mm.MixingMatrix(*self.comp)
-        A_ev = A.evaluator(nus)
-        A = A_ev(beta)
-
-        return A
-    def get_mixing_operator(self, beta, nus):
-
-        A = self.get_mixingmatrix(beta, nus)
-        nf, nc = A.shape
-        R = ReshapeOperator(((1, 12*self.nside**2, 3)), ((12*self.nside**2, 3)))
-        D = DenseOperator(A[0], broadcast='rightward', shapein=(nc, 12*self.nside**2, 3),
-                            shapeout=(1, 12*self.nside**2, 3))
-
-        return R * D
 
     def make_convolution(self, type, convolution):
         """
@@ -2121,7 +2061,7 @@ class QubicTwoBandsComponentsMapMaking:
                         if convolution:
                             self.H150.operands[j] = delete_inside_list(self.H150.operands[j], 5)
 
-    def get_operator(self, beta, convolution, type):
+    def get_operator(self, beta, convolution, type='no_convolution'):
 
         self.H150 = self.qubic150.get_operator(beta, convolution=convolution)
         self.H220 = self.qubic220.get_operator(beta, convolution=convolution)
@@ -2200,21 +2140,6 @@ class QubicOtherIntegratedComponentsMapMaking:
         self.alltarget = compute_fwhm_to_convolve(self.allresolution, np.max(self.allresolution))
         self.alltarget_external = self.alltarget[-len(self.external_nus):]
 
-    def get_mixingmatrix(self, nus, beta):
-
-        A = mm.MixingMatrix(*self.comp)
-        A_ev = A.evaluator(nus)
-        A = A_ev(beta)
-
-        return A
-    def get_mixing_operator(self, nus, beta):
-
-        A = self.get_mixingmatrix(nus, beta)
-        nf, nc = A.shape
-        D = DenseOperator(A, broadcast='rightward', shapein=(nc, 12*self.nside**2, 3),
-                            shapeout=(nf, 12*self.nside**2, 3))
-
-        return D
     def get_external_invntt_operator(self):
 
         allsigma=np.array([])
@@ -2226,9 +2151,8 @@ class QubicOtherIntegratedComponentsMapMaking:
 
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
-    def get_operator(self, beta, type, H_qubic=None):
-        if H_qubic is None:
-            Hqubic = self.qubic.get_operator(beta=beta, convolution=self.convolution, type=type)
+    def get_operator(self, beta, nside_fit=0, type='no_convolution'):
+        Hqubic = self.qubic.get_operator(beta=beta, convolution=self.convolution, type=type)
         Rqubic = ReshapeOperator(Hqubic.shapeout, Hqubic.shape[0])
 
         Operator=[Rqubic * Hqubic]
@@ -2251,9 +2175,7 @@ class QubicOtherIntegratedComponentsMapMaking:
                 else:
                     raise TypeError('Not implemented yet')
                 Hother = other.get_operator(self.nintegr, beta, convolution=self.convolution, fwhm_max=fwhm)
-                # Type define if we chnage de convolution operator
-                #Hother = self.make_convolution_other(Hother, type, fwhm=self.alltarget_external[ii])
-                # Add H to the list
+                
                 Operator.append(Hother)
 
 
@@ -2320,7 +2242,6 @@ class QubicOtherIntegratedComponentsMapMaking:
         Re = ReshapeOperator(invNe.shapeout, invNe.shape[0])
 
         return BlockDiagonalOperator([Rq(invNq(Rq.T)), Re(invNe(Re.T))], axisout=0)
-
 class OtherData:
 
     def __init__(self, nus, nside, comp):
@@ -2367,49 +2288,6 @@ class OtherData:
         
         return AdditionOperator(operator)/nf
 
-    def get_mixing_operator_verying_beta(self, A):
-        R = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
-        op = []
-        for i in range(self.npix):
-            op.append(DenseOperator(A[i], broadcast='rightward', shapein=(self.nc, 3)))
-        D = R * BlockDiagonalOperator(op, new_axisout=1)
-        
-        #R = ReshapeOperator((self.npix, 1, 3), (self.npix, 3))
-        #D = R * BlockDiagonalOperator([DenseBlockDiagonalOperator(A, broadcast='rightward'),
-        #                               DenseBlockDiagonalOperator(A, broadcast='rightward'),
-        #                               DenseBlockDiagonalOperator(A, broadcast='rightward')], 
-        #                               shapein=(3, self.npix, self.nc), new_axisin=0, new_axisout=2)
-        return D
-    def get_allA(self, beta, nus):
-    
-        beta_npix = len(beta)
-        if beta_npix != self.npix:
-            beta = hp.ud_grade(beta, self.nside)
-
-        allA = np.zeros((self.npix, 1, self.nc))
-        for i in range(self.npix):
-            allA[i] = self.get_mixingmatrix(beta[i], nus)
-        return allA
-    def get_mixing_operator(self, beta, nus):
-        """
-        This function returns a mixing operator based on the input parameters: beta and nus.
-        The mixing operator is either a constant operator, or a varying operator depending on the input.
-        """
-        
-        # Get all A matrices
-        A = self.get_mixingmatrix(beta, nus)
-        
-        # Get the varying mixing operator
-        D = self.get_mixing_operator(A)
-
-        return D
-    def get_mixingmatrix(self, beta, nus):
-
-        A = mm.MixingMatrix(*self.comp)
-        A_ev = A.evaluator(nus)
-        A = A_ev(beta)
-
-        return A
     def get_invntt_operator(self, fact=None):
         # Create an empty array to store the values of sigma
         allsigma = np.array([])
@@ -2450,35 +2328,13 @@ class OtherData:
             fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
             C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
             for inu, nu in enumerate(allnus):
-                if len(beta.ravel()) > len(self.comp):
-                    print('Varying index')
-                    A = self.get_allA(beta, np.array([nu]))
-                    D = self.get_mixing_operator_verying_beta(A)
-                    Operator.append(C * D)
-                else:
-                    print('Constant index')
-                    A = self.get_mixingmatrix(beta, np.array([nu]))
-                    D = DenseOperator(A, broadcast='rightward', shapein=(self.nc, 12*self.nside**2, 3), shapeout=(1, 12*self.nside**2, 3))
-                    Operator.append(C * R * D)
+                D = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside)
+                Operator.append(C * D)
 
 
             op.append(R2tod(AdditionOperator(Operator)/nintegr))
             
         return BlockColumnOperator(op, axisout=0)
-
-    #def get_operator(self, nintegr, beta, convolution, fwhm_max=None):
-    #    R2tod = ReshapeOperator((12*self.nside**2, 3), (3*12*self.nside**2))
-    #    op = []
-    #    for ii, i in enumerate(self.nus):
-    #        if nintegr == 1:
-    #            allnus = np.array([i])
-    #        else:
-    #            allnus = np.linspace(i-self.bw[ii]/2, i+self.bw[ii]/2, nintegr)
-    #        A = self.get_mixingmatrix(allnus, beta)
-    #        print(A.shape)
-    #        fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
-    #        op.append(R2tod(self.integrated_convolved_data(A, fwhm=fwhm)))
-    #    return BlockColumnOperator(op, axisout=0)
 
     def get_noise(self, fact=None):
         state = np.random.get_state()

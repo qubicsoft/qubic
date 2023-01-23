@@ -78,9 +78,9 @@ seed = 42
 noiseless = True
 
 npointings = 3000
-Nf_TOD = 12
-Nf_recon = 3
-fact_sub = 4
+Nf_TOD = 20
+Nf_recon = 2
+fact_sub = 5
 ```
 
 # TOD Fabrication
@@ -233,7 +233,8 @@ gc.collect()
 ```
 
 ```{python}
-def display_maps(inputs, outputs, istk, display=True, rot=None, res=None, min=300, max=300, minr=-300, maxr=300):
+def display_maps(inputs, outputs, istk, display=True, rot=None, res=None, min=300, max=300, minr=-300, maxr=300, 
+                 extra_string='', addnum=False, inside=None):
     
     r = inputs[:, :, istk] - outputs[:, :, istk]
     Nf = outputs.shape[0]
@@ -242,13 +243,22 @@ def display_maps(inputs, outputs, istk, display=True, rot=None, res=None, min=30
     stk=['I', 'Q', 'U']
     k=1
     for i in range(Nf): # Nf
-        hp.gnomview(inputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, 3, k), title='Input')
+        if addnum:
+            addstr = '{}'.format(i)
+        else:
+            addstr=''
+        if inside is not None:
+            rms_in = np.std(r[i][inside])
+            rms_out = np.std(r[i][~inside])
+            addstr += '\n $\sigma_Q$={0:5.2g} $\sigma_P$={1:5.2g}'.format(rms_in, rms_out)
+        hp.gnomview(inputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, 3, k), title='Input'+ extra_string+addstr)
         k+=1
-        hp.gnomview(outputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, 3, k), title='Output')
+        hp.gnomview(outputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, 3, k), title='Output'+ extra_string+addstr)
         k+=1
-        hp.gnomview(r[i], rot=rot, reso=res, cmap='jet', min=minr, max=maxr, sub=(Nf, 3, k), title='Residual')
+        hp.gnomview(r[i], rot=rot, reso=res, cmap='jet', min=minr, max=maxr, sub=(Nf, 3, k), title='Residual'+ extra_string+addstr)
         k+=1
 
+inside = (cov/np.max(cov)) >= 0.01
 stk = ['I', 'Q', 'U']
 for i in range(3):
     fig = plt.figure(figsize=(10, 10))
@@ -256,8 +266,9 @@ for i in range(3):
     mmr = 1
     if i==0:
         mm=300
-    display_maps(mapin_conv, solution_qubic_planck['x'], istk=i, display=True, rot=center, res=25, min=-mm, max=mm, minr=-mmr, maxr=mmr)
-    fig.suptitle('toto')
+    display_maps(mapin_conv, solution_qubic_planck['x'], istk=i, display=True, rot=center, res=15, 
+                 min=-mm, max=mm, minr=-mmr, maxr=mmr, extra_string=' {}'.format(stk[i]), addnum=True, inside=inside)
+    fig.suptitle('Stokes {}'.format(stk[i]), fontsize=20)
     tight_layout()
     plt.show()
 ```

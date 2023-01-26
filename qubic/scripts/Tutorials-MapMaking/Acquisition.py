@@ -960,9 +960,9 @@ class QubicPlanckMultiBandAcquisition:
         self.nueff = self.qubic.nueff
         self.nfreqs = len(self.nueff)
         self.type = type
-    def get_operator(self, convolution=False):
+    def get_operator(self, convolution=False, fwhm_max=None, switch_convolution=False):
 
-        H_qubic = self.qubic.get_operator(convolution=convolution)
+        H_qubic = self.qubic.get_operator(convolution=convolution, fwhm_max=fwhm_max, switch_convolution=switch_convolution)
         R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
         R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
         full_operator=[]
@@ -973,12 +973,21 @@ class QubicPlanckMultiBandAcquisition:
             for i in range(self.nfreqs):
                 if len(self.nueff) != 1:
                     Operator = [R_qubic(H_qubic.operands[i])]
+
+                if fwhm_max is None:
+                    C = IdentityOperator()
+                else:
+                    if switch_convolution:
+                        ffwhm = self.final_fwhm[::-1]
+                        C = HealpixConvolutionGaussianOperator(fwhm=np.sqrt(ffwhm[i]**2 - fwhm_max**2))
+                    else:
+                        C = HealpixConvolutionGaussianOperator(fwhm=np.sqrt(fwhm_max**2 - self.final_fwhm[i]**2))
                 
                 for j in range(self.nfreqs):
                     if i == j :
-                        Operator.append(R_planck)
+                        Operator.append(R_planck*C)
                     else:
-                        Operator.append(R_planck*0)
+                        Operator.append(R_planck*0*C)
                 
                 
                 full_operator.append(BlockColumnOperator(Operator, axisout=0))
@@ -1142,7 +1151,7 @@ class QubicPlanckMultiBandAcquisition:
                 n = np.r_[n, self.planck.get_noise().ravel()]
                 narray = n.copy()
         return narray
-    def get_observation(self, m_sub, m_rec, convolution, noisy, verbose=True):
+    def get_observation(self, m_sub, m_rec, convolution, noisy, fwhm_max=None, verbose=True):
 
         target = self.qubic.d['nf_sub']
         if m_sub.shape[0] != target:
@@ -1167,7 +1176,10 @@ class QubicPlanckMultiBandAcquisition:
             if convolution:
                 if verbose:
                     print(f'Convolution by {self.qubic.final_fwhm[i]:.4f} rad')
-                C = HealpixConvolutionGaussianOperator(fwhm=self.qubic.final_fwhm[i])
+                if fwhm_max is not None:
+                    fwhm_target = fwhm_max.copy()
+                else: fwhm_target = self.qubic.final_fwhm[i].copy()
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm_target)
             else:
                 C = IdentityOperator()
             
@@ -1353,37 +1365,49 @@ class QubicIntegrated:
     def get_noise(self):
         a = self._get_average_instrument_acq()
         return a.get_noise()
-    def _get_array_of_operators(self, convolution=False, fwhm_max=None, switch_convolution=False):
+    def _get_array_of_operators(self, convolution=False, convolve_to_max=False):
 
 
-        
+        '''
         if switch_convolution:
             all_fwhm = self.allfwhm[::-1].copy()
-            alltarget = np.sqrt(self.allfwhm**2 - fwhm_max**2)
+            if fwhm_max is None:
+                alltarget = all_fwhm
+            else:
+                alltarget = np.sqrt(all_fwhm**2 - fwhm_max**2)
             if fwhm_max is not None:
                 if fwhm_max > all_fwhm[0]: raise TypeError(f'Your targeted FWHM should be smaller than {all_fwhm[0]}')
         else:
             all_fwhm = self.allfwhm.copy()
-            alltarget = np.sqrt(fwhm_max**2 - self.allfwhm**2)
+            if fwhm_max is None:
+                alltarget = all_fwhm
+            else:
+                alltarget = np.sqrt(fwhm_max**2 - all_fwhm**2)
             if fwhm_max is not None:
                 if fwhm_max < all_fwhm[0]: raise TypeError(f'Your targeted FWHM should be higher than {all_fwhm[0]}')
+        
+        '''
         
         op=[]
         for ia, a in enumerate(self.subacqs):
             if convolution:
-                C = HealpixConvolutionGaussianOperator(fwhm=alltarget[ia])
+                if convolve_to_max:
+                    allfwhm = np.sqrt(self.allfwhm**2 - self.allfwhm[-1]**2)
+                else:
+                    allfwhm = self.allfwhm.copy()
+                C = HealpixConvolutionGaussianOperator(fwhm=allfwhm[ia])
             else:
                 C = IdentityOperator()
             op.append(a.get_operator() * C)
         return op
-    def get_operator_to_make_TOD(self, convolution=False, fwhm_max=None, switch_convolution=False):
-        operator = self._get_array_of_operators(convolution=convolution, fwhm_max=fwhm_max, switch_convolution=switch_convolution)
+    def get_operator_to_make_TOD(self, convolution=False):
+        operator = self._get_array_of_operators(convolution=convolution, convolve_to_max=False)
         return BlockRowOperator(operator, new_axisin=0)
-    def get_operator(self, convolution=False, fwhm_max=None, switch_convolution=False):
+    def get_operator(self, convolution=False, convolve_to_max=False):
 
         
         op_sum = []
-        op = np.array(self._get_array_of_operators(convolution=convolution, fwhm_max=fwhm_max, switch_convolution=switch_convolution))
+        op = np.array(self._get_array_of_operators(convolution=convolution, convolve_to_max=convolve_to_max))
         for ii, band in enumerate(self.bands):
             print('Making sum from {:.2f} to {:.2f}'.format(band[0], band[1]))
             op_i = op[(self.nus > band[0]) * (self.nus < band[1])].sum(axis=0)

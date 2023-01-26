@@ -1353,27 +1353,37 @@ class QubicIntegrated:
     def get_noise(self):
         a = self._get_average_instrument_acq()
         return a.get_noise()
-    def _get_array_of_operators(self, convolution=False, fwhm_max=None):
+    def _get_array_of_operators(self, convolution=False, fwhm_max=None, switch_convolution=False):
+
+
+        
+        if switch_convolution:
+            all_fwhm = self.allfwhm[::-1].copy()
+            alltarget = np.sqrt(self.allfwhm**2 - fwhm_max**2)
+            if fwhm_max is not None:
+                if fwhm_max > all_fwhm[0]: raise TypeError(f'Your targeted FWHM should be smaller than {all_fwhm[0]}')
+        else:
+            all_fwhm = self.allfwhm.copy()
+            alltarget = np.sqrt(fwhm_max**2 - self.allfwhm**2)
+            if fwhm_max is not None:
+                if fwhm_max < all_fwhm[0]: raise TypeError(f'Your targeted FWHM should be higher than {all_fwhm[0]}')
+        
         op=[]
         for ia, a in enumerate(self.subacqs):
-            if fwhm_max is None:
-                fwhm = self.allfwhm[ia]
-            else:
-                fwhm = np.sqrt(fwhm_max**2 - self.allfwhm[ia]**2)
             if convolution:
-                C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+                C = HealpixConvolutionGaussianOperator(fwhm=alltarget[ia])
             else:
                 C = IdentityOperator()
             op.append(a.get_operator() * C)
         return op
-    def get_operator_to_make_TOD(self, convolution=False, fwhm_max=None):
-        operator = self._get_array_of_operators(convolution=convolution, fwhm_max=fwhm_max)
+    def get_operator_to_make_TOD(self, convolution=False, fwhm_max=None, switch_convolution=False):
+        operator = self._get_array_of_operators(convolution=convolution, fwhm_max=fwhm_max, switch_convolution=switch_convolution)
         return BlockRowOperator(operator, new_axisin=0)
-    def get_operator(self, convolution=False, fwhm_max=None):
+    def get_operator(self, convolution=False, fwhm_max=None, switch_convolution=False):
 
         
         op_sum = []
-        op = np.array(self._get_array_of_operators(convolution=convolution, fwhm_max=fwhm_max))
+        op = np.array(self._get_array_of_operators(convolution=convolution, fwhm_max=fwhm_max, switch_convolution=switch_convolution))
         for ii, band in enumerate(self.bands):
             print('Making sum from {:.2f} to {:.2f}'.format(band[0], band[1]))
             op_i = op[(self.nus > band[0]) * (self.nus < band[1])].sum(axis=0)

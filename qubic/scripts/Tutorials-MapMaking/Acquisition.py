@@ -11,6 +11,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 import pysm3
+import os
 import warnings
 warnings.filterwarnings("ignore")
 import pysm3.units as u
@@ -46,6 +47,7 @@ __all__ = ['QubicAcquisition',
            'QubicIntegratedComponentsMapMaking',
            'QubicWideBandComponentsMapMaking',
            'QubicTwoBandsComponentsMapMaking']
+CMB_CL_FILE = os.getcwd() + '/Cls_Planck2018_'
 
 def create_array(name, nus, nside):
 
@@ -74,7 +76,13 @@ def get_preconditioner(cov):
 
 def arcmin2rad(arcmin):
     return arcmin * 0.000290888
-
+def give_cl_cmb(r=0, Alens=1.):
+    power_spectrum = hp.read_cl(CMB_CL_FILE+'lensed_scalar.fits')[:,:4000]
+    if Alens != 1.:
+        power_spectrum[2] *= Alens
+    if r:
+        power_spectrum += r * hp.read_cl(CMB_CL_FILE+'unlensed_scalar_and_tensor_r1.fits')[:,:4000]
+    return power_spectrum
 def rad2arcmin(rad):
     return rad / 0.000290888
 def circular_mask(nside, center, radius):
@@ -554,84 +562,60 @@ class QubicAcquisition(Acquisition):
         return preconditioner
 class PlanckAcquisition:
 
-    def __init__(self, band, scene, true_sky=None, factor=1, fwhm=0, mask=None, convolution_operator=None):
+    def __init__(self, band, scene):
         if band not in (30, 44, 70, 143, 217, 353):
             raise ValueError("Invalid band '{}'.".format(band))
-        if true_sky is None:
-            raise ValueError('The Planck Q & U maps are not released yet.')
-        if scene.kind == 'IQU' and true_sky.shape[-1] != 3:
-            raise TypeError('The Planck sky shape is not (npix, 3).')
-        true_sky = np.array(hp.ud_grade(true_sky.T, nside_out=scene.nside),
-                            copy=False).T
-        if scene.kind == 'IQU' and true_sky.shape[-1] != 3:
-            raise TypeError('The Planck sky shape is not (npix, 3).')
         self.scene = scene
-        self.fwhm = fwhm
         self.band = band
-        self._true_sky = true_sky
-        if mask is not None:
-            self.mask = mask
-        else:
-            self.mask = np.ones(scene.npixel, dtype=np.bool)
-
-
+        self.nside = self.scene.nside
+        
         if band == 30:
             filename = 'Variance_Planck30GHz_Kcmb2_ns256.fits'
             var=np.zeros((12*self.scene.nside**2, 3))
             for i in range(3):
                 var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-            sigma = 1e5 * factor * np.sqrt(var)
-
+            sigma = 1e6 * np.sqrt(var)
         elif band == 44:
             filename = 'Variance_Planck44GHz_Kcmb2_ns256.fits'
             var=np.zeros((12*self.scene.nside**2, 3))
             for i in range(3):
                 var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-            sigma = 1e5 * factor * np.sqrt(var)
+            sigma = 1e6 * np.sqrt(var)
         elif band == 70:
             filename = 'Variance_Planck70GHz_Kcmb2_ns256.fits'
             var=np.zeros((12*self.scene.nside**2, 3))
             for i in range(3):
                 var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-            sigma = 1e5 * factor * np.sqrt(var)
+            sigma = 1e6 * np.sqrt(var)
         elif band == 143:
             filename = 'Variance_Planck143GHz_Kcmb2_ns256.fits'
-            sigma = 1e6 * factor * np.sqrt(FitsArray(PATH + filename))
+            sigma = 1e6 * np.sqrt(FitsArray(PATH + filename))
         elif band == 217:
             filename = 'Variance_Planck217GHz_Kcmb2_ns256.fits'
-            sigma = 1e6 * factor * np.sqrt(FitsArray(PATH + filename))
+            sigma = 1e6 * np.sqrt(FitsArray(PATH + filename))
         else:
             filename = 'Variance_Planck353GHz_Kcmb2_ns256.fits'
             var=np.zeros((12*self.scene.nside**2, 3))
             for i in range(3):
                 var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-            sigma = 1e5 * factor * np.sqrt(var)
+            sigma = 1e6 * np.sqrt(var)
 
-        #if d['nside']!=256:
-        #    sig = np.zeros((12*d['nside']**2, 3))
-        #    for i in range(3):
-        #        sig[:, i]=hp.ud_grade(sigma[:, i], d['nside'])
-
-
+        
 
 
         if scene.kind == 'I':
             sigma = sigma[:, 0]
         elif scene.kind == 'QU':
             sigma = sigma[:, :2]
-        if self.scene.nside != 256:
-            sigma = np.array(hp.ud_grade(sigma.T, self.scene.nside, power=2),
+        if self.nside != 256:
+            sigma = np.array(hp.ud_grade(sigma.T, self.nside, power=2),
                              copy=False).T
         self.sigma = sigma
-        if convolution_operator is None:
-            self.C = IdentityOperator()
-        else:
-            self.C = convolution_operator
 
-
+    
     def get_operator(self):
-        return DiagonalOperator(self.mask.astype(np.int), broadcast='rightward',
-                                shapein=self.scene.shape)
+        return DiagonalOperator(np.ones((12*self.nside**2, 3)), broadcast='rightward',
+                                shapein=self.scene.shape, shapeout=np.ones((12*self.nside**2, 3)).ravel().shape)
 
     def get_invntt_operator(self):
         return DiagonalOperator(1 / self.sigma ** 2, broadcast='leftward',
@@ -641,7 +625,7 @@ class PlanckAcquisition:
         state = np.random.get_state()
         #np.random.seed(self._SIMULATED_PLANCK_SEED)
         np.random.seed(None)
-        out = np.random.standard_normal(self._true_sky.shape) * self.sigma
+        out = np.random.standard_normal(np.ones((12*self.nside**2, 3)).shape) * self.sigma
         np.random.set_state(state)
         return out
 
@@ -970,6 +954,7 @@ class QubicPlanckMultiBandAcquisition:
         self.final_fwhm = self.qubic.final_fwhm
         #self.nfreqs = len(self.qubic.nus)
         self.planck = planck
+        self.nside = self.scene.nside
 
         self.nus_edge = self.qubic.nus_edge
         self.nueff = self.qubic.nueff
@@ -978,34 +963,27 @@ class QubicPlanckMultiBandAcquisition:
     def get_operator(self, convolution=False):
 
         H_qubic = self.qubic.get_operator(convolution=convolution)
-        print('QUBIC shape', H_qubic.shapein, H_qubic.shapeout)
-        print(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
         R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
         R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
         full_operator=[]
 
-        if self.type == 'QubicIntegrated':
+        if self.type=='QubicIntegrated':
             if len(self.nueff) == 1:
                 Operator = [R_qubic(H_qubic)]
             for i in range(self.nfreqs):
-                print(i)
                 if len(self.nueff) != 1:
                     Operator = [R_qubic(H_qubic.operands[i])]
+                
                 for j in range(self.nfreqs):
-                    if convolution:
-                        C = HealpixConvolutionGaussianOperator(fwhm=self.final_fwhm[i])
-                    else:
-                        C = IdentityOperator()
                     if i == j :
-                        Operator.append(R_planck * C)
+                        Operator.append(R_planck)
                     else:
-                        Operator.append(R_planck*0 * C)
-
+                        Operator.append(R_planck*0)
+                
+                
                 full_operator.append(BlockColumnOperator(Operator, axisout=0))
-                #for i in range(self.nfreqs):
-
             return BlockRowOperator(full_operator, new_axisin=0)
-
+            
 
         elif self.type == 'WideBand':
 
@@ -1084,7 +1062,20 @@ class QubicPlanckMultiBandAcquisition:
                 R = ReshapeOperator((self.nfreqs, 12*self.qubic.scene.nside**2, 3), (self.nfreqs*12*self.qubic.scene.nside**2, 3))
                 return BlockDiagonalOperator(Operator, axisin=0) * R
 
-    def get_invntt_operator(self):
+    def get_planck_tod(self, mapin):
+        npix = 12*self.nside**2
+        R_planck = ReshapeOperator((self.qubic.d['nf_recon'], npix, 3), (self.qubic.d['nf_recon']*npix*3))
+        tod_pl = R_planck(mapin)
+        return tod_pl
+
+    def get_planck_noise(self):
+        npix = 12*self.nside**2
+        npl = np.zeros((self.qubic.d['nf_recon']*npix*3))
+        for i in range(self.qubic.d['nf_recon']):
+            npl[i*npix*3:(i+1)*npix*3] = self.planck.get_noise().ravel()
+        return npl
+
+    def get_invntt_operator(self, weigth_planck=1):
 
         if self.type == 'TwoBands':
             invntt_qubic = self.qubic.get_invntt_operator()
@@ -1118,7 +1109,7 @@ class QubicPlanckMultiBandAcquisition:
 
         invntt_qubic = self.qubic.get_invntt_operator()
         R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
-        invntt_planck = self.planck.get_invntt_operator()
+        invntt_planck = weigth_planck*self.planck.get_invntt_operator()
         R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
         Operator = [R_qubic(invntt_qubic(R_qubic.T))]
 
@@ -1151,56 +1142,92 @@ class QubicPlanckMultiBandAcquisition:
                 n = np.r_[n, self.planck.get_noise().ravel()]
                 narray = n.copy()
         return narray
-    def get_observation(self, m=None, convolution=True, noiseless=False):
-        """
-        Return fusion observation as a sum of monochromatic fusion TODs
-        """
+    def get_observation(self, m_sub, m_rec, convolution, noisy, verbose=True):
 
-        H = self.get_operator()
-        if convolution and m is None:
-            raise ValueError('Define the map, if you want to use convolution option')
+        target = self.qubic.d['nf_sub']
+        if m_sub.shape[0] != target:
+            raise TypeError(f'Input maps should have {target} frequencies instead of {m_sub.shape[0]}')
 
-        p = self.planck
-        if m is None:
-            m = p._true_sky
-        tod_shape = len(self.qubic[0].instrument) * len(self.qubic[0].sampling) + \
-                    len(self.qubic.scene.kind) * hp.nside2npix(self.qubic.scene.nside)
-        tod = np.zeros(tod_shape)
-        maps = np.empty((self.nfreqs, m.shape[1], m.shape[0]))
-        for i in range(self.nfreqs):
-            q = self.qubic[i]
+        target = self.qubic.d['nf_recon']
+        if m_rec.shape[0] != target:
+            raise TypeError(f'Input maps should have {target} frequencies instead of {m_rec.shape[0]}')
+
+        # Qubic Operator
+        H_qubic_to_make_TOD = self.qubic.get_operator_to_make_TOD(convolution=convolution)
+
+        # TOD Qubic
+        tod_qubic = H_qubic_to_make_TOD(m_sub).ravel()
+
+        ### Planck TOD
+        m_rec = m_rec.copy()
+        m_rec_noiseless = m_rec.copy()
+        
+        for i in range(m_rec.shape[0]):
+
             if convolution:
-                C = q.get_convolution_peak_operator()
-                maps[i] = C(m[i])
+                if verbose:
+                    print(f'Convolution by {self.qubic.final_fwhm[i]:.4f} rad')
+                C = HealpixConvolutionGaussianOperator(fwhm=self.qubic.final_fwhm[i])
             else:
-                maps[i] = m[i].copy()
+                C = IdentityOperator()
+            
+            if noisy:
+                if verbose:
+                    print('Adding noise in Planck')
+                npl = self.planck.get_noise()
+            else:
+                npl = 0
+                
+            m_rec[i] = C(m_rec[i] + npl).copy()
+            m_rec_noiseless[i] = C(m_rec[i]).copy()
 
-            tod += H.operands[i](maps[i])
+        
+        todpl = self.get_planck_tod(m_rec)
+
+        
+        if noisy:
+            if verbose:
+                print('Adding noise in QUBIC')
+            noise_qubic = self.qubic.get_noise().ravel()
+        else:
+            noise_qubic = self.qubic.get_noise().ravel() * 0
+
+        tod = np.r_[tod_qubic+noise_qubic.copy(), todpl]
+
+        return tod
+
+        
 
 
-            #tod = H(maps)
-
-        if not noiseless:
-            np.random.seed(None)
-            tod += self.get_noise()
-
-        return tod, maps
 
 
-
-        print(obs_qubic)
+        
+        
 
 
 class QubicIntegrated:
 
-    def __init__(self, multiinstrument, sampling, scene, d, nus_edge):
+    def __init__(self, d, Nsub=1, Nrec=1):
 
-        self.multiinstrument = multiinstrument
-        self.sampling = sampling
-        self.scene = scene
         self.d = d
+        self.d['nf_sub']=Nsub
+        self.d['nf_recon']=Nrec
+        # Pointing
+        self.sampling = qubic.get_pointing(self.d)
+
+        # Scene
+        self.scene = qubic.QubicScene(self.d)
+
+        # Instrument
+        self.multiinstrument = qubic.QubicMultibandInstrument(self.d)
+
+        _, nus_edge, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=self.d['nf_recon'])
+
+        self.nside = self.scene.nside
+        
+        self.central_nu = int(self.d['filter_nu']/1e9)
         self.nus_edge = nus_edge
-        self.nus = np.array([q.filter.nu / 1e9 for q in multiinstrument])
+        self.nus = np.array([q.filter.nu / 1e9 for q in self.multiinstrument])
 
         edges=np.zeros((len(self.nus_edge)-1, 2))
         for i in range(len(self.nus_edge)-1):
@@ -1208,6 +1235,9 @@ class QubicIntegrated:
 
         self.bands = edges
         self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
+
+        _, _, self.allnus, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=len(self.subacqs))
+
 
         self.nueff = np.zeros(len(self.nus_edge)-1)
         for i in range(self.d['nf_recon']):
@@ -1220,22 +1250,51 @@ class QubicIntegrated:
             self.allfwhm[i] = self.subacqs[i].get_convolution_peak_operator().fwhm
 
         self.final_fwhm = np.zeros(self.d['nf_recon'])
-        fact = self.d['nf_sub']/self.d['nf_recon']
+        fact = int(self.d['nf_sub']/self.d['nf_recon'])
         if fact != 1:
             for i in range(self.d['nf_recon']):
-                print(int(i*fact),int(fact*(i+1)-1))
                 self.final_fwhm[i] = np.mean(self.allfwhm[int(i*fact):int(fact*(i+1))])
         else:
             for i in range(self.d['nf_recon']):
                 self.final_fwhm[i] = self.allfwhm[i]
 
-    def print_informations(self):
+    def get_PySM_maps(self, config, nus):
+        allmaps = np.zeros((len(nus), 12*self.nside**2, 3))
+        ell=np.arange(2*self.nside-1)
+        mycls = give_cl_cmb()
 
-        print('*****************')
-        print('Nf_recon : {}'.format(self.d['nf_recon']))
-        print('Nf_sub : {}'.format(self.d['nf_sub']))
-        print('Npix : {}'.format(12*self.scene.nside**2))
-        print('*****************')
+        for k in config.keys():
+            if k == 'cmb':
+
+                np.random.seed(config[k])
+                cmb = hp.synfast(mycls, self.nside, verbose=False, new=True).T
+
+                for j in range(len(self.nueff)):
+                    allmaps[j] += cmb.copy()
+            
+            elif k == 'dust':
+                sky=pysm3.Sky(nside=self.nside, preset_strings=[config[k]])
+                
+                for jnu, nu in enumerate(nus):
+                    myfg=np.array(sky.get_emission(nu * u.GHz, None).T * utils.bandpass_unit_conversion(nu*u.GHz, 
+                                                                                     None, 
+                                                                                     u.uK_CMB))
+                    allmaps[jnu] += myfg.copy()
+            elif k == 'synchrotron':
+                sky=pysm3.Sky(nside=self.nside, preset_strings=[config[k]])
+                
+                for jnu, nu in enumerate(nus):
+                    myfg=np.array(sky.get_emission(nu * u.GHz, None).T * utils.bandpass_unit_conversion(nu*u.GHz, 
+                                                                                     None, 
+                                                                                     u.uK_CMB))
+                    allmaps[jnu] += myfg.copy()
+            else:
+                raise TypeError('Choose right foreground model (d0, s0, ...)')
+
+        #if len(nus) == 1:
+        #    allmaps = allmaps[0].copy()
+            
+        return allmaps
     def give_me_correctedFWHM(self):
 
         fwhm_max = np.max(self.final_fwhm)
@@ -1294,28 +1353,31 @@ class QubicIntegrated:
     def get_noise(self):
         a = self._get_average_instrument_acq()
         return a.get_noise()
-    def _get_array_of_operators(self, convolution=False):
+    def _get_array_of_operators(self, convolution=False, fwhm_max=None):
         op=[]
         for ia, a in enumerate(self.subacqs):
+            if fwhm_max is None:
+                fwhm = self.allfwhm[ia]
+            else:
+                fwhm = np.sqrt(fwhm_max**2 - self.allfwhm[ia]**2)
             if convolution:
-                C = HealpixConvolutionGaussianOperator(fwhm=self.allfwhm[ia])
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
             else:
                 C = IdentityOperator()
             op.append(a.get_operator() * C)
         return op
-    def get_operator_to_make_TOD(self):
-        operator = self._get_array_of_operators()
+    def get_operator_to_make_TOD(self, convolution=False, fwhm_max=None):
+        operator = self._get_array_of_operators(convolution=convolution, fwhm_max=fwhm_max)
         return BlockRowOperator(operator, new_axisin=0)
-    def get_operator(self, convolution=False):
+    def get_operator(self, convolution=False, fwhm_max=None):
 
-        op = np.array(self._get_array_of_operators(convolution=convolution))
+        
         op_sum = []
-        allnus = np.zeros(len(self.nus_edge)-1)
+        op = np.array(self._get_array_of_operators(convolution=convolution, fwhm_max=fwhm_max))
         for ii, band in enumerate(self.bands):
             print('Making sum from {:.2f} to {:.2f}'.format(band[0], band[1]))
             op_i = op[(self.nus > band[0]) * (self.nus < band[1])].sum(axis=0)
             op_sum.append(op_i)
-            allnus[ii]=np.mean(self.nus_edge[ii:ii+2])
 
         return BlockRowOperator(op_sum, new_axisin=0)
     def get_coverage(self):

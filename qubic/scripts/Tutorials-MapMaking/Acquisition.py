@@ -589,12 +589,12 @@ class PlanckAcquisition:
             sigma = 1e6 * np.sqrt(var)
         elif band == 143:
             filename = 'Variance_Planck143GHz_Kcmb2_ns256.fits'
-            self.var = np.sqrt(FitsArray(PATH + filename))
-            sigma = 1e6 * self.var
+            self.var = np.array(FitsArray(PATH + filename))
+            sigma = 1e6 * np.sqrt(self.var)
         elif band == 217:
             filename = 'Variance_Planck217GHz_Kcmb2_ns256.fits'
-            self.var = np.sqrt(FitsArray(PATH + filename))
-            sigma = 1e6 * self.var
+            self.var = np.array(FitsArray(PATH + filename))
+            sigma = 1e6 * np.sqrt(self.var)
         else:
             filename = 'Variance_Planck353GHz_Kcmb2_ns256.fits'
             var=np.zeros((12*self.scene.nside**2, 3))
@@ -619,12 +619,16 @@ class PlanckAcquisition:
         return DiagonalOperator(np.ones((12*self.nside**2, 3)), broadcast='rightward',
                                 shapein=self.scene.shape, shapeout=np.ones((12*self.nside**2, 3)).ravel().shape)
 
-    def get_invntt_operator(self, beam_correction=None):
-        if beam_correction is not None:
+    def get_invntt_operator(self, beam_correction=0):
+        if type(beam_correction) is not int and type(beam_correction) is not float:
+            raise TypeError('Beam correction should be an integer of a floating number')
+
+        if beam_correction != 0:
             factor = (4*np.pi*(beam_correction/2.35/np.degrees(hp.nside2resol(self.scene.nside)))**2)
-            print(self.var.shape)
-            varnew = hp.smoothing(self.var[:, 0].T, fwhm=beam_correction/np.sqrt(2)) / factor
+            print(f'corrected by {factor}')
+            varnew = hp.smoothing(self.var.T, fwhm=beam_correction/np.sqrt(2)) / factor
             self.sigma = 1e6 * varnew.T
+
         return DiagonalOperator(1 / self.sigma ** 2, broadcast='leftward',
                                 shapein=self.scene.shape)
 
@@ -1092,7 +1096,15 @@ class QubicPlanckMultiBandAcquisition:
             npl[i*npix*3:(i+1)*npix*3] = self.planck.get_noise().ravel()
         return npl
 
-    def get_invntt_operator(self, weight_planck=1):
+    def get_invntt_operator(self, weight_planck=1, beam_correction=None):
+
+        if beam_correction is None :
+            beam_correction = [0]*self.nfreqs
+        else:
+            if type(beam_correction) is not list:
+                raise TypeError('Beam correction should be a list')
+            if len(beam_correction) != self.nfreqs:
+                raise TypeError('List of beam correction should have Nrec elements')
 
         if self.type == 'TwoBands':
             invntt_qubic = self.qubic.get_invntt_operator()
@@ -1126,12 +1138,12 @@ class QubicPlanckMultiBandAcquisition:
 
         invntt_qubic = self.qubic.get_invntt_operator()
         R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
-        invntt_planck = weight_planck*self.planck.get_invntt_operator()
-        R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
         Operator = [R_qubic(invntt_qubic(R_qubic.T))]
 
         if type == 'TwoBands' or 'WideBand':
             for i in range(self.nfreqs):
+                invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i])
+                R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
                 Operator.append(R_planck(invntt_planck(R_planck.T)))
 
         return BlockDiagonalOperator(Operator, axisout=0)

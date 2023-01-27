@@ -1092,7 +1092,7 @@ class QubicPlanckMultiBandAcquisition:
             npl[i*npix*3:(i+1)*npix*3] = self.planck.get_noise().ravel()
         return npl
 
-    def get_invntt_operator(self, weigth_planck=1):
+    def get_invntt_operator(self, weight_planck=1):
 
         if self.type == 'TwoBands':
             invntt_qubic = self.qubic.get_invntt_operator()
@@ -1126,7 +1126,7 @@ class QubicPlanckMultiBandAcquisition:
 
         invntt_qubic = self.qubic.get_invntt_operator()
         R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
-        invntt_planck = weigth_planck*self.planck.get_invntt_operator()
+        invntt_planck = weight_planck*self.planck.get_invntt_operator()
         R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
         Operator = [R_qubic(invntt_qubic(R_qubic.T))]
 

@@ -589,10 +589,12 @@ class PlanckAcquisition:
             sigma = 1e6 * np.sqrt(var)
         elif band == 143:
             filename = 'Variance_Planck143GHz_Kcmb2_ns256.fits'
-            sigma = 1e6 * np.sqrt(FitsArray(PATH + filename))
+            self.var = np.sqrt(FitsArray(PATH + filename))
+            sigma = 1e6 * self.var
         elif band == 217:
             filename = 'Variance_Planck217GHz_Kcmb2_ns256.fits'
-            sigma = 1e6 * np.sqrt(FitsArray(PATH + filename))
+            self.var = np.sqrt(FitsArray(PATH + filename))
+            sigma = 1e6 * self.var
         else:
             filename = 'Variance_Planck353GHz_Kcmb2_ns256.fits'
             var=np.zeros((12*self.scene.nside**2, 3))
@@ -617,7 +619,12 @@ class PlanckAcquisition:
         return DiagonalOperator(np.ones((12*self.nside**2, 3)), broadcast='rightward',
                                 shapein=self.scene.shape, shapeout=np.ones((12*self.nside**2, 3)).ravel().shape)
 
-    def get_invntt_operator(self):
+    def get_invntt_operator(self, beam_correction=None):
+        if beam_correction is not None:
+            factor = (4*np.pi*(beam_correction/2.35/np.degrees(hp.nside2resol(self.scene.nside)))**2)
+            print(self.var.shape)
+            varnew = hp.smoothing(self.var[:, 0].T, fwhm=beam_correction/np.sqrt(2)) / factor
+            self.sigma = 1e6 * varnew.T
         return DiagonalOperator(1 / self.sigma ** 2, broadcast='leftward',
                                 shapein=self.scene.shape)
 
@@ -960,9 +967,9 @@ class QubicPlanckMultiBandAcquisition:
         self.nueff = self.qubic.nueff
         self.nfreqs = len(self.nueff)
         self.type = type
-    def get_operator(self, convolution=False, fwhm_max=None, switch_convolution=False):
+    def get_operator(self, convolution=False, convolve_to_max=False):
 
-        H_qubic = self.qubic.get_operator(convolution=convolution, fwhm_max=fwhm_max, switch_convolution=switch_convolution)
+        H_qubic = self.qubic.get_operator(convolution=convolution, convolve_to_max=convolve_to_max)
         R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
         R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
         full_operator=[]
@@ -974,14 +981,15 @@ class QubicPlanckMultiBandAcquisition:
                 if len(self.nueff) != 1:
                     Operator = [R_qubic(H_qubic.operands[i])]
 
-                if fwhm_max is None:
-                    C = IdentityOperator()
-                else:
-                    if switch_convolution:
-                        ffwhm = self.final_fwhm[::-1]
-                        C = HealpixConvolutionGaussianOperator(fwhm=np.sqrt(ffwhm[i]**2 - fwhm_max**2))
+                if convolution:
+                    if convolve_to_max:
+                        target = np.sqrt(self.final_fwhm[i]**2 - self.qubic.allfwhm[-1]**2)
                     else:
-                        C = HealpixConvolutionGaussianOperator(fwhm=np.sqrt(fwhm_max**2 - self.final_fwhm[i]**2))
+                        target = 0
+                    C = HealpixConvolutionGaussianOperator(fwhm=target)
+                else:
+                    C = IdentityOperator()
+                    
                 
                 for j in range(self.nfreqs):
                     if i == j :
@@ -1151,7 +1159,7 @@ class QubicPlanckMultiBandAcquisition:
                 n = np.r_[n, self.planck.get_noise().ravel()]
                 narray = n.copy()
         return narray
-    def get_observation(self, m_sub, m_rec, convolution, noisy, fwhm_max=None, verbose=True):
+    def get_observation(self, m_sub, m_rec, convolution, noisy, verbose=True):
 
         target = self.qubic.d['nf_sub']
         if m_sub.shape[0] != target:
@@ -1176,9 +1184,7 @@ class QubicPlanckMultiBandAcquisition:
             if convolution:
                 if verbose:
                     print(f'Convolution by {self.qubic.final_fwhm[i]:.4f} rad')
-                if fwhm_max is not None:
-                    fwhm_target = fwhm_max.copy()
-                else: fwhm_target = self.qubic.final_fwhm[i].copy()
+                fwhm_target = self.qubic.final_fwhm[i].copy()
                 C = HealpixConvolutionGaussianOperator(fwhm=fwhm_target)
             else:
                 C = IdentityOperator()

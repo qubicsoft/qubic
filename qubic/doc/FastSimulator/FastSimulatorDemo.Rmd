@@ -199,7 +199,7 @@ new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=T
 
 plt.figure()
 for isub in range(newd['nf_recon']):
-    sqn = np.int(np.sqrt(newd['nf_recon']))
+    sqn = int(np.sqrt(newd['nf_recon']))
     if (sqn**2) != newd['nf_recon']:
         sqn += 1
     plt.subplot(sqn, sqn, isub+1)

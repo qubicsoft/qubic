@@ -544,7 +544,7 @@ class PlanckAcquisition(object):
     _SIMULATED_PLANCK_SEED = 0
 
     def get_operator(self):
-        return DiagonalOperator(self.mask.astype(np.int), broadcast='rightward',
+        return DiagonalOperator(self.mask.astype(int), broadcast='rightward',
                                 shapein=self.scene.shape)
 
     def get_invntt_operator(self):

@@ -71,9 +71,9 @@ amps = np.zeros(len(labels))
 offsets = np.zeros(len(labels))
 for i in xrange(len(labels)):
     bla = str.split(labels[i],'_')
-    modfreqs[i] = np.float(bla[2][0:len(bla[2])-2])
-    amps[i] = np.float(bla[4])
-    offsets[i] = np.float(bla[6])
+    modfreqs[i] = float(bla[2][0:len(bla[2])-2])
+    amps[i] = float(bla[4])
+    offsets[i] = float(bla[6])
 
     
 order = np.argsort(amps)

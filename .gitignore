@@ -15,4 +15,5 @@ _flib*.so
 flib/polarization.f90
 .project
 .pydevproject
+.pytest_cache/
 *.egg-info/

@@ -110,7 +110,7 @@ plt.tight_layout()
 
 
 plt.figure(figsize=(16,8))
-zi150 = flatmap150[xr.astype(np.int), yr.astype(np.int)]
+zi150 = flatmap150[xr.astype(int), yr.astype(int)]
 zi150 = scipy.ndimage.map_coordinates(np.transpose(flatmap150), np.vstack((xr,yr)))
 #maybe remove degpt azi from here
 #degpt = (X[x2] - X[x0]) /len(zi150)
@@ -192,7 +192,7 @@ plt.tight_layout()
 
 
 plt.figure(figsize=(16,8))
-zi170 = flatmap170[xr.astype(np.int), yr.astype(np.int)]
+zi170 = flatmap170[xr.astype(int), yr.astype(int)]
 zi170 = scipy.ndimage.map_coordinates(np.transpose(flatmap170), np.vstack((xr,yr)))
 #maybe remove degpt azi from here
 #degpt = (X[x2] - X[x0]) /len(zi170)
@@ -270,7 +270,7 @@ plt.tight_layout()
 
 
 plt.figure(figsize=(16,8))
-zi130 = flatmap130[xr.astype(np.int), yr.astype(np.int)]
+zi130 = flatmap130[xr.astype(int), yr.astype(int)]
 zi130 = scipy.ndimage.map_coordinates(np.transpose(flatmap130), np.vstack((xr,yr)))
 #maybe remove degpt azi from here
 #degpt = (X[x2] - X[x0]) /len(zi130)

@@ -335,7 +335,7 @@ for i in range(len(all_nfsub)):
 
     for isub in range(nfsub):
         
-        sqn = np.int(np.sqrt(nfsub))
+        sqn = int(np.sqrt(nfsub))
         if (sqn**2) != nfsub:
             sqn += 1
         subplot(sqn,sqn,isub+1)
@@ -470,7 +470,7 @@ if nfsub == 1:
 print(np.shape(new_sub_maps))
 
 for isub in range(nfsub):
-    sqn = np.int(np.sqrt(nfsub))
+    sqn = int(np.sqrt(nfsub))
     if (sqn**2) != nfsub:
         sqn += 1
     subplot(sqn,sqn,isub+1)
@@ -545,7 +545,7 @@ if nfsub == 1:
 print(np.shape(new_sub_maps))
 
 for isub in range(nfsub):
-    sqn = np.int(np.sqrt(nfsub))
+    sqn = int(np.sqrt(nfsub))
     if (sqn**2) != nfsub:
         sqn += 1
     subplot(sqn,sqn,isub+1)
@@ -639,7 +639,7 @@ if nfsub == 1:
 print(np.shape(new_sub_maps))
 
 for isub in range(nfsub):
-    sqn = np.int(np.sqrt(nfsub))
+    sqn = int(np.sqrt(nfsub))
     if (sqn**2) != nfsub:
         sqn += 1
     subplot(sqn,sqn,isub+1)

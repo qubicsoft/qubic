@@ -137,12 +137,12 @@ def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
                     global_namelist.append(new_name)
                 
             catalog[f][new_name]    = {}
-            catalog[f][new_name]['RA']      = np.float(ra)
-            catalog[f][new_name]['DEC']     = np.float(dec)
-            catalog[f][new_name]['GLON']    = np.float(gLon)
-            catalog[f][new_name]['GLAT']    = np.float(gLat)
-            catalog[f][new_name]['DETFLUX'] = np.float(detFlux)
-            catalog[f][new_name]['PFLUX']   = np.float(p)
+            catalog[f][new_name]['RA']      = float(ra)
+            catalog[f][new_name]['DEC']     = float(dec)
+            catalog[f][new_name]['GLON']    = float(gLon)
+            catalog[f][new_name]['GLAT']    = float(gLat)
+            catalog[f][new_name]['DETFLUX'] = float(detFlux)
+            catalog[f][new_name]['PFLUX']   = float(p)
             catalog[f][new_name]['ALTNAME'] = ''
         
     if excluded:
@@ -170,12 +170,12 @@ def build_catalog(freqs = freqs, freqs_ex = freqs_ex, excluded = True):
                     global_namelist.append(new_name)
  
                 catalog[f][new_name]    = {}
-                catalog[f][new_name]['RA']      = np.float(ra)
-                catalog[f][new_name]['DEC']     = np.float(dec)
-                catalog[f][new_name]['GLON']    = np.float(gLon)
-                catalog[f][new_name]['GLAT']    = np.float(gLat)
-                catalog[f][new_name]['DETFLUX'] = np.float(detFlux)
-                catalog[f][new_name]['PFLUX']   = np.float(p)
+                catalog[f][new_name]['RA']      = float(ra)
+                catalog[f][new_name]['DEC']     = float(dec)
+                catalog[f][new_name]['GLON']    = float(gLon)
+                catalog[f][new_name]['GLAT']    = float(gLat)
+                catalog[f][new_name]['DETFLUX'] = float(detFlux)
+                catalog[f][new_name]['PFLUX']   = float(p)
                 catalog[f][new_name]['ALTNAME'] = ''
 
     return catalog
@@ -193,10 +193,10 @@ def build_name(name):
     new_name     - STRING - source new name defined as lll.l±bb.b
     '''
     
-    name_l = np.round(np.float(name[-12:-6]),1)
+    name_l = np.round(float(name[-12:-6]),1)
     str_l  = '%05.1f' % name_l
     sign_b = name[-6]
-    name_b = np.round(np.float(name[-5:]),1)
+    name_b = np.round(float(name[-5:]),1)
     str_b = '%04.1f' % name_b
     new_name = str_l.rjust(5,'0') + sign_b + str_b.rjust(4,'0')
     
@@ -219,12 +219,12 @@ def duplicate_source(name, global_namelist, threshold = 0.1):
     Output
     isduplicate, new_name  - BOOL, STRING - whether a duplicate has been found, new name
     '''
-    name_l = np.float(name[0:5])
-    name_b = np.float(name[-5:])
+    name_l = float(name[0:5])
+    name_b = float(name[-5:])
     
     for item in global_namelist:
-        ex_l = np.float(item[0:5])
-        ex_b = np.float(item[-5:])
+        ex_l = float(item[0:5])
+        ex_b = float(item[-5:])
         
         if (np.abs(name_l - ex_l) <= threshold) and (np.abs(name_b - ex_b) <= threshold):
             # In this case we have the same source, return True and the name

@@ -14,6 +14,7 @@ import os
 import numpy as np
 from astropy.io import fits
 
+from qubic.level1.flags import flag_definition
 
 hdr_comment = {}
 hdr_comment['TELESCOP'] ='Telescope used for the observation'
@@ -41,6 +42,7 @@ def write_level1(fpobject,todarray,flagarray):
     hdr['FILENAME'] = filename+filename_suffix
 
     # Primary header
+    prihdr = fits.Header()
     for key in hdr.keys():
         val = hdr[key]
         if key in hdr_comment.keys():
@@ -50,8 +52,12 @@ def write_level1(fpobject,todarray,flagarray):
         prihdr[key] = (val,comment)
 
     # add flag definitions in header
+    for idx,flagdef in enumerate(flag_definition):
+        if flagdef!='available':
+            key = 'FLAG%04i' % idx
+            prihdr[key] = flagdef
 
-    prihdr = fits.Header()
+    # create the primary HDU
     prihdu = fits.PrimaryHDU(header=prihdr)
 
     # prepare the hdulist

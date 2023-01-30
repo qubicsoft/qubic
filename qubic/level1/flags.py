@@ -33,7 +33,7 @@ flag_definition[32] = '1K temperature above 1.2K'
 flag_definition[31] = '1K temperature above 1.1K'
 flag_definition[30] = '1K temperature rising'
 flag_definition[27] = 'corrected flux jump'
-
+flag_definition[17] = 'baseline adjusted'
 
 # for ease-of-use, we make a dictionary for the bit numbers
 flag_bit = {}
@@ -78,9 +78,7 @@ def isset_flag(flagdef,flagval):
     flagnumber = np.uint(2**bit_position)
     flagval = np.uint(flagval)
 
-    if (flagnumber & flagval)==flagnumber:
-        return True
-    return False
+    return ( (flagnumber & flagval)==flagnumber )
     
 
 def show_flags(flagval):

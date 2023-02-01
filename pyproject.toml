@@ -50,7 +50,6 @@ dependencies = [
     'iminuit',
     'pandas',
     'progressbar',
-    'pymaster',
     'pyoperators[fft]>=0.13.18',
     'pysimulators>=1.2.3',
     'pysm3',

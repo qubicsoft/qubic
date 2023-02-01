@@ -819,10 +819,10 @@ print(np.shape(H.T),)# 196608/12/128/128, 12*128**2, d['npointings'] * 248)
 
 #print('Operator ', a.get_operator())
 print(len(a.instrument), len(a.sampling))
-print(a.comm.allreduce(len(a.instrument)))
-print(a.comm.allreduce(len(a.sampling)))
+print(a.instrument.comm.allreduce(len(a.instrument)))
+print(a.sampling.comm.allreduce(len(a.sampling)))
 print('Period ', a.sampling.period)
-print(a.comm.allreduce(len(a.instrument)) * a.comm.allreduce(len(a.sampling)) * a.sampling.period)
+print(a.instrument.comm.allreduce(len(a.instrument)) * a.sampling.comm.allreduce(len(a.sampling)) * a.sampling.period)
 
 ```{python}
 cov = a.get_coverage()

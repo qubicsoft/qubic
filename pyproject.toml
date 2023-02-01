@@ -52,7 +52,7 @@ dependencies = [
     'progressbar',
     'pymaster',
     'pyoperators[fft]>=0.13.18',
-    'pysimulators>=1.0.8',
+    'pysimulators>=1.2.3',
     'pysm3',
     'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
     'satorchipy @ git+https://github.com/satorchi/mypy@master',
@@ -62,10 +62,34 @@ dynamic = ['version']
 
 [project.optional-dependencies]
 mpi = ['mpi4py']
+dev = [
+    'mpi4py',
+    'pytest',
+    'pytest-cov',
+]
 
 [project.urls]
 homepage = 'https://www.qubic.org.ar'
 repository = 'https://github.com/qubicsoft/qubic'
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "except ImportError:",
+    "raise NotImplementedError",
+    "if typing.TYPE_CHECKING:",
+]
+show_missing = true
+skip_covered = true
+
+[tool.pytest.ini_options]
+addopts = "-ra --cov=qubic"
+testpaths = [
+    "tests",
+]
+markers = [
+    "mpi: mark tests to be run using mpirun.",
+]
 
 [tool.setuptools.packages]
 find = {}

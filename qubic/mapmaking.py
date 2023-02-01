@@ -1,10 +1,11 @@
 from __future__ import absolute_import, division, print_function
 from collections import OrderedDict
 from pyoperators import (
-    asoperator, BlockColumnOperator, DiagonalOperator, PackOperator, pcg,
+    MPI, asoperator, BlockColumnOperator, DiagonalOperator, PackOperator, pcg,
     proxy_group)
 from pyoperators.memory import ones
 from pyoperators.utils import ndarraywrap
+from pyoperators.utils.mpi import as_mpi
 from pysimulators.interfaces.healpy import HealpixLaplacianOperator
 from .utils import progress_bar
 import healpy as hp
@@ -157,7 +158,7 @@ def _tod2map(acq, tod, coverage_threshold, max_nbytes, callback,
     elif acq.scene.kind == 'QU':
         raise NotImplementedError()
     theta, phi = acq.instrument.detector.theta, acq.instrument.detector.phi
-    ndetectors = acq.instrument.detector.comm.allreduce(
+    ndetectors = acq.instrument.comm.allreduce(
         np.sum(acq.instrument.secondary_beam(theta, phi)))
     nsamplings = acq.sampling.comm.allreduce(len(acq.sampling))
     coverage *= ndetectors * nsamplings / np.sum(coverage)
@@ -185,7 +186,7 @@ def _tod2map(acq, tod, coverage_threshold, max_nbytes, callback,
     M = (H.T * H * np.ones(H.shapein))[..., 0]
     preconditioner = DiagonalOperator(1/M, broadcast='rightward')
 #    preconditioner = DiagonalOperator(1/coverage[mask], broadcast='rightward')
-    nsamplings = acq.comm.allreduce(len(acq.sampling))
+    nsamplings = acq.sampling.comm.allreduce(len(acq.sampling))
     npixels = np.sum(mask)
 
     A = H.T * invNtt * H / nsamplings
@@ -351,6 +352,9 @@ def tod2map_each(acquisition, tod, coverage_threshold=0.01, max_nbytes=None,
         n += n_
         if disp:
             bar.update()
+
+    acquisition.instrument.comm.Allreduce(MPI.IN_PLACE, as_mpi(x), op=MPI.SUM)
+    acquisition.instrument.comm.Allreduce(MPI.IN_PLACE, as_mpi(n), op=MPI.SUM)
 
     if acquisition.scene.kind == 'I':
         return np.nan_to_num(x / n), n

@@ -142,7 +142,7 @@ class QubicInstrument(Instrument):
         d['detarray'] = d['detarray'].replace(d['detarray'][-7:-5], d['config'])
         d['hornarray'] = d['hornarray'].replace(d['hornarray'][-7:-5], d['config'])
 
-        if d['nf_sub'] is None and d['MultiBand'] is True:
+        if d['MultiBand'] and d['nf_sub'] is None:
             raise ValueError("Error: number of subband not specified")
 
         detector_fknee = d['detector_fknee']
@@ -241,7 +241,7 @@ class QubicInstrument(Instrument):
             PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl,
                                      nu=nu)
         self.primary_beam = PrimBeam
-        if secondary is 'gaussian':
+        if secondary == 'gaussian':
             SecBeam = BeamGaussian(
                 np.radians(self.calibration.get('primbeam')), nu=nu,
                 backward=True)

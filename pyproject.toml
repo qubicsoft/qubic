@@ -50,7 +50,7 @@ dependencies = [
     'iminuit',
     'pandas',
     'progressbar',
-    'pyoperators[fft]>=0.13.18',
+    'pyoperators[fft]>=0.16.2',
     'pysimulators>=1.2.3',
     'pysm3',
     'qubicpack @ git+https://github.com/satorchi/qubicpack@master',

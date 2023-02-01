@@ -1,10 +1,11 @@
-from __future__ import division
-from astropy.io import fits
+import io as builtin_io
 from collections.abc import Container
-from pyoperators.utils import ndarraywrap
+
 import healpy as hp
 import numpy as np
-from io import _io
+from astropy.io import fits
+
+from pyoperators.utils import ndarraywrap
 
 __all__ = ['read_map', 'write_map']
 
@@ -12,6 +13,13 @@ _default_extnames = {
     1: ('I_STOKES',),
     3: ('I_STOKES', 'Q_STOKES', 'U_STOKES'),
     6: ('II', 'IQ', 'IU', 'QQ', 'QU', 'UU')}
+
+_FITS_MODES = {
+    '+ab': 'append',
+    'br': 'readonly',
+    '+br': 'update',
+    'w': 'ostream',
+}
 
 
 def read_map(filename, field=None, dtype=float, nest=False, partial=False):
@@ -21,7 +29,7 @@ def read_map(filename, field=None, dtype=float, nest=False, partial=False):
     Parameters
     ----------
     filename : str
-        The FITS file name.
+        The name of the FITS file.
     field : int, str or tuple of int or str, optional
         The fields to be read. Default: all. By convention 0 is temperature,
         1 is Q, 2 is U. It can be a tuple to read multiple columns (0, 1, 2).
@@ -30,7 +38,7 @@ def read_map(filename, field=None, dtype=float, nest=False, partial=False):
         Force the conversion to some data type. Default: np.float64
     nest : bool, optional
         If True, return the map in NEST ordering, otherwise in RING ordering;
-        use fits keyword ORDERING to decide whether conversion is needed or not
+        use FITS keyword ORDERING to decide whether conversion is needed or not
         If None, no conversion is performed.
     partial : bool, optional
         If True, return the partial map and the mask of valid pixels.
@@ -45,45 +53,47 @@ def read_map(filename, field=None, dtype=float, nest=False, partial=False):
         set to True.
 
     """
-    if isinstance(filename, _io.TextIOWrapper):
-        modes = {'+ab': 'append'}
-        mode = modes.get(''.join(sorted(filename.mode)), 'readonly')
+    if isinstance(
+        filename,
+        (
+            builtin_io.BufferedRandom,
+            builtin_io.BufferedReader,
+            builtin_io.BufferedWriter,
+        )
+    ):
+        mode = _FITS_MODES[''.join(sorted(filename.mode))]
     else:
         mode = 'readonly'
     hdus = fits.open(filename, mode=mode)
     header = hdus[0].header
+
+    # Handle files written by healpy's write_map
     if 'format' not in header or header['format'] != 'HPX_QB':
-        # fall back to healpy's read_map
-        if len(hdus) != 2 or 'pixtype' not in hdus[1].header or \
-           hdus[1].header['pixtype'] != 'HEALPIX':
-            raise TypeError('This file cannot be read as a Healpix map.')
         header = hdus[1].header
-        if field is None:
-            field = range(header['TFIELDS'])
-        out = hp.read_map(filename, dtype=dtype, nest=nest, field=field,
-                          h=True, verbose=False)
-        out, header = out[:-1], fits.header.Header(out[-1])
-        out = np.column_stack(out)
-        out = out.view(ndarraywrap)
+        if len(hdus) != 2 or 'pixtype' not in header or header['pixtype'] != 'HEALPIX':
+            raise TypeError('This file cannot be read as a Healpix map.')
+        out = hp.read_map(filename, dtype=dtype, nest=nest, field=field)
+        out = np.ascontiguousarray(out.T).view(ndarraywrap)
         out.header = header
         if partial:
             return out, None
         return out
 
+    # Handle files written by qubic's write_map
     nside = header['nside']
     npix = 12 * nside**2
     ordering = header['ordering']
+    hasmask = header['hasmask']
     if field is None:
         field = range(header['nmaps'])
     elif not isinstance(field, Container) or isinstance(field, str):
         field = (field,)
 
     npix_ = npix
-    if header['hasmask'] and header['hasmask']:
+    if hasmask:
         mask = hdus[1].data.view(bool)
         mask_ = mask
         ifirst = 2
-        outfunc = lambda shape, **keywords: np.full(shape, np.nan, **keywords)
         if partial:
             npix_ = np.sum(mask)
             mask_ = Ellipsis
@@ -91,12 +101,21 @@ def read_map(filename, field=None, dtype=float, nest=False, partial=False):
         mask = None
         mask_ = Ellipsis
         ifirst = 1
-        outfunc = np.empty
+
     if dtype is None:
-        bitpix_table = {8: np.uint8, 16: np.int16, 32: np.int32, 64: np.int64,
-                        -32: np.float32, -64: np.float64}
-        dtype = bitpix_table[hdus[ifirst].header['bitpix']]
-    out = outfunc((len(field), npix_), dtype=dtype, order='f')
+        bitpix = hdus[ifirst].header['bitpix']
+        dtype = fits.BITPIX2DTYPE[bitpix]
+    dtype = np.dtype(dtype)
+
+    if hasmask:
+        if dtype.kind == 'f':
+            outfunc = lambda shape, **keywords: np.full(shape, np.nan, **keywords)
+        else:
+            outfunc = np.zeros
+    else:
+        outfunc = np.empty
+
+    out = outfunc((len(field), npix_), dtype=dtype, order='F')
 
     if partial and (nest and ordering == 'RING' or
                     not nest and ordering == 'NESTED'):
@@ -161,7 +180,7 @@ def write_map(filename, map, mask=None, nest=False, dtype=np.float32,
             - II, IQ, IU, QQ, QU, UU for 6 components,
             - DATA_0, DATA_1... otherwise
     """
-    map = np.asanyarray(map, order='f') #XXX astropy issue #2150
+    map = np.asanyarray(map)
     if map.ndim not in (1, 2):
         raise ValueError('Invalid dimensions of the healpix map(s).')
     if map.ndim == 1:

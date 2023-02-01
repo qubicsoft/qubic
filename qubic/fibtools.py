@@ -4,14 +4,13 @@ from matplotlib.pyplot import *
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
 
-
+import numpy as np
 import scipy.signal as scsig
 import scipy.stats
-from scipy.ndimage.filters import correlate1d, gaussian_filter1d
+from scipy.ndimage import correlate1d, gaussian_filter1d
 from glob import glob
 from astropy.io import fits
 from iminuit.util import describe, make_func_code
-from functools import partial, update_wrapper
 from qubic.utils import progress_bar
 
 from qubicpack.pix2tes import assign_pix_grid, assign_pix2tes, tes2pix, pix2tes, TES2PIX
@@ -1342,7 +1341,7 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
         plot([thecut_amp, thecut_amp], [np.min(allerr[allok, 3]), np.max(allerr[allok, 3])], 'g--')
         plot(allparams[newok, 3], allerr[newok, 3], 'r.')
         allparams[~newok, :] = np.nan
-        ylabel('$\sigma_{amp}$ [nA]')
+        ylabel(r'$\sigma_{amp}$ [nA]')
         xlabel('Amp Fib{} [nA]'.format(fib))
 
         subplot(2, 2, 3)

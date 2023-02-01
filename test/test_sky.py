@@ -1,10 +1,10 @@
-from __future__ import division
 from numpy.testing import assert_allclose, assert_equal
-from pyoperators import pcg, DiagonalOperator, UnpackOperator
-from pyoperators.utils.testing import assert_same, skiptest
-from qubic import QubicAcquisition, create_sweeping_pointings
 import numpy as np
+
 import qubic
+from pyoperators import pcg, DiagonalOperator, UnpackOperator
+from pyoperators.utils.testing import assert_same
+from qubic import QubicAcquisition, create_sweeping_pointings
 
 # read the input map
 I, Q, U = qubic.io.read_map(qubic.data.PATH + 'syn256_pol.fits').T
@@ -72,7 +72,6 @@ def test_sky():
     assert_same(pTx_pT1s['I'][1], pTx_pT1s['IQU'][1].astype(np.float32))
 
 
-@skiptest
 def test_sky2():
     assert_allclose(outputs['I'], outputs['IQU'][..., 0], atol=2e-2)
     assert_allclose(outputs['QU'], outputs['IQU'][..., 1:], atol=2e-2)

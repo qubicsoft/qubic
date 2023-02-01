@@ -1,0 +1,78 @@
+[build-system]
+build-backend = 'setuptools.build_meta'
+requires = [
+    'oldest-supported-numpy',
+    'pchanial-legacy-install-hooks==1.0.1',
+    'setuptools==64.0.3',
+    'setuptools_scm[toml]>=6.2',
+    'wheel',
+]
+
+[project]
+name = 'qubic'
+authors = [
+    {name = 'Pierre Chanial', email = 'chanial@apc.in2p3.fr'},
+    {name = 'Jean-Christophe Hamilton', email = 'hamilton@apc.in2p3.fr'},
+    {name = 'Mikhail Stolpovskiy', email = 'mikhail.stolpovskiy@apc.univ-paris7.fr'},
+    {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
+    {name = 'Louise Mousset', email = 'mousset@apc.in2p3.fr'},
+    {name = 'Mathias Régnier', email = 'mathias.p.regnier@gmail.com'},
+]
+maintainers = [
+    {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
+]
+description = 'Simulation and map-making tools for the QUBIC experiment.'
+readme = 'README.md'
+keywords = [
+    'scientific computing',
+]
+classifiers = [
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Fortran',
+    'Development Status :: 5 - Production/Stable',
+    'Intended Audience :: Science/Research',
+    'Operating System :: OS Independent',
+    'Topic :: Scientific/Engineering',
+    'Topic :: Scientific/Engineering :: Astronomy',
+    'Topic :: Scientific/Engineering :: Physics',
+]
+requires-python = '>=3.8'
+dependencies = [
+    'astropy',
+    'camb',
+    'corner',
+    'emcee',
+    'GetDist',
+    'healpy>=0.6.1',
+    'iminuit',
+    'pandas',
+    'progressbar',
+    'pymaster',
+    'pyoperators[fft]>=0.13.18',
+    'pysimulators>=1.0.8',
+    'pysm3',
+    'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
+    'satorchipy @ git+https://github.com/satorchi/mypy@master',
+    'scipy',
+]
+dynamic = ['version']
+
+[project.optional-dependencies]
+mpi = ['mpi4py']
+
+[project.urls]
+homepage = 'https://www.qubic.org.ar'
+repository = 'https://github.com/qubicsoft/qubic'
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.setuptools.package-data]
+'*' = ['*']
+
+[tool.setuptools_scm]
+version_scheme = 'post-release'
+fallback_version = '0.0.0'

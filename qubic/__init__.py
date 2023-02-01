@@ -1,3 +1,4 @@
+from importlib.metadata import version as _version
 from . import dicts
 from . import calfiles
 from . import data
@@ -44,3 +45,5 @@ if numpy.__version__ < '1.8':
     numpy.full = full
     numpy.full_like = full_like
 del full, full_like, numpy
+
+__version__ = _version('qubic')

@@ -92,10 +92,10 @@ t = time.time()
 fitted = pip.fit_beta(chi2, beta, components.T, tod, x0=np.array([1.5]), mask=np.ones(len(beta), dtype=bool), 
 processes=1, N=1, options={'eps':1e-6}, tol=1e-2, method='L-BFGS-B')
 print('Execution time : ', time.time() - t)
-print(np.mean(fiited - beta))
+print(np.mean(fitted - beta))
 
 t = time.time()
 fitted = pip.fit_beta(chi2, beta, components.T, tod, x0=np.array([1.5]), mask=np.ones(len(beta), dtype=bool), 
 processes=os.cpu_count(), N=os.cpu_count(), options={'eps':1e-6}, tol=1e-2, method='L-BFGS-B')
 print('Execution time : ', time.time() - t)
-print(np.mean(fiited - beta))
+print(np.mean(fitted - beta))

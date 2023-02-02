@@ -23,6 +23,7 @@ import mixing_matrix as mm
 import pickle
 from scipy.optimize import minimize
 import ComponentsMapMakingTools as CMMTools
+import multiprocess as mp
 # PyOperators stuff
 from pysimulators import *
 from pyoperators import *
@@ -62,7 +63,7 @@ def create_array(name, nus, nside):
         shape=(2, 12*nside**2, 3)
     else:
         shape=len(nus)
-    pkl_file = open('AllDataSet_Components_MapMaking.pkl', 'rb')
+    pkl_file = open(CMB_FILE+'AllDataSet_Components_MapMaking.pkl', 'rb')
     dataset = pickle.load(pkl_file)
 
     myarray=np.zeros(shape)
@@ -626,7 +627,6 @@ class PlanckAcquisition:
     def get_invntt_operator(self, beam_correction=0):
         
         if beam_correction != 0:
-            print(beam_correction)
             factor = (4*np.pi*(np.rad2deg(beam_correction)/2.35/np.degrees(hp.nside2resol(self.scene.nside)))**2)
             print(f'corrected by {factor}')
             varnew = hp.smoothing(self.var.T, fwhm=beam_correction/np.sqrt(2)) / factor
@@ -1141,6 +1141,7 @@ class QubicPlanckMultiBandAcquisition:
 
         if type == 'TwoBands' or 'WideBand':
             for i in range(self.nfreqs):
+                print(i)
                 invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i])
                 R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
                 Operator.append(R_planck(invntt_planck(R_planck.T)))
@@ -1963,7 +1964,9 @@ class QubicIntegratedComponentsMapMaking:
 
                 nu0 = self.comp[k].__dict__['_fixed_params']['nu0']
                 sky=pysm3.Sky(nside=self.nside, preset_strings=[config[kconf]])
-                
+                #sky.components[0].mbb_index = hp.ud_grade(sky.components[0].mbb_index, 8)
+                sky.components[0].mbb_temperature = 20*sky.components[0].mbb_temperature.unit
+                #sky.components[0].mbb_index = hp.ud_grade(np.array(sky.components[0].mbb_index), 8)
                 mydust=np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0*u.GHz, None, u.uK_CMB))
                     
                 allmaps[k] = mydust.copy()
@@ -2046,7 +2049,10 @@ class QubicIntegratedComponentsMapMaking:
 
         list_op = self._get_array_of_operators()
         #print('Making sum from {:.2f} to {:.2f} with {:.0f} acquisitions'.format(self.bands[0], self.bands[1], self.d['nf_sub']))
-
+        if beta.shape[0] == 1:
+            R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
+        else:
+            R = ReshapeOperator((12*self.nside**2, 1, 3), (12*self.nside**2, 3))
         for inu, nu in enumerate(self.allnus):
             if convolution:
                 C =  HealpixConvolutionGaussianOperator(fwhm=self.final_fwhm[inu])
@@ -2055,7 +2061,7 @@ class QubicIntegratedComponentsMapMaking:
             
             A = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside)
             
-            list_op[inu] = list_op[inu] * C * A
+            list_op[inu] = list_op[inu] * C * R * A
 
 
         return BlockColumnOperator([np.sum(list_op, axis=0)], axisout=0)
@@ -2082,14 +2088,7 @@ class QubicWideBandComponentsMapMaking:
 
         self.nueff = np.append(self.nueff, self.qubic150.nueff)
         self.nueff = np.append(self.nueff, self.qubic220.nueff)
-        #for i in range(len(self.qubic150.nus_edge)-1):
-        #    self.nueff = np.append(self.nueff, np.mean(self.qubic150.nus_edge[i:i+2]))
-
-        #for i in range(len(self.qubic220.nus_edge)-1):
-        #    self.nueff = np.append(self.nueff, np.mean(self.qubic220.nus_edge[i:i+2]))
-
-
-
+        
         self.nus_edge = np.array([])
         self.nus_edge = np.append(self.nus_edge, self.qubic150.nus_edge)
         self.nus_edge = np.append(self.nus_edge, self.qubic220.nus_edge)
@@ -2097,11 +2096,11 @@ class QubicWideBandComponentsMapMaking:
         self.scene = self.qubic150.scene
 
 
-    def get_operator(self, beta, convolution, type):
+    def get_operator(self, beta, convolution):
 
 
-        self.H150 = self.qubic150.get_operator(beta, convolution=convolution, type=type)
-        self.H220 = self.qubic220.get_operator(beta, convolution=convolution, type=type)
+        self.H150 = self.qubic150.get_operator(beta, convolution=convolution)
+        self.H220 = self.qubic220.get_operator(beta, convolution=convolution)
         R = ReshapeOperator(self.H150.shapeout, self.H150.shape[0])
 
         return R(self.H150)+R(self.H220)
@@ -2215,25 +2214,24 @@ class QubicTwoBandsComponentsMapMaking:
 
 class QubicOtherIntegratedComponentsMapMaking:
 
-    def __init__(self, qubic, external_nus, comp, nintegr=1, type='QubicIntegrated', convolution=False):
+    def __init__(self, qubic, external_nus, comp, nintegr=1):
 
         self.qubic = qubic
-        self.convolution = convolution
         self.external_nus = external_nus
         self.comp = comp
         self.nside = self.qubic.scene.nside
         self.npix = 12*self.nside**2
         self.nintegr = nintegr
         self.ndets = 992
-        self.type = type
         self.Nsub = self.qubic.Nsub
         self.nueff = self.qubic.nueff
         self.length_external_nus = len(self.external_nus) * 12*self.nside**2 * 3
 
         self.allresolution = self.qubic.final_fwhm
+        self.qubic_resolution = self.allresolution.copy()
 
 
-        pkl_file = open('AllDataSet_Components_MapMaking.pkl', 'rb')
+        pkl_file = open(CMB_FILE+'AllDataSet_Components_MapMaking.pkl', 'rb')
         dataset = pickle.load(pkl_file)
         self.dataset = dataset
         self.bw = []
@@ -2254,7 +2252,7 @@ class QubicOtherIntegratedComponentsMapMaking:
     def get_external_invntt_operator(self):
 
         allsigma=np.array([])
-        for inu, nu in enumerate(self.external_nus):
+        for _, nu in enumerate(self.external_nus):
             sigma = hp.ud_grade(self.dataset['noise{}'.format(nu)].T, self.nside).T
             allsigma = np.append(allsigma, sigma.ravel())
 
@@ -2262,34 +2260,25 @@ class QubicOtherIntegratedComponentsMapMaking:
 
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
-    def get_operator(self, beta, nside_fit=0, type='no_convolution'):
-        Hqubic = self.qubic.get_operator(beta=beta, convolution=self.convolution, type=type)
+    def get_operator(self, beta, convolution):
+        Hqubic = self.qubic.get_operator(beta=beta, convolution=convolution)
         Rqubic = ReshapeOperator(Hqubic.shapeout, Hqubic.shape[0])
 
         Operator=[Rqubic * Hqubic]
 
-        R2tod = ReshapeOperator((1, self.npix, 3), (self.npix*3))
         if self.external_nus is not None:
             for ii, i in enumerate(self.external_nus):
+                
                 # Setting BandWidth
                 bw = self.dataset['bw{}'.format(i)]
                 # Generate instanciation for external data
-                print('nus ', i)
                 other = OtherData([i], self.nside, self.comp)
                 # Compute operator H with forced convolution
-                if type == 'no_convolution':
-                    fwhm = self.allresolution_external[ii]
-                elif type == 'realres':
-                    fwhm = self.alltarget_external[ii]
-                elif type == 'convolution_by_bands':
-                    fwhm = self.alltarget_external[ii]
-                else:
-                    raise TypeError('Not implemented yet')
-                Hother = other.get_operator(self.nintegr, beta, convolution=self.convolution, fwhm_max=fwhm)
+                fwhm = self.allresolution_external[ii]
+                # Add operator
+                Hother = other.get_operator(self.nintegr, beta, convolution=convolution, fwhm_max=fwhm)
                 
                 Operator.append(Hother)
-
-
         return BlockColumnOperator(Operator, axisout=0)
     def get_noise(self):
 
@@ -2303,48 +2292,32 @@ class QubicOtherIntegratedComponentsMapMaking:
 
         sh = tod.shape[0]
         sh_external = len(self.external_nus)*3*12*self.nside**2
-        sh_1external = 3*12*self.nside**2
         shape_tod_qubic = sh - sh_external
         tod_qubic = tod[:shape_tod_qubic]
         tod_external = tod[shape_tod_qubic:]
         R = self.get_maps()
         maps_external = R(tod_external)
         for ii, i in enumerate(self.external_nus):
-            target = compute_fwhm_to_convolve(self.fwhm[ii], np.max(self.allresolution))
-            print(f'Reconvolution from {self.fwhm[ii]} to {np.max(self.allresolution)} with gaussian kernel {target}')
+            target = compute_fwhm_to_convolve(self.fwhm[ii], np.mean(self.qubic_resolution))
             C = HealpixConvolutionGaussianOperator(fwhm=target)
             maps_external[ii] = C(maps_external[ii])
 
         tod_external = R.T(maps_external)
 
         return np.r_[tod_qubic, tod_external]
-    def get_tod(self, H, components, convolution, noisy=True):
+    def get_observations(self, beta, components, convolution, noisy=True):
 
+        H = self.get_operator(beta, convolution)
         tod = H(components)
         n = self.get_noise()
         if noisy:
             tod += n.copy()
 
-        #if convolution:
-        #    tod = self.reconvolve_to_worst_resolution(tod)
+        if convolution:
+            tod = self.reconvolve_to_worst_resolution(tod)
 
 
-        return H, tod, n
-    def normalize(self, tod):
-
-        sh = tod.shape[0]
-        sh_external = len(self.external_nus)*3*12*self.nside**2
-        sh_1external = 3*12*self.nside**2
-        shape_tod_qubic = sh - sh_external
-        tod_qubic = tod[:shape_tod_qubic]
-        tod_external = tod[shape_tod_qubic:]
-
-        new_tod_qubic = tod_qubic.copy()
-        new_tod_external = tod_external.copy()
-        new_tod_qubic /= new_tod_qubic.max()
-        new_tod_external /= new_tod_external.max()
-
-        return np.r_[new_tod_qubic, new_tod_external]
+        return tod
     def get_invntt_operator(self, fact=None):
 
         invNq = self.qubic.get_invntt_operator()
@@ -2357,7 +2330,7 @@ class OtherData:
 
     def __init__(self, nus, nside, comp):
 
-        pkl_file = open('AllDataSet_Components_MapMaking.pkl', 'rb')
+        pkl_file = open(CMB_FILE+'AllDataSet_Components_MapMaking.pkl', 'rb')
         dataset = pickle.load(pkl_file)
         self.dataset = dataset
 
@@ -2427,7 +2400,10 @@ class OtherData:
     
     def get_operator(self, nintegr, beta, convolution, fwhm_max=None):
         R2tod = ReshapeOperator((12*self.nside**2, 3), (3*12*self.nside**2))
-        R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
+        if beta.shape[0] == 1:
+            R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
+        else:
+            R = ReshapeOperator((12*self.nside**2, 1, 3), (12*self.nside**2, 3))
         op = []
         Operator=[]
         for ii, i in enumerate(self.nus):
@@ -2435,17 +2411,13 @@ class OtherData:
                 allnus = np.array([i])
             else:
                 allnus = np.linspace(i-self.bw[ii]/2, i+self.bw[ii]/2, nintegr)
-            
             fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
             C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
             for inu, nu in enumerate(allnus):
                 D = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside)
-                Operator.append(C * D)
-
-
-            op.append(R2tod(AdditionOperator(Operator)/nintegr))
-            
-        return BlockColumnOperator(op, axisout=0)
+                op.append(R2tod * C * R * D)
+            Operator.append(AdditionOperator(op)/nintegr)
+        return BlockColumnOperator(Operator, axisout=0)
 
     def get_noise(self, fact=None):
         state = np.random.get_state()
@@ -2468,21 +2440,20 @@ class OtherData:
 
 class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
 
-    def __init__(self, qubic, external_nus, comp, nintegr=1, convolution=False, type='QubicIntegrated'):
+    def __init__(self, qubic, external_nus, comp, H, nintegr=1):
 
-        self.convolution = convolution
         self.qubic = qubic
-        self.type = type
         self.comp = comp
+        self.H = H
         self.nc = len(self.comp)
         self.external = external_nus
         self.Nsamples = self.qubic.qubic150.sampling.shape[0]
         self.Ndets = 992
-        QubicOtherIntegratedComponentsMapMaking.__init__(self, qubic, external_nus, comp, nintegr, type=self.type, convolution=self.convolution)
-        if self.convolution:
-            self.alltarget = compute_fwhm_to_convolve(self.allresolution, np.max(self.allresolution))
-
-
+        self.nintegr = nintegr
+        QubicOtherIntegratedComponentsMapMaking.__init__(self, qubic, external_nus, comp, nintegr)
+        
+        if self.Nsub == 1 :
+            raise TypeError('You should have more than 1 sub-acquisitions')
 
     def generate_tod(self, H, components, beta, noisy=True):
 
@@ -2549,125 +2520,48 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
 
 
         return H
-    def update_H(self, Ope, beta, mask_beta=None, nside_fit=0):
-        """
-        This function updates the Mixing Matrix D inside the Operator H. It is used to change spectral indices during the convergence. 
+    
+    def get_newH(self, Ope, newbeta, type='TwoBands'):
 
-        If you're using constant spectral index across the sky, you should let nside_fit=0 and mask_beta=None. If not, the function change beta maps 
-        according to the mask you provided.
-        """
-        
-
-        if self.type == 'TwoBands':
+        if type == 'TwoBands':
             k=0
             for i in range(2):
+                # Select a physical band
+                myope = Ope.operands[0].operands[i]
                 for j in range(self.Nsub):
-                    # get mixing operator for current sub-band
-                    myope = Ope.operands[0].operands[i]
-                    if len(beta.ravel()) > len(self.comp):
-                        if nside_fit == 0:
-                            raise TypeError('Change Nside fit')
-                        A = self.get_A_varying(beta, np.array([self.nueff[k]]), nside_fit=nside_fit)
-                        if self.Nsub == 1 :
-                            allD = myope.operands[-1]
-                        else:
-                            allD = myope.operands[1].operands[j].operands[-1]
-                        
-                        D = self.replace_mixing_operator_varying_beta(allD, A, mask_beta=mask_beta)
-                        #D = self.get_mixing_operator_verying_beta(A)
-                        
-                    else:
-                        D = self.get_mixing_operator(beta, np.array([self.nueff[k]]))
                     
-                    if self.Nsub == 1 :
-                        myope.operands[-1] = D
-                    else:
-                        myope.operands[1].operands[j].operands[-1] = D
-
+                    # get mixing operator for current sub-band
+                    A = CMMTools.get_mixing_operator(newbeta, np.array([self.nueff[k]]), 
+                                            comp=self.comp, nside=self.nside)
+                    myope.operands[1].operands[j].operands[-1] = A
                     k+=1
+
             for inu, nu in enumerate(self.external):
                 if self.nintegr == 1:
-                    if len(beta.ravel()) > len(self.comp):
-                        A = self.get_A_varying(beta, np.array([nu]), nside_fit=nside_fit)
-                        allD = Ope.operands[inu+1].operands[-1]
-                        
-                        D = self.replace_mixing_operator_varying_beta(allD, A, mask_beta=mask_beta)
-                    else:
-                        D = self.get_mixing_operator(beta, np.array([nu]))
-                        Ope.operands[inu+1].operands[-1] = D
+                    
+                    # get mixing operator for current sub-band
+                    A = CMMTools.get_mixing_operator(newbeta, np.array([nu]), 
+                                            comp=self.comp, nside=self.nside)
+
+                    Ope.operands[inu+1].operands[-1] = A
                 else:
-                    myope = Ope.operands[inu+1].operands[2]
-                    allnus = np.linspace(nu-self.bw[inu]/2, nu+self.bw[inu]/2, self.nintegr)
-                    for j in range(self.nintegr):
-                        if len(beta.ravel()) > len(self.comp):
-                            #A = self.get_A_varying(beta, np.array([allnus[j]]))
-                            #D = self.get_mixing_operator_verying_beta(A)
-                            #myope.operands[j].operands[-1] = D
-                            pass
-                        else:
-                            D = self.get_mixing_operator(np.array([allnus[j]]), beta)
-                            myope.operands[j].operands[-1] = D
+                    allnus = np.linspace(nu-(self.dataset[f'bw{nu}']/2), nu+(self.dataset[f'bw{nu}']/2), 
+                                                                                                    self.nintegr)
+                    for jnu, j in enumerate(allnus):
+                        # get mixing operator for current sub-band
+                        A = CMMTools.get_mixing_operator(newbeta, np.array([j]), 
+                                            comp=self.comp, nside=self.nside)
+
+                        Ope.operands[inu+1].operands[1].operands[jnu].operands[-1] = A
+
 
         else:
             raise TypeError('Not yet implemented...')
 
-
         return Ope
-    def replace_mixing_operator_varying_beta(self, allD, A, mask_beta=None):
-
-        if len(allD.operands) != len(mask_beta):
-            raise TypeError('All mixing operator and mask must have the same size')
-        A_npix = np.zeros((self.npix, A.shape[1], A.shape[2]))
-
-        for i in range(A.shape[1]):
-            for j in range(A.shape[2]):
-                A_npix[:, i, j] = hp.ud_grade(A[:, i, j], self.nside)
-
-        indices_beta_to_replace = np.where(mask_beta == True)[0]
-        
-        for i in indices_beta_to_replace:
-            allD.operands[i] = DenseOperator(A_npix[i], broadcast='rightward', shapein=(self.nc, 3))
-        
-        return allD
-    def get_A_varying(self, beta, nus, nside_fit):
-        
-        npix_fit = 12*nside_fit**2
-        allA = np.zeros((npix_fit, 1, self.nc))
-        allA_fit = np.zeros((self.npix, 1, self.nc))
-        for i in range(npix_fit):
-            allA[i] = self.get_mixingmatrix(beta[i], nus)
-        
-
-        for i in range(self.nc):
-            allA_fit[:, 0, i] = hp.ud_grade(allA[:, 0, i], self.nside)
-        return allA
-    def get_mixingmatrix(self, beta, nus):
-
-        A = mm.MixingMatrix(*self.comp)
-        A_ev = A.evaluator(nus)
-        A = A_ev(beta)
-
-        return A
-    def get_mixing_operator(self, beta, nus):
-        """
-        This function returns a mixing operator based on the input parameters: beta and nus.
-        The mixing operator is either a constant operator, or a varying operator depending on the input.
-        """
-
-        # Check if the length of beta is equal to the number of channels minus 1
-        
-        # Get the mixing matrix
-        A = self.get_mixingmatrix(beta, nus)
-        
-        # Create a ReshapeOperator
-        R = ReshapeOperator(((1, 12*self.nside**2, 3)), ((12*self.nside**2, 3)))
-        
-        # Create a DenseOperator with the first row of A
-        D = DenseOperator(A[0], broadcast='rightward', shapein=(self.nc, 12*self.nside**2, 3), shapeout=(1, 12*self.nside**2, 3))
-        return D
     def get_invN(self):
         return self.get_invntt_operator()
-    def call_pcg(self, H, tod, invN, beta0, tolerance, x0, kmax=5, disp=True, maxiter=10, mask=None, **kwargs):
+    def call_pcg(self, tod, invN, beta0, tolerance, x0, kmax=5, disp=True, maxiter=10, mask=None, **kwargs):
 
         convergence=[1]
 
@@ -2680,7 +2574,7 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         while convergence[-1] > tolerance:
 
             print('k = {}'.format(k+1))
-            Hi = self.update_H(H, beta[-1])
+            Hi = self.update_H(self.H, beta[-1])
             A = Hi.T * invN * Hi
             b = Hi.T * invN * tod
 
@@ -2708,71 +2602,107 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         return mysolution, beta, error
 
 
-    def myChi2(self, beta, allbeta, H, solution, data, nside_fit, mask=None):
+    def myChi2(self, beta, allbeta, solution, data, patch_id=None):
         """
         This function calculates the chi-squared value for a given beta, H, solution, and data.
         If a mask is provided, it will zero out the corresponding elements in the solution and data.
-        
-        if mask is not None:
-            # Make a copy of the solution and zero out the elements specified by the mask
-            newsolution = solution.copy()
-            newsolution[:, mask, :] = 0
-
-            # Make a copy of the data and zero out the elements specified by the mask
-            new_data = data.copy()
-            tod_other = new_data[(2*self.Nsamples*self.Ndets):].copy()
-            R = self.get_maps()
-            maps_other = R(tod_other)
-            maps_other[:, mask, :] = 0
-            tod_other = R.T * maps_other.copy()
-            new_data = np.r_[new_data[:(2*self.Nsamples*self.Ndets)], tod_other]
-        else:
-            # If no mask is provided, make a copy of the data
-            new_data = data.copy()
-
-        # Update H based on the given beta
-        H_for_beta = self.update_H(H, beta)
-
-        # Generate fake data using the updated H and solution
-        fakedata = H_for_beta(newsolution)
-
-        # Normalize the fake and real data
-        fakedata_norm = fakedata.copy()
-        newdata_norm = new_data.copy()
-
-        #print(beta)
         """
-
+        #print(1)
+        #Hi = self.H.copy()
         nsidemap = hp.npix2nside(len(solution[0, :, 0]))
-    
-
-        if mask is not None:
-            fix_beta = allbeta.copy()
-            fix_beta[mask] = 0
-            fix_beta[mask] = beta.copy()
-            fix_beta = hp.ud_grade(fix_beta, nsidemap)
+        newbeta = allbeta.copy()
+        if patch_id is not None:
+            newbeta[patch_id] = beta.copy()
         else:
-            fix_beta = beta.copy()
-    
-        H_for_beta = self.update_H(H, fix_beta, nside_fit=nside_fit, mask_beta=mask)
-        fakedata = H_for_beta(solution)
+            newbeta = beta.copy()
+        Hi = self.H.copy()
+        Hi = self.get_newH(Hi, newbeta)
+        fakedata = Hi(solution)
         
         chi2 = np.sum((data-fakedata)**2)
-        print(np.mean(beta), chi2)
+        #print(beta)
         return chi2
-        #return np.sum((newdata_norm-fakedata_norm)**2)
 
 
+    def fit_beta(self, chi2, beta_planck, solution, data, x0, mask=None, processes=1, N=1, options={}, 
+                                                    method='TNC', tol=1e-5):
 
-    def spectral_index_fitting(self, x0, args, **kwargs):
+        if mask is None: # Constant spectral index
+        
+            args = (beta_planck, solution, data, None)
+            beta_fitted = minimize(chi2, x0=x0, args=args, options=options, method=method, tol=tol).x
+            print(beta_fitted)
+    
+        else:
+            o = FitParallel(chi2, beta_planck, solution, data, Nprocess=processes, x0=x0, options=options, method=method, tol=tol)
+            index = np.where(mask == True)[0]
+            print(index, len(index))
+            main_loop = len(index) // N
+            rest_loop = len(index) % N
+            print(f'{main_loop} main loop and {rest_loop} rest')
+            beta_fitted = beta_planck.copy()
+        
+            k=0
+            for i in range(main_loop):
+                print(index[k:(k+N)])
+                f = o.run_fit(index[k:(k+N)])
+                print(f)
+                #print(index[k:(k+N)])
+                beta_fitted[index[k:(k+N)]] = f.copy()
+            
+                k+=N
+            k=rest_loop
+            for i in range(rest_loop):
+                f = o.run_fit(np.array([index[-k]]))
+                beta_fitted[index[-k]] = f.copy()
+                k+=1
+            
+    
+        return beta_fitted
+    def spectral_index_fitting(self, mask, allbeta, solution, data, x0, process=1, **kwargs):
+        fit_beta = allbeta.copy()
+        if mask.shape[0] != allbeta.shape[0]:
+            mask = hp.ud_grade(mask, hp.npix2nside(allbeta.shape[0]))
 
-        r = minimize(self.myChi2, x0=x0, args=args, **kwargs).x
+        index = np.where(mask == True)[0]
+        print(len(index))
+        for ii, i in enumerate(index):
+            
+            args = (allbeta, solution, data, i)
+            fit_beta[i] = minimize(self.myChi2, x0=x0, args=args, **kwargs).x
+            print(i, fit_beta[i])
 
-        return r
+        return fit_beta
 
 
-
-
-
-
-###
+class FitParallel:
+    
+    def __init__(self, chi2, betamap, sol, data, method='TNC', tol=1e-5, Nprocess=1, x0=np.array([1.54]), options={}):
+        self.chi2 = chi2
+        self.Nprocess = Nprocess
+        self.x0 = x0
+        self.method = method
+        self.tol = tol
+        self.options = options
+        self.data = data
+        self.betamap = betamap
+        self.sol = sol
+        
+    
+    def do_task(self, x):
+        args = (self.betamap, self.sol, self.data, x)
+        beta = minimize(self.chi2, x0=self.x0, args=args, method=self.method, tol=self.tol, options=self.options).x
+        return beta
+    def from_res2tab(self, res):
+        tab = np.zeros(len(res))
+        for i in range(len(res)):
+            tab[i] = res[i][0]
+        return tab
+        
+    def run_fit(self, index):
+        #self.initialize_pool()
+        #print(f'Fit of those pixels : {np.arange(min_pix, min_pix+delta, 1)}')
+        pool = mp.Pool(processes=self.Nprocess)
+        allbeta = self.from_res2tab(pool.map(self.do_task, list(index)))
+        pool.close()
+        return allbeta

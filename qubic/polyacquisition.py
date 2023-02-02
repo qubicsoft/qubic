@@ -171,7 +171,7 @@ class QubicPolyAcquisition(object):
         q = qubic.QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
         q.detector = self[0].instrument.detector
         s_ = self[0].sampling
-        nsamplings = self[0].comm.allreduce(len(s_))
+        nsamplings = self[0].sampling.comm.allreduce(len(s_))
 
         d1['random_pointing'] = True
         d1['sweeping_pointing'] = False

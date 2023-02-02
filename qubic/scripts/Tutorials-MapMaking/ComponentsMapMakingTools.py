@@ -9,27 +9,33 @@ import numpy as np
 
 
 def get_allA(nc, nf, npix, beta, nus, comp):
-    
-    allA = np.zeros((npix, nf, nc))
-    for i in range(npix):
+    # Initialize arrays to store mixing matrix values
+    allA = np.zeros((beta.shape[0], nf, nc))
+    allA_pix = np.zeros((npix, nf, nc))
+
+    # Loop through each element of beta to calculate mixing matrix
+    for i in range(beta.shape[0]):
         allA[i] = get_mixingmatrix(beta[i], nus, comp)
-    return allA
+
+    # Check if beta and npix are equal
+    if beta.shape[0] != npix:
+        # Upgrade resolution if not equal
+        for i in range(nf):
+            for j in range(nc):
+                allA_pix[:, i, j] = hp.ud_grade(allA[:, i, j], hp.npix2nside(npix))
+        # Return upgraded mixing matrix
+        return allA_pix
+    else:
+        # Return original mixing matrix
+        return allA
 
 def get_mixing_operator_verying_beta(nc, nside, A):
 
     npix = 12*nside**2
-    if A.shape[0] != npix:
-        print(f'Upgrade pixelization of beta from {A.shape[0]} to {12*nside**2}')
-        Adown = np.zeros((12*nside**2, A.shape[1], A.shape[2]))
-        for i in range(nc):
-            Adown[:, 0, i] = hp.ud_grade(A[:, 0, i], nside)
-    else:
-        Adown=A.copy()
     
-    R = ReshapeOperator((npix, 1, 3), (npix, 3))
-    D = R * BlockDiagonalOperator([DenseBlockDiagonalOperator(Adown, broadcast='rightward', shapein=(npix, nc)),
-                           DenseBlockDiagonalOperator(Adown, broadcast='rightward', shapein=(npix, nc)),
-                           DenseBlockDiagonalOperator(Adown, broadcast='rightward', shapein=(npix, nc))], new_axisin=0, new_axisout=2)
+    D = BlockDiagonalOperator([DenseBlockDiagonalOperator(A, broadcast='rightward', shapein=(npix, nc)),
+                           DenseBlockDiagonalOperator(A, broadcast='rightward', shapein=(npix, nc)),
+                           DenseBlockDiagonalOperator(A, broadcast='rightward', shapein=(npix, nc))], new_axisin=0, new_axisout=2)
     return D
 
 def get_mixingmatrix(beta, nus, comp):
@@ -54,8 +60,9 @@ def get_mixing_operator(beta, nus, comp, nside):
         nside_fit = 0
 
     # Check if the length of beta is equal to the number of channels minus 1
-    if nside_fit == 0:
+    if nside_fit == 0: # Constant indice on the sky
         beta = np.mean(beta)
+        
         # Get the mixing matrix
         A = get_mixingmatrix(beta, nus, comp)
         
@@ -66,13 +73,11 @@ def get_mixing_operator(beta, nus, comp, nside):
         R = ReshapeOperator(((1, 12*nside**2, 3)), ((12*nside**2, 3)))
         
         # Create a DenseOperator with the first row of A
-        D = R * DenseOperator(A[0], broadcast='rightward', shapein=(nc, 12*nside**2, 3), shapeout=(1, 12*nside**2, 3))
-    else:
-        print(beta.shape[0])
-        if beta.shape[0] != 12*nside**2:
-            beta = hp.ud_grade(beta, nside_fit)
+        D = DenseOperator(A[0], broadcast='rightward', shapein=(nc, 12*nside**2, 3), shapeout=(1, 12*nside**2, 3))
+    else: # Varying indice on the sky
+        
         # Get all A matrices nc, nf, npix, beta, nus, comp
-        A = get_allA(nc, 1, len(beta), beta, nus, comp)
+        A = get_allA(nc, 1, 12*nside**2, beta, nus, comp)
         
         # Get the varying mixing operator
         D = get_mixing_operator_verying_beta(nc, nside, A)

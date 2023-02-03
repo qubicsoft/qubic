@@ -52,7 +52,7 @@ def get_dictionary(nsub, nside, pointing, band):
     
     return d, center
 
-Nsub = 2
+Nsub = 4
 nside = 256
 pointing = 1000
 

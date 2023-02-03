@@ -6,7 +6,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.14.4
+      jupytext_version: 1.14.0
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -219,8 +219,8 @@ plt.show()
 
 
 plt.figure(figsize=(15, 5))
-hp.mollview(inputs[1, :, istk], cmap='jet', min=-5, max=10, sub=(1, 4, 1))
-hp.mollview(outputs[1, :, istk], cmap='jet', min=-5, max=10, sub=(1, 4, 2))
+hp.mollview(inputs[1, :, istk], cmap='jet', min=-5, max=5, sub=(1, 4, 1))
+hp.mollview(outputs[1, :, istk], cmap='jet', min=-5, max=5, sub=(1, 4, 2))
 hp.mollview(inputs[1, :, istk] - outputs[1, :, istk], cmap='jet', min=-r, max=r, sub=(1, 4, 3))
 hp.mollview(cov/cov.max(), cmap='jet', min=0, max=1, sub=(1, 4, 4))
 plt.show()

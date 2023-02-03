@@ -6,7 +6,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.14.4
+      jupytext_version: 1.14.0
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -142,7 +142,7 @@ H_qubic = qubic_acquisition.get_operator(convolution=True)
 ```
 
 ```{python}
-
+print(H_qubic.shapein)
 ```
 
 Here we define $N^{-1}$ the inverse noise covariance matrix in time domain.
@@ -302,7 +302,7 @@ You can note that the convergence is much faster than before with the QUBIC only
 
 ```{python}
 plt.figure(figsize=(10, 10))
-display_maps(mapin_conv, solution_qubic_planck['x'], istk=2, display=True, rot=center, res=15, min=-8, max=8, minr=-8, maxr=8)
+display_maps(mapin_conv, solution_qubic_planck['x'], istk=1, display=True, rot=center, res=15, min=-10, max=10, minr=-10, maxr=10)
 plt.show()
 ```
 

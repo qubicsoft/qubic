@@ -11,6 +11,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 import pysm3
+import gc
 import os
 import warnings
 warnings.filterwarnings("ignore")
@@ -36,6 +37,7 @@ def find_folder_recursively(folder_name, start_path=os.path.expanduser("~/Deskto
     raise FileNotFoundError(f"{folder_name} not found.")
 
 CMB_FILE = os.path.dirname(os.path.abspath(__file__))+'/'
+print(CMB_FILE)
 #find_folder_recursively('mypackages', start_path=os.path.expanduser("~/Desktop"))
 
 __all__ = ['QubicAcquisition',
@@ -56,7 +58,8 @@ __all__ = ['QubicAcquisition',
            'QubicWideBandComponentsMapMaking',
            'QubicTwoBandsComponentsMapMaking']
 
-
+def give_me_intercal(D, d):
+    return np.append(1, 1/np.sum(D[1:]**2, axis=1) * np.sum(D[1:] * d[1:], axis=1))
 def create_array(name, nus, nside):
 
     if name == 'noise':
@@ -1226,7 +1229,6 @@ class QubicPlanckMultiBandAcquisition:
 
         return tod
 
-        
 
 class QubicIntegrated:
 
@@ -1542,7 +1544,6 @@ class QubicWideBand:
 
     def get_coverage(self):
         return self.qubic150.get_coverage()
-
 class QubicOtherIntegrated:
 
     def __init__(self, qubic, external_nus, comp, nintegr=1):
@@ -1945,7 +1946,7 @@ class QubicIntegratedComponentsMapMaking:
         for i in range(len(self.multiinstrument)):
             self.final_fwhm[i] = self.subacqs[i].get_convolution_peak_operator().fwhm
 
-        self.alltarget = compute_fwhm_to_convolve(self.final_fwhm, np.max(self.final_fwhm))
+        self.alltarget = compute_fwhm_to_convolve(np.min(self.final_fwhm), self.final_fwhm)
 
     def get_PySM_maps(self, config):
         allmaps = np.zeros((self.nc, 12*self.nside**2, 3))
@@ -2045,17 +2046,26 @@ class QubicIntegratedComponentsMapMaking:
         for _, i in enumerate(self.subacqs):
             Operator.append(i.get_operator())
         return Operator
-    def get_operator(self, beta, convolution):
+    def get_operator(self, beta, convolution, gain=None, list_fwhm=None):
 
         list_op = self._get_array_of_operators()
         #print('Making sum from {:.2f} to {:.2f} with {:.0f} acquisitions'.format(self.bands[0], self.bands[1], self.d['nf_sub']))
-        if beta.shape[0] == 1:
+        if beta.shape[0] <= 2:
             R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
         else:
             R = ReshapeOperator((12*self.nside**2, 1, 3), (12*self.nside**2, 3))
+
+        if gain is not None:
+            G = DiagonalOperator(gain, broadcast='rightward')
+        else:
+            G = DiagonalOperator(np.ones(self.Ndets), broadcast='rightward')
+        
         for inu, nu in enumerate(self.allnus):
             if convolution:
-                C =  HealpixConvolutionGaussianOperator(fwhm=self.final_fwhm[inu])
+                if list_fwhm is not None:
+                    C =  HealpixConvolutionGaussianOperator(fwhm=list_fwhm[inu])
+                else:
+                    C =  HealpixConvolutionGaussianOperator(fwhm=self.final_fwhm[inu])
             else:
                 C = IdentityOperator()
             
@@ -2064,7 +2074,7 @@ class QubicIntegratedComponentsMapMaking:
             list_op[inu] = list_op[inu] * C * R * A
 
 
-        return BlockColumnOperator([np.sum(list_op, axis=0)], axisout=0)
+        return BlockColumnOperator([G * np.sum(list_op, axis=0)], axisout=0)
     def get_coverage(self):
         return self.subacqs[0].get_coverage()
     def get_invntt_operator(self):
@@ -2135,7 +2145,7 @@ class QubicTwoBandsComponentsMapMaking:
         self.final_fwhm = np.array([])
         self.final_fwhm = np.append(self.final_fwhm, self.qubic150.final_fwhm)
         self.final_fwhm = np.append(self.final_fwhm, self.qubic220.final_fwhm)
-        self.alltarget = compute_fwhm_to_convolve(self.final_fwhm, np.max(self.final_fwhm))
+        self.alltarget = compute_fwhm_to_convolve(np.min(self.final_fwhm), self.final_fwhm)
 
         self.nueff = np.array([])
         self.nueff = np.append(self.nueff, self.qubic150.nueff)
@@ -2180,12 +2190,18 @@ class QubicTwoBandsComponentsMapMaking:
                         if convolution:
                             self.H150.operands[j] = delete_inside_list(self.H150.operands[j], 5)
 
-    def get_operator(self, beta, convolution, type='no_convolution'):
+    def get_operator(self, beta, convolution, gain=None, list_fwhm=None):
 
-        self.H150 = self.qubic150.get_operator(beta, convolution=convolution)
-        self.H220 = self.qubic220.get_operator(beta, convolution=convolution)
+        if list_fwhm is not None:
+            list_fwhm1 = list_fwhm[:self.Nsub]
+            list_fwhm2 = list_fwhm[self.Nsub:]
+        else:
+            list_fwhm1 = None
+            list_fwhm2 = None
+        self.H150 = self.qubic150.get_operator(beta, convolution=convolution, list_fwhm=list_fwhm1, gain=gain[0])
+        self.H220 = self.qubic220.get_operator(beta, convolution=convolution, list_fwhm=list_fwhm2, gain=gain[1])
 
-        self.make_convolution(type=type, convolution=convolution)
+        #self.make_convolution(type=type, convolution=convolution)
 
         R = ReshapeOperator(self.H150.shapeout, self.H150.shape[0])
         ndets, nsamples = self.H150.shapeout
@@ -2260,8 +2276,8 @@ class QubicOtherIntegratedComponentsMapMaking:
 
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
-    def get_operator(self, beta, convolution):
-        Hqubic = self.qubic.get_operator(beta=beta, convolution=convolution)
+    def get_operator(self, beta, convolution, gain=None, list_fwhm=None):
+        Hqubic = self.qubic.get_operator(beta=beta, convolution=convolution, list_fwhm=list_fwhm, gain=gain)
         Rqubic = ReshapeOperator(Hqubic.shapeout, Hqubic.shape[0])
 
         Operator=[Rqubic * Hqubic]
@@ -2276,7 +2292,7 @@ class QubicOtherIntegratedComponentsMapMaking:
                 # Compute operator H with forced convolution
                 fwhm = self.allresolution_external[ii]
                 # Add operator
-                Hother = other.get_operator(self.nintegr, beta, convolution=convolution, fwhm_max=fwhm)
+                Hother = other.get_operator(self.nintegr, beta, convolution=convolution)
                 
                 Operator.append(Hother)
         return BlockColumnOperator(Operator, axisout=0)
@@ -2298,16 +2314,17 @@ class QubicOtherIntegratedComponentsMapMaking:
         R = self.get_maps()
         maps_external = R(tod_external)
         for ii, i in enumerate(self.external_nus):
-            target = compute_fwhm_to_convolve(self.fwhm[ii], np.mean(self.qubic_resolution))
+            target = compute_fwhm_to_convolve(self.fwhm[ii], np.min(self.qubic_resolution))
+            print(self.fwhm[ii], np.mean(self.qubic_resolution), target)
             C = HealpixConvolutionGaussianOperator(fwhm=target)
             maps_external[ii] = C(maps_external[ii])
 
         tod_external = R.T(maps_external)
 
         return np.r_[tod_qubic, tod_external]
-    def get_observations(self, beta, components, convolution, noisy=True):
+    def get_observations(self, beta, gain, components, convolution, noisy=True):
 
-        H = self.get_operator(beta, convolution)
+        H = self.get_operator(beta, convolution, gain=gain)
         tod = H(components)
         n = self.get_noise()
         if noisy:
@@ -2316,16 +2333,18 @@ class QubicOtherIntegratedComponentsMapMaking:
         if convolution:
             tod = self.reconvolve_to_worst_resolution(tod)
 
+        del H
+        gc.collect()
 
         return tod
     def get_invntt_operator(self, fact=None):
 
         invNq = self.qubic.get_invntt_operator()
-        Rq = ReshapeOperator(invNq.shapeout, invNq.shape[0])
+        #Rq = ReshapeOperator(invNq.shapeout, invNq.shape[0])
         invNe = OtherData(self.external_nus, self.nside, self.comp).get_invntt_operator(fact=fact)
-        Re = ReshapeOperator(invNe.shapeout, invNe.shape[0])
+        #Re = ReshapeOperator(invNe.shapeout, invNe.shape[0])
 
-        return BlockDiagonalOperator([Rq(invNq(Rq.T)), Re(invNe(Re.T))], axisout=0)
+        return BlockDiagonalOperator([invNq, invNe], axisout=0)
 class OtherData:
 
     def __init__(self, nus, nside, comp):
@@ -2397,26 +2416,32 @@ class OtherData:
         # Create reshape operator and apply it to the diagonal operator
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
-    
-    def get_operator(self, nintegr, beta, convolution, fwhm_max=None):
+    def get_operator(self, nintegr, beta, convolution):
         R2tod = ReshapeOperator((12*self.nside**2, 3), (3*12*self.nside**2))
-        if beta.shape[0] == 1:
+        if beta.shape[0] <= 2:
             R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
         else:
             R = ReshapeOperator((12*self.nside**2, 1, 3), (12*self.nside**2, 3))
-        op = []
+        
         Operator=[]
+        
         for ii, i in enumerate(self.nus):
             if nintegr == 1:
                 allnus = np.array([i])
             else:
                 allnus = np.linspace(i-self.bw[ii]/2, i+self.bw[ii]/2, nintegr)
-            fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
+            
+            if convolution:
+                fwhm = self.fwhm[ii]
+            else:
+                fwhm = 0
+            #fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
             C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+            op = []
             for inu, nu in enumerate(allnus):
                 D = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside)
-                op.append(R2tod * C * R * D)
-            Operator.append(AdditionOperator(op)/nintegr)
+                op.append(C * R * D)
+            Operator.append(R2tod(AdditionOperator(op)/nintegr))
         return BlockColumnOperator(Operator, axisout=0)
 
     def get_noise(self, fact=None):
@@ -2521,20 +2546,28 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
 
         return H
     
-    def get_newH(self, Ope, newbeta, type='TwoBands'):
-
+    def get_newH(self, H, newbeta, newgain, type='TwoBands'):
+        Ope = H.copy()
         if type == 'TwoBands':
             k=0
             for i in range(2):
                 # Select a physical band
                 myope = Ope.operands[0].operands[i]
+                
                 for j in range(self.Nsub):
                     
                     # get mixing operator for current sub-band
                     A = CMMTools.get_mixing_operator(newbeta, np.array([self.nueff[k]]), 
                                             comp=self.comp, nside=self.nside)
-                    myope.operands[1].operands[j].operands[-1] = A
+
+                    #if np.mean(newgain) == 1:
+                    myope.operands[-1].operands[j].operands[-1] = A
+                    
+                    
                     k+=1
+                if np.mean(newgain) != 1:
+                    G = DiagonalOperator(newgain[i], broadcast='rightward')
+                    myope.operands[1] = G
 
             for inu, nu in enumerate(self.external):
                 if self.nintegr == 1:
@@ -2561,20 +2594,28 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         return Ope
     def get_invN(self):
         return self.get_invntt_operator()
-    def call_pcg(self, tod, invN, beta0, tolerance, x0, kmax=5, disp=True, maxiter=10, mask=None, **kwargs):
+    def call_pcg(self, chi2, tod, H, invN, beta0, tolerance, x0, inputs=None, kmax=5, disp=True, maxiter=10, mask=None, process=1, N=1, options={'eps':1e-5}, fwhm_target=0, tol=1e-3, method='BFGS', **kwargs):
 
         convergence=[1]
 
         M = get_preconditioner(np.ones(12*self.nside**2))
         print('Starting loop : ')
         k=0
-        beta = np.array([beta0])
+        beta = np.zeros((kmax+1, beta0.shape[0]))
+        beta[0] = beta0
         error = np.array([])
+        nc, _, nstk = x0.shape
+        RMS_RESIDUALS_MAP = np.ones([nc, nstk, 1]) * hp.UNSEEN
+        g = np.array([np.ones(self.Ndets)*1.0000001, np.ones(self.Ndets)*1.0000001])
+
+        inputs_convolved = inputs.copy()
+        for i in range(nc):
+            C = HealpixConvolutionGaussianOperator(fwhm=fwhm_target)
+            inputs_convolved[i] = C(inputs[i])
 
         while convergence[-1] > tolerance:
-
-            print('k = {}'.format(k+1))
-            Hi = self.update_H(self.H, beta[-1])
+            print('k = {}'.format(k+1), np.array(beta[k]))
+            Hi = self.get_newH(H, np.array(beta[k]), newgain = g, type='TwoBands')
             A = Hi.T * invN * Hi
             b = Hi.T * invN * tod
 
@@ -2585,57 +2626,131 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
             else:
                 solution = pcg(A, b, M=M, x0=mysolution, tol=tolerance, disp=disp, maxiter=maxiter)
 
+            
+            
             mysolution = solution['x'].copy()
+            
+            if inputs is not None:
+                
+                residuals_map = inputs_convolved - mysolution
+                rms_maps_i = np.zeros((nc, nstk, 1))
+                for stk in range(3):
+                    for ncomp in range(nc):
+                        rms_maps_i[ncomp, stk, 0] = np.std(residuals_map[ncomp, mask, stk])
+
+            RMS_RESIDUALS_MAP = np.concatenate((RMS_RESIDUALS_MAP, rms_maps_i), axis=2)
+            
             error = np.append(error, solution['error'])
 
-            beta_i = self.spectral_index_fitting(x0=beta[0], args=(Hi, mysolution, tod, mask), **kwargs)
+            print('\nFIT DETECTOR GAIN\n')
 
-            beta = np.append(beta, beta_i, axis=0)
-            print(f'{beta[-2]} → {beta_i[0]}')
+            R = ReshapeOperator((self.Nsamples * self.Ndets), (self.Ndets, self.Nsamples))
+            Hi = self.get_newH(H, np.array(beta[k]), newgain = np.array([np.ones(self.Ndets)*1.0000001, np.ones(self.Ndets)*1.0000001]), type='TwoBands')
+            sh_qubic = self.Nsamples * self.Ndets
+            data150_qu = R(tod[:sh_qubic]).copy()
+            data220_qu = R(tod[sh_qubic:(2*sh_qubic)]).copy()
+            H150 = CompositionOperator(Hi.operands[0].operands[0].operands[1:])
+            H220 = CompositionOperator(Hi.operands[0].operands[1].operands[1:])
+            data150_s_qu = H150(mysolution).copy()
+            data220_s_qu = H220(mysolution).copy()
+            
+
+            I150 = give_me_intercal(data150_qu, data150_s_qu)
+            I220 = give_me_intercal(data220_qu, data220_s_qu)
+            
+            g = np.array([I150, I220])
+            
+
+            print('\nFIT SPECTRAL INDEX\n')
+            beta[k+1] = self.fit_beta(chi2, beta[k], mysolution, tod, gain=g, mask=mask, processes=process, N=N, options=options, 
+                                                    method=method, tol=tol)
+
+            #Hi = self.get_newH(H, np.array(beta[k+1]), newgain = g, type='TwoBands')
+            
+            
+            #beta_i = self.spectral_index_fitting(x0=beta[0], args=(Hi, mysolution, tod, mask), **kwargs)
+            #beta = np.append(beta, beta_i)
+            #if beta0.shape[0] < 2 :
+            #    print(f'{beta[k]} → {beta[k+1]}')
+            #else:
+            #    print(f'{np.mean(beta[k])} → {np.mean(beta[k+1])}')
 
             k+=1
 
+            #give_me_intercal(D, d)
 
-        if mask is not None:
-            mysolution[:, mask, :] = hp.UNSEEN
+            print('\n******** Display convergence state ********\n')
+            if inputs is not None:
+                for i in range(mysolution.shape[0]):
+                    print(f'I - Maps {i+1} residuals : {np.std(residuals_map[i, mask, 0]):.4f} muK^2')
+                    print(f'Q - Maps {i+1} residuals : {np.std(residuals_map[i, mask, 1]):.4f} muK^2')
+                    print(f'U - Maps {i+1} residuals : {np.std(residuals_map[i, mask, 2]):.4f} muK^2')
+                    print()
+            
+            print(f'\nSpectral index : {beta[k]}')
+            print(f'\nAverage Gain detector for 150 GHz band : {np.mean(I150):.4f} +- {np.std(I150):.4f}')
+            print(f'Average Gain detector for 220 GHz band : {np.mean(I220):.4f} +- {np.std(I220):.4f}\n')
+            del Hi
+            gc.collect()
 
-        return mysolution, beta, error
+
+        #if mask is not None:
+        #    mysolution[:, ~mask, :] = hp.UNSEEN
+
+        return mysolution, beta, error, RMS_RESIDUALS_MAP, np.array([I150, I220])
 
 
-    def myChi2(self, beta, allbeta, solution, data, patch_id=None):
+    def myChi2(self, beta, allbeta, solution, data, gain, patch_id=None):
         """
         This function calculates the chi-squared value for a given beta, H, solution, and data.
         If a mask is provided, it will zero out the corresponding elements in the solution and data.
         """
-        #print(1)
-        #Hi = self.H.copy()
-        nsidemap = hp.npix2nside(len(solution[0, :, 0]))
+        
+
+
+
         newbeta = allbeta.copy()
         if patch_id is not None:
+            #print(patch_id, beta)
             newbeta[patch_id] = beta.copy()
         else:
             newbeta = beta.copy()
+
         Hi = self.H.copy()
-        Hi = self.get_newH(Hi, newbeta)
+        Hi = self.get_newH(Hi, newbeta, newgain=gain)
         fakedata = Hi(solution)
+        data_patch = data.copy()
+        fakedata_patch = fakedata.copy()
+
+        R = self.get_maps()
+        Rinv = R.T
+
+        #data0 = R(data[2*(self.Nsamples*self.Ndets):])
+        #data0[:, ~seenpix, :] = 0
+        #data_patch[(2*self.Nsamples*self.Ndets):] = Rinv(data0)
+
+        #fakedata0 = R(fakedata[(2*self.Nsamples*self.Ndets):])
+        #fakedata0[:, ~seenpix, :] = 0
+        #fakedata_patch[(2*self.Nsamples*self.Ndets):] = Rinv(fakedata0)
+
         
-        chi2 = np.sum((data-fakedata)**2)
+        chi2 = np.sum((data_patch-fakedata_patch)**2)
         #print(beta)
         return chi2
 
 
-    def fit_beta(self, chi2, beta_planck, solution, data, x0, mask=None, processes=1, N=1, options={}, 
+    def fit_beta(self, chi2, beta_planck, solution, data, gain, mask=None, processes=1, N=1, options={}, 
                                                     method='TNC', tol=1e-5):
 
-        if mask is None: # Constant spectral index
-        
-            args = (beta_planck, solution, data, None)
-            beta_fitted = minimize(chi2, x0=x0, args=args, options=options, method=method, tol=tol).x
-            print(beta_fitted)
+        if len(beta_planck) <= 2: # Constant spectral index
+            args = (beta_planck, solution, data, gain, None)
+            beta_fitted = np.array(minimize(chi2, x0=beta_planck, args=args, options=options, method=method, tol=tol).x)
     
         else:
-            o = FitParallel(chi2, beta_planck, solution, data, Nprocess=processes, x0=x0, options=options, method=method, tol=tol)
-            index = np.where(mask == True)[0]
+            o = FitParallel(chi2, beta_planck, solution, data, gain, Nprocess=processes, x0=np.array([1.5]), options=options, method=method, tol=tol)
+            mymask = mask.copy()
+            mymask = hp.ud_grade(mymask, hp.npix2nside(len(beta_planck)))
+            index = np.where(mymask == True)[0]
             print(index, len(index))
             main_loop = len(index) // N
             rest_loop = len(index) % N
@@ -2646,12 +2761,12 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
             for i in range(main_loop):
                 print(index[k:(k+N)])
                 f = o.run_fit(index[k:(k+N)])
-                print(f)
                 #print(index[k:(k+N)])
                 beta_fitted[index[k:(k+N)]] = f.copy()
-            
+                print(beta_fitted[index[k:(k+N)]])
                 k+=N
             k=rest_loop
+            o = FitParallel(chi2, beta_planck, solution, data, gain, Nprocess=rest_loop, x0=np.array([1.5]), options=options, method=method, tol=tol)
             for i in range(rest_loop):
                 f = o.run_fit(np.array([index[-k]]))
                 beta_fitted[index[-k]] = f.copy()
@@ -2668,16 +2783,14 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         print(len(index))
         for ii, i in enumerate(index):
             
-            args = (allbeta, solution, data, i)
+            args = (allbeta, solution, data, mask, i)
             fit_beta[i] = minimize(self.myChi2, x0=x0, args=args, **kwargs).x
             print(i, fit_beta[i])
 
         return fit_beta
-
-
 class FitParallel:
     
-    def __init__(self, chi2, betamap, sol, data, method='TNC', tol=1e-5, Nprocess=1, x0=np.array([1.54]), options={}):
+    def __init__(self, chi2, betamap, sol, data, gain, method='TNC', tol=1e-5, Nprocess=1, x0=np.array([1.54]), options={}):
         self.chi2 = chi2
         self.Nprocess = Nprocess
         self.x0 = x0
@@ -2687,10 +2800,11 @@ class FitParallel:
         self.data = data
         self.betamap = betamap
         self.sol = sol
+        self.gain = gain
         
     
     def do_task(self, x):
-        args = (self.betamap, self.sol, self.data, x)
+        args = (self.betamap, self.sol, self.data, self.gain, x)
         beta = minimize(self.chi2, x0=self.x0, args=args, method=self.method, tol=self.tol, options=self.options).x
         return beta
     def from_res2tab(self, res):

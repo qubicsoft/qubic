@@ -39,7 +39,7 @@ classifiers = [
     'Topic :: Scientific/Engineering :: Astronomy',
     'Topic :: Scientific/Engineering :: Physics',
 ]
-requires-python = '>=3.8'
+requires-python = '>=3.8, <3.11'
 dependencies = [
     'astropy',
     'camb',

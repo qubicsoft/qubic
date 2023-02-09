@@ -77,7 +77,10 @@ def write_level1(fpobject,todarray,flagarray):
     # HWP position
     # azimuth
     # elevation
+    # bore sight rotation
     # calsource info and value interpolated to data time axis
+    # carbon fibre parameters
+    # horn status
     
     # write the FITS file
     thdulist = fits.HDUList(hdulist)

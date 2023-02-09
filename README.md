@@ -30,8 +30,8 @@ It is recommended (even mandatory for MacOS) to install the qubic software using
 
 ```bash
 conda config --add channels conda-forge
-conda create --yes --name venv-qubic2
-conda activate venv-qubic2
+conda create --yes --name venv-qubic
+conda activate venv-qubic
 conda install --yes gfortran pyfftw healpy namaster
 SETUPTOOLS_ENABLE_FEATURES="legacy-editable" pip install -e .
 ```

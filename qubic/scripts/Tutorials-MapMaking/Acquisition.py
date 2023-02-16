@@ -623,19 +623,29 @@ class PlanckAcquisition:
         self.sigma = sigma
 
     
-    def get_operator(self):
-        return DiagonalOperator(np.ones((12*self.nside**2, 3)), broadcast='rightward',
+    def get_operator(self, nintegr=1):
+        Hp = DiagonalOperator(np.ones((12*self.nside**2, 3)), broadcast='rightward',
                                 shapein=self.scene.shape, shapeout=np.ones((12*self.nside**2, 3)).ravel().shape)
 
-    def get_invntt_operator(self, beam_correction=0):
+
+        if nintegr == 1 :
+            return Hp
+
+    def get_invntt_operator(self, beam_correction=0, mask=None):
         
+        if mask is None:
+            mask = np.ones(12*self.scene.nside**2)
         if beam_correction != 0:
             factor = (4*np.pi*(np.rad2deg(beam_correction)/2.35/np.degrees(hp.nside2resol(self.scene.nside)))**2)
             print(f'corrected by {factor}')
             varnew = hp.smoothing(self.var.T, fwhm=beam_correction/np.sqrt(2)) / factor
             self.sigma = 1e6 * np.sqrt(varnew.T)
+        mysigma = 1 / (self.sigma ** 2)
+        index_1 = np.where(mask == 1)[0]
 
-        return DiagonalOperator(1 / self.sigma ** 2, broadcast='leftward',
+        mysigma /= np.array([mask, mask, mask]).T
+        
+        return DiagonalOperator(mysigma, broadcast='leftward',
                                 shapein=self.scene.shape)
 
     def get_noise(self):
@@ -1098,7 +1108,7 @@ class QubicPlanckMultiBandAcquisition:
         for i in range(self.qubic.d['nf_recon']):
             npl[i*npix*3:(i+1)*npix*3] = self.planck.get_noise().ravel()
         return npl
-    def get_invntt_operator(self, weight_planck=1, beam_correction=None):
+    def get_invntt_operator(self, weight_planck=1, beam_correction=None, mask=None):
 
         if beam_correction is None :
             beam_correction = [0]*self.nfreqs
@@ -1115,7 +1125,7 @@ class QubicPlanckMultiBandAcquisition:
             ndets, nsamples = invN1.shapein
             R_qubic = ReshapeOperator((ndets, nsamples), (ndets*nsamples))
 
-            invntt_planck = self.planck.get_invntt_operator()
+            invntt_planck = self.planck.get_invntt_operator(mask=mask)
             R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
 
             Operator = [R_qubic(invN1(R_qubic.T))]
@@ -1145,7 +1155,7 @@ class QubicPlanckMultiBandAcquisition:
         if type == 'TwoBands' or 'WideBand':
             for i in range(self.nfreqs):
                 print(i)
-                invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i])
+                invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i], mask=mask)
                 R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
                 Operator.append(R_planck(invntt_planck(R_planck.T)))
 
@@ -1186,8 +1196,9 @@ class QubicPlanckMultiBandAcquisition:
 
         # Qubic Operator
         H_qubic_to_make_TOD = self.qubic.get_operator_to_make_TOD(convolution=convolution)
-
         # TOD Qubic
+        if m_sub.shape[0] == 1 and m_rec.shape[0] == 1:
+            m_sub = m_sub[0]
         tod_qubic = H_qubic_to_make_TOD(m_sub).ravel()
 
         ### Planck TOD
@@ -1214,7 +1225,6 @@ class QubicPlanckMultiBandAcquisition:
             m_rec[i] = C(m_rec[i] + npl).copy()
             m_rec_noiseless[i] = C(m_rec[i]).copy()
 
-        
         todpl = self.get_planck_tod(m_rec)
 
         
@@ -1237,6 +1247,8 @@ class QubicIntegrated:
         self.d = d
         self.d['nf_sub']=Nsub
         self.d['nf_recon']=Nrec
+        self.Nsub = Nsub
+        self.Nrec = Nrec
         # Pointing
         self.sampling = qubic.get_pointing(self.d)
 
@@ -1294,7 +1306,7 @@ class QubicIntegrated:
                 np.random.seed(config[k])
                 cmb = hp.synfast(mycls, self.nside, verbose=False, new=True).T
 
-                for j in range(len(self.nueff)):
+                for j in range(len(nus)):
                     allmaps[j] += cmb.copy()
             
             elif k == 'dust':
@@ -1405,7 +1417,12 @@ class QubicIntegrated:
         for ia, a in enumerate(self.subacqs):
             if convolution:
                 if convolve_to_max:
-                    allfwhm = np.sqrt(self.allfwhm**2 - self.allfwhm[-1]**2)
+                    fact = int(self.Nsub/self.Nrec)
+                    fwhmi = np.zeros(self.Nsub)
+                    for ii in range(self.Nrec):
+                        fwhmi[ii*fact:(ii+1)*fact] = np.min(self.allfwhm[ii*(fact):(ii+1)*fact])
+                    
+                    allfwhm = np.sqrt(self.allfwhm**2 - fwhmi**2)#self.allfwhm[-1]**2)
                 else:
                     allfwhm = self.allfwhm.copy()
                 C = HealpixConvolutionGaussianOperator(fwhm=allfwhm[ia])
@@ -2545,7 +2562,6 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
 
 
         return H
-    
     def get_newH(self, H, newbeta, newgain, type='TwoBands'):
         Ope = H.copy()
         if type == 'TwoBands':
@@ -2594,19 +2610,31 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         return Ope
     def get_invN(self):
         return self.get_invntt_operator()
-    def call_pcg(self, chi2, tod, H, invN, beta0, tolerance, x0, inputs=None, kmax=5, disp=True, maxiter=10, mask=None, process=1, N=1, options={'eps':1e-5}, fwhm_target=0, tol=1e-3, method='BFGS', **kwargs):
+    def call_pcg(self, chi2, tod, H, invN, beta0, tolerance, x0, inputs=None, inputgain=None, kmax=5, disp=True, maxiter=10, mask=None, process=1, N=1, options={'eps':1e-5}, fwhm_target=0, tol=1e-3, method='BFGS', **kwargs):
 
         convergence=[1]
 
         M = get_preconditioner(np.ones(12*self.nside**2))
         print('Starting loop : ')
         k=0
-        beta = np.zeros((kmax+1, beta0.shape[0]))
-        beta[0] = beta0
+        print(beta0.shape)
+        if beta0.shape[1] > 1 :
+            beta = np.zeros((kmax+1, beta0.shape[0], beta0.shape[1]))
+            beta[0] = beta0
+        else:
+            beta = np.zeros((kmax+1, beta0.shape[0]))
+            beta[0] = beta0[:, 0]
+        
+        
+        
         error = np.array([])
-        nc, _, nstk = x0.shape
+        if len(beta0) > 2 :
+            nstk, _, nc = x0.shape
+        else:
+            nc, _, nstk = x0.shape
         RMS_RESIDUALS_MAP = np.ones([nc, nstk, 1]) * hp.UNSEEN
         g = np.array([np.ones(self.Ndets)*1.0000001, np.ones(self.Ndets)*1.0000001])
+        GAIN = np.ones((2, 992, 1)) * hp.UNSEEN
 
         inputs_convolved = inputs.copy()
         for i in range(nc):
@@ -2614,8 +2642,10 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
             inputs_convolved[i] = C(inputs[i])
 
         while convergence[-1] > tolerance:
+
+            #### Pixels minimization ####
             print('k = {}'.format(k+1), np.array(beta[k]))
-            Hi = self.get_newH(H, np.array(beta[k]), newgain = g, type='TwoBands')
+            Hi = self.get_newH(H, np.array(beta[k]), newgain = 1/g, type='TwoBands')
             A = Hi.T * invN * Hi
             b = Hi.T * invN * tod
 
@@ -2636,60 +2666,45 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
                 rms_maps_i = np.zeros((nc, nstk, 1))
                 for stk in range(3):
                     for ncomp in range(nc):
-                        rms_maps_i[ncomp, stk, 0] = np.std(residuals_map[ncomp, mask, stk])
+                        if len(beta0) > 2 :
+                            rms_maps_i[ncomp, stk, 0] = np.std(residuals_map[stk, mask, ncomp])
+                        else:
+                            rms_maps_i[ncomp, stk, 0] = np.std(residuals_map[ncomp, mask, stk])
 
             RMS_RESIDUALS_MAP = np.concatenate((RMS_RESIDUALS_MAP, rms_maps_i), axis=2)
             
             error = np.append(error, solution['error'])
 
+            #### Gain minimization ####
             print('\nFIT DETECTOR GAIN\n')
-
-            R = ReshapeOperator((self.Nsamples * self.Ndets), (self.Ndets, self.Nsamples))
-            Hi = self.get_newH(H, np.array(beta[k]), newgain = np.array([np.ones(self.Ndets)*1.0000001, np.ones(self.Ndets)*1.0000001]), type='TwoBands')
-            sh_qubic = self.Nsamples * self.Ndets
-            data150_qu = R(tod[:sh_qubic]).copy()
-            data220_qu = R(tod[sh_qubic:(2*sh_qubic)]).copy()
-            H150 = CompositionOperator(Hi.operands[0].operands[0].operands[1:])
-            H220 = CompositionOperator(Hi.operands[0].operands[1].operands[1:])
-            data150_s_qu = H150(mysolution).copy()
-            data220_s_qu = H220(mysolution).copy()
+            g =  self.get_gain_detector(H, beta[k], mysolution, tod)
+            GAIN = np.concatenate((GAIN, 1/g), axis=2)
+            print(GAIN[:, :5, k+1])
+            print()
+            if inputgain is not None:
+                print(inputgain[:, :5])
             
-
-            I150 = give_me_intercal(data150_qu, data150_s_qu)
-            I220 = give_me_intercal(data220_qu, data220_s_qu)
-            
-            g = np.array([I150, I220])
-            
-
+            #### Spectral index minimization ####
             print('\nFIT SPECTRAL INDEX\n')
-            beta[k+1] = self.fit_beta(chi2, beta[k], mysolution, tod, gain=g, mask=mask, processes=process, N=N, options=options, 
+            beta[k+1] = self.fit_beta(chi2, beta[k], mysolution, tod, gain=1/g, mask=mask, processes=process, N=N, options=options, 
                                                     method=method, tol=tol)
-
-            #Hi = self.get_newH(H, np.array(beta[k+1]), newgain = g, type='TwoBands')
-            
-            
-            #beta_i = self.spectral_index_fitting(x0=beta[0], args=(Hi, mysolution, tod, mask), **kwargs)
-            #beta = np.append(beta, beta_i)
-            #if beta0.shape[0] < 2 :
-            #    print(f'{beta[k]} → {beta[k+1]}')
-            #else:
-            #    print(f'{np.mean(beta[k])} → {np.mean(beta[k+1])}')
 
             k+=1
 
-            #give_me_intercal(D, d)
+
 
             print('\n******** Display convergence state ********\n')
             if inputs is not None:
-                for i in range(mysolution.shape[0]):
-                    print(f'I - Maps {i+1} residuals : {np.std(residuals_map[i, mask, 0]):.4f} muK^2')
-                    print(f'Q - Maps {i+1} residuals : {np.std(residuals_map[i, mask, 1]):.4f} muK^2')
-                    print(f'U - Maps {i+1} residuals : {np.std(residuals_map[i, mask, 2]):.4f} muK^2')
+                for i in range(ncomp):
+                    print(f'I - Maps {i+1} residuals : {rms_maps_i[i, 0, 0]:.4e} muK^2')
+                    print(f'Q - Maps {i+1} residuals : {rms_maps_i[i, 1, 0]:.4e} muK^2')
+                    print(f'U - Maps {i+1} residuals : {rms_maps_i[i, 2, 0]:.4e} muK^2')
                     print()
             
             print(f'\nSpectral index : {beta[k]}')
-            print(f'\nAverage Gain detector for 150 GHz band : {np.mean(I150):.4f} +- {np.std(I150):.4f}')
-            print(f'Average Gain detector for 220 GHz band : {np.mean(I220):.4f} +- {np.std(I220):.4f}\n')
+            print(f'\nAverage Gain detector for 150 GHz band : {np.mean(g[0]):.4e} +- {np.std(g[0]):.4e}')
+            print(f'Average Gain detector for 220 GHz band : {np.mean(g[1]):.4e} +- {np.std(g[1]):.4e}\n')
+            
             del Hi
             gc.collect()
 
@@ -2697,9 +2712,23 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
         #if mask is not None:
         #    mysolution[:, ~mask, :] = hp.UNSEEN
 
-        return mysolution, beta, error, RMS_RESIDUALS_MAP, np.array([I150, I220])
+        return mysolution, beta, error, RMS_RESIDUALS_MAP, GAIN
 
-
+    def get_gain_detector(self, H, beta, mysolution, tod):
+        R = ReshapeOperator((self.Nsamples * self.Ndets), (self.Ndets, self.Nsamples))
+        Hi = self.get_newH(H, np.array(beta), newgain = np.array([np.ones(self.Ndets)*1.0000001, np.ones(self.Ndets)*1.0000001]), type='TwoBands')
+        sh_qubic = self.Nsamples * self.Ndets
+        data150_qu = R(tod[:sh_qubic]).copy()
+        data220_qu = R(tod[sh_qubic:(2*sh_qubic)]).copy()
+        H150 = CompositionOperator(Hi.operands[0].operands[0].operands[1:])
+        H220 = CompositionOperator(Hi.operands[0].operands[1].operands[1:])
+        data150_s_qu = H150(mysolution).copy()
+        data220_s_qu = H220(mysolution).copy()
+            
+        I150 = give_me_intercal(data150_qu, data150_s_qu)
+        I220 = give_me_intercal(data220_qu, data220_s_qu)
+        R = ReshapeOperator((2, self.Ndets), (2, self.Ndets, 1))
+        return R(np.array([I150, I220]))
     def myChi2(self, beta, allbeta, solution, data, gain, patch_id=None):
         """
         This function calculates the chi-squared value for a given beta, H, solution, and data.
@@ -2747,30 +2776,39 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
             beta_fitted = np.array(minimize(chi2, x0=beta_planck, args=args, options=options, method=method, tol=tol).x)
     
         else:
-            o = FitParallel(chi2, beta_planck, solution, data, gain, Nprocess=processes, x0=np.array([1.5]), options=options, method=method, tol=tol)
+            
             mymask = mask.copy()
             mymask = hp.ud_grade(mymask, hp.npix2nside(len(beta_planck)))
             index = np.where(mymask == True)[0]
             print(index, len(index))
+            if processes > len(index):
+                processes = len(index)
+                N = len(index)
             main_loop = len(index) // N
             rest_loop = len(index) % N
-            print(f'{main_loop} main loop and {rest_loop} rest')
+            
+            
             beta_fitted = beta_planck.copy()
+            o = FitParallel(chi2, beta_planck, solution, data, gain, Nprocess=processes, x0=np.array([1.5]), options=options, method=method, tol=tol)
         
             k=0
             for i in range(main_loop):
-                print(index[k:(k+N)])
-                f = o.run_fit(index[k:(k+N)])
-                #print(index[k:(k+N)])
+                if N == 1 :
+                    args = (beta_planck, solution, data, gain, index[i])
+                    f = np.array(minimize(chi2, x0=np.array([1.54, 20]), args=args, options=options, method=method, tol=tol).x)
+                else:
+                    f = o.run_fit(index[k:(k+N)])
+                
                 beta_fitted[index[k:(k+N)]] = f.copy()
                 print(beta_fitted[index[k:(k+N)]])
                 k+=N
-            k=rest_loop
-            o = FitParallel(chi2, beta_planck, solution, data, gain, Nprocess=rest_loop, x0=np.array([1.5]), options=options, method=method, tol=tol)
-            for i in range(rest_loop):
-                f = o.run_fit(np.array([index[-k]]))
-                beta_fitted[index[-k]] = f.copy()
-                k+=1
+            if rest_loop != 0:
+                k=rest_loop
+                o = FitParallel(chi2, beta_planck, solution, data, gain, Nprocess=rest_loop, x0=np.array([1.5]), options=options, method=method, tol=tol)
+                for i in range(rest_loop):
+                    f = o.run_fit(np.array([index[-k]]))
+                    beta_fitted[index[-k]] = f.copy()
+                    k+=1
             
     
         return beta_fitted
@@ -2801,6 +2839,8 @@ class FitParallel:
         self.betamap = betamap
         self.sol = sol
         self.gain = gain
+
+        print(f'\nMinimization on {self.Nprocess} process\n')
         
     
     def do_task(self, x):

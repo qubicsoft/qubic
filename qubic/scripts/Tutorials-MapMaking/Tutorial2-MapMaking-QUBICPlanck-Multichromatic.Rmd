@@ -6,7 +6,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.14.0
+      jupytext_version: 1.14.4
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -21,6 +21,9 @@ In this notebook, we describe how to make the map-making process using Planck ac
 from __future__ import division
 from pyoperators import pcg
 from pysimulators import profile
+
+import sys
+sys.path.append('/Users/mregnier/Desktop/PhD Regnier/mypackages')
 
 # QUBIC packages
 import qubic
@@ -68,242 +71,223 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 We first import the QUBIC dictionary to define general stuff like pixelization, seen region on the sky, etc... 
 
 ```{python}
-# Repository for dictionary
-global_dir = '/pbs/home/m/mregnier/Libs/qubic/qubic/'#Qubic_DataDir()
-print(global_dir)
-dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+def initial_guess_pcg(map, n, Nrec, npix):
 
-# Read dictionary chosen
+    initial_guess = np.zeros((Nrec, npix, 3))
+    for i in range(Nrec):
+        initial_guess[i] = map + n
+    
+    return initial_guess
+def integration(nu_min, nu_max, Nintegr, sky_config, d):
+    print(f'Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps')
+    obj = Acq.QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
+    if Nintegr == 1:
+        allnus = np.array([np.mean([nu_min, nu_max])])
+    else:
+        allnus = np.linspace(nu_min, nu_max, Nintegr)
+    m = obj.get_PySM_maps(sky_config, nus=allnus)
+    #print(m.shape)
+    
+    return np.array([np.mean(m, axis=0)])
+```
+
+```{python}
+print('\n******* Dictionary *******\n')
+
+dictfilename = 'dicts/pipeline_demo.dict'
+
 d = qubic.qubicdict.qubicDict()
 d.read_from_file(dictfilename)
 
-from qubic import SpectroImLib as sp
-from importlib import reload
+Nrec = 2
+fact = 2
+Nsub = int(Nrec * fact)
+Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(220, Nfreq=Nsub)
+band = 217
+sky_config = {'dust':'d0'}
 
-Nf = 2
-relative_bandwidth = 0.25
-Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(220, Nfreq=Nf)
-print(nus)
-print(nus_edge)
+nside = 256
+pointings = 3000
+ite = 1
+noisy = 1
+convolution = False
+convolution_to_max=False
+correction = False
 
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
-d['nf_recon'] = Nf
-d['nf_sub'] = 4*Nf
+d['nf_recon'] = Nrec
+d['nf_sub'] = Nrec
 d['nside'] = 256
 npix=12*d['nside']**2
 d['RA_center'] = 0
 d['DEC_center'] = -57
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-d['effective_duration'] = 3
-#d['dtheta'] = 15
-d['npointings'] = 1000
-d['tol'] = 5e-4
+d['effective_duration'] = 300000000
+d['npointings'] = pointings
 d['filter_nu'] = 220e9
-d['photon_noise'] = False
-d['noiseless'] = False
 d['config'] = 'FI'
 d['MultiBand'] = True
-d['planck'] = True
-
-d_formaps = qubic.qubicdict.qubicDict()
-d_formaps.read_from_file(dictfilename)
-d_formaps['nf_recon'] = Nf
-d_formaps['nf_sub'] = Nf
-d_formaps['nside'] = d['nside']
-npix=12*d_formaps['nside']**2
-```
-
-Then, we define specific qubic package for Map-Making. The Pointing package define the information on the scanning strategy (random pointing here). The Scene package define things realted to the pixelization. The Instrument package define the QUBIC instrument forexample for systematics effect. Then we define the acquisition for our instrument.
-
-```{python}
-reload(Acq)
-
-Qubic_sky = qss.Qubic_sky({'cmb':42}, d_formaps)
-mapin = Qubic_sky.get_simple_sky_map()
-
-# Pointing
-p = qubic.get_pointing(d)
-
-# Scene
-s = qubic.QubicScene(d)
-
-# Instrument
-q = qubic.QubicMultibandInstrument(d)
-
-# QUBIC Acquisition
-qubic_acquisition = Acq.QubicIntegrated(q, p, s, d, nus_edge)
-```
-
-The acquisition allows you to define the QUBIC operator which tak eas input a sky map with shape ($N_{pix}$, $N_{stk}$) and returns TOD after many rotations and transformations. For the next notebook, it will be very inportant to understand the structure of this operator... To be breaf, this operator can be seen as a list of function.
-
-```{python}
-H_qubic = qubic_acquisition.get_operator(convolution=True)
 ```
 
 ```{python}
-print(H_qubic.shapein)
+
 ```
 
-Here we define $N^{-1}$ the inverse noise covariance matrix in time domain.
-
 ```{python}
-invntt = qubic_acquisition.get_invntt_operator()
-invntt
+qubic_acquisition = Acq.QubicIntegrated(d, Nsub=Nsub, Nrec=Nsub)
+m_tod = qubic_acquisition.get_PySM_maps(sky_config, nus=qubic_acquisition.allnus)  # To make TOD
+
+m_planck = integration(band-35, band+35, 20, sky_config, d)
 ```
 
-As we said before, we compute our observations using QUBIC operator.
-
 ```{python}
-n = qubic_acquisition.get_noise()
-tod = H_qubic(mapin) + n
-```
-
-In a very generic way, all of this work is done to solve this equation :
-
-$$y = (H^t N^{-1} H)^{-1} H^t N^{-1} d$$
-
-where d is your data and $y$ is the observed sky. In practical, we can not solve that analytical due to the very large size of $H$ and $N^{-1}$, then the PCG is here to solve iteratively. We just define here both side of this equation like : 
-
-$$A = (H^t N^{-1} H)$$
-$$b = H^t N^{-1} d$$
-
-```{python}
-H_qubic = qubic_acquisition.get_operator(convolution=False)
-A = H_qubic.T * invntt * H_qubic
-b = H_qubic.T * invntt * tod
-```
-
-The PCG (Preconditionned Conjugated Gradient) solve the above equation iteratively, the convergence of the method is conditionnned by $M$ which is called the preconditionner. For QUBIC only acquisition, it can be define as function of the coverage.
-
-```{python}
-def get_preconditioner(cov):
-    if cov is not None:
-        cov_inv = 1 / cov
-        cov_inv[np.isinf(cov_inv)] = 0.
-        preconditioner = DiagonalOperator(cov_inv, broadcast='rightward')
-    else:
-        preconditioner = None
-    return preconditioner
-
-cov = qubic_acquisition.get_coverage()
-pixok = cov > 0
-mapin[:, ~pixok, :] = 0
-M = get_preconditioner(np.array([cov]))
-```
-
-Here we call the PCG from the PyOperators package, we have to mentionned a tolerance.
-
-```{python}
-tol=2e-3
-
-solution_qubic = pcg(A, b, x0=None, M=M, tol=tol, disp=True)
-```
-
-Now we can see the result of the convergence...
-
-```{python}
-def display_maps(inputs, outputs, istk, display=True, rot=None, res=None, min=300, max=300, minr=-300, maxr=300):
-    
-    r = inputs[:, :, istk] - outputs[:, :, istk]
-    Nf = outputs.shape[0]
-    
-    
-    stk=['I', 'Q', 'U']
-    k=1
-    for i in range(Nf): # Nf
-        hp.gnomview(inputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, 3, k), title='Input')
-        k+=1
-        hp.gnomview(outputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, 3, k), title='Output')
-        k+=1
-        hp.gnomview(r[i], rot=rot, reso=res, cmap='jet', min=minr, max=maxr, sub=(Nf, 3, k), title='Residual')
-        k+=1
-
-        
-for i in range(2):
-    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
-   
-    plt.figure(figsize=(10, 10))
-    display_maps(np.array([C(mapin[i])]), np.array([solution_qubic['x'][i]]), istk=0, display=True, rot=center, res=25, min=-300, max=300, minr=-30, maxr=30)
-    plt.show()
-```
-
-In the inner part of the coverage, the result is quite good. It seems that the PCG solve correctly the Map-Making equation and so converge to the solution. Unfortunately, on the edge of the coverage the reconstruction is very bad and the error increase a lot... Missing data is the cause and a way to solve this problem is to merge the QUBIC acquisition with the planck aquisition which have seen the whole sky.
-
-
-We define here the PlanckAcquisition which needs the central frequency that you are using (150 or 220 GHz) and the same scene as before.
-
-```{python}
-# Planck Acquisition
-reload(Acq)
-mapin_conv = mapin.copy()
-
-for i in range(Nf):
-    print(qubic_acquisition.final_fwhm[i])
-    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
-    #C = q[i].get_convolution_peak_operator()#qubic_acquisition[i].get_convolution_peak_operator()
-    mapin_conv[i] = C(mapin[i])
-print(mapin_conv.shape)
-#mapin_conv[:, ~mask, :] = 0
-planck_acquisition = qubic.PlanckAcquisition(150, s, true_sky=mapin_conv[0], mask=None)
-```
-
-Now we define the multichromatic acquisition for QUBIC using Planck acquisition to correct all the previous effects.
-
-```{python}
+qubic_acquisition = Acq.QubicIntegrated(d, Nsub=Nsub, Nrec=Nrec)
+planck_acquisition = Acq.PlanckAcquisition(band, qubic_acquisition.scene)
 qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
 ```
 
-Here, we define the QUBIC-Planck Operator. As before, look at this operator is very important for next steps.
-
 ```{python}
-H = qubicplanck_acquisition.get_operator(convolution=True)
-```
-
-```{python}
-
-```
-
-```{python}
-invntt = qubicplanck_acquisition.get_invntt_operator()
-```
-
-Here, we take a look of data. The first part of the TOD is the QUBIC part and the second is the sky seen by Planck.
-
-```{python}
-n = qubicplanck_acquisition.get_noise()
-tod = H(mapin) + n
-
-plt.figure(figsize=(15, 5))
-plt.plot(tod, ls=':')
-plt.show()
-```
-
-```{python}
-H = qubicplanck_acquisition.get_operator(convolution=False)
-A = H.T * invntt * H
-b = H.T * invntt * tod
-```
-
-Here, the preconditionner is not a function of the QUBIC coverage because Planck acquisition is turn on. The simplest preconditionner is the entire sky itself.
-
-```{python}
-M = Acq.get_preconditioner(np.ones(12*d['nside']**2))
 cov = qubic_acquisition.get_coverage()
+pixok = cov > 0
+seenpix = cov/cov.max() > 0.
 ```
 
 ```{python}
-tol=1e-4
-
-solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=tol, disp=True, maxiter=200)
+tod = qubicplanck_acquisition.get_observation(m_tod, np.array([m_planck[0]]*Nrec), convolution, noisy=noisy, verbose=True)
 ```
 
-You can note that the convergence is much faster than before with the QUBIC only acquisition. This is due to the fact that edge effects have disappeared ! Let's take a look of reconstructed maps.
+```{python}
+mask = np.array(seenpix, dtype=int)
+mask[np.where(seenpix == False)[0]] = 1e10
+```
 
 ```{python}
-plt.figure(figsize=(10, 10))
-display_maps(mapin_conv, solution_qubic_planck['x'], istk=1, display=True, rot=center, res=15, min=-10, max=10, minr=-10, maxr=10)
+qubic_acquisition = Acq.QubicIntegrated(d, Nsub=Nsub, Nrec=Nrec)
+planck_acquisition = Acq.PlanckAcquisition(band, qubic_acquisition.scene)
+qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
+Hrecon = qubicplanck_acquisition.get_operator(convolution=convolution_to_max, convolve_to_max=convolution_to_max)
+
+if correction:
+    beam_correction = list(qubic_acquisition.final_fwhm)
+else:
+    beam_correction = None
+```
+
+```{python}
+invntt = qubicplanck_acquisition.get_invntt_operator(mask=mask, beam_correction=beam_correction)
+
+A = Hrecon.T * invntt * Hrecon
+b = Hrecon.T * invntt * tod
+
+print('\n********** PCG **********\n')
+
+M = Acq.get_preconditioner(np.ones(12*d['nside']**2))
+
+tol=1e-10
+```
+
+```{python}
+def initial_guess(map, nrec, fwhm = None, noisy = False):
+    
+    if fwhm is None:
+        fwhm = [0]*nrec
+    
+    map_ini = np.zeros((nrec, map.shape[1], map.shape[2]))
+    
+    for i in range(nrec):
+        C = HealpixConvolutionGaussianOperator(fwhm = fwhm[i])
+        map_ini[i] = C(map[0])
+        
+    if nrec == 1:
+        map_ini = map[0]
+    
+    return map_ini
+
+map_planck_ini = initial_guess(m_planck+np.array([planck_acquisition.get_noise()*0.0000001]), Nrec, fwhm = qubic_acquisition.final_fwhm)
+
+solution_qubic_planck = pcg(A, b, x0=map_planck_ini, M=None, tol=tol, disp=True, maxiter=100)
+```
+
+```{python}
+covnorm = cov/cov.max()
+ii = covnorm > 0.1
+
+new_res = np.zeros((Nrec, 12*nside**2, 3))
+print(new_res.shape)
+for i in range(Nrec):
+    
+    new_res[i, :] = np.mean(m_tod[i*fact:(i+1)*fact], axis=0)
+    new_res[i, ~ii] = m_planck[0, ~ii].copy()
+```
+
+```{python}
+
+```
+
+```{python}
+plt.figure(figsize=(10, 8))
+res=15
+istk=1
+
+for i in range(Nrec):
+    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
+    #inputs = np.mean(m_tod[i*fact:(i+1)*fact], axis=0)
+    #inputs = m_planck[0]
+    inputs = new_res[i]
+    hp.gnomview(C(inputs[:, istk]), rot=center, reso=res, cmap='jet', min=-6, max=6, sub=(3, Nrec, i+1), 
+                                        title=f'Input QUBIC - {qubic_acquisition.allnus[i]:.2f} GHz')
+
+
+for i in range(Nrec):
+    hp.gnomview(solution_qubic_planck['x'][i, :, istk], rot=center, reso=res, cmap='jet', min=-6, max=6, sub=(3, Nrec, Nrec+i+1), title=r'Output - $\nu$'+f'{i+1}')
+
+
+    
+for i in range(Nrec):
+    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
+    #inputs = np.mean(m_tod[i*fact:(i+1)*fact], axis=0)
+    #inputs = m_planck[0]
+    inputs = new_res[i]
+    r = C(inputs[:, istk]) - solution_qubic_planck['x'][i, :, istk]
+    hp.gnomview(r, rot=center, reso=res, cmap='jet', min=-1, max=1, sub=(3, Nrec, (2*Nrec)+i+1), 
+                                        title=r'Residuals - $\nu$'+f'{i+1}')
 plt.show()
+```
+
+```{python}
+allcov = np.linspace(0.001, 1, 20)
+allcov
+```
+
+```{python}
+r = np.zeros((Nrec, 12*nside**2))
+for i in range(Nrec):
+    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
+    r[i] = C(new_res[i])[:, istk] - solution_qubic_planck['x'][i, :, istk]
+
+plt.figure(figsize=(10, 14))
+
+for i in range(Nrec):
+    plt.subplot(Nrec, 1, i+1)
+    
+    
+    for j, jj in enumerate(allcov):
+        if jj != 1:
+            #print(allcov[j], allcov[j+1])
+            index = np.where((covnorm > allcov[j]) & (covnorm < allcov[j+1]))[0]
+            #print(index)
+            #print(np.mean(r[i][index]), np.std(r[i][index]))
+            plt.plot(covnorm[index], r[i][index], ',')
+            plt.errorbar(np.mean([allcov[j], allcov[j+1]]), np.mean(r[i][index]), yerr=np.std(r[i][index]), fmt='or', capsize=3)
+            plt.axhline(0, color='black')
+    #plt.plot(covnorm, r[4], ',')
+    #plt.xscale('log')
+    plt.xlim(0.001, 1)
+    plt.ylim(-1, 1)
+plt.show()
+```
+
+```{python}
+
 ```
 
 ```{python}

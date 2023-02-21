@@ -81,6 +81,7 @@ effective_duration = 300000
 rwplanck = 1.
 tol = 1e-4
 noise_planck_level = 0.001
+threshold = 0
 
 
 npointings = 3000
@@ -227,8 +228,9 @@ def initial_guess(map, nrec, fwhm = None, noisy = False):
     map_ini = np.zeros((nrec, map.shape[1], map.shape[2]))
     
     for i in range(nrec):
-        C = HealpixConvolutionGaussianOperator(fwhm = fwhm[i])
-        map_ini[i] = C(map[0])
+        #C = HealpixConvolutionGaussianOperator(fwhm = fwhm[i])
+        #map_ini[i] = C(map[0])
+        map_ini[i] = map[0]
         
     if nrec == 1:
         map_ini = map[0]
@@ -239,6 +241,11 @@ def initial_guess(map, nrec, fwhm = None, noisy = False):
 ```
 
 ```{python}
+threshold = 0.5
+prrint(fwhm_su)
+```
+
+```{python}
 d = copy.deepcopy(d_formaps)
 
 # QUBIC Acquisition and coverage
@@ -246,11 +253,24 @@ qubic_final_fwhm = list(qubic_acquisition.final_fwhm)
 cov = qubic_acquisition.get_coverage()
 
 cov = qubic_acquisition.get_coverage()
-pixok = cov > 0
-seenpix = cov/cov.max() > 0.
-mask = np.array(seenpix, dtype=int)
-mask[np.where(seenpix == False)[0]] = 1e10
 
+### In order to define the QUBIC and Planck regions, we use the coverage map, but first smooth it to 1 degree
+C = HealpixConvolutionGaussianOperator(fwhm=np.radians(1.))
+covconv = C(cov)
+
+seenpix = (cov > 0) & ((covconv/covconv.max()) > threshold)
+maskinit = np.array(seenpix, dtype=int)
+maskinit[np.where(seenpix == False)[0]] = 1e10
+
+### Now we can also apodize the mask
+
+
+hp.gnomview(cov/cov.max(), min=0, max=1, rot=center, reso=25, cmap='jet', sub=(1,4,1), title='Coverage Map')
+hp.gnomview(maskinit, rot=center, reso=25, cmap='jet', sub=(1,4,2), title='Planck Mask Init')
+
+```
+
+```{python}
 # Planck Acquisition
 planck_acquisition = Acq.PlanckAcquisition(band_planck, qubic_acquisition.scene)
 m_planck = integration(band-35, band+35, qubic_acquisition.Nsub, sky_config, d, fwhm_subbands=qubic_acquisition.allfwhm)
@@ -307,15 +327,21 @@ gc.collect()
 ```
 
 ```{python}
-m_planck.shape
-```
-
-```{python}
+from qubic import fibtools as ft
 def display_maps(inputs, outputs, istk, display=True, rot=None, res=None, min=300, max=300, minr=-300, maxr=300, 
-                 extra_string='', addnum=False, inside=None):
+                 extra_string='', addnum=False, inside=None, cov=None):
     
     r = inputs[:, :, istk] - outputs[:, :, istk]
     Nf = outputs.shape[0]
+    
+    if cov is None:
+        nx = 3
+    else:
+        nx = 4
+        covnorm = cov/np.max(cov)
+        uvpix = np.array(hp.pix2vec(hp.npix2nside(len(cov)), np.arange(len(cov))))
+        uvcenter = np.array(hp.pix2vec(hp.npix2nside(len(cov)), argmax(cov)))
+        dcenter = np.degrees(np.arccos(np.dot(uvpix.T, uvcenter)))
     
     all_rms_in = np.zeros(Nf)
     all_rms_out = np.zeros(Nf)
@@ -335,37 +361,64 @@ def display_maps(inputs, outputs, istk, display=True, rot=None, res=None, min=30
             addin = '\n $\sigma_{Qubic}$='+'{0:5.2g}'.format(rms_in)
         else:
             addin = ''
-        hp.gnomview(inputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, 3, k), title='Input'+ extra_string+addstr)
+        hp.gnomview(inputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, nx, k), title='Input'+ extra_string+addstr)
         k+=1
-        hp.gnomview(outputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, 3, k), title='Output'+ extra_string+addstr)
+        hp.gnomview(outputs[i, :, istk], rot=rot, reso=res, cmap='jet', min=min, max=max, sub=(Nf, nx, k), title='Output'+ extra_string+addstr)
         k+=1
-        hp.gnomview(r[i], rot=rot, reso=res, cmap='jet', min=minr, max=maxr, sub=(Nf, 3, k), title='Residual'+ extra_string+addstr+addin)
+        hp.gnomview(r[i], rot=rot, reso=res, cmap='jet', min=minr, max=maxr, sub=(Nf, nx, k), title='Residual'+ extra_string+addstr+addin)
         k+=1
+        if nx==4:
+            x,y,sx,sy,_ = ft.profile(dcenter, r[i], nbins=40, rng=[0,40], plot=False)
+            subplot(2, nx, 4)
+            errorbar(x, y,yerr=sy, fmt='o')
+            xlabel('Radius [deg]')
+            ylabel('Mean')
+            ylim(-maxr, maxr)
+            if istk==0:
+                ylim(-maxr*5, maxr*5)
+            subplot(2, nx, 8)
+            plot(x, sy,'o-')
+            xlabel('Radius [deg]')
+            ylabel('RMS Residuals')
+            ylim(0,maxr)
+            if istk==0:
+                ylim(0, maxr*5)
+            k+=1
         
     return all_rms_in, all_rms_out
 
 
+rc('figure',figsize=(20,8))
+figure()
+hp.gnomview(cov/cov.max(), min=0, max=1, rot=center, reso=25, cmap='jet', sub=(2,4,1), title='Coverage Map')
+hp.gnomview(mask, rot=center, reso=25, cmap='jet', sub=(2,4,2), title='Planck Mask')
+hp.gnomview(seenpix, rot=center, reso=25, cmap='jet', sub=(2,4,3), title='Seenpix')
+hp.gnomview(mask, rot=center, reso=25, cmap='jet', sub=(2,4,4), title='Planck Mask')
+#tight_layout()
+figure()
+rc('figure',figsize=(20,8))
 ### mapin_conv contains QUBIC frequency maps. In the Planck region, we need to replace them by the Planck map values.
 myrefmap = mapin_conv.copy()
 myrefmap[:,~seenpix,:] = m_planck[0,~seenpix,:]
 
-all_rms_in = np.zeros((d['nf_recon'], 3))
-all_rms_out = np.zeros((d['nf_recon'], 3))
-inside = (cov/np.max(cov)) >= 0.01
+all_rms_in = np.zeros((Nf_recon, 3))
+all_rms_out = np.zeros((Nf_recon, 3))
+inside = (cov/np.max(cov)) >= threshold
 stk = ['I', 'Q', 'U']
 for i in range(3):
-    fig = plt.figure(figsize=(10, 10))
+    #fig = plt.figure(figsize=(10, 10))
+    fig = plt.figure()
     mm = 20
     mmr = mm/10
     if i==0:
         mm=300
         mmr = 10
     rin, rout = display_maps(myrefmap, solution_qubic_planck['x'], istk=i, display=True, rot=center, res=25, 
-                 min=-mm, max=mm, minr=-mmr, maxr=mmr, extra_string=' {}'.format(stk[i]), addnum=True, inside=inside)
-    #all_rms_in[:,i] = rin
-    #all_rms_out[:,i] = rout
-    fig.suptitle('Stokes {}'.format(stk[i]), fontsize=20)
-    tight_layout()
+                 min=-mm, max=mm, minr=-mmr, maxr=mmr, extra_string=' {}'.format(stk[i]), addnum=True, inside=inside, cov=cov)
+    all_rms_in[:,i] = rin
+    all_rms_out[:,i] = rout
+    fig.suptitle('Stokes {} - Thr = {}'.format(stk[i], threshold), fontsize=20, y=1.1)
+    plt.tight_layout()
     plt.show()
     
 print('RMS In:')
@@ -377,19 +430,11 @@ print('RMS Out:')
 #print(all_rms_out)
 print('Mean')
 print(np.mean(all_rms_out, axis=0))
-```
-
-```{python}
 
 ```
 
-```{python}
-
-```
-
-```{python}
-
-```
+TODO:
+- essayer de reduire la zone QUBIC et de remplacer par planck jusqu'à cov=0.1 par exemple. Peut etre mieux...
 
 ```{python}
 

@@ -17,7 +17,6 @@ jupyter:
 JCH - 17 Feb 2023
 
 ```{python}
-from __future__ import division
 from pyoperators import pcg
 from pysimulators import profile
 
@@ -67,6 +66,7 @@ warnings.filterwarnings("ignore")
 from IPython.display import display, HTML
 display(HTML("<style>.container { width:95% !important; }</style>"))
 
+rc('figure',figsize=(20,8))
 
 ```
 
@@ -242,7 +242,6 @@ def initial_guess(map, nrec, fwhm = None, noisy = False):
 
 ```{python}
 threshold = 0.5
-prrint(fwhm_su)
 ```
 
 ```{python}
@@ -263,8 +262,9 @@ maskinit = np.array(seenpix, dtype=int)
 maskinit[np.where(seenpix == False)[0]] = 1e10
 
 ### Now we can also apodize the mask
+mask = maskinit.copy()
 
-
+rc('figure',figsize=(20,8))
 hp.gnomview(cov/cov.max(), min=0, max=1, rot=center, reso=25, cmap='jet', sub=(1,4,1), title='Coverage Map')
 hp.gnomview(maskinit, rot=center, reso=25, cmap='jet', sub=(1,4,2), title='Planck Mask Init')
 
@@ -280,14 +280,16 @@ map_planck_ini = initial_guess(m_planck+np.array([planck_acquisition.get_noise()
 qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
 
 # Free som memory
-del qubic_acquisition, planck_acquisition
-gc.collect()
+#del qubic_acquisition, planck_acquisition
+#gc.collect()
 
 H = qubicplanck_acquisition.get_operator(convolution=False, convolve_to_max=False)
 
 invntt = qubicplanck_acquisition.get_invntt_operator(mask=mask, weight_planck=1, beam_correction=qubic_final_fwhm)
 
-H
+
+
+invntt
 ```
 
 ```{python}
@@ -320,9 +322,14 @@ M = Acq.get_preconditioner(np.ones(12*d['nside']**2))
 
 
 
-solution_qubic_planck = pcg(A, b, x0=map_planck_ini, M=M, tol=tol, disp=True, maxiter=200)
+solution_qubic_planck = pcg(A, b, x0=map_planck_ini, M=M, tol=tol*0+1e-3, disp=True, maxiter=2)
 
-del H, M, A, b, n, mytod, invntt, qubicplanck_acquisition
+print('A', A.shapein, A.shapeout)
+print('b', b.shape)
+print('map_planck_ini', map_planck_ini.shape)
+print('M', M.shapein, M.shapeout)
+
+del H, M, A, b, n, mytod, invntt#, qubicplanck_acquisition
 gc.collect()
 ```
 
@@ -437,7 +444,12 @@ TODO:
 - essayer de reduire la zone QUBIC et de remplacer par planck jusqu'à cov=0.1 par exemple. Peut etre mieux...
 
 ```{python}
+istk = 0
+hp.gnomview(solution_qubic_planck['x'][1,:,istk] - solution_qubic_planck['x'][0,:,istk], rot=center, reso=25, cmap='jet', min=-1, max=1)
+```
 
+```{python}
+solution_qubic_planck['x'][1,seenpix,istk] - solution_qubic_planck['x'][0,seenpix,istk]
 ```
 
 ```{python}

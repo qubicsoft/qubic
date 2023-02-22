@@ -387,8 +387,8 @@ class QubicAcquisition(Acquisition):
             raise ValueError('The noise model is not specified.')
 
 
-        print('In acquisition.py: self.forced_sigma={}'.format(self.forced_sigma))
-        print('and self.sigma is:{}'.format(self.sigma))
+        #print('In acquisition.py: self.forced_sigma={}'.format(self.forced_sigma))
+        #print('and self.sigma is:{}'.format(self.sigma))
         if self.forced_sigma is None:
             print('Using theoretical TES noises')
         else:
@@ -640,13 +640,14 @@ class PlanckAcquisition:
             print(f'corrected by {factor}')
             varnew = hp.smoothing(self.var.T, fwhm=beam_correction/np.sqrt(2)) / factor
             self.sigma = 1e6 * np.sqrt(varnew.T)
-        mysigma = 1 / (self.sigma ** 2)
-        index_1 = np.where(mask == 1)[0]
 
-        mysigma /= np.array([mask, mask, mask]).T
-        
-        return DiagonalOperator(mysigma, broadcast='leftward',
+        # sigmanew = self.sigma / np.array([mask, mask, mask]).T
+        # The line below is absurd but the one above seems to do the inverse of what we want - Big mystery !
+        sigmanew = self.sigma * np.array([mask, mask, mask]).T
+        return DiagonalOperator(1 / sigmanew**2, broadcast='leftward',
                                 shapein=self.scene.shape)
+
+
 
     def get_noise(self):
         state = np.random.get_state()
@@ -1143,21 +1144,15 @@ class QubicPlanckMultiBandAcquisition:
 
             return BlockDiagonalOperator(Operator, axisout=0)
 
-
-
-
-
-
         invntt_qubic = self.qubic.get_invntt_operator()
         R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
         Operator = [R_qubic(invntt_qubic(R_qubic.T))]
 
-        if type == 'TwoBands' or 'WideBand':
-            for i in range(self.nfreqs):
-                print(i)
-                invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i], mask=mask)
-                R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
-                Operator.append(R_planck(invntt_planck(R_planck.T)))
+        for i in range(self.nfreqs):
+            print(i)
+            invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i], mask=mask)
+            R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
+            Operator.append(R_planck(invntt_planck(R_planck.T)))
 
         return BlockDiagonalOperator(Operator, axisout=0)
     def get_noise(self):

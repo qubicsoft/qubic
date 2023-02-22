@@ -17,6 +17,7 @@ jupyter:
 JCH - 17 Feb 2023
 
 ```{python}
+from pylab import *
 from pyoperators import pcg
 from pysimulators import profile
 

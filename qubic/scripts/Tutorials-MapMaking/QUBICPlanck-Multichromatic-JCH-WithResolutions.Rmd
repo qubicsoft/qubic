@@ -69,6 +69,8 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 
 rc('figure',figsize=(20,8))
 
+stokes = ['I', 'Q', 'U']
+
 ```
 
 ```{python}
@@ -78,17 +80,22 @@ band = 220
 band_planck = 217
 seed = 42
 noiseless = False
-effective_duration = 300000
+effective_duration = 30
 rwplanck = 1.
 tol = 1e-4
-noise_planck_level = 0.001
-threshold = 0
+noise_planck_level = 1
+threshold = 0.2
 
 
 npointings = 3000
 Nf_TOD = 20
 Nf_recon = 2
 fact_sub = 5
+
+sky_config = {'cmb':seed, 'dust':'d0'}
+# sky_config = {'dust':'d0'}
+# sky_config = {'cmb':seed}
+
 ```
 
 # TOD Fabrication
@@ -127,8 +134,6 @@ print('Noisless:      {}'.format(d_TOD['noiseless']))
 print('Photon Noise:  {}'.format(d_TOD['photon_noise']))
 print('************************************')
 
-sky_config = {'cmb':seed, 'dust':'d0'}
-# sky_config = {'Dust':'d0'}
 Qubic_sky = qss.Qubic_sky(sky_config, d_TOD)
 mapin_TOD = Qubic_sky.get_simple_sky_map()
 
@@ -155,18 +160,28 @@ gc.collect()
 ```{python}
 reload(Acq)
 
-######## Get the unconvolved maps from pysm
+######## Get the individual Nf_recon x fact_sub unconvolved maps from pysm in the variable "mapin"
+######## These are the True maps
 d_formaps = copy.deepcopy(d_TOD)
 d_formaps['nf_recon'] = Nf_recon
 d_formaps['nf_sub'] = Nf_recon * fact_sub
 Qubic_sky = qss.Qubic_sky(sky_config, d_formaps)
 mapin = Qubic_sky.get_simple_sky_map()
 
-######## Find the resolution for each reco sub-band. 
-######## For this we artificiall say we have  Nf_recon * fact_sub in order to get all the resolutions
-qubic_acquisition= Acq.QubicIntegrated(d_formaps, Nsub=Nf_recon * fact_sub, Nrec=Nf_recon)
 
-# Convolve them to each sub-band resolution
+####### Now create the Nf_recon True maps, convolved at the relevant resolution for each reco sub-band
+mapin_conv = np.zeros((Nf_recon, 12*nside**2, 3))
+
+### Create the corresponding qubic_acquisition
+qubic_acquisition= Acq.QubicIntegrated(d_formaps, Nsub=Nf_recon * fact_sub, Nrec=Nf_recon)
+qubic_final_fwhm = list(qubic_acquisition.final_fwhm)
+
+### We have two alternatives here:
+### 1./ We can convolved each integration sub-band to its own resolution and then average them into the reco sub-band
+### 2./ We can integrate into the sub-band and then convolve to the actual resolution of the reco sub-band if we know 
+###     it (for instance the worst res in the sub-band)
+
+####### Version 1 - convolve each integration sub-band to its resolution and then average
 mapin_conv = np.zeros((Nf_recon, 12*nside**2, 3))
 for j in range(Nf_recon):
     print('Building True Map for reco sub-band {}'.format(j))
@@ -187,125 +202,140 @@ for mystk in range(3):
         maxi = 300
     for k in range(Nf_recon):
         hp.gnomview(mapin_conv[k, :, mystk], rot=center, reso=25, 
-                    title='True map conv - stk={} - sub={}'.format(mystk, k), sub=(1, Nf_recon, k+1), 
+                    title='True map conv - stk={} - sub={}'.format(stokes[mystk], k), sub=(1, Nf_recon, k+1), 
                     cmap='jet', min=mini, max=maxi)
 
+
+        
+### Now we create the QUBIC TOD:
+H_qubic = qubic_acquisition.get_operator(convolution=False)
+TOD_qubic = H_qubic(mapin_conv) + qubic_acquisition.get_noise()
+
+del(H_qubic)
+gc.collect()
+```
+
+## Let's define the mask for the QUBIC and Planck regions
+
+```{python}
+reload(Acq)
+d = copy.deepcopy(d_formaps)
+
+# QUBIC coverage
+cov = qubic_acquisition.get_coverage()
+
+# In order to define the QUBIC and Planck regions, we use the coverage map, but first smooth it to 1 degree
+C = HealpixConvolutionGaussianOperator(fwhm=np.radians(1.))
+covconv = C(cov)
+
+# seenpix is the zone observed by QUBIC above a certain threshold
+seenpix = (cov > 0) & ((covconv/covconv.max()) > threshold)
+
+# We build a mask from it and this mask will incorporate weighting for Planck
+maskinit = np.array(seenpix, dtype=float)
+
+# we amplify the weight of the Planck data in the "Not QUBIC Region"
+maskinit[np.where(seenpix == False)[0]] = 1e10
+
+# We can also downweight Planck in the "QUBIC region" if we want no planck data in the QUBIC region
+maskinit[np.where(seenpix == True)[0]] = 1
+
+### Now we can also apodize the mask - not implemented yet
+mask = maskinit.copy()
+
+rc('figure',figsize=(20,8))
+hp.gnomview(cov/cov.max(), min=0, max=1, rot=center, reso=25, cmap='jet', sub=(1,2,1), title='Coverage Map')
+hp.gnomview(maskinit, rot=center, reso=25, cmap='jet', sub=(1,2,2), title='Planck Mask Init')
 
 ```
 
 ## Now QUBIC and Planck acquisitions used for reconstruction
 
 ```{python}
-def initial_guess_pcg(map, n, Nrec, npix):
+### Here is the Planck Acquisition
+# Planck Acquisition
+planck_acquisition = Acq.PlanckAcquisition(band_planck, qubic_acquisition.scene)
 
-    initial_guess = np.zeros((Nrec, npix, 3))
-    for i in range(Nrec):
-        initial_guess[i] = map + n
-    
-    return initial_guess
-
-
-def integration(nu_min, nu_max, Nintegr, sky_config, d, fwhm_subbands = None):
+# Here is the map we used as the external "Planck data"
+def create_fake_planck_map(nu_min, nu_max, Nintegr, sky_config, d):
     print(f'Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps')
     obj = Acq.QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
     if Nintegr == 1:
         allnus = np.array([np.mean([nu_min, nu_max])])
     else:
         allnus = np.linspace(nu_min, nu_max, Nintegr)
-    m = obj.get_PySM_maps(sky_config, nus=allnus)
-    
-    if fwhm_subbands is not None:
-        for i in range(Nintegr):
-            C = HealpixConvolutionGaussianOperator(fwhm=fwhm_subbands[i])
-            m[i] = C(m[i])
-    
-    return np.array([np.mean(m, axis=0)])
+    m = np.mean(obj.get_PySM_maps(sky_config, nus=allnus), axis=0)
+    return m
 
-def initial_guess(map, nrec, fwhm = None, noisy = False):
-    
-    if fwhm is None:
-        fwhm = [0]*nrec
-    
-    map_ini = np.zeros((nrec, map.shape[1], map.shape[2]))
-    
-    for i in range(nrec):
-        #C = HealpixConvolutionGaussianOperator(fwhm = fwhm[i])
-        #map_ini[i] = C(map[0])
-        map_ini[i] = map[0]
+# this is the True Planck map (without Planck noise) (here at infinite resolution => we should improve that later)
+m_planck_true = create_fake_planck_map(band_planck-35, band_planck+35, qubic_acquisition.Nsub, sky_config, d)
+# this is the equivalent of the planck PLA map
+m_planck_noisy = m_planck_true + planck_acquisition.get_noise()
+
+figure()
+for k in range(3):
+    mm = 8
+    if k==0: mm = 300
+    hp.mollview(m_planck_noisy[:,k], title='Planck Data (sim) - Stk={}'.format(stokes[k]), cmap='jet',sub=(1,3,k+1), min=-mm, max=mm)
+tight_layout()
+
+figure()
+for k in range(3):
+    mm = 10
+    if k==0: mm = 300
+    hp.gnomview(m_planck_noisy[:,k], rot=center, reso=25, title='Planck Data (sim) - Stk={}'.format(stokes[k]), cmap='jet',sub=(1,3,k+1), min=-mm, max=mm)
+tight_layout()
+
+
+
+
+# Now we want to create one "Planck map" per QUBIC reconstruction sub-band, each convolved at the appropriate resolution
+maps_planck_used = np.zeros((Nf_recon, 12*nside**2, 3))
+for i in range(Nf_recon):
+    print('Building True Map for reco sub-band {}'.format(i))
+    for j in range(fact_sub):
+        fwhm = qubic_acquisition.allfwhm[i*fact_sub+j]
+        print("     - {} Convolving input map {} to fwhm: {:5.3f} deg".format(i * fact_sub + j, j, np.degrees(fwhm)))
+        C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+        maps_planck_used[i, :, :] += C(m_planck_noisy) / fact_sub
+
         
-    if nrec == 1:
-        map_ini = map[0]
-    
-    return map_ini
+        
+for i in range(Nf_recon):
+    figure()
+    for k in range(3):
+        mm = 10
+        if k==0: mm = 300
+        hp.gnomview(maps_planck_used[i,:,k], rot=center, reso=25, 
+                    title='Map Planck Used - Stk={} - RecSub={}'.format(stokes[k], i), cmap='jet',sub=(Nf_recon,3,k+1), min=-mm, max=mm)
+tight_layout()
 
 
 ```
 
 ```{python}
-threshold = 0.5
+# Create Planck TOD
+R = ReshapeOperator(maps_planck_used.shape, (maps_planck_used.shape[0]*maps_planck_used.shape[1]*maps_planck_used.shape[2]))
+TOD_planck = R(maps_planck_used)
 ```
 
 ```{python}
-d = copy.deepcopy(d_formaps)
-
-# QUBIC Acquisition and coverage
-qubic_final_fwhm = list(qubic_acquisition.final_fwhm)
-cov = qubic_acquisition.get_coverage()
-
-cov = qubic_acquisition.get_coverage()
-
-### In order to define the QUBIC and Planck regions, we use the coverage map, but first smooth it to 1 degree
-C = HealpixConvolutionGaussianOperator(fwhm=np.radians(1.))
-covconv = C(cov)
-
-seenpix = (cov > 0) & ((covconv/covconv.max()) > threshold)
-maskinit = np.array(seenpix, dtype=int)
-maskinit[np.where(seenpix == False)[0]] = 1e10
-
-### Now we can also apodize the mask
-mask = maskinit.copy()
-
-rc('figure',figsize=(20,8))
-hp.gnomview(cov/cov.max(), min=0, max=1, rot=center, reso=25, cmap='jet', sub=(1,4,1), title='Coverage Map')
-hp.gnomview(maskinit, rot=center, reso=25, cmap='jet', sub=(1,4,2), title='Planck Mask Init')
-
+# Now joint TOD
+tod = np.r_[TOD_qubic.ravel(), TOD_planck]
 ```
 
 ```{python}
-# Planck Acquisition
-planck_acquisition = Acq.PlanckAcquisition(band_planck, qubic_acquisition.scene)
-m_planck = integration(band-35, band+35, qubic_acquisition.Nsub, sky_config, d, fwhm_subbands=qubic_acquisition.allfwhm)
-map_planck_ini = initial_guess(m_planck+np.array([planck_acquisition.get_noise()*noise_planck_level]), Nf_recon, fwhm = qubic_acquisition.final_fwhm)
-
 # Joint Acquisition
 qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
-
-# Free som memory
-#del qubic_acquisition, planck_acquisition
-#gc.collect()
-
 H = qubicplanck_acquisition.get_operator(convolution=False, convolve_to_max=False)
-
 invntt = qubicplanck_acquisition.get_invntt_operator(mask=mask, weight_planck=1, beam_correction=qubic_final_fwhm)
-
-
-
 invntt
 ```
 
 ```{python}
-### Replacing fake QUBIC TOD with real one
-n = qubicplanck_acquisition.get_noise()
-if noiseless == True:
-    n *= 0
-mytod = H(mapin_conv) + n * noise_planck_level
-nelt = len(np.ravel(tod))
-mytod[:nelt] = np.ravel(tod)
-
-
 ### Solve PCG
 A = H.T * invntt * H
-b = H.T * invntt * mytod
+b = H.T * invntt * tod
 
 def get_preconditioner(cov):
     if cov is not None:
@@ -318,20 +348,18 @@ def get_preconditioner(cov):
 
 M = Acq.get_preconditioner(np.ones(12*d['nside']**2))
 
+guess = maps_planck_used.copy()
+#guess[:,seenpix,:] = 0
 
-
-
-
-
-solution_qubic_planck = pcg(A, b, x0=map_planck_ini, M=M, tol=tol*0+1e-3, disp=True, maxiter=2)
+solution_qubic_planck = pcg(A, b, x0=guess, M=M, tol=tol*0+1e-30, disp=True, maxiter=100)
 
 print('A', A.shapein, A.shapeout)
 print('b', b.shape)
-print('map_planck_ini', map_planck_ini.shape)
+print('guess', guess.shape)
 print('M', M.shapein, M.shapeout)
 
-del H, M, A, b, n, mytod, invntt#, qubicplanck_acquisition
-gc.collect()
+# del H, M, A, b, n, tod, invntt
+# gc.collect()
 ```
 
 ```{python}
@@ -383,31 +411,33 @@ def display_maps(inputs, outputs, istk, display=True, rot=None, res=None, min=30
             ylabel('Mean')
             ylim(-maxr, maxr)
             if istk==0:
-                ylim(-maxr*5, maxr*5)
+                ylim(-maxr, maxr)
             subplot(2, nx, 8)
             plot(x, sy,'o-')
             xlabel('Radius [deg]')
             ylabel('RMS Residuals')
-            ylim(0,maxr)
+            ylim(0,maxr*10)
             if istk==0:
-                ylim(0, maxr*5)
+                ylim(0, maxr)
             k+=1
         
     return all_rms_in, all_rms_out
 
 
+res = 30
+
 rc('figure',figsize=(20,8))
 figure()
-hp.gnomview(cov/cov.max(), min=0, max=1, rot=center, reso=25, cmap='jet', sub=(2,4,1), title='Coverage Map')
-hp.gnomview(mask, rot=center, reso=25, cmap='jet', sub=(2,4,2), title='Planck Mask')
-hp.gnomview(seenpix, rot=center, reso=25, cmap='jet', sub=(2,4,3), title='Seenpix')
-hp.gnomview(mask, rot=center, reso=25, cmap='jet', sub=(2,4,4), title='Planck Mask')
+hp.gnomview(cov/cov.max(), min=0, max=1, rot=center, reso=res, cmap='jet', sub=(2,4,1), title='Coverage Map')
+hp.gnomview(mask, rot=center, reso=res, cmap='jet', sub=(2,4,2), title='Planck Mask')
+hp.gnomview(seenpix, rot=center, reso=res, cmap='jet', sub=(2,4,3), title='Seenpix')
+hp.gnomview(mask, rot=center, reso=res, cmap='jet', sub=(2,4,4), title='Planck Mask')
 #tight_layout()
 figure()
 rc('figure',figsize=(20,8))
 ### mapin_conv contains QUBIC frequency maps. In the Planck region, we need to replace them by the Planck map values.
 myrefmap = mapin_conv.copy()
-myrefmap[:,~seenpix,:] = m_planck[0,~seenpix,:]
+myrefmap[:,~seenpix,:] = maps_planck_used[:,~seenpix,:]
 
 all_rms_in = np.zeros((Nf_recon, 3))
 all_rms_out = np.zeros((Nf_recon, 3))
@@ -416,12 +446,12 @@ stk = ['I', 'Q', 'U']
 for i in range(3):
     #fig = plt.figure(figsize=(10, 10))
     fig = plt.figure()
-    mm = 20
-    mmr = mm/10
+    mm = 10
+    mmr = mm/2
     if i==0:
         mm=300
         mmr = 10
-    rin, rout = display_maps(myrefmap, solution_qubic_planck['x'], istk=i, display=True, rot=center, res=25, 
+    rin, rout = display_maps(myrefmap, solution_qubic_planck['x'], istk=i, display=True, rot=center, res=res, 
                  min=-mm, max=mm, minr=-mmr, maxr=mmr, extra_string=' {}'.format(stk[i]), addnum=True, inside=inside, cov=cov)
     all_rms_in[:,i] = rin
     all_rms_out[:,i] = rout
@@ -445,44 +475,99 @@ TODO:
 - essayer de reduire la zone QUBIC et de remplacer par planck jusqu'à cov=0.1 par exemple. Peut etre mieux...
 
 ```{python}
-istk = 0
-hp.gnomview(solution_qubic_planck['x'][1,:,istk] - solution_qubic_planck['x'][0,:,istk], rot=center, reso=25, cmap='jet', min=-1, max=1)
+# for istk in [0,1,2]:
+#     hp.gnomview(solution_qubic_planck['x'][1,:,istk] - solution_qubic_planck['x'][0,:,istk], rot=center, reso=25, cmap='jet', 
+#                 title='Difference between 2 rec sub-bands', min=-1, max=1, sub=(1,3,istk+1))
 ```
 
-```{python}
-solution_qubic_planck['x'][1,seenpix,istk] - solution_qubic_planck['x'][0,seenpix,istk]
-```
+Explore QUBIC region residuals as a functiion of chosen angular resolution for the True Maps
 
 ```{python}
+# def resradq(nughz):
+#     return 1.02803844/nughz
 
-```
+# def profile_res(maprec, mapref, center, doplot=False):
+#     residuals = maprec - mapref
+#     uvpix = np.array(hp.pix2vec(hp.npix2nside(len(maprec)), np.arange(len(maprec))))
+#     uvcenter = hp.ang2vec(center[0], center[1], lonlat=True)
+#     dcenter = np.degrees(np.arccos(np.dot(uvpix.T, uvcenter)))
+#     x,y,sx,sy,_ = ft.profile(dcenter, residuals, nbins=40, rng=[0,40], plot=False)
+#     if doplot:
+#         rc('figure',figsize=(20,5))
+#         figure()
+#         hp.gnomview(maprec, rot=center, reso=25, min=-10, max=10, sub=(1,4,1), title='REC', cmap='jet')
+#         hp.gnomview(mapref, rot=center, reso=25, min=-10, max=10, sub=(1,4,2), title='REF', cmap='jet')
+#         hp.gnomview(residuals, rot=center, reso=25, min=-1, max=1, sub=(1,4,3), title='REC-REF', cmap='jet')
+#         tight_layout()    
+#         subplot(1,4,4)
+#         plot(x, sy,'o-')
+#         axhline(y=0, ls=':', color='k')
+#         xlabel('Radius [deg]')
+#         ylabel('RMS Residuals')
+#         tight_layout()
+#     return x, sy
+    
 
-```{python}
 
-```
+# ### This is with the average of many maps convolved with proper angular resolution within the band
+# map_avres = mapin_conv.copy()
 
-```{python}
+# for isub in [0,1]:
+#     istk = 1
+#     #isub = 1
+#     rc('figure',figsize=(20,5))
+#     xx, y_avres = profile_res(solution_qubic_planck['x'][isub,:,istk], map_avres[isub,:,istk], center, doplot=False)
 
-```
+#     all_y_avres = []
+#     numin = qubic_acquisition.nus_edge[isub]
+#     numax = qubic_acquisition.nus_edge[isub+1]
+# #     allfwhm = resradq(np.linspace(numin, numax, 20))[0:10]
+#     allfwhm = qubic_acquisition.allfwhm[isub*fact_sub:(isub+1)*fact_sub]
+#     for i,fwhm in enumerate(allfwhm):
+#         C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+#         mymapref = C(mapin[0,:,:])
+#         mymapref[~seenpix,:] = map_avres[isub, ~seenpix, :]
+#         xx, yy = profile_res(solution_qubic_planck['x'][isub,:,istk], mymapref[:,istk], center, doplot=False)
+#         all_y_avres.append(yy)
 
-```{python}
+#     figure()
+#     subplot(1,3,1)
+#     plot(xx, y_avres, 'k', label='Res from Used Planck map', lw=3)
 
-```
+#     rms_q = np.zeros(len(allfwhm))
+#     for i,fwhm in enumerate(allfwhm):
+#         plot(xx, all_y_avres[i], label='FWHM={:5.2f}'.format(np.degrees(fwhm)*60))
+#         rms_q[i] = np.mean(all_y_avres[i][xx < 10])
+#     legend()
+#     xlabel('Radius [deg]')
+#     ylabel('RMS Residuals')
+#     title('CMB Only - Noiseless - Sub={} - STK={}'.format(isub, istk))
 
-```{python}
+#     subplot(1,3,2)
+#     plot(xx, y_avres, 'k', label='Res from Used Planck map', lw=3)
 
-```
+#     for i,fwhm in enumerate(allfwhm):
+#         plot(xx, all_y_avres[i], label='FWHM={:5.2f}'.format(np.degrees(fwhm)*60))
+#     xlim(0,15)
+#     ylim(0,0.15)
+#     xlabel('Radius [deg]')
+#     ylabel('RMS Residuals')
 
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
+#     subplot(1,3,3)
+#     plot(np.degrees(allfwhm)*60, rms_q, color='r')
+#     for k,ff in enumerate(qubic_acquisition.allfwhm[isub*fact_sub:(isub+1)*fact_sub]):
+#         p = plot(np.degrees(allfwhm)*60, rms_q, alpha=0)
+#         axvline(x=np.degrees(ff)*60, ls=':', label='SubInt = {0:} - FWHM = {1:5.2f} arcmin'.format(k, np.degrees(ff)*60), color=p[0].get_color())
+#     xlabel('Res in arcmin') 
+#     ylabel('RMS (r < 10 deg)') 
+#     minval = (np.degrees(allfwhm)*60)[argmin(rms_q)]
+#     title('Min = {:5.2f}'.format(minval))
+#     axvline(x=minval, color='k', ls='--')
+#     #prediction = np.degrees(np.sqrt(resradq(numin)*resradq(numax)))*60
+#     #axvline(x=prediction, color='r', ls='--', label='{0:5.2f}'.format(prediction))
+#     legend()
+        
+        
 ```
 
 ```{python}

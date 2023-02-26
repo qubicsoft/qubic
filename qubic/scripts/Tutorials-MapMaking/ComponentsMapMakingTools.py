@@ -42,7 +42,10 @@ def get_mixingmatrix(beta, nus, comp):
 
     A = mm.MixingMatrix(*comp)
     A_ev = A.evaluator(nus)
-    A = A_ev(beta)
+    if beta.shape[0] == 0:
+        A = A_ev()
+    else:
+        A = A_ev(beta)
 
     return A
 
@@ -54,15 +57,16 @@ def get_mixing_operator(beta, nus, comp, nside):
     """
 
     nc = len(comp)
-    if beta.shape[0] != 1:
+    if beta.shape[0] != 1 and beta.shape[0] != 2:
+        
         nside_fit = hp.npix2nside(beta.shape[0])
     else:
         nside_fit = 0
 
     # Check if the length of beta is equal to the number of channels minus 1
     if nside_fit == 0: # Constant indice on the sky
-        beta = np.mean(beta)
-        
+        #beta = np.mean(beta)
+
         # Get the mixing matrix
         A = get_mixingmatrix(beta, nus, comp)
         
@@ -74,6 +78,7 @@ def get_mixing_operator(beta, nus, comp, nside):
         
         # Create a DenseOperator with the first row of A
         D = DenseOperator(A[0], broadcast='rightward', shapein=(nc, 12*nside**2, 3), shapeout=(1, 12*nside**2, 3))
+
     else: # Varying indice on the sky
         
         # Get all A matrices nc, nf, npix, beta, nus, comp

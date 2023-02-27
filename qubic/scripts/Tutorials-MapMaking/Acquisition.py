@@ -80,8 +80,6 @@ __all__ = ['QubicAcquisition',
            'QubicWideBandComponentsMapMaking',
            'QubicTwoBandsComponentsMapMaking']
 
-def give_me_intercal(D, d):
-    return 1/np.sum(D[:]**2, axis=1) * np.sum(D[:] * d[:], axis=1)
 def create_array(name, nus, nside):
 
     if name == 'noise':
@@ -1045,13 +1043,14 @@ class QubicPlanckMultiBandAcquisition:
                 f = FixedDataOperator(fixed_data, seenpix)
             else:
                 f = IdentityOperator()
+            print(f)
             # Loop over the number of frequencies again
             for j in range(self.nfreqs):
                 # Create an Operator list that includes the appropriate operator for each frequency
                 if i == j :
                     Operator.append(R_planck*C*f)
                 else:
-                    Operator.append(R_planck*0*C)
+                    Operator.append(R_planck*0*C*f)
 
             # Append a BlockColumnOperator instance to the full_operator list
             full_operator.append(BlockColumnOperator(Operator, axisout=0))
@@ -2473,7 +2472,6 @@ class PipelineReconstruction(QubicOtherIntegratedComponentsMapMaking):
     def myChi2_spectral_index(self, beta, Hi, allbeta, solution, data, patch_id=None):
         newbeta = allbeta.copy()
         if patch_id is not None:
-            #print(patch_id, beta)
             newbeta[patch_id] = beta.copy()
         else:
             newbeta = beta.copy()

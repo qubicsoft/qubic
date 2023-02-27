@@ -46,20 +46,19 @@ from pyoperators import *
 @pyoperators.flags.orthogonal
 class FixedDataOperator(Operator):
     def __init__(self, data, seenpix):
+       
         self.data = data
+        Nf = self.data.shape[0]
         self.seenpix = seenpix
-        
+        print('shape : ', self.data.shape)
         Operator.__init__(self, shapein=(np.sum(self.seenpix), 3), shapeout=self.data.shape)
-        #print(self.transpose)
-        #self.set_rule('T', self.rule_transpose)
+
     def direct(self, x, output):
         output[...] = self.data
         output[self.seenpix] = x
-        #output=np.zeros(se)
         output[~self.seenpix] = self.data[~self.seenpix].copy()
+
     def transpose(self, input, output):
-        #print(input.shape)
-        #print(output.shape)
         output[...] = input[self.seenpix]
 
 __all__ = ['QubicAcquisition',
@@ -1038,14 +1037,17 @@ class QubicPlanckMultiBandAcquisition:
             else:
                 C = IdentityOperator()
 
-            if fixed_data is not None:
-                seenpix = fixed_data[:, 0] == 0
-                f = FixedDataOperator(fixed_data, seenpix)
-            else:
-                f = IdentityOperator()
-            print(f)
+            
             # Loop over the number of frequencies again
             for j in range(self.nfreqs):
+
+                if fixed_data is not None:
+                    seenpix = fixed_data[j, :, 0] == 0
+                    f = FixedDataOperator(fixed_data[j], seenpix)
+                else:
+                    f = IdentityOperator()
+                print(f)
+
                 # Create an Operator list that includes the appropriate operator for each frequency
                 if i == j :
                     Operator.append(R_planck*C*f)
@@ -1324,7 +1326,9 @@ class QubicIntegrated:
     def _get_array_of_operators(self, convolution=False, convolve_to_max=False, fixed_data=None):
         # Initialize an empty list
         op = []
-    
+        allsub = np.arange(0, self.Nsub, 1)
+        indice = allsub//int(self.Nsub/self.Nrec)
+
         # Loop through each acquisition in subacqs
         for ia, a in enumerate(self.subacqs):
             if convolution:
@@ -1346,12 +1350,14 @@ class QubicIntegrated:
                 # If convolution is False, set the operator to an identity operator
                 C = IdentityOperator()
         
+
             # Append the acquisition operator multiplied by the convolution operator to the list
             if fixed_data is not None:
-                seenpix = fixed_data[:, 0] == 0
-                f = FixedDataOperator(fixed_data, seenpix)
+                seenpix = fixed_data[0, :, 0] == 0
+                f = FixedDataOperator(fixed_data[indice[ia]], seenpix)
             else:
                 f = IdentityOperator()
+            
             op.append(a.get_operator() * C * f)
     
         # Return the list of operators

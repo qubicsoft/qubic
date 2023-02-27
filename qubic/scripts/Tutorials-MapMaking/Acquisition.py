@@ -50,7 +50,6 @@ class FixedDataOperator(Operator):
         self.data = data
         Nf = self.data.shape[0]
         self.seenpix = seenpix
-        print('shape : ', self.data.shape)
         Operator.__init__(self, shapein=(np.sum(self.seenpix), 3), shapeout=self.data.shape)
 
     def direct(self, x, output):

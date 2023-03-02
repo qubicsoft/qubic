@@ -405,23 +405,23 @@ class QubicAcquisition(Acquisition):
             raise ValueError('The noise model is not specified.')
 
 
-        print('In acquisition.py: self.forced_sigma={}'.format(self.forced_sigma))
-        print('and self.sigma is:{}'.format(self.sigma))
+        #print('In acquisition.py: self.forced_sigma={}'.format(self.forced_sigma))
+        #print('and self.sigma is:{}'.format(self.sigma))
         if self.forced_sigma is None:
-            print('Using theoretical TES noises')
+            pass#print('Using theoretical TES noises')
         else:
-            print('Using self.forced_sigma as TES noises')
+            #print('Using self.forced_sigma as TES noises')
             self.sigma = self.forced_sigma.copy()
 
         shapein = (len(self.instrument), len(self.sampling))
 
         if self.bandwidth is None and self.instrument.detector.fknee == 0:
-            print('diagonal case')
+            #print('diagonal case')
 
             out = DiagonalOperator(1 / self.sigma ** 2, broadcast='rightward',
                                    shapein=(len(self.instrument), len(self.sampling)))
-            print(out.shape)
-            print(out)
+            #print(out.shape)
+            #print(out)
 
             if self.effective_duration is not None:
                 nsamplings = self.comm.allreduce(len(self.sampling))
@@ -1005,9 +1005,9 @@ class QubicPlanckMultiBandAcquisition:
         self.nus_edge = self.qubic.nus_edge
         self.nueff = self.qubic.nueff
         self.nfreqs = len(self.nueff)
-    def get_operator(self, convolution=False, convolve_to_max=False, fixed_data=None):
+    def get_operator(self, convolution=False, fixed_data=None):
         # Get QUBIC operator
-        H_qubic = self.qubic.get_operator(convolution=convolution, convolve_to_max=convolve_to_max, fixed_data=fixed_data)
+        H_qubic = self.qubic.get_operator(convolution=convolution, fixed_data=fixed_data)
         # Reshape the operator to match a desired input and output shape
         R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
         R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
@@ -1045,7 +1045,6 @@ class QubicPlanckMultiBandAcquisition:
                     f = FixedDataOperator(fixed_data[j], seenpix)
                 else:
                     f = IdentityOperator()
-                print(f)
 
                 # Create an Operator list that includes the appropriate operator for each frequency
                 if i == j :
@@ -1088,7 +1087,6 @@ class QubicPlanckMultiBandAcquisition:
         Operator = [R_qubic(invntt_qubic(R_qubic.T))]
 
         for i in range(self.nfreqs):
-            print(i)
             if i == 0:
                 mask_correction = mask
             else:
@@ -1235,12 +1233,8 @@ class QubicIntegrated:
 
         self.final_fwhm = np.zeros(self.d['nf_recon'])
         fact = int(self.d['nf_sub']/self.d['nf_recon'])
-        if fact != 1:
-            for i in range(self.d['nf_recon']):
-                self.final_fwhm[i] = np.mean(self.allfwhm[int(i*fact):int(fact*(i+1))])
-        else:
-            for i in range(self.d['nf_recon']):
-                self.final_fwhm[i] = self.allfwhm[i]
+        for i in range(self.d['nf_recon']):
+            self.final_fwhm[i] = np.mean(self.allfwhm[int(i*fact):int(fact*(i+1))])
 
     def get_PySM_maps(self, config, nus):
         allmaps = np.zeros((len(nus), 12*self.nside**2, 3))
@@ -1322,29 +1316,21 @@ class QubicIntegrated:
     def get_noise(self):
         a = self._get_average_instrument_acq()
         return a.get_noise()
-    def _get_array_of_operators(self, convolution=False, convolve_to_max=False, fixed_data=None):
+    def _get_array_of_operators(self, convolution=False, myfwhm=None, fixed_data=None):
         # Initialize an empty list
         op = []
         allsub = np.arange(0, self.Nsub, 1)
         indice = allsub//int(self.Nsub/self.Nrec)
-
         # Loop through each acquisition in subacqs
+        k=0
         for ia, a in enumerate(self.subacqs):
             if convolution:
-                if convolve_to_max:
-                    # Calculate the minimum FWHM for each sub-acquisition
-                    fact = int(self.Nsub/self.Nrec)
-                    fwhmi = np.zeros(self.Nsub)
-                    for ii in range(self.Nrec):
-                        fwhmi[ii*fact:(ii+1)*fact] = np.min(self.allfwhm[ii*(fact):(ii+1)*fact])
-                
-                    # Calculate the convolution operator for this sub-acquisition
-                    allfwhm = np.sqrt(self.allfwhm**2 - fwhmi**2)
-                    C = HealpixConvolutionGaussianOperator(fwhm=allfwhm[ia])
-                else:
-                    # Calculate the convolution operator for this sub-acquisition
-                    allfwhm = self.allfwhm.copy()
-                    C = HealpixConvolutionGaussianOperator(fwhm=allfwhm[ia])
+                # Calculate the convolution operator for this sub-acquisition
+                allfwhm = self.allfwhm.copy()
+                target = allfwhm[ia]
+                if myfwhm is not None:
+                    target = myfwhm[ia]
+                C = HealpixConvolutionGaussianOperator(fwhm=target)
             else:
                 # If convolution is False, set the operator to an identity operator
                 C = IdentityOperator()
@@ -1352,10 +1338,14 @@ class QubicIntegrated:
 
             # Append the acquisition operator multiplied by the convolution operator to the list
             if fixed_data is not None:
+                
+                C0 = HealpixConvolutionGaussianOperator(fwhm=self.allfwhm[ia])
+                Planck_conv = fixed_data[k]
                 seenpix = fixed_data[0, :, 0] == 0
-                f = FixedDataOperator(fixed_data[indice[ia]], seenpix)
+                f = FixedDataOperator(Planck_conv, seenpix)
             else:
                 f = IdentityOperator()
+            k+=1
             
             op.append(a.get_operator() * C * f)
     
@@ -1380,13 +1370,13 @@ class QubicIntegrated:
         operator = self._get_array_of_operators(convolution=convolution, convolve_to_max=False)
         # Combine the operators into a BlockRowOperator along the first axis
         return BlockRowOperator(operator, new_axisin=0)
-    def get_operator(self, convolution=False, convolve_to_max=False, fixed_data=None):
+    def get_operator(self, convolution=False, myfwhm=None, fixed_data=None):
 
         # Initialize an empty list to store the sum of operators for each frequency band
         op_sum = []
     
         # Get an array of operators for all sub-arrays
-        op = np.array(self._get_array_of_operators(convolution=convolution, convolve_to_max=convolve_to_max, fixed_data=fixed_data))
+        op = np.array(self._get_array_of_operators(convolution=convolution, myfwhm=myfwhm, fixed_data=fixed_data))
 
         # Loop over the frequency bands
         for ii, band in enumerate(self.bands):

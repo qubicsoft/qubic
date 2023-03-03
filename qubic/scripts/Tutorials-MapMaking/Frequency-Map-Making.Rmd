@@ -151,7 +151,7 @@ reload(Acq)
 qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_TOD, Nrec=Nf_TOD)
 cov = qubic_acquisition.get_coverage()
 covnorm = cov/cov.max()
-threshold = 0.4
+threshold = 0.1
 #seenpix = generate_circular_mask(256, 10, center[0], center[1])
 seenpix = covnorm > threshold
 notseenpix = covnorm < threshold
@@ -170,7 +170,7 @@ m_sub = qubic_acquisition.get_PySM_maps(sky_config, qubic_acquisition.allnus)
 qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_TOD, Nrec=Nf_TOD)
 
 # Create operator
-H_TOD = qubic_acquisition.get_operator(convolution=True, myfwhm=None, fixed_data=None)
+H_TOD = qubic_acquisition.get_operator(convolution=False, myfwhm=None, fixed_data=None)
 n_qubic = qubic_acquisition.get_noise()
 
 # Create TOD
@@ -195,14 +195,14 @@ m_planck_all = np.zeros((Nf_recon * fact_sub, 12*nside**2, 3))
 # Convolving Planck map to QUBIC resolutions
 for i in range(Nf_recon):
     
-    target = np.mean(qubic_acquisition.allfwhm[i*fact_sub:(i+1)*fact_sub])                   # Target FWHM
+    target = 0#np.mean(qubic_acquisition.allfwhm[i*fact_sub:(i+1)*fact_sub])                   # Target FWHM
     print(target)
     C = HealpixConvolutionGaussianOperator(fwhm=target)                                     # Operator
     m_planck_for_tod[i] = C(planck_obs[0] + (n_planck.copy() * noise_planck_level))         # Convolution
 
 for i in range(Nf_recon*fact_sub):
     
-    target = qubic_acquisition.allfwhm[i]                   # Target FWHM
+    target = 0#qubic_acquisition.allfwhm[i]                   # Target FWHM
     print(target)
     C = HealpixConvolutionGaussianOperator(fwhm=target)                                     # Operator
     m_planck_all[i] = C(planck_obs[0] + (n_planck.copy() * noise_planck_level))         # Convolution
@@ -256,7 +256,7 @@ qubic_acquisition = Acq.QubicIntegrated(d_formaps, Nsub=Nf_recon * fact_sub, Nre
 qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
 R = ReshapeOperator((1, 786432, 3), (786432, 3))
 
-user = 'Mathias'
+user = 'old'
 
 if user == 'Pierre':
     H = qubicplanck_acquisition.get_operator(convolution=False, fixed_data=None)
@@ -288,14 +288,33 @@ elif user == 'Mathias':
     
     A = H.T * invN * H
     b = H.T * invN * tod
+elif user == 'old':
+    maskinit = np.array(seenpix, dtype=float)
+    index_0 = maskinit == 0
+    maskinit[index_0] += 1e10
+
+    H = qubicplanck_acquisition.get_operator(convolution=False, fixed_data=None)
+    invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=None, seenpix=None, mask=None)
+    
+    A = H.T * invN * H
+    b = H.T * invN * tod
+    
+    for i in range(1, Nf_recon+1):
+        invN.operands[i].operands[1] /= DiagonalOperator(np.array([maskinit, maskinit, maskinit]).T)
 else:
     raise TypeError('We would like to have more people..')
+```
+
+```{python}
+invN
 ```
 
 ```{python}
 if user == 'Pierre' or user == 'Mathias':
     m_ini = m_planck_for_tod.copy()
     solution_qubic_planck = mypcg.pcg(A, b, x0=m_ini[:, seenpix], M=M, tol=tol, disp=True, maxiter=100)
+elif user == 'old':
+    solution_qubic_planck = mypcg.pcg(A, b, x0=m_ini, M=M, tol=tol, disp=True, maxiter=40)
 else:
     raise TypeError('We would like to have more people..')
 ```
@@ -313,16 +332,27 @@ def get_inputs(m, fwhm):
 
 ```{python}
 mysolution = m_planck_for_tod.copy()
-mysolution[:, seenpix] = solution_qubic_planck['x']['x'].copy()
+if user == 'Pierre' or user == 'Mathias':
+    mysolution[:, seenpix] = solution_qubic_planck['x']['x'].copy()
+elif user == 'old':
+    mysolution = solution_qubic_planck['x']['x'].copy()
+else:
+    raise TypeError('We would like to have more people..')
 ```
 
 ```{python}
 inputs0 = m_planck_for_tod[0].copy()
 #get_inputs(m_sub[:fact_sub], myfwhm[:fact_sub])#qubic_acquisition.allfwhm[:fact_sub])
 inputs1 = m_planck_for_tod[1].copy()#get_inputs(m_sub[fact_sub:2*fact_sub], myfwhm[fact_sub:2*fact_sub])#qubic_acquisition.allfwhm[fact_sub:2*fact_sub])
-inputs0[seenpix] = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub])[seenpix]
-inputs1[seenpix] = get_inputs(m_sub[fact_sub:2*fact_sub], qubic_acquisition.allfwhm[fact_sub:2*fact_sub])[seenpix]
 
+if user == 'Pierre' or user == 'Mathias':
+    inputs0[seenpix] = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub]*0)[seenpix]
+    inputs1[seenpix] = get_inputs(m_sub[fact_sub:2*fact_sub], qubic_acquisition.allfwhm[fact_sub:2*fact_sub]*0)[seenpix]
+elif user == 'old':
+    inputs0[seenpix] = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub]*0)[seenpix]
+    inputs1[seenpix] = get_inputs(m_sub[fact_sub:2*fact_sub], qubic_acquisition.allfwhm[fact_sub:2*fact_sub]*0)[seenpix]
+else:
+    raise TypeError('We would like to have more people..')
 inputs = np.array([inputs0, inputs1])
 ```
 
@@ -331,7 +361,7 @@ inputs = np.array([inputs0, inputs1])
 ```
 
 ```{python}
-res=15
+res=25
 istk=0
 minr=10
 

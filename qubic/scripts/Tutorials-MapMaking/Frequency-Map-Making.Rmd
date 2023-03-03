@@ -1,0 +1,404 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+from __future__ import division
+from pyoperators import pcg
+from pysimulators import profile
+
+# QUBIC packages
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from qubic.data import PATH
+from qubic.io import read_map
+from qubic import QubicSkySim as qss
+import sys
+sys.path.append('/Users/mregnier/Desktop/PhD Regnier/mypackages')
+
+
+import Acquisition as Acq
+
+# Display packages
+import healpy as hp
+import matplotlib.pyplot as plt
+
+# FG-Buster packages
+import component_model as c
+import mixing_matrix as mm
+
+# General packages
+import numpy as np
+import pysm3
+import warnings
+from qubic import QubicSkySim as qss
+import pysm3.units as u
+from importlib import reload
+from pysm3 import utils
+import mypcg
+
+from qubic import SpectroImLib as sp
+from importlib import reload
+import gc
+import copy
+from pyoperators import *
+
+
+# PyOperators packages
+from pyoperators import (
+    BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
+    CompositionOperator, DiagonalOperator, I, IdentityOperator,
+    MPIDistributionIdentityOperator, MPI, proxy_group, ReshapeOperator,
+    rule_manager, pcg, Operator)
+
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+warnings.filterwarnings("ignore")
+# # %matplotlib inline
+
+## Now QUBIC and Planck acquisitions used for reconstruction
+
+def integration(nu_min, nu_max, Nintegr, sky_config, d, fwhm_subbands = None):
+    print(f'Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps')
+    obj = Acq.QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
+    if Nintegr == 1:
+        allnus = np.array([np.mean([nu_min, nu_max])])
+    else:
+        allnus = np.linspace(nu_min, nu_max, Nintegr)
+    m = obj.get_PySM_maps(sky_config, nus=allnus)
+    
+    if fwhm_subbands is not None:
+        for i in range(Nintegr):
+            C = HealpixConvolutionGaussianOperator(fwhm=fwhm_subbands[i])
+            m[i] = C(m[i])
+    
+    return np.array([np.mean(m, axis=0)])
+
+
+# # # %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
+```{python}
+reload(Acq)
+nside = 256
+relative_bandwidth = 0.25
+band = 220
+band_planck = 217
+seed = 42
+noiseless = False
+effective_duration = 3e10
+rwplanck = 1.
+tol = 1e-40
+noise_planck_level = 0.00000000001
+threshold = 0.
+
+
+npointings = 600
+Nf_TOD = 4
+Nf_recon = 2
+fact_sub = 2
+
+reload(Acq)
+
+# Repository for dictionary
+global_dir = Qubic_DataDir()
+print(global_dir)
+dictfilename = global_dir + 'dicts/pipeline_demo.dict'
+
+# Read dictionary chosen
+d_TOD = qubic.qubicdict.qubicDict()
+d_TOD.read_from_file(dictfilename)
+
+d_TOD['nf_recon'] = Nf_TOD
+d_TOD['nf_sub'] = Nf_TOD
+d_TOD['nside'] = nside
+npix=12*d_TOD['nside']**2
+d_TOD['RA_center'] = 0
+d_TOD['DEC_center'] = -57
+center = qubic.equ2gal(d_TOD['RA_center'], d_TOD['DEC_center'])
+d_TOD['effective_duration'] = effective_duration
+d_TOD['npointings'] = npointings
+d_TOD['tol'] = 5e-4
+d_TOD['filter_nu'] = band * 1e9
+d_TOD['photon_noise'] = False#not noiseless
+d_TOD['noiseless'] = noiseless
+d_TOD['config'] = 'FI'
+d_TOD['MultiBand'] = True
+d_TOD['planck'] = True
+d_TOD['dtheta'] = 15
+
+print('*************** Noise **************')
+print('Noisless:      {}'.format(d_TOD['noiseless']))
+print('Photon Noise:  {}'.format(d_TOD['photon_noise']))
+print('************************************')
+
+#sky_config = {'cmb':3}
+sky_config = {'cmb':3, 'dust':'d0'}
+
+reload(Acq)
+qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_TOD, Nrec=Nf_TOD)
+cov = qubic_acquisition.get_coverage()
+covnorm = cov/cov.max()
+threshold = 0.1
+#seenpix = generate_circular_mask(256, 10, center[0], center[1])
+seenpix = covnorm > threshold
+notseenpix = covnorm < threshold
+
+m_sub = qubic_acquisition.get_PySM_maps(sky_config, qubic_acquisition.allnus)
+print(m_sub.shape)
+```
+
+# QUBIC TOD
+
+```{python}
+# Create Nsub maps
+m_sub = qubic_acquisition.get_PySM_maps(sky_config, qubic_acquisition.allnus)
+#qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_recon * fact_sub, Nrec=Nf_recon)
+#myfwhm = qubic_acquisition.final_fwhm.repeat(fact_sub)
+qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_TOD, Nrec=Nf_TOD)
+
+# Create operator
+H_TOD = qubic_acquisition.get_operator(convolution=True, myfwhm=None, fixed_data=None)
+n_qubic = qubic_acquisition.get_noise()
+
+# Create TOD
+TOD_QUBIC = H_TOD(m_sub).ravel() + n_qubic.ravel()
+```
+
+# Planck TOD
+
+```{python}
+planck_acquisition = Acq.PlanckAcquisition(band_planck, qubic_acquisition.scene)
+
+d_formaps = copy.deepcopy(d_TOD)
+d_formaps['nf_recon'] = Nf_recon
+d_formaps['nf_sub'] = Nf_recon * fact_sub
+
+planck_obs = integration(band_planck-35, band_planck+35, qubic_acquisition.Nsub, sky_config, d_formaps, fwhm_subbands=None) # Planck map
+n_planck = planck_acquisition.get_noise()  # Planck noise
+
+m_planck_for_tod = np.zeros((Nf_recon, 12*nside**2, 3))
+m_planck_all = np.zeros((Nf_recon * fact_sub, 12*nside**2, 3))
+
+# Convolving Planck map to QUBIC resolutions
+for i in range(Nf_recon):
+    
+    target = np.mean(qubic_acquisition.allfwhm[i*fact_sub:(i+1)*fact_sub])                   # Target FWHM
+    print(target)
+    C = HealpixConvolutionGaussianOperator(fwhm=target)                                     # Operator
+    m_planck_for_tod[i] = C(planck_obs[0] + (n_planck.copy() * noise_planck_level))         # Convolution
+
+for i in range(Nf_recon*fact_sub):
+    
+    target = qubic_acquisition.allfwhm[i]                   # Target FWHM
+    print(target)
+    C = HealpixConvolutionGaussianOperator(fwhm=target)                                     # Operator
+    m_planck_all[i] = C(planck_obs[0] + (n_planck.copy() * noise_planck_level))         # Convolution
+    
+plt.figure(figsize=(15, 5))
+stk = ['I', 'Q', 'U']
+j=0
+for i in range(Nf_recon):
+    for k in range(3):
+        if k == 0:
+            r = 200
+        else:
+            r = 12
+        hp.mollview(m_planck_for_tod[i, :, k], cmap='jet', sub=(Nf_recon, 3, j+1), min=-r, max=r, title=f'{stk[k]} - FWHM = {np.mean(qubic_acquisition.allfwhm[i*fact_sub:(i+1)*fact_sub]):.4f} rad')
+        j+=1
+
+plt.show()
+
+R = ReshapeOperator(m_planck_for_tod.shape, (m_planck_for_tod.shape[0]*m_planck_for_tod.shape[1]*m_planck_for_tod.shape[2]))
+TOD_PLANCK = R(m_planck_for_tod)
+```
+
+# Final TOD
+
+```{python}
+tod = np.r_[TOD_QUBIC, TOD_PLANCK]
+
+plt.figure(figsize=(15, 10))
+plt.subplot(2, 1, 1)
+plt.plot(TOD_QUBIC/TOD_QUBIC.max())
+
+plt.subplot(2, 1, 2)
+plt.plot(TOD_PLANCK/TOD_PLANCK.max())
+
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+d_formaps = copy.deepcopy(d_TOD)
+d_formaps['nf_recon'] = Nf_recon
+d_formaps['nf_sub'] = Nf_recon * fact_sub
+
+# QUBIC acqusition
+qubic_acquisition = Acq.QubicIntegrated(d_formaps, Nsub=Nf_recon * fact_sub, Nrec=Nf_recon)
+
+# Joint acquisition
+qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
+R = ReshapeOperator((1, 786432, 3), (786432, 3))
+
+user = 'Pierre'
+
+if user == 'Pierre':
+    H = qubicplanck_acquisition.get_operator(convolution=False, fixed_data=None)
+    invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=None, seenpix=None, mask=None)
+    
+    ### Solve PCG
+    U = (
+        ReshapeOperator((Nf_recon * sum(seenpix) * 3), (Nf_recon, sum(seenpix), 3)) *
+        PackOperator(np.broadcast_to(seenpix[None, :, None], (Nf_recon, seenpix.size, 3)).copy())
+    ).T
+
+    with rule_manager(none=True):
+        if Nf_recon == 1:
+            A = U.T * R.T * H.T * invN * H * R * U
+            x_planck = m_planck_for_tod * (1 - seenpix[None, :, None])
+            b = U.T ( R.T * H.T * invN * (tod - H(R(x_planck))))
+        else:
+            A = U.T * H.T * invN * H * U
+            x_planck = m_planck_for_tod * (1 - seenpix[None, :, None])
+            b = U.T (  H.T * invN * (tod - H(x_planck)))
+    
+    M = Acq.get_preconditioner(np.ones(12*nside**2))
+    
+elif user == 'Mathias':
+    fixed_data = m_planck_all.copy()
+    fixed_data[:, ~seenpix, :] = 0
+    H = qubicplanck_acquisition.get_operator(convolution=False, fixed_data=fixed_data)
+    invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=None, seenpix=None, mask=None)
+else:
+    raise TypeError('We would like to have more people..')
+```
+
+```{python}
+if user == 'Pierre' or user == 'Mathias':
+    m_ini = m_planck_for_tod.copy()
+    solution_qubic_planck = mypcg.pcg(A, b, x0=m_ini[:, seenpix], M=M, tol=tol, disp=True, maxiter=50)
+else:
+    raise TypeError('We would like to have more people..')
+```
+
+```{python}
+def get_inputs(m, fwhm):
+    
+    mean_m = np.zeros((m.shape[1], m.shape[2]))
+    for i in range(m.shape[0]):
+        print(fwhm[i])
+        C = HealpixConvolutionGaussianOperator(fwhm=fwhm[i])
+        mean_m += C(m[i])/m.shape[0]
+    return mean_m
+```
+
+```{python}
+mysolution = m_planck_for_tod.copy()
+mysolution[:, seenpix] = solution_qubic_planck['x']['x'].copy()
+```
+
+```{python}
+inputs0 = m_planck_for_tod[0].copy()
+#get_inputs(m_sub[:fact_sub], myfwhm[:fact_sub])#qubic_acquisition.allfwhm[:fact_sub])
+inputs1 = m_planck_for_tod[1].copy()#get_inputs(m_sub[fact_sub:2*fact_sub], myfwhm[fact_sub:2*fact_sub])#qubic_acquisition.allfwhm[fact_sub:2*fact_sub])
+inputs0[seenpix] = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub])[seenpix]
+inputs1[seenpix] = get_inputs(m_sub[fact_sub:2*fact_sub], qubic_acquisition.allfwhm[fact_sub:2*fact_sub])[seenpix]
+
+inputs = np.array([inputs0, inputs1])
+```
+
+```{python}
+
+```
+
+```{python}
+res=15
+istk=0
+minr=10
+
+
+for i in range(3):
+    if i == 0:
+        r = 10
+        v = 300
+    else:
+        r = 1
+        v = 8
+    plt.figure(figsize=(15, 5))
+    hp.gnomview(mysolution[0, :, i], cmap='jet', rot=center, reso=res, min=-v, max=v, sub=(1, 3, 1), title='Output')
+    hp.gnomview(inputs[0, :, i], cmap='jet', rot=center, reso=res, min=-v, max=v, sub=(1, 3, 2), title='Input')
+
+    hp.gnomview(mysolution[0, :, i]-inputs0[:, i], cmap='jet', rot=center, reso=res, title='Residual - Input',
+                            min=-r, max=r, sub=(1, 3, 3))
+
+    plt.show()
+```
+
+```{python}
+import qubic.fibtools as ft
+covnorm = cov/np.max(cov)
+uvpix = np.array(hp.pix2vec(hp.npix2nside(len(cov)), np.arange(len(cov))))
+uvcenter = np.array(hp.pix2vec(hp.npix2nside(len(cov)), np.argmax(cov)))
+dcenter = np.degrees(np.arccos(np.dot(uvpix.T, uvcenter)))
+
+for i in range(3):
+    new_res0 = mysolution[0,:, i]-inputs[0, :, i]
+    #new_res1 = mysolution[1,:, i]-inputs[1, :, i]
+    x0,y0,sx0,sy0,_ = ft.profile(dcenter, new_res0, nbins=30, rng=[0,50], plot=False)
+    #x1,y1,sx1,sy1,_ = ft.profile(dcenter, new_res1, nbins=30, rng=[0,50], plot=False)
+
+    plt.figure(figsize=(15, 5))
+    plt.subplot(1, 2, 1)
+    plt.errorbar(x0, y0, yerr=sy0, fmt='o')
+    #plt.errorbar(x1, y1, yerr=sy1, fmt='o')
+    plt.axhline(0, color='black')
+    plt.xlabel('Radius [deg]')
+    plt.ylabel('Mean')
+    plt.subplot(1, 2, 2)
+    plt.plot(x0, sy0,'o-')
+    #plt.plot(x1, sy1,'o-')
+    plt.xlabel('Radius [deg]')
+    plt.ylabel('RMS Residuals')
+    plt.axhline(0, color='black')
+    plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

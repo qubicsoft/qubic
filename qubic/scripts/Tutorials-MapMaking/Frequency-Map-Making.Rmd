@@ -105,7 +105,7 @@ noise_planck_level = 0.00000000001
 threshold = 0.
 
 
-npointings = 600
+npointings = 2000
 Nf_TOD = 4
 Nf_recon = 2
 fact_sub = 2
@@ -151,7 +151,7 @@ reload(Acq)
 qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_TOD, Nrec=Nf_TOD)
 cov = qubic_acquisition.get_coverage()
 covnorm = cov/cov.max()
-threshold = 0.1
+threshold = 0.4
 #seenpix = generate_circular_mask(256, 10, center[0], center[1])
 seenpix = covnorm > threshold
 notseenpix = covnorm < threshold
@@ -256,7 +256,7 @@ qubic_acquisition = Acq.QubicIntegrated(d_formaps, Nsub=Nf_recon * fact_sub, Nre
 qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
 R = ReshapeOperator((1, 786432, 3), (786432, 3))
 
-user = 'Pierre'
+user = 'Mathias'
 
 if user == 'Pierre':
     H = qubicplanck_acquisition.get_operator(convolution=False, fixed_data=None)
@@ -282,9 +282,12 @@ if user == 'Pierre':
     
 elif user == 'Mathias':
     fixed_data = m_planck_all.copy()
-    fixed_data[:, ~seenpix, :] = 0
+    fixed_data[:, seenpix, :] = 0
     H = qubicplanck_acquisition.get_operator(convolution=False, fixed_data=fixed_data)
     invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=None, seenpix=None, mask=None)
+    
+    A = H.T * invN * H
+    b = H.T * invN * tod
 else:
     raise TypeError('We would like to have more people..')
 ```
@@ -292,7 +295,7 @@ else:
 ```{python}
 if user == 'Pierre' or user == 'Mathias':
     m_ini = m_planck_for_tod.copy()
-    solution_qubic_planck = mypcg.pcg(A, b, x0=m_ini[:, seenpix], M=M, tol=tol, disp=True, maxiter=50)
+    solution_qubic_planck = mypcg.pcg(A, b, x0=m_ini[:, seenpix], M=M, tol=tol, disp=True, maxiter=100)
 else:
     raise TypeError('We would like to have more people..')
 ```
@@ -359,20 +362,20 @@ dcenter = np.degrees(np.arccos(np.dot(uvpix.T, uvcenter)))
 
 for i in range(3):
     new_res0 = mysolution[0,:, i]-inputs[0, :, i]
-    #new_res1 = mysolution[1,:, i]-inputs[1, :, i]
+    new_res1 = mysolution[1,:, i]-inputs[1, :, i]
     x0,y0,sx0,sy0,_ = ft.profile(dcenter, new_res0, nbins=30, rng=[0,50], plot=False)
-    #x1,y1,sx1,sy1,_ = ft.profile(dcenter, new_res1, nbins=30, rng=[0,50], plot=False)
+    x1,y1,sx1,sy1,_ = ft.profile(dcenter, new_res1, nbins=30, rng=[0,50], plot=False)
 
     plt.figure(figsize=(15, 5))
     plt.subplot(1, 2, 1)
     plt.errorbar(x0, y0, yerr=sy0, fmt='o')
-    #plt.errorbar(x1, y1, yerr=sy1, fmt='o')
+    plt.errorbar(x1, y1, yerr=sy1, fmt='o')
     plt.axhline(0, color='black')
     plt.xlabel('Radius [deg]')
     plt.ylabel('Mean')
     plt.subplot(1, 2, 2)
     plt.plot(x0, sy0,'o-')
-    #plt.plot(x1, sy1,'o-')
+    plt.plot(x1, sy1,'o-')
     plt.xlabel('Radius [deg]')
     plt.ylabel('RMS Residuals')
     plt.axhline(0, color='black')

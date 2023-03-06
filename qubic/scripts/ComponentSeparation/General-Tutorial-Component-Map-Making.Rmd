@@ -1,0 +1,191 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Tutorial for Component Map-Making (Written by Mathias Regnier)
+
+
+## Frequency point of view
+
+
+In this notebook, we will try to introduce some aspects of component map-making. In general, CMB experiments solve their inverse problems to reconstruct N frequency maps, then apply a component separation method to produce a final cosmological analysis. Here we will join the map-making and component separation steps.
+
+Our data can be described by : 
+
+$$\vec{d} = H \cdot \vec{s} + \vec{n}$$
+
+where $H$ is the pointing matrix, $\vec{s}$ is the input sky and $\vec{n}$ a noise vector. The pointing matrix caracterising the full instrument and contains all the specificities. 
+
+
+## Component point of view
+
+
+Now, we would like to think not about frequency maps, but component maps directly. A sky with mixed components can be written by :
+
+$$\vec{s} = A \cdot \vec{c}$$
+
+where A is the mixing matrix and $\vec{c}$ is the components. By replacing this equation in the first one, we have :
+
+$$\vec{d} = H \cdot A \cdot \vec{c} + \vec{n}$$
+
+
+## QUBIC Operator
+
+
+The QUBIC operator was build to simulate the way that the instrument is taking data. You can see the code in the QUBIC soft in the `acquisiton.py` at the line 341. By doing that, you can write :
+
+$$\vec{d} = H^{Q} (\vec{x})$$
+
+where $\vec{d}$ is a TOD, $H^{Q}$ is the QUBIC operator and $\vec{x}$ a map in pixel space with shape (Npix, 3). 
+
+
+## Python code
+
+```{python}
+import qubic
+import sys
+sys.path.append('/Users/mregnier/Desktop/PhD Regnier/mypackages')
+import Acquisition as acq
+import component_model as c
+import numpy as np
+
+def get_dictionary(nsub, nside, pointing, band):
+    dictfilename = 'dicts/pipeline_demo.dict'
+    
+    # Read dictionary chosen
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(dictfilename)
+    d['nf_recon'] = nsub
+    d['nf_sub'] = nsub
+    d['nside'] = nside
+    d['RA_center'] = 0
+    d['DEC_center'] = -57
+    center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+    d['effective_duration'] = 3
+    d['npointings'] = pointing
+    d['filter_nu'] = int(band*1e9)
+    d['photon_noise'] = False
+    d['config'] = 'FI'
+    d['MultiBand'] = True
+    
+    return d
+
+Nsub=2
+nside = 64
+pointing = 999
+
+d150 = get_dictionary(Nsub, nside, pointing, 150)
+```
+
+```{python}
+comp = [c.CMB(), c.Dust(nu0=150, beta_d=1.54, temp=20)]
+
+H = acq.QubicIntegratedComponentsMapMaking(d150, Nsub=Nsub, comp=comp).get_operator(np.array([]), convolution=False)
+print('*********************************************')
+print(f'\nShapein = {H.shapein}, Shapeout = {H.shapeout}\n')
+print('*********************************************')
+H
+```
+
+You should see that this H operator is taking as input maps with shape (Ncomp, Npix, 3) with Ncomp your number of components and Npix the number of pixels of your map. The output is your TOD with shape (Ndets*Nsamples). Now the model is defined based on component maps instead of frequency maps. 
+
+If you look inside the operator, you should see few lines with `DenseOperator`. This line define the mixing matrix  which tells you how your components are mixing at a given frequency. Those numbers are calculating thanks to FG-Buster (PUT LINK) packages which provides foreground models.
+
+In the first lines, you should see a line with `DiagonalOperator` with numbers close to 1, those are the gain detector which are set to be very close to 1 at the beginning. During the convergence that we will see later, we will fit those numbers to marginalized over foregrounds and gain detectors.
+
+$$H(\vec{s}) \longrightarrow H(\vec{c}, \vec{\beta}, \vec{g})$$
+
+As expressed above, the new QUBIC operator is not longer depending of frequency maps but it depends on the components, the spectral indices and the detectors gain which will be a variable to marginalized over them.
+
+
+## Alternate PCG
+
+
+For using this method, we used `PyOperators` written by Pierre Chanial (PUT LINK). In this package is define an iterative algorithm called Preconditionning Conjugate Gradient (PCG) which solved linear equation $A x = b$ iteratively. 
+
++ Choose an initial guess $x_0$
++ Compute first residuals $r_0 = b - A x_0$
++ Compute the first direction $d_0 = M^{-1} r_0$
++ For each k-th step :
+    + Compute step size $\alpha_i = \frac{r_i^T M^{-1} r_i}{d_i^T A d_i}$
+    + Compute new maps $x_{i+1} = x_i + \alpha_i d_i$
+    + Compute new residuals $r_{i+1} = r_i - \alpha_i A d_i$
+    + Compute the next direction $d_{i+1} = M^{-1} r_{i+1}$
+    
+That algorithm is working by minimizing the residuals. For each iterations, it will propose a new solution and compute from that the direction in parameter space where the residuals are smaller than the previous step.
+
+If we go back to our problem, the main equation to solve is $A x = b$ where $x$ is the components. By defining $A = H^T \cdot N^{-1} \cdot H$ and $b = H^T \cdot N^{-1} \cdot \vec{d}$, we can solve the inverse problem.
+
+The PCG is considering constant $H$ (so constant $A$ and $b$) during the convergence so we need to make an alternate PCG by apply the previous algorithm on few steps (no less than 10 due to the convergence step size) and update regularly the spectral indices and gain detectors. 
+
+Our fitting scheme becomes :
+
++ Define initial guess $\vec{c}_0$, $\vec{\beta}_0$ and $\vec{g}_0$
+
++ for each k-th step :
+    + Define operator $H(\vec{c}_k, \vec{\beta}_k, \vec{g}_k)$
+    + Compute $A$ and $b$ term
+    + Let PCG converge by applying previous algorithm
+    + Fit gain detectors $\vec{g}_{k+1}$
+    + Fit spectral indices $\vec{\beta}_{k+1}$
+    
+    + $\vec{c}_{k} \rightarrow \vec{c}_{k+1}$
+    + $\vec{g}_{k} \rightarrow \vec{g}_{k+1}$
+    + $\vec{\beta}_{k} \rightarrow \vec{\beta}_{k+1}$
+
+<!-- #region -->
+## How to fit our parameters ?
+
+### Gain detectors 
+
+$$\vec{d} = \vec{g} \cdot \vec{d}_{\text{intercalibrated}}$$
+
+
+
+$$\chi^2 = (\vec{d} - \vec{d}_{intercalibrated})^T \cdot (\vec{d} - \vec{d}_{intercalibrated})$$
+$$\chi^2 = (\vec{d} - g * H * c )^T \cdot (\vec{d} - g * H * c )$$
+$$\chi^2 = \vec{d}^T \vec{d} - g^T H^T c^T \vec{d} - \vec{d} g H c + g^T H^T c^T c H g$$
+<!-- #endregion -->
+
+We are looking for a solution which minimize the $\chi^2$ on the gain, so we pose $\frac{\partial \chi^2}{\partial g^T} = 0$, so :
+
+
+$$0 = -  + H^T c^T c H g$$
+$$H^T c^T \vec{d} = H^T c^T c H g$$
+$$ g = \frac{\vec{d}}{H c}$$
+
+The gain of the detector can be find by compute the ratio between the observation data and the simulated data assuming $g_i = 1$
+
+
+### Spectral indices
+
+The more important fit we want to perform is the fit of the spectral indices which describe how the components evolving with respect to the frequency. New, the QUBIC operator is depending of those parameters. In other words, we have a way to simulate data parametrized by spectral indices, and on the other side we have data to compare with. We can apply a $\chi^2$ minimizatioon like :
+
+$$\chi^2 = (\vec{d} - H(\beta) \cdot \vec{c}_i)^T \cdot (\vec{d} - H(\beta) \cdot \vec{c}_i)$$
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -94,20 +94,19 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 reload(Acq)
 nside = 256
 relative_bandwidth = 0.25
-band = 220
-band_planck = 217
+band = 150
+band_planck = 143
 seed = 42
 noiseless = False
-effective_duration = 3e10
+effective_duration = 3e0
 rwplanck = 1.
 tol = 1e-40
-noise_planck_level = 0.00000000001
-threshold = 0.
+noise_planck_level = 1e-10
 
 
-npointings = 2000
-Nf_TOD = 4
-Nf_recon = 2
+npointings = 1000
+Nf_TOD = 2
+Nf_recon = 1
 fact_sub = 2
 
 reload(Acq)
@@ -133,25 +132,27 @@ d_TOD['npointings'] = npointings
 d_TOD['tol'] = 5e-4
 d_TOD['filter_nu'] = band * 1e9
 d_TOD['photon_noise'] = False#not noiseless
-d_TOD['noiseless'] = noiseless
+d_TOD['noiseless'] = True#noiseless
 d_TOD['config'] = 'FI'
 d_TOD['MultiBand'] = True
 d_TOD['planck'] = True
 d_TOD['dtheta'] = 15
+#d_TOD['synthbeam_dtype'] = float
 
 print('*************** Noise **************')
 print('Noisless:      {}'.format(d_TOD['noiseless']))
 print('Photon Noise:  {}'.format(d_TOD['photon_noise']))
 print('************************************')
 
-#sky_config = {'cmb':3}
-sky_config = {'cmb':3, 'dust':'d0'}
+sky_config = {'cmb':42}
+#sky_config = {'dust':'d0'}
+#sky_config = {'cmb':3, 'dust':'d0'}
 
 reload(Acq)
 qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_TOD, Nrec=Nf_TOD)
 cov = qubic_acquisition.get_coverage()
 covnorm = cov/cov.max()
-threshold = 0.1
+threshold = 0
 #seenpix = generate_circular_mask(256, 10, center[0], center[1])
 seenpix = covnorm > threshold
 notseenpix = covnorm < threshold
@@ -165,16 +166,21 @@ print(m_sub.shape)
 ```{python}
 # Create Nsub maps
 m_sub = qubic_acquisition.get_PySM_maps(sky_config, qubic_acquisition.allnus)
+#for i in range(m_sub.shape[0]):
+#    m_sub[i] = m_sub[0]
 #qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_recon * fact_sub, Nrec=Nf_recon)
 #myfwhm = qubic_acquisition.final_fwhm.repeat(fact_sub)
 qubic_acquisition = Acq.QubicIntegrated(d_TOD, Nsub=Nf_TOD, Nrec=Nf_TOD)
 
 # Create operator
-H_TOD = qubic_acquisition.get_operator(convolution=False, myfwhm=None, fixed_data=None)
+H_TOD = qubic_acquisition.get_operator(convolution=True, myfwhm=None, fixed_data=None)
 n_qubic = qubic_acquisition.get_noise()
 
 # Create TOD
-TOD_QUBIC = H_TOD(m_sub).ravel() + n_qubic.ravel()
+if Nf_recon == 1 and fact_sub == 1:
+    TOD_QUBIC = H_TOD(m_sub[0]).ravel()# + n_qubic.ravel()
+else:
+    TOD_QUBIC = H_TOD(m_sub).ravel()# + n_qubic.ravel()
 ```
 
 # Planck TOD
@@ -195,17 +201,17 @@ m_planck_all = np.zeros((Nf_recon * fact_sub, 12*nside**2, 3))
 # Convolving Planck map to QUBIC resolutions
 for i in range(Nf_recon):
     
-    target = 0#np.mean(qubic_acquisition.allfwhm[i*fact_sub:(i+1)*fact_sub])                   # Target FWHM
+    target = np.mean(qubic_acquisition.allfwhm[i*fact_sub:(i+1)*fact_sub])                   # Target FWHM
     print(target)
     C = HealpixConvolutionGaussianOperator(fwhm=target)                                     # Operator
-    m_planck_for_tod[i] = C(planck_obs[0] + (n_planck.copy() * noise_planck_level))         # Convolution
+    m_planck_for_tod[i] = C(m_sub[i])#planck_obs[0]# + (n_planck.copy() * noise_planck_level)         # Convolution
 
 for i in range(Nf_recon*fact_sub):
     
-    target = 0#qubic_acquisition.allfwhm[i]                   # Target FWHM
+    target = qubic_acquisition.allfwhm[i]                   # Target FWHM
     print(target)
     C = HealpixConvolutionGaussianOperator(fwhm=target)                                     # Operator
-    m_planck_all[i] = C(planck_obs[0] + (n_planck.copy() * noise_planck_level))         # Convolution
+    m_planck_all[i] = C(m_sub[i])#planck_obs[0]# + (n_planck.copy() * noise_planck_level)         # Convolution
     
 plt.figure(figsize=(15, 5))
 stk = ['I', 'Q', 'U']
@@ -256,9 +262,22 @@ qubic_acquisition = Acq.QubicIntegrated(d_formaps, Nsub=Nf_recon * fact_sub, Nre
 qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
 R = ReshapeOperator((1, 786432, 3), (786432, 3))
 
-user = 'old'
+user = 'full'
+M = Acq.get_preconditioner(np.ones(12*nside**2))
+if user == 'full':
+    
+    H = qubicplanck_acquisition.get_operator(convolution=False, fixed_data=None)
+    invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=None, seenpix=None, mask=None)
 
-if user == 'Pierre':
+    with rule_manager(none=True):
+        if Nf_recon == 1:
+            A = R.T * (H.T * invN * H) * R
+            b = R.T * (H.T * invN * tod)
+        else:
+            A = (H.T * invN * H)
+            b = (H.T * invN * tod)
+        
+elif user == 'Pierre':
     H = qubicplanck_acquisition.get_operator(convolution=False, fixed_data=None)
     invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=None, seenpix=None, mask=None)
     
@@ -278,7 +297,7 @@ if user == 'Pierre':
             x_planck = m_planck_for_tod * (1 - seenpix[None, :, None])
             b = U.T (  H.T * invN * (tod - H(x_planck)))
     
-    M = Acq.get_preconditioner(np.ones(12*nside**2))
+    
     
 elif user == 'Mathias':
     fixed_data = m_planck_all.copy()
@@ -299,8 +318,8 @@ elif user == 'old':
     A = H.T * invN * H
     b = H.T * invN * tod
     
-    for i in range(1, Nf_recon+1):
-        invN.operands[i].operands[1] /= DiagonalOperator(np.array([maskinit, maskinit, maskinit]).T)
+    #for i in range(1, Nf_recon+1):
+    #    invN.operands[i].operands[1] /= DiagonalOperator(np.array([maskinit, maskinit, maskinit]).T)
 else:
     raise TypeError('We would like to have more people..')
 ```
@@ -312,9 +331,11 @@ invN
 ```{python}
 if user == 'Pierre' or user == 'Mathias':
     m_ini = m_planck_for_tod.copy()
-    solution_qubic_planck = mypcg.pcg(A, b, x0=m_ini[:, seenpix], M=M, tol=tol, disp=True, maxiter=100)
+    solution_qubic_planck = mypcg.pcg(A, b, x0=m_planck_for_tod[0, seenpix], M=M, tol=tol, disp=True, maxiter=50)
+elif user == 'full':
+    solution_qubic_planck = mypcg.pcg(A, b, x0=None, M=M, tol=tol, disp=True, maxiter=200)
 elif user == 'old':
-    solution_qubic_planck = mypcg.pcg(A, b, x0=m_ini, M=M, tol=tol, disp=True, maxiter=40)
+    solution_qubic_planck = mypcg.pcg(A, b, x0=m_planck_for_tod[0], M=M, tol=tol, disp=True, maxiter=50)
 else:
     raise TypeError('We would like to have more people..')
 ```
@@ -334,30 +355,40 @@ def get_inputs(m, fwhm):
 mysolution = m_planck_for_tod.copy()
 if user == 'Pierre' or user == 'Mathias':
     mysolution[:, seenpix] = solution_qubic_planck['x']['x'].copy()
-elif user == 'old':
+elif user == 'old' or user == 'full':
     mysolution = solution_qubic_planck['x']['x'].copy()
 else:
     raise TypeError('We would like to have more people..')
 ```
 
 ```{python}
-inputs0 = m_planck_for_tod[0].copy()
-#get_inputs(m_sub[:fact_sub], myfwhm[:fact_sub])#qubic_acquisition.allfwhm[:fact_sub])
-inputs1 = m_planck_for_tod[1].copy()#get_inputs(m_sub[fact_sub:2*fact_sub], myfwhm[fact_sub:2*fact_sub])#qubic_acquisition.allfwhm[fact_sub:2*fact_sub])
 
-if user == 'Pierre' or user == 'Mathias':
-    inputs0[seenpix] = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub]*0)[seenpix]
-    inputs1[seenpix] = get_inputs(m_sub[fact_sub:2*fact_sub], qubic_acquisition.allfwhm[fact_sub:2*fact_sub]*0)[seenpix]
-elif user == 'old':
-    inputs0[seenpix] = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub]*0)[seenpix]
-    inputs1[seenpix] = get_inputs(m_sub[fact_sub:2*fact_sub], qubic_acquisition.allfwhm[fact_sub:2*fact_sub]*0)[seenpix]
-else:
-    raise TypeError('We would like to have more people..')
-inputs = np.array([inputs0, inputs1])
 ```
 
 ```{python}
+inputs0 = m_planck_for_tod[0].copy()
 
+if user == 'Pierre' or user == 'Mathias':
+    inputs0[seenpix] = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub])[seenpix]
+elif user == 'old':
+    inputs0[seenpix] = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub])[seenpix]
+elif user == 'full':
+    inputs0 = get_inputs(m_sub[:fact_sub], qubic_acquisition.allfwhm[:fact_sub])
+else:
+    raise TypeError('We would like to have more people..')
+inputs = np.array([inputs0])
+```
+
+```{python}
+threshold = 0
+#seenpix = generate_circular_mask(256, 10, center[0], center[1])
+#seenpix = covnorm > threshold
+mysolution[:, ~seenpix] = m_planck_for_tod[0, ~seenpix].copy()
+inputs[:, ~seenpix] = m_planck_for_tod[0, ~seenpix].copy()
+```
+
+```{python}
+inputs.shape
 ```
 
 ```{python}
@@ -368,18 +399,18 @@ minr=10
 
 for i in range(3):
     if i == 0:
-        r = 10
+        r = 5e-2
         v = 300
     else:
-        r = 1
+        r = 5e-2
         v = 8
-    plt.figure(figsize=(15, 5))
-    hp.gnomview(mysolution[0, :, i], cmap='jet', rot=center, reso=res, min=-v, max=v, sub=(1, 3, 1), title='Output')
-    hp.gnomview(inputs[0, :, i], cmap='jet', rot=center, reso=res, min=-v, max=v, sub=(1, 3, 2), title='Input')
+    plt.figure(figsize=(15, 10))
+    hp.gnomview(mysolution[0, :, i], cmap='jet', rot=center, reso=res, min=-v, max=v, sub=(2, 3, 1), title='Output')
+    hp.gnomview(inputs[0, :, i], cmap='jet', rot=center, reso=res, min=-v, max=v, sub=(2, 3, 2), title='Input')
 
-    hp.gnomview(mysolution[0, :, i]-inputs0[:, i], cmap='jet', rot=center, reso=res, title='Residual - Input',
-                            min=-r, max=r, sub=(1, 3, 3))
-
+    hp.gnomview(mysolution[0, :, i]-inputs[0, :, i], cmap='jet', rot=center, reso=res, title='Residual - Input',
+                            min=-r, max=r, sub=(2, 3, 3))
+    
     plt.show()
 ```
 
@@ -391,21 +422,18 @@ uvcenter = np.array(hp.pix2vec(hp.npix2nside(len(cov)), np.argmax(cov)))
 dcenter = np.degrees(np.arccos(np.dot(uvpix.T, uvcenter)))
 
 for i in range(3):
-    new_res0 = mysolution[0,:, i]-inputs[0, :, i]
-    new_res1 = mysolution[1,:, i]-inputs[1, :, i]
-    x0,y0,sx0,sy0,_ = ft.profile(dcenter, new_res0, nbins=30, rng=[0,50], plot=False)
-    x1,y1,sx1,sy1,_ = ft.profile(dcenter, new_res1, nbins=30, rng=[0,50], plot=False)
+    new_res0 = mysolution[0, :, i]-inputs[0, :, i]
+    #new_res1 = mysolution[0,:, i]-m_dust[:, i]#inputs[0, :, i]
+    x0,y0,sx0,sy0,_ = ft.profile(dcenter, new_res0, nbins=20, rng=[0,55], plot=False)
 
     plt.figure(figsize=(15, 5))
     plt.subplot(1, 2, 1)
-    plt.errorbar(x0, y0, yerr=sy0, fmt='o')
-    plt.errorbar(x1, y1, yerr=sy1, fmt='o')
+    plt.errorbar(x0, y0, yerr=sy0, fmt='o', capsize=3)
     plt.axhline(0, color='black')
     plt.xlabel('Radius [deg]')
     plt.ylabel('Mean')
     plt.subplot(1, 2, 2)
     plt.plot(x0, sy0,'o-')
-    plt.plot(x1, sy1,'o-')
     plt.xlabel('Radius [deg]')
     plt.ylabel('RMS Residuals')
     plt.axhline(0, color='black')
@@ -418,6 +446,82 @@ for i in range(3):
 
 ```{python}
 
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+# MC
+
+```{python}
+nb_samples = 4
+allfwhm = np.linspace(0.004, 0.008, nb_samples)
+allnus = np.linspace(190, 205, nb_samples)
+
+dust = np.zeros((nb_samples, 12*nside**2, 3))
+dust_conv = np.zeros((nb_samples, 12*nside**2, 3))
+
+for i in range(nb_samples):
+    print(i)
+    C = HealpixConvolutionGaussianOperator(fwhm=allfwhm[i])
+    dust[i] = qubic_acquisition.get_PySM_maps(sky_config, nus=np.array([allnus[i]]))[0]
+    dust_conv[i] = C(qubic_acquisition.get_PySM_maps(sky_config, nus=np.array([allnus[i]]))[0])
+    
+mean_dust = np.mean(dust, axis=0)
+mean_dust_conv = np.mean(dust_conv, axis=0)
+```
+
+```{python}
+mydust = qubic_acquisition.get_PySM_maps(sky_config, nus=np.array([197.5]))[0]
+#C = HealpixConvolutionGaussianOperator(fwhm=0.0060)
+#mydust = mydust
+
+plt.figure(figsize=(15, 5))
+
+hp.mollview(mean_dust[:, 1]-mydust[:, 1], cmap='jet', min=-1, max=1, sub=(1, 3, 1))
+hp.mollview(mean_dust_conv[:, 1]-mydust[:, 1], cmap='jet', min=-0.1, max=0.1, sub=(1, 3, 2))
+#hp.mollview(mydust[:, 1], cmap='jet', min=-8, max=8, sub=(1, 3, 3))
+#hp.mollview(mydust[:, 1], cmap='jet', min=-8, max=8, sub=(1, 3, 3))
+
+
+plt.show()
 ```
 
 ```{python}

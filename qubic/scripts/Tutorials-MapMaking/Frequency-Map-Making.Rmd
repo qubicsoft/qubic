@@ -46,7 +46,7 @@ from qubic import QubicSkySim as qss
 import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
-import mypcg
+import myPCG
 
 from qubic import SpectroImLib as sp
 from importlib import reload

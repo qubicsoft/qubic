@@ -11,9 +11,9 @@ MANIFEST
 build
 dist
 htmlcov
-qubic/__init__.py
-qubic/_flib.so
-src/polarization.f90
+_flib*.so
+flib/polarization.f90
 .project
 .pydevproject
+.pytest_cache/
 *.egg-info/

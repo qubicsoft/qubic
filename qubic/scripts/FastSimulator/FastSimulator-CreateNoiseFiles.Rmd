@@ -283,7 +283,7 @@ for nfsub in all_nf:
     figure()
     myfitcovs = []
     for isub in range(nfsub):
-        sqn = np.int(np.sqrt(nfsub))
+        sqn = int(np.sqrt(nfsub))
         if (sqn**2) != nfsub:
             sqn += 1
         subplot(sqn,sqn,isub+1)

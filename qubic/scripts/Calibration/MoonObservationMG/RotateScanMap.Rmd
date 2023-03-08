@@ -293,7 +293,7 @@ plt.plot(racoord*24/360, decoord)
 plt.figure(figsize = (12,8))
 plt.subplot(111, projection = 'mollweide')
 plt.plot(np.radians(racoord-180), np.radians(decoord), label = r'($\alpha, \delta$) using qubic.get_sampling', alpha = 0.6, color = 'm')
-plt.plot(np.radians(np.float(d['RA_center'])), np.radians(np.float(d['DEC_center'])), color = 'r', marker = '*')
+plt.plot(np.radians(float(d['RA_center'])), np.radians(float(d['DEC_center'])), color = 'r', marker = '*')
 plt.legend()
 ```
 

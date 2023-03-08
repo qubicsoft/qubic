@@ -601,7 +601,7 @@ f = open('ASIC-150GHz.txt')
 li = [ ln.split() for ln in f ]
 f.close()
 tableau = np.array(li)
-Resp = np.array([np.float(tableau[0,_]) for _ in range(256)])
+Resp = np.array([float(tableau[0,_]) for _ in range(256)])
 Resp[Resp < 5.5e3] = np.nan
 maskresp=ft.image_asics(all1=Resp/np.nanmean(Resp))
 ```

@@ -161,30 +161,30 @@ def build_catalog(freqs = 'All', freqs_ex = 'All', excluded = True):
             catalog[f][new_name]['NAME']    = new_name
             
             # Position
-            catalog[f][new_name]['RA'  ]    = np.float(ra)
-            catalog[f][new_name]['DEC' ]    = np.float(dec)
-            catalog[f][new_name]['GLON']    = np.float(gLon)
-            catalog[f][new_name]['GLAT']    = np.float(gLat)
+            catalog[f][new_name]['RA'  ]    = float(ra)
+            catalog[f][new_name]['DEC' ]    = float(dec)
+            catalog[f][new_name]['GLON']    = float(gLon)
+            catalog[f][new_name]['GLAT']    = float(gLat)
             
             # Intensity flux
-            catalog[f][new_name]['DETFLUX'      ] = np.float(detFlux)
-            catalog[f][new_name]['DETFLUX_ERR'  ] = np.float(detFlux_err)            
-            catalog[f][new_name]['APERFLUX'     ] = np.float(aperFlux)
-            catalog[f][new_name]['APERFLUX_ERR' ] = np.float(aperFlux_err)            
-            catalog[f][new_name]['PSFFLUX'      ] = np.float(psfFlux)
-            catalog[f][new_name]['PSFFLUX_ERR'  ] = np.float(psfFlux_err)            
-            catalog[f][new_name]['GAUFLUX'      ] = np.float(gauFlux)
-            catalog[f][new_name]['GAUFLUX_ERR'  ] = np.float(gauFlux_err) 
+            catalog[f][new_name]['DETFLUX'      ] = float(detFlux)
+            catalog[f][new_name]['DETFLUX_ERR'  ] = float(detFlux_err)
+            catalog[f][new_name]['APERFLUX'     ] = float(aperFlux)
+            catalog[f][new_name]['APERFLUX_ERR' ] = float(aperFlux_err)
+            catalog[f][new_name]['PSFFLUX'      ] = float(psfFlux)
+            catalog[f][new_name]['PSFFLUX_ERR'  ] = float(psfFlux_err)
+            catalog[f][new_name]['GAUFLUX'      ] = float(gauFlux)
+            catalog[f][new_name]['GAUFLUX_ERR'  ] = float(gauFlux_err)
             
             # Polarized flux
-            catalog[f][new_name]['PFLUX'           ] = np.float(p)
-            catalog[f][new_name]['PFLUX_ERR'       ] = np.float(p_err)    
-            catalog[f][new_name]['ANGLE_P'         ] = np.float(angle_p)
-            catalog[f][new_name]['ANGLE_P_ERR'     ] = np.float(angle_p_err)    
-            catalog[f][new_name]['APER_P'          ] = np.float(aper_p)
-            catalog[f][new_name]['APER_P_ERR'      ] = np.float(aper_p_err)    
-            catalog[f][new_name]['APER_ANGLE_P'    ] = np.float(aper_angle_p)
-            catalog[f][new_name]['APER_ANGLE_P_ERR'] = np.float(aper_angle_p_err)    
+            catalog[f][new_name]['PFLUX'           ] = float(p)
+            catalog[f][new_name]['PFLUX_ERR'       ] = float(p_err)
+            catalog[f][new_name]['ANGLE_P'         ] = float(angle_p)
+            catalog[f][new_name]['ANGLE_P_ERR'     ] = float(angle_p_err)
+            catalog[f][new_name]['APER_P'          ] = float(aper_p)
+            catalog[f][new_name]['APER_P_ERR'      ] = float(aper_p_err)
+            catalog[f][new_name]['APER_ANGLE_P'    ] = float(aper_angle_p)
+            catalog[f][new_name]['APER_ANGLE_P_ERR'] = float(aper_angle_p_err)
             
             catalog[f][new_name]['ALTNAME'] = ''
         
@@ -238,30 +238,30 @@ def build_catalog(freqs = 'All', freqs_ex = 'All', excluded = True):
                 catalog[f][new_name]['NAME']    = new_name
 
                 # Position
-                catalog[f][new_name]['RA'  ]    = np.float(ra)
-                catalog[f][new_name]['DEC' ]    = np.float(dec)
-                catalog[f][new_name]['GLON']    = np.float(gLon)
-                catalog[f][new_name]['GLAT']    = np.float(gLat)
+                catalog[f][new_name]['RA'  ]    = float(ra)
+                catalog[f][new_name]['DEC' ]    = float(dec)
+                catalog[f][new_name]['GLON']    = float(gLon)
+                catalog[f][new_name]['GLAT']    = float(gLat)
 
                 # Intensity flux
-                catalog[f][new_name]['DETFLUX'      ] = np.float(detFlux)
-                catalog[f][new_name]['DETFLUX_ERR'  ] = np.float(detFlux_err)            
-                catalog[f][new_name]['APERFLUX'     ] = np.float(aperFlux)
-                catalog[f][new_name]['APERFLUX_ERR' ] = np.float(aperFlux_err)            
-                catalog[f][new_name]['PSFFLUX'      ] = np.float(psfFlux)
-                catalog[f][new_name]['PSFFLUX_ERR'  ] = np.float(psfFlux_err)            
-                catalog[f][new_name]['GAUFLUX'      ] = np.float(gauFlux)
-                catalog[f][new_name]['GAUFLUX_ERR'  ] = np.float(gauFlux_err) 
+                catalog[f][new_name]['DETFLUX'      ] = float(detFlux)
+                catalog[f][new_name]['DETFLUX_ERR'  ] = float(detFlux_err)
+                catalog[f][new_name]['APERFLUX'     ] = float(aperFlux)
+                catalog[f][new_name]['APERFLUX_ERR' ] = float(aperFlux_err)
+                catalog[f][new_name]['PSFFLUX'      ] = float(psfFlux)
+                catalog[f][new_name]['PSFFLUX_ERR'  ] = float(psfFlux_err)
+                catalog[f][new_name]['GAUFLUX'      ] = float(gauFlux)
+                catalog[f][new_name]['GAUFLUX_ERR'  ] = float(gauFlux_err)
 
                 # Polarized flux
-                catalog[f][new_name]['PFLUX'           ] = np.float(p)
-                catalog[f][new_name]['PFLUX_ERR'       ] = np.float(p_err)    
-                catalog[f][new_name]['ANGLE_P'         ] = np.float(angle_p)
-                catalog[f][new_name]['ANGLE_P_ERR'     ] = np.float(angle_p_err)    
-                catalog[f][new_name]['APER_P'          ] = np.float(aper_p)
-                catalog[f][new_name]['APER_P_ERR'      ] = np.float(aper_p_err)    
-                catalog[f][new_name]['APER_ANGLE_P'    ] = np.float(aper_angle_p)
-                catalog[f][new_name]['APER_ANGLE_P_ERR'] = np.float(aper_angle_p_err)    
+                catalog[f][new_name]['PFLUX'           ] = float(p)
+                catalog[f][new_name]['PFLUX_ERR'       ] = float(p_err)
+                catalog[f][new_name]['ANGLE_P'         ] = float(angle_p)
+                catalog[f][new_name]['ANGLE_P_ERR'     ] = float(angle_p_err)
+                catalog[f][new_name]['APER_P'          ] = float(aper_p)
+                catalog[f][new_name]['APER_P_ERR'      ] = float(aper_p_err)
+                catalog[f][new_name]['APER_ANGLE_P'    ] = float(aper_angle_p)
+                catalog[f][new_name]['APER_ANGLE_P_ERR'] = float(aper_angle_p_err)
 
                 catalog[f][new_name]['ALTNAME'] = ''
 
@@ -283,10 +283,10 @@ def build_name(name):
     '''
     import numpy as np
     
-    name_l = np.round(np.float(name[-12:-6]),1)
+    name_l = np.round(float(name[-12:-6]),1)
     str_l  = '%05.1f' % name_l
     sign_b = name[-6]
-    name_b = np.round(np.float(name[-5:]),1)
+    name_b = np.round(float(name[-5:]),1)
     str_b = '%04.1f' % name_b
     new_name = str_l.rjust(5,'0') + sign_b + str_b.rjust(4,'0')
     
@@ -313,12 +313,12 @@ def duplicate_source(name, global_namelist, threshold = 0.1):
     '''
     import numpy as np
     
-    name_l = np.float(name[0:5])
-    name_b = np.float(name[-5:])
+    name_l = float(name[0:5])
+    name_b = float(name[-5:])
     
     for item in global_namelist:
-        ex_l = np.float(item[0:5])
-        ex_b = np.float(item[-5:])
+        ex_l = float(item[0:5])
+        ex_b = float(item[-5:])
         
         if (np.abs(name_l - ex_l) <= threshold) and (np.abs(name_b - ex_b) <= threshold):
             # In this case we have the same source, return True and the name

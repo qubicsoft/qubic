@@ -93,7 +93,7 @@ def noise_profile_fitting(residuals, coverage, nfsub, config, nbins, dirsave=Non
     plt.figure(figsize=(16, 10))
     myfitcovs = []
     for isub in range(nfsub):
-        sqn = np.int(np.sqrt(nfsub))
+        sqn = int(np.sqrt(nfsub))
         if (sqn ** 2) != nfsub:
             sqn += 1
         plt.subplot(sqn, sqn, isub + 1)
@@ -215,7 +215,7 @@ for nfsub in all_nf:
 
     # C(theta) Measurement
     # See notebook called "2pt-Correlation Function" for an empirical explanation of alpha
-    alpha = np.float(sys.argv[2])
+    alpha = float(sys.argv[2])
     allresults, allcth, allclth, lll, clth = ctheta_measurement(residuals, coverage, myfitcovs,
                                                                 nfsub, config, alpha, dirsave=dirsave)
 
@@ -242,8 +242,8 @@ for nfsub in all_nf:
             'CovI': cI,
             'CovQ': cQ,
             'CovU': cU,
-            'alpha': np.float(sys.argv[2]),
-            'signoise': np.float(sys.argv[3]),
+            'alpha': float(sys.argv[2]),
+            'signoise': float(sys.argv[3]),
             'effective_variance_invcov': myfitcovs,
             'clnoise': clth_tosave}
     name = 'DataFastSimulator_' + config + '_nfsub_{}.pkl'.format(nfsub)

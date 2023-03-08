@@ -39,6 +39,23 @@ class QubicScene(SceneHealpixCMB):
             atmosphere.
 
         """
+
+        ######## check for required keys  #####
+        required_keys = ['nside',
+                         'kind',
+                         'absolute',
+                         'temperature',
+                         'summer',
+                         'TemperatureAtmosphere150',
+                         'TemperatureAtmosphere220',
+                         'EmissivityAtmosphere150',
+                         'EmissivityAtmosphere220']
+        for key in required_keys:
+            if key not in d.keys():
+                d[key] = None
+
+                
+        ### now start working ###
         nside=d['nside']
         kind=d['kind']
         absolute=d['absolute']

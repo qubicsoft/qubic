@@ -1,7 +1,7 @@
-##############################################################################
-#Authors: E. Manzan
-#Date: 2023-03-08 
-#Library dedicated at performing an overall analysis of the quality of the focal plane data
+# #############################################################################
+# Authors: E. Manzan. M.Regnier, B.Costanza
+# Date: 2023-03-08 
+# Library dedicated at performing an overall analysis of the quality of the focal plane data
 
 import qubic
 import qubicpack
@@ -18,26 +18,184 @@ from pylab import *
 import glob
 import pickle
 
+# Scikit-Learn packages
+import bottleneck as bn
+from sklearn.cluster import DBSCAN
+from sklearn.decomposition import PCA
+
 from matplotlib import rc
 rc('figure',figsize=(5,5))
 rc('font',size=16)
 
+####################################################### HOUSEKEEPING DIAGNOSTIC ########################################################################
+class HK_Diagnostic:
+    
+    def __init__(self, a, data_date):
+        '''
+        This Class performs a HOUSEKEEPING diagnostic. It takes in:
+        - a_list: a qubic.focalplane object. Either a single qubicfp or a list of qubicfp.
+        - data_date: str or array of str. Contains the name of the dataset(s)
+        WARNING: The list feature has to be implemented yet! Right now, pass a single qubicfp object!
+        
+        The methods perform the following type of diagnostic:
+        - quicklook
+        - ASICs synchro error display
+        - 1K temperatures plot
+        - 1K temperatures plot wo patological sensors
+        - 1K and 300mK monitor: just the STAGE and FRIDGE sensors.
+        The user can call each method individually or all of them through the analysis() method.
+        '''
+        
+        self.a = a
+        self.data_date = data_date
+        print()
+        print('#######################################')
+        print('Initialize HOUSEKEEPING diagnostic class for the dataset : \n {}'.format(self.data_date))
+
+    def plot_synch_error(self):
+        '''
+        This function plots the ASIC1 (red) and ASIC2 (blue) NETQUIC synchro error on a double-y axis plot. A png image is saved.
+        If NETQUIC synchro error == 0 : OK. If NETQUIC synchro error == 1 : There's a synchro error.
+        '''
+        print()
+        print('-----> Synchro error diagnostic')
+        #save and plot ASIC 1
+        self.synch_err1 = self.a.asic(1).hk['CONF_ASIC1']['NETQUIC synchro error']
+        self.tstamps1 = self.a.asic(1).hk['CONF_ASIC1']['ComputerDate']
+        self.tstamps1 -= self.tstamps1[0] #convert time into hours
+        self.tstamps1 /= (60*60)
+        figure(figsize=(15,15))
+        title(self.data_date+' : NETQUIC synchro error', y=1.005)
+        plot(self.tstamps1, self.synch_err1, color='r')
+        ylabel('NETQUIC ASIC 1', color='r')
+        xlabel('Time [hours]')
+        twinx()
+        #save and plot ASIC 2
+        self.synch_err2 = self.a.asic(2).hk['CONF_ASIC2']['NETQUIC synchro error']
+        self.tstamps2 = self.a.asic(2).hk['CONF_ASIC2']['ComputerDate']
+        self.tstamps2 -= self.tstamps2[0] #convert time into hours
+        self.tstamps2 /= (60*60)
+        plot(self.tstamps2, self.synch_err2, color='b')
+        ylabel('NETQUIC ASIC 2', color='b')
+        xlabel('Time [hours]')
+        savefig('./{}_NETQUIC_synchro.png'.format(self.data_date))
+        close()
+        
+        if np.max(self.synch_err1) == 1 or np.max(self.synch_err2) == 1:
+            print('WARNING: There is a synchro error! Please check further!')
+        else:
+            print('No synchro error detected!')
+        
+        return
+
+    def plot_1Ktemperature_wo_problematic_1KStageBack(self):
+        '''
+        This function returns a 1K temperature sensors plot without the 1K Stage Back sensor, which is problematic.  A png image is saved.
+        '''
+        print()
+        print('-----> 1K temperatures diagnostic')
+        #save sensor labels: don't save '1K stage back'
+        label = {}
+        label['AVS47_1_ch1'] = '1K stage'
+        label['AVS47_1_ch3'] = 'M1'
+        label['AVS47_1_ch4'] = '1K fridge CH'
+        label['AVS47_1_ch7'] = 'M2'
+        label['AVS47_2_ch0'] = 'PT2 S2 CH'
+        label['AVS47_2_ch2'] = 'Fridge plate MHS'
+        #label['AVS47_2_ch3'] = '1K stage back'
+        label['AVS47_2_ch4'] = '4K shield Cu braids'
+        #plot
+        self.a.plot_temperatures(None,label,'1K Temperatures wo patological 1K stage',12)
+        close()
+        return
+
+    
+    def plot_1K_and_300mK_monitor(self):
+        '''
+        This function returns a 2-subplot image with the 1K monitor on the left and the 300mK monitor on the right.
+        Each monitor shows a double-y axis with the temperature STAGE (blue) and FRIDGE (red).  A png image is saved.
+        '''
+        print()
+        print('-----> 1K and 300mK STAGE and FRIDGE diagnostic')
+        figure(figsize=(20,10))
+        suptitle(self.data_date+' : 1K and 300 mK monitors', y=1)
+        #plot 1K monitor
+        subplot(1,2,1)
+        title('1K monitor', y=0.95)
+        OneK_stage  = self.a.get_hk('AVS47_1_ch1')
+        OneK_fridge  = self.a.get_hk('AVS47_1_ch4')
+        time_hk = self.a.get_hk(data='RaspberryDate',hk='EXTERN_HK')
+        time_hk -= time_hk[0] #convert time into hours
+        time_hk /= (60*60)
+        plot(time_hk, OneK_stage, color='b')
+        ylabel('1K Stage [K]', color='b')
+        xlabel('Time [hours]')
+        twinx()
+        plot(time_hk, OneK_fridge, color='r')
+        ylabel('1K Fridge [K]', color='r')
+        #plot 300mK monitor
+        subplot(1,2,2)
+        title('300 mK monitor', y=0.95)
+        TES_stage  = self.a.get_hk('AVS47_1_CH2')
+        ThreeHmK_fridge  = self.a.get_hk('AVS47_1_CH6')
+        time_hk = self.a.get_hk(data='RaspberryDate',hk='EXTERN_HK')
+        time_hk -= time_hk[0] #convert time into hours
+        time_hk /= (60*60)
+        plot(time_hk, TES_stage, color='b')
+        ylabel('TES Stage [K]', color='b')
+        xlabel('Time [hours]')
+        twinx()
+        plot(time_hk, ThreeHmK_fridge, color='r')
+        ylabel('300 mK Fridge [K]', color='r')
+        
+        tight_layout()
+        savefig('./{}_1K_300mK_monitors.png'.format(self.data_date))
+        #savefig('./{}_1K_300mK_monitors.pdf'.format(self.data_date))
+        close()
+        return
+    
+    def analysis(self):
+        '''
+        Wrapper function that calls all the HK_Diagnostic methods to get all the necessary plots for the hk diagnostic
+        '''
+        #do a quicklook
+        self.a.quicklook()
+        close()
+
+        #plot ASICs synchro error
+        self.plot_synch_error()
+
+        #plot all the 1K temperature sensors
+        self.a.plot_1Ktemperatures()
+        close()
+
+        #plot 1K temperature sensors w/o the 1K Stage Back sensor, which is problematic
+        self.plot_1Ktemperature_wo_problematic_1KStageBack()
+
+        #plot 1K and 300mK monitors (stage and fridge)
+        self.plot_1K_and_300mK_monitor()
+
+
+####################################################### SCIENTIFIC DIAGNOSTIC ########################################################################
 class Diagnostic:
 
     def __init__(self, a_list, data_date, sat_thr=0.01, upper_satval = 4.19*1e6):
         '''
-        This Class takes in:
+        This Class performs a SCIENTIFIC diagnostic. It takes in:
         - a_list: a qubic.focalplane object. Either a single qubicfp or a list of qubicfp.
+        - data_date: str or array of str. Contains the name of the dataset(s)
         - sat_thr: float, fraction of time to be used as threshold for saturation. If the saturation time is > sat_thr : detector is saturated. Default is 0.01 (1%)
         - upper_satval: float, positive ADU value ccorresponding to saturation, Default is 4.19*1e6
         
         The methods perform the following type of diagnostic:
+        - basic hk plots (quicklook, temperature monitor, synch error)
         - focal plane display
         - timeline acquisition
         - saturation detection
         - flux jumps detection (TO BE IMPLEMENTED)
         - power spectral density 
         - coadded maps (TO BE IMPLEMENTED)
+        The user can call each method individually or all of them through the analysis() method.
         '''
         #initialize the qubicfp object
         self.a = a_list
@@ -181,10 +339,6 @@ class Diagnostic:
             estimate[i] = (np.sqrt(mean_level * samplefreq / 2))
         
         if do_plot:
-            #if self.colors doesn't exist, instantiate it and then do plot
-            if not isinstance(self.colors, np.ndarray):
-                #instantiate color array
-                self.tes_saturation_state(do_plot=False)
             #do plot
             self.plot_focal_plane(freq_f, np.array(spectrum_density), colors_to_use, plot_suptitle='{}: power spectrum'.format(data_date_full),
                              path_and_filename='./{}_powerspectrum'.format(data_date_full), the_yscale='log')
@@ -196,6 +350,12 @@ class Diagnostic:
         Wrapper to the -hf_noise_estimate- function, i.e. the power spectral density computation. 
         If there is more than one dataset, it calls the -hf_noise_estimate- for each dataset.
         '''
+        
+        #if self.colors doesn't exist, instantiate it and then do plot
+        if not isinstance(self.colors, np.ndarray):
+            #instantiate color array
+            self.tes_saturation_state(do_plot=False)
+        
         print('-----> Power spectrum computation ')
         if isinstance(self.data_date, str): #there's only one dataset
             self.noise_level, self.spectrum_density, self.frequency = self.hf_noise_estimate_and_spectrum(self.timeaxis, self.tod, self.data_date, self.colors, do_plot)
@@ -214,6 +374,32 @@ class Diagnostic:
             self.spectrum_density = np.array(spectrum_density)
             self.frequency = np.array(freq)
         return
+    
+    def discard_tods(self, ncomp, eps):
+        '''
+        Mathias's function to detect flux jumps
+        '''
+        pca = PCA(n_components=ncomp)
+        X_pca = pca.fit_transform(self.tod)
+        Z = DBSCAN(eps=eps).fit(X_pca)
+        return X_pca, Z
+
+    def plot_scatter_PCA(self, X, Z, figsize=(10, 8)):
+        '''
+        Mathias's function to plot flux jumps
+        '''
+        unique_labels = set(Z.labels_)
+        core_samples_mask = np.zeros_like(Z.labels_, dtype=bool)
+        core_samples_mask[Z.core_sample_indices_] = True
+
+        colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, len(unique_labels))]
+
+        plt.figure(figsize=figsize)
+        for k, col in zip(unique_labels, colors):
+            index = np.where(Z.labels_ == k)[0]
+            plt.scatter(X[index, 0], X[index, 1], s=20, c=col, label=f'{k}')
+        plt.legend()
+        close()
     
     
     def plot_focal_plane(self, x_data, tes_y_data, colors_plot, plot_suptitle=None, path_and_filename=None, the_xscale='linear', the_yscale='linear'):
@@ -287,6 +473,7 @@ class Diagnostic:
         if path_and_filename is not None:
             savefig(path_and_filename+'.png')
             savefig(path_and_filename+'.pdf')
+        close('all')
         return
     
     def plot_raw_focal_plane(self):
@@ -340,4 +527,4 @@ class Diagnostic:
 
         # Perform method2
         #self.method2()        
-############################################################################################################################
+

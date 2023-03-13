@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # #############################################################################
 # Authors: E. Manzan. M.Regnier, B.Costanza
 # Date: 2023-03-08 
@@ -17,11 +18,14 @@ import numpy as np
 from pylab import *
 import glob
 import pickle
+import os
 
 # Scikit-Learn packages
 import bottleneck as bn
 from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
+
+from scipy.signal import savgol_filter 
 
 from matplotlib import rc
 rc('figure',figsize=(5,5))
@@ -47,7 +51,8 @@ class HK_Diagnostic:
         '''
         
         self.a = a
-        self.data_date = data_date
+        self.data_date = data_date       
+        
         print()
         print('#######################################')
         print('Initialize HOUSEKEEPING diagnostic class for the dataset : \n {}'.format(self.data_date))
@@ -64,7 +69,7 @@ class HK_Diagnostic:
         self.tstamps1 = self.a.asic(1).hk['CONF_ASIC1']['ComputerDate']
         self.tstamps1 -= self.tstamps1[0] #convert time into hours
         self.tstamps1 /= (60*60)
-        figure(figsize=(15,15))
+        figure(figsize=(10,10))
         title(self.data_date+' : NETQUIC synchro error', y=1.005)
         plot(self.tstamps1, self.synch_err1, color='r')
         ylabel('NETQUIC ASIC 1', color='r')
@@ -176,23 +181,316 @@ class HK_Diagnostic:
         self.plot_1K_and_300mK_monitor()
 
 
-####################################################### SCIENTIFIC DIAGNOSTIC ########################################################################
+# ###################################################### SCIENTIFIC DIAGNOSTIC ########################################################################
+
+class FluxJumps:
+    def __init__(self, data_date_full, use_verbose = True, doplot = True):
+        '''
+        This Class performs only flux jumps (FJ) detection. It takes in:
+        - data_date: (str) the name of the dataset(s)
+        - use_verbose : Bool. If True: do all the flux jump intermediate plots (zoom on jumps, comparison btw raw tod and smoothed tod, etc.).
+        - doplot : Bool. If True: returns a png image with 3 subplots, showing: i. tod and haar filter; ii. the tod with the jumps in red (if jumps have been detected); iii. The haar filter with all the amplitude thresholds, the detected jumps in red, the start/end of the jump in green.
+        
+        The methods perform the following type of diagnostic:
+        - determine if there is at least on FJ using the raw tod and its Haar filter
+        - if there are many FJ, check if they are "true" FJ using the smoothed tod and its Haar filter
+        - (regardless of the jump detection method) find how many FJ there are using DBSCAN on given masked array of jump timestamps
+        - (regardless of the jump detection method) for each FJ (DBSCAN cluster), finds its initial and final timestamp (using a 95% reduction level)
+        - (optional) displays intermediate plots, e.g. zoom on jumps, comparison btw raw tod and smoothed tod
+        - (optional) displays a set of 3 plot showing the overal results and saves it as png.
+        The user can call this class on single detectors or call it for the entire focal plane using the Diagnostic class below.
+        '''
+        
+        #define variables common to all detectors
+        self.data_date = data_date_full 
+        self.verbose = use_verbose 
+        self.doplot = doplot
+        self.size_to_use = 150 # (float) It's the number of timestamps used as window in the moving median of the Haar filter. Also used in the DBSCAN.
+        self.window = 401 # odd number, moving windows for the Savitzky-Golay filter.
+        self.polyorder = 3 # polynomial ordeer for the Savitzky-Golay filter
+        self.method = 'nearest' # approximation mode for the Savitzky-Golay filter
+        self.thr = np.array([2e5, 1.5e5, 1e5, 5e4, 4e4, 3e4]) # array of amplitude thresholds. Usually: [2e5, 1e5, 5e4, 3e4], etc.
+        
+        #create directory to save flux jumps plots
+        self.path_FJ = './FluxJumps_{}'.format(self.data_date)
+        if not os.path.exists(self.path_FJ):
+            print('Creating directory : ', self.path_FJ)
+            os.mkdir(self.path_FJ)
+        
+        
+    #Haar filter definition
+    def haar(self, x):
+        '''
+        This function performs a Haar Filter of the tod: it returns a rescaled median of the TOD, where flux jumps appear as spikes.
+        Input:
+        - x : array, the tod
+        '''
+        out = np.zeros(x.size)
+        xf = bn.move_median(x, self.size_to_use)[self.size_to_use:]   
+        out[self.size_to_use+self.size_to_use//2:-self.size_to_use+self.size_to_use//2] = xf[:-self.size_to_use] - xf[self.size_to_use:]
+        return out
+    
+    
+    def find_jumps(self, tod_haar):
+        '''
+        This function performs an iterative jump detection by comparing the maximum of the Haar filter with a series of thresholds. 
+        Input:
+        - tod_haar : array, the Haar filter of the tod
+        Output:
+        - number : zero or one. If zero, there are no jumps. If one, there's at least one jump
+        - jumps : Masked array, the timestamp of the jump(s)
+        - thr_used : (float) The threshold corresponding to the jump detection
+        '''
+        print('##### JUMP DETECTION #####')
+        #dummy variable
+        self.number = 0
+        self.jumps = 0
+        self.thr_used = 0 
+        #iterate over the amplitude thresholds
+        for j,thr_val in enumerate(self.thr):
+            print('Iteration with thr :', thr_val)
+            if self.number == 0: #haven't detected any jump yet
+                if max(tod_haar) < thr_val:
+                    print('No jump')
+                else: #there's a jump
+                    self.number += 1
+                    self.thr_used = thr_val
+                    print('Found jump')
+                    self.jumps = (tod_haar >= thr_val) #save the timestamp of the jump
+            else: #jumps already detected
+                pass
+        return #self.number, self.jumps, self.thr_used
+    
+    
+    def plot_HaarFilter_and_SVFilter(self, tes_num, tt, todarray, tod_sav, tod_haar, tod_haar_sav):
+        '''
+        This function plots the raw tod and it's Haar filter compared to a smoothed tod (Savitzky-Golay, sav or SG) and it's corresponding Haar filter 
+        Input:
+        - tes_num : (int) detector number
+        - tt : array of timestamps
+        - todarray : array, tod
+        - tod_haar : array, the Haar filter of the tod
+        - tod_sav : array, smoothed tod (SG)
+        - tod_haar_sav : Haar filter of the smoothed tod
+        '''
+
+        figure(figsize=(10,10))
+        suptitle(self.data_date+'\n TES {}'.format(tes_num), y=1)
+        subplot(2,1,1)
+        plot(tt, todarray , 'g', label='Raw tod')
+        plot(tt, tod_sav, 'b', alpha=0.7, label='SG tod')
+        xlabel('time')
+        ylabel('TOD')
+        legend(loc='best')
+
+        subplot(2,1,2)
+        plot(tt, tod_haar , 'g', label='Raw-Haar tod')
+        plot(tt, tod_haar_sav, 'b', alpha=0.7, label='SG-Haar tod')
+        for j,thr_val in enumerate(self.thr):
+            plot(tt, thr_val*np.ones(len(tt)), color='k', linestyle='--', label = 'Amplitude threshold')
+        xlabel('time')
+        ylabel('Haar filter')
+        legend(loc='best')
+        tight_layout()
+        savefig(self.path_FJ+'/HaarFilter_and_SVFilter_TES{}.png'.format(tes_num))
+        close()
+        return
+    
+    def get_number_of_jumps(self, todarray):
+        '''
+        This function takes in a masked array with the timestamps of all the jumps and perform a DBSCAN to detect how many jumps (cluster of timestamps) there are.
+        Input:
+        - todarray : array, the tod
+        - jumps : a masked array of timestamps. If True, there's a jump at that timestamp
+        Output:
+        - nc : (int) the number of jumps (cluster) found
+        - idx_jumps : array made by all the timestamps of the jumps
+        - clust : the DBSCAN cluster
+        '''
+        idx = np.arange(len(todarray))
+        idx_jumps = idx[self.jumps]
+        print(idx_jumps)
+
+        #find number of jumps with cluster method
+        clust = DBSCAN(eps=self.size_to_use//5, min_samples=1).fit(np.reshape(idx_jumps, (len(idx_jumps),1)))
+        nc = np.max(clust.labels_)+1
+        print('Number of FJ : ', nc)
+        return nc, idx_jumps, clust
+    
+    
+    def find_jump_start_and_end(self, nc, idx_jumps, clust, tt, tod_haar, tes_num):
+        '''
+        This function finds and returns the beginning and ending timestamp of each flux jump. If verbose, plots a zoom-in of all the Haar filter spikes (jumps).
+        '''
+        xc = np.zeros(nc, dtype=int) 
+        xcf = np.zeros(nc, dtype=int)
+        for i in range(nc):
+            idx_jumps_from_thr = idx_jumps[clust.labels_ == i]
+            print('From thr, jump start at idx : ', idx_jumps_from_thr[0])
+            print('From thr, jump ends at idx : ', idx_jumps_from_thr[-1])
+
+            #consider the jump to be over when it's (filtered) amplitude is reduced by 90%
+            idx_delta_end_jump = np.where( tod_haar[idx_jumps_from_thr[-1]:] < self.thr_used*0.05 )[0][0]
+            print('From filter ampl, jump ends at idx : ', idx_jumps_from_thr[-1] + idx_delta_end_jump)
+            print('Timestamps number to be added : ', idx_delta_end_jump)
+            idx_delta_start_jump = idx_jumps_from_thr[0] - np.where( tod_haar[:idx_jumps_from_thr[0]] < self.thr_used*0.05 )[0][-1]
+            xc[i] = idx_jumps_from_thr[0] - idx_delta_start_jump
+            xcf[i] = idx_jumps_from_thr[-1] + idx_delta_end_jump
+
+            delta = xcf - xc #time samples of a jump candidate
+            print('Number of timestamps of each jump : ', delta)
+
+        if self.verbose: 
+            figure(figsize=(10,10))
+            suptitle('TES = {}'.format(tes_num), y=1)
+            for i in range(nc):
+                subplot(nc, 1, i+1)
+                title('Jump {}'.format(i+1), x=0.3, y=0.9)
+                #plot(tt[xc[i]], todarray[xc[i]], 'g.')
+                #plot(tt[xcf[i]], todarray[xcf[i]], 'g.')
+                idx_single_jump = idx_jumps[clust.labels_ == i]
+                time_idx = (tt[idx_single_jump[0]-500] < tt) & ( tt < tt[idx_single_jump[-1]+500])
+                plot(tt[time_idx], tod_haar[time_idx], color='orange')
+                plot(tt[xc[i]:xcf[i]], tod_haar[xc[i]:xcf[i]], color='c', label='Total jump')
+                plot(tt[idx_single_jump], tod_haar[idx_single_jump], color='red', label='Jump based on ampl. thr.')
+                plot(tt[time_idx], np.zeros(len(tt[time_idx])), color='k', linestyle='--')
+                plot(tt[time_idx], (self.thr_used)*np.ones(len(tt[time_idx])), color='g', linestyle='--', label='Thr. for jump detection')
+                plot(tt[time_idx], (self.thr_used*0.05)*np.ones(len(tt[time_idx])), color='g', linestyle=':', label='Thr. for jump start/end')
+                xlabel('Time')
+                ylabel('Haar filter', color='orange')
+                legend(loc='center left', bbox_to_anchor=(0.6, 0.5))
+            tight_layout()
+            savefig(self.path_FJ+'/ZoomJumps_TES{}.png'.format(tes_num))
+            close()
+
+        print('Number of final Jumps: ', nc)
+        print()  
+        return xc, xcf
+    
+    
+    def make_flux_diagnostic_plot(self, tt, todarray, tod_haar, xc, xcf, nc, idx_jumps, tes_num):
+        '''
+        This function makes a diagnostic plot of the jump detection: it returns a plot with 3 subplots, showing: i. tod and haar filter; ii. the tod with the jumps in red (if jumps have been detected); iii. The haar filter with all the amplitude thresholds, the detected jumps in red, the start/end of the jump in green.
+        Input:
+        '''
+        fig, ax = plt.subplots(3, figsize = (10,10))
+        suptitle(self.data_date+'\n TES {}'.format(tes_num), y=1)
+        #plot TOD and Filter
+        ax[0].plot(tt, todarray, color='b')
+        ax[0].set_ylabel('tod', color='b')
+        ax2 = ax[0].twinx()
+        ax2.plot(tt, tod_haar, color='orange', alpha=0.5)
+        ax2.set_ylabel('haar filter', color='orange')
+
+        #plot TOD with jumps highlighted
+        ax[1].plot(tt, todarray, color='b', label='Jumps nr = {}'.format(nc))
+        if self.number > 0 : 
+            for i in range(nc):
+                ax[1].plot(tt[xc[i]:xcf[i]], todarray[xc[i]:xcf[i]], 'r')  
+            ax[1].legend()
+        ax[1].set_ylabel('tod', color='b')               
+
+        #plot Filter with jumps highlighted         
+        ax[2].plot(tt, tod_haar, color='orange')
+        if self.number > 0 : 
+            ax[2].plot(tt[idx_jumps], tod_haar[idx_jumps], 'r.')
+            ax[2].plot(tt[xc], tod_haar[xc], 'g.')
+            ax[2].plot(tt[xcf], tod_haar[xcf], 'g.')
+        for j,thr_val in enumerate(self.thr):
+            ax[2].plot(tt, thr_val*np.ones(len(tt)), color='k', linestyle='--', label = 'Amplitude threshold')
+        ax[2].set_ylabel('haar filter', color='orange')
+        ax[2].set_xlabel('time')
+        tight_layout()
+        savefig(self.path_FJ+'/FluxJump_TES{}.png'.format(tes_num))
+        #savefig(self.path_FJ+'/FluxJump_TES{}_size{}.png'.format(tes_num))
+        close('all')
+        return
+    
+      
+    def fluxjumps_analysis(self, tt, todarray, tes_num):
+        '''
+        This function evaluates if there are flux jumps and their initial and final timestamps. Optionally plots the tod and jump filter.
+        Input:
+        - tt : array of timestamps
+        - todarray : array of tes timeline
+        - tes_num : (int) detector number (not index!)
+        - data_date : (string) dataset label to be used in the plot
+        - size : (int) ? to be used in the Haar filter. Default is ?
+        - doplot: Bool. If True, do plot and save it. Otherwise, skip plot
+        - verbose : if True, do additional plots and prints
+        Returns:
+        - xc : beginning of the jump 
+        - xcf : final of the jump 
+        - dif : diference between the final of a jump and the beginning of the next jump 
+        - nc : number of clusters/number of jumps
+        '''
+
+        #make haar filter of raw tod
+        tod_haar = np.abs(self.haar(todarray))
+
+        #JUMP DETECTION : 
+        #check maximum of raw tod: if it's > thr : it's a jump. If it's < thr : no jump
+        self.find_jumps(tod_haar) #sets the following variables: number; jumps; threshold for which we have jump detection
+        xc = 0
+        xcf = 0
+        nc = 0
+        idx_jumps = 0
+
+        #if there's a jump (i.e. self.number > 0), continue. Else: go directly to the plot stage
+        if self.number > 0 : 
+            print('##### JUMP INVESTIGATION #####')
+            #get number of jumps and the set of timestamps where there are jumps (beware you still don't know how many jumps are there)
+            nc, idx_jumps, clust = self.get_number_of_jumps(todarray)
+
+            if nc > 10: #if there are more than 5 jumps, redo jump detection on smoothed tod (SAVGOL)
+                tod_to_use = todarray.copy()
+                for j in range(3):
+                    #apply Savitzky–Golay filter (SG or savgol) to the raw tod : it will smooth out the tod
+                    tod_sav = savgol_filter(tod_to_use, window_length=self.window, polyorder=self.polyorder, mode=self.method) 
+                    #make haar filter of SG tod
+                    tod_haar_sav = np.abs(self.haar(tod_sav))
+
+                    if self.verbose:
+                        self.plot_HaarFilter_and_SVFilter(tes_num, tt, todarray, tod_sav, tod_haar, tod_haar_sav)
+
+                    #update self.number, self.jumps, self.thr_used and the tod
+                    self.find_jumps(tod_haar_sav)
+                    tod_to_use = tod_sav.copy()
+
+                if self.number == 0 : #there are no jumps with the smoothed tod. Exit.
+                    if self.doplot == True:
+                        self.make_flux_diagnostic_plot(tt, todarray, tod_haar, xc, xcf, nc, idx_jumps, tes_num)
+                    return nc, xc, xcf
+                else: #get the number of jumps and their time interval using SG tod
+                    nc, idx_jumps, clust = self.get_number_of_jumps(tod_haar_sav)
+
+            #find Start and End of each jump: consider the jump to be over when it's (filtered) amplitude is reduced by 95% (beware: now use raw tod!)
+            xc, xcf = self.find_jump_start_and_end(nc, idx_jumps, clust, tt, tod_haar, tes_num)
+
+        #plot tod, filter, jump interval
+        if self.doplot:
+            self.make_flux_diagnostic_plot(tt, todarray, tod_haar, xc, xcf, nc, idx_jumps, tes_num)
+
+        return nc, xc, xcf #returns number_of_jumps, start_jumps, end_jumps        
+
+
 class Diagnostic:
 
-    def __init__(self, a_list, data_date, sat_thr=0.01, upper_satval = 4.19*1e6):
+    def __init__(self, a_list, data_date, sat_thr=0.01, upper_satval = 4.19*1e6, use_verbose = False):
         '''
         This Class performs a SCIENTIFIC diagnostic. It takes in:
         - a_list: a qubic.focalplane object. Either a single qubicfp or a list of qubicfp.
         - data_date: str or array of str. Contains the name of the dataset(s)
         - sat_thr: float, fraction of time to be used as threshold for saturation. If the saturation time is > sat_thr : detector is saturated. Default is 0.01 (1%)
-        - upper_satval: float, positive ADU value ccorresponding to saturation, Default is 4.19*1e6
+        - upper_satval: float, positive ADU value ccorresponding to saturation. Default is 4.19*1e6
+        - use_verbose : Bool. If True: do all the flux jump intermediate plots (zoom on jumps, comparison btw raw tod and smoothed tod, etc.). Recommended is: False
         
         The methods perform the following type of diagnostic:
         - basic hk plots (quicklook, temperature monitor, synch error)
         - focal plane display
         - timeline acquisition
-        - saturation detection
-        - flux jumps detection (TO BE IMPLEMENTED)
+        - saturation detection (TO BE IMPROVED)
+        - flux jumps detection
         - power spectral density 
         - coadded maps (TO BE IMPLEMENTED)
         The user can call each method individually or all of them through the analysis() method.
@@ -207,6 +505,12 @@ class Diagnostic:
         print('#######################################')
         print('Initialize diagnostic class for the dataset : \n {}'.format(self.data_date))
         
+        #create directory to save focal plane plots
+        self.path_FP = './FocalPlane_{}'.format(self.data_date)
+        if not os.path.exists(self.path_FP):
+            print('Creating directory : ', self.path_FP)
+            os.mkdir(self.path_FP)
+        
         #save saturation threshold
         self.sat_thr = sat_thr
         print('Saturation time threshold is : {} %'.format(self.sat_thr*100))
@@ -217,6 +521,8 @@ class Diagnostic:
         
         #dummy variable for the detector color, to be set later
         self.colors = 0
+        
+        self.use_verbose = use_verbose #this is used for flux jump intermediate plots (zoom on jumps, comparison btw raw tod and smoothed tod, etc.)
         
         #load in the tods from self.a
         print('##########Loading in the TODs##########')
@@ -239,11 +545,14 @@ class Diagnostic:
         print('ADU : ', self.tod.shape)
         print('#######################################')
 
+# #################### SATURATION ##################################################
+
     def do_saturation_diagnostic(self, adu, data_date_full, do_plot=True):
         '''
         This function detects saturated TESs, prints out the saturation percentage, (optionally) plots the focal plane timeline with saturated detectors in red (thermo TES are in black, the others in green) and returns:
         - tes_to_use : array of Bool; True if TES is NOT saturated, False if TES is saturated or a thermometer
         - colors : array of strings; 'g' if the TES is NOT saturated, 'r' if TES is saturated, 'k' if TES is a thermometer
+        - fraction_saturated_tes : (float) fraction of saturated detectors
         Input:
         - adu: (array) the detectors ADU timeline
         - data_date_full : string with the label of the dataset
@@ -284,10 +593,10 @@ class Diagnostic:
             suptitle_to_use = '{} : FP timeline. {:.2f}% TES are saturated; {:.2f}% TES are not saturated'.format(data_date_full,
                                                                                                     fraction_saturated_tes*100,
                                                                                                     fraction_not_saturated_tes*100)
-            savefig_path_and_filename = './Focal_plane_saturation_{}'.format(data_date_full)
+            savefig_path_and_filename = self.path_FP+'/Focal_plane_saturation_{}'.format(data_date_full)
             self.plot_focal_plane(self.timeaxis, adu, colors, plot_suptitle=suptitle_to_use, path_and_filename=savefig_path_and_filename)
 
-        return tes_to_use, colors
+        return tes_to_use, colors, fraction_saturated_tes
         
 
     def tes_saturation_state(self, do_plot=True):
@@ -298,17 +607,19 @@ class Diagnostic:
         print()
         print('-----> Saturation detection')
         if isinstance(self.data_date, str): #there's only one dataset
-            self.tes_to_use, self.colors = self.do_saturation_diagnostic(self.tod, self.data_date, do_plot) 
+            self.tes_to_use, self.colors, self.frac_saturation = self.do_saturation_diagnostic(self.tod, self.data_date, do_plot) 
         else: #there is more than one dataset. loop over all of them
             self.tes_to_use = np.ones((self.num_datasets, 256), dtype=str)
             self.colors = np.ones((self.num_datasets, 256), dtype=str) 
+            self.frac_saturation = np.zeros((self.num_datasets, 256)) 
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
-                self.tes_to_use[j,:], self.colors[j,:] = self.do_saturation_diagnostic(self.tod[j], self.data_date[j], do_plot)
+                self.tes_to_use[j,:], self.colors[j,:], self.frac_saturation[j,:] = self.do_saturation_diagnostic(self.tod[j], self.data_date[j], do_plot)
                 
         return
-    
-    
+
+# #################### NOISE ESTIMATE ##################################################
+
     def hf_noise_estimate_and_spectrum(self, time, adu, data_date_full, colors_to_use, do_plot=True):
         '''
         This function computes the power spectral density of the entire focal plane and plots it (optional).
@@ -341,7 +652,7 @@ class Diagnostic:
         if do_plot:
             #do plot
             self.plot_focal_plane(freq_f, np.array(spectrum_density), colors_to_use, plot_suptitle='{}: power spectrum'.format(data_date_full),
-                             path_and_filename='./{}_powerspectrum'.format(data_date_full), the_yscale='log')
+                             path_and_filename=self.path_FP+'/FocalPlane_powerspectrum_{}'.format(data_date_full), the_yscale='log')
         
         return estimate, np.array(spectrum_density), freq_f
     
@@ -374,7 +685,9 @@ class Diagnostic:
             self.spectrum_density = np.array(spectrum_density)
             self.frequency = np.array(freq)
         return
-    
+
+# #################### FLUX JUMPS ##################################################    
+
     def discard_tods(self, ncomp, eps):
         '''
         Mathias's function to detect flux jumps
@@ -400,8 +713,79 @@ class Diagnostic:
             plt.scatter(X[index, 0], X[index, 1], s=20, c=col, label=f'{k}')
         plt.legend()
         close()
+        
     
-    
+    def do_fluxjump_diagnostic(self, time, adu, data_date_full, tes_to_use, colors_to_use, fraction_saturated_tes, do_plot=True):
+        '''
+        This function performs the flux jump detection on the focal plane of the given dataset.
+        It selects only the not-saturated detectors and calls the FluxJumps class, which loops over all the selected detectors.
+        (Optionally) it plots the focal plane timeline with : flux jump in yellow, saturated detectors in red, good detectors in green (and thermo TES are in black).
+        Returns:
+        - tes_to_use : array of Bool; True if TES is GOOD, False if TES has flux jumps or is saturated or a thermometer
+        - colors : array of strings; 'g' if the TES is GOOD, 'y' if TES has flux jumps, 'r' if TES is saturated, 'k' if TES is a thermometer
+        - frac_flux : (float) fraction of detectors with (at least one) flux jumps 
+        Input:
+        - time: (array) timestamps
+        - adu: (array) the detectors ADU timeline 
+        - data_date_full : string with the label of the dataset
+        - colors_to_use : array of string, containing the color (state) of each detector. Saturated and thermos have to be discarded.
+        - fraction_saturated_tes : (float) fraction of saturated detectors
+        - do_plot: if True, plots the focal plane
+        '''
+        #initialize fluxjump class
+        fluxjumps_class = FluxJumps(data_date_full, use_verbose = self.use_verbose, doplot = self.use_verbose)
+       
+        #apply flux jump detection on not-saturated detectors
+        num_of_det = adu.shape[0]
+        for i in range(num_of_det):
+            Tesnum = i+1
+            print('Doing TES :', Tesnum)
+            if tes_to_use[i] == True:
+                num_of_jumps, jumps_start_idx, jumps_end_idx = fluxjumps_class.fluxjumps_analysis(time, adu[i], Tesnum) #, size=size_to_use, doplot=do_plot, verbose=use_verbose)
+                if num_of_jumps > 0 :
+                    tes_to_use[i] = False
+                    colors_to_use[i] = 'y'                    
+            else:
+                print('Skipping TES = ', Tesnum) 
+        
+        tes_with_fj = (colors_to_use=='y')
+        frac_flux = np.sum(tes_with_fj) / num_of_det
+        
+        #plot focal plane
+        if do_plot:
+            suptitle_to_use = '{} : FP timeline. {:.2f}% TES are saturated; {:.2f}% TES have flux jumps'.format(data_date_full,
+                                                                                                    fraction_saturated_tes*100,
+                                                                                                    frac_flux*100)
+            savefig_path_and_filename = self.path_FP+'/Focal_plane_saturation_and_jumps_{}'.format(data_date_full)
+            self.plot_focal_plane(self.timeaxis, adu, colors_to_use, plot_suptitle=suptitle_to_use, path_and_filename=savefig_path_and_filename)
+
+        return tes_to_use, colors_to_use, frac_flux
+        
+        
+    def tes_fluxjump_state(self, do_plot=True):
+        '''
+        Wrapper to the -do_fluxjump_diagnostic- function, i.e. the flux jump detection function. 
+        If there is more than one dataset, it calls the -do_fluxjump_diagnostic- for each dataset.
+        '''
+        #if self.colors doesn't exist, instantiate it : do saturation analysis first.
+        if not isinstance(self.colors, np.ndarray):
+            #instantiate color array
+            self.tes_saturation_state(do_plot=False)
+        
+        print()
+        print('-----> Flux jump detection')
+        if isinstance(self.data_date, str): #there's only one dataset
+            self.tes_to_use, self.colors, self.frac_flux = self.do_fluxjump_diagnostic(self.timeaxis, self.tod, self.data_date, self.tes_to_use ,self.colors, self.frac_saturation, do_plot) 
+        else: #there is more than one dataset. loop over all of them
+            for j in tqdm(range(self.num_datasets)):
+                print('Doing dataset nr. {}'.format(j+1))
+                self.tes_to_use[j,:], self.colors[j,:], self.frac_flux[j,:] = self.do_fluxjump_diagnostic(self.timeaxis, self.tod[j], self.data_date[j], self.tes_to_use[j], self.colors[j], self.frac_saturation[j], do_plot)
+                
+        return
+
+
+# #################### FOCAL PLANE PLOTS ##################################################
+
     def plot_focal_plane(self, x_data, tes_y_data, colors_plot, plot_suptitle=None, path_and_filename=None, the_xscale='linear', the_yscale='linear'):
         '''
         This function plots some data (timeline, spectrum) over the entire qubic focal plane.
@@ -472,7 +856,7 @@ class Diagnostic:
         #Save image
         if path_and_filename is not None:
             savefig(path_and_filename+'.png')
-            savefig(path_and_filename+'.pdf')
+            #savefig(path_and_filename+'.pdf')
         close('all')
         return
     
@@ -491,18 +875,19 @@ class Diagnostic:
         if isinstance(self.data_date, str): #len(self.a) == 1:
             plot_suptitle = '{} : FP timeline'.format(self.data_date)
             print('Plotting :', plot_suptitle)
-            path_and_filename = './Focal_plane_{}'.format(self.data_date)
+            path_and_filename = self.path_FP+'/Focal_plane_{}'.format(self.data_date)
             self.plot_focal_plane(self.timeaxis, self.tod, colors_plot, plot_suptitle, path_and_filename)
         else:
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
                 plot_suptitle = '{} : FP timeline'.format(self.data_date[j])
                 print('Plotting:', plot_suptitle)
-                path_and_filename = './Focal_plane_{}'.format(self.data_date[j])
+                path_and_filename = self.path_FP+'/Focal_plane_{}'.format(self.data_date[j])
                 self.plot_focal_plane(self.timeaxis, self.tod[j], colors_plot, plot_suptitle, path_and_filename)
         return
-        
-        
+
+# #################### WRAPPER FOR GLOBAL ANALYSIS ##################################################
+
     def analysis(self, do_plot=True):
         '''
         Wrapper function that calls all the diagnostic methods and performs a global analysis in a (semi-)automatic way
@@ -513,6 +898,9 @@ class Diagnostic:
         
         #saturation diagnostic
         self.tes_saturation_state(do_plot)
+        
+        #fluxjumps diagnostic
+        self.tes_fluxjump_state(do_plot)
         
         #power spectrum diagnostic
         self.tes_noise_estimate_and_spectrum(do_plot)

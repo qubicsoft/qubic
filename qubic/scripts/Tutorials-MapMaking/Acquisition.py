@@ -13,6 +13,7 @@ import numpy as np
 import pysm3
 import gc
 import os
+import time
 import warnings
 warnings.filterwarnings("ignore")
 import pysm3.units as u
@@ -24,7 +25,6 @@ import mixing_matrix as mm
 import pickle
 from scipy.optimize import minimize
 import ComponentsMapMakingTools as CMMTools
-import multiprocess as mp
 # PyOperators stuff
 from pysimulators import *
 from pyoperators import *
@@ -125,6 +125,8 @@ def compute_fwhm_to_convolve(allres, target):
     #if s == np.nan:
     #    s = 0
     return s
+def find_co(comp, nus_edge):
+    return np.sum(nus_edge < comp[-1].nu) - 1
 def parse_addition_operator(operator):
 
     if isinstance(operator, AdditionOperator):
@@ -1677,14 +1679,12 @@ class QubicIntegratedComponentsMapMaking:
         _, nus_edge, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=self.Nsub)
 
         self.nside = self.scene.nside
-        self.d = d
         self.nus_edge = nus_edge
         self.comp = comp
         self.nc = len(self.comp)
         self.npix = 12*self.nside**2
         self.Nsub = self.d['nf_sub']
         self.allnus = np.array([q.filter.nu / 1e9 for q in self.multiinstrument])
-
 
         self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
 
@@ -1694,7 +1694,15 @@ class QubicIntegratedComponentsMapMaking:
             self.allfwhm[i] = self.subacqs[i].get_convolution_peak_operator().fwhm
 
         self.alltarget = compute_fwhm_to_convolve(np.min(self.allfwhm), self.allfwhm)
-
+    def get_monochromatic_acquisition(self, nu):
+    
+        self.d['filter_nu'] = nu
+    
+        sampling = qubic.get_pointing(self.d)
+        scene = qubic.QubicScene(self.d)
+        instrument = qubic.QubicInstrument(self.d)
+        #print(instrument)
+        return qubic.QubicAcquisition(instrument, sampling, scene, self.d)
     def get_PySM_maps(self, config):
         allmaps = np.zeros((self.nc, 12*self.nside**2, 3))
         ell=np.arange(2*self.nside-1)
@@ -1711,6 +1719,7 @@ class QubicIntegratedComponentsMapMaking:
             elif kconf == 'dust':
 
                 nu0 = self.comp[k].__dict__['_fixed_params']['nu0']
+                print(nu0)
                 sky=pysm3.Sky(nside=self.nside, preset_strings=[config[kconf]])
                 #sky.components[0].mbb_index = hp.ud_grade(sky.components[0].mbb_index, 8)
                 sky.components[0].mbb_temperature = 20*sky.components[0].mbb_temperature.unit
@@ -1793,9 +1802,12 @@ class QubicIntegratedComponentsMapMaking:
         for _, i in enumerate(self.subacqs):
             Operator.append(i.get_operator())
         return Operator
-    def get_operator(self, beta, convolution, gain=None, list_fwhm=None):
+    def get_operator(self, beta, convolution, gain=None, list_fwhm=None, co_line=False):
 
         list_op = self._get_array_of_operators()
+        if co_line:
+            index_acq_co = find_co(self.comp, self.nus_edge)
+            acq_co = list_op[index_acq_co]
         if beta.shape[0] <= 2:
             R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
         else:
@@ -1815,9 +1827,10 @@ class QubicIntegratedComponentsMapMaking:
             else:
                 C = IdentityOperator()
             
-            A = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside)
+            A = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside, active=False)
             
             list_op[inu] = list_op[inu] * C * R * A
+
 
         Rflat = ReshapeOperator((self.Ndets, self.Nsamples), self.Ndets*self.Nsamples)
         return Rflat * BlockColumnOperator([G * np.sum(list_op, axis=0)], axisout=0)
@@ -2017,7 +2030,7 @@ class QubicOtherIntegratedComponentsMapMaking:
                 # Compute operator H with forced convolution
                 fwhm = self.allresolution_external[ii]
                 # Add operator
-                Hother = other.get_operator(self.nintegr, beta, convolution=convolution)
+                Hother = other.get_operator(self.nintegr, beta, convolution=convolution, myfwhm=[0])
                 
                 Operator.append(Hother)
         return BlockColumnOperator(Operator, axisout=0)
@@ -2172,7 +2185,7 @@ class OtherData:
         # Create reshape operator and apply it to the diagonal operator
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
-    def get_operator(self, nintegr, beta, convolution):
+    def get_operator(self, nintegr, beta, convolution, myfwhm=None):
         R2tod = ReshapeOperator((12*self.nside**2, 3), (3*12*self.nside**2))
         if beta.shape[0] <= 2:
             R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
@@ -2188,14 +2201,17 @@ class OtherData:
                 allnus = np.linspace(i-self.bw[ii]/2, i+self.bw[ii]/2, nintegr)
             
             if convolution:
-                fwhm = self.fwhm[ii]
+                if myfwhm is not None:
+                    fwhm = myfwhm[ii]
+                else:
+                    fwhm = self.fwhm[ii]
             else:
                 fwhm = 0
             #fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
             C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
             op = []
             for inu, nu in enumerate(allnus):
-                D = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside)
+                D = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside, active=False)
                 op.append(C * R * D)
             Operator.append(R2tod(AdditionOperator(op)/nintegr))
         return BlockColumnOperator(Operator, axisout=0)
@@ -2420,37 +2436,4 @@ class SciPyMinimize:
     def minimizer(self, x0, args=None):
         r = minimize(self.myfunc, x0=x0, method=self.method, tol=self.tol, args=args, options=self.options)
         return r.x
-class FitParallel:
-    
-    def __init__(self, chi2, betamap, sol, data, gain, method='TNC', tol=1e-5, Nprocess=1, x0=np.array([1.54]), options={}):
-        self.chi2 = chi2
-        self.Nprocess = Nprocess
-        self.x0 = x0
-        self.method = method
-        self.tol = tol
-        self.options = options
-        self.data = data
-        self.betamap = betamap
-        self.sol = sol
-        self.gain = gain
 
-        print(f'\nMinimization on {self.Nprocess} process\n')
-        
-    
-    def do_task(self, x):
-        args = (self.betamap, self.sol, self.data, self.gain, x)
-        beta = minimize(self.chi2, x0=self.x0, args=args, method=self.method, tol=self.tol, options=self.options).x
-        return beta
-    def from_res2tab(self, res):
-        tab = np.zeros(len(res))
-        for i in range(len(res)):
-            tab[i] = res[i][0]
-        return tab
-        
-    def run_fit(self, index):
-        #self.initialize_pool()
-        #print(f'Fit of those pixels : {np.arange(min_pix, min_pix+delta, 1)}')
-        pool = mp.Pool(processes=self.Nprocess)
-        allbeta = self.from_res2tab(pool.map(self.do_task, list(index)))
-        pool.close()
-        return allbeta

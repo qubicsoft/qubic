@@ -34,7 +34,7 @@ rc('font',size=16)
 ####################################################### HOUSEKEEPING DIAGNOSTIC ########################################################################
 class HK_Diagnostic:
     
-    def __init__(self, a, data_date):
+    def __init__(self, a_list, data_date):
         '''
         This Class performs a HOUSEKEEPING diagnostic. It takes in:
         - a_list: a qubic.focalplane object. Either a single qubicfp or a list of qubicfp.
@@ -50,86 +50,153 @@ class HK_Diagnostic:
         The user can call each method individually or all of them through the analysis() method.
         '''
         
-        self.a = a
+        self.a = a_list
         self.data_date = data_date       
         
         print()
         print('#######################################')
         print('Initialize HOUSEKEEPING diagnostic class for the dataset : \n {}'.format(self.data_date))
+        
+        #load in the tods from self.a
+        if isinstance(self.data_date, str): 
+            #there's only one qubicfc (dataset) to load. Create directory name to save focal plane plots using the dataset name
+            self.path_HK = './HK_{}'.format(self.data_date)           
+        else:
+            #there's more than one qubicfc (dataset) to load
+            self.num_datasets = len(self.a)
+            print('There are {} datasets'.format(self.num_datasets))
+            #create directory name to save focal plane plots: use only the DATE of the set of datasets in this case
+            self.path_HK = './HK_{}'.format(self.data_date[0].split('_')[0])
+            
+        #Create directory to save focal plane plots    
+        if not os.path.exists(self.path_HK):
+            print('Creating directory : ', self.path_HK)
+            os.mkdir(self.path_HK)
 
-    def plot_synch_error(self):
+        print('#######################################')
+
+    def plot_synch_error(self, a, data_date):
         '''
         This function plots the ASIC1 (red) and ASIC2 (blue) NETQUIC synchro error on a double-y axis plot. A png image is saved.
         If NETQUIC synchro error == 0 : OK. If NETQUIC synchro error == 1 : There's a synchro error.
         '''
-        print()
-        print('-----> Synchro error diagnostic')
         #save and plot ASIC 1
-        self.synch_err1 = self.a.asic(1).hk['CONF_ASIC1']['NETQUIC synchro error']
-        self.tstamps1 = self.a.asic(1).hk['CONF_ASIC1']['ComputerDate']
-        self.tstamps1 -= self.tstamps1[0] #convert time into hours
-        self.tstamps1 /= (60*60)
         figure(figsize=(10,10))
-        title(self.data_date+' : NETQUIC synchro error', y=1.005)
-        plot(self.tstamps1, self.synch_err1, color='r')
+        title(data_date+' :\nNETQUIC synchro error', y=1.005)
+        if a.asic(1) is not None:
+            synch_err1 = a.asic(1).hk['CONF_ASIC1']['NETQUIC synchro error']
+            tstamps1 = a.asic(1).hk['CONF_ASIC1']['ComputerDate']
+            tstamps1 -= tstamps1[0] #convert time into hours
+            tstamps1 /= (60*60)
+            plot(tstamps1, synch_err1, color='r')
+            if np.max(synch_err1) == 1:
+                print('WARNING: There is a synchro error in ASIC1! Please check further!')
+            else:
+                print('No synchro error in ASIC1 detected!')
+                
+        else:
+            textstr = 'No ASIC 1 data!' 
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+            # place a text box in upper left in axes coords
+            text(0., 0.4, textstr, fontsize=25, color='r', verticalalignment='top', bbox=props)
         ylabel('NETQUIC ASIC 1', color='r')
         xlabel('Time [hours]')
         twinx()
         #save and plot ASIC 2
-        self.synch_err2 = self.a.asic(2).hk['CONF_ASIC2']['NETQUIC synchro error']
-        self.tstamps2 = self.a.asic(2).hk['CONF_ASIC2']['ComputerDate']
-        self.tstamps2 -= self.tstamps2[0] #convert time into hours
-        self.tstamps2 /= (60*60)
-        plot(self.tstamps2, self.synch_err2, color='b')
+        if a.asic(2) is not None:
+            synch_err2 = a.asic(2).hk['CONF_ASIC2']['NETQUIC synchro error']
+            tstamps2 = a.asic(2).hk['CONF_ASIC2']['ComputerDate']
+            tstamps2 -= tstamps2[0] #convert time into hours
+            tstamps2 /= (60*60)
+            plot(tstamps2, synch_err2, color='b')
+            if np.max(synch_err2) == 1:
+                print('WARNING: There is a synchro error in ASIC2! Please check further!')
+            else:
+                print('No synchro error in ASIC2 detected!')                
+        else:
+            textstr = 'No ASIC 2 data!' 
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+            # place a text box in upper left in axes coords
+            text(0., 0.2, textstr, fontsize=25, color='r', verticalalignment='top', bbox=props)
         ylabel('NETQUIC ASIC 2', color='b')
         xlabel('Time [hours]')
-        savefig('./{}_NETQUIC_synchro.png'.format(self.data_date))
+        savefig(self.path_HK+'/{}_NETQUIC_synchro.png'.format(data_date))
         close()
         
-        if np.max(self.synch_err1) == 1 or np.max(self.synch_err2) == 1:
-            print('WARNING: There is a synchro error! Please check further!')
-        else:
-            print('No synchro error detected!')
-        
         return
-
-    def plot_1Ktemperature_wo_problematic_1KStageBack(self):
+    
+    def get_plot_synch_error(self):
         '''
-        This function returns a 1K temperature sensors plot without the 1K Stage Back sensor, which is problematic.  A png image is saved.
+        Wrapper to the -plot_synch_error- function. If there is more than one dataset, it calls the function for each dataset.
+        '''
+        print()
+        print('-----> Synchro error diagnostic')
+        if isinstance(self.data_date, str): #there's only one dataset
+            #self.synch_status_asic1, self.synch_status_asic2 = 
+            self.plot_synch_error(self.a, self.data_date) 
+        else: #there is more than one dataset. loop over all of them
+            for j in tqdm(range(self.num_datasets)):
+                print('Doing dataset nr. {}'.format(j+1))
+                self.plot_synch_error(self.a[j], self.data_date[j])                
+        return
+    
+        
+    def plot_1Ktemperature_wo_problematic_sensors(self, a):
+        '''
+        This function returns a 1K temperature sensors plot without problematic sensors, like the 1K Stage Back sensor.  A png image is saved.
+        '''
+        #save sensor labels: 
+        label = {}
+        if np.max(a.get_hk('AVS47_1_ch1')) < 10.:
+            label['AVS47_1_ch1'] = '1K stage'
+        if np.max(a.get_hk('AVS47_1_ch3')) < 10.:
+            label['AVS47_1_ch3'] = 'M1'
+        if np.max(a.get_hk('AVS47_1_ch4')) < 10.:    
+            label['AVS47_1_ch4'] = '1K fridge CH'
+        if np.max(a.get_hk('AVS47_1_ch7')) < 10.:
+            label['AVS47_1_ch7'] = 'M2'
+        if np.max(a.get_hk('AVS47_2_ch3')) < 10.:
+            label['AVS47_2_ch3'] = '1K stage back'
+        if np.max(a.get_hk('AVS47_2_ch0')) < 10.:
+            label['AVS47_2_ch0'] = 'PT2 S2 CH'
+        if np.max(a.get_hk('AVS47_2_ch2')) < 10.:
+            label['AVS47_2_ch2'] = 'Fridge plate MHS'
+        if np.max(a.get_hk('AVS47_2_ch4')) < 10.:
+            label['AVS47_2_ch4'] = '4K shield Cu braids'
+        #plot
+        a.plot_temperatures(None,label,'1K Temperatures wo patological stages',12)
+        close()
+        return
+    
+    
+    def get_plot_1Ktemperature_wo_problematic_sensors(self):
+        '''
+        Wrapper to the -1Ktemperature_wo_problematic_sensors- function. If there is more than one dataset, it calls the function for each dataset.
         '''
         print()
         print('-----> 1K temperatures diagnostic')
-        #save sensor labels: don't save '1K stage back'
-        label = {}
-        label['AVS47_1_ch1'] = '1K stage'
-        label['AVS47_1_ch3'] = 'M1'
-        label['AVS47_1_ch4'] = '1K fridge CH'
-        label['AVS47_1_ch7'] = 'M2'
-        label['AVS47_2_ch0'] = 'PT2 S2 CH'
-        label['AVS47_2_ch2'] = 'Fridge plate MHS'
-        #label['AVS47_2_ch3'] = '1K stage back'
-        label['AVS47_2_ch4'] = '4K shield Cu braids'
-        #plot
-        self.a.plot_temperatures(None,label,'1K Temperatures wo patological 1K stage',12)
-        close()
+        if isinstance(self.data_date, str): #there's only one dataset
+            self.plot_1Ktemperature_wo_problematic_sensors(self.a) 
+        else: #there is more than one dataset. loop over all of them
+            for j in tqdm(range(self.num_datasets)):
+                print('Doing dataset nr. {}'.format(j+1))
+                self.plot_1Ktemperature_wo_problematic_sensors(self.a[j])                
         return
 
     
-    def plot_1K_and_300mK_monitor(self):
+    def plot_1K_and_300mK_monitor(self, a, data_date):
         '''
         This function returns a 2-subplot image with the 1K monitor on the left and the 300mK monitor on the right.
         Each monitor shows a double-y axis with the temperature STAGE (blue) and FRIDGE (red).  A png image is saved.
         '''
-        print()
-        print('-----> 1K and 300mK STAGE and FRIDGE diagnostic')
         figure(figsize=(20,10))
-        suptitle(self.data_date+' : 1K and 300 mK monitors', y=1)
+        suptitle(data_date+' : 1K and 300 mK monitors', y=1)
         #plot 1K monitor
         subplot(1,2,1)
         title('1K monitor', y=0.95)
-        OneK_stage  = self.a.get_hk('AVS47_1_ch1')
-        OneK_fridge  = self.a.get_hk('AVS47_1_ch4')
-        time_hk = self.a.get_hk(data='RaspberryDate',hk='EXTERN_HK')
+        OneK_stage = a.get_hk('AVS47_1_ch1')
+        OneK_fridge = a.get_hk('AVS47_1_ch4')
+        time_hk = a.get_hk(data='RaspberryDate',hk='EXTERN_HK')
         time_hk -= time_hk[0] #convert time into hours
         time_hk /= (60*60)
         plot(time_hk, OneK_stage, color='b')
@@ -141,11 +208,8 @@ class HK_Diagnostic:
         #plot 300mK monitor
         subplot(1,2,2)
         title('300 mK monitor', y=0.95)
-        TES_stage  = self.a.get_hk('AVS47_1_CH2')
-        ThreeHmK_fridge  = self.a.get_hk('AVS47_1_CH6')
-        time_hk = self.a.get_hk(data='RaspberryDate',hk='EXTERN_HK')
-        time_hk -= time_hk[0] #convert time into hours
-        time_hk /= (60*60)
+        TES_stage = a.get_hk('AVS47_1_CH2')
+        ThreeHmK_fridge = a.get_hk('AVS47_1_CH6')
         plot(time_hk, TES_stage, color='b')
         ylabel('TES Stage [K]', color='b')
         xlabel('Time [hours]')
@@ -154,31 +218,64 @@ class HK_Diagnostic:
         ylabel('300 mK Fridge [K]', color='r')
         
         tight_layout()
-        savefig('./{}_1K_300mK_monitors.png'.format(self.data_date))
+        savefig(self.path_HK+'/{}_1K_300mK_monitors.png'.format(data_date))
         #savefig('./{}_1K_300mK_monitors.pdf'.format(self.data_date))
         close()
         return
+    
+    
+    def get_plot_1K_and_300mK_monitor(self):
+        '''
+        Wrapper to the -plot_1K_and_300mK_monitor- function. If there is more than one dataset, it calls the function for each dataset.
+        '''
+        print()
+        print('-----> 1K and 300mK monitor')
+        if isinstance(self.data_date, str): #there's only one dataset
+            self.plot_1K_and_300mK_monitor(self.a, self.data_date) 
+        else: #there is more than one dataset. loop over all of them
+            for j in tqdm(range(self.num_datasets)):
+                print('Doing dataset nr. {}'.format(j+1))
+                self.plot_1K_and_300mK_monitor(self.a[j], self.data_date[j])                
+        return
+    
     
     def analysis(self):
         '''
         Wrapper function that calls all the HK_Diagnostic methods to get all the necessary plots for the hk diagnostic
         '''
         #do a quicklook
-        self.a.quicklook()
-        close()
+        print()
+        print('-----> Quicklook')
+        if isinstance(self.data_date, str): #there's only one dataset
+            self.a.quicklook()
+            close()
+        else: #there is more than one dataset. loop over all of them
+            for j in tqdm(range(self.num_datasets)):
+                print('Doing dataset nr. {}'.format(j+1))
+                self.a[j].quicklook()
+                close()
+
 
         #plot ASICs synchro error
-        self.plot_synch_error()
+        self.get_plot_synch_error()
 
         #plot all the 1K temperature sensors
-        self.a.plot_1Ktemperatures()
-        close()
+        print()
+        print('-----> plot 1K sensors')
+        if isinstance(self.data_date, str): #there's only one dataset
+            self.a.plot_1Ktemperatures()
+            close()
+        else: #there is more than one dataset. loop over all of them
+            for j in tqdm(range(self.num_datasets)):
+                print('Doing dataset nr. {}'.format(j+1))
+                self.a[j].plot_1Ktemperatures()
+                close()
 
         #plot 1K temperature sensors w/o the 1K Stage Back sensor, which is problematic
-        self.plot_1Ktemperature_wo_problematic_1KStageBack()
+        self.get_plot_1Ktemperature_wo_problematic_sensors()
 
         #plot 1K and 300mK monitors (stage and fridge)
-        self.plot_1K_and_300mK_monitor()
+        self.get_plot_1K_and_300mK_monitor()
 
 
 # ###################################################### SCIENTIFIC DIAGNOSTIC ########################################################################
@@ -482,7 +579,7 @@ class Diagnostic:
         - a_list: a qubic.focalplane object. Either a single qubicfp or a list of qubicfp.
         - data_date: str or array of str. Contains the name of the dataset(s)
         - sat_thr: float, fraction of time to be used as threshold for saturation. If the saturation time is > sat_thr : detector is saturated. Default is 0.01 (1%)
-        - upper_satval: float, positive ADU value ccorresponding to saturation. Default is 4.19*1e6
+        - upper_satval: float, positive ADU value corresponding to saturation. Fixed at 2**22 - 2**7 = 4.19*1e6 due to the detector dynamic range
         - use_verbose : Bool. If True: do all the flux jump intermediate plots (zoom on jumps, comparison btw raw tod and smoothed tod, etc.). Recommended is: False
         
         The methods perform the following type of diagnostic:
@@ -491,7 +588,7 @@ class Diagnostic:
         - timeline acquisition
         - saturation detection (TO BE IMPROVED)
         - flux jumps detection
-        - power spectral density 
+        - power spectral density (TO BE IMPROVED: smooth PS, add lines of known frequencies, add curve fit)
         - coadded maps (TO BE IMPLEMENTED)
         The user can call each method individually or all of them through the analysis() method.
         '''
@@ -504,13 +601,7 @@ class Diagnostic:
         print()
         print('#######################################')
         print('Initialize diagnostic class for the dataset : \n {}'.format(self.data_date))
-        
-        #create directory to save focal plane plots
-        self.path_FP = './FocalPlane_{}'.format(self.data_date)
-        if not os.path.exists(self.path_FP):
-            print('Creating directory : ', self.path_FP)
-            os.mkdir(self.path_FP)
-        
+                
         #save saturation threshold
         self.sat_thr = sat_thr
         print('Saturation time threshold is : {} %'.format(self.sat_thr*100))
@@ -519,30 +610,43 @@ class Diagnostic:
         self.lower_satval = - upper_satval
         print('ADU saturation values: {} and {}'.format(self.upper_satval, self.lower_satval))
         
-        #dummy variable for the detector color, to be set later
-        self.colors = 0
-        
+        #set other variables
+        self.colors = 0 #dummy variable for the detector color, to be set later
+        self.num_det = 256 #total number of detectors
         self.use_verbose = use_verbose #this is used for flux jump intermediate plots (zoom on jumps, comparison btw raw tod and smoothed tod, etc.)
         
         #load in the tods from self.a
         print('##########Loading in the TODs##########')
         if isinstance(self.data_date, str): 
             #there's only one qubicfc (dataset) to load
-            self.timeaxis, self.tod = self.a.tod()
+            self.timeaxis, tod_input = self.a.tod()
+            #if for some reason we only have part of the focalplane, set the missing tod info to zero
+            self.tod = np.zeros((self.num_det, tod_input.shape[-1]))
+            self.tod[:tod_input.shape[0],:] = tod_input
+            
+            #create directory name to save focal plane plots using the dataset name
+            self.path_FP = './FocalPlane_{}'.format(self.data_date)
+            
         else:
             #there's more than one qubicfc (dataset) to load
             self.timeaxis, _= self.a[0].tod()
             self.num_datasets = len(self.a)
             print('There are {} datasets'.format(self.num_datasets))
-            tods = []
+            self.tod = np.zeros((self.num_datasets, self.num_det, len(self.timeaxis))) #[]
             for i in range(self.num_datasets):
-                _, tod_tmp = self.a[i].tod()
-                print(tod_tmp.shape)
-                tods.append(tod_tmp)
-                print(len(tods))
-            self.tod = np.array(tods)
+                _, tod_input = self.a[i].tod()
+                self.tod[i, :tod_input.shape[0], :] = tod_input 
+                
+            #create directory name to save focal plane plots: use only the DATE of the set of datasets in this case
+            self.path_FP = './FocalPlane_{}'.format(self.data_date[0].split('_')[0])
+
         print('Timeline : ', self.timeaxis.shape)
         print('ADU : ', self.tod.shape)
+        #create directory to save focal plane plots    
+        if not os.path.exists(self.path_FP):
+            print('Creating directory : ', self.path_FP)
+            os.mkdir(self.path_FP)
+
         print('#######################################')
 
 # #################### SATURATION ##################################################
@@ -562,19 +666,19 @@ class Diagnostic:
         #upper_satval = 4.19*1e6
         #lower_satval = -4.19*1e6
 
-        frac_sat_time = np.zeros(256)
-        tes_to_use = np.ones(256, dtype=bool)
+        frac_sat_time = np.zeros(self.num_det)
+        tes_to_use = np.ones(self.num_det, dtype=bool)
 
-        colors = np.ones(256, dtype=str) 
+        colors = np.ones(self.num_det, dtype=str) 
 
-        for i in range(256):
+        for i in range(self.num_det):
             mask1 = adu[i] > self.upper_satval
             mask2 = adu[i] < self.lower_satval
             frac_sat_time[i] = (np.sum(mask1)+np.sum(mask2))/len(adu[i])
 
         saturated_tes = (frac_sat_time >= self.sat_thr)
-        fraction_saturated_tes = np.sum(saturated_tes) / 256
-        fraction_not_saturated_tes = np.sum(~saturated_tes) / 256
+        fraction_saturated_tes = np.sum(saturated_tes) / self.num_det
+        fraction_not_saturated_tes = np.sum(~saturated_tes) / self.num_det
 
         tes_to_use[saturated_tes] = False
         colors[saturated_tes] = 'r'
@@ -609,9 +713,9 @@ class Diagnostic:
         if isinstance(self.data_date, str): #there's only one dataset
             self.tes_to_use, self.colors, self.frac_saturation = self.do_saturation_diagnostic(self.tod, self.data_date, do_plot) 
         else: #there is more than one dataset. loop over all of them
-            self.tes_to_use = np.ones((self.num_datasets, 256), dtype=str)
-            self.colors = np.ones((self.num_datasets, 256), dtype=str) 
-            self.frac_saturation = np.zeros((self.num_datasets, 256)) 
+            self.tes_to_use = np.ones((self.num_datasets, self.num_det), dtype=str)
+            self.colors = np.ones((self.num_datasets, self.num_det), dtype=str) 
+            self.frac_saturation = np.zeros((self.num_datasets, self.num_det)) 
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
                 self.tes_to_use[j,:], self.colors[j,:], self.frac_saturation[j,:] = self.do_saturation_diagnostic(self.tod[j], self.data_date[j], do_plot)
@@ -652,7 +756,7 @@ class Diagnostic:
         if do_plot:
             #do plot
             self.plot_focal_plane(freq_f, np.array(spectrum_density), colors_to_use, plot_suptitle='{}: power spectrum'.format(data_date_full),
-                             path_and_filename=self.path_FP+'/FocalPlane_powerspectrum_{}'.format(data_date_full), the_yscale='log')
+                             path_and_filename=self.path_FP+'/FocalPlane_powerspectrum_{}'.format(data_date_full), the_xscale='log', the_yscale='log')
         
         return estimate, np.array(spectrum_density), freq_f
     
@@ -804,7 +908,7 @@ class Diagnostic:
         q = qubic.QubicInstrument(d)
 
         figure(figsize=(30, 30))
-        bar=progress_bar(256, 'Display focal plane')
+        bar=progress_bar(self.num_det, 'Display focal plane')
         #add title
         if plot_suptitle is not None:
             suptitle(plot_suptitle, x=0.5, y=1.0, fontsize=12)
@@ -864,8 +968,7 @@ class Diagnostic:
         '''
         This function plots the raw timeline of the entire focal plane
         '''
-        colors_plot = np.array(['c' for i in range(256)])
-        #colors_plot = 'g'*np.ones(256, dtype=str) 
+        colors_plot = np.array(['c' for i in range(self.num_det)])
         colors_plot[128:] = 'b'
         thermo_tes_idx = np.array([3,35,67,99])
         #colors_plot[~thermo_tes_idx] = 'g'

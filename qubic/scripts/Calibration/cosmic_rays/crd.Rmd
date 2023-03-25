@@ -5,9 +5,9 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.5.0
+      jupytext_version: 1.14.5
   kernelspec:
-    display_name: Python 3 (ipykernel)
+    display_name: Python 3
     language: python
     name: python3
 ---
@@ -217,19 +217,25 @@ def get_candidates(tes_num: int,
     return candidates
 
 
-def candidate_filter(time_fname: str, s_clean_fabs: np.ndarray, candidate: list) -> bool:
+def candidate_filter(time_fname: str,
+                     s_clean_fabs: np.ndarray,
+                     candidate: list,
+                     points_vertical_trend: int = 7) -> bool:
     
     """
     Returns True or False depending on whether the candidate is valid or not
 
         :param time_fname: str
             path to the file where the time values are saved
-            
-        :param signal_clean: CubicSpline
-            object that generates the signal cleaned from the atmosphere
         
         :param candidate: list 
             a candidate
+            
+        :param signal_clean: CubicSpline
+            object that generates the signal cleaned from the atmosphere
+              
+        :param points_vertical_trend: int
+            number of points preceding the candidate whose increasing linear trend is to be verified
 
     :return: bool
         True if the candidate is valid
@@ -264,6 +270,30 @@ def candidate_filter(time_fname: str, s_clean_fabs: np.ndarray, candidate: list)
         if straight(x1) - y1 < 0 or straight(x2) - y2 < 0:
             return False 
     
+    # Given the candidate's first index, I consider the previous 
+    # "points_vertical_trend" indexes to verify that the signal follows a vertical growth
+    
+    # First starting point for verifying vertical growth. 
+    # It respects the edge conditions of the signal array
+    first_vertical_point = max(0, candidate[0] - points_vertical_trend)
+    
+        
+    # check that the "points_vertical_trend" points preceding the candidate are strictly increasing
+    for index in range(first_vertical_point, candidate[0] - 1):
+        
+        if s_clean_fabs[index] > s_clean_fabs[index + 1]:
+            return False    
+    
+    # the points follow a vertical trend if the straight line connecting the first and last point 
+    # has an angular coefficient greater than 1 (theta greater than 45 degrees)
+    
+    delta_x = time[candidate[0]] - time[first_vertical_point] 
+    delta_y = s_clean_fabs[candidate[0]] - s_clean_fabs[first_vertical_point]
+    
+    if np.pi/4 * delta_x > delta_y:
+        return False
+    
+            
     return True
 
 
@@ -509,6 +539,7 @@ signals = np.load(signals_fname)
 tes_num = "93" 
 std_coeff = 5
 points_per_candidate = 7
+points_vertical_trend = 7
 time_raw -= time_raw[0]
 s_raw = signals[tes_num]
 
@@ -539,6 +570,52 @@ ax.set(xlabel="time [s]", ylabel="S [ADU]")
 
 ax.plot(time_raw, s_clean_fabs, alpha=0.3);
 ax.plot(time_raw, np.repeat(std_coeff*np.std(s_clean_fabs), len(time_raw)));
+```
+
+```{python}
+## Creation of the file containing the plots of ALL candidates for each TES - 
+## with attached the trend of "points_vertical_trend" points PRECEDING the candidate
+
+# all candidates (valid and not)
+candidates = get_candidates(tes_num, time_fname, s_clean, std_coeff, points_per_candidate) 
+
+col = 3 if len(candidates) >= 3 else 1
+row = int(round(len(candidates)/col)) if len(candidates) >= col else 1
+
+if row*col < len(candidates):
+    row += 1
+    
+candidates_figsize = {1: (8,5), 2: (6,8)}
+        
+fig, ax = plt.subplots(row, col, figsize=candidates_figsize[len(candidates)] if len(candidates) < 3 else (12,20)) 
+fig.suptitle(f"N. Candidates {len(candidates)} - TES {tes_num}")
+
+
+for index in range(len(candidates)):
+    x_plot = index // col
+    y_plot = index % col
+    
+    first_vertical_point = max(0, candidates[index][0] - points_vertical_trend)
+    time_signal_index = list(range(first_vertical_point, candidates[index][0])) + candidates[index]
+        
+    if col > 1:
+        ax[x_plot][y_plot].scatter(time_raw[time_signal_index], s_clean_fabs[time_signal_index])
+        ax[x_plot][y_plot].set_xlabel("Time [s]")
+        ax[x_plot][y_plot].set_ylabel("Signal [ADU]")
+    else:
+        if row > 1:
+            ax[x_plot].scatter(time_raw[time_signal_index], s_clean_fabs[time_signal_index])
+            ax[x_plot].set_xlabel("Time [s]")
+            ax[x_plot].set_ylabel("Signal [ADU]")
+        else:
+            ax.scatter(time_raw[time_signal_index], s_clean_fabs[time_signal_index])
+            ax.set_xlabel("Time [s]")
+            ax.set_ylabel("Signal [ADU]")
+            
+
+plt.tight_layout()
+plt.subplots_adjust(top=0.93)
+plt.savefig(f"candidates_plots_TES_{tes_num}")
 ```
 
 ```{python}

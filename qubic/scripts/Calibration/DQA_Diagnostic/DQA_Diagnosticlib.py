@@ -141,7 +141,7 @@ class HK_Diagnostic:
         return
     
         
-    def plot_1Ktemperature_wo_problematic_sensors(self, a):
+    def plot_1Ktemperature_wo_problematic_sensors(self, a, data_date):
         '''
         This function returns a 1K temperature sensors plot without problematic sensors, like the 1K Stage Back sensor.  A png image is saved.
         '''
@@ -164,7 +164,22 @@ class HK_Diagnostic:
         if np.max(a.get_hk('AVS47_2_ch4')) < 10.:
             label['AVS47_2_ch4'] = '4K shield Cu braids'
         #plot
-        a.plot_temperatures(None,label,'1K Temperatures wo patological stages',12)
+        #a.plot_temperatures(None,label,'1K Temperatures wo patological stages',12)
+        time_sensors = a.get_hk(data='RaspberryDate',hk='EXTERN_HK').copy()
+        time_sensors -= time_sensors[0]
+        time_sensors /= 60
+        figure(figsize=(15,15))
+        i=1
+        suptitle(data_date+' : 1K Temperatures wo patological stages', y=1)
+        for k in label.keys():
+            subplot(3,3,i)
+            plot(time_sensors, a.get_hk(k), marker='D',markersize=0.2*12)
+            ylabel(label[k]+' [K]')
+            xlabel('Time [min]')
+            i+=1
+        tight_layout()
+        savefig(self.path_HK+'/{}_1K_Temperatures_wo_patological_stages.png'.format(data_date))
+            
         close()
         return
     
@@ -176,11 +191,11 @@ class HK_Diagnostic:
         print()
         print('-----> 1K temperatures diagnostic')
         if isinstance(self.data_date, str): #there's only one dataset
-            self.plot_1Ktemperature_wo_problematic_sensors(self.a) 
+            self.plot_1Ktemperature_wo_problematic_sensors(self.a, self.data_date) 
         else: #there is more than one dataset. loop over all of them
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
-                self.plot_1Ktemperature_wo_problematic_sensors(self.a[j])                
+                self.plot_1Ktemperature_wo_problematic_sensors(self.a[j], self.data_date[j])                
         return
 
     
@@ -196,25 +211,25 @@ class HK_Diagnostic:
         title('1K monitor', y=0.95)
         OneK_stage = a.get_hk('AVS47_1_ch1')
         OneK_fridge = a.get_hk('AVS47_1_ch4')
-        time_hk = a.get_hk(data='RaspberryDate',hk='EXTERN_HK')
+        time_hk = a.get_hk(data='RaspberryDate',hk='EXTERN_HK').copy()
         time_hk -= time_hk[0] #convert time into hours
-        time_hk /= (60*60)
-        plot(time_hk, OneK_stage, color='b')
+        time_hk /= 60 #(60*60)
+        plot(time_hk, OneK_stage, color='b', marker='D',markersize=0.2*12)
         ylabel('1K Stage [K]', color='b')
         xlabel('Time [hours]')
         twinx()
-        plot(time_hk, OneK_fridge, color='r')
+        plot(time_hk, OneK_fridge, color='r', marker='D',markersize=0.2*12)
         ylabel('1K Fridge [K]', color='r')
         #plot 300mK monitor
         subplot(1,2,2)
         title('300 mK monitor', y=0.95)
         TES_stage = a.get_hk('AVS47_1_CH2')
         ThreeHmK_fridge = a.get_hk('AVS47_1_CH6')
-        plot(time_hk, TES_stage, color='b')
+        plot(time_hk, TES_stage, color='b', marker='D',markersize=0.2*12)
         ylabel('TES Stage [K]', color='b')
         xlabel('Time [hours]')
         twinx()
-        plot(time_hk, ThreeHmK_fridge, color='r')
+        plot(time_hk, ThreeHmK_fridge, color='r', marker='D',markersize=0.2*12)
         ylabel('300 mK Fridge [K]', color='r')
         
         tight_layout()
@@ -711,14 +726,16 @@ class Diagnostic:
         print()
         print('-----> Saturation detection')
         if isinstance(self.data_date, str): #there's only one dataset
-            self.tes_to_use, self.colors, self.frac_saturation = self.do_saturation_diagnostic(self.tod, self.data_date, do_plot) 
+            self.tes_to_use, self.colors, self.frac_saturation = self.do_saturation_diagnostic(self.tod, self.data_date, do_plot)
+            pickle.dump([self.tes_to_use, self.frac_saturation], open(self.path_FP+'/{}_Saturated_TES_statistics.pkl'.format(self.data_date),'wb'))
         else: #there is more than one dataset. loop over all of them
-            self.tes_to_use = np.ones((self.num_datasets, self.num_det), dtype=str)
+            self.tes_to_use = np.ones((self.num_datasets, self.num_det), dtype=bool)
             self.colors = np.ones((self.num_datasets, self.num_det), dtype=str) 
-            self.frac_saturation = np.zeros((self.num_datasets, self.num_det)) 
+            self.frac_saturation = np.zeros(self.num_datasets) 
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
-                self.tes_to_use[j,:], self.colors[j,:], self.frac_saturation[j,:] = self.do_saturation_diagnostic(self.tod[j], self.data_date[j], do_plot)
+                self.tes_to_use[j,:], self.colors[j,:], self.frac_saturation[j] = self.do_saturation_diagnostic(self.tod[j], self.data_date[j], do_plot)
+            pickle.dump([self.tes_to_use, self.frac_saturation], open(self.path_FP+'/{}_Saturated_TES_statistics.pkl'.format(self.data_date[0].split('_')[0]),'wb'))
                 
         return
 
@@ -755,7 +772,8 @@ class Diagnostic:
         
         if do_plot:
             #do plot
-            self.plot_focal_plane(freq_f, np.array(spectrum_density), colors_to_use, plot_suptitle='{}: power spectrum'.format(data_date_full),
+            f_to_use = (freq_f<=20.)
+            self.plot_focal_plane(freq_f[f_to_use], np.array(spectrum_density)[:,f_to_use], colors_to_use, plot_suptitle='{}: power spectrum'.format(data_date_full),
                              path_and_filename=self.path_FP+'/FocalPlane_powerspectrum_{}'.format(data_date_full), the_xscale='log', the_yscale='log')
         
         return estimate, np.array(spectrum_density), freq_f
@@ -854,6 +872,7 @@ class Diagnostic:
         
         tes_with_fj = (colors_to_use=='y')
         frac_flux = np.sum(tes_with_fj) / num_of_det
+        print(frac_flux*100)
         
         #plot focal plane
         if do_plot:
@@ -881,9 +900,10 @@ class Diagnostic:
         if isinstance(self.data_date, str): #there's only one dataset
             self.tes_to_use, self.colors, self.frac_flux = self.do_fluxjump_diagnostic(self.timeaxis, self.tod, self.data_date, self.tes_to_use ,self.colors, self.frac_saturation, do_plot) 
         else: #there is more than one dataset. loop over all of them
+            self.frac_flux = np.zeros(self.num_datasets) 
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
-                self.tes_to_use[j,:], self.colors[j,:], self.frac_flux[j,:] = self.do_fluxjump_diagnostic(self.timeaxis, self.tod[j], self.data_date[j], self.tes_to_use[j], self.colors[j], self.frac_saturation[j], do_plot)
+                self.tes_to_use[j,:], self.colors[j,:], self.frac_flux[j] = self.do_fluxjump_diagnostic(self.timeaxis, self.tod[j], self.data_date[j], self.tes_to_use[j], self.colors[j], self.frac_saturation[j], do_plot)
                 
         return
 
@@ -947,11 +967,17 @@ class Diagnostic:
                     plot(x_data, tes_y_data[idx_tes, :], color=colors_plot[idx_tes])
                 else:
                     plot(x_data[idx_tes], tes_y_data[idx_tes, :], color=colors_plot[idx_tes])
-                #############################            
+                #############################   
+                if any('powerspectrum' in path_and_filename):
+                    vlines(0.4, np.min(tes_y_data[idx_tes, :]), np.max(tes_y_data[idx_tes, :]), color='k', linestyle='dashed')
+                    vlines(1.73, np.min(tes_y_data[idx_tes, :]), np.max(tes_y_data[idx_tes, :]), color='k', linestyle='dashed')
+                    vlines(0.003, np.min(tes_y_data[idx_tes, :]), np.max(tes_y_data[idx_tes, :]), color='k', linestyle='dotted')
+                    vlines(0.00005, np.min(tes_y_data[idx_tes, :]), np.max(tes_y_data[idx_tes, :]), color='k', linestyle='dashdot')
+                    #xlim([0,10])
                 xscale(the_xscale)
                 yscale(the_yscale)
                 annotate('{}'.format(num_tes), xy=(0, 0),  xycoords='axes fraction', fontsize=9, color='black',
-                     fontstyle='italic', fontweight='bold', xytext=(0.05,0.85),backgroundcolor=bgcol)
+                     fontstyle='italic', fontweight='bold', xytext=(0.05,0.85))#,backgroundcolor=bgcol)
 
                 bar.update()
 

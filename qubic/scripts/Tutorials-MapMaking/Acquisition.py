@@ -1697,12 +1697,12 @@ class QubicIntegratedComponentsMapMaking:
     def get_monochromatic_acquisition(self, nu):
     
         self.d['filter_nu'] = nu
-    
+
         sampling = qubic.get_pointing(self.d)
         scene = qubic.QubicScene(self.d)
         instrument = qubic.QubicInstrument(self.d)
-        #print(instrument)
-        return qubic.QubicAcquisition(instrument, sampling, scene, self.d)
+
+        return qubic.QubicAcquisition(instrument, sampling, scene, self.d).get_operator()
     def get_PySM_maps(self, config):
         allmaps = np.zeros((self.nc, 12*self.nside**2, 3))
         ell=np.arange(2*self.nside-1)
@@ -1732,6 +1732,13 @@ class QubicIntegratedComponentsMapMaking:
                 sky=pysm3.Sky(nside=self.nside, preset_strings=[config[kconf]])
                 mysync=np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0*u.GHz, None, u.uK_CMB))
                 allmaps[k] = mysync.copy()
+            elif kconf == 'coline':
+                
+                sky=pysm3.Sky(nside=self.nside, preset_strings=[config[kconf]], output_unit="uK_CMB")
+                nu0 = sky.components[0].line_frequency['21'].value
+                myco=np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0*u.GHz, None, u.uK_CMB))
+                allmaps[k] = myco.copy()
+
             else:
                 raise TypeError('Choose right foreground model (d0, s0, ...)')
 
@@ -1802,12 +1809,10 @@ class QubicIntegratedComponentsMapMaking:
         for _, i in enumerate(self.subacqs):
             Operator.append(i.get_operator())
         return Operator
-    def get_operator(self, beta, convolution, gain=None, list_fwhm=None, co_line=False):
+    def get_operator(self, beta, convolution, gain=None, list_fwhm=None, nu_co=None):
 
         list_op = self._get_array_of_operators()
-        if co_line:
-            index_acq_co = find_co(self.comp, self.nus_edge)
-            acq_co = list_op[index_acq_co]
+
         if beta.shape[0] <= 2:
             R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
         else:
@@ -1831,15 +1836,27 @@ class QubicIntegratedComponentsMapMaking:
             
             list_op[inu] = list_op[inu] * C * R * A
 
-
         Rflat = ReshapeOperator((self.Ndets, self.Nsamples), self.Ndets*self.Nsamples)
-        return Rflat * BlockColumnOperator([G * np.sum(list_op, axis=0)], axisout=0)
-    def update_A(self, H, newbeta):
+        H = Rflat * BlockColumnOperator([G * np.sum(list_op, axis=0)], axisout=0)
 
+        if nu_co is not None:
+            Hco = self.get_monochromatic_acquisition(nu_co)
+            Aco = CMMTools.get_mixing_operator(beta, np.array([nu_co]), comp=self.comp, nside=self.nside, active=True)
+            Hco = Rflat * Hco * R * Aco
+            H += Hco
+
+        return H
+    def update_A(self, H, newbeta):
         
-        for inu, nu in enumerate(self.allnus):
-            newA = CMMTools.get_mixing_operator(newbeta, np.array([nu]), comp=self.comp, nside=self.nside)
-            H.operands[2].operands[inu].operands[-1] = newA
+        # If CO line
+        if len(H.operands) == 2:
+            for inu, nu in enumerate(self.allnus):
+                newA = CMMTools.get_mixing_operator(newbeta, np.array([nu]), comp=self.comp, nside=self.nside, active=False)
+                H.operands[0].operands[2].operands[inu].operands[-1] = newA
+        else:
+            for inu, nu in enumerate(self.allnus):
+                newA = CMMTools.get_mixing_operator(newbeta, np.array([nu]), comp=self.comp, nside=self.nside)
+                H.operands[2].operands[inu].operands[-1] = newA
 
         return H
     def get_coverage(self):
@@ -1929,7 +1946,7 @@ class QubicTwoBandsComponentsMapMaking:
         new_H220 = self.qubic220.update_A(self.H220, newbeta=newbeta)
         Operator=[new_H150, new_H220]
         return BlockColumnOperator(Operator, axisout=0)
-    def get_operator(self, beta, convolution, gain=None, list_fwhm=None):
+    def get_operator(self, beta, convolution, gain=None, list_fwhm=None, nu_co=None):
 
         if list_fwhm is not None:
             list_fwhm1 = list_fwhm[:self.Nsub]
@@ -1941,8 +1958,8 @@ class QubicTwoBandsComponentsMapMaking:
         if gain is None:
             gain = 1 + 0.000001 * np.random.randn(2, 992)
 
-        self.H150 = self.qubic150.get_operator(beta, convolution=convolution, list_fwhm=list_fwhm1, gain=gain[0])
-        self.H220 = self.qubic220.get_operator(beta, convolution=convolution, list_fwhm=list_fwhm2, gain=gain[1])
+        self.H150 = self.qubic150.get_operator(beta, convolution=convolution, list_fwhm=list_fwhm1, gain=gain[0], nu_co=None)
+        self.H220 = self.qubic220.get_operator(beta, convolution=convolution, list_fwhm=list_fwhm2, gain=gain[1], nu_co=nu_co)
 
         Operator=[self.H150, self.H220]
 
@@ -2014,8 +2031,8 @@ class QubicOtherIntegratedComponentsMapMaking:
 
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
-    def get_operator(self, beta, convolution, gain=None, list_fwhm=None):
-        Hqubic = self.qubic.get_operator(beta=beta, convolution=convolution, list_fwhm=list_fwhm, gain=gain)
+    def get_operator(self, beta, convolution, gain=None, list_fwhm=None, nu_co=None):
+        Hqubic = self.qubic.get_operator(beta=beta, convolution=convolution, list_fwhm=list_fwhm, gain=gain, nu_co=nu_co)
         Rqubic = ReshapeOperator(Hqubic.shapeout, Hqubic.shape[0])
 
         Operator=[Rqubic * Hqubic]
@@ -2030,7 +2047,7 @@ class QubicOtherIntegratedComponentsMapMaking:
                 # Compute operator H with forced convolution
                 fwhm = self.allresolution_external[ii]
                 # Add operator
-                Hother = other.get_operator(self.nintegr, beta, convolution=convolution, myfwhm=[0])
+                Hother = other.get_operator(self.nintegr, beta, convolution=convolution, myfwhm=[0], nu_co=nu_co)
                 
                 Operator.append(Hother)
         return BlockColumnOperator(Operator, axisout=0)
@@ -2059,9 +2076,9 @@ class QubicOtherIntegratedComponentsMapMaking:
         tod_external = R.T(maps_external)
 
         return np.r_[tod_qubic, tod_external]
-    def get_observations(self, beta, gain, components, convolution, noisy=True):
+    def get_observations(self, beta, gain, components, convolution, noisy=True, nu_co=None):
 
-        H = self.get_operator(beta, convolution, gain=gain)
+        H = self.get_operator(beta, convolution, gain=gain, nu_co=nu_co)
         tod = H(components)
         n = self.get_noise()
         if noisy:
@@ -2074,34 +2091,42 @@ class QubicOtherIntegratedComponentsMapMaking:
         gc.collect()
 
         return tod
-    def update_systematic(self, H, newG):
+    def update_systematic(self, H, newG, co=False):
 
         Hp = H.copy()
         if self.number_FP == 2:
-            for i in range(2):
-                G = DiagonalOperator(newG[i], broadcast='rightward')
-                Hp.operands[0].operands[i].operands[1] = G
+            G150 = DiagonalOperator(newG[0], broadcast='rightward')
+            G220 = DiagonalOperator(newG[1], broadcast='rightward')
+            if co:
+                Hp.operands[0].operands[0].operands[1] = G150
+                Hp.operands[0].operands[1].operands[0].operands[1] = G220
+            else:
+                Hp.operands[0].operands[0].operands[1] = G150
+                Hp.operands[0].operands[1].operands[1] = G220
         else:
             G = DiagonalOperator(newG, broadcast='rightward')
             Hp.operands[0].operands[1] = G
-        #for i in range(self.Nsub):
-        #Hp.operands[0].operands[0].operands[1] = G150
-        #Hp.operands[0].operands[1].operands[1] = G220
 
         return Hp
     def update_A(self, H, newbeta):
 
         if self.number_FP == 2:
-            for i in range(self.number_FP):
-                H.operands[0].operands[i] = self.qubic.qubic150.update_A(H.operands[0].operands[i], newbeta=newbeta)
+            H.operands[0].operands[0] = self.qubic.qubic150.update_A(H.operands[0].operands[0], newbeta=newbeta)
+            H.operands[0].operands[1] = self.qubic.qubic220.update_A(H.operands[0].operands[1], newbeta=newbeta)
         else:
             H.operands[0] = self.qubic.update_A(H.operands[0], newbeta=newbeta)
        #H.operands[0].operands[1] = self.qubic.qubic220.update_A(H.operands[0].operands[1], newbeta=newbeta)
 
         for inu, nu in enumerate(self.external_nus):
-
-            newA = CMMTools.get_mixing_operator(newbeta, np.array([nu]), comp=self.comp, nside=self.nside)
-            H.operands[inu+1].operands[-1] = newA
+            if self.nintegr == 1:
+                newA = CMMTools.get_mixing_operator(newbeta, np.array([nu]), comp=self.comp, nside=self.nside)
+                H.operands[inu+1].operands[-1] = newA
+            else:
+                allnus = np.linspace(nu-self.bw[inu]/2, nu+self.bw[inu]/2, self.nintegr)
+                print(allnus)
+                for jnu, j in enumerate(allnus):
+                    newA = CMMTools.get_mixing_operator(newbeta, np.array([j]), comp=self.comp, nside=self.nside)
+                    H.operands[inu+1].operands[2].operands[jnu].operands[-1] = newA
 
         return H
 
@@ -2185,7 +2210,7 @@ class OtherData:
         # Create reshape operator and apply it to the diagonal operator
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
-    def get_operator(self, nintegr, beta, convolution, myfwhm=None):
+    def get_operator(self, nintegr, beta, convolution, myfwhm=None, nu_co=None):
         R2tod = ReshapeOperator((12*self.nside**2, 3), (3*12*self.nside**2))
         if beta.shape[0] <= 2:
             R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
@@ -2213,6 +2238,12 @@ class OtherData:
             for inu, nu in enumerate(allnus):
                 D = CMMTools.get_mixing_operator(beta, np.array([nu]), comp=self.comp, nside=self.nside, active=False)
                 op.append(C * R * D)
+
+            if i == 217:
+                if nu_co is not None:
+                    Dco = CMMTools.get_mixing_operator(beta, np.array([nu_co]), comp=self.comp, nside=self.nside, active=True)
+                    op.append(C * R * Dco)
+            
             Operator.append(R2tod(AdditionOperator(op)/nintegr))
         return BlockColumnOperator(Operator, axisout=0)
 

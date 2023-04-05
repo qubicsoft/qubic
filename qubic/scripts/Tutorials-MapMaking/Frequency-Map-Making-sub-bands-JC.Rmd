@@ -105,10 +105,10 @@ noise_planck_level = 1
 noise_qubic_level = 1
 
 
-npointings = 3000
-Nf_TOD = 20
+npointings = 2000
+Nf_TOD = 10
 Nf_recon = 5
-fact_sub = 4
+fact_sub = 2
 
 reload(Acq)
 
@@ -392,11 +392,15 @@ else:
 ```
 
 ```{python}
-
+del H_TOD
+gc.collect()
 ```
 
 ```{python}
-
+import pickle
+thesolution = solution_qubic_planck['x']['x'].copy()
+with open('sol_with_noise.pickle', 'wb') as f:
+    pickle.dump([thesolution, seenpix], f)
 ```
 
 ```{python}
@@ -496,7 +500,7 @@ plt.show()
 ```
 
 ```{python}
-rc('font', size=15)
+rc('font', size=10)
 rc('figure', figsize=(20, 8))
 
 istk = 1
@@ -552,6 +556,10 @@ for istk in range(3):
         k+=3
     
 #plt.show()
+```
+
+```{python}
+qubicplanck_acquisition.nueff
 ```
 
 # Essai: 
@@ -709,17 +717,12 @@ print(mytoto2.chi2)
 print('Uniform weights')
 print(mytoto.chi2)
 print(res['fun'])
-print(res['x'])
-print()
-print(np.insert(res['x'], 0, 1))
-```
-
-```{python}
-res
-```
-
-```{python}
 goodweights = np.insert(res['x'], 0, 1)
+print()
+print(goodweights)
+```
+
+```{python}
 mytoto2 = toto(solution_qubic_planck['x']['x'], m_sub, seenpix, myfwhms, goodweights, center, verbose=False)
 mytoto2.plot_all(reso=15, cmap='jet')
 

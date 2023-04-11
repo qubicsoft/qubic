@@ -60,6 +60,20 @@ class FixedDataOperator(Operator):
     def transpose(self, input, output):
         output[...] = input[self.seenpix]
 
+@pyoperators.flags.orthogonal
+#@pyoperators.flags.involutary
+class BandpassOperator(Operator):
+    
+    def __init__(self, data):
+        
+        self.data = data
+        Operator.__init__(self, shapein=self.data.shape, shapeout=self.data.shape)
+        
+    def direct(self, x, out):
+        out[...] = x + self.data
+    
+    def transpose(self, x, out):
+        out[...] = x - self.data
 __all__ = ['QubicAcquisition',
            'PlanckAcquisition',
            'QubicPlanckAcquisition',
@@ -678,20 +692,27 @@ class PlanckAcquisition:
         out = np.random.standard_normal(np.ones((12*self.nside**2, 3)).shape) * self.sigma
         np.random.set_state(state)
         return out
+    
+    def get_map(self, nu_min, nu_max, Nintegr, sky_config, d, fwhm = None):
 
-    def get_observation(self, noiseless=False):
-        obs = self._true_sky
-        if not noiseless:
-            obs = obs + self.C(self.get_noise())
-        if len(self.scene.shape) == 2:
-            for i in range(self.scene.shape[1]):
-                obs[~(self.mask), i] = 0.
+        print(f'Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps')
+        obj = QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
+        if Nintegr == 1:
+            allnus = np.array([np.mean([nu_min, nu_max])])
         else:
-            obs[~(self.mask)] = 0.
-        return obs
-        # XXX neglecting convolution effects...
-        HealpixConvolutionGaussianOperator(fwhm=self.fwhm)(obs, obs)
-        return obs
+            allnus = np.linspace(nu_min, nu_max, Nintegr)
+        m = obj.get_PySM_maps(sky_config, nus=allnus)
+    
+        if fwhm is None:
+            fwhm = [0]*Nintegr
+        
+        for i in range(Nintegr):
+            C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+            m[i] = C(m[i])
+    
+        return np.mean(m, axis=0)
+
+
 class QubicPlanckAcquisition:
 
     def __init__(self, qubic, planck):
@@ -1011,12 +1032,12 @@ class QubicPlanckMultiBandAcquisition:
         self.nus_edge = self.qubic.nus_edge
         self.nueff = self.qubic.nueff
         self.nfreqs = len(self.nueff)
-    def get_operator(self, convolution=False, myfwhm=None, fixed_data=None):
+    def get_operator(self, convolution=False, myfwhm=None):
         
         if self.type == 'QubicIntegrated':   # Classic intrument
             
             # Get QUBIC operator
-            H_qubic = self.qubic.get_operator(convolution=convolution, myfwhm=myfwhm, fixed_data=fixed_data)
+            H_qubic = self.qubic.get_operator(convolution=convolution, myfwhm=myfwhm)
             # Reshape the operator to match a desired input and output shape
             R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
             R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
@@ -1046,17 +1067,11 @@ class QubicPlanckMultiBandAcquisition:
                 # Loop over the number of frequencies again
                 for j in range(self.nfreqs):
 
-                    if fixed_data is not None:
-                        seenpix = fixed_data[j, :, 0] == 0
-                        f = FixedDataOperator(fixed_data[j], seenpix)
-                    else:
-                        f = IdentityOperator()
-
                     # Create an Operator list that includes the appropriate operator for each frequency
                     if i == j :
-                        Operator.append(R_planck*C*f)
+                        Operator.append(R_planck*C)
                     else:
-                        Operator.append(R_planck*0*C*f)
+                        Operator.append(R_planck*0*C)
 
                 # Append a BlockColumnOperator instance to the full_operator list
                 full_operator.append(BlockColumnOperator(Operator, axisout=0))
@@ -1191,7 +1206,7 @@ class QubicPlanckMultiBandAcquisition:
         invntt_qubic = self.qubic.get_invntt_operator()
         R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
         Operator = [R_qubic(invntt_qubic(R_qubic.T))]
-
+    
 
 
     def get_noise(self):
@@ -1441,14 +1456,55 @@ class QubicIntegrated:
     def get_noise(self):
         a = self._get_average_instrument_acq()
         return a.get_noise()
-    def _get_array_of_operators(self, convolution=False, myfwhm=None, fixed_data=None):
-        # Initialize an empty list
+    
+    def generate_tod(self, config, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
+
+        m_sub = self.get_PySM_maps(config, self.allnus)
+        array = self._get_array_of_operators(convolution=convolution, myfwhm=myfwhm)
+        h_tod = BlockRowOperator(array, new_axisin=0)
+        if self.Nsub == 1 and self.Nrec == 1:
+            tod = h_tod(m_sub[0]).ravel()
+        else:
+            tod = h_tod(m_sub).ravel()
+
+        if noise:
+            n = self.get_noise().ravel()
+            tod += n.copy()
+
+        if bandpass_correction:
+            tod = self.bandpass_correction(h_tod, tod, config)
+
+        return tod
+
+
+    def bandpass_correction(self, H, tod, config):
+        
+        fact = int(self.Nsub / self.Nrec)
+        k = 0
+        m_sub = self.get_PySM_maps(config, self.allnus)
+
+        for irec in range(self.Nrec):
+            
+            delta = m_sub[fact*irec:(irec+1)*fact] - np.mean(m_sub[fact*irec:(irec+1)*fact], axis=0)
+            for jfact in range(fact):
+                delta_tt = H.operands[k](delta[jfact]).ravel()
+                tod -= delta_tt
+                k+=1
+            
+        return tod
+
+    def _get_array_of_operators(self, convolution=False, myfwhm=None):
+        
         op = []
-        allsub = np.arange(0, self.Nsub, 1)
-        indice = allsub//int(self.Nsub/self.Nrec)
+        
         # Loop through each acquisition in subacqs
         k=0
         for ia, a in enumerate(self.subacqs):
+            
+            ###################
+            ### Convolution ###
+            ###################
+
             if convolution:
                 # Calculate the convolution operator for this sub-acquisition
                 allfwhm = self.allfwhm.copy()
@@ -1459,64 +1515,30 @@ class QubicIntegrated:
             else:
                 # If convolution is False, set the operator to an identity operator
                 C = IdentityOperator()
-        
 
-            # Append the acquisition operator multiplied by the convolution operator to the list
-            if fixed_data is not None:
-                
-                Planck_conv = fixed_data[k]
-                seenpix = fixed_data[0, :, 0] == 0
-                f = FixedDataOperator(Planck_conv, seenpix)
-            else:
-                f = IdentityOperator()
             k+=1
             
-            op.append(a.get_operator() * C * f)
+            op.append(a.get_operator() * C)
     
-        # Return the list of operators
         return op
-    def get_operator_to_make_TOD(self, convolution=False):
-        """
-        Returns the operator to make the time-ordered data (TOD).
-        The operator is a BlockRowOperator made of the acquisition operator and the convolution operator.
-
-        Parameters:
-        -----------
-        convolution: bool, default False
-            Whether to apply convolution with the instrumental beam.
-
-        Returns:
-        --------
-        operator: BlockRowOperator
-            The operator to make the TOD.
-        """
-        # Get the array of operators with convolution applied if specified
-        operator = self._get_array_of_operators(convolution=convolution, convolve_to_max=False)
-        # Combine the operators into a BlockRowOperator along the first axis
-        return BlockRowOperator(operator, new_axisin=0)
-    def get_operator(self, convolution=False, myfwhm=None, fixed_data=None):
+    
+    def get_operator(self, convolution=False, myfwhm=None):
 
         # Initialize an empty list to store the sum of operators for each frequency band
         op_sum = []
     
         # Get an array of operators for all sub-arrays
-        op = np.array(self._get_array_of_operators(convolution=convolution, myfwhm=myfwhm, fixed_data=fixed_data))
+        op = np.array(self._get_array_of_operators(convolution=convolution, myfwhm=myfwhm))
 
         # Loop over the frequency bands
+        f = int(self.Nsub/self.Nrec)
         for ii, band in enumerate(self.bands):
-        
+            
             # Print a message indicating the frequency band being processed
             print('Making sum from {:.2f} to {:.2f}'.format(band[0], band[1]))
-        
-            # Get the subset of operators for the current frequency band and sum them
-            if fixed_data is not None:
-                seenpix = fixed_data[:, 0] == hp.UNSEEN
-                sh_in = (np.sum(seenpix), 3)
-            else:
-                sh_in = (12*self.nside**2, 3)
             
             op_i = op[(self.nus > band[0]) * (self.nus < band[1])].sum(axis=0)#op[(self.nus > band[0]) * (self.nus < band[1])].sum(axis=0)
-        
+            
             # Append the summed operator to the list of operators for all frequency bands
             op_sum.append(op_i)
 
@@ -1528,6 +1550,7 @@ class QubicIntegrated:
         # Get the inverse noise variance covariance matrix from the first sub-acquisition
         invN = self.subacqs[0].get_invntt_operator()
         return invN
+    
 class QubicTwoBands:
 
     def __init__(self, qubic150, qubic220):
@@ -1624,7 +1647,7 @@ class QubicWideBand:
         self.nus_edge = np.append(self.nus_edge, self.qubic150.nus_edge)
         self.nus_edge = np.append(self.nus_edge, self.qubic220.nus_edge)
         self.Nf = self.qubic150.d['nf_recon']
-        self.scene = scene
+
 
         print('****************************')
         print('Noise : {}'.format(not self.qubic150.d['noiseless']))

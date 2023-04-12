@@ -1085,11 +1085,12 @@ class QubicPlanckMultiBandAcquisition:
             # Reshape the operator to match a desired input and output shape
             R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
             Ndets, Nsamples = R_qubic.shapein
-            Ndets /= int(2)
-            Ndets = int(Ndets)
+            if self.Nrec == 2:
+                Ndets /= int(2)
+                Ndets = int(Ndets)
+                #print(Ndets, Nsamples)
+                R_qubic = ReshapeOperator((Ndets, Nsamples), Ndets*Nsamples)
             #print(R_qubic.shapein, R_qubic.shapeout)
-            #print(Ndets, Nsamples)
-            R_qubic = ReshapeOperator((Ndets, Nsamples), Ndets*Nsamples)
             
             R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
 
@@ -1101,9 +1102,12 @@ class QubicPlanckMultiBandAcquisition:
                 for ifp in range(2):
                     full_operator = []
                     for inu in range(int(self.Nrec/2)):
-                        print(H_qubic.operands[1].operands[ifp])
-                        print(H_qubic.operands[1].operands[ifp].shapein, H_qubic.operands[1].operands[ifp].shapeout)
-                        operator = [R_qubic * H_qubic.operands[1].operands[ifp]]
+                        #print(H_qubic.operands[1].operands[ifp])
+                        #print(H_qubic.operands[1].operands[ifp].shapein, H_qubic.operands[1].operands[ifp].shapeout)
+                        if self.Nrec != 2:
+                            operator = [R_qubic * H_qubic.operands[ifp].operands[inu]]
+                        else:
+                            operator = [R_qubic * H_qubic.operands[1].operands[ifp]]
                         for jnu in range(int(self.Nrec/2)):
                             if inu == jnu :
                                 operator.append(R_planck)
@@ -1112,8 +1116,16 @@ class QubicPlanckMultiBandAcquisition:
                             k+=1
                         full_operator.append(BlockColumnOperator(operator, axisout=0))
                     huge_operator.append(BlockRowOperator(full_operator, new_axisin=0))
+
+            if self.Nrec != 2:
+                D = BlockDiagonalOperator(huge_operator, axisin=0)
+                print('shape 1 -> ', D.shapein, D.shapeout)
+                #R = ReshapeOperator(D.shapeout, (D.shapeout[0]*D.shapeout[1]))
+                return D
+            else:
                 D = BlockDiagonalOperator(huge_operator, new_axisin=0)
-                R = ReshapeOperator(D.shapeout, (D.shapeout[0]*D.shapeout[1]))
+                print('shape 2 -> ', D.shapein, D.shapeout)
+                R = ReshapeOperator(D.shapeout, D.shapeout[0]*D.shapeout[1])
                 return R * D
 
         
@@ -1480,7 +1492,7 @@ class QubicIntegrated:
             tod += n.copy()
 
         if bandpass_correction:
-            tod = self.bandpass_correction(h_tod, tod, config)
+            tod = self.bandpass_correction(h_tod, tod, {'dust':'d0'})
 
         return tod
 

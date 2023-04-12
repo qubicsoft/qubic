@@ -284,7 +284,6 @@ class QubicAcquisition(Acquisition):
     def get_noise(self, out=None):
         out = self.instrument.get_noise(
             self.sampling, self.scene, photon_noise=self.photon_noise, out=out)
-        print('ii', self.effective_duration)
         if self.effective_duration is not None:
             nsamplings = self.comm.allreduce(len(self.sampling))
             
@@ -1079,13 +1078,19 @@ class QubicPlanckMultiBandAcquisition:
             # Return a BlockRowOperator instance that concatenates the full_operator list together along a new axis
             return BlockRowOperator(full_operator, new_axisin=0)
 
-        
         elif self.qubic.type == 'TwoBands':  # TwoBands instrument
             
             # Get QUBIC operator
             H_qubic = self.qubic.get_operator(convolution=convolution)
             # Reshape the operator to match a desired input and output shape
             R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
+            Ndets, Nsamples = R_qubic.shapein
+            Ndets /= int(2)
+            Ndets = int(Ndets)
+            #print(R_qubic.shapein, R_qubic.shapeout)
+            #print(Ndets, Nsamples)
+            R_qubic = ReshapeOperator((Ndets, Nsamples), Ndets*Nsamples)
+            
             R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
 
             # Create an empty list to hold operators
@@ -1096,6 +1101,8 @@ class QubicPlanckMultiBandAcquisition:
                 for ifp in range(2):
                     full_operator = []
                     for inu in range(int(self.Nrec/2)):
+                        print(H_qubic.operands[1].operands[ifp])
+                        print(H_qubic.operands[1].operands[ifp].shapein, H_qubic.operands[1].operands[ifp].shapeout)
                         operator = [R_qubic * H_qubic.operands[1].operands[ifp]]
                         for jnu in range(int(self.Nrec/2)):
                             if inu == jnu :
@@ -1105,8 +1112,9 @@ class QubicPlanckMultiBandAcquisition:
                             k+=1
                         full_operator.append(BlockColumnOperator(operator, axisout=0))
                     huge_operator.append(BlockRowOperator(full_operator, new_axisin=0))
-            
-                return BlockDiagonalOperator(huge_operator, axisin=0)
+                D = BlockDiagonalOperator(huge_operator, new_axisin=0)
+                R = ReshapeOperator(D.shapeout, (D.shapeout[0]*D.shapeout[1]))
+                return R * D
 
         
         else:      # WideBand intrument

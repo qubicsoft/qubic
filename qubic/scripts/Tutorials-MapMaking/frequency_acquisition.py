@@ -1167,7 +1167,7 @@ class QubicPlanckMultiBandAcquisition:
         for i in range(self.qubic.d['nf_recon']):
             npl[i*npix*3:(i+1)*npix*3] = self.planck.get_noise().ravel()
         return npl
-    def get_invntt_operator(self, weight_planck=1, beam_correction=None, seenpix=None):
+    def get_invntt_operator(self, weight_planck=1, beam_correction=None, seenpix=None, mask=None):
         
         if self.type == 'QubicIntegrated' or self.type == 'WideBand':
             if beam_correction is None :
@@ -1184,7 +1184,7 @@ class QubicPlanckMultiBandAcquisition:
             Operator = [R_qubic(invntt_qubic(R_qubic.T))]
 
             for i in range(self.nfreqs):
-                invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i], mask=None, seenpix=seenpix)
+                invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i], mask=mask, seenpix=seenpix)
                 R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
                 Operator.append(R_planck(invntt_planck(R_planck.T)))
 
@@ -1492,6 +1492,7 @@ class QubicIntegrated:
             tod += n.copy()
 
         if bandpass_correction:
+            print('Bandpass correction')
             tod = self.bandpass_correction(h_tod, tod, {'dust':'d0'})
 
         return tod
@@ -1502,10 +1503,10 @@ class QubicIntegrated:
         fact = int(self.Nsub / self.Nrec)
         k = 0
         m_sub = self.get_PySM_maps(config, self.allnus)
-
         for irec in range(self.Nrec):
-            
+            print((irec)*fact, (irec+1)*fact)
             delta = m_sub[fact*irec:(irec+1)*fact] - np.mean(m_sub[fact*irec:(irec+1)*fact], axis=0)
+            print(delta.shape)
             for jfact in range(fact):
                 delta_tt = H.operands[k](delta[jfact]).ravel()
                 tod -= delta_tt

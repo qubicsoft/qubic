@@ -1183,8 +1183,11 @@ class QubicPlanckMultiBandAcquisition:
             R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
             Operator = [R_qubic(invntt_qubic(R_qubic.T))]
 
-            for i in range(self.nfreqs):
-                invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i], mask=mask, seenpix=seenpix)
+            for i in range(self.Nrec):
+                if i < int(self.Nrec/2):
+                    invntt_planck = weight_planck*self.planck[0].get_invntt_operator(beam_correction=beam_correction[i], mask=mask, seenpix=seenpix)
+                else:
+                    invntt_planck = weight_planck*self.planck[1].get_invntt_operator(beam_correction=beam_correction[i], mask=mask, seenpix=seenpix)
                 R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
                 Operator.append(R_planck(invntt_planck(R_planck.T)))
 
@@ -1253,7 +1256,7 @@ class QubicPlanckMultiBandAcquisition:
 
             # Loop over the number of frequencies
             for i in range(int(self.Nrec/2)):
-            #    # Append the noise array of the Planck instrument
+                # Append the noise array of the Planck instrument
                 n150 = np.r_[n150, self.planck[0].get_noise().ravel()]
                 n220 = np.r_[n220, self.planck[1].get_noise().ravel()]
                 
@@ -1263,9 +1266,12 @@ class QubicPlanckMultiBandAcquisition:
 
             n = self.qubic.get_noise().ravel()
             narray = np.array([])
-            for i in range(self.nfreqs):
-                # Append the noise array of the Planck instrument
-                n = np.r_[n, self.planck.get_noise().ravel()]
+            for i in range(self.Nrec):
+                if i < int(self.Nrec/2):
+                    # Append the noise array of the Planck instrument
+                    n = np.r_[n, self.planck[0].get_noise().ravel()]
+                else:
+                    n = np.r_[n, self.planck[1].get_noise().ravel()]
                 narray = n.copy()
             return narray
 
@@ -1477,7 +1483,7 @@ class QubicIntegrated:
         a = self._get_average_instrument_acq()
         return a.get_noise()
     
-    def generate_tod(self, config, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
+    def generate_tod(self, config, map_ref, beta, A_ev, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
 
         m_sub = self.get_PySM_maps(config, self.allnus)
         array = self._get_array_of_operators(convolution=convolution, myfwhm=myfwhm)
@@ -1493,19 +1499,31 @@ class QubicIntegrated:
 
         if bandpass_correction:
             print('Bandpass correction')
-            tod = self.bandpass_correction(h_tod, tod, {'dust':'d0'})
+            tod = self.bandpass_correction(h_tod, tod, map_ref, beta, A_ev)
 
         return tod
 
 
-    def bandpass_correction(self, H, tod, config):
+    def bandpass_correction(self, H, tod, map_ref, beta, A_ev):
         
         fact = int(self.Nsub / self.Nrec)
         k = 0
-        m_sub = self.get_PySM_maps(config, self.allnus)
+        sed = A_ev(beta)
+        modelsky = np.zeros((len(self.allnus), 12*self.nside**2, 3))
+        for i in range(3):
+            modelsky[:, :, i] = sed @ np.array([map_ref[:, i]])
+
+        #if convolution:
+        #    for i in range(len(self.allnus)):
+        #        C = HealpixConvolutionGaussianOperator(fwhm = self.allfwhm[i])
+        #        modelsky[i] = C(modelsky[i])
+        
+        #print(modelsky.shape)
+        #stop
+        #m_sub = self.get_PySM_maps(config, self.allnus)
         for irec in range(self.Nrec):
             print((irec)*fact, (irec+1)*fact)
-            delta = m_sub[fact*irec:(irec+1)*fact] - np.mean(m_sub[fact*irec:(irec+1)*fact], axis=0)
+            delta = modelsky[fact*irec:(irec+1)*fact] - np.mean(modelsky[fact*irec:(irec+1)*fact], axis=0)
             print(delta.shape)
             for jfact in range(fact):
                 delta_tt = H.operands[k](delta[jfact]).ravel()

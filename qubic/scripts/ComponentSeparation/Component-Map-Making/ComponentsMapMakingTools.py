@@ -33,7 +33,6 @@ def get_allA(nc, nf, npix, beta, nus, comp):
     else:
         # Return original mixing matrix
         return allA
-
 def get_mixing_operator_verying_beta(nc, nside, A):
 
     npix = 12*nside**2
@@ -42,20 +41,6 @@ def get_mixing_operator_verying_beta(nc, nside, A):
                            DenseBlockDiagonalOperator(A, broadcast='rightward', shapein=(npix, nc)),
                            DenseBlockDiagonalOperator(A, broadcast='rightward', shapein=(npix, nc))], new_axisin=0, new_axisout=2)
     return D
-
-'''
-def get_mixingmatrix(beta, nus, comp):
-
-    A = mm.MixingMatrix(*comp)
-    A_ev = A.evaluator(nus)
-    if beta.shape[0] == 0:
-        A = A_ev()
-    else:
-        A = A_ev(beta)
-
-    return A
-'''
-
 def get_mixingmatrix(beta, nus, comp, active=False):
     A = mm.MixingMatrix(*comp)
     if active:
@@ -89,9 +74,7 @@ def get_mixingmatrix(beta, nus, comp, active=False):
             A_ev[0, i] = 0
         except:
             pass
-
     return A_ev
-
 def get_mixing_operator(beta, nus, comp, nside, active=False):
     
     """
@@ -131,8 +114,6 @@ def get_mixing_operator(beta, nus, comp, nside, active=False):
         D = get_mixing_operator_verying_beta(nc, nside, A)
 
     return D
-
-
 def give_me_intercal(D, d):
     return 1/np.sum(D[:]**2, axis=1) * np.sum(D[:] * d[:], axis=1)
 def get_gain_detector(H, mysolution, tod, Nsamples, Ndets, number_FP):
@@ -172,7 +153,7 @@ def get_dictionary(nsub, nside, pointing, band):
     d['effective_duration'] = 3
     d['npointings'] = pointing
     d['filter_nu'] = int(band*1e9)
-    d['photon_noise'] = False
+    d['photon_noise'] = True
     d['config'] = 'FI'
     d['MultiBand'] = True
     
@@ -196,15 +177,20 @@ def myChi2(beta, betamap, Hi, solution, data, patch_id, acquisition):
     #print('chi2 ', np.sum((fakedata - data)**2))
     return np.sum((fakedata - data)**2)
 
-def normalize_tod(tod, ndets, nsamples, number_of_FP):
+def normalize_tod(tod, external_nus, npix):
 
-    tod_qubic = tod[:ndets*nsamples*number_of_FP]
-    tod_external = tod[ndets*nsamples*number_of_FP:]
+    R = ReshapeOperator(len(external_nus)*npix*3, (len(external_nus), npix, 3))
+    R1 = ReshapeOperator((npix, 3), npix*3)
+    
+    tod_external = R(tod)   # size -> (Nf, Npix, 3)
+    tod_normalized = []
+    
+    for ii, i in enumerate(external_nus):
+        tod_external[ii] = tod_external[ii]/tod_external[ii].max()
+        
+        tod_normalized = np.r_[tod_normalized, R1(tod_external[ii])]
 
-    newtod_qubic = tod_qubic / tod_qubic.max()
-    newtod_external = tod_external / tod_external.max()
-
-    return np.r_[newtod_qubic, newtod_external]
+    return tod_normalized
 
 class Spectra:
     

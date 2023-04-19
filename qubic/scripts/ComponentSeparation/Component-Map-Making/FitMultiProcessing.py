@@ -37,17 +37,18 @@ def do_fit(self, x):
 '''
 class FitMultiProcess:
 
-    def __init__(self, chi2, Nprocess, method='TNC', tol=1e-20, options={}):
+    def __init__(self, chi2, Nprocess, x0, method='TNC', tol=1e-20, options={}):
         
         self.chi2 = chi2
         self.Nprocess = Nprocess
         self.method = method
         self.tol = tol
         self.options = options
+        self.x0 = x0
         
     def fit(self, args):
 
-        res = minimize(self.chi2, np.ones(1)*1., args=args, method=self.method, tol=self.tol, options=self.options)
+        res = minimize(self.chi2, self.x0, args=args, method=self.method, tol=self.tol, options=self.options)
         return res.x
     
     def perform(self, x):

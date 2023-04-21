@@ -1,0 +1,337 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.5
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+# QUBIC packages
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from qubic import QubicSkySim as qss
+import sys
+sys.path.append('/home/tom/mypackages')
+
+import frequency_acquisition as Acq
+
+# Display packages
+import healpy as hp
+import matplotlib.pyplot as plt
+import gc
+
+# General packages
+import numpy as np
+import importlib
+from pyoperators import *
+import copy
+```
+
+```{python}
+def integration(nu_min, nu_max, Nintegr, sky_config, d, fwhm_subbands = None):
+    print(f'Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps')
+    obj = Acq.QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
+    if Nintegr == 1:
+        allnus = np.array([np.mean([nu_min, nu_max])])
+    else:
+        allnus = np.linspace(nu_min, nu_max, Nintegr)
+    m = obj.get_PySM_maps(sky_config, nus=allnus)
+    
+    if fwhm_subbands is not None:
+        for i in range(Nintegr):
+            C = HealpixConvolutionGaussianOperator(fwhm=fwhm_subbands[i])
+            m[i] = C(m[i])
+    
+    return np.array([np.mean(m, axis=0)])
+```
+
+```{python}
+# PyOperators packages
+from pyoperators import (
+    BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
+    CompositionOperator, DiagonalOperator, I, IdentityOperator,
+    MPIDistributionIdentityOperator, MPI, proxy_group, ReshapeOperator,
+    rule_manager, pcg, Operator)
+
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+```
+
+```{python}
+# usefull variables
+importlib.reload(Acq)
+nside = 256
+band = 150
+relative_bandwidth = 0.25
+noiseless = True
+noise = False
+effective_duration = 3
+noise_qubic_level = 1
+noise_planck_level = 1
+noise_qubicplanck_level = 1
+
+npointings = 1000
+Nf_TOD = 1
+Nf_recon = 1
+fact_sub = 1
+
+tol = 1e-40
+maxiter = 1500
+```
+
+```{python}
+# fill the dict
+
+dictfilename = 'dicts/pipeline_demo.dict'
+
+# Read dictionary chosen
+d_TOD = qubic.qubicdict.qubicDict()
+d_TOD.read_from_file(dictfilename)
+
+d_TOD['nf_recon'] = Nf_TOD
+d_TOD['nf_sub'] = Nf_TOD
+d_TOD['nside'] = nside
+npix=12*d_TOD['nside']**2
+d_TOD['RA_center'] = 0
+d_TOD['DEC_center'] = -57
+center = qubic.equ2gal(d_TOD['RA_center'], d_TOD['DEC_center'])
+d_TOD['effective_duration'] = effective_duration
+d_TOD['npointings'] = npointings
+d_TOD['tol'] = 5e-4
+d_TOD['filter_nu'] = band * 1e9
+d_TOD['photon_noise'] = False
+d_TOD['noiseless'] = True
+d_TOD['config'] = 'FI'
+d_TOD['MultiBand'] = True
+d_TOD['planck'] = True
+d_TOD['dtheta'] = 15
+```
+
+```{python}
+# Create the two dicts for 150 & 220 GHz
+d150 = d_TOD
+d220 = copy.deepcopy(d_TOD)
+d220['filter_nu'] = 220 * 1e9
+```
+
+```{python}
+# Create config
+Nf_TOD = 1
+Nf_recon = 1
+fact_sub = 1
+
+sky_config = {'cmb':1}#, 'dust':'d0'}
+```
+
+```{python}
+# Qubic acquisition
+qubic_acquisition_150 = Acq.QubicIntegrated(d150, Nsub=Nf_recon*fact_sub, Nrec=Nf_recon)
+qubic_acquisition_220 = Acq.QubicIntegrated(d220, Nsub=Nf_recon*fact_sub, Nrec=Nf_recon)
+
+# Create the wide band acquisition
+qubic_acquisition = Acq.QubicTwoBands(qubic_acquisition_150, qubic_acquisition_220)
+
+# Create Qubic scene
+scene = qubic_acquisition.scene
+
+# Create Nsub maps
+m_sub = qubic_acquisition_150.get_PySM_maps(sky_config, nus = qubic_acquisition.nueff)
+```
+
+```{python}
+# Create coverage
+coverage = qubic_acquisition.get_coverage()
+seenpix = coverage/coverage.max() > 0.0001
+```
+
+```{python}
+# Planck acquisitions
+planck_acquisition_150 = Acq.PlanckAcquisition(143, scene)
+planck_acquisition_220 = Acq.PlanckAcquisition(217, scene)
+
+# Joint acquisition
+qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, [planck_acquisition_150, planck_acquisition_220])
+```
+
+```{python}
+# QUBIC Planck operators
+H_qp = qubicplanck_acquisition.get_operator()
+invN_qp = qubicplanck_acquisition.get_invntt_operator()
+noise_qp = qubicplanck_acquisition.get_noise()
+
+TOD = H_qp(m_sub) + noise_qp * noise_qubicplanck_level
+```
+
+```{python}
+A = H_qp.T * invN_qp * H_qp
+b = H_qp.T * invN_qp * TOD
+```
+
+```{python}
+solution = pcg(A, b, x0=None, disp=True, tol=tol, maxiter=maxiter)
+```
+
+```{python}
+# Visualize the first sub-band at 150 Ghz
+# %matplotlib inline
+plt.figure(figsize=(10, 10))
+
+# m_sub[:, ~seenpix, :] = hp.UNSEEN
+# solution['x'][~seenpix, :] = hp.UNSEEN
+stk = ['I', 'Q', 'U']
+
+k=0
+reso=25
+for i in range(3):
+    if i == 0:
+        m = 300
+        minr = 20
+    else:
+        m = 8
+        minr = 8
+        
+    hp.gnomview(m_sub[0, :, i], rot=center, reso=reso, cmap='jet', sub=(3, 3, k+1), min=-m, max=m, title=f'{stk[i]} - Input')
+    hp.gnomview(solution['x'][0, :, i], rot=center, reso=reso, cmap='jet', sub=(3, 3, k+2), min=-m, max=m, title=f'{stk[i]} - Output')
+    residuals = solution['x'][0, :, i]-m_sub[0, :, i]
+    #residuals[~seenpix] = hp.UNSEEN
+    hp.gnomview(residuals, rot=center, reso=reso, cmap='jet', sub=(3, 3, k+3), min=-minr, max=minr, title=f'{stk[i]} - Residuals')
+    k+=3
+
+plt.show()
+```
+
+```{python}
+from qubic import NamasterLib as nms
+```
+
+```{python}
+solution_qubic = solution['x'].copy()
+m_sub_qubic = m_sub.copy()
+for i in range(npix):
+    if seenpix[i] == False:
+        solution_qubic[:, i, :] = 0
+        m_sub_qubic[:, i, :] = 0
+```
+
+```{python}
+namaster = nms.Namaster(weight_mask = seenpix, lmin = 40, lmax = 2*nside-1, delta_ell = 35)
+```
+
+```{python}
+solution_first_band = solution_qubic[0]
+```
+
+```{python}
+sky_map = m_sub_qubic[0]
+```
+
+```{python}
+_, spectra, _ = namaster.get_spectra(solution_first_band.T)
+```
+
+```{python}
+_, spectra_th, _ = namaster.get_spectra(sky_map.T)
+```
+
+```{python}
+spectra_TT, spectra_EE, spectra_BB, spectra_TE = spectra[:, 0], spectra[:, 1], spectra[:, 2], spectra[:, 3]
+```
+
+```{python}
+spectra_th_TT, spectra_th_EE, spectra_th_BB, spectra_th_TE = spectra_th[:, 0], spectra_th[:, 1], spectra_th[:, 2], spectra_th[:, 3]
+```
+
+```{python}
+# %matplotlib inline
+plt.plot(spectra_BB)
+```
+
+```{python}
+plt.plot(spectra_th_BB)
+```
+
+```{python}
+# Create a list which will contains residuals
+residual = []
+for stk_index in range(3):
+    residuals = solution['x'][:, :, stk_index]-m_sub[:, :, stk_index]
+    residual.append(residuals)
+print(np.shape(residual))
+```
+
+```{python}
+xx, yyI, yyQ, yyU = qss.get_angular_profile(np.array([residual[0][0], residual[1][0], residual[2][0]]).T, nbins=30, separate=True, center=center, thmax=30)
+plt.plot(xx, yyI, 'r.', label='I')
+plt.plot(xx, yyQ, 'b*', label='Q')
+plt.plot(xx, yyU, 'gs', label='U')
+plt.xlabel("Degrees")
+plt.ylabel('RMS')
+plt.legend()
+plt.show()
+```
+
+```{python}
+cov_res = np.zeros((3,Nf_TOD,Nf_TOD))
+plt.rc('font', size=10)
+plt.rc('figure', figsize=(20, 5))
+for i in range(3):
+    plt.subplot(1,3,i+1)
+    cov_res[i,:,:] = np.cov(residual[i][:][:])
+    plt.imshow(cov_res[i,:,:])
+    plt.xlabel('sub_band', fontsize = 20)
+    plt.ylabel('sub_band', fontsize = 20)
+    plt.title(stk[i], fontsize = 30)
+    plt.colorbar()
+plt.tight_layout()
+```
+
+```{python}
+# Select the sub-band of interest
+sub_band_index = 0
+
+# Select the Stokes parameter of interest
+stk_i_index = 0
+stk_q_index = 1
+stk_u_index = 2
+```
+
+```{python}
+cov = np.zeros((3,Nf_TOD,Nf_TOD))
+plt.rc('font', size=10)
+plt.rc('figure', figsize=(20, 5))
+for i in range(3):
+    plt.subplot(1,3,i+1)
+    cov[i,:,:] = np.cov(solution['x'][:,:,i])
+    plt.imshow(cov[i,:,:])
+    plt.xlabel('sub_band', fontsize = 20)
+    plt.ylabel('sub_band', fontsize = 20)
+    plt.title(stk[i], fontsize = 30)
+    plt.colorbar()
+plt.tight_layout()
+```
+
+```{python}
+corr = np.zeros((3,Nf_TOD,Nf_TOD))
+plt.rc('font', size=10)
+plt.rc('figure', figsize=(20, 5))
+for i in range(3):
+    plt.subplot(1,3,i+1)
+    cov[i,:,:] = np.corrcoef(solution['x'][:,:,i])
+    plt.imshow(cov[i,:,:])
+    plt.xlabel('sub_band', fontsize = 20)
+    plt.ylabel('sub_band', fontsize = 20)
+    plt.title(stk[i], fontsize = 30)
+    plt.colorbar()
+plt.tight_layout()
+```
+
+```{python}
+
+```

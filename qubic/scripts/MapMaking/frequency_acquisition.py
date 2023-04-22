@@ -1572,7 +1572,7 @@ class QubicIntegrated:
         # Get the inverse noise variance covariance matrix from the first sub-acquisition
         invN = self.subacqs[0].get_invntt_operator()
         return invN
-    
+
 class QubicTwoBands:
 
     def __init__(self, qubic150, qubic220):

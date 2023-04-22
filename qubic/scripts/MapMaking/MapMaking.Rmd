@@ -24,8 +24,6 @@ from qubicpack.utilities import Qubic_DataDir
 from qubic.data import PATH
 from qubic.io import read_map
 from qubic import QubicSkySim as qss
-import sys
-sys.path.append('/Users/mregnier/Desktop/PhD Regnier/mypackages')
 
 
 import frequency_acquisition as Acq
@@ -76,6 +74,24 @@ def integration(nu_min, nu_max, Nintegr, sky_config, d, fwhm_subbands = None):
 # # # %config InlineBackend.figure_format='retina'
 from IPython.display import display, HTML
 display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
+```{python}
+qubic.frequency_acquisition
+
+```
+
+```{python}
+import qubic
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

@@ -32,7 +32,6 @@ from qubic.polyacquisition import compute_freq
 __all__ = ['QubicInstrument',
            'QubicMultibandInstrument']
 
-
 class Filter(object):
     def __init__(self, nu, relative_bandwidth):
         self.nu = float(nu)

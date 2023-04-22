@@ -17,7 +17,7 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
-import instrument_mathias as instr
+#import instrument_mathias as instr
 
 import pysm3.units as u
 from importlib import reload

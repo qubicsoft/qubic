@@ -29,6 +29,7 @@ import pickle
 from scipy.optimize import minimize
 #import ComponentsMapMakingTools as CMMTools
 # PyOperators stuff
+#import component_acquisition as ca
 from pysimulators import *
 from pyoperators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator

@@ -19,6 +19,9 @@ warnings.filterwarnings("ignore")
 import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
+
+from frequency_acquisition import compute_fwhm_to_convolve
+import instrument as instr
 # FG-Buster packages
 import component_model as c
 import mixing_matrix as mm
@@ -39,7 +42,7 @@ def find_folder_recursively(folder_name, start_path=os.path.expanduser("~/Deskto
 CMB_FILE = os.path.dirname(os.path.abspath(__file__))+'/'
 print(CMB_FILE)
 #find_folder_recursively('mypackages', start_path=os.path.expanduser("~/Desktop"))
-
+'''
 __all__ = []
 
 def compute_fwhm_to_convolve(allres, target):
@@ -751,14 +754,19 @@ class QubicIntegrated:
         # Get the inverse noise variance covariance matrix from the first sub-acquisition
         invN = self.subacqs[0].get_invntt_operator()
         return invN
+'''
+
 class QubicIntegratedComponentsMapMaking:
 
     def __init__(self, d, comp, Nsub):
 
+
         self.d = d
         self.sampling = qubic.get_pointing(self.d)
         self.scene = qubic.QubicScene(self.d)
-        self.multiinstrument = qubic.QubicMultibandInstrument(self.d)
+        self.multiinstrument = instr.QubicMultibandInstrument(self.d)
+
+        
         self.Nsub = Nsub
         self.d['nf_sub'] = self.Nsub
         self.Ndets = 992
@@ -775,7 +783,7 @@ class QubicIntegratedComponentsMapMaking:
         self.Nsub = self.d['nf_sub']
         self.allnus = np.array([q.filter.nu / 1e9 for q in self.multiinstrument])
 
-        self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
+        self.subacqs = [qubic.QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
 
         
         self.allfwhm = np.zeros(len(self.multiinstrument))

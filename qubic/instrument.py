@@ -1276,17 +1276,21 @@ class QubicMultibandInstrument:
             Needed to study the synthesised beam
         """
         Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = compute_freq(d['filter_nu'] / 1e9,
-                                                                        d['nf_sub'],
+                                                                        d['nf_sub']-1,
                                                                         d['filter_relative_bandwidth'])
+        #print(deltas)
         self.FRBW = d['filter_relative_bandwidth']  # initial Full Relative Band Width
         d1 = d.copy()
+        #print('Nus_edge : {}'.format(nus_edge))
 
         self.nsubbands = len(filter_nus)
         if not d['center_detector']:
             self.subinstruments = []
-            for i in range(self.nsubbands):
-                d1['filter_nu'] = filter_nus[i] * 1e9
-                d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+            W = IntegrationTrapezeOperator(nus_edge)
+            for i in range(len(nus_edge)):
+
+                d1['filter_nu'] = nus_edge[i] * 1e9
+                d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge[i]
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
         else:
             self.subinstruments = []

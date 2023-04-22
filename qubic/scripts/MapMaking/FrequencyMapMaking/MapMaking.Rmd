@@ -33,6 +33,7 @@ sys.path.append(path_mm)
 
 
 import frequency_acquisition as Acq
+#import component_acquisition
 
 # Display packages
 import healpy as hp
@@ -144,6 +145,24 @@ covnorm = cov/cov.max()
 
 ### Pixels seen by QUBIC
 seenpix = covnorm > 0.
+```
+
+```{python}
+import component_acquisition
+
+component_acquisition.QubicIntegratedComponentsMapMaking(d, [c.Dust(nu0=150)], 3).get_operator(np.array([1.54, 20]), convolution=True)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

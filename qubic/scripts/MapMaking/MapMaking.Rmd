@@ -77,12 +77,10 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 ```
 
 ```{python}
-qubic.frequency_acquisition
 
 ```
 
 ```{python}
-import qubic
 
 ```
 

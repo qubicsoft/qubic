@@ -148,24 +148,6 @@ seenpix = covnorm > 0.
 ```
 
 ```{python}
-import component_acquisition
-
-component_acquisition.QubicIntegratedComponentsMapMaking(d, [c.Dust(nu0=150)], 3).get_operator(np.array([1.54, 20]), convolution=True)
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
 ### Return frequency map according to nu and sky model
 def get_pySM_maps(sky, nu):
     return np.array(sky.get_emission(nu * u.GHz, None).T * utils.bandpass_unit_conversion(nu*u.GHz, None, u.uK_CMB))

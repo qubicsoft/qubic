@@ -1,3 +1,13 @@
+#########################################################################################################################
+#########################################################################################################################
+########                                                                                                         ########
+########      This file contain the acquisition models to perform the frequency map-making for QUBIC. We can     ########
+########      choose to simulate one FP of the instrument, two FP or the WideBand instrument.                    ########
+########                                                                                                         ########
+#########################################################################################################################
+#########################################################################################################################
+
+
 # QUBIC stuff
 import qubic
 from qubicpack.utilities import Qubic_DataDir
@@ -27,9 +37,8 @@ import component_model as c
 import mixing_matrix as mm
 import pickle
 from scipy.optimize import minimize
-#import ComponentsMapMakingTools as CMMTools
+
 # PyOperators stuff
-#import component_acquisition as ca
 from pysimulators import *
 from pyoperators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator

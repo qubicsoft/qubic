@@ -1351,7 +1351,7 @@ class QubicIntegrated:
 
         # Compute frequency bands
         # Compute the frequency range covered by each detector given a central frequency and the filter bandwith
-        _, nus_edge, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=self.d['nf_recon']*self.d['nf_sub'])
+        _, nus_edge, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=(self.d['nf_recon']*self.d['nf_sub'])-1)
 
         self.nside = self.scene.nside
 
@@ -1373,7 +1373,8 @@ class QubicIntegrated:
 
         # Compute all frequency channels
         # Compute the frequency channels corresponding to each sub-acquisition
-        _, _, self.allnus, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=len(self.subacqs))
+        _, self.allnus, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=len(self.subacqs)-1)
+        
 
         # Compute effective frequencies
         # Compute the effective frequency for each sub-band
@@ -1382,7 +1383,7 @@ class QubicIntegrated:
             imin = self.fact*i
             imax = self.fact*(i+1)
             self.nueff[i] = np.mean(self.nus[imin:imax])
-
+        #self.allnus = self.nueff.copy()
         ### fwhm
 
         # Compute all full width half maximums (FWHM)
@@ -1479,9 +1480,9 @@ class QubicIntegrated:
     def generate_tod(self, config, map_ref=None, beta=None, A_ev=None, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
 
         m_sub = self.get_PySM_maps(config, self.allnus)
-        C = HealpixConvolutionGaussianOperator(fwhm = 0.00)
-        for i in range(m_sub.shape[0]):
-            m_sub[i] = C(m_sub[i])
+        #C = HealpixConvolutionGaussianOperator(fwhm = 0.00)
+        #for i in range(m_sub.shape[0]):
+        #    m_sub[i] = C(m_sub[i])
         array = self._get_array_of_operators(convolution=convolution, myfwhm=myfwhm)
         h_tod = BlockRowOperator(array, new_axisin=0)
         if self.Nsub == 1 and self.Nrec == 1:
@@ -1506,7 +1507,7 @@ class QubicIntegrated:
         modelsky = np.zeros((len(self.allnus), 12*self.nside**2, 3))
         for i in range(3):
             modelsky[:, :, i] = sed @ np.array([map_ref[:, i]])
-
+        #print(modelsky.shape)
         #if convolution:
         #    for i in range(len(self.allnus)):
         #        C = HealpixConvolutionGaussianOperator(fwhm = self.allfwhm[i])
@@ -1516,11 +1517,15 @@ class QubicIntegrated:
         #stop
         #m_sub = self.get_PySM_maps(config, self.allnus)
         for irec in range(self.Nrec):
-            
+            #print(fact*irec, (irec+1)*fact)
             delta = modelsky[fact*irec:(irec+1)*fact] - np.mean(modelsky[fact*irec:(irec+1)*fact], axis=0)
-            
+            #print(delta)
+            #stop
             for jfact in range(fact):
+                #print(jfact)
+                #print(delta.shape)
                 delta_tt = H.operands[k](delta[jfact]).ravel()
+                #print(delta_tt.ravel())
                 tod -= delta_tt
                 k+=1
             

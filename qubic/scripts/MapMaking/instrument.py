@@ -1277,6 +1277,8 @@ class QubicMultibandInstrument:
         Nf, nus_edge, filter_nus, deltas, Delta, Nbbands = compute_freq(d['filter_nu'] / 1e9,
                                                                         d['nf_sub']-1,
                                                                         d['filter_relative_bandwidth'])
+        
+        #print('nus_edge : ', nus_edge)
         #print(deltas)
         self.FRBW = d['filter_relative_bandwidth']  # initial Full Relative Band Width
         d1 = d.copy()

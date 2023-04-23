@@ -1456,7 +1456,7 @@ class QubicIntegrated:
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = qubic.QubicInstrument(d1, FRBW=q0.FRBW)
+        q = instr.QubicInstrument(d1, FRBW=q0.FRBW)
         q.detector = q0.detector
         #s_ = self.sampling
         #nsamplings = self.multiinstrument[0].comm.allreduce(len(s_))
@@ -1516,9 +1516,9 @@ class QubicIntegrated:
         #stop
         #m_sub = self.get_PySM_maps(config, self.allnus)
         for irec in range(self.Nrec):
-            print((irec)*fact, (irec+1)*fact)
+            
             delta = modelsky[fact*irec:(irec+1)*fact] - np.mean(modelsky[fact*irec:(irec+1)*fact], axis=0)
-            print(delta.shape)
+            
             for jfact in range(fact):
                 delta_tt = H.operands[k](delta[jfact]).ravel()
                 tod -= delta_tt

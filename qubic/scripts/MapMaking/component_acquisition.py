@@ -32,7 +32,7 @@ import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
 
-from frequency_acquisition import compute_fwhm_to_convolve
+from frequency_acquisition import compute_fwhm_to_convolve, arcmin2rad, give_cl_cmb, create_array, get_preconditioner
 import instrument as instr
 # FG-Buster packages
 import component_model as c
@@ -52,7 +52,15 @@ __all__ = ['QubicIntegratedComponentsMapMaking',
            'QubicOtherIntegratedComponentsMapMaking',
            'OtherData']
 
+def polarized_I(m, nside, polarization_fraction=0.01):
+    
+    polangle = hp.ud_grade(hp.read_map(CMB_FILE+'/psimap_dust90_512.fits'), nside)
+    depolmap = hp.ud_grade(hp.read_map(CMB_FILE+'/gmap_dust90_512.fits'), nside)
+    cospolangle = np.cos(2.0 * polangle)
+    sinpolangle = np.sin(2.0 * polangle)
 
+    P_map = polarization_fraction * depolmap * m
+    return P_map * np.array([cospolangle, sinpolangle])
 
 class QubicIntegratedComponentsMapMaking:
 
@@ -101,7 +109,7 @@ class QubicIntegratedComponentsMapMaking:
 
         sampling = qubic.get_pointing(self.d)
         scene = qubic.QubicScene(self.d)
-        instrument = qubic.QubicInstrument(self.d)
+        instrument = instr.QubicInstrument(self.d)
         fwhm = qubic.QubicAcquisition(instrument, sampling, scene, self.d).get_convolution_peak_operator().fwhm
         H = qubic.QubicAcquisition(instrument, sampling, scene, self.d).get_operator()
         return H, fwhm
@@ -151,8 +159,8 @@ class QubicIntegratedComponentsMapMaking:
                 #nu0 = sky.components[0].line_frequency['21'].value
                 
                 #myco=np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0*u.GHz, None, u.uK_CMB))
-                # 150 is for reproduce the PsYM template
-                m = np.array(sky.components[0].read_map(CMB_FILE+'CO_line.fits', unit=u.K_CMB)) * 150    
+                # 10 is for reproduce the PsYM template
+                m = np.array(sky.components[0].read_map(CMB_FILE+'CO_line.fits', unit=u.K_CMB)) * 10    
                 mP = polarized_I(m, self.nside)
                 myco = np.zeros((12*self.nside**2, 3))
                 myco[:, 0] = m.copy()
@@ -189,7 +197,7 @@ class QubicIntegratedComponentsMapMaking:
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        qq = qubic.QubicInstrument(d1, FRBW=q0.FRBW)
+        qq = instr.QubicInstrument(d1, FRBW=q0.FRBW)
         qq.detector = q0.detector
         #s_ = self.sampling
         #nsamplings = self.multiinstrument[0].comm.allreduce(len(s_))
@@ -204,7 +212,7 @@ class QubicIntegratedComponentsMapMaking:
         d1['period'] = self.d['period']
 
         # s = create_random_pointings([0., 0.], nsamplings, 10., period=s_.period)
-        a = QubicAcquisition(qq, self.sampling, self.scene, d1)
+        a = qubic.QubicAcquisition(qq, self.sampling, self.scene, d1)
         return a
     def get_noise(self):
 

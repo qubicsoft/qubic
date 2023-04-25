@@ -1325,7 +1325,7 @@ class QubicPlanckMultiBandAcquisition:
 
 class QubicIntegrated:
 
-    def __init__(self, d, Nsub=1, Nrec=1):
+    def __init__(self, d, Nsub=1, Nrec=1, integration='Trapeze'):
 
         self.d = d
         self.d['nf_sub']=Nsub
@@ -1334,6 +1334,7 @@ class QubicIntegrated:
         self.Nrec = Nrec
         self.fact = int(self.Nsub / self.Nrec)
         self.type = 'QubicIntegrated'
+        self.integration = integration
 
         # Pointing
         # Generate the scanning strategy (i.e. pointing) for the QUBIC instrument
@@ -1347,7 +1348,7 @@ class QubicIntegrated:
 
         # Instrument
         # Define the QUBIC instrument (which includes detectors, filters, and optical elements)
-        self.multiinstrument = instr.QubicMultibandInstrument(self.d)
+        self.multiinstrument = instr.QubicMultibandInstrument(self.d, integration=integration)
 
         # Compute frequency bands
         # Compute the frequency range covered by each detector given a central frequency and the filter bandwith
@@ -1725,7 +1726,7 @@ class QubicWideBand:
 
         if self.photon_noise:
             photon_noise150 = self.qubic150.multiinstrument[0].get_noise_photon(self.qubic150.sampling, self.qubic150.scene)
-            photon_noise220 = self.qubic150.multiinstrument[0].get_noise_photon(self.qubic150.sampling, self.qubic150.scene)
+            photon_noise220 = self.qubic220.multiinstrument[0].get_noise_photon(self.qubic220.sampling, self.qubic220.scene)
             photon_noise = photon_noise150 + photon_noise220
 
             return fact * (detector_noise + photon_noise)

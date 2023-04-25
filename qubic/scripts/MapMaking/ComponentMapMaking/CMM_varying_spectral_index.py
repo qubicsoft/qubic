@@ -1,13 +1,17 @@
 # QUBIC packages
+import os
 import qubic
 from qubicpack.utilities import Qubic_DataDir
 from qubic.data import PATH
 from qubic.io import read_map
 from qubic import QubicSkySim as qss
 import sys
-sys.path.append('/home/regnier/work/regnier/mypackages')
+folder_to_data = os.path.abspath(os.path.join(os.path.abspath(os.getcwd()), os.pardir))
+sys.path.append(folder_to_data)
+folder_to_data +=  '/'
 
-import Acquisition as Acq
+import component_acquisition as Acq
+
 import pickle
 
 # Display packages
@@ -26,8 +30,7 @@ from qubic import QubicSkySim as qss
 import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
-import os
-import iterate
+
 from scipy.optimize import minimize
 import ComponentsMapMakingTools as CMM
 import FitMultiProcessing as fmp
@@ -42,8 +45,6 @@ from pyoperators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 warnings.filterwarnings("ignore")
-path = '/Users/mregnier/Desktop/PhD Regnier/MapMaking/bash'
-
 
 ### Reading and loading configuration file
 def load_config(config_file):
@@ -55,7 +56,7 @@ def load_config(config_file):
 
     # Itérer sur chaque section et option
     external = []
-    allnus = [30, 44, 70, 143, 217, 353]
+    allnus = [30, 44, 70, 100, 143, 217, 353]
     k = 0
     for section in config.sections():
         for option in config.options(section):
@@ -190,6 +191,9 @@ invN = allexp.get_invntt_operator()
 M = Acq.get_preconditioner(np.ones(12*allexp.nside**2))
 
 # Input beta
+beta_d = hp.read_map(folder_to_data + beta_file)
+print(beta_d)
+stop
 beta = np.ones((12*nside_fit**2, 1))
 beta[:, 0] *= 1.54
 
@@ -216,6 +220,7 @@ else:
 #########################################################################################################
 ############################################## Reconstruction ###########################################
 #########################################################################################################
+
 if convolution:
     myfwhm = np.sqrt(myqubic.allfwhm**2 - np.min(myqubic.allfwhm)**2)
 else:

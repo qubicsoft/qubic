@@ -191,11 +191,10 @@ invN = allexp.get_invntt_operator()
 M = Acq.get_preconditioner(np.ones(12*allexp.nside**2))
 
 # Input beta
-beta_d = hp.read_map(folder_to_data + beta_file)
+beta_d = hp.ud_grade(hp.read_map(folder_to_data + beta_file), nside_fit)
 print(beta_d)
-stop
 beta = np.ones((12*nside_fit**2, 1))
-beta[:, 0] *= 1.54
+beta[:, 0]  = beta_d.copy()
 
 #########################################################################################################
 ############################################## Systematics ##############################################
@@ -232,7 +231,7 @@ print(f'FWHM for Nsub : {myfwhm}')
 Hrecon = allexp.get_operator(beta, convolution, list_fwhm=myfwhm, gain=None, nu_co=nu_co)#np.array([np.ones(992)*1.0000000001, np.ones(992)*1.0000000001]))
 
 # Get simulated data
-tod = allexp.get_observations(beta, g, components, convolution=convolution, noisy=noisy, nu_co=nu_co)
+tod = allexp.get_observations(beta, g, components.T, convolution=convolution, noisy=noisy, nu_co=nu_co)
 
 if band == 150:
     tod_150 = tod[:(myqubic.Ndets*myqubic.Nsamples)]
@@ -251,17 +250,18 @@ else:
 C_2degree = HealpixConvolutionGaussianOperator(fwhm=np.deg2rad(2))
 
 ### We can make the hypothesis that Planck's astrophysical foregrounds are a good starting point. We assume no prior on the CMB.
-comp_for_pcg = components.copy()
+comp_for_pcg = components.T.copy()
+
 for i in range(len(comp)):
 
     if comp_name[i] == 'CMB':
-        comp_for_pcg[i] = components[i].copy() * 0
+        comp_for_pcg[:, :, i] = components[i].T.copy() * 0
     elif comp_name[i] == 'DUST':
-        comp_for_pcg[i] = components[i].copy() * 0
+        comp_for_pcg[:, :, i] = C2degree(components[i]).T.copy()# * 0
     elif comp_name[i] == 'SYNCHROTRON':
-        comp_for_pcg[i] = Ctrue(components[i])
+        comp_for_pcg[:, :, i] = C2degree(components[i]).T.copy()
     elif comp_name[i] == 'CO':
-        comp_for_pcg[i] = components[i] * 0
+        comp_for_pcg[:, :, i] = C2degree(components[i]).T.copy()
     else:
         raise TypeError(f'{comp_name[i]} not recognize')
 
@@ -280,9 +280,8 @@ lmin = 40
 lmax = 2*d150['nside']
 dl = 35
 s = CMM.Spectra(lmin, lmax, dl, r=float(r), Alens=float(alens), icl=2, CMB_CL_FILE=op.join('/home/regnier/work/regnier/mypackages/Cls_Planck2018_%s.fits'))
-
-spectra_cmb = s.get_observed_spectra(comp_for_pcg[0].T)
-spectra_dust = s.get_observed_spectra(comp_for_pcg[1].T)
+spectra_cmb = s.get_observed_spectra(comp_for_pcg[:, :, 0])
+spectra_dust = s.get_observed_spectra(comp_for_pcg[:, :, 1])
 def chi2_150(x, patch_id, solution, g150):
 
     newbeta = beta.copy()
@@ -400,12 +399,14 @@ while k < kmax :
     ###################################
 
     components_for_beta = np.zeros((2*nsub, 3, 12*nside**2, len(comp)))
-
     for i in range(2*nsub):
         print(f'Convolution by gaussian kernel with FWHM = {myqubic.allfwhm[i]}')
-        Ci = HealpixConvolutionGaussianOperator(fwhm = myfwhm[i])
+        if convolution:
+            C = HealpixConvolutionGaussianOperator(fwhm = myfwhm[i])
+        else:
+            C = HealpixConvolutionGaussianOperator(fwhm = 0)
         for jcomp in range(len(comp)):
-            components_for_beta[i, :, :, jcomp] = Ci(components_i[jcomp]).T
+            components_for_beta[i, :, :, jcomp] = C(components_i[:, :, jcomp].T).T
 
     chi2 = partial(chi2_tot, solution=components_for_beta, g150=g_i[0], g220=g_i[1])
 
@@ -417,11 +418,11 @@ while k < kmax :
 
         print('Doing estimation on index {}'.format(list(index_fit_beta[pix_min:pix_max])))
         
-        beta_i[index_fit_beta[pix_min:pix_max]] = fmp.FitMultiProcess(chi2, nprocess, method=method, tol=1e-5, x0=np.array([1.5]), options={}).perform(list(index_fit_beta[pix_min:pix_max]))
+        beta_i[index_fit_beta[pix_min:pix_max]] = fmp.FitMultiProcess(chi2, nprocess, method=method, tol=1e-6, x0=np.array([1.5]), options={}).perform(list(index_fit_beta[pix_min:pix_max]))
 
     if rest_processes != 0:
         print('Doing estimation of {} betas on {} processes'.format(rest_processes, rest_processes))
-        beta_i[index_fit_beta[-rest_processes:]] = fmp.FitMultiProcess(chi2, rest_processes, method=method, tol=1e-5, x0=np.array([1.5])).perform(list(index_fit_beta[-(rest_processes):]))
+        beta_i[index_fit_beta[-rest_processes:]] = fmp.FitMultiProcess(chi2, rest_processes, method=method, tol=1e-6, x0=np.array([1.5])).perform(list(index_fit_beta[-(rest_processes):]))
     print(beta_i)
 
     end = time.time()
@@ -430,13 +431,13 @@ while k < kmax :
     
     #stop
     
-    #if save_each_ite is not None:
-    #    dict_i = {'maps':components_i, 'beta':beta_i, 'gain':g_i, 'allfwhm':myqubic.allfwhm, 'coverage':coverage, 'convergence':solution['error']}
+    if save_each_ite is not None:
+        dict_i = {'maps':components_i, 'beta':beta_i, 'gain':g_i, 'allfwhm':myqubic.allfwhm, 'coverage':coverage, 'convergence':solution['error']}
 
-    #    fullpath = current_path + save_each_ite + '/'
-    #    output = open(fullpath+'Iter{}_maps_beta_gain_rms_maps.pkl'.format(k+1), 'wb')
-    #    pickle.dump(dict_i, output)
-    #    output.close()
+        fullpath = current_path + save_each_ite + '/'
+        output = open(fullpath+'Iter{}_maps_beta_gain_rms_maps.pkl'.format(k+1), 'wb')
+        pickle.dump(dict_i, output)
+        output.close()
 
     k+=1
 

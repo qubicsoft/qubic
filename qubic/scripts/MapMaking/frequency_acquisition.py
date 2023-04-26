@@ -1328,6 +1328,7 @@ class QubicIntegrated:
 
     def __init__(self, d, Nsub=1, Nrec=1, integration='Trapeze'):
 
+
         self.d = d
         self.d['nf_sub']=Nsub
         self.d['nf_recon']=Nrec
@@ -1336,6 +1337,8 @@ class QubicIntegrated:
         self.fact = int(self.Nsub / self.Nrec)
         self.type = 'QubicIntegrated'
         self.integration = integration
+        if self.integration == 'Trapeze' and self.Nsub == 1:
+            raise TypeError('You are using trapeze integration, you should have Nsub > 1')
 
         # Pointing
         # Generate the scanning strategy (i.e. pointing) for the QUBIC instrument

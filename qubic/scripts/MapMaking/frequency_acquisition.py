@@ -1134,7 +1134,6 @@ class QubicPlanckMultiBandAcquisition:
                     else:
                         operator.append(R_planck*0)
                 k+=1
-
                 full_operator.append(BlockColumnOperator(operator, axisout=0))
 
             return BlockRowOperator(full_operator, new_axisin=0)    

@@ -1013,6 +1013,7 @@ class QubicPlanckMultiBandAcquisition:
 
         self.nus_edge = self.qubic.nus_edge
         self.nueff = self.qubic.nueff
+        self.allnus = self.qubic.allnus
         self.nfreqs = len(self.nueff)
     def get_operator(self, convolution=False, myfwhm=None):
         
@@ -1122,11 +1123,12 @@ class QubicPlanckMultiBandAcquisition:
 
             # Create an empty list to hold operators
             full_operator = []
-
+            #stop
             k=0
-            for inu in range(self.nfreqs):
+            for inu in range(len(self.nueff)):
+                #print(k, len(H_qubic.operands))
                 operator = [R_qubic * H_qubic.operands[k]]
-                for jnu in range(self.nfreqs):
+                for jnu in range(len(self.nueff)):
                     if inu == jnu:
                         operator.append(R_planck)
                     else:
@@ -1601,11 +1603,13 @@ class QubicTwoBands:
 
         self.nueff = np.array([])
 
-        for i in range(len(self.qubic150.nus_edge)-1):
-            self.nueff = np.append(self.nueff, np.mean(self.qubic150.nus_edge[i:i+2]))
+        self.nueff = np.array(list(self.qubic150.nueff)+list(self.qubic220.nueff))
+        self.allnus = np.array(list(self.qubic150.allnus)+list(self.qubic220.allnus))
+        #for i in range(len(self.qubic150.nus_edge)-1):
+        #    self.nueff = np.append(self.nueff, np.mean(self.qubic150.nus_edge[i:i+2]))
 
-        for i in range(len(self.qubic220.nus_edge)-1):
-            self.nueff = np.append(self.nueff, np.mean(self.qubic220.nus_edge[i:i+2]))
+        #for i in range(len(self.qubic220.nus_edge)-1):
+        #    self.nueff = np.append(self.nueff, np.mean(self.qubic220.nus_edge[i:i+2]))
 
 
 
@@ -1666,13 +1670,11 @@ class QubicWideBand:
         self.Nsamples = self.qubic150.Nsamples
         self.Ndets = 992
 
-        self.nueff = np.array([])
+        self.nueff = np.array(list(self.qubic150.nueff)+list(self.qubic220.nueff))
+        self.allnus = np.array(list(self.qubic150.allnus)+list(self.qubic220.allnus))
 
-        for i in range(len(self.qubic150.nus_edge)-1):
-            self.nueff = np.append(self.nueff, np.mean(self.qubic150.nus_edge[i:i+2]))
-
-        for i in range(len(self.qubic220.nus_edge)-1):
-            self.nueff = np.append(self.nueff, np.mean(self.qubic220.nus_edge[i:i+2]))
+        #for i in range(len(self.qubic220.nus_edge)-1):
+        #    self.nueff = np.append(self.nueff, np.mean(self.qubic220.nus_edge[i:i+2]))
 
 
 

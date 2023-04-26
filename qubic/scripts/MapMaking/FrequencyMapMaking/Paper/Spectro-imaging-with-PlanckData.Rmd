@@ -88,8 +88,8 @@ def get_pySM_maps(sky, nu):
 ```
 
 ```{python}
-Nrec = 2
-Nsub = 4
+Nrec = 3
+Nsub = 3
 
 if Nrec == 1:
     raise TypeError('Please use the notebook called Broadband-Reconstruction-using-PlanckData.Rmd')
@@ -98,7 +98,7 @@ elif Nsub%Nrec != 0:
     
 fact_sub = int(Nsub / Nrec)
 npointings = 3000
-convolution = True
+convolution = False
 
 ### Noise
 noise = True
@@ -249,7 +249,8 @@ print(myfwhm)
 ### Reconstruction operator
 
 H = qubicplanck_acquisition.get_operator(convolution=convolution, myfwhm=myfwhm)
-invN = qubicplanck_acquisition.get_invntt_operator()
+beam_correction = [np.min(qubic_acquisition.allfwhm[0*fact_sub:(0+1)*fact_sub]), np.min(qubic_acquisition.allfwhm[1*fact_sub:(1+1)*fact_sub])]
+invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=None)
 
 R = ReshapeOperator((1, 12*nside**2, 3), (12*nside**2, 3))
 
@@ -278,7 +279,7 @@ M = Acq.get_preconditioner(np.ones(12*nside**2))
 
 ```{python}
 ### PCG
-solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-35, disp=True, maxiter=100)
+solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-35, disp=True, maxiter=300)
 ```
 
 ```{python}
@@ -303,7 +304,7 @@ input = C1(C(plancksky[0]))
 ```{python}
 plt.figure(figsize=(12, 12))
 
-reso=25
+reso=15
 center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 stk = ['I', 'Q', 'U']
 
@@ -313,15 +314,15 @@ for istk in range(3):
         min=-300
         max = 300
     else:
-        min=-8
-        max=8
+        min=-15
+        max=15
     
     hp.gnomview(input[:, istk], rot=center, reso=reso, cmap='jet', sub=(3, 3, k), min=min, max=max, notext=True, title=f'Input - {stk[istk]}')
     hp.gnomview(C1(solution_qubic_planck['x'][isub])[:, istk], rot=center, reso=reso, cmap='jet', sub=(3, 3, k+1), min=min, max=max, notext=True, title=f'Output - {stk[istk]}')
     
     r = C1(solution_qubic_planck['x'][isub])[:, istk]-input[:, istk]
     sig = np.std(r[seenpix], axis=0)
-    nsig = 3
+    nsig = 2
     
     hp.gnomview(r, rot=center, reso=reso, cmap='jet', sub=(3, 3, k+2), min=-nsig*sig, max=nsig*sig, notext=True, title=f'Residual - {stk[istk]}')
     k+=3
@@ -338,7 +339,7 @@ xx, yyI, yyQ, yyU = qss.get_angular_profile(np.array([r[:, 0], r[:, 1], r[:, 2]]
 ```{python}
 plt.figure(figsize=(12, 8))
 
-plt.plot(xx, yyI, '-o', label='I')
+#plt.plot(xx, yyI, '-o', label='I')
 plt.plot(xx, yyQ, '-o', label='Q')
 plt.plot(xx, yyU, '-o', label='U')
 
@@ -346,7 +347,8 @@ plt.legend(frameon=False, fontsize=14)
 
 plt.xlabel(r'$\theta$ [deg]', fontsize=12)
 plt.ylabel(r'RMS [$\mu K^2$]', fontsize=12)
-plt.xlim(2, 60)
+#plt.xlim(2, 50)
+#plt.ylim(0, 10)
 
 plt.show()
 ```

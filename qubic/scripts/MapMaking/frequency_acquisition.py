@@ -1352,7 +1352,10 @@ class QubicIntegrated:
 
         # Compute frequency bands
         # Compute the frequency range covered by each detector given a central frequency and the filter bandwith
-        _, nus_edge, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=(self.d['nf_recon']*self.d['nf_sub'])-1)
+        if self.integration == 'Trapeze':
+            _, nus_edge, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=(self.d['nf_recon']*self.d['nf_sub']-1))
+        else:
+            _, nus_edge, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=(self.d['nf_recon']))
 
         self.nside = self.scene.nside
 
@@ -1374,7 +1377,10 @@ class QubicIntegrated:
 
         # Compute all frequency channels
         # Compute the frequency channels corresponding to each sub-acquisition
-        _, self.allnus, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=len(self.subacqs)-1)
+        if self.Nsub == 1 and self.Nrec == 1:
+            _, self.allnus, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=len(self.subacqs))
+        else:
+            _, self.allnus, _, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=len(self.subacqs)-1)
         
 
         # Compute effective frequencies
@@ -1507,29 +1513,15 @@ class QubicIntegrated:
         sed = A_ev(beta)
         modelsky = np.zeros((len(self.allnus), 12*self.nside**2, 3))
         for i in range(3):
+            tt = sed @ np.array([map_ref[:, i]])
             modelsky[:, :, i] = sed @ np.array([map_ref[:, i]])
-        #print(modelsky.shape)
-        #if convolution:
-        #    for i in range(len(self.allnus)):
-        #        C = HealpixConvolutionGaussianOperator(fwhm = self.allfwhm[i])
-        #        modelsky[i] = C(modelsky[i])
-        
-        #print(modelsky.shape)
-        #stop
-        #m_sub = self.get_PySM_maps(config, self.allnus)
         for irec in range(self.Nrec):
-            #print(fact*irec, (irec+1)*fact)
             delta = modelsky[fact*irec:(irec+1)*fact] - np.mean(modelsky[fact*irec:(irec+1)*fact], axis=0)
-            #print(delta)
-            #stop
             for jfact in range(fact):
-                #print(jfact)
-                #print(delta.shape)
                 delta_tt = H.operands[k](delta[jfact]).ravel()
-                #print(delta_tt.ravel())
                 tod -= delta_tt
                 k+=1
-            
+
         return tod
     def _get_array_of_operators(self, convolution=False, myfwhm=None):
         

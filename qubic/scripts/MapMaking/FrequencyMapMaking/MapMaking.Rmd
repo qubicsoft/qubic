@@ -21,13 +21,11 @@ from pysimulators import profile
 # QUBIC packages
 import qubic
 from qubicpack.utilities import Qubic_DataDir
-from qubic.data import PATH
-from qubic.io import read_map
-from qubic import QubicSkySim as qss
 import os
-path = os.getcwd()
 
+path = os.getcwd()
 path_mm = os.path.dirname(path)
+path_mm = os.path.dirname(path_mm)
 import sys
 sys.path.append(path_mm)
 
@@ -53,7 +51,6 @@ from importlib import reload
 from pysm3 import utils
 
 from importlib import reload
-import gc
 from pyoperators import *
 from pysimulators import *
 
@@ -61,26 +58,24 @@ from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 warnings.filterwarnings("ignore")
 
-def integration(nu_min, nu_max, Nintegr, sky_config, d, fwhm_subbands = None):
-    print(f'Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps')
-    obj = Acq.QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
-    if Nintegr == 1:
-        allnus = np.array([np.mean([nu_min, nu_max])])
-    else:
-        allnus = np.linspace(nu_min, nu_max, Nintegr)
-    m = obj.get_PySM_maps(sky_config, nus=allnus)
-    
-    if fwhm_subbands is not None:
-        for i in range(Nintegr):
-            C = HealpixConvolutionGaussianOperator(fwhm=fwhm_subbands[i])
-            m[i] = C(m[i])
-    
-    return np.array([np.mean(m, axis=0)])
-
-
 # # # %config InlineBackend.figure_format='retina'
 from IPython.display import display, HTML
 display(HTML("<style>.container { width:95% !important; }</style>"))
+
+
+### Load the default dictionary and perform the changements
+def get_dict(args={}):
+    
+    ### Get the default dictionary
+    dictfilename = 'dicts/pipeline_demo.dict'
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(dictfilename)
+    d['npointings'] = 9
+    for i in args.keys():
+        
+        d[str(i)] = args[i]
+    
+    return d
 ```
 
 ```{python}
@@ -92,9 +87,9 @@ band_planck = 217
 noise = True
 level_noise_planck = 1
 
-npointings = 2000
-Nf_TOD = 2
-Nf_recon = 1
+npointings = 3000
+Nf_TOD = 6
+Nf_recon = 3
 fact_sub = 2
 convolution = False
 
@@ -129,7 +124,7 @@ print('Noisless:      {}'.format(d['noiseless']))
 print('Photon Noise:  {}'.format(d['photon_noise']))
 print('************************************')
 
-sky_config = {'cmb':42}#, 'dust':'d0'}
+sky_config = {'cmb':42, 'dust':'d0'}
 
 reload(Acq)
 
@@ -145,6 +140,11 @@ covnorm = cov/cov.max()
 
 ### Pixels seen by QUBIC
 seenpix = covnorm > 0.
+```
+
+```{python}
+print(qubic_acquisition_recon.allnus)
+print(qubic_acquisition_recon.nueff)
 ```
 
 ```{python}
@@ -167,8 +167,8 @@ nu_ref = 150
 plancksky = np.zeros((Nf_TOD, 12*nside**2, 3))
 skymodel = np.zeros((Nf_TOD, 12*nside**2, 3))
 C = HealpixConvolutionGaussianOperator(fwhm=np.deg2rad(0))
-mysky_ref = get_pySM_maps(sky, nu_ref)*0
-mysky_model = C(get_pySM_maps(sky_model, nu_ref)*0)
+mysky_ref = get_pySM_maps(sky, nu_ref)
+mysky_model = C(get_pySM_maps(sky_model, nu_ref))
 ```
 
 ```{python}
@@ -190,11 +190,6 @@ print(sed)
 for i in range(3):
     plancksky[:, :, i] = sed @ np.array([mysky_ref[:, i]]) + cmb[0, :, i]
     skymodel[:, :, i] = sed_model @ np.array([mysky_model[:, i]])
-    
-#for i in range(Nf_recon):
-#    target = qubic_acquisition.allfwhm[i]
-#    C = HealpixConvolutionGaussianOperator(fwhm=target)
-#    plancksky[i] = C(plancksky[i])
 
 k=0
 for i in range(Nf_recon):
@@ -202,7 +197,6 @@ for i in range(Nf_recon):
     for j in range(fact_sub):
         plancksky[k] -= delta[j]
         k+=1
-    #plancksky[i, :, :] -= delta
 
 ### We remove the bandpass mismatch for Planck data using the same model
 mean_sky = np.zeros((Nf_recon, 12*nside**2, 3))
@@ -215,13 +209,13 @@ for i in range(Nf_recon):
 ##### 1st row -> Planck sky assuming a given model to correct our reconstructed maps
 ##### 2nd row -> Sky model to correct the bandpass mismatch (only for astrophysical foregrounds)
 
-#plt.figure(figsize=(15, 5))
+plt.figure(figsize=(15, 5))
 
-#for i in range(Nf_TOD):
-#    hp.mollview(plancksky[i, :, 0], min=-300, max=300, sub=(2, Nf_TOD, i+1), cmap='jet', title=f'{qubic_acquisition.allnus[i]:.2f} GHz')
-#    hp.mollview(skymodel[i, :, 0], min=-300, max=300, sub=(2, Nf_TOD, Nf_TOD+i+1), cmap='jet', title=f'{qubic_acquisition.allnus[i]:.2f} GHz')
+for i in range(Nf_TOD):
+    hp.mollview(plancksky[i, :, 0], min=-300, max=300, sub=(2, Nf_TOD, i+1), cmap='jet', title=f'{qubic_acquisition.allnus[i]:.2f} GHz')
+    hp.mollview(skymodel[i, :, 0], min=-300, max=300, sub=(2, Nf_TOD, Nf_TOD+i+1), cmap='jet', title=f'{qubic_acquisition.allnus[i]:.2f} GHz')
 
-#plt.show()
+plt.show()
 ```
 
 # Generate TOD
@@ -229,12 +223,8 @@ for i in range(Nf_recon):
 ```{python}
 ### We compute QUBIC TODs with the correction of the bandpass
 
-TOD_QUBIC = qubic_acquisition.generate_tod(config=sky_config, map_ref=mysky_model, beta=beta_model, A_ev=mm.MixingMatrix(comp).evaluator(allnus), noise=noise, 
-                                                     bandpass_correction=False, convolution=convolution)
-```
-
-```{python}
-
+TOD_QUBIC = qubic_acquisition_recon.generate_tod(config=sky_config, map_ref=mysky_model, beta=beta_model, A_ev=mm.MixingMatrix(comp).evaluator(allnus), noise=noise, 
+                                                     bandpass_correction=True, convolution=convolution)
 ```
 
 ```{python}
@@ -317,29 +307,33 @@ with rule_manager(none=True):
         x_planck = mean_sky * (1 - seenpix[None, :, None])
         b = U.T (  H.T * invN * (TOD - H(x_planck)))
         
-#A = H.T * invN * H
-#b = H.T * invN * TOD
+A = H.T * invN * H
+b = H.T * invN * TOD
         
 M = Acq.get_preconditioner(np.ones(12*nside**2))
 ```
 
 ```{python}
-### PCG
-solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-35, disp=True, maxiter=50)
+
 ```
 
 ```{python}
-solution_qubic_planck['x'].shape
+### PCG
+solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-35, disp=True, maxiter=100)
+```
+
+```{python}
+
 ```
 
 ```{python}
 ### Display the result
 
-istk = 2
+istk = 1
 
-v = 8
-r = 8
-res = 15
+v = 12
+r = 10
+res = 20
 
 plt.figure(figsize=(10, 8))
 
@@ -361,11 +355,11 @@ for i in range(Nf_recon):
     
     ### Outputs
     mysolution = myinputs.copy()
-    mysolution[seenpix] = solution_qubic_planck['x'][i].copy()
+    mysolution = solution_qubic_planck['x'][i].copy()
     
     seenpix = covnorm > 0.
-    myinputs[~seenpix] = hp.UNSEEN
-    mysolution[~seenpix] = hp.UNSEEN
+    #myinputs[~seenpix] = hp.UNSEEN
+    #mysolution[~seenpix] = hp.UNSEEN
     
     hp.gnomview(myinputs[:, istk], cmap='jet', rot=center, reso=res, min=-v, max=v, sub=(Nf_recon, 3, k+1), title='Input')
     hp.gnomview(mysolution[:, istk], cmap='jet', rot=center, reso=res, min=-v, max=v, sub=(Nf_recon, 3, k+2), title='Output')
@@ -396,32 +390,32 @@ for i in range(Nf_recon):
     myinputs = C(myinputs)
     
     ### Outputs
-    mysolution = myinputs.copy()
-    mysolution[seenpix] = solution_qubic_planck['x'][i].copy()
+    #mysolution = myinputs.copy()
+    mysolution = solution_qubic_planck['x'][i].copy()
     
     seenpix = covnorm > 0.1
     #myinputs[~seenpix] = hp.UNSEEN
     #mysolution[~seenpix] = hp.UNSEEN
-    pl = C(+ n_pl.copy())
+    pl = C(n_pl.copy())
     print(pl.shape)
     
     r[i] = (mysolution-myinputs)
-    r[i, ~seenpix] = pl[~seenpix]
+    #r[i, ~seenpix] = pl[~seenpix]
     
     #r[~seenpix] = hp.UNSEEN
 ```
 
 ```{python}
 from qubic import QubicSkySim as qss
-
-xx, yyI, yyQ, yyU = qss.get_angular_profile(np.array([r[0, :, 0], r[0, :, 1], r[0, :, 2]]).T, nbins=20, separate=True, center=center, thmax=30)
+#r = solution_qubic_planck['x'] - mean_sky[0]
+#print(r.shape)
+xx, yyI, yyQ, yyU = qss.get_angular_profile(np.array([r[0, :, 0], r[0, :, 1], r[0, :, 2]]).T, nbins=30, separate=True, center=center, thmax=60)
 ```
 
 ```{python}
-plt.plot(xx, yyU)
-plt.axhline(np.std(C(n_pl), axis=0)[2])
+plt.plot(xx, yyQ, 'or')
+plt.axhline(np.std(n_pl, axis=0)[2])
 plt.yscale('log')
-#plt.xlim(0, 50)
 ```
 
 ```{python}
@@ -429,7 +423,19 @@ plt.yscale('log')
 ```
 
 ```{python}
-qubic_acquisition.allfwhm
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
 ```
 
 ```{python}

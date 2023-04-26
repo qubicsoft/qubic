@@ -1289,10 +1289,8 @@ class QubicMultibandInstrument:
         
 
         if integration == 'Trapeze':
-            print('Trapeze integration')
             self.nsubbands = len(filter_nus)
             if not d['center_detector']:
-                print('no det')
                 self.subinstruments = []
                 W = IntegrationTrapezeOperator(nus_edge)
                 for i in range(len(nus_edge)):
@@ -1301,7 +1299,6 @@ class QubicMultibandInstrument:
                     d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
             else:
-                print('det')
                 self.subinstruments = []
                 for i in range(self.nsubbands):
                     d1['filter_nu'] = nus_edge[i] * 1e9
@@ -1310,10 +1307,10 @@ class QubicMultibandInstrument:
                     q.detector.center = np.array([[0., 0., -0.3]])
                     self.subinstruments.append(q)
         else:
-            print('Basic integration')
+
             self.nsubbands = len(filter_nus)
             if not d['center_detector']:
-                print('no det')
+
                 self.subinstruments = []
                 for i in range(len(filter_nus)):
 
@@ -1321,7 +1318,7 @@ class QubicMultibandInstrument:
                     d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
             else:
-                print('det')
+
                 self.subinstruments = []
                 for i in range(self.nsubbands):
                     d1['filter_nu'] = filter_nus[i] * 1e9

@@ -297,37 +297,6 @@ plt.show()
 ```
 
 ```{python}
-reload(Acq)
-d150 = get_dict({'npointings':npointings, 'nf_recon':Nrec, 'nf_sub':Nsub, 'nside':nside,
-              'filter_nu':150 * 1e9, 'noiseless': not noise,'photon_noise':noise, 'nhwp_angles':7, 'effective_duration':3})
-
-
-d220 = get_dict({'npointings':npointings, 'nf_recon':Nrec, 'nf_sub':Nsub, 'nside':nside,
-              'filter_nu':220 * 1e9, 'noiseless': not noise,'photon_noise':noise, 'nhwp_angles':7, 'effective_duration':3})
-
-qubic150 = Acq.QubicIntegrated(d150, Nsub=2, Nrec=2, integration='Trapeze')
-qubic220 = Acq.QubicIntegrated(d220, Nsub=2, Nrec=2, integration='Trapeze')
-planck143 = Acq.PlanckAcquisition(143, qubic150.scene)
-planck217 = Acq.PlanckAcquisition(217, qubic150.scene)
-print(qubic150.nueff)
-print(qubic150.allnus)
-print()
-print(qubic220.nueff)
-print(qubic220.allnus)
-WB = Acq.QubicTwoBands(qubic150, qubic220)
-#h = WB.get_operator()
-h = Acq.QubicPlanckMultiBandAcquisition(WB, [planck143, planck217]).get_operator()
-```
-
-```{python}
-h.shapeout
-```
-
-```{python}
-qubic150.nus_edge
-```
-
-```{python}
 
 ```
 

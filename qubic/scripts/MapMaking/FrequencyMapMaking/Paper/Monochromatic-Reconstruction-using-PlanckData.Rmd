@@ -80,8 +80,8 @@ def get_dict(args={}):
 
 ```{python}
 Nrec = 1
-Nsub = 1
-npointings = 5000
+Nsub = 3
+npointings = 500
 convolution = True
 
 ### Noise
@@ -118,10 +118,6 @@ covnorm = cov/cov.max()
 
 ### Pixels seen by QUBIC
 seenpix = covnorm > 0.
-```
-
-```{python}
-qubic_acquisition.allnus
 ```
 
 ```{python}
@@ -242,7 +238,7 @@ solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-35, disp=True, maxiter=50
 ```
 
 ```{python}
-C = HealpixConvolutionGaussianOperator(fwhm = qubic_acquisition.allfwhm[0])
+C = HealpixConvolutionGaussianOperator(fwhm = qubic_acquisition.allfwhm[-1])
 input = C(plancksky[0])
 ```
 
@@ -301,15 +297,34 @@ plt.show()
 ```
 
 ```{python}
+reload(Acq)
+d150 = get_dict({'npointings':npointings, 'nf_recon':Nrec, 'nf_sub':Nsub, 'nside':nside,
+              'filter_nu':150 * 1e9, 'noiseless': not noise,'photon_noise':noise, 'nhwp_angles':7, 'effective_duration':3})
 
+
+d220 = get_dict({'npointings':npointings, 'nf_recon':Nrec, 'nf_sub':Nsub, 'nside':nside,
+              'filter_nu':220 * 1e9, 'noiseless': not noise,'photon_noise':noise, 'nhwp_angles':7, 'effective_duration':3})
+
+qubic150 = Acq.QubicIntegrated(d150, Nsub=2, Nrec=2, integration='Trapeze')
+qubic220 = Acq.QubicIntegrated(d220, Nsub=2, Nrec=2, integration='Trapeze')
+planck143 = Acq.PlanckAcquisition(143, qubic150.scene)
+planck217 = Acq.PlanckAcquisition(217, qubic150.scene)
+print(qubic150.nueff)
+print(qubic150.allnus)
+print()
+print(qubic220.nueff)
+print(qubic220.allnus)
+WB = Acq.QubicTwoBands(qubic150, qubic220)
+#h = WB.get_operator()
+h = Acq.QubicPlanckMultiBandAcquisition(WB, [planck143, planck217]).get_operator()
 ```
 
 ```{python}
-
+h.shapeout
 ```
 
 ```{python}
-
+qubic150.nus_edge
 ```
 
 ```{python}

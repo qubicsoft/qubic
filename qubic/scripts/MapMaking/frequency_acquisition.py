@@ -1121,9 +1121,47 @@ class QubicPlanckMultiBandAcquisition:
             R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
             R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
 
+            H = H_qubic.copy()
+
+            if self.Nrec == 2:
+                #if self.Nsub == 2:
+                h150 = BlockColumnOperator([R_qubic * H.operands[0], R_planck, 0*R_planck], axisout=0)
+                h220 = BlockColumnOperator([R_qubic * H.operands[1], 0*R_planck, R_planck], axisout=0)
+
+                return BlockRowOperator([h150, h220], new_axisin=0)
+            
+            else:
+                op = []
+                
+                for irec in range(int(len(self.nueff))):
+                    sub_op = [R_qubic * H.operands[0].operands[irec]]
+                    for jrec in range(int(len(self.nueff))):
+                        print(irec, jrec)
+                        if irec == jrec :
+                            sub_op += [R_planck]
+                        else:
+                            sub_op += [0*R_planck]
+                    #print(sub_op)
+
+                #for ifp in range(2):
+                #    k = 0
+                #    for irec in range(int(len(self.nueff)/2)):
+                #        sub_op = [R_qubic * H.operands[ifp].operands[irec]]
+                #        for jrec in range(int(len(self.nueff)/2)):
+                #            
+                #            print(ifp, irec, jrec)
+                #            if irec == jrec : sub_op += [R_planck]
+                #            else: sub_op += [0*R_planck]
+                #            k+=1
+                #        op += [BlockColumnOperator(sub_op, axisout=0)]
+                
+                return BlockRowOperator(op, new_axisin=0)
+
+
+
+            """
             # Create an empty list to hold operators
             full_operator = []
-            #stop
             k=0
             for inu in range(len(self.nueff)):
                 #print(k, len(H_qubic.operands))
@@ -1136,7 +1174,9 @@ class QubicPlanckMultiBandAcquisition:
                 k+=1
                 full_operator.append(BlockColumnOperator(operator, axisout=0))
 
-            return BlockRowOperator(full_operator, new_axisin=0)    
+            return BlockRowOperator(full_operator, new_axisin=0)
+            """
+                
     def get_planck_tod(self, mapin):
         npix = 12*self.nside**2
         R_planck = ReshapeOperator((self.qubic.d['nf_recon'], npix, 3), (self.qubic.d['nf_recon']*npix*3))
@@ -1150,7 +1190,40 @@ class QubicPlanckMultiBandAcquisition:
         return npl
     def get_invntt_operator(self, weight_planck=1, beam_correction=None, seenpix=None, mask=None):
         
+
+        if beam_correction is None :
+                beam_correction = [0]*self.nfreqs
+
         if self.type == 'WideBand':
+
+
+            invn_q = self.qubic.get_invntt_operator()
+            R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
+            invn_q = R(invn_q(R.T))
+
+            if self.Nrec == 2 :
+
+
+                invntt_planck143 = weight_planck*self.planck[0].get_invntt_operator(beam_correction=beam_correction[0], mask=mask, seenpix=seenpix)
+                invntt_planck217 = weight_planck*self.planck[1].get_invntt_operator(beam_correction=beam_correction[0], mask=mask, seenpix=seenpix)
+                R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
+                invN_143 = R_planck(invntt_planck143(R_planck.T))
+                invN_217 = R_planck(invntt_planck217(R_planck.T))
+                return BlockDiagonalOperator([invn_q, invN_143, invN_217], axisout=0)
+
+                #else:
+
+
+
+
+
+
+
+
+
+
+
+            """
             if beam_correction is None :
                 beam_correction = [0]*self.nfreqs
             else:
@@ -1173,6 +1246,8 @@ class QubicPlanckMultiBandAcquisition:
                 Operator.append(R_planck(invntt_planck(R_planck.T)))
 
             return BlockDiagonalOperator(Operator, axisout=0)
+            """
+            
         
         elif self.type == 'QubicIntegrated':
             if beam_correction is None :
@@ -1686,33 +1761,72 @@ class QubicWideBand:
         self.Nf = self.qubic150.d['nf_recon']
 
 
-        print('****************************')
-        print('Noise : {}'.format(not self.qubic150.d['noiseless']))
-        print('  Detector noise : {}'.format(not self.qubic150.d['noiseless']))
-        print('  Photon noise   : {}'.format(self.photon_noise))
-        print('****************************')
-
-
     def get_operator(self, convolution=False):
 
         self.H150 = self.qubic150.get_operator(convolution=convolution)
         self.H220 = self.qubic220.get_operator(convolution=convolution)
+        operator = [self.H150, self.H220]
 
-        operator = []
-
-        if self.qubic150.Nsub != 1:
-            for i in range(2):
-                for j in range(self.qubic150.Nrec):
-                    if i == 0:
-                        operator.append(self.H150.operands[j])
-                    else:
-                        operator.append(self.H220.operands[j])
-
+        ### Nrec = 1
+        if self.qubic150.Nrec == 1:
             return BlockRowOperator(operator, new_axisin=0)
+        ### Nrec > 1
         else:
-            operator = [self.H150, self.H220]
+            return BlockRowOperator(operator, axisin=0)
+
+
+
+        """
+        if self.qubic150.Nrec == 1:
+            for i in range(2):
+                ope = []
+                if self.qubic150.Nsub == 1:
+                    return BlockRowOperator([self.H150, self.H220], new_axisin=0)
+                else:
+                    for j in range(self.qubic150.Nsub):   ### Nsub > 1 and Nrec = 1 
+                        if i == 0:
+                            ope += [self.H150.operands[j]]
+                        else:
+                            ope += [self.H220.operands[j]]
+                        
+                operator += [BlockColumnOperator(ope, axisout=0)]
 
             return BlockRowOperator(operator, new_axisin=0)
+
+        else:
+            
+            
+            ope = []
+            if self.qubic150.Nrec == self.qubic150.Nsub :
+                for i in range(2):
+                    sub_op = []
+                    for irec in range(self.qubic150.Nrec):
+                        
+                        if i == 0:
+                            sub_op += [self.H150.operands[irec]]
+                        else:
+                            sub_op += [self.H220.operands[irec]]
+                    ope += [BlockColumnOperator(sub_op, axisout=0)]
+                
+                return BlockRowOperator(ope, new_axisin=0)
+                        
+            else:
+                for i in range(2):
+                    sub_op = []
+                    for irec in range(self.qubic150.Nrec):
+                        subsub_op = []
+                        for isub in range(int(self.qubic150.Nsub/self.qubic150.Nrec)):
+                            if i == 0:
+                                subsub_op += [self.H150.operands[irec].operands[isub]]
+                            else:
+                                subsub_op += [self.H220.operands[irec].operands[isub]]
+
+                        sub_op += [BlockRowOperator(subsub_op, new_axisin=0)]
+                    ope += [BlockRowOperator(sub_op, axisin=0)]
+
+                return ope
+        """
+        
 
     def get_noise(self):
         detector_noise = self.qubic150.multiinstrument[0].get_noise_detector(self.qubic150.sampling)

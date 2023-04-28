@@ -80,9 +80,9 @@ def get_dict(args={}):
 
 ```{python}
 Nrec = 1
-Nsub = 3
-npointings = 500
-convolution = True
+Nsub = 1
+npointings = 1000
+convolution = False
 
 ### Noise
 noise = True
@@ -106,8 +106,8 @@ sky_config = {'cmb':42, 'dust':'d0'}
 
 reload(Acq)
 
-qubic_acquisition = Acq.QubicIntegrated(d, Nsub=Nsub, Nrec=Nsub, integration='')
-qubic_acquisition_recon = Acq.QubicIntegrated(d, Nsub=Nrec, Nrec=Nrec, integration='')
+qubic_acquisition = Acq.QubicIntegrated(d, Nsub=Nsub, Nrec=Nsub)
+qubic_acquisition_recon = Acq.QubicIntegrated(d, Nsub=Nrec, Nrec=Nrec)
 planck_acquisition = Acq.PlanckAcquisition(band_planck, qubic_acquisition.scene)
 qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
 
@@ -125,53 +125,32 @@ seenpix = covnorm > 0.
 def get_pySM_maps(sky, nu):
     return np.array(sky.get_emission(nu * u.GHz, None).T * utils.bandpass_unit_conversion(nu*u.GHz, None, u.uK_CMB))
 
-### CMB realization -> for real data, we should take Planck CMB map
-cmb = qubic_acquisition.get_PySM_maps({'cmb':42}, np.array([150]))
-
 ###############################################################
 
 ### We define foregrounds model
-sky = pysm3.Sky(nside, preset_strings=['d0'])
-sky_model = pysm3.Sky(nside, preset_strings=['d0'])
 
+skyconfig = {'cmb':42, 'dust':'d0'}
+s = Acq.Sky(skyconfig, qubic_acquisition)
+beta = np.array([1.54])
 
-### We compute components, we should take Planck components for real data
-nu_ref = 150
-plancksky = np.zeros((Nsub, 12*nside**2, 3))
-skymodel = np.zeros((Nsub, 12*nside**2, 3))
-C = HealpixConvolutionGaussianOperator(fwhm=np.deg2rad(0))
-mysky_ref = get_pySM_maps(sky, nu_ref)
-mysky_model = C(get_pySM_maps(sky_model, nu_ref))
 
 ###############################################################
 ### We scale the components to reproduce frequency observations
 
-comp = c.Dust(nu0=150)
-beta = np.array([1.54, 20])
-beta_model = np.array([1.54, 20])
-allnus = qubic_acquisition.allnus
-
-sed = mm.MixingMatrix(comp).evaluator(allnus)(beta)
-sed_model = mm.MixingMatrix(comp).evaluator(allnus)(beta_model)
-print(f'Scaling map from {nu_ref} GHz to {band} GHz with factor {sed[0][0]}')
-
-for i in range(3):
-    plancksky[:, :, i] = sed @ np.array([mysky_ref[:, i]]) + cmb[0, :, i]
-    skymodel[:, :, i] = sed_model @ np.array([mysky_model[:, i]])
+plancksky = s.scale_component(beta)
 ```
 
 ```{python}
 ### We compute QUBIC TODs with the correction of the bandpass
 
-TOD_QUBIC = qubic_acquisition_recon.generate_tod(config=sky_config, map_ref=mysky_model, beta=beta_model, A_ev=mm.MixingMatrix(comp).evaluator(allnus), noise=noise, 
-                                                     bandpass_correction=False, convolution=convolution)
+TOD_QUBIC = qubic_acquisition.get_TOD(skyconfig, beta, convolution=convolution, noise=noise)
 ```
 
 ```{python}
 ### We compute Planck TODs using the previous sky
 
-TOD_PLANCK = np.zeros((Nrec, 12*nside**2, 3))
-mrec = np.zeros((Nrec, 12*nside**2, 3))
+TOD_PLANCK = np.zeros((12*nside**2*3))
+
 n_pl = planck_acquisition.get_noise() * level_noise_planck
 for irec in range(Nrec):
     
@@ -181,11 +160,8 @@ for irec in range(Nrec):
         target = 0.00
         
     C = HealpixConvolutionGaussianOperator(fwhm = target)
-    mrec[irec] = C(plancksky[irec].copy() + n_pl.copy())
-    TOD_PLANCK[irec] = C(plancksky[irec].copy() + n_pl.copy())
-
-R = ReshapeOperator(mrec.shape, (mrec.shape[0]*mrec.shape[1]*mrec.shape[2]))
-TOD_PLANCK = R(TOD_PLANCK)
+    mpl = plancksky[irec].copy() + n_pl.copy()
+    TOD_PLANCK = C(mpl).ravel()
 ```
 
 ```{python}
@@ -198,14 +174,14 @@ qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition_
 ```{python}
 ### Create the final TOD (noise is already inside each TODs)
 
-TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
+TOD = np.r_[TOD_QUBIC.ravel(), TOD_PLANCK]
 ```
 
 ```{python}
 ### Reconstruction operator
 
 H = qubicplanck_acquisition.get_operator(convolution=False, myfwhm=None)
-invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=[qubic_acquisition.allfwhm[0]])
+invN = qubicplanck_acquisition.get_invntt_operator(beam_correction=[0])
 
 R = ReshapeOperator((1, 12*nside**2, 3), (12*nside**2, 3))
 
@@ -234,11 +210,11 @@ M = Acq.get_preconditioner(np.ones(12*nside**2))
 
 ```{python}
 ### PCG
-solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-35, disp=True, maxiter=50)
+solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-35, disp=True, maxiter=100)
 ```
 
 ```{python}
-C = HealpixConvolutionGaussianOperator(fwhm = qubic_acquisition.allfwhm[-1])
+C = HealpixConvolutionGaussianOperator(fwhm = 0)#qubic_acquisition.allfwhm[-1])
 input = C(plancksky[0])
 ```
 
@@ -290,6 +266,10 @@ plt.ylabel(r'RMS [$\mu K^2$]', fontsize=12)
 plt.xlim(2, 60)
 
 plt.show()
+```
+
+```{python}
+
 ```
 
 ```{python}

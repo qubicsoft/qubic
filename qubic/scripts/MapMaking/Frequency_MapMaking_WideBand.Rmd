@@ -90,7 +90,13 @@ noise_qubic_level = 1
 noise_planck_level = 1
 noise_qubicplanck_level = 1 #1e-15
 
-npointings = 1000
+# Acquisition configuration
+Nf_recon = 1
+fact_sub = 3
+Nf_TOD = Nf_recon*fact_sub
+
+sky_config = {'cmb':1}#, 'dust':'d0'}
+npointings = 500
 
 maxiter = 200
 tol = 1e-40
@@ -105,8 +111,8 @@ dictfilename = 'dicts/pipeline_demo.dict'
 d_TOD = qubic.qubicdict.qubicDict()
 d_TOD.read_from_file(dictfilename)
 
-d_TOD['nf_recon'] = 1
-d_TOD['nf_sub'] = 1
+d_TOD['nf_recon'] = Nf_recon
+d_TOD['nf_sub'] = Nf_TOD
 d_TOD['nside'] = nside
 npix=12*d_TOD['nside']**2
 d_TOD['RA_center'] = 0
@@ -131,27 +137,49 @@ d220['filter_nu'] = 220 * 1e9
 ```
 
 ```{python}
-# Acquisition configuration
-Nf_recon = 1
-fact_sub = 3
-Nf_TOD = Nf_recon*fact_sub
-
-sky_config = {'cmb':1}#, 'dust':'d0'}
-```
-
-```{python}
 # Qubic acquisitions
-qubic_acquisition_150 = Acq.QubicIntegrated(d150, Nsub=Nf_TOD, Nrec=Nf_TOD, integration ='')
-qubic_acquisition_220 = Acq.QubicIntegrated(d220, Nsub=Nf_TOD, Nrec=Nf_TOD, integration ='')
+qubic_acquisition_150 = Acq.QubicIntegrated(d150, Nsub=Nf_TOD, Nrec=Nf_recon, integration ='')
+qubic_acquisition_220 = Acq.QubicIntegrated(d220, Nsub=Nf_TOD, Nrec=Nf_recon, integration ='')
 
 # Create the wide band acquisition
 qubic_acquisition = Acq.QubicWideBand(qubic_acquisition_150, qubic_acquisition_220)
 
 # Create Nsub map
-m_sub = qubic_acquisition_150.get_PySM_maps(sky_config, nus = qubic_acquisition.nueff)
+freq_150, freq_220 = [], []
+for j in range(fact_sub):
+    freq_150.append(150)
+    freq_220.append(220)
+m_sub_150 = qubic_acquisition_150.get_PySM_maps(sky_config, nus = freq_150)
+m_sub_220 = qubic_acquisition_220.get_PySM_maps(sky_config, nus = freq_220)
 
 # Create the QUBIC scene
 scene = qubic_acquisition.scene
+```
+
+```{python}
+# QUBIC TOD 150 & 220
+array_150 = qubic_acquisition_150._get_array_of_operators()
+array_220 = qubic_acquisition_220._get_array_of_operators()
+
+H_tod_150 = BlockRowOperator(array_150, new_axisin=0)
+H_tod_220 = BlockRowOperator(array_220, new_axisin=0)
+
+TOD_QUBIC_150 = H_tod_150(m_sub_150)
+TOD_QUBIC_220 = H_tod_220(m_sub_220)
+```
+
+```{python}
+np.shape(TOD_QUBIC_150)
+```
+
+```{python}
+# QUBIC TOD WIDE BAND
+noise_qubic = qubic_acquisition.get_noise()
+TOD_QUBIC = TOD_QUBIC_150 + TOD_QUBIC_220 + noise_qubic * noise_qubic_level
+```
+
+```{python}
+np.shape(TOD_QUBIC)
 ```
 
 ```{python}
@@ -164,7 +192,50 @@ seenpix = coverage/coverage.max() > 0.0001
 # Planck acquisitions
 planck_acquisition_150 = Acq.PlanckAcquisition(143, scene)
 planck_acquisition_220 = Acq.PlanckAcquisition(217, scene)
+```
 
+```{python}
+# Planck noise
+noise_planck_143 = planck_acquisition_150.get_noise() * noise_planck_level
+noise_planck_217 = planck_acquisition_220.get_noise() * noise_planck_level
+```
+
+```{python}
+# Planck TOD
+band_planck = [143, 217]
+bw = 35
+Nintegr = 10
+
+planck_obs_143 = integration(band_planck[0] - bw/2, band_planck[0] + bw/2, Nintegr, sky_config, d150, fwhm_subbands = None)
+planck_obs_217 = integration(band_planck[1] - bw/2, band_planck[1] + bw/2, Nintegr, sky_config, d220, fwhm_subbands = None)
+
+TOD_PLANCK = []
+for i in range(2):
+    for j in range(Nf_recon):
+        if i == 0:
+            TOD_PLANCK.append(planck_obs_143[0] + noise_planck_143)
+        else :
+            TOD_PLANCK.append(planck_obs_217[0] + noise_planck_217)
+```
+
+```{python}
+np.shape(planck_obs_143)
+```
+
+```{python}
+np.shape(noise_planck_143)
+```
+
+```{python}
+np.shape(TOD_PLANCK)
+```
+
+```{python}
+# TOD
+TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
+```
+
+```{python}
 # Joint acquisition
 qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, [planck_acquisition_150, planck_acquisition_220])
 ```
@@ -173,10 +244,6 @@ qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition,
 # QUBIC Planck operators
 H_qp = qubicplanck_acquisition.get_operator()
 invN_qp = qubicplanck_acquisition.get_invntt_operator()
-```
-
-```{python}
-TOD = H_qp(m_sub) + qubicplanck_acquisition.get_noise() * noise_qubicplanck_level
 ```
 
 ```{python}
@@ -196,7 +263,7 @@ plt.figure(figsize=(10, 10))
 # m_sub[:, ~seenpix, :] = hp.UNSEEN
 # solution['x'][~seenpix, :] = hp.UNSEEN
 stk = ['I', 'Q', 'U']
-sub_band_index = 1
+sub_band_index = 0
 
 k=0
 reso=25
@@ -221,6 +288,10 @@ plt.show()
 ```{python}
 # Create a list which will contains residuals
 residual = solution['x'] - m_sub
+```
+
+```{python}
+np.shape(solution['x'])
 ```
 
 ```{python}

@@ -83,11 +83,11 @@ pickle_1 = pickle.load(open(dir_name + f'{qubic_config_1}_' + f'{effective_durat
 sky_1 = pickle_1['sky']
 solution_noise_1 = pickle_1['solution_noise']
 solution_noiseless_1 = pickle_1['solution_noiseless']       
-nf_tod_1 = pickle_1['Nf_TOD']
 nf_recon_1 = pickle_1['Nf_recon']
 fact_sub_1 = pickle_1['fact_sub']
+nf_tod_1 = nf_recon_1 * fact_sub_1
 dict_parameters_1 = pickle_1['parameters']
-residual_1 = solution_noise_1 - sky_1
+residual_1 = solution_noise_1 - sky_1[0:1]
 sol_diff_1 = solution_noise_1 - solution_noiseless_1
 
 pickle_2 = pickle.load(open(dir_name + f'{qubic_config_2}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.pkl', 'rb'))
@@ -95,11 +95,11 @@ pickle_2 = pickle.load(open(dir_name + f'{qubic_config_2}_' + f'{effective_durat
 sky_2 = pickle_2['sky']
 solution_noise_2 = pickle_2['solution_noise']
 solution_noiseless_2 = pickle_2['solution_noiseless']       
-nf_tod_2 = pickle_2['Nf_TOD']
 nf_recon_2 = pickle_2['Nf_recon']
 fact_sub_2 = pickle_2['fact_sub']
+nf_tod_2 = nf_recon_2 * fact_sub_2
 dict_parameters_2 = pickle_2['parameters']
-residual_2 = solution_noise_2 - sky_2
+residual_2 = solution_noise_2 - sky_2[0:1]
 sol_diff_2 = solution_noise_2 - solution_noiseless_2
 
 #freq = pickle_1['frequencies']
@@ -113,7 +113,7 @@ if nf_tod_1 != nf_tod_2 or nf_recon_1 != nf_recon_2 or fact_sub_1 != fact_sub_2:
 dir = str(dir)
 #### RMS ####
 
-for sb_index in range(fact_sub_1*nf_recon_1):
+for sb_index in range(2*nf_recon_1):
     plt.figure(figsize=(10, 10))
     xx_1, yyI_1, yyQ_1, yyU_1 = qss.get_angular_profile(np.array([residual_1[sb_index, :, 0], residual_1[sb_index, :, 1], residual_1[sb_index, :, 2]]).T, nbins=30, separate=True, center=center, thmax=30)
     xx_2, yyI_2, yyQ_2, yyU_2 = qss.get_angular_profile(np.array([residual_2[sb_index, :, 0], residual_2[sb_index, :, 1], residual_2[sb_index, :, 2]]).T, nbins=30, separate=True, center=center, thmax=30)
@@ -126,10 +126,10 @@ for sb_index in range(fact_sub_1*nf_recon_1):
     plt.xlabel("Degrees")
     plt.ylabel('RMS')
     plt.legend()
-    plt.title(f'RMS - Residual - {qubic_config_1} vs {qubic_config_2}_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}sub_band_' + f'{sky_name}')
-    plt.savefig(dir + 'rms/' + f'RMS_noise - Residual - {qubic_config_1}_vs_{qubic_config_2}_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
+    plt.title(f'RMS - Residual - {qubic_config_1} vs {qubic_config_2}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}sub_band_' + f'{sky_name}')
+    plt.savefig(dir + 'rms/' + f'RMS_noise - Residual - {qubic_config_1}_vs_{qubic_config_2}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
 
-for sb_index in range(fact_sub_1*nf_recon_1):
+for sb_index in range(2*nf_recon_1):
     plt.figure(figsize=(10, 10))
     xx_1, yyI_1, yyQ_1, yyU_1 = qss.get_angular_profile(np.array([sol_diff_1[sb_index, :, 0], sol_diff_1[sb_index, :, 1], sol_diff_1[sb_index, :, 2]]).T, nbins=30, separate=True, center=center, thmax=30)
     xx_2, yyI_2, yyQ_2, yyU_2 = qss.get_angular_profile(np.array([sol_diff_2[sb_index, :, 0], sol_diff_2[sb_index, :, 1], sol_diff_2[sb_index, :, 2]]).T, nbins=30, separate=True, center=center, thmax=30)
@@ -142,5 +142,5 @@ for sb_index in range(fact_sub_1*nf_recon_1):
     plt.xlabel("Degrees")
     plt.ylabel('RMS')
     plt.legend()
-    plt.title(f'RMS - Sol_Diff - {qubic_config_1} vs {qubic_config_2}_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}sub_band_' + f'{sky_name}')
-    plt.savefig(dir + 'rms/' + f'RMS_noise - Sol_Diff - {qubic_config_1}_vs_{qubic_config_2}_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
+    plt.title(f'RMS - Sol_Diff - {qubic_config_1} vs {qubic_config_2}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}sub_band_' + f'{sky_name}')
+    plt.savefig(dir + 'rms/' + f'RMS_noise - Sol_Diff - {qubic_config_1}_vs_{qubic_config_2}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')

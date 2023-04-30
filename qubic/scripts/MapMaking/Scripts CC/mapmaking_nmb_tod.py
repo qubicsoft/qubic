@@ -55,7 +55,7 @@ def load_config(config_file):
     return external, global_variables
 
 #### Load the global variables in the config file ####
-external = load_config('config_mapmaking_versus.ini')
+external = load_config('config_mapmaking_nmb_tod.ini')
 dict_parameters = external[1]
 
 #### Create name variables from config file ####
@@ -72,41 +72,49 @@ elif qubic_config == "two":
 # import solutions computed in mapmaking.py
 import pickle
 sky, solution_noise, solution_noiseless, residual, sol_diff, freq = [], [], [], [], [], []
-for nmb_tod in range(nmb_nf_tod):
-    pickle = pickle.load(open(dir_name + f'{qubic_config}_' + f'{effective_duration}_years_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.pkl', 'rb'))
-    sky.append(pickle['sky'])
-    solution_noise.append(pickle['solution_noise'])
-    solution_noiseless.append(pickle['solution_noiseless'])   
-    residual.append(solution_noise - sky)
-    sol_diff.append(solution_noise - solution_noiseless)
-    freq.append(pickle['frequencies'])
+for nmb_tod in range(1, nmb_nf_tod + 1):
+    pickle_dict = pickle.load(open(dir_name + f'{qubic_config}_' + f'{effective_duration}_years_' + f'{nmb_tod}_TOD_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.pkl', 'rb'))
+    sky.append(pickle_dict['sky'])
+    solution_noise.append(pickle_dict['solution_noise'])
+    solution_noiseless.append(pickle_dict['solution_noiseless'])   
+    residual.append(pickle_dict['residual'])
+    sol_diff.append(pickle_dict['solution_noise'] - pickle_dict['solution_noiseless'])
+    freq.append(pickle_dict['frequencies'])
 
 dir = str(dir)
 
 #### RMS ####
-yyI, yyQ, yyU = [], [], []
+yyI, yyQ, yyU = [[],[]], [[],[]], [[], []]
 for tod_index in range(nmb_nf_tod):
-    for sb_index in range(fact_sub_1*nf_recon_1):
-        rms = qss.get_angular_profile(np.array([residual[tod_index, sb_index, :, 0], residual[tod_index, sb_index, :, 1], residual[tod_index, sb_index, :, 2]]).T, nbins=30, separate=True, center=center, thmax=30)
-        print(np.shape(rms[1]))
-        yyI.append(rms[1][0])
-        yyQ.append(rms[2][0])
-        yyU.append(rms[3][0])
+    for sb_index in range(sub_band_number*2):
+        rms = qss.get_angular_profile(np.array([residual[tod_index][sb_index, :, 0], residual[tod_index][sb_index, :, 1], residual[tod_index][sb_index, :, 2]]).T, nbins=30, separate=True, center=center, thmax=30)
+        yyI[sb_index].append(np.mean(rms[1][0:8]))
+        yyQ[sb_index].append(np.mean(rms[2][0:8]))
+        yyU[sb_index].append(np.mean(rms[3][0:8]))
 
-plt.figure()
-nf_tod = np.arange(nmb_nf_tod)
-plt.plot(nf_tod, yyI)
-plt.title('RMS_noise_I_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}')
-plt.savefig(dir + 'RMS_noise_I_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
+for sb_index in range(sub_band_number*2):
+    plt.figure()
+    nf_tod = np.arange(nmb_nf_tod)
+    plt.xlabel('Nsub')
+    plt.ylabel('Noise level')
+    plt.plot(nf_tod, yyI[sb_index])
+    plt.title('RMS_noise_I_' + f'{effective_duration}_years_' + f'{round(freq[0][sb_index],1)}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}')
+    plt.savefig(dir + 'RMS_noise_I_' + f'{effective_duration}_years_' + f'{round(freq[0][sb_index],1)}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
 
-plt.figure()
-nf_tod = np.arange(nmb_nf_tod)
-plt.plot(nf_tod, yyQ)
-plt.title('RMS_noise_Q_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}')
-plt.savefig(dir + 'RMS_noise_Q_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
+for sb_index in range(sub_band_number*2):
+    plt.figure()
+    nf_tod = np.arange(nmb_nf_tod)
+    plt.plot(nf_tod, yyQ[sb_index][:])
+    plt.xlabel('Nsub')
+    plt.ylabel('Noise level')
+    plt.title('RMS_noise_Q_' + f'{effective_duration}_years_' + f'{round(freq[0][sb_index],1)}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}')
+    plt.savefig(dir + 'RMS_noise_Q_' + f'{effective_duration}_years_' + f'{round(freq[0][sb_index],1)}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
 
-plt.figure()
-nf_tod = np.arange(nmb_nf_tod)
-plt.plot(nf_tod, yyU)
-plt.title('RMS_noise_U_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}')
-plt.savefig(dir + 'RMS_noise_U_' + f'{effective_duration}_years_' + f'{freq[sb_index]}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
+for sb_index in range(sub_band_number*2):
+    plt.figure()
+    nf_tod = np.arange(nmb_nf_tod)
+    plt.xlabel('Nsub')
+    plt.ylabel('Noise level')
+    plt.plot(nf_tod, yyU[sb_index][:])
+    plt.title('RMS_noise_U_' + f'{effective_duration}_years_' + f'{round(freq[0][sb_index],1)}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}')
+    plt.savefig(dir + 'RMS_noise_U_' + f'{effective_duration}_years_' + f'{round(freq[0][sb_index],1)}_GHz_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')

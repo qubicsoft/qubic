@@ -38,6 +38,7 @@ from qubic import time_constants_tools as tct
 # Directories
 
 ```{python}
+## Select a dataset corresponding to the TC measurement thorugh square modulation
 day = '2023-04-17'
 data_dir = '/home/nahue/Downloads/' + day + '/'
 thedirs = np.sort(glob.glob(data_dir+'*carbon*'))

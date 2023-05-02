@@ -318,7 +318,7 @@ def run_OPTICS(results, doplot=False, parnames = None, min_samples_optics = 10):
     return (labels)
 
 
-def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, doplot = False, doplot_onebyone = True, verbose = False):
+def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, doplot = False, doplot_onebyone = True, verbose = False,save_path =None):
 
 	"""
 	Compute the time constants from a square modulation
@@ -336,8 +336,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	doplot (= False) :	to show several plots.
 	doplot_onebyone (= True) :	to show one plot per TES (fit and folded data, three plots per figure). If doplot= False, then doplot_onebyone will be also False.
 	verbose (= True) :	to show some intermediate output messages.
-	saveplots (= ) :	(not implemented yet) to save plots. 'No' no saving, 'calsource' save just calsource...
-	save_dicts (=True) :	(not implemented yet) to save all the dictionaries with the relevant information (output of the function).
+	save_path (= None) :	if not None, one dictionary (with all the information, see Output) and one focal plane plot (with the fits and folded data) per dataset.
 	
 	Output:
 	d :	dictionary with all the relevant information. Elaborate...
@@ -1581,25 +1580,37 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 # 	d_ok['Params-Errors-Ch2-with-OPTICS'] = ok_optics_parerrch2
 
 
-	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_signal_ok = nonsaturated_tes * ok_dbs_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsdb-'+dataset_info)
-
-# 	plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_signal_ok = nonsaturated_tes * ok_dbs_residuals_fit, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualsfitdb-'+dataset_info)
-
-# 	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_signal_ok = nonsaturated_tes * ok_optics_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsop'+dataset_info)			
-
-# 	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_signal_ok = nonsaturated_tes * ok_dbs_parerrch2, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-parerrch2db'+dataset_info)			
-
-# 	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_signal_ok = nonsaturated_tes * ok_optics_parerrch2, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-parerrch2op'+dataset_info)			
-
-# 	except:
-# 		print('Error when fitting folded TOD data in the first pass.')
-
 	d_results['Vbias'] = Vbias
 	d_results['calsource'] = d_cal
 	d_results['folded_median'] = d_folded_median
 	d_results['ok'] = d_ok
 	d_results['alltod_folded_nonorm'] = d_alltod_nonorm
 	d_results['alltod_folded_norm'] = d_alltod_norm
+
+
+
+	if save_path is not None:
+		wdir = os.getcwd()
+		os.chdir(save_path)
+		dictname = 'd__{}.npy'.format(d_results['dataset_info'])
+		np.save(dictname,d_results)
+
+		plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_signal_ok = nonsaturated_tes * ok_dbs_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsdb-'+dataset_info)
+
+	# 	plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_signal_ok = nonsaturated_tes * ok_dbs_residuals_fit, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualsfitdb-'+dataset_info)
+
+	# 	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_signal_ok = nonsaturated_tes * ok_optics_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsop'+dataset_info)			
+
+	# 	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_signal_ok = nonsaturated_tes * ok_dbs_parerrch2, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-parerrch2db'+dataset_info)			
+
+	# 	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_signal_ok = nonsaturated_tes * ok_optics_parerrch2, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-parerrch2op'+dataset_info)			
+
+		os.chdir(wdir)
+
+
+# 	except:
+# 		print('Error when fitting folded TOD data in the first pass.')
+
 
 	
 	return d_results

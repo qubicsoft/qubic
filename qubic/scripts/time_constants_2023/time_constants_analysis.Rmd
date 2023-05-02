@@ -22,9 +22,8 @@ from importlib import reload
 
 from matplotlib.pyplot import *
 from matplotlib import pyplot as plt
-# %config InlineBackend.figure_format='retina'
 from IPython.display import display, HTML
-display(HTML("<style>.container { width:95% !important; }</style>"))
+display(HTML("<style>.container { width:97% !important; }</style>"))
 
 # %matplotlib notebook
 rc('figure',figsize=(11,6))
@@ -38,7 +37,7 @@ from qubic import time_constants_tools as tct
 # Directories
 
 ```{python}
-## Select a dataset corresponding to the TC measurement thorugh square modulation
+## Select a dataset corresponding to the TC measurement thorugh square modulation (external calsource or carbon fibres)
 day = '2023-04-17'
 data_dir = '/home/nahue/Downloads/' + day + '/'
 thedirs = np.sort(glob.glob(data_dir+'*carbon*'))
@@ -56,14 +55,14 @@ close('all')
 ```
 
 ```{python}
+## To plot the raw timelines
+
 # a = qubicfp()
 # a.assign_verbosity(0)
 # a.read_qubicstudio_dataset(thedatadir)
 
 # tt, alltod = a.tod()
-```
 
-```{python}
 # figure()
 # for i in np.arange(256)[50:70]:
 #     plot(tt,alltod[i])
@@ -83,17 +82,20 @@ thedatadir = thedirs[numfile]
 print('We will analyse:')
 print(numfile, thedatadir)
 
-d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33)
-dictname = 'd__{}.npy'.format(d['dataset_info'])
-np.save(dictname,d)
+#base_save_path = os.getcwd()
+base_save_path = thedatadir
+save_path = base_save_path+'/results/'
+if not os.path.exists(save_path):
+    os.mkdir(save_path)
+
+d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
+                             highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
+                            save_path=save_path)
+
 
 # for thedatadir in thedirs:
-#     d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33)
-#     dictname = 'd__{}.npy'.format(d['dataset_info'])
-#     np.save(dictname,d)
-```
-
-```{python}
+#     d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
+#highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,save_path=save_path)
 
 ```
 
@@ -105,7 +107,7 @@ for i,thedatadir in enumerate(thedirs):
 
 ```{python}
 figure()
-title('Histograms risetime - all datasets CF 2023-04-17')
+title('Histograms risetime - datasets from {}'.format(day))
 ylabel('Counts')
 xlabel('Risetime [ ms ]')
 
@@ -131,7 +133,7 @@ grid()
 legend()
 
 figure()
-title('Histograms falltime - all datasets CF 2023-04-17')
+title('Histograms falltime - datasets from {}'.format(day))
 ylabel('Counts')
 xlabel('Falltime [ ms ]')
 
@@ -145,7 +147,7 @@ tight_layout
 
 
 figure()
-title('Mean time constants - all datasets CF 2023-04-17')
+title('Mean time constants - datasets from {}'.format(day))
 ylabel('Mean time constant [ ms ]')
 xlabel('Vbias [V]')
 errorbar(Vbias,1e3*rt_mean,yerr = 1e3*rt_mean_error,fmt='bo',alpha=0.5,label='Risetime')
@@ -156,34 +158,22 @@ tight_layout
 ```
 
 ```{python}
-# print(alldic['1'])#['alltod_folded_nonorm']['amplitude'])
-amps_1 = np.abs(alldic['1']['alltod_folded_nonorm']['amplitude'])
-ok = alldic['1']['ok']['Residuals'] & (amps_1<20000) & (amps_1>0)
+# # print(alldic['1'])#['alltod_folded_nonorm']['amplitude'])
+# amps_1 = np.abs(alldic['1']['alltod_folded_nonorm']['amplitude'])
+# ok = alldic['1']['ok']['Residuals'] & (amps_1<20000) & (amps_1>0)
 
-figure()
-hist(amps_1[ok],15)
+# figure()
+# hist(amps_1[ok],15)
 ```
 
 ```{python}
-
+# figure()
+# plot(d['alltod_folded_norm']['residuals_fit_folded_median'],d['alltod_folded_norm']['residuals_folded_median'],'.')
+# plot(d['alltod_folded_norm']['residuals_fit_folded_median'],d['alltod_folded_norm']['residuals_fit_folded_median'])
+# # show()
 ```
 
 ```{python}
-figure()
-plot(d['alltod_folded_norm']['residuals_fit_folded_median'],d['alltod_folded_norm']['residuals_folded_median'],'.')
-plot(d['alltod_folded_norm']['residuals_fit_folded_median'],d['alltod_folded_norm']['residuals_fit_folded_median'])
-# show()
-```
-
-```{python}
-print(d['dataset_info'])
-print(d['Vbias'])
-```
-
-```{python}
-1/0.01
-```
-
-```{python}
-
+# print(d['dataset_info'])
+# print(d['Vbias'])
 ```

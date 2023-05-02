@@ -330,13 +330,19 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	notch (= None) : 	several frequencies to notch filter. See fibtools.fold_data() for more info.
 	fmod (= None) : 	modulation frequency, this is only required if the calsource information is not available in the housekeeping data.
 	dutycycle (= None) : 	dutycycle in %, this is only required if the calsource information is not available in the housekeeping data.
-	typefit (= 'spl') : 	on top of the exponential behaviour we can chose to also fit a slow varying function. 'just_exp' means an exponential model, 'spl' means adding a slow varying function with splines on top of the exponential behaviour (nparams_ext_spl must be >=4 and defines the number of polynomial parameters) and 'poly' means adding a slow varying function with polynomials on top of the exponential behaviour (nparams_ext_poly must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial).
+	typefit (= 'just_exp') : 	on top of the exponential behaviour we can chose to also fit a slow varying function. 'just_exp' means an exponential model, 'spl' means adding a slow varying function with splines on top of the exponential behaviour (nparams_ext_spl must be >=4 and defines the number of polynomial parameters) and 'poly' means adding a slow varying function with polynomials on top of the exponential behaviour (nparams_ext_poly must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial).
 	nparams_ext_spl (=4) :	must be >=4 and defines the number of spline parameters.
 	nparams_ext_poly (=1) :	must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial.
 	doplot (= False) :	to show several plots.
+	doplot_onebyone (= True) :	to show one plot per TES (fit and folded data, three plots per figure). If doplot= False, then doplot_onebyone will be also False.
 	verbose (= True) :	to show some intermediate output messages.
 	saveplots (= ) :	(not implemented yet) to save plots. 'No' no saving, 'calsource' save just calsource...
 	save_dicts (=True) :	(not implemented yet) to save all the dictionaries with the relevant information (output of the function).
+	
+	Output:
+	d :	dictionary with all the relevant information. Elaborate...
+	
+
 	"""
 	
 	dataset_info = str.split(thedatadir,'/')[-1]

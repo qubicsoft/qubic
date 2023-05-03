@@ -70,12 +70,13 @@ close('all')
 ```
 
 ```{python}
+only_overview = False
 doplot = True
-doplot_onebyone = False
+doplot_onebyone = True
 lowcut = None
 highcut = None
 notch = None
-typefit = 'spl'#'just_exp'
+typefit = 'just_exp'
 
 numfile = 0
 thedatadir = thedirs[numfile]
@@ -91,7 +92,7 @@ if not os.path.exists(save_path):
 
 d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
                              highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
-                            save_path=save_path)
+                            save_path=save_path,only_overview = only_overview)
 
 
 # for thedatadir in thedirs:

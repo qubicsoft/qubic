@@ -333,7 +333,7 @@ def run_OPTICS(results, doplot=False, parnames = None, min_samples_optics = 10):
     return (labels)
 
 
-def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, doplot = False, doplot_onebyone = True, verbose = False,save_path =None):
+def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, doplot = False, doplot_onebyone = True, verbose = False,save_path =None,only_overview=False):
 
 	"""
 	Compute the time constants from a square modulation
@@ -498,6 +498,12 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	#	try:
 		print('Fitting the calibration source data.')
 
+		### Vectors to fit
+
+		tofit = np.reshape(folded_nonorm_cal, nbins)
+		errors = np.reshape(dfolded_nonorm_cal, nbins)
+		t = t_cal
+
 		###Fit type
 		if typefit == 'spl':
 		### Instanciate timecst+spline object
@@ -517,11 +523,6 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		else:
 			print('Give a valid typefit: \'just_exp\', \'spl\' or \'poly\' ')
 
-		### Vectors to fit
-
-		tofit = np.reshape(folded_nonorm_cal, nbins)
-		errors = np.reshape(dfolded_nonorm_cal, nbins)
-		t = t_cal
 
 		### Initial guess
 
@@ -947,6 +948,18 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 #	try:
 	print('Fitting no normalized folded data.')
 
+	### Fit the folded median
+
+	mean_fold = np.nanmean(folded[nonsaturated_tes],axis=0)
+	median_fold = np.nanmedian(folded[nonsaturated_tes],axis=0)
+	smoothed_median_fold = savgol_filter(median_fold, int(nbins/5), 3)
+	sigma_fold = np.nanstd(folded[nonsaturated_tes],axis=0)
+	error_mean = sigma_fold / np.sqrt(len(nonsaturated_tes)) # revisit this
+	errors_median = 1.253 * sigma_fold / np.sqrt(len(nonsaturated_tes)) #revisit this
+
+	tofit = median_fold
+	errors = errors_median
+
 	###Fit type
 	if typefit == 'spl':
 	### Instanciate timecst+spline object
@@ -965,18 +978,6 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 	else:
 		print('Give a valid typefit: \'just_exp\', \'spl\' or \'poly\' ')
-
-	mean_fold = np.nanmean(folded[nonsaturated_tes],axis=0)
-	median_fold = np.nanmedian(folded[nonsaturated_tes],axis=0)
-	smoothed_median_fold = savgol_filter(median_fold, int(nbins/5), 3)
-	sigma_fold = np.nanstd(folded[nonsaturated_tes],axis=0)
-	error_mean = sigma_fold / np.sqrt(len(nonsaturated_tes)) # revisit this
-	errors_median = 1.253 * sigma_fold / np.sqrt(len(nonsaturated_tes)) #revisit this
-
-	### Fit the folded median
-
-	tofit = median_fold
-	errors = errors_median
 
 	### Initial guess
 
@@ -1106,15 +1107,14 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 				plot(t,folded[i,:], 'k-',alpha=0.1,label='Folded data for all detectors')
 			plot(t, folded[i,:], 'k-',alpha=0.1)
 		plot(t,median_fold,'bo',label='Median over nonsaturated folded')
-		plot(t,-median_fold,'bo',label='- Median over nonsaturated folded')
 		plot(t,fctfit(t,allpars_folded_median),color='blue',label='Fitted median')
 		
-		
-		plot(t,-fctfit(t,allpars_folded_median),color='blue',label='-Fitted median')
-		allpars_folded_median_inverted = allpars_folded_median
-		allpars_folded_median_inverted[4] = -allpars_folded_median_inverted[4]
-		allpars_folded_median_inverted[5] = -allpars_folded_median_inverted[5] 
-		plot(t,fctfit(t,allpars_folded_median_inverted),color='blue',label='Fitted median')
+		plot(t,-median_fold,'ro',label='- Median over nonsaturated folded')		
+		plot(t,-fctfit(t,allpars_folded_median),color='red',label='-Fitted median')
+#		allpars_folded_median_inverted = allpars_folded_median
+#		allpars_folded_median_inverted[4] = -allpars_folded_median_inverted[4]
+#		allpars_folded_median_inverted[5] = -allpars_folded_median_inverted[5] 
+#		plot(t,fctfit(t,allpars_folded_median_inverted),color='green',label='Fitted median inverted params')
 		
 		if calsource_analysis:
 			plot(t_cal,folded_cal,color='red',label='Folded calsource data')
@@ -1124,6 +1124,13 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		ylabel('Stacked folded data')
 		tight_layout
 
+	if only_overview:
+
+		d_results['Vbias'] = Vbias
+		d_results['calsource'] = d_cal
+		d_results['folded_median'] = d_folded_median
+
+		return d_results
 
 	ch2vals = np.zeros(256)
 	ndfvals = np.zeros(256)
@@ -1508,47 +1515,52 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 			validfit_folded[i] = m.valid
 			allpars_folded[i,:] = np.array(m.values)
 			allerrs_folded[i,:] = np.array(m.errors)
-			residual_fit_1 = simps((fctfit(t,m.values)-fctfit(t,allpars_folded_median))**2,t)
-			m.values[4] = - m.values[4]
-			m.values[5] = - m.values[5]			
-			residual_fit_2 = simps((fctfit(t,m.values)-fctfit(t,allpars_folded_median))**2,t)
+			residual_1 = simps((fctfit(t,m.values)-fctfit(t,allpars_folded_median))**2,t)
+#			m.values[4] = - m.values[4]
+#			m.values[5] = - m.values[5]			
+#			residual_2 = simps((fctfit(t,m.values)-fctfit(t,allpars_folded_median))**2,t)
+			residual_2 = simps((fctfit(t,m.values)+fctfit(t,allpars_folded_median))**2,t)
 			
-			residuals_fit[i] = np.min([residual_fit_1,residual_fit_2])	
+			residuals_fit[i] = np.min([residual_1,residual_2])	
 			
 		else:
 			print('TES# {}'.format(i+1))
 
 		residual_1 = simps((tofit-fctfit(t,allpars_folded_median))**2,t)
-		allpars_folded_median_2 = allpars_folded_median
-		allpars_folded_median_2[4] = - allpars_folded_median[4]
-		allpars_folded_median_2[5] = - allpars_folded_median[5]
-		residual_2 = simps((tofit-fctfit(t,allpars_folded_median))**2,t)		
-
+#		allpars_folded_median_2 = allpars_folded_median
+#		allpars_folded_median_2[4] = - allpars_folded_median[4]
+#		allpars_folded_median_2[5] = - allpars_folded_median[5]
+#		residual_2 = simps((tofit-fctfit(t,allpars_folded_median_2))**2,t)		
+		residual_2 = simps((tofit+fctfit(t,allpars_folded_median))**2,t)		
+		
 		residuals_combined[i] = np.min([residual_1,residual_2])
 		
-		residuals[i] = simps((tofit-median_fold)**2,t)
+		residual_1 = simps((tofit-median_fold)**2,t)
+		residual_2 = simps((tofit+median_fold)**2,t)
+		
+		residuals[i] = np.min([residual_1,residual_2])
 
 	d_alltod_norm = {'dutycycle':dcfit_folded, 'dutycyle_error':dcerr_folded, 'risetime':risefit_folded, 'risetime_error' : riseerr_folded, 'falltime' : fallfit_folded, 'falltime_error' : fallerr_folded, 't0' : t0fit_folded, 't0_error' : t0err_folded, 'amplitude' : ampfit_folded, 'amplitude_error' :amperr_folded, 'ch2' : ch2vals_folded, 'ndf' : ndfvals_folded, 'valid_minuitfit' : validfit_folded,'residuals_folded_median':residuals,'residuals_folded_median_combined':residuals_combined, 'residuals_fit_folded_median':residuals_fit}
 
 	print('Fitting normalized folded data finished')				
 	
 	### different types of discarding process
-	## by clustering the residuals [ integrate((folded-foldedmedian[nonsaturated])**2) ]
-	results = np.array([residuals]).T
-	labels = run_DBSCAN(results, doplot=doplot, parnames = ['Residuals'],eps_cpar=0.6,min_samples_cpar = 20)
-	total_labels = np.max(labels)+1 #without considering the noisy data in label=-1 that could appear
-	
-	if total_labels == 0:
-		ok_dbs_residuals = np.zeros(256,dtype=bool)
-		print('All data considered as noisy when clustering')
-	else:
-		n_samples_in_cluster = np.zeros(total_labels)
-		for i in np.arange(total_labels):
-			n_samples_in_cluster[i] = np.sum(labels==i)
-		
-		ok_dbs_residuals = (labels==np.argmax(n_samples_in_cluster))
-	
-	d_ok['Residuals'] = ok_dbs_residuals
+#	## by clustering the residuals [ integrate((folded-foldedmedian[nonsaturated])**2) ]
+#	results = np.array([residuals]).T
+#	labels = run_DBSCAN(results, doplot=doplot, parnames = ['Residuals'],eps_cpar=0.6,min_samples_cpar = 20)
+#	total_labels = np.max(labels)+1 #without considering the noisy data in label=-1 that could appear
+#	
+#	if total_labels == 0:
+#		ok_dbs_residuals = np.zeros(256,dtype=bool)
+#		print('All data considered as noisy when clustering')
+#	else:
+#		n_samples_in_cluster = np.zeros(total_labels)
+#		for i in np.arange(total_labels):
+#			n_samples_in_cluster[i] = np.sum(labels==i)
+#		
+#		ok_dbs_residuals = (labels==np.argmax(n_samples_in_cluster))
+#	
+#	d_ok['Residuals'] = ok_dbs_residuals
 
  	## by clustering the residuals [ integrate((fitted_folded-fitted_foldedmedian[nonsaturated])**2) ]
 	results = np.array([residuals_combined]).T
@@ -1567,22 +1579,22 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	
 	d_ok['Residuals_combined'] = ok_dbs_residuals_combined
 
-	## by clustering the residuals [ integrate((fitted_folded-fitted_foldedmedian[nonsaturated])**2) ]
-	results = np.array([residuals_fit]).T
-	labels = run_DBSCAN(results, doplot=doplot, parnames = ['Residuals fit'],eps_cpar=0.6,min_samples_cpar = 20)
-	total_labels = np.max(labels)+1 #without considering the noisy data in label=-1 that could appear
-
-	if total_labels == 0:
-		ok_dbs_residuals_fit = np.zeros(256,dtype=bool)
-		print('All data considered as noisy when clustering')
-	else:
-		n_samples_in_cluster = np.zeros(total_labels)
-		for i in np.arange(total_labels):
-			n_samples_in_cluster[i] = np.sum(labels==i)
-		
-		ok_dbs_residuals_fit = (labels==np.argmax(n_samples_in_cluster))
-	
-	d_ok['Residuals_fit'] = ok_dbs_residuals_fit
+#	## by clustering the residuals [ integrate((fitted_folded-fitted_foldedmedian[nonsaturated])**2) ]
+#	results = np.array([residuals_fit]).T
+#	labels = run_DBSCAN(results, doplot=doplot, parnames = ['Residuals fit'],eps_cpar=0.6,min_samples_cpar = 20)
+#	total_labels = np.max(labels)+1 #without considering the noisy data in label=-1 that could appear
+#
+#	if total_labels == 0:
+#		ok_dbs_residuals_fit = np.zeros(256,dtype=bool)
+#		print('All data considered as noisy when clustering')
+#	else:
+#		n_samples_in_cluster = np.zeros(total_labels)
+#		for i in np.arange(total_labels):
+#			n_samples_in_cluster[i] = np.sum(labels==i)
+#		
+#		ok_dbs_residuals_fit = (labels==np.argmax(n_samples_in_cluster))
+#	
+#	d_ok['Residuals_fit'] = ok_dbs_residuals_fit
 
 
 # 	## by clustering the residuals [ integrate((folded-foldedmedian[nonsaturated])**2) ] with OPTICS
@@ -1651,11 +1663,11 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		dictname = 'd__{}.npy'.format(d_results['dataset_info'])
 		np.save(dictname,d_results)
 
-		plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsdb-'+dataset_info)
+#		plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsdb-'+dataset_info)
 
 		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_combined, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualscombineddb-'+dataset_info)
 		
-		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_fit, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualsfitdb-'+dataset_info)
+#		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_fit, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualsfitdb-'+dataset_info)
 
 	# 	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_optics_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsop'+dataset_info)			
 

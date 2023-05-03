@@ -605,14 +605,14 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 					allguess_7 = guess_7
 					allguess_8 = guess_8
 				elif nparams_ext > 1:
-					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-2))
-					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-2))
-					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-2))
-					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-2))
-					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-2))
-					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-2))
-					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-2))
-					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-2))
+					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1))
+					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1))
+					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1))
+					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1))
+					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1))
+					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1))
+					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1))
+					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1))
 
 			elif typefit == 'spl':
 				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
@@ -1063,14 +1063,14 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 				allguess_7 = guess_7
 				allguess_8 = guess_8
 			elif nparams_ext > 1:
-				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-2))
-				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-2))
-				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-2))
-				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-2))
-				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-2))
-				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-2))
-				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-2))
-				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-2))
+				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1))
+				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1))
+				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1))
+				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1))
+				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1))
+				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1))
+				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1))
+				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1))
 
 		elif typefit == 'spl':
 			allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
@@ -1270,8 +1270,6 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		guess_8 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
 
 
-
-
 		if nparams_ext == 0:
 		    allguess_1 = guess_1
 		    allguess_2 = guess_2
@@ -1293,14 +1291,14 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 					allguess_7 = guess_7
 					allguess_8 = guess_8
 				elif nparams_ext > 1:
-					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-2))
-					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-2))
-					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-2))
-					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-2))
-					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-2))
-					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-2))
-					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-2))
-					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-2))
+					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1))
+					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1))
+					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1))
+					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1))
+					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1))
+					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1))
+					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1))
+					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1))
 
 			elif typefit == 'spl':
 				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
@@ -1519,14 +1517,14 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 					allguess_7 = guess_7
 					allguess_8 = guess_8
 				elif nparams_ext > 1:
-					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-2))
-					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-2))
-					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-2))
-					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-2))
-					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-2))
-					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-2))
-					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-2))
-					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-2))
+					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1))
+					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1))
+					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1))
+					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1))
+					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1))
+					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1))
+					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1))
+					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1))
 
 			elif typefit == 'spl':
 				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
@@ -1736,7 +1734,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 #		plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsdb-'+dataset_info)
 
-		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_combined, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-residualscombined-typefit-{}'.format(typefit)+dataset_info)
+		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_combined, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-residualscombined-typefit-{}_'.format(typefit)+dataset_info)
 		
 #		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_fit, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualsfitdb-'+dataset_info)
 

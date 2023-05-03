@@ -70,15 +70,15 @@ close('all')
 ```
 
 ```{python}
-only_overview = True
-doplot = True
-doplot_onebyone = True
+only_overview = False
+doplot = False
+doplot_onebyone = False
 lowcut = None
 highcut = None
 notch = None
-params_spl = 5
-params_poly = 2
-typefit = 'poly'#'just_exp'
+params_spl = 4
+params_poly = 1
+typefit = 'just_exp'
 
 numfile = 0
 thedatadir = thedirs[numfile]
@@ -92,16 +92,19 @@ save_path = base_save_path+'/results/'
 if not os.path.exists(save_path):
     os.mkdir(save_path)
 
-d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
+#d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
                              highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
                              save_path=save_path,only_overview = only_overview,nparams_ext_spl=params_spl,
                              nparams_ext_poly=params_poly)
 
+for thedatadir in thedirs:
+    d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
+                                 highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
+                                 save_path=save_path)
 
-# for thedatadir in thedirs:
-#     d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
-#                                  highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
-#                                  save_path=save_path)
+```
+
+```{python}
 
 ```
 

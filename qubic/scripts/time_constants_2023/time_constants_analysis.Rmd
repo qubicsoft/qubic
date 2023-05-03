@@ -39,7 +39,8 @@ from qubic import time_constants_tools as tct
 ```{python}
 ## Select a dataset corresponding to the TC measurement thorugh square modulation (external calsource or carbon fibres)
 day = '2023-04-17'
-data_dir = '/home/nahue/Downloads/' + day + '/'
+base_dir = '/home/nahue/Downloads/'
+data_dir = base_dir + day + '/'
 thedirs = np.sort(glob.glob(data_dir+'*carbon*'))
 
 print('Here are all the available files')
@@ -64,7 +65,7 @@ close('all')
 # tt, alltod = a.tod()
 
 # figure()
-# for i in np.arange(256)[50:70]:
+# for i in [22]:#np.arange(256)[21:24]:
 #     plot(tt,alltod[i])
 ```
 
@@ -74,7 +75,7 @@ doplot_onebyone = False
 lowcut = None
 highcut = None
 notch = None
-typefit = 'just_exp'
+typefit = 'spl'#'just_exp'
 
 numfile = 0
 thedatadir = thedirs[numfile]
@@ -82,8 +83,8 @@ thedatadir = thedirs[numfile]
 print('We will analyse:')
 print(numfile, thedatadir)
 
-#base_save_path = os.getcwd()
-base_save_path = thedatadir
+# base_save_path = os.getcwd()
+base_save_path = data_dir
 save_path = base_save_path+'/results/'
 if not os.path.exists(save_path):
     os.mkdir(save_path)
@@ -95,7 +96,8 @@ d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot
 
 # for thedatadir in thedirs:
 #     d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
-#highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,save_path=save_path)
+#                                  highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
+#                                  save_path=save_path)
 
 ```
 

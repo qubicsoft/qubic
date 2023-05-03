@@ -333,7 +333,7 @@ def run_OPTICS(results, doplot=False, parnames = None, min_samples_optics = 10):
     return (labels)
 
 
-def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, doplot = False, doplot_onebyone = True, verbose = False,save_path =None,only_overview=False):
+def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=5, nparams_ext_poly=2, doplot = False, doplot_onebyone = True, verbose = False,save_path =None,only_overview=False):
 
 	"""
 	Compute the time constants from a square modulation
@@ -345,9 +345,9 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	notch (= None) : 	several frequencies to notch filter. See fibtools.fold_data() for more info.
 	fmod (= None) : 	modulation frequency, this is only required if the calsource information is not available in the housekeeping data.
 	dutycycle (= None) : 	dutycycle in %, this is only required if the calsource information is not available in the housekeeping data.
-	typefit (= 'just_exp') : 	on top of the exponential behaviour we can chose to also fit a slow varying function. 'just_exp' means an exponential model, 'spl' means adding a slow varying function with splines on top of the exponential behaviour (nparams_ext_spl must be >=4 and defines the number of polynomial parameters) and 'poly' means adding a slow varying function with polynomials on top of the exponential behaviour (nparams_ext_poly must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial).
+	typefit (= 'just_exp') : 	on top of the exponential behaviour we can chose to also fit a slow varying function. 'just_exp' means an exponential model, 'spl' means adding a slow varying function with splines on top of the exponential behaviour (nparams_ext_spl must be >=4 and defines the number of spline parameters) and 'poly' means adding a slow varying function with polynomials on top of the exponential behaviour (nparams_ext_poly must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial).
 	nparams_ext_spl (=4) :	must be >=4 and defines the number of spline parameters.
-	nparams_ext_poly (=1) :	must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial.
+	nparams_ext_poly (=2) :	must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial.
 	doplot (= False) :	to show several plots.
 	doplot_onebyone (= True) :	to show one plot per TES (fit and folded data, three plots per figure). If doplot= False, then doplot_onebyone will be also False.
 	verbose (= True) :	to show some intermediate output messages.
@@ -1654,6 +1654,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	d_results['ok'] = d_ok
 	d_results['alltod_folded_nonorm'] = d_alltod_nonorm
 	d_results['alltod_folded_norm'] = d_alltod_norm
+	d_results['typefit'] = typefit
 
 
 
@@ -1665,7 +1666,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 #		plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsdb-'+dataset_info)
 
-		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_combined, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualscombineddb-'+dataset_info)
+		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_combined, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-residualscombined-typefit-{}'.format(typefit)+dataset_info)
 		
 #		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_fit, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualsfitdb-'+dataset_info)
 

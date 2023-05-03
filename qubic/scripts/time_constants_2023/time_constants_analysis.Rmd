@@ -76,7 +76,7 @@ doplot_onebyone = True
 lowcut = None
 highcut = None
 notch = None
-typefit = 'just_exp'
+typefit = 'spl'#'just_exp'
 
 numfile = 0
 thedatadir = thedirs[numfile]

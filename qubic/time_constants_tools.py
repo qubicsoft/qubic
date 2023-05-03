@@ -209,13 +209,23 @@ def asymsig_poly(x, pars):
 
 
 
-def fit_one(t, tofit, errors, initguess, nparams_ext, fctfit = asymsig_poly, fixpars = None, limits=None, scan=None):
+#def fit_one(t, tofit, errors, initguess, nparams_ext, fctfit = asymsig_poly, fixpars = None, limits=None, scan=None):
+#    ok = np.isfinite(tofit) & (errors != 0)
+#    myls = LeastSquares(t[ok], tofit[ok], errors[ok], fctfit)
+#    if nparams_ext == 0:
+#        guess = initguess
+#    else:
+#        guess = np.append(initguess, np.zeros(nparams_ext-1)+initguess[-1])
+
+
+def fit_one(t, tofit, errors, initguess, fctfit = asymsig_poly, fixpars = None, limits=None, scan=None):
     ok = np.isfinite(tofit) & (errors != 0)
     myls = LeastSquares(t[ok], tofit[ok], errors[ok], fctfit)
-    if nparams_ext == 0:
-        guess = initguess
-    else:
-        guess = np.append(initguess, np.zeros(nparams_ext-1)+initguess[-1])
+#    if nparams_ext == 0:
+#        guess = initguess
+#    else:
+#        guess = np.append(initguess, np.zeros(nparams_ext-1)+initguess[-1])
+    guess = initguess
     try:
         m = iminuit.Minuit(myls, guess)
         ## Limits
@@ -333,7 +343,7 @@ def run_OPTICS(results, doplot=False, parnames = None, min_samples_optics = 10):
     return (labels)
 
 
-def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=5, nparams_ext_poly=2, doplot = False, doplot_onebyone = True, verbose = False,save_path =None,only_overview=False):
+def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, doplot = False, doplot_onebyone = True, verbose = False,save_path =None,only_overview=False):
 
 	"""
 	Compute the time constants from a square modulation
@@ -347,7 +357,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	dutycycle (= None) : 	dutycycle in %, this is only required if the calsource information is not available in the housekeeping data.
 	typefit (= 'just_exp') : 	on top of the exponential behaviour we can chose to also fit a slow varying function. 'just_exp' means an exponential model, 'spl' means adding a slow varying function with splines on top of the exponential behaviour (nparams_ext_spl must be >=4 and defines the number of spline parameters) and 'poly' means adding a slow varying function with polynomials on top of the exponential behaviour (nparams_ext_poly must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial).
 	nparams_ext_spl (=4) :	must be >=4 and defines the number of spline parameters.
-	nparams_ext_poly (=2) :	must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial.
+	nparams_ext_poly (=1) :	must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial.
 	doplot (= False) :	to show several plots.
 	doplot_onebyone (= True) :	to show one plot per TES (fit and folded data, three plots per figure). If doplot= False, then doplot_onebyone will be also False.
 	verbose (= True) :	to show some intermediate output messages.
@@ -584,14 +594,35 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		    allguess_7 = guess_7
 		    allguess_8 = guess_8
 		else:
-		    allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
-		    allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
-		    allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
-		    allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
-		    allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
-		    allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
-		    allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
-		    allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
+			if typefit == 'poly':
+				if nparams_ext == 1:
+					allguess_1 = guess_1
+					allguess_2 = guess_2
+					allguess_3 = guess_3
+					allguess_4 = guess_4
+					allguess_5 = guess_5
+					allguess_6 = guess_6
+					allguess_7 = guess_7
+					allguess_8 = guess_8
+				elif nparams_ext > 1:
+					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-2))
+					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-2))
+					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-2))
+					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-2))
+					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-2))
+					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-2))
+					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-2))
+					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-2))
+
+			elif typefit == 'spl':
+				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
+				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
+				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
+				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
+				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
+				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
+				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
+				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
 
 		guesses = [guess_1, guess_2, guess_3, guess_4, guess_5, guess_6, guess_7, guess_8]
 		allguesses = [allguess_1, allguess_2, allguess_3, allguess_4, allguess_5, allguess_6, allguess_7, allguess_8]
@@ -620,25 +651,8 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		### Fixed parameters
 		fixpars = []
 
-		m, ch2, ndf = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
+		m, ch2, ndf = fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
 		
-		# m_1, ch2_1, ndf_1 = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
-		# difference_1 = np.abs(simps((tofit-fctfit(t, m_1.values))**2,t))
-
-		# guess[3] = t[argmin(-np.gradient(tofit))]
-		# m_2, ch2_2, ndf_2 = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
-		# difference_2 = np.abs(simps((tofit-fctfit(t, m_2.values))**2,t))
-
-		# if difference_2 > difference_1:
-		#     m = m_1
-		#     ch2 = ch2_1
-		#     ndf = ndf_1
-		#     guess[3] = t[argmin(np.gradient(tofit))]
-		# else:
-		#     m = m_2
-		#     ch2 = ch2_2
-		#     ndf = ndf_2
-
 		ch2vals_cal = ch2
 		ndfvals_cal = ndf
 		dcfit_cal = m.values[0]
@@ -1028,7 +1042,6 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	offset = np.min(tofit)
 	guess_8 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
 
-
 	if nparams_ext == 0:
 	    allguess_1 = guess_1
 	    allguess_2 = guess_2
@@ -1039,14 +1052,35 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	    allguess_7 = guess_7
 	    allguess_8 = guess_8
 	else:
-	    allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
-	    allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
-	    allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
-	    allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
-	    allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
-	    allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
-	    allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
-	    allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
+		if typefit == 'poly':
+			if nparams_ext == 1:
+				allguess_1 = guess_1
+				allguess_2 = guess_2
+				allguess_3 = guess_3
+				allguess_4 = guess_4
+				allguess_5 = guess_5
+				allguess_6 = guess_6
+				allguess_7 = guess_7
+				allguess_8 = guess_8
+			elif nparams_ext > 1:
+				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-2))
+				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-2))
+				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-2))
+				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-2))
+				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-2))
+				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-2))
+				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-2))
+				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-2))
+
+		elif typefit == 'spl':
+			allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
+			allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
+			allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
+			allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
+			allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
+			allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
+			allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
+			allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
 
 	guesses = [guess_1, guess_2, guess_3, guess_4, guess_5, guess_6, guess_7, guess_8]
 	allguesses = [allguess_1, allguess_2, allguess_3, allguess_4, allguess_5, allguess_6, allguess_7, allguess_8]
@@ -1077,7 +1111,21 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 	### Run minuit
 
-	m, ch2, ndf = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
+	m, ch2, ndf = fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
+
+	ch2vals_folded_median = np.nan
+	ndfvals_folded_median = np.nan
+	dcfit_folded_median = np.nan
+	dcerr_folded_median = np.nan
+	risefit_folded_median = np.nan
+	riseerr_folded_median = np.nan
+	fallfit_folded_median = np.nan
+	fallerr_folded_median = np.nan
+	t0fit_folded_median = np.nan
+	t0err_folded_median = np.nan
+	ampfit_folded_median = np.nan
+	amperr_folded_median = np.nan
+	validfit_folded_median = np.nan
 	
 	if m != 0:
 		ch2vals_folded_median = ch2
@@ -1107,14 +1155,12 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 				plot(t,folded[i,:], 'k-',alpha=0.1,label='Folded data for all detectors')
 			plot(t, folded[i,:], 'k-',alpha=0.1)
 		plot(t,median_fold,'bo',label='Median over nonsaturated folded')
-		plot(t,fctfit(t,allpars_folded_median),color='blue',label='Fitted median')
+		plot(t,fctfit(t,allguess),color='green',label='Media guess')
+		plot(t,-median_fold,'ro',label='- Median over nonsaturated folded')
 		
-		plot(t,-median_fold,'ro',label='- Median over nonsaturated folded')		
-		plot(t,-fctfit(t,allpars_folded_median),color='red',label='-Fitted median')
-#		allpars_folded_median_inverted = allpars_folded_median
-#		allpars_folded_median_inverted[4] = -allpars_folded_median_inverted[4]
-#		allpars_folded_median_inverted[5] = -allpars_folded_median_inverted[5] 
-#		plot(t,fctfit(t,allpars_folded_median_inverted),color='green',label='Fitted median inverted params')
+		if m !=0:
+			plot(t,fctfit(t,allpars_folded_median),color='blue',label='Fitted median')	
+			plot(t,-fctfit(t,allpars_folded_median),color='red',label='-Fitted median')
 		
 		if calsource_analysis:
 			plot(t_cal,folded_cal,color='red',label='Folded calsource data')
@@ -1224,6 +1270,8 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		guess_8 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
 
 
+
+
 		if nparams_ext == 0:
 		    allguess_1 = guess_1
 		    allguess_2 = guess_2
@@ -1234,14 +1282,35 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		    allguess_7 = guess_7
 		    allguess_8 = guess_8
 		else:
-		    allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
-		    allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
-		    allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
-		    allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
-		    allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
-		    allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
-		    allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
-		    allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
+			if typefit == 'poly':
+				if nparams_ext == 1:
+					allguess_1 = guess_1
+					allguess_2 = guess_2
+					allguess_3 = guess_3
+					allguess_4 = guess_4
+					allguess_5 = guess_5
+					allguess_6 = guess_6
+					allguess_7 = guess_7
+					allguess_8 = guess_8
+				elif nparams_ext > 1:
+					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-2))
+					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-2))
+					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-2))
+					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-2))
+					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-2))
+					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-2))
+					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-2))
+					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-2))
+
+			elif typefit == 'spl':
+				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
+				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
+				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
+				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
+				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
+				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
+				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
+				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
 
 		guesses = [guess_1, guess_2, guess_3, guess_4, guess_5, guess_6, guess_7, guess_8]
 		allguesses = [allguess_1, allguess_2, allguess_3, allguess_4, allguess_5, allguess_6, allguess_7, allguess_8]
@@ -1272,27 +1341,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 		### Run minuit
 
-		m, ch2, ndf = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
-
-# 		m_1, ch2_1, ndf_1 = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
-#
-# 		difference_1 = np.abs(simps((tofit-fctfit(t, m_1.values))**2,t))
-#
-# 		guess[3] = t[argmin(-np.gradient(tofit))]
-#
-# 		m_2, ch2_2, ndf_2 = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
-#
-# 		difference_2 = np.abs(simps((tofit-fctfit(t, m_2.values))**2,t))
-#
-# 		if difference_2 > difference_1:
-# 			m = m_1
-# 			ch2 = ch2_1
-# 			ndf = ndf_1
-# 			guess[3] = t[argmin(np.gradient(tofit))]
-# 		else:
-# 			m = m_2
-# 			ch2 = ch2_2
-# 			ndf = ndf_2		
+		m, ch2, ndf = fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
 
 		if m != 0:
 			ch2vals[i] = ch2
@@ -1459,14 +1508,35 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		    allguess_7 = guess_7
 		    allguess_8 = guess_8
 		else:
-		    allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
-		    allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
-		    allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
-		    allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
-		    allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
-		    allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
-		    allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
-		    allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
+			if typefit == 'poly':
+				if nparams_ext == 1:
+					allguess_1 = guess_1
+					allguess_2 = guess_2
+					allguess_3 = guess_3
+					allguess_4 = guess_4
+					allguess_5 = guess_5
+					allguess_6 = guess_6
+					allguess_7 = guess_7
+					allguess_8 = guess_8
+				elif nparams_ext > 1:
+					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-2))
+					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-2))
+					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-2))
+					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-2))
+					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-2))
+					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-2))
+					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-2))
+					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-2))
+
+			elif typefit == 'spl':
+				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
+				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
+				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
+				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
+				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
+				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
+				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
+				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
 
 		guesses = [guess_1, guess_2, guess_3, guess_4, guess_5, guess_6, guess_7, guess_8]
 		allguesses = [allguess_1, allguess_2, allguess_3, allguess_4, allguess_5, allguess_6, allguess_7, allguess_8]
@@ -1497,7 +1567,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 		### Run minuit
 
-		m, ch2, ndf = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
+		m, ch2, ndf = fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
 		
 		if m != 0:
 			ch2vals_folded[i] = ch2
@@ -1687,11 +1757,9 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	return d_results
 
 
-# # to improve:
-# when computing residuals, inverted signal are not corrected and then give a false bad result
-
+## to improve:
+# maybe fitting the normalized folded data and then the nonormalized one is better
 # definir la mediana
 # fitear la mediana
 # usar esos parámetros fiteados como los guess para fitear la normalized folded data
-
 # ahora usar esos parámetros fiteados como los guess (salvo amp y offset) para fitear la nonorm folded data

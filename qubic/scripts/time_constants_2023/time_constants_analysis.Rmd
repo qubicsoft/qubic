@@ -80,11 +80,11 @@ params_spl = 4
 params_poly = 1
 typefit = 'just_exp'
 
-numfile = 0
-thedatadir = thedirs[numfile]
+# numfile = 0
+# thedatadir = thedirs[numfile]
 
-print('We will analyse:')
-print(numfile, thedatadir)
+# print('We will analyse:')
+# print(numfile, thedatadir)
 
 # base_save_path = os.getcwd()
 base_save_path = data_dir
@@ -92,10 +92,10 @@ save_path = base_save_path+'/results/'
 if not os.path.exists(save_path):
     os.mkdir(save_path)
 
-#d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
-                             highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
-                             save_path=save_path,only_overview = only_overview,nparams_ext_spl=params_spl,
-                             nparams_ext_poly=params_poly)
+# d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
+#                              highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
+#                              save_path=save_path,only_overview = only_overview,nparams_ext_spl=params_spl,
+#                              nparams_ext_poly=params_poly)
 
 for thedatadir in thedirs:
     d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
@@ -109,9 +109,10 @@ for thedatadir in thedirs:
 ```
 
 ```{python}
+os.chdir(save_path)
 alldic = {}
 for i,thedatadir in enumerate(thedirs):
-    alldic['{}'.format(i+1)] = np.load('/home/nahue/Downloads/2023-04-17/results/d__{}.npy'.format(str.split(thedatadir,'/')[-1]),allow_pickle=True).item()
+    alldic['{}'.format(i+1)] = np.load('d__{}.npy'.format(str.split(thedatadir,'/')[-1]),allow_pickle=True).item()
 ```
 
 ```{python}
@@ -129,7 +130,7 @@ Vbias = np.zeros(len(thedirs))
 for i in np.arange(len(thedirs)):
     ok_cuts_rt = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']>0)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']<0.6)
     ok_cuts_ft = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']>0)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']<0.6)
-    ok = ok_cuts_ft * ok_cuts_rt * d['ok']['Residuals']
+    ok = ok_cuts_ft * ok_cuts_rt * d['ok']['Residuals_combined']
     rt_mean[i] = np.mean(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime'][ok])
     rt_mean_error[i] = np.sum(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime_error'][ok])/(np.sum(ok))
     ft_mean[i] = np.mean(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime'][ok])
@@ -164,6 +165,19 @@ errorbar(Vbias,1e3*ft_mean,yerr = 1e3*ft_mean_error,fmt='ro',alpha=0.5,label='Fa
 grid()
 legend()
 tight_layout
+```
+
+```{python}
+rt_nonorm = alldic['1']['alltod_folded_nonorm']['risetime']
+rt_norm = alldic['1']['alltod_folded_norm']['risetime']
+b = np.abs(rt_nonorm-rt_norm)
+
+# figure()
+# plot(b,'.')
+
+
+results = np.array([b]).T
+labels = tct.run_DBSCAN(results, doplot=True, parnames = ['Risetime diff'],eps_cpar=0.01,min_samples_cpar = 10)
 ```
 
 ```{python}

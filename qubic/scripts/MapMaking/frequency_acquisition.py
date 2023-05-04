@@ -43,6 +43,15 @@ from pysimulators import *
 from pyoperators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
+def get_ultrawideband_config():
+    
+    nu_up = 247.5
+    nu_down = 131.25
+    nu_ave = np.mean(np.array([nu_up, nu_down]))
+    delta = nu_up - nu_ave
+    
+    return nu_ave, 2*delta/nu_ave
+
 def find_folder_recursively(folder_name, start_path=os.path.expanduser("~/Desktop")):
     for root, dirs, files in os.walk(start_path):
         if folder_name in dirs:
@@ -658,10 +667,12 @@ class PlanckAcquisition:
         if mask is not None:
             for i in range(3):
                 self.sigma[:, i] /= mask.copy()
-        if seenpix is not None:
-            myweight = 1 / (self.sigma[seenpix] ** 2)
-        else:
-            myweight = 1 / (self.sigma ** 2)
+                print(self.sigma[seenpix, i])
+                print(len(mask[seenpix]), mask[seenpix])
+        #if seenpix is not None:
+        #    myweight = 1 / (self.sigma[seenpix] ** 2)
+        #else:
+        myweight = 1 / (self.sigma ** 2)
         
         return DiagonalOperator(myweight, broadcast='leftward',
                                 shapein=myweight.shape)
@@ -1229,57 +1240,6 @@ class QubicPlanckMultiBandAcquisition:
             return BlockDiagonalOperator(invN, axisout=0)
 
 
-            """
-            if self.Nrec == 2 :
-
-
-                invntt_planck143 = weight_planck*self.planck[0].get_invntt_operator(beam_correction=beam_correction[0], mask=mask, seenpix=seenpix)
-                invntt_planck217 = weight_planck*self.planck[1].get_invntt_operator(beam_correction=beam_correction[0], mask=mask, seenpix=seenpix)
-                R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
-                invN_143 = R_planck(invntt_planck143(R_planck.T))
-                invN_217 = R_planck(invntt_planck217(R_planck.T))
-
-
-                return BlockDiagonalOperator([invn_q, invN_143, invN_217], axisout=0)
-
-                #else:
-            """
-            
-
-
-
-
-
-
-
-
-
-
-
-            """
-            if beam_correction is None :
-                beam_correction = [0]*self.nfreqs
-            else:
-                if type(beam_correction) is not list:
-                    raise TypeError('Beam correction should be a list')
-                if len(beam_correction) != self.nfreqs:
-                    raise TypeError('List of beam correction should have Nrec elements')
-
-
-            invntt_qubic = self.qubic.get_invntt_operator()
-            R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
-            Operator = [R_qubic(invntt_qubic(R_qubic.T))]
-
-            for i in range(self.Nrec):
-                if i < int(self.Nrec/2):
-                    invntt_planck = weight_planck*self.planck[0].get_invntt_operator(beam_correction=beam_correction[i], mask=mask, seenpix=seenpix)
-                else:
-                    invntt_planck = weight_planck*self.planck[1].get_invntt_operator(beam_correction=beam_correction[i], mask=mask, seenpix=seenpix)
-                R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
-                Operator.append(R_planck(invntt_planck(R_planck.T)))
-
-            return BlockDiagonalOperator(Operator, axisout=0)
-            """
             
         
         elif self.type == 'QubicIntegrated':
@@ -1554,9 +1514,22 @@ class QubicIntegrated:
         a = QubicAcquisition(q, self.sampling, self.scene, d1)
         return a
     def get_noise(self):
+
+        """
+        
+        Method which compute the noise of QUBIC.
+
+        """
+        np.random.seed(None)
         a = self._get_average_instrument_acq()
         return a.get_noise()
     def get_TOD(self, skyconfig, beta, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
+
+        """
+        
+        Method which allow to compute QUBIC TOD for a given skyconfig according to a given beta.
+
+        """
 
         s = Sky(skyconfig, self)
         m_nu = s.scale_component(beta)
@@ -1678,6 +1651,7 @@ class QubicTwoBands:
 
         self.nueff = np.array(list(self.qubic150.nueff)+list(self.qubic220.nueff))
         self.allnus = np.array(list(self.qubic150.allnus)+list(self.qubic220.allnus))
+        self.allfwhm = np.array(list(self.qubic150.allfwhm)+list(self.qubic220.allfwhm))
 
     def get_TOD(self, skyconfig, beta, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
 
@@ -1749,6 +1723,7 @@ class QubicWideBand:
 
         self.nueff = np.array(list(self.qubic150.nueff)+list(self.qubic220.nueff))
         self.allnus = np.array(list(self.qubic150.allnus)+list(self.qubic220.allnus))
+        self.allfwhm = np.array(list(self.qubic150.allfwhm)+list(self.qubic220.allfwhm))
     def get_operator(self, convolution=False, myfwhm=None):
 
         """
@@ -1825,5 +1800,308 @@ class QubicWideBand:
 
     def get_coverage(self):
         return self.qubic150.get_coverage()
+
+class QubicUltraWideBand(QubicIntegrated):
+
+    def __init__(self, d, Nsub, Nrec):
+
+
+        ### Warnings
+        if Nsub == 1:
+            raise TypeError('The number of Nsub should be above 1')
+        
+        if Nsub%2 != 0:
+            raise TypeError('The number of bandpass integration should be divisible by an integer')
+        
+        Nsub = int(Nsub/2)
+
+        self.d150 = d.copy()
+        self.d220 = d.copy()
+        self.Nsub = Nsub
+        self.Nrec = Nrec
+        self.fact_sub = int(2*Nsub/Nrec)
+        self.d150['filter_nu'] = 150 * 1e9
+        self.d220['filter_nu'] = 220 * 1e9
+        
+        ### Qubic acquisitions
+        self.qubic150 = QubicIntegrated(self.d150, Nsub=self.Nsub, Nrec=self.Nrec)
+        self.qubic220 = QubicIntegrated(self.d220, Nsub=self.Nsub, Nrec=self.Nrec)
+        self.scene = self.qubic150.scene
+        
+        self.nu_down = 131.25
+        self.nu_up = 247.5
+        self.nu_ave = np.mean(np.array([self.nu_up, self.nu_down]))
+
+        self.allnus = np.array(list(self.qubic150.allnus) + list(self.qubic220.allnus))
+        self.allfwhm = np.array(list(self.qubic150.allfwhm) + list(self.qubic220.allfwhm))
+
+        _, _, self.nueff, _, _, _ = qubic.compute_freq(self.nu_ave, self.Nrec, (self.nu_up - self.nu_down)/self.nu_ave)
+
+        self.subacqs = self.qubic150.subacqs + self.qubic220.subacqs
+
+
+        """
+        
+        if self.Nsub == 1 and self.Nrec == 1:
+            _, _, self.allnus, _, _, _ = qubic.compute_freq(self.nu_ave, self.Nsub, (self.nu_up - self.nu_down)/self.nu_ave)
+        else:
+            _, self.allnus, _, _, _, _ = qubic.compute_freq(self.nu_ave, self.Nsub-1, (self.nu_up - self.nu_down)/self.nu_ave)
+        ### Scene
+        self.scene = self.qubic.scene
+
+        
+
+        if self.bandpass is None:
+            self.bandpass = np.ones(self.Nsub)
+
+        if self.Nsub != len(self.bandpass):
+            raise TypeError(f'Bandpass should have {len(self.bandpass)} values.')
+
+
+        ### Effective frequencies
+        self.nueff = self.qubic.nueff
+
+        ### All frequencies
+        self.allnus = self.qubic.allnus
+
+        ### All FWHM (rad)
+        self.allfwhm = self.qubic.allfwhm
+        """
+
+    def _get_average_instrument(self):
+        
+        """
+        Create and return a QubicAcquisition instance of a monochromatic
+            instrument with frequency correspondent to the mean of the
+            frequency range.
+        """
+        
+        #if len(self) == 1:
+        #    return self[0]
+
+        ### 150 GHz
+        q150 = self.qubic150.multiinstrument[0]
+        
+        nu150_min = self.qubic150.multiinstrument[0].filter.nu
+        nu150_max = self.qubic150.multiinstrument[-1].filter.nu
+        
+        nep150 = q150.detector.nep
+        fknee150 = q150.detector.fknee
+        fslope150 = q150.detector.fslope
+
+        d1 = self.qubic150.d.copy()
+        d1['filter_nu'] = (nu150_max + nu150_min) / 2.
+        d1['filter_relative_bandwidth'] = (nu150_max - nu150_min) / ((nu150_max + nu150_min) / 2.)
+        d1['detector_nep'] = nep150
+        d1['detector_fknee'] = fknee150
+        d1['detector_fslope'] = fslope150
+        ins150 = instr.QubicInstrument(d1, FRBW=q150.FRBW)
+
+
+        ### 220 GHz
+
+        q220 = self.qubic220.multiinstrument[0]
+        nu220_min = self.qubic220.multiinstrument[0].filter.nu
+        nu220_max = self.qubic220.multiinstrument[-1].filter.nu
+
+        nep220 = q220.detector.nep
+        fknee220 = q220.detector.fknee
+        fslope220 = q220.detector.fslope
+
+        d1 = self.qubic220.d.copy()
+        d1['filter_nu'] = (nu220_max + nu220_min) / 2.
+        d1['filter_relative_bandwidth'] = (nu220_max - nu220_min) / ((nu220_max + nu220_min) / 2.)
+        d1['detector_nep'] = nep220
+        d1['detector_fknee'] = fknee220
+        d1['detector_fslope'] = fslope220
+
+        ins220 = instr.QubicInstrument(d1, FRBW=q220.FRBW)
+
+        return ins150, ins220
+
+    def get_TOD(self, skyconfig, beta, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
+
+        tod150 = self.qubic150.get_TOD(skyconfig, beta, convolution, myfwhm, noise=False, bandpass_correction=bandpass_correction)
+        tod220 = self.qubic220.get_TOD(skyconfig, beta, convolution, myfwhm, noise=False, bandpass_correction=bandpass_correction)
+        tod = tod150 + tod220
+
+        if noise:
+            n = self.get_noise()
+            tod += n.copy()
+        
+        return tod
+    
+    def get_operator(self, convolution=False, myfwhm=None):
+
+        """
+        
+        Method to compute the reconstruction operator for the WideBand instrument.
+
+        """
+        self.H150 = self.qubic150._get_array_of_operators(convolution=convolution, myfwhm=myfwhm)
+        self.H220 = self.qubic220._get_array_of_operators(convolution=convolution, myfwhm=myfwhm)
+
+        op = self.H150 + self.H220
+
+        op_sum = []
+        if self.Nrec == 1:
+            op_sum = np.sum(np.array(op), axis=0)
+            return op_sum
+        else:
+            for irec in range(self.Nrec):
+                imin = irec*self.fact_sub
+                imax = (irec+1)*self.fact_sub
+                op_sum += [np.sum(np.array(op[imin:imax]), axis=0)]
+
+            return BlockRowOperator(op_sum, new_axisin=0)
+    
+
+    def get_noise(self, weights=None):
+        
+        """
+        
+        Method to compute the noise vector for the WideBand instrument.
+        It assumes only one contribution of the noise detectors but the sum of the photon noise of each separated focal plane.
+
+        """
+
+        if weights is None:
+            weights = np.ones(3)
+
+        ave_ins150, ave_ins220 = self._get_average_instrument()
+        detector_noise = ave_ins150.get_noise_detector(self.qubic150.sampling)
+        nsamplings = self.qubic150.sampling.comm.allreduce(len(self.qubic150.sampling))
+        fact = np.sqrt(nsamplings * self.qubic150.sampling.period / (self.qubic150.d['effective_duration'] * 31557600))
+
+        photon_noise150 = ave_ins150.get_noise_photon(self.qubic150.sampling, self.qubic150.scene)
+        photon_noise220 = ave_ins220.get_noise_photon(self.qubic220.sampling, self.qubic220.scene)
+
+        return fact * (weights[0] * detector_noise + weights[1] * photon_noise150 + weights[2] * photon_noise220)
+    
+    def get_invntt_operator(self, weights=None):
+
+        """
+        
+        Method to compute the inverse noise covariance matrix in time-domain.
+
+        """
+        ave_ins150, ave_ins220 = self._get_average_instrument()
+        if weights is None:
+            weights = np.ones(3)
+
+        sigma = weights[0] * ave_ins150.detector.nep / np.sqrt(2 * self.qubic150.sampling.period)
+        sigma_photon150 = weights[1] * ave_ins150._get_noise_photon_nep(self.qubic150.scene) / np.sqrt(2 * self.qubic150.sampling.period)
+        sigma_photon220 = weights[2] * ave_ins220._get_noise_photon_nep(self.qubic220.scene) / np.sqrt(2 * self.qubic220.sampling.period)
+
+        sig = np.sqrt(sigma**2 + sigma_photon150**2 + sigma_photon220**2)
+
+        f = (len(self.qubic150.sampling) * self.qubic150.sampling.period / (self.qubic150.d['effective_duration'] * 31557600))
+        out =  DiagonalOperator(1 / sig ** 2, broadcast='rightward',
+                                   shapein=(len(self.qubic150.multiinstrument[0]), len(self.qubic150.sampling))) / f
+
+
+        return out
+
+    def get_coverage(self):
+        return self.qubic150.get_coverage()
+
+class QubicDualBand(QubicIntegrated):
+
+    def __init__(self, d, Nsub, Nrec):
+
+        if Nrec == 1:
+            raise TypeError('You can not reconstruct 1 band with DualBand instrument')
+        if Nsub == 1:
+            raise TypeError('You should have at least Nsub = 2')
+        
+        if Nsub%2 != 0:
+            raise TypeError('You should have the same number of sub-bands in each bands')
+        
+        if Nrec%2 != 0:
+            raise TypeError('You should reconstruct the same number of band for each focal plane')
+        
+        self.d150 = d.copy()
+        self.d220 = d.copy()
+        self.Nrec = int(Nrec/2)
+        self.Nsub = int(Nsub/2)
+
+        self.fact_sub = int(Nsub/Nrec)
+        self.d150['filter_nu'] = 150 * 1e9
+        self.d220['filter_nu'] = 220 * 1e9
+
+        ### Qubic acquisitions
+        self.qubic150 = QubicIntegrated(self.d150, Nsub=self.Nsub, Nrec=self.Nrec)
+        self.qubic220 = QubicIntegrated(self.d220, Nsub=self.Nsub, Nrec=self.Nrec)
+        self.scene = self.qubic150.scene
+
+        self.allnus = np.array(list(self.qubic150.allnus) + list(self.qubic220.allnus))
+        self.allfwhm = np.array(list(self.qubic150.allfwhm) + list(self.qubic220.allfwhm))
+        self.nueff = np.array(list(self.qubic150.nueff) + list(self.qubic220.nueff))
+
+
+    def get_TOD(self, skyconfig, beta, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
+
+        tod150 = self.qubic150.get_TOD(skyconfig, beta, convolution, myfwhm, noise=False, bandpass_correction=bandpass_correction)
+        tod220 = self.qubic220.get_TOD(skyconfig, beta, convolution, myfwhm, noise=False, bandpass_correction=bandpass_correction)
+        tod = np.r_[tod150, tod220]
+
+        if noise:
+            n = self.get_noise()
+            tod += n.copy()
+        
+        return tod
+
+    def get_operator(self, convolution=False, myfwhm=None):
+
+        self.H150 = np.array(self.qubic150._get_array_of_operators(convolution=convolution, myfwhm=myfwhm))
+        self.H220 = np.array(self.qubic220._get_array_of_operators(convolution=convolution, myfwhm=myfwhm))
+
+        ### 150 GHz
+
+        op_sum=[]
+        for irec in range(self.Nrec):
+            imin = irec*self.fact_sub
+            imax = (irec+1)*self.fact_sub - 1
+
+            op_sum += [self.H150[(self.qubic150.allnus >= self.qubic150.allnus[imin]) * (self.qubic150.allnus <= self.qubic150.allnus[imax])].sum(axis=0)]
+            
+        self.H150 = BlockRowOperator(op_sum, new_axisin=0)
+
+        
+        ### 220 GHz
+
+        op_sum=[]
+        for irec in range(self.Nrec):
+            imin = irec*self.fact_sub
+            imax = (irec+1)*self.fact_sub - 1
+
+            op_sum += [self.H220[(self.qubic220.allnus >= self.qubic220.allnus[imin]) * (self.qubic220.allnus <= self.qubic220.allnus[imax])].sum(axis=0)]
+            
+        self.H220 = BlockRowOperator(op_sum, new_axisin=0)
+
+        if self.Nrec == 1:
+            hh = BlockDiagonalOperator([self.H150, self.H220], new_axisin=0)
+            R = ReshapeOperator(hh.shapeout, (hh.shapeout[0]*hh.shapeout[1], hh.shapeout[2]))
+            return R * hh
+        else:
+            return BlockDiagonalOperator([self.H150, self.H220], axisin=0)
+        
+    def get_noise(self):
+
+        self.n150 = self.qubic150.get_noise()
+        self.n220 = self.qubic220.get_noise()
+
+        return np.r_[self.n150, self.n220]
+
+    def get_invntt_operator(self):
+
+        self.invn150 = self.qubic150.get_invntt_operator()
+        self.invn220 = self.qubic220.get_invntt_operator()
+
+        return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
+
+
+
+
 
 

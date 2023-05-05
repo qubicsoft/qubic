@@ -31,6 +31,7 @@ import sys
 import os.path as op
 sys.path.append('/home/tom/mypackages')
 import frequency_acquisition as Acq
+import myMCMC as mcmc
 
 # Display packages
 import healpy as hp
@@ -39,12 +40,18 @@ import gc
 
 # General packages
 import numpy as np
-import importlib
-import camb
-from astropy.io import fits
-from pyoperators import *
+import pysm3
+import warnings
+from qubic import QubicSkySim as qss
+import pysm3.units as u
+from importlib import reload
+from pysm3 import utils
 import copy
-import random
+import scipy
+
+from importlib import reload
+from pyoperators import *
+from pysimulators import *
 ```
 
 ```{python}
@@ -78,23 +85,29 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 ```{python}
 # usefull variables
-importlib.reload(Acq)
+reload(Acq)
 nside = 256
 band = 150
 relative_bandwidth = 0.25
-noiseless = True
-noise = False
 effective_duration = 3
-noise_qubic_level = 1
-noise_planck_level = 1
-noise_qubicplanck_level = 0
+noise_qubic = False
+noise_planck_level = 1e-15
+noise_qubicplanck_level = 1e-15
 
-npointings = 1000
-Nf_TOD = 1
+# Acquisition configuration
+type_qubic = 'two'
+beta = None #np.array([1.54])
+
 Nf_recon = 1
-fact_sub = 1
+fact_sub = 8
+Nf_TOD = Nf_recon*fact_sub
 
-maxiter = 150
+sky_config = {'cmb':1}#, 'dust':'d0'}
+npointings = 500
+
+convolution = False
+
+maxiter = 100
 tol = 1e-40
 ```
 
@@ -104,53 +117,51 @@ tol = 1e-40
 dictfilename = 'dicts/pipeline_demo.dict'
 
 # Read dictionary chosen
-d_TOD = qubic.qubicdict.qubicDict()
-d_TOD.read_from_file(dictfilename)
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
 
-d_TOD['nf_recon'] = Nf_TOD
-d_TOD['nf_sub'] = Nf_TOD
-d_TOD['nside'] = nside
-npix=12*d_TOD['nside']**2
-d_TOD['RA_center'] = 0
-d_TOD['DEC_center'] = -57
-center = qubic.equ2gal(d_TOD['RA_center'], d_TOD['DEC_center'])
-d_TOD['effective_duration'] = effective_duration
-d_TOD['npointings'] = npointings
-d_TOD['filter_nu'] = band * 1e9
-d_TOD['photon_noise'] = False
-d_TOD['noiseless'] = True
-d_TOD['config'] = 'FI'
-d_TOD['MultiBand'] = True
-d_TOD['planck'] = True
-d_TOD['dtheta'] = 15
+d['nf_recon'] = Nf_recon
+d['nf_sub'] = Nf_TOD
+d['nside'] = nside
+npix=12*d['nside']**2
+d['RA_center'] = 0
+d['DEC_center'] = -57
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+d['effective_duration'] = 3
+d['npointings'] = npointings
+d['filter_nu'] = 220 * 1e9
+d['photon_noise'] = False
+d['noiseless'] = True
+d['config'] = 'FI'
+d['filter_relative_bandwidth'] = relative_bandwidth
+d['MultiBand'] = True
+d['planck'] = True
+d['dtheta'] = 15
+d['synthbeam_dtype'] = float
+d['debug'] = False
 ```
 
 ```{python}
 # Create the two dicts for 150 & 220 GHz
-d150 = d_TOD
-d220 = copy.deepcopy(d_TOD)
+d150 = d
+d220 = copy.deepcopy(d)
 d220['filter_nu'] = 220 * 1e9
 ```
 
 ```{python}
-# Acquisition configuration
-Nf_TOD = 1
-Nf_recon = 1
-fact_sub = 1
-
-sky_config = {'cmb':1}#, 'dust':'d0'}
-```
-
-```{python}
 # Qubic acquisitions
-qubic_acquisition_150 = Acq.QubicIntegrated(d150, Nsub=Nf_recon*fact_sub, Nrec=Nf_recon)
-qubic_acquisition_220 = Acq.QubicIntegrated(d220, Nsub=Nf_recon*fact_sub, Nrec=Nf_recon)
+qubic_acquisition_150 = Acq.QubicIntegrated(d150, Nsub=Nf_TOD, Nrec=Nf_recon)
+qubic_acquisition_220 = Acq.QubicIntegrated(d220, Nsub=Nf_TOD, Nrec=Nf_recon)
 
-# Create the wide band acquisition
-qubic_acquisition = Acq.QubicWideBand(qubic_acquisition_150, qubic_acquisition_220)
-
-# Create Nsub map
-m_sub = qubic_acquisition_150.get_PySM_maps(sky_config, nus = qubic_acquisition.nueff)
+# Create the acquisition
+if type_qubic == 'wide':
+    qubic_acquisition = Acq.QubicWideBand(qubic_acquisition_150, qubic_acquisition_220)
+else:
+    qubic_acquisition = Acq.QubicTwoBands(qubic_acquisition_150, qubic_acquisition_220)
+    
+# Create Nsub sky_maps
+sky = Acq.Sky(sky_config, qubic_acquisition)
+sky_nu = sky.scale_component(beta)
 
 # Create the QUBIC scene
 scene = qubic_acquisition.scene
@@ -164,30 +175,62 @@ seenpix = coverage/coverage.max() > 0.0001
 
 ```{python}
 # Planck acquisitions
-planck_acquisition_150 = Acq.PlanckAcquisition(143, scene)
-planck_acquisition_220 = Acq.PlanckAcquisition(217, scene)
+planck_acquisition_143 = Acq.PlanckAcquisition(143, scene)
+planck_acquisition_217 = Acq.PlanckAcquisition(217, scene)
 
 # Joint acquisition
-qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, [planck_acquisition_150, planck_acquisition_220])
+qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, [planck_acquisition_143, planck_acquisition_217])
 ```
 
 ```{python}
-# QUBIC Planck operators
-H_qp = qubicplanck_acquisition.get_operator()
-invN_qp = qubicplanck_acquisition.get_invntt_operator()
+# TOD QUBIC
+TOD_QUBIC = qubic_acquisition.get_TOD(sky_config, beta = beta, noise = noise_qubic)
 ```
 
 ```{python}
-TOD = H_qp(m_sub) + qubicplanck_acquisition.get_noise() * noise_qubicplanck_level
+# PLANCK TOD
+planck_143 = np.mean(sky_nu[:Nf_TOD], axis=0).ravel()
+planck_217 = np.mean(sky_nu[Nf_TOD:2*Nf_TOD], axis=0).ravel()
+
+# PLANCK noise
+planck_noise_143 = planck_acquisition_143.get_noise().ravel()
+planck_noise_217 = planck_acquisition_217.get_noise().ravel()
+
+TOD_PLANCK_143 = planck_143 + planck_noise_143 * noise_planck_level
+TOD_PLANCK_217 = planck_217 + planck_noise_217 * noise_planck_level
 ```
 
 ```{python}
-A = H_qp.T * invN_qp * H_qp
-b = H_qp.T * invN_qp * TOD
+# TOD
+if type_qubic == 'Wide':
+    
+    TOD = TOD_QUBIC.ravel()
+    TOD = np.r_[TOD, TOD_PLANCK_143]
+    TOD = np.r_[TOD, TOD_PLANCK_217]
+    
+else:
+    TOD_QUBIC_150 = TOD_QUBIC[:992]
+    TOD_QUBIC_220 = TOD_QUBIC[992:2*992]
+    TOD = TOD_QUBIC_150.ravel()
+    TOD = np.r_[TOD, TOD_PLANCK_143]
+    TOD = np.r_[TOD, TOD_QUBIC_220.ravel()]
+    TOD = np.r_[TOD, TOD_PLANCK_217]
+TOD = np.array(TOD)
 ```
 
 ```{python}
-solution = pcg(A, b, x0=m_sub, disp=True, tol=tol, maxiter=maxiter)
+# Build operators
+H = qubicplanck_acquisition.get_operator()
+invN = qubicplanck_acquisition.get_invntt_operator()
+```
+
+```{python}
+A = H.T * invN * H
+b = H.T * invN * TOD
+```
+
+```{python}
+solution = pcg(A, b, x0=None, disp=True, tol=tol, maxiter=maxiter)
 ```
 
 ```{python}
@@ -195,9 +238,8 @@ solution = pcg(A, b, x0=m_sub, disp=True, tol=tol, maxiter=maxiter)
 # %matplotlib inline
 plt.figure(figsize=(10, 10))
 
-# m_sub[:, ~seenpix, :] = hp.UNSEEN
-# solution['x'][~seenpix, :] = hp.UNSEEN
 stk = ['I', 'Q', 'U']
+sub_band_index = 0
 
 k=0
 reso=25
@@ -209,9 +251,9 @@ for i in range(3):
         m = 8
         minr = 8
         
-    hp.gnomview(m_sub[0, :, i], rot=center, reso=reso, cmap='jet', sub=(3, 3, k+1), min=-m, max=m, title=f'{stk[i]} - Input')
-    hp.gnomview(solution['x'][0, :, i], rot=center, reso=reso, cmap='jet', sub=(3, 3, k+2), min=-m, max=m, title=f'{stk[i]} - Output')
-    residuals = solution['x'][0, :, i]-m_sub[0, :, i]
+    hp.gnomview(sky_nu[sub_band_index, :, i], rot=center, reso=reso, cmap='jet', sub=(3, 3, k+1), min=-m, max=m, title=f'{stk[i]} - Input')
+    hp.gnomview(solution['x'][sub_band_index, :, i], rot=center, reso=reso, cmap='jet', sub=(3, 3, k+2), min=-m, max=m, title=f'{stk[i]} - Output')
+    residuals = solution['x'][sub_band_index, :, i]-sky_nu[sub_band_index, :, i]
     #residuals[~seenpix] = hp.UNSEEN
     hp.gnomview(residuals, rot=center, reso=reso, cmap='jet', sub=(3, 3, k+3), min=-minr, max=minr, title=f'{stk[i]} - Residuals')
     k+=3
@@ -220,12 +262,8 @@ plt.show()
 ```
 
 ```{python}
-solution_qubic = solution['x'].copy()
-m_sub_qubic = m_sub.copy()
-for i in range(npix):
-    if seenpix[i] == False:
-        solution_qubic[:, i, :] = 0
-        m_sub_qubic[:, i, :] = 0
+# Create a list which will contains residuals
+residual = solution['x'] - sky_nu[0:Nf_recon]
 ```
 
 ```{python}
@@ -241,11 +279,11 @@ namaster = nam.Namaster(weight_mask = seenpix, lmin = lmin, lmax = lmax, delta_e
 ```
 
 ```{python}
-solution_first_band = solution_qubic[0]
+solution_first_band = solution['x'][sub_band_index]
 ```
 
 ```{python}
-sky_map = m_sub_qubic[0]
+sky_map = sky_nu[0]
 ```
 
 ```{python}
@@ -303,29 +341,12 @@ def get_cl_w_namaster(solution, nside):
 ```
 
 ```{python}
-# cl = get_cl(solution_first_band.T, nside)
-```
-
-```{python}
-# I think that does not work...
-def get_dl_bis(cl, lell):
-    dl = np.zeros(np.shape(cl))
-
-    fact = lell*(lell + 1) / (2*np.pi)
-    cpt, index = 0, 0
-    while cpt < len(cl[0]) :
-        dl[0][cpt] = cl[0][cpt] * fact[index]
-        dl[1][cpt] = cl[1][cpt] * fact[index]
-        dl[2][cpt] = cl[2][cpt] * fact[index]
-        cpt += 1
-        index += 35
+# function to compute the Dl from the Cl
+def cl_to_dl(ell, cl):
+    dl=np.zeros(ell.shape[0])
+    for i in range(ell.shape[0]):
+        dl[i]=(ell[i]*(ell[i]+1)*cl[i])/(2*np.pi)
     return dl
-```
-
-```{python}
-def get_dl(cl, ell):
-    l_vals = np.arrange(0, 2*nside-1)
-    return np.interp(l_vals, cl, ell)
 ```
 
 ```{python}
@@ -342,9 +363,9 @@ class find_r(object):
 
         
     def ana_likelihood(self, rv, leff, fakedata, errors, model, prior,mylikelihood=mcmc.LogLikelihood, covariance_model_funct=None, otherp=None):
+        
         ll = mylikelihood(xvals=leff, yvals=fakedata, errors=errors,model = model, flatprior=prior,
                                     covariance_model_funct=covariance_model_funct)
-
         like = np.zeros_like(rv)
         for i in range(len(rv)):
             like[i] = np.exp(ll([rv[i]]))
@@ -375,7 +396,7 @@ class find_r(object):
         lbinned, b = Namaster.get_binning(self.nside)
 
         def myBBth(ell, r):
-            return self.model(ell, r, Alens=Alens)
+            return self.model(r, ell)
 
         ### Fake data
         fakedata = cl.copy()
@@ -386,9 +407,9 @@ class find_r(object):
             covariance_model_funct = None
 
         if otherp is None:
-            like, cumint, allrlim, maxL = self.ana_likelihood(rv, leff, fakedata, errors*2, myBBth, [[-1,1]],covariance_model_funct=covariance_model_funct)
+            like, cumint, allrlim, maxL = self.ana_likelihood(rv, leff, fakedata, errors, myBBth, [[-1,1]],covariance_model_funct=covariance_model_funct)
         else:
-            like, cumint, allrlim, other, maxL = self.ana_likelihood(rv, leff, fakedata, errors*2, myBBth, [[-1,1]],covariance_model_funct=covariance_model_funct, otherp=otherp)
+            like, cumint, allrlim, other, maxL = self.ana_likelihood(rv, leff, fakedata, errors, myBBth, [[-1,1]],covariance_model_funct=covariance_model_funct, otherp=otherp)
 
         if otherp is None:
             return like, cumint, allrlim, maxL
@@ -411,157 +432,82 @@ def get_pw_from_planck(r, Alens):
 ```
 
 ```{python}
-# function to compute the Dl from the Cl
-def cl_to_dl(ell, cl):
-    dl=np.zeros(ell.shape[0])
-    for i in range(ell.shape[0]):
-        dl[i]=(ell[i]*(ell[i]+1)*cl[i])/(2*np.pi)
-    return dl
+def myBBth(r, ell):
+    dlBB = cl_to_dl(ell, get_pw_from_planck(Alens=1, r=r)[2, ell.astype(int)-1])
+    return dlBB
 ```
 
 ```{python}
-def myBBth(r, ell, Alens):
-    clBB = cl_to_dl(ell, get_cl_cmb(Alens=Alens, r=r)[2, ell.astype(int)-1])
-    return clBB
-```
-
-```{python}
-def give_all_cl(allr, ndim, ll, ell, Alens):
-    
-    allcl = np.zeros((len(allr), ndim))
+def give_all_dl(allr, ndim, ell, Alens):
+    alldl = np.zeros((len(allr), ndim))
     
     for ii, i in enumerate(allr):
-
-        cli = get_cl_cmb(Alens, i)[2, :1000]
-        allcl[ii] = cli
-        # allcl[ii] = np.interp(ll, ell, cli)
+        dli = get_pw_from_planck(i, Alens)[2, :1000]
         
-    return allcl
-```
-
-```{python}
-# def give_all_dl(allr, ndim, ll, ell, Alens):
-#     alldl = np.zeros((len(allr), ndim))
-#     cov = np.zeros((len(allr), ndim))
+        liste = []
+        for j in range(len(ell)):
+            ell_value = int(ell[j])
+            liste.append(dli[ell_value])
+            
+        alldl[ii] = liste
     
-#     for ii, i in enumerate(allr):
-#         #print(i)
-#         dli = dl(ell, get_Cl_cmb(Alens, i)[2, :1000])
-#         alldl[ii] = np.interp(ell, ll, dli)
-        
-#     return alldl
+    return alldl
 ```
 
 ```{python}
-rv=np.linspace(0, 0.1, 600)
-n=1000
-nsub=[1]
-r=np.zeros((len(nsub), n))
+n_realisation = 600
+rv=np.linspace(0.0, 0.1, n_realisation)
 
 ell, _ = namaster.get_binning(nside)
+n = len(ell)
+Alens = 1
 
-cl = give_all_cl(allr=rv, ndim=n, ll=np.arange(0, n), ell=ell, Alens = 0)
+dl_planck = myBBth(0.08, ell = ell)
 ```
 
 ```{python}
-np.shape(cl)
+ell
 ```
 
 ```{python}
-for jj in enumerate(nsub):
-    print(jj)
-    error=np.std(cl[jj, :], axis=1)
+np.shape(dl_planck)
 ```
 
 ```{python}
-for jj in enumerate(nsub):
-    print(jj)
-    error=np.std(cl[:, jj], axis=1)
-
-    for i in range(n):
-        print(ell.shape, cl[jj, i].shape, error)
-        _, _, _, rr = find_r(myBBth, 256).explore_like(ell, cl[jj, i], error*np.sqrt(2), rv)
-        r[jj, i] = rr[0]
+dl_planck
 ```
 
 ```{python}
-# Create a list which will contains residuals
-residual = []
-for stk_index in range(3):
-    residuals = solution['x'][:, :, stk_index]-m_sub[:, :, stk_index]
-    residual.append(residuals)
+error = np.random.random(13) * 0.001#np.std(dl_planck, axis = 0)
+mean = dl_planck
+
+likelihood, cumint, sigma_r, r = find_r(myBBth, nside).explore_like(ell, mean, error*np.sqrt(2), rv)
 ```
 
 ```{python}
-print(np.shape(residual))
+error
 ```
 
 ```{python}
-xx, yyI, yyQ, yyU = qss.get_angular_profile(np.array([residual[0][0], residual[1][0], residual[2][0]]).T, nbins=30, separate=True, center=center, thmax=30)
-plt.plot(xx, yyI, 'r.', label='I')
-plt.plot(xx, yyQ, 'b*', label='Q')
-plt.plot(xx, yyU, 'gs', label='U')
-plt.xlabel("Degrees")
-plt.ylabel('RMS')
-plt.legend()
-plt.show()
+mean
 ```
 
 ```{python}
-# Select the sub-band of interest
-sub_band_index = 0
-
-# Select the Stokes parameter of interest
-stk_i_index = 0
-stk_q_index = 1
-stk_u_index = 2
+cumint
 ```
 
 ```{python}
-print(np.shape(residual))
+plt.plot(likelihood)
 ```
 
 ```{python}
-cov_res = np.zeros((3,Nf_TOD, Nf_TOD))
-plt.rc('font', size=10)
-plt.rc('figure', figsize=(20, 5))
-for i in range(3):
-    plt.subplot(1,3,i+1)
-    cov_res[i,:,:] = np.cov(residual[i][:][:])
-    plt.imshow(cov_res[i,:,:])
-    plt.xlabel('sub_band', fontsize = 20)
-    plt.ylabel('sub_band', fontsize = 20)
-    plt.title(stk[i], fontsize = 30)
-    plt.colorbar()
-plt.tight_layout()
+sigma_r
 ```
 
 ```{python}
-cov = np.zeros((3,Nf_TOD,Nf_TOD))
-plt.rc('font', size=10)
-plt.rc('figure', figsize=(20, 5))
-for i in range(3):
-    plt.subplot(1,3,i+1)
-    cov[i,:,:] = np.cov(solution['x'][:,:,i])
-    plt.imshow(cov[i,:,:])
-    plt.xlabel('sub_band', fontsize = 20)
-    plt.ylabel('sub_band', fontsize = 20)
-    plt.title(stk[i], fontsize = 30)
-    plt.colorbar()
-plt.tight_layout()
+r
 ```
 
 ```{python}
-corr = np.zeros((3,Nf_TOD,Nf_TOD))
-plt.rc('font', size=10)
-plt.rc('figure', figsize=(20, 5))
-for i in range(3):
-    plt.subplot(1,3,i+1)
-    corr[i,:,:] = np.corrcoef(solution['x'][:,:,i])
-    plt.imshow(corr[i,:,:])
-    plt.xlabel('sub_band', fontsize = 20)
-    plt.ylabel('sub_band', fontsize = 20)
-    plt.title(stk[i], fontsize = 30)
-    plt.colorbar()
-plt.tight_layout()
+
 ```

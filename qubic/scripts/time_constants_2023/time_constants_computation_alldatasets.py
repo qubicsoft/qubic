@@ -53,8 +53,14 @@ for i, (keyword, day) in enumerate(zip(keywords,days)):
 
         for thedatadir in thedirs:
             
-            d = tct.compute_tc_squaremod(thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path)
-        
+            try:
+            
+            	d = tct.compute_tc_squaremod(thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path)
+            
+            except:
+            
+                print('tct.compute_tc_squaremod did not work for {}'.format(thedatadir))
+            	
     elif len(fmods[i])>1 and len(fmods[i])==len(thedirs):
         
         for k in range(len(fmods[i])):
@@ -63,4 +69,10 @@ for i, (keyword, day) in enumerate(zip(keywords,days)):
             dc = dcs[i][k]
             thedatadir = thedirs[k]
             
-            d = tct.compute_tc_squaremod(thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path)
+            try:
+            
+            	d = tct.compute_tc_squaremod(thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path)
+            
+            except:
+            
+                print('tct.compute_tc_squaremod did not work for {}'.format(thedatadir))

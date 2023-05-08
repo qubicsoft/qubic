@@ -5,7 +5,8 @@ import numpy as np
 
 from qubic import time_constants_tools as tct
 
-index = int(sys.argv[1])
+index_ini = int(sys.argv[1])
+index_fin = int(sys.argv[2])
 
 base_save_path = '/sps/qubic/Users/nahuelmg'
 save_path = base_save_path+'/time_constants_results/alldatasets_to_may_2023/'
@@ -31,10 +32,10 @@ fmods = [[0.25],[0.25],[0.6],[0.6],[0.6],[0.6],[0.6],[0.6],[0.8],[0.2],[None],[0
 dcs = [[30],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],
        [33],[60],[None],[30],[66],[66, 66],[33, 66, 66, 66],[33],[33]]
        
-days = days[index]
-keywords = keywords[index]
-fmods = fmods[index]
-dcs = dcs[index]
+days = days[index_ini:index_fin]
+keywords = keywords[index_ini:index_fin]
+fmods = fmods[index_ini:index_fin]
+dcs = dcs[index_ini:index_fin]
 
 for i, (keyword, day) in enumerate(zip(keywords,days)):
     data_dir = base_dir + day + '/'

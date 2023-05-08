@@ -653,19 +653,24 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 		m, ch2, ndf = fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
 		
-		ch2vals_cal = ch2
-		ndfvals_cal = ndf
-		dcfit_cal = m.values[0]
-		dcerr_cal = m.errors[0]
-		risefit_cal = m.values[1]
-		riseerr_cal = m.errors[1]
-		fallfit_cal = m.values[2]
-		fallerr_cal = m.errors[2]
-		t0fit_cal = m.values[3]
-		t0err_cal = m.errors[3]
-		ampfit_cal = m.values[4]
-		amperr_cal = m.errors [4]
-		validfit_cal = m.valid
+		if m != 0:
+		
+			ch2vals_cal = ch2
+			ndfvals_cal = ndf
+			dcfit_cal = m.values[0]
+			dcerr_cal = m.errors[0]
+			risefit_cal = m.values[1]
+			riseerr_cal = m.errors[1]
+			fallfit_cal = m.values[2]
+			fallerr_cal = m.errors[2]
+			t0fit_cal = m.values[3]
+			t0err_cal = m.errors[3]
+			ampfit_cal = m.values[4]
+			amperr_cal = m.errors [4]
+			validfit_cal = m.valid
+		
+		else:
+			print('Folded calsource')
 		
 		d_cal = {'dutycycle':dcfit_cal, 'dutycyle_error':dcerr_cal, 'risetime':risefit_cal, 'risetime_error' : riseerr_cal, 'falltime' : fallfit_cal, 'falltime_error' : fallerr_cal, 't0' : t0fit_cal, 't0_error' : t0err_cal, 'amplitude' : ampfit_cal, 'amplitude_error' :amperr_cal, 'ch2' : ch2vals_cal, 'ndf' : ndfvals_cal, 'valid_minuitfit' : validfit_cal,'calsource_info':calsource_dict}
 		

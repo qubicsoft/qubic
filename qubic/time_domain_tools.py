@@ -71,7 +71,6 @@ class MySplineFitting:
 def remove_drifts_spline(tt, tod, nsplines=20, nresample=1000, nedge=100, doplot=False):
 	### Linear function using the beginning and end of the samples (nn samples)
 	### In order to approach periodicity of the signal to be resampled
-	nnedge = 100
 	x0 = np.mean(tt[:nedge])
 	y0 = np.mean(tod[:nedge])
 	x1 = np.mean(tt[-nedge:])
@@ -87,7 +86,7 @@ def remove_drifts_spline(tt, tod, nsplines=20, nresample=1000, nedge=100, doplot
 	if doplot:
 		plot(tt_resample, tod_resample, label='Resampled TOD')
 
-	### Perfomr spline fitting
+	### Perform spline fitting
 	splfit = MySplineFitting(tt_resample, tod_resample, tod_resample*0+1, nsplines)
 	fitted = splfit(tt_resample)
 	if doplot:

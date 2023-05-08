@@ -15,16 +15,16 @@
 # +
 import os
 import glob
+import numpy as np
 
-from qubicpack.qubicfp import qubicfp
 from qubic import time_constants_tools as tct
 
 base_save_path = '/sps/qubic/Users/nahuelmg'
-save_path = base_save_path+'/time_constants/results-may-2023/'
-if not os.path.exists(save_path):
-    os.mkdir(save_path)
-
-print('Save path:',save_path)
+save_path = base_save_path+'/time_constants_results/alldatasets_to_may_2023/'
+if os.path.exists(save_path):
+    print('Save path:',save_path)
+else:
+    print('Insert save path.')
 
 base_dir = '/sps/qubic/Data/Calib-TD/'
 
@@ -51,17 +51,17 @@ for i,day in enumerate(days):
     
     for j,thedir in enumerate(thedirs):
         print(j,thedir)
-
+        
     if len(fmods[i])==1:
 
-        fmod = fmods[i]
-        dc = dcs[i]
+        fmod = fmods[i][0]
+        dc = dcs[i][0]
 
         for thedatadir in thedirs:
-    
+            
             d = tct.compute_tc_squaremod(thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path)
-    
-    elif len(fmods[i])>1 & len(fmods[i])==len(thedirs):
+        
+    elif len(fmods[i])>1 and len(fmods[i])==len(thedirs):
         
         for k in range(len(fmods[i])):
             

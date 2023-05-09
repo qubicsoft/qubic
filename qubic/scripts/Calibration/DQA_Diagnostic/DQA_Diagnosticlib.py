@@ -147,6 +147,15 @@ class HK_Diagnostic:
         '''
         #save sensor labels: 
         label = {}
+        label['AVS47_1_ch1'] = '1K stage'
+        label['AVS47_1_ch3'] = 'M1'
+        label['AVS47_1_ch4'] = '1K fridge CH'
+        label['AVS47_1_ch7'] = 'M2'
+        label['AVS47_2_ch3'] = '1K stage back'
+        label['AVS47_2_ch0'] = 'PT2 S2 CH'
+        label['AVS47_2_ch2'] = 'Fridge plate MHS'
+        label['AVS47_2_ch4'] = '4K shield Cu braids'
+        '''
         if np.max(a.get_hk('AVS47_1_ch1')) < 10.:
             label['AVS47_1_ch1'] = '1K stage'
         if np.max(a.get_hk('AVS47_1_ch3')) < 10.:
@@ -163,6 +172,7 @@ class HK_Diagnostic:
             label['AVS47_2_ch2'] = 'Fridge plate MHS'
         if np.max(a.get_hk('AVS47_2_ch4')) < 10.:
             label['AVS47_2_ch4'] = '4K shield Cu braids'
+            '''
         #plot
         #a.plot_temperatures(None,label,'1K Temperatures wo patological stages',12)
         time_sensors = a.get_hk(data='RaspberryDate',hk='EXTERN_HK').copy()
@@ -173,12 +183,15 @@ class HK_Diagnostic:
         suptitle(data_date+' : 1K Temperatures wo patological stages', y=1)
         for k in label.keys():
             subplot(3,3,i)
-            plot(time_sensors, a.get_hk(k), marker='D',markersize=0.2*12)
+            #define mask corresponding to patological events (e.g. sensor behaving erratically).
+            timest_out = (a.get_hk(k) > 5.) | (a.get_hk(k) < 0)
+            plot(time_sensors[~timest_out], a.get_hk(k)[~timest_out], marker='D',markersize=0.2*12)
             ylabel(label[k]+' [K]')
             xlabel('Time [min]')
             i+=1
         tight_layout()
-        savefig(self.path_HK+'/{}_1K_Temperatures_wo_patological_stages.png'.format(data_date))
+        #savefig(self.path_HK+'/{}_1K_Temperatures_wo_patological_stages.png'.format(data_date))
+        savefig(self.path_HK+'/{}_1K_Temperatures_patological_stages_filtered.png'.format(data_date))
             
         close()
         return
@@ -204,30 +217,37 @@ class HK_Diagnostic:
         This function returns a 2-subplot image with the 1K monitor on the left and the 300mK monitor on the right.
         Each monitor shows a double-y axis with the temperature STAGE (blue) and FRIDGE (red).  A png image is saved.
         '''
+        OneK_stage = a.get_hk('AVS47_1_ch1')
+        OneK_fridge = a.get_hk('AVS47_1_ch4')
+        TES_stage = a.get_hk('AVS47_1_CH2')
+        ThreeHmK_fridge = a.get_hk('AVS47_1_CH6')
+        time_hk = a.get_hk(data='RaspberryDate',hk='EXTERN_HK').copy()
+        time_hk -= time_hk[0] #convert time into hours
+        time_hk /= 60 #(60*60)
+        
+        #define mask corresponding to patological events (e.g. sensor behaving erratically).
+        #define 1 mask for 1K, since 1K stage and fridge share the same time axis in the plot
+        timest_out_oneK = (OneK_stage > 2) | (OneK_stage < 0.9) | (OneK_fridge > 2) | (OneK_fridge < 0.9)
+        #define 1 mask for 300mK monitor, since TES stage and fridge share the same time axis in the plot
+        timest_out_TESstage = (TES_stage > 0.5) | (TES_stage < 0.2) | (ThreeHmK_fridge > 0.5) | (ThreeHmK_fridge < 0.2)
+        
         figure(figsize=(20,10))
         suptitle(data_date+' : 1K and 300 mK monitors', y=1)
         #plot 1K monitor
         subplot(1,2,1)
         title('1K monitor', y=0.95)
-        OneK_stage = a.get_hk('AVS47_1_ch1')
-        OneK_fridge = a.get_hk('AVS47_1_ch4')
-        time_hk = a.get_hk(data='RaspberryDate',hk='EXTERN_HK').copy()
-        time_hk -= time_hk[0] #convert time into hours
-        time_hk /= 60 #(60*60)
         plot(time_hk, OneK_stage, color='b', marker='D',markersize=0.2*12)
         ylabel('1K Stage [K]', color='b')
-        xlabel('Time [hours]')
+        xlabel('Time [min]')
         twinx()
         plot(time_hk, OneK_fridge, color='r', marker='D',markersize=0.2*12)
         ylabel('1K Fridge [K]', color='r')
         #plot 300mK monitor
         subplot(1,2,2)
         title('300 mK monitor', y=0.95)
-        TES_stage = a.get_hk('AVS47_1_CH2')
-        ThreeHmK_fridge = a.get_hk('AVS47_1_CH6')
         plot(time_hk, TES_stage, color='b', marker='D',markersize=0.2*12)
         ylabel('TES Stage [K]', color='b')
-        xlabel('Time [hours]')
+        xlabel('Time [min]')
         twinx()
         plot(time_hk, ThreeHmK_fridge, color='r', marker='D',markersize=0.2*12)
         ylabel('300 mK Fridge [K]', color='r')
@@ -235,7 +255,38 @@ class HK_Diagnostic:
         tight_layout()
         savefig(self.path_HK+'/{}_1K_300mK_monitors.png'.format(data_date))
         #savefig('./{}_1K_300mK_monitors.pdf'.format(self.data_date))
-        close()
+        
+        if any(timest_out_oneK) or any(timest_out_TESstage):
+            #redo the plot with problematic/instable temperature timestamps removed
+            print('--------> Patological events in the temperature sensors have been found! Plotting again w/o those!')
+            figure(figsize=(20,10))
+            suptitle(data_date+' : TOD and temperature monitors wo patological events', y=1)
+
+            #plot 1K monitor
+            subplot(1,2,1)
+            title('1K monitor', y=0.95)
+            plot(time_hk[~timest_out_oneK], OneK_stage[~timest_out_oneK], color='b', marker='D',markersize=0.2*12)
+            ylabel('1K Stage [K]', color='b')
+            xlabel('Time [min]')
+            twinx()
+            plot(time_hk[~timest_out_oneK], OneK_fridge[~timest_out_oneK], color='r', marker='D',markersize=0.2*12)
+            ylabel('1K Fridge [K]', color='r')
+            #plot 300mK monitor
+            subplot(1,2,2)
+            title('300 mK monitor', y=0.95)
+            plot(time_hk[~timest_out_TESstage], TES_stage[~timest_out_TESstage], color='b', marker='D',markersize=0.2*12)
+            ylabel('TES Stage [K]', color='b')
+            xlabel('Time [min]')
+            twinx()
+            plot(time_hk[~timest_out_TESstage], ThreeHmK_fridge[~timest_out_TESstage], color='r', marker='D',markersize=0.2*12)
+            ylabel('300 mK Fridge [K]', color='r')
+
+            tight_layout()
+            savefig(self.path_HK+'/{}_1K_300mK_monitors_filtered.png'.format(data_date))
+        else:
+            print('--------> No patological events in the temperature sensors have been found!')
+        
+        close('all')
         return
     
     
@@ -630,6 +681,10 @@ class Diagnostic:
         self.num_det = 256 #total number of detectors
         self.use_verbose = use_verbose #this is used for flux jump intermediate plots (zoom on jumps, comparison btw raw tod and smoothed tod, etc.)
         
+        #select a reference detector for each asic. This is used for visual diagnostic.
+        self.num_ref_tes_asic1 = 95
+        self.num_ref_tes_asic2 = 183
+        
         #load in the tods from self.a
         print('##########Loading in the TODs##########')
         if isinstance(self.data_date, str): 
@@ -677,9 +732,6 @@ class Diagnostic:
         - data_date_full : string with the label of the dataset
         - do_plot: if True, plots the focal plane
         '''
-    
-        #upper_satval = 4.19*1e6
-        #lower_satval = -4.19*1e6
 
         frac_sat_time = np.zeros(self.num_det)
         tes_to_use = np.ones(self.num_det, dtype=bool)
@@ -691,7 +743,7 @@ class Diagnostic:
             mask2 = adu[i] < self.lower_satval
             frac_sat_time[i] = (np.sum(mask1)+np.sum(mask2))/len(adu[i])
 
-        saturated_tes = (frac_sat_time >= self.sat_thr)
+        saturated_tes = (frac_sat_time > self.sat_thr)
         fraction_saturated_tes = np.sum(saturated_tes) / self.num_det
         fraction_not_saturated_tes = np.sum(~saturated_tes) / self.num_det
 
@@ -713,9 +765,9 @@ class Diagnostic:
                                                                                                     fraction_saturated_tes*100,
                                                                                                     fraction_not_saturated_tes*100)
             savefig_path_and_filename = self.path_FP+'/Focal_plane_saturation_{}'.format(data_date_full)
-            self.plot_focal_plane(self.timeaxis, adu, colors, plot_suptitle=suptitle_to_use, path_and_filename=savefig_path_and_filename)
+            self.plot_focal_plane(self.timeaxis, adu, colors, plot_suptitle=suptitle_to_use, path_and_filename=savefig_path_and_filename, frac_sat_time=frac_sat_time)
 
-        return tes_to_use, colors, fraction_saturated_tes
+        return tes_to_use, colors, fraction_saturated_tes, frac_sat_time
         
 
     def tes_saturation_state(self, do_plot=True):
@@ -726,16 +778,17 @@ class Diagnostic:
         print()
         print('-----> Saturation detection')
         if isinstance(self.data_date, str): #there's only one dataset
-            self.tes_to_use, self.colors, self.frac_saturation = self.do_saturation_diagnostic(self.tod, self.data_date, do_plot)
-            pickle.dump([self.tes_to_use, self.frac_saturation], open(self.path_FP+'/{}_Saturated_TES_statistics.pkl'.format(self.data_date),'wb'))
+            self.tes_to_use, self.colors, self.frac_saturation, self.frac_sat_time = self.do_saturation_diagnostic(self.tod, self.data_date, do_plot)
+            pickle.dump([self.tes_to_use, self.frac_saturation, len(self.timeaxis), self.frac_sat_time], open(self.path_FP+'/{}_Saturated_TES_statistics.pkl'.format(self.data_date),'wb'))
         else: #there is more than one dataset. loop over all of them
             self.tes_to_use = np.ones((self.num_datasets, self.num_det), dtype=bool)
             self.colors = np.ones((self.num_datasets, self.num_det), dtype=str) 
             self.frac_saturation = np.zeros(self.num_datasets) 
+            self.frac_sat_time = np.zeros((self.num_datasets, self.num_det)) 
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
-                self.tes_to_use[j,:], self.colors[j,:], self.frac_saturation[j] = self.do_saturation_diagnostic(self.tod[j], self.data_date[j], do_plot)
-            pickle.dump([self.tes_to_use, self.frac_saturation], open(self.path_FP+'/{}_Saturated_TES_statistics.pkl'.format(self.data_date[0].split('_')[0]),'wb'))
+                self.tes_to_use[j,:], self.colors[j,:], self.frac_saturation[j], self.frac_sat_time[j] = self.do_saturation_diagnostic(self.tod[j], self.data_date[j], do_plot)
+            pickle.dump([self.tes_to_use, self.frac_saturation, len(self.timeaxis), self.frac_sat_time], open(self.path_FP+'/{}_Saturated_TES_statistics.pkl'.format(self.data_date[0].split('_')[0]),'wb'))
                 
         return
 
@@ -910,7 +963,7 @@ class Diagnostic:
 
 # #################### FOCAL PLANE PLOTS ##################################################
 
-    def plot_focal_plane(self, x_data, tes_y_data, colors_plot, plot_suptitle=None, path_and_filename=None, the_xscale='linear', the_yscale='linear'):
+    def plot_focal_plane(self, x_data, tes_y_data, colors_plot, plot_suptitle=None, path_and_filename=None, frac_sat_time=None, the_xscale='linear', the_yscale='linear'):
         '''
         This function plots some data (timeline, spectrum) over the entire qubic focal plane.
         Input: 
@@ -919,6 +972,7 @@ class Diagnostic:
         - colors_plot: an array of 256 (or number of detectors) elements. Each element is a string with the color of that detector ('g' for good TESs, 'r' for saturation, etc.)
         - plot_suptitle (optional): string with the title of the plot
         - path_and_filename (optional): string with namefile of the plot. The function will save a png and a pdf version of the FP
+        - frac_sat_time (optional): array with the percent saturation time for each detector. If passed in input, it will be written on the detector slot. Default is None.
         - the_xscale and the_yscale : 'linear' or 'log' (default is linear) ; to choose the scale of the x and y axes
         '''
         dictfilename = 'global_source_oneDet.dict'
@@ -926,8 +980,13 @@ class Diagnostic:
         d.read_from_file(dictfilename)
         d['synthbeam'] = 'CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
         q = qubic.QubicInstrument(d)
+        
+        color_backgd_sat_state = cm.Wistia(np.linspace(0,1,100+1)) #jet
+        norm = mpl.colors.Normalize(vmin=0, vmax=100)
+        cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.Wistia)
+        cmap.set_array([])
 
-        figure(figsize=(30, 30))
+        fig = figure(figsize=(30, 30))
         bar=progress_bar(self.num_det, 'Display focal plane')
         #add title
         if plot_suptitle is not None:
@@ -960,29 +1019,42 @@ class Diagnostic:
                 idx_tes = num_tes - 1
 
                 rc('font',size=6)
-                subplot(17,17, place_graph)
+                ax = subplot(17,17, place_graph)
                 #############################
                 #### Do your plot here ######
                 if x_data.ndim==1:
                     plot(x_data, tes_y_data[idx_tes, :], color=colors_plot[idx_tes])
                 else:
-                    plot(x_data[idx_tes], tes_y_data[idx_tes, :], color=colors_plot[idx_tes])
+                    plot(x_data[idx_tes], tes_y_data[idx_tes, :], color=colors_plot[idx_tes])                 
                 #############################   
+                annotate('{}'.format(num_tes), xy=(0, 0),  xycoords='axes fraction', fontsize=10, color='black',
+                         fontstyle='italic', fontweight='bold', xytext=(0.05,0.85))#,backgroundcolor=bgcol)
                 if any('powerspectrum' in path_and_filename):
                     vlines(0.4, np.min(tes_y_data[idx_tes, :]), np.max(tes_y_data[idx_tes, :]), color='k', linestyle='dashed')
                     vlines(1.73, np.min(tes_y_data[idx_tes, :]), np.max(tes_y_data[idx_tes, :]), color='k', linestyle='dashed')
                     vlines(0.003, np.min(tes_y_data[idx_tes, :]), np.max(tes_y_data[idx_tes, :]), color='k', linestyle='dotted')
                     vlines(0.00005, np.min(tes_y_data[idx_tes, :]), np.max(tes_y_data[idx_tes, :]), color='k', linestyle='dashdot')
                     #xlim([0,10])
+                    
+                if any('saturation' in path_and_filename) and colors_plot[idx_tes]=='r':
+                    ax.set_facecolor(color_backgd_sat_state[int(round(frac_sat_time[idx_tes]*100))])
+                    ax.set_alpha(0.4)
+                    annotate('{:.2f}%'.format(frac_sat_time[idx_tes]*100), xy=(0, 0),  xycoords='axes fraction', fontsize=14, color='black',
+                             fontstyle='italic', fontweight='bold', xytext=(0.2,0.3))#, backgroundcolor=) #bgcol
+                
                 xscale(the_xscale)
                 yscale(the_yscale)
-                annotate('{}'.format(num_tes), xy=(0, 0),  xycoords='axes fraction', fontsize=9, color='black',
-                     fontstyle='italic', fontweight='bold', xytext=(0.05,0.85))#,backgroundcolor=bgcol)
-
                 bar.update()
 
                 k+=1
+                
         tight_layout()
+        if any('saturation' in path_and_filename):
+            cb_ax = fig.add_axes([0.01, 0.092, 0.3, 0.02])
+            c = colorbar(cmap, orientation="horizontal", cax=cb_ax)
+            c.set_label('% of saturation time', fontsize=27)#, loc='left')
+            c.ax.tick_params(labelsize=26)
+        
         #Save image
         if path_and_filename is not None:
             savefig(path_and_filename+'.png')
@@ -1014,7 +1086,143 @@ class Diagnostic:
                 path_and_filename = self.path_FP+'/Focal_plane_{}'.format(self.data_date[j])
                 self.plot_focal_plane(self.timeaxis, self.tod[j], colors_plot, plot_suptitle, path_and_filename)
         return
+    
 
+# #################### VISUAL DIAGNOSTIC PLOTS ##################################################
+    
+    def plot_tod_and_temp_monitor(self, a, adu, data_date):
+        '''
+        This function returns a 4-subplot image with the TOD from 2 reference TESs overplot to a temperature monitor, either the 300mK or 1K stage monitor on a double-y axis with the TOD in blue and the temperature in red.
+        The reference TES from asic 1 (TES 95) is shown on the left; the reference TES from asic 2 (TES 183) is shown on the right.
+        A png image is saved.
+        '''
+        
+        #get HK temp data. Interpolate them on the TOD axis.
+        OneK_stage = a.get_hk('AVS47_1_ch1')
+        TES_stage = a.get_hk('AVS47_1_CH2')
+        time_hk = a.get_hk(data='RaspberryDate',hk='EXTERN_HK').copy()
+                
+        TES_stage_interp = np.interp(self.timeaxis, time_hk, TES_stage)
+        OneK_stage_interp = np.interp(self.timeaxis, time_hk, OneK_stage)
+        
+        time_sci = self.timeaxis.copy()
+        time_sci -= time_sci[0] #convert time into minutes
+        time_sci /= 60 #(60*60)
+        
+        #define tod mask corresponding to patological events (e.g. sensor behaving erratically)
+        timest_out_oneK = (OneK_stage_interp > 2) | (OneK_stage_interp < 0.9)
+        timest_out_TESstage = (TES_stage_interp > 0.5) | (TES_stage_interp < 0.2)
+        
+        #plot
+        figure(figsize=(20,10))
+        suptitle(data_date+' : TOD and temperature monitors', y=1)
+        
+        #plot TES asic 1 and 300mK monitor
+        subplot(2,2,1)
+        title('TES = {}'.format(self.num_ref_tes_asic1), y=0.92, backgroundcolor= 'silver')
+        plot(time_sci, adu[self.num_ref_tes_asic1-1,:], color='b', marker='D', markersize=0.2*12)
+        ylabel('TOD [ADU]', color='b')
+        twinx() 
+        plot(time_sci, TES_stage_interp, color='r', marker='D', markersize=0.2*10)
+        ylabel('TES Stage [K]', color='r')
+        
+        #plot TES asic 1 and 1K monitor
+        subplot(2,2,3)
+        xlabel('Time [min.]')
+        plot(time_sci, adu[self.num_ref_tes_asic1-1,:], color='b', marker='D',markersize=0.2*12)
+        ylabel('TOD [ADU]', color='b')
+        twinx()
+        plot(time_sci, OneK_stage_interp, color='orange', marker='D',markersize=0.2*10)
+        ylabel('1K Stage [K]', color='orange')
+
+        
+        #plot TES asic 2 and 300mK monitor
+        subplot(2,2,2)
+        title('TES = {}'.format(self.num_ref_tes_asic2), y=0.92, backgroundcolor= 'silver')
+        plot(time_sci, adu[self.num_ref_tes_asic2-1,:], color='b', marker='D',markersize=0.2*12)
+        ylabel('TOD [ADU]', color='b')
+        twinx() 
+        plot(time_sci, TES_stage_interp, color='r', marker='D',markersize=0.2*10)
+        ylabel('TES Stage [K]', color='r')
+        
+        #plot TES asic 2 and 1K monitor
+        subplot(2,2,4) 
+        plot(time_sci, adu[self.num_ref_tes_asic2-1,:], color='b', marker='D',markersize=0.2*12)
+        ylabel('TOD [ADU]', color='b')
+        xlabel('Time [min.]')
+        twinx() 
+        plot(time_sci, OneK_stage_interp, color='orange', marker='D',markersize=0.2*10)
+        ylabel('1K Stage [K]', color='orange')
+        
+        tight_layout()
+        savefig(self.path_FP +'/{}_TOD_and_temp_1K_300mK_monitors.png'.format(data_date))
+        #savefig('./{}_1K_300mK_monitors.pdf'.format(self.data_date))
+        
+        if any(timest_out_oneK) or any(timest_out_TESstage):
+            #redo the plot with problematic/instable temperature timestamps removed
+            print('--------> Patological events in the temperature sensors have been found! Plotting again w/o those!')
+            figure(figsize=(20,10))
+            suptitle(data_date+' : TOD and temperature monitors wo patological events', y=1)
+
+            #plot TES asic 1 and 300mK monitor
+            subplot(2,2,1)
+            title('TES = {}'.format(self.num_ref_tes_asic1), y=0.92, backgroundcolor= 'silver')
+            plot(time_sci[~timest_out_TESstage], adu[self.num_ref_tes_asic1-1,~timest_out_TESstage], color='b', marker='D', markersize=0.2*12)
+            ylabel('TOD [ADU]', color='b')
+            twinx() 
+            plot(time_sci[~timest_out_TESstage], TES_stage_interp[~timest_out_TESstage], color='r', marker='D', markersize=0.2*10)
+            ylabel('TES Stage [K]', color='r')
+
+            #plot TES asic 1 and 1K monitor
+            subplot(2,2,3)
+            xlabel('Time [min.]')
+            plot(time_sci[~timest_out_oneK], adu[self.num_ref_tes_asic1-1,~timest_out_oneK], color='b', marker='D',markersize=0.2*12)
+            ylabel('TOD [ADU]', color='b')
+            twinx()
+            plot(time_sci[~timest_out_oneK], OneK_stage_interp[~timest_out_oneK], color='orange', marker='D',markersize=0.2*10)
+            ylabel('1K Stage [K]', color='orange')
+
+
+            #plot TES asic 2 and 300mK monitor
+            subplot(2,2,2)
+            title('TES = {}'.format(self.num_ref_tes_asic2), y=0.92, backgroundcolor= 'silver')
+            plot(time_sci[~timest_out_TESstage], adu[self.num_ref_tes_asic2-1,~timest_out_TESstage], color='b', marker='D',markersize=0.2*12)
+            ylabel('TOD [ADU]', color='b')
+            twinx() 
+            plot(time_sci[~timest_out_TESstage], TES_stage_interp[~timest_out_TESstage], color='r', marker='D',markersize=0.2*10)
+            ylabel('TES Stage [K]', color='r')
+
+            #plot TES asic 2 and 1K monitor
+            subplot(2,2,4) 
+            plot(time_sci[~timest_out_oneK], adu[self.num_ref_tes_asic2-1,~timest_out_oneK], color='b', marker='D',markersize=0.2*12)
+            ylabel('TOD [ADU]', color='b')
+            xlabel('Time [min.]')
+            twinx() 
+            plot(time_sci[~timest_out_oneK], OneK_stage_interp[~timest_out_oneK], color='orange', marker='D',markersize=0.2*10)
+            ylabel('1K Stage [K]', color='orange')
+
+            tight_layout()
+            savefig(self.path_FP +'/{}_filtered_TOD_and_temp_1K_300mK_monitors.png'.format(data_date))
+        else:
+            print('--------> No patological events in the temperature sensors have been found!')
+        
+        close('all')
+        return
+
+    
+    def get_plot_tod_and_temp_monitor(self):
+        '''
+        Wrapper to the -plot_tod_and_temp_monitor- function. If there is more than one dataset, it calls the function for each dataset.
+        '''
+        print()
+        print('-----> Visual diagnostic: TOD and temperature monitor')
+        if isinstance(self.data_date, str): #there's only one dataset
+            self.plot_tod_and_temp_monitor(self.a, self.tod, self.data_date) 
+        else: #there is more than one dataset. loop over all of them
+            for j in tqdm(range(self.num_datasets)):
+                print('Doing dataset nr. {}'.format(j+1))
+                self.plot_tod_and_temp_monitor(self.a[j], self.tod[j], self.data_date[j])                
+        return
 # #################### WRAPPER FOR GLOBAL ANALYSIS ##################################################
 
     def analysis(self, do_plot=True):
@@ -1024,6 +1232,9 @@ class Diagnostic:
         
         #plot the timelines over the focal plane
         self.plot_raw_focal_plane()
+        
+        #plot reference TODs together with temperature monitor for visual diagnostic
+        self.get_plot_tod_and_temp_monitor()
         
         #saturation diagnostic
         self.tes_saturation_state(do_plot)

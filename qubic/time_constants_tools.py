@@ -26,7 +26,9 @@ import qubic
 from qubic.qubicdict import qubicDict
 from qubic.instrument import QubicInstrument
 from qubicpack.qubicfp import qubicfp
+print('qubicfp:', qubicfp.__file__)
 from qubic import fibtools as ft
+print('ft:', ft.__file__)
 from qubicpack.utilities import Qubic_DataDir
 from qubic import selfcal_lib as scal
 from qubic import time_domain_tools as tdt
@@ -1174,6 +1176,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		xlabel('Time [s]')
 		ylabel('Stacked folded data')
 		tight_layout
+		savefig(folded_data.png)
 
 	if only_overview:
 

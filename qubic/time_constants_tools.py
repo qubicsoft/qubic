@@ -25,8 +25,9 @@ from qubic.instrument import QubicInstrument
 import qubic
 from qubic.qubicdict import qubicDict
 from qubic.instrument import QubicInstrument
+from qubicpack
+print('qubicpack:', qubicpack.__file__)
 from qubicpack.qubicfp import qubicfp as qubicfp
-print('qubicfp:', qubicfp.__file__)
 from qubic import fibtools as ft
 print('ft:', ft.__file__)
 from qubicpack.utilities import Qubic_DataDir

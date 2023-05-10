@@ -1176,7 +1176,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		xlabel('Time [s]')
 		ylabel('Stacked folded data')
 		tight_layout
-		savefig(folded_data.png)
+		savefig(save_path+'/folded_data.png')
 
 	if only_overview:
 

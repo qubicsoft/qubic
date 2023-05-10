@@ -243,6 +243,8 @@ class QubicAcquisition(Acquisition):
         self.sigma = sigma
         self.forced_sigma = None
 
+        #print('Acq -> ', self.comm)
+
     def get_coverage(self):
         """
         Return the acquisition scene coverage as given by H.T(1), normalized
@@ -271,9 +273,9 @@ class QubicAcquisition(Acquisition):
         self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
-    def get_noise(self, out=None):
+    def get_noise(self, det_noise, photon_noise, out=None):
         out = self.instrument.get_noise(
-            self.sampling, self.scene, photon_noise=self.photon_noise, out=out)
+            self.sampling, self.scene, det_noise, photon_noise, out=out)
         if self.effective_duration is not None:
             nsamplings = self.comm.allreduce(len(self.sampling))
             
@@ -351,7 +353,7 @@ class QubicAcquisition(Acquisition):
             out /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
         return out
 
-    def get_invntt_operator(self):
+    def get_invntt_operator(self, det_noise, photon_noise):
 
         """
         Return the inverse time-time noise correlation matrix as an Operator.
@@ -398,14 +400,15 @@ class QubicAcquisition(Acquisition):
             raise ValueError('The bandwidth or the PSD is not specified.')
 
         # Get sigma in Watt
-        if self.instrument.detector.nep is not None:
+        self.sigma = 0
+        if det_noise is not None:
             self.sigma = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
 
-            if self.photon_noise:
-                sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(2 * self.sampling.period)
-                self.sigma = np.sqrt(self.sigma ** 2 + sigma_photon ** 2)
-            else:
-                pass
+        if photon_noise:
+            sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(2 * self.sampling.period)
+            self.sigma = np.sqrt(self.sigma ** 2 + sigma_photon ** 2)
+        else:
+            pass
                 # sigma_photon = 0
 
         if self.bandwidth is None and self.psd is None and self.sigma is None:
@@ -667,8 +670,8 @@ class PlanckAcquisition:
         if mask is not None:
             for i in range(3):
                 self.sigma[:, i] /= mask.copy()
-                print(self.sigma[seenpix, i])
-                print(len(mask[seenpix]), mask[seenpix])
+                #print(self.sigma[seenpix, i])
+                #print(len(mask[seenpix]), mask[seenpix])
         #if seenpix is not None:
         #    myweight = 1 / (self.sigma[seenpix] ** 2)
         #else:
@@ -787,12 +790,9 @@ class QubicPolyAcquisition:
 
         weights = d['weights']
 
-        self.warnings(d)
-
+        #self.warnings(d)
         if d['MultiBand'] and d['nf_sub']>1:
-            self.subacqs = [QubicAcquisition(multiinstrument[i],
-                                             sampling, scene, d)
-                            for i in range(len(multiinstrument))]
+            self.subacqs = [QubicAcquisition(multiinstrument[i], sampling, scene, d) for i in range(len(multiinstrument))]
         else:
             raise ValueError('If you do not use a multiband instrument,'
                              'you should use the QubicAcquisition class'
@@ -809,10 +809,8 @@ class QubicPolyAcquisition:
 
     def __getitem__(self, i):
         return self.subacqs[i]
-
     def __len__(self):
         return len(self.subacqs)
-
     def warnings(self, d):
 
         """
@@ -830,8 +828,6 @@ class QubicPolyAcquisition:
                 warnings.warn('Beam and solid angle frequency dependence implementation '
                         'in the 220 GHz band for the fitted beam does not correctly describe '
                         'the true behavior')
-
-
     def get_coverage(self):
         """
         Return an array of monochromatic coverage maps, one for each of subacquisitions
@@ -839,7 +835,6 @@ class QubicPolyAcquisition:
         if len(self) == 1:
             return self.subacqs[0].get_coverage()
         return np.array([self.subacqs[i].get_coverage() for i in range(len(self))])
-
     def get_coverage_mask(self, coverages, covlim=0.2):
         """
         Return a healpix boolean map with True on the pixels where ALL the
@@ -853,7 +848,6 @@ class QubicPolyAcquisition:
         observed = [(coverages[i] > covlim * np.max(coverages[i])) for i in range(len(self))]
         obs = reduce(np.logical_and, tuple(observed[i] for i in range(len(self))))
         return obs
-
     def _get_average_instrument_acq(self):
         """
         Create and return a QubicAcquisition instance of a monochromatic
@@ -894,14 +888,11 @@ class QubicPolyAcquisition:
         # s = create_random_pointings([0., 0.], nsamplings, 10., period=s_.period)
         a = QubicAcquisition(q, s, self[0].scene, d1)
         return a
-
     def get_noise(self):
         a = self._get_average_instrument_acq()
         return a.get_noise()
-
     def _get_array_of_operators(self):
         return [a.get_operator() * w for a, w in zip(self, self.weights)]
-
     def get_operator_to_make_TOD(self):
         """
         Return a BlockRowOperator of subacquisition operators
@@ -912,7 +903,6 @@ class QubicPolyAcquisition:
             return self.get_operator()
         op = self._get_array_of_operators()
         return BlockRowOperator(op, new_axisin=0)
-
     def get_operator(self):
         """
         Return an sum of operators for subacquisitions
@@ -921,7 +911,6 @@ class QubicPolyAcquisition:
             return self[0].get_operator()
         op = np.array(self._get_array_of_operators())
         return np.sum(op, axis=0)
-
     def get_invntt_operator(self):
         """
         Return the inverse noise covariance matrix as operator
@@ -1418,7 +1407,7 @@ class Sky:
     
 
         
-class QubicIntegrated:
+class QubicIntegrated(QubicPolyAcquisition):
 
     def __init__(self, d, Nsub=1, Nrec=1):
 
@@ -1449,22 +1438,29 @@ class QubicIntegrated:
 
         self.scene = qubic.QubicScene(self.d)
 
-        self.multiinstrument = instr.QubicMultibandInstrument(self.d, integration=self.integration)
+        self.multiinstrument = instr.QubicMultibandInstrument(self.d, self.integration)
+
+        QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
 
         if self.integration == 'Trapeze':
-            _, _, self.nueff, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=self.Nrec)
+            _, _, self.nueff, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=self.Nrec, relative_bandwidth=self.d['filter_relative_bandwidth'])
             
         else:
             _, self.nus_edge, self.nueff, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=(self.d['nf_recon']))
+
+        print(self.nueff)
         
         self.nside = self.scene.nside
         self.allnus = np.array([q.filter.nu / 1e9 for q in self.multiinstrument])
-        self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
-
+        #self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
+        
         ############
         ### FWHM ###
         ############
-
+        
+        for a in self.subacqs[1:]:
+            a.comm = self.subacqs[0].comm
+        
         self.allfwhm = np.zeros(len(self.multiinstrument))
         for i in range(len(self.multiinstrument)):
             self.allfwhm[i] = self.subacqs[i].get_convolution_peak_operator().fwhm
@@ -1613,7 +1609,7 @@ class QubicIntegrated:
     
         # Get an array of operators for all sub-arrays
         op = np.array(self._get_array_of_operators(convolution=convolution, myfwhm=myfwhm))
-
+        #print('done')
         # Loop over the frequency bands
         op_sum=[]
         for irec in range(self.Nrec):
@@ -1622,7 +1618,8 @@ class QubicIntegrated:
 
             op_sum += [op[(self.allnus >= self.allnus[imin]) * (self.allnus <= self.allnus[imax])].sum(axis=0)]
             
-        return BlockRowOperator(op_sum, new_axisin=0)
+        return BlockRowOperator(op_sum, new_axisin=0)# * MPIDistributionIdentityOperator(self.d['comm'])
+    
     def get_coverage(self):
         return self.subacqs[0].get_coverage()
     def get_invntt_operator(self):

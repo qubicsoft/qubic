@@ -95,19 +95,19 @@ noise_planck_level = 1e-15
 noise_qubicplanck_level = 1e-15
 
 # Acquisition configuration
-type_qubic = 'two'
+type_qubic = 'wide'
 beta = None #np.array([1.54])
 
 Nf_recon = 1
-fact_sub = 8
+fact_sub = 1
 Nf_TOD = Nf_recon*fact_sub
 
 sky_config = {'cmb':1}#, 'dust':'d0'}
-npointings = 500
+npointings = 5000
 
 convolution = False
 
-maxiter = 100
+maxiter = 150
 tol = 1e-40
 ```
 
@@ -130,8 +130,8 @@ center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
 d['effective_duration'] = 3
 d['npointings'] = npointings
 d['filter_nu'] = 220 * 1e9
-d['photon_noise'] = False
-d['noiseless'] = True
+d['photon_noise'] = True
+d['noiseless'] = False
 d['config'] = 'FI'
 d['filter_relative_bandwidth'] = relative_bandwidth
 d['MultiBand'] = True
@@ -455,7 +455,7 @@ def give_all_dl(allr, ndim, ell, Alens):
 ```
 
 ```{python}
-n_realisation = 600
+n_realisation = 6000
 rv=np.linspace(0.0, 0.1, n_realisation)
 
 ell, _ = namaster.get_binning(nside)
@@ -506,6 +506,34 @@ sigma_r
 
 ```{python}
 r
+```
+
+```{python}
+mean_pcg = spectra_BB
+```
+
+```{python}
+spectra_BB
+```
+
+```{python}
+error_pcg = np.zeros(13)
+```
+
+```{python}
+likelihood_pcg, cumint_pcg, sigma_r_pcg, r_pcg = find_r(myBBth, nside).explore_like(ell, mean_pcg, error_pcg*np.sqrt(2), rv)
+```
+
+```{python}
+plt.plot(rv, likelihood_pcg)
+```
+
+```{python}
+print(sigma_r_pcg, r_pcg)
+```
+
+```{python}
+
 ```
 
 ```{python}

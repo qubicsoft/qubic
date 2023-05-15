@@ -45,6 +45,7 @@ dependencies = [
     'camb',
     'corner',
     'emcee',
+    'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
     'GetDist',
     'healpy>=0.6.1',
     'iminuit',

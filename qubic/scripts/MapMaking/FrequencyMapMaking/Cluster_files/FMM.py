@@ -2,41 +2,54 @@
 #########################################################################################################################
 #########                                                                                                       #########
 #########      This script allow to perform the frequency map-making for QUBIC experiments. We show here how to #########
-#########      take into account the angular resolution and the bandpass mismatch.                              #########
+#########      take into account the angular resolution and the bandpass mismatch in the case of the Wide Band  #########
+#########      instrument.                                                                                      #########
 #########                                                                                                       #########
 #########################################################################################################################
 #########################################################################################################################
 
 ### General importations
 import numpy as np
-import scipy
 import healpy as hp
-import pysm3
 import pysm3.units as u
 from pysm3 import utils
 import sys
 import os
-from scipy.optimize import minimize
 import os.path as op
 import configparser
 import pickle
-sys.path.append('/home/regnier/work/regnier/mypackages')
+import matplotlib.pyplot as plt
+import time
+sys.path.append('/home/regnier/work/regnier/MapMaking')
 
-# FG-Buster packages
-import component_model as c
-import mixing_matrix as mm
+seed = int(sys.argv[1])
+iteration = int(sys.argv[2])
+band = int(sys.argv[3])
+ndet = int(sys.argv[4])
+npho150 = int(sys.argv[5])
+npho220 = int(sys.argv[6])
+npointings = int(sys.argv[7])
+
+ndet, npho150, npho220 = np.array([ndet, npho150, npho220], dtype=bool)
 
 ### QUBIC packages
 import qubic
-from qubic import NamasterLib as nam
 import frequency_acquisition as Acq
 
 ### PyOperators
 from pyoperators import *
 
 ### PySimulators
-from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+comm = MPI.COMM_WORLD
+size = comm.Get_size()
+rank = comm.Get_rank()
+
+t0 = time.time()
+
+if rank == 0:
+    print(f'You resquested for {size} processus.')
 
 ###############################################################
 ##################### Useful definitions ######################
@@ -44,8 +57,18 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 def get_pySM_maps(sky, nu):
     return np.array(sky.get_emission(nu * u.GHz, None).T * utils.bandpass_unit_conversion(nu*u.GHz, None, u.uK_CMB))
-
-### Reading and loading configuration file
+def get_dict(args={}):
+    
+    ### Get the default dictionary
+    dictfilename = 'dicts/pipeline_demo.dict'
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(dictfilename)
+    d['npointings'] = 9
+    for i in args.keys():
+        
+        d[str(i)] = args[i]
+    
+    return d
 def load_config(config_file):
     # Créer un objet ConfigParser
     config = configparser.ConfigParser()
@@ -76,98 +99,99 @@ def load_config(config_file):
             globals()[option] = value
 
 load_config('config.ini')
+relative_bandwidth = 0.25
+
+if rank == 0:
+    print('Configuration of the simulation :\n')
+    print(f'   Nside            : {nside}')
+    print(f'   Band             : {band}')
+    print(f'   Npointing        : {npointings}')
+    print(f'   Nrec             : {nrec}')
+    print(f'   Nsub             : {nsub}')
+    print(f'   Seed CMB         : {seed}')
+    print(f'   Iteration CMB    : {iteration}')
+    print('\nNoise configuration  :\n')
+    print(f'   Detector noise   : {ndet}')
+    print(f'   Photon noise 150 : {npho150}')
+    print(f'   Photon noise 220 : {npho220}')
 
 ###############################################################
 ########################## Dictionary #########################
 ###############################################################
 
-dictfilename = 'dicts/pipeline_demo.dict'
-d = qubic.qubicdict.qubicDict()
-d.read_from_file(dictfilename)
+if band == 150 or band == 220:
+    type = ''
+    filter_nu = band
+else:
+    type = 'wide'
+    filter_nu = 220
 
-d['nf_recon'] = nf_recon
-d['nf_sub'] = nf_recon*fact_sub
-d['nside'] = nside
-npix=12*d['nside']**2
-d['RA_center'] = 0
-d['DEC_center'] = -57
-center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
-d['effective_duration'] = 3
-d['npointings'] = npointings
-d['filter_nu'] = band * 1e9
-d['photon_noise'] = not noiseless
-d['noiseless'] = noiseless
-d['config'] = 'FI'
-d['filter_relative_bandwidth'] = 0.25
-d['MultiBand'] = True
-d['dtheta'] = 15
-d['synthbeam_dtype'] = float
+d = get_dict({'npointings':npointings, 'nf_recon':nrec, 'nf_sub':nsub, 'nside':nside, 'MultiBand':True, 
+              'filter_nu':filter_nu*1e9, 'noiseless':False, 'comm':comm, 'nprocs_sampling':1, 'nprocs_instrument':size,
+              'photon_noise':True, 'nhwp_angles':3, 'effective_duration':3, 'filter_relative_bandwidth':relative_bandwidth, 
+              'type_instrument':type})
 
-if seed is False:
-    seed = np.random.randint(10000000)
-sky_config = {'cmb':seed}
+center = qubic.equ2gal(0, -57)
+if band == 150 or band == 220:
+    a = Acq.QubicIntegrated(d, Nsub=nsub, Nrec=nrec)
+    atod = Acq.QubicIntegrated(d, Nsub=nsub, Nrec=nsub)
+    planck_acquisition = Acq.PlanckAcquisition(band_planck, a.scene)
+    joint = Acq.QubicPlanckMultiBandAcquisition(a, planck_acquisition)
+else:
+    a = Acq.QubicFullBand(d, Nsub=nsub, Nrec=nrec)
+    atod = Acq.QubicFullBand(d, Nsub=nsub, Nrec=nsub)
+    planck_acquisition143 = Acq.PlanckAcquisition(143, a.scene)
+    planck_acquisition217 = Acq.PlanckAcquisition(217, a.scene)
+    joint = Acq.QubicPlanckMultiBandAcquisition(a, [planck_acquisition143, planck_acquisition217])
 
-qubic_acquisition = Acq.QubicIntegrated(d, Nsub=nf_tod, Nrec=nf_tod)
-qubic_acquisition_recon = Acq.QubicIntegrated(d, Nsub=fact_sub*nf_recon, Nrec=nf_recon)
-planck_acquisition = Acq.PlanckAcquisition(band_planck, qubic_acquisition.scene)
-qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
+
+print(a.allnus)
+myfwhm = np.sqrt(a.allfwhm**2 - a.allfwhm[-1]**2)
+H = joint.get_operator(convolution=convolution, myfwhm=myfwhm)
+Htod = atod.get_operator(convolution=convolution)
+
+invN = joint.get_invntt_operator(True, [True, True])
 
 ### Coverage
-cov = qubic_acquisition.get_coverage()
-C_1degree  = HealpixConvolutionGaussianOperator(fwhm = np.deg2rad(1))
+cov = a.get_coverage()
 covnorm = cov/cov.max()
-seenpix = covnorm > thr
-#seenpix = C_1degree(seenpix)
 
 
 ###############################################################
 ######################### Sky model ###########################
 ###############################################################
-print('\n***** Sky Model ******\n')
 
 ### We define foregrounds model
-sky = pysm3.Sky(nside, preset_strings=['d0'])
-sky_model = pysm3.Sky(nside, preset_strings=['d0'])
+skyconfig = {'cmb':seed}
+if dust:
+    skyconfig['dust'] = 'd0'
 
-nu_ref = 150
-### CMB realization -> for real data, we should take Planck CMB map
-cmb = qubic_acquisition.get_PySM_maps({'cmb':seed}, np.array([nu_ref]))
+f = int(nsub/nrec)
+sky = Acq.Sky(skyconfig, a)
+sky_fg = Acq.Sky({'dust':'d0'}, a)
+m_nu_fg = sky_fg.scale_component(beta=1.54)
 
-### We compute components, we should take Planck components for real data
+if dust:
+    m_nu = sky.scale_component(beta=1.54)
+else:
+    m_nu = np.array([sky.cmb*np.ones(sky.cmb.shape)]*nsub)
 
-plancksky = np.zeros((nf_tod, 12*nside**2, 3))
-skymodel = np.zeros((nf_tod, 12*nside**2, 3))
-C = HealpixConvolutionGaussianOperator(fwhm=np.deg2rad(fwhm_correction))
-mysky_ref = get_pySM_maps(sky, nu_ref)*0                                    ### Used for Planck data 
-mysky_model = C(get_pySM_maps(sky_model, nu_ref)*0)                         ### Convolved sky model by gaussian kernel
-
-### We define how foregrounds emit w.r.t frequency
-comp = c.Dust(nu0=nu_ref, temp=20)
-beta = np.array([1.54])
-beta_model = np.array([beta_d_model])
-allnus = qubic_acquisition.allnus
-
-### We compute the expected SED
-sed = mm.MixingMatrix(comp).evaluator(allnus)(beta)
-sed_model = mm.MixingMatrix(comp).evaluator(allnus)(beta_model)
-
-### We scale the components to reproduce frequency observations
-for i in range(3):
-    plancksky[:, :, i] = sed @ np.array([mysky_ref[:, i]]) + cmb[0, :, i]
-    skymodel[:, :, i] = sed_model @ np.array([mysky_model[:, i]])
-
-### Correct Planck data by the sky model
+    
 k=0
-for i in range(nf_recon):
-    delta = skymodel[i*fact_sub:(i+1)*fact_sub] - np.mean(skymodel[i*fact_sub:(i+1)*fact_sub], axis=0)
-    for j in range(fact_sub):
-        plancksky[k] -= delta[j]
-        k+=1
+if bandpass_correction:
+    for i in range(nrec):
+        delta = m_nu_fg[i*f:(i+1)*f] - np.mean(m_nu_fg[i*f:(i+1)*f], axis=0)
+        for j in range(f):
+            m_nu[k] -= delta[j]
+            k+=1
 
-### We making the average between two frequencies
-mean_sky = np.zeros((nf_recon, 12*nside**2, 3))
-for i in range(nf_recon):
-    mean_sky[i] = np.mean(plancksky[i*fact_sub:(i+1)*fact_sub], axis=0)
+
+mean_sky = np.zeros((nrec, 12*nside**2, 3))
+for i in range(nrec):
+    if rank == 0:
+        print(f'Doing average of m_nu between {np.min(a.allnus[i*f:(i+1)*f])} GHz and {np.max(a.allnus[i*f:(i+1)*f])} GHz')
+    mean_sky[i] = np.mean(m_nu[i*f:(i+1)*f], axis=0)
+
 
 
 
@@ -176,77 +200,86 @@ for i in range(nf_recon):
 ###############################################################
 
 print('\n***** Making TODs ******\n')
-### We compute QUBIC TODs with the correction of the bandpass
-noise = not noiseless
-TOD_QUBIC = qubic_acquisition.generate_tod(config=sky_config, map_ref=mysky_model, beta=beta_model, A_ev=mm.MixingMatrix(comp).evaluator(allnus), 
-                            noise=False, bandpass_correction=bandpass_correction, convolution=convolution)
 
-### We compute Planck TODs using the previous sky
+R = ReshapeOperator((12*nside**2, 3), 3*12*nside**2)
+npho = False
+if npho150 == True or npho220 == True:
+    npho = True
 
-TOD_PLANCK = np.zeros((nf_recon, 12*nside**2, 3))
-mrec = np.zeros((nf_recon, 12*nside**2, 3))
-n_pl = planck_acquisition.get_noise() * level_noise_planck * 0
-for irec in range(nf_recon):
+comm.Barrier()
+if rank == 0:
+    np.random.seed(int(str(int(time.time()*1e6))[-8:]))
+    seed_noise_pl = np.random.randint(1000000000)
+else:
+    seed_noise_pl = None
+
+seed_noise_pl = comm.bcast(seed_noise_pl, root=0)
+
+
+for i in range(size):
+    print(f'seed for planck noise is {seed_noise_pl} for rank = {rank}')
+
+if band == 150 or band == 220:
+    nq = a.get_noise(bool(ndet), bool(npho), seed=None).ravel()
+else:
+    nd, np150, np220 = a.get_noise(bool(ndet), bool(npho150), bool(npho220))
+    nq = nd.ravel()+np150.ravel()+np220.ravel()
+print(nq)
+TOD_QUBIC = Htod(m_nu).ravel() + nq
+
+if band == 150 or band == 220:
+    TOD_PLANCK = np.zeros((nrec, 12*nside**2, 3))
+    npl = planck_acquisition.get_noise(seed_noise_pl) * level_planck_noise
+    for irec in range(nrec):
+        if convolution:
+            C = HealpixConvolutionGaussianOperator(fwhm=np.min(a.allfwhm[irec*f:(irec+1)*f]))
+        else:
+            C = HealpixConvolutionGaussianOperator(fwhm=0)
+        TOD_PLANCK[irec] = C(mean_sky[irec] + npl)
+    TOD_PLANCK = TOD_PLANCK.ravel()
+else:
+    npl143 = planck_acquisition143.get_noise(iteration) * level_planck_noise
+    npl217 = planck_acquisition217.get_noise(iteration) * level_planck_noise
     
-    if convolution:
-        target = np.min(qubic_acquisition.allfwhm[irec*fact_sub:(irec+1)*fact_sub])
+    if nrec != 1:
+        TOD_PLANCK = np.zeros((nrec, 12*nside**2, 3))
+        for irec in range(int(nrec/2)):
+            if convolution:
+                C = HealpixConvolutionGaussianOperator(fwhm=np.min(a.allfwhm[irec*f:(irec+1)*f]))
+            else:
+                C = HealpixConvolutionGaussianOperator(fwhm=0)
+        
+            TOD_PLANCK[irec] = C(mean_sky[irec] + npl143)
+
+        for irec in range(int(nrec/2), nrec):
+            if convolution:
+                C = HealpixConvolutionGaussianOperator(fwhm=np.min(a.allfwhm[irec*f:(irec+1)*f]))
+            else:
+                C = HealpixConvolutionGaussianOperator(fwhm=0)
+        
+            TOD_PLANCK[irec] = C(mean_sky[irec] + npl217)
+        
     else:
-        target = 0
+        TOD_PLANCK = np.zeros((2*nrec, 12*nside**2, 3))
+        if convolution:
+            C = HealpixConvolutionGaussianOperator(fwhm=a.allfwhm[-1])
+        else:
+            C = HealpixConvolutionGaussianOperator(fwhm=0)
 
-    C = HealpixConvolutionGaussianOperator(fwhm = target)
-    mrec[irec] = C(mean_sky[irec].copy() + n_pl.copy())
-    TOD_PLANCK[irec] = C(mean_sky[irec].copy() + n_pl.copy())
+        TOD_PLANCK[0] = C(mean_sky[0] + npl143)
+        TOD_PLANCK[1] = C(mean_sky[0] + npl217)
+    
+    TOD_PLANCK = TOD_PLANCK.ravel()
+            
+TOD = np.r_[TOD_QUBIC.ravel(), TOD_PLANCK.ravel()]
 
-R = ReshapeOperator(mrec.shape, (mrec.shape[0]*mrec.shape[1]*mrec.shape[2]))
-TOD_PLANCK = R(TOD_PLANCK)
-
-###############################################################
-######################## Acquisitions #########################
-###############################################################
-print('\n***** Acquisitions ******\n')
-### Create Planck and joint acquisition
-planck_acquisition = Acq.PlanckAcquisition(band_planck, qubic_acquisition_recon.scene)
-qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition_recon, planck_acquisition)
-
-### Create the final TOD
-TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
-
+comm.Barrier()
 ###############################################################
 ########################## Operators ##########################
 ###############################################################
-print('\n***** Reconstruction Operators ******\n')
 
-### We define here the expected angular resolution for reconstruction
-myfwhm = np.array([])
-for i in range(nf_recon):
-    myfwhm = np.append(myfwhm, np.sqrt(qubic_acquisition.allfwhm[i*fact_sub:(i+1)*fact_sub]**2 - np.min(qubic_acquisition.allfwhm[i*fact_sub:(i+1)*fact_sub]**2)))
-if convolution is False:
-    myfwhm *= 0
-
-
-print(f'You are reconstructing with : {myfwhm} rad')
-### Reconstruction operator
-H = qubicplanck_acquisition.get_operator(convolution=convolution, myfwhm=myfwhm)
-invN = qubicplanck_acquisition.get_invntt_operator()
-
-R = ReshapeOperator((1, 12*nside**2, 3), (12*nside**2, 3))
-
-### Unpack Operator to fix pixels not seen by QUBIC
-U = (
-    ReshapeOperator((nf_recon * sum(seenpix) * 3), (nf_recon, sum(seenpix), 3)) *
-    PackOperator(np.broadcast_to(seenpix[None, :, None], (nf_recon, seenpix.size, 3)).copy())
-).T
-
-### Compute A and b
-with rule_manager(none=True):
-    if nf_recon == 1:
-        A = U.T * R.T * H.T * invN * H * R * U
-        x_planck = mean_sky * (1 - seenpix[None, :, None])
-        b = U.T ( R.T * H.T * invN * (TOD - H(R(x_planck))))
-    else:
-        A = U.T * H.T * invN * H * U
-        x_planck = mean_sky * (1 - seenpix[None, :, None])
-        b = U.T (  H.T * invN * (TOD - H(x_planck)))
+A = H.T * invN * H
+b = H.T * invN * TOD
 
 ### Preconditionning
 M = Acq.get_preconditioner(np.ones(12*nside**2))
@@ -255,49 +288,46 @@ M = Acq.get_preconditioner(np.ones(12*nside**2))
 print('\n***** PCG ******\n')
 solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-25, disp=True, maxiter=maxiter)
 
-output = mean_sky.copy()
-for i in range(nf_recon):
-    output[i, seenpix] = solution_qubic_planck['x'][i]
+if doplot:
+    if rank == 0:
+        if nrec == 1:
+            plt.figure(figsize=(15, 5))
 
-dict_i = {'output':output, 'input':mean_sky, 'allfwhm':qubic_acquisition.allfwhm, 'coverage':cov, 'seenpix':seenpix, 'covcut':thr, 'center':center, 
-          'fact_sub':fact_sub, 'Nf_recon':nf_recon, 'Nf_TOD':nf_tod}
+            hp.gnomview(solution_qubic_planck['x'][:, 1], min=-8, max=8, cmap='jet', sub=(1, 3, 1), rot=center, reso=15)
+            hp.gnomview(mean_sky[0, :, 1], min=-8, max=8, cmap='jet', sub=(1, 3, 2), rot=center, reso=15)
+            hp.gnomview(solution_qubic_planck['x'][:, 1]-mean_sky[0, :, 1], min=-8, max=8, cmap='jet', sub=(1, 3, 3), rot=center, reso=15)
+            plt.savefig(f'test_{seed}_{iteration}.png')
+            plt.close()
+        else:
+            plt.figure(figsize=(15, 5))
+            k = 0
+            for irec in range(nrec):
+                k+=1
+                hp.gnomview(solution_qubic_planck['x'][irec, :, 1], min=-8, max=8, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15)
+                k+=1
+                hp.gnomview(mean_sky[irec, :, 1], min=-8, max=8, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15)
+                k+=1
+                hp.gnomview(solution_qubic_planck['x'][irec, :, 1]-mean_sky[irec, :, 1], min=-8, max=8, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15)
+            plt.savefig('test.png')
+            plt.close()
 
-def get_spectrum(map, maskpix, lmin, lmax, dl, map2=None):
-    aposize=10
-    Namaster = nam.Namaster(maskpix, lmin=lmin, lmax=lmax, delta_ell=dl, aposize=aposize)
-    Namaster.ell_binned, _ = Namaster.get_binning(nside)
+end = time.time()
+execution_time = end - t0
 
-    leff, cls, _ = Namaster.get_spectra(map, map2=map2,
-                                 purify_e=False,
-                                 purify_b=True,
-                                 w=None,
-                                 verbose=False,
-                                 beam_correction=None,
-                                 pixwin_correction=False)
+if rank == 0:
+    print(f'Simulation done in {execution_time} s')
 
-    return leff, cls[:, 2]
-
-map_to_nam = output.copy() - mean_sky.copy()
-
-### To be sure that pixels not seen by QUBIC = 0
-map_to_nam[:, ~seenpix, :] = 0
-
-
-if spectrum:
-    leff, Dls = get_spectrum(map=map_to_nam[0].T, maskpix=seenpix, lmin=40, lmax=2*nside-1, dl=35)
-    print(leff)
-    print(Dls)
-    dict_i['leff'] = leff
-    dict_i['Dl_BB'] = Dls
+dict_i = {'output':solution_qubic_planck['x'], 'input':mean_sky, 'allfwhm':a.allfwhm, 'coverage':cov, 'center':center, 'nsub':nsub, 'nrec':nrec, 'execution_time':execution_time, 'size':size}
 
 
 ### If the folder is not here, you will create it
-save_each_ite = str(prefix)
-current_path = os.getcwd() + '/'
-if not os.path.exists(current_path + save_each_ite):
-    os.makedirs(current_path + save_each_ite)
+if rank == 0:
+    save_each_ite = f'band{band}'
+    current_path = os.getcwd() + '/'
+    if not os.path.exists(current_path + save_each_ite):
+        os.makedirs(current_path + save_each_ite)
 
-fullpath = current_path + save_each_ite + '/'
-output = open(fullpath+f'MM_band{band}_bandpasscorrection{bandpass_correction}_Nrec{nf_recon}_Nsub{nf_recon*fact_sub}_Ntod{nf_tod}_correction_conv{fwhm_correction}deg_noise{noise}.pkl', 'wb')
-pickle.dump(dict_i, output)
-output.close()
+    fullpath = current_path + save_each_ite + '/'
+    output = open(fullpath+f'MM_convolution{convolution}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{iteration}.pkl', 'wb')
+    pickle.dump(dict_i, output)
+    output.close()

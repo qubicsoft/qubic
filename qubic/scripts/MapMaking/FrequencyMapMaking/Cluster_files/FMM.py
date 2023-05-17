@@ -176,6 +176,11 @@ if dust:
 else:
     m_nu = np.array([sky.cmb*np.ones(sky.cmb.shape)]*nsub)
 
+if fake_convolution != 0:
+    print(f'Convolving input sky by constant fwhm = {fake_convolution}')
+    C = HealpixConvolutionGaussianOperator(fwhm=fake_convolution)
+    for inu in range(m_nu.shape[0]):
+        m_nu[inu] = C(m_nu[inu])
     
 k=0
 if bandpass_correction:
@@ -191,8 +196,6 @@ for i in range(nrec):
     if rank == 0:
         print(f'Doing average of m_nu between {np.min(a.allnus[i*f:(i+1)*f])} GHz and {np.max(a.allnus[i*f:(i+1)*f])} GHz')
     mean_sky[i] = np.mean(m_nu[i*f:(i+1)*f], axis=0)
-
-
 
 
 ###############################################################
@@ -290,12 +293,18 @@ solution_qubic_planck = pcg(A, b, x0=None, M=M, tol=1e-25, disp=True, maxiter=ma
 
 if doplot:
     if rank == 0:
+        C = HealpixConvolutionGaussianOperator(fwhm=np.min(a.allfwhm))
+        if convolution:
+            C_reconv = HealpixConvolutionGaussianOperator(fwhm = np.sqrt(a.allfwhm[0]**2 - a.allfwhm[-1]**2))
+        else:
+            C_reconv = HealpixConvolutionGaussianOperator(fwhm = 0)
+
         if nrec == 1:
             plt.figure(figsize=(15, 5))
 
-            hp.gnomview(solution_qubic_planck['x'][:, 1], min=-8, max=8, cmap='jet', sub=(1, 3, 1), rot=center, reso=15)
-            hp.gnomview(mean_sky[0, :, 1], min=-8, max=8, cmap='jet', sub=(1, 3, 2), rot=center, reso=15)
-            hp.gnomview(solution_qubic_planck['x'][:, 1]-mean_sky[0, :, 1], min=-8, max=8, cmap='jet', sub=(1, 3, 3), rot=center, reso=15)
+            hp.gnomview(C_reconv(solution_qubic_planck['x'][:, 1]), min=-8, max=8, cmap='jet', sub=(1, 3, 1), rot=center, reso=15)
+            hp.gnomview(C_reconv(C(mean_sky[0, :, 1])), min=-8, max=8, cmap='jet', sub=(1, 3, 2), rot=center, reso=15)
+            hp.gnomview(C_reconv(solution_qubic_planck['x'][:, 1])-C_reconv(C(mean_sky[0, :, 1])), min=-8, max=8, cmap='jet', sub=(1, 3, 3), rot=center, reso=15)
             plt.savefig(f'test_{seed}_{iteration}.png')
             plt.close()
         else:
@@ -320,6 +329,7 @@ if rank == 0:
 dict_i = {'output':solution_qubic_planck['x'], 'input':mean_sky, 'allfwhm':a.allfwhm, 'coverage':cov, 'center':center, 'nsub':nsub, 'nrec':nrec, 'execution_time':execution_time, 'size':size}
 
 
+
 ### If the folder is not here, you will create it
 if rank == 0:
     save_each_ite = f'band{band}'
@@ -328,6 +338,13 @@ if rank == 0:
         os.makedirs(current_path + save_each_ite)
 
     fullpath = current_path + save_each_ite + '/'
-    output = open(fullpath+f'MM_convolution{convolution}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{iteration}.pkl', 'wb')
+    if fake_convolution != 0:
+        fc = 'fake'
+    else:
+        if convolution:
+            fc = True
+        else:
+            fc = False
+    output = open(fullpath+f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{iteration}.pkl', 'wb')
     pickle.dump(dict_i, output)
     output.close()

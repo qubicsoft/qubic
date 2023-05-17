@@ -256,7 +256,8 @@ class QubicAcquisition(Acquisition):
         if self.scene.kind != 'I':
             out = out[..., 0].copy()  # to avoid keeping QU in memory
         ndetectors = self.comm.allreduce(len(self.instrument))
-        nsamplings = self.comm.allreduce(len(self.sampling))
+        nsamplings = self.sampling.comm.allreduce(len(self.sampling))
+        #nsamplings = self.comm.allreduce(len(self.sampling))
         out *= ndetectors * nsamplings * self.sampling.period / np.sum(out)
         return out
 
@@ -270,14 +271,17 @@ class QubicAcquisition(Acquisition):
         ipixel = self.sampling.healpix(nside)
         npixel = 12 * nside ** 2
         hit = np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
-        self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
+        #self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
+        self.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
-    def get_noise(self, det_noise, photon_noise, out=None):
+    def get_noise(self, det_noise, photon_noise, seed=None, out=None):
+        np.random.seed(seed)
         out = self.instrument.get_noise(
             self.sampling, self.scene, det_noise, photon_noise, out=out)
         if self.effective_duration is not None:
-            nsamplings = self.comm.allreduce(len(self.sampling))
+            #nsamplings = self.comm.allreduce(len(self.sampling))
+            nsamplings = self.sampling.comm.allreduce(len(self.sampling))
             
             out *= np.sqrt(nsamplings * self.sampling.period /
                            (self.effective_duration * 31557600))
@@ -403,10 +407,11 @@ class QubicAcquisition(Acquisition):
         self.sigma = 0
         if det_noise is not None:
             self.sigma = self.instrument.detector.nep / np.sqrt(2 * self.sampling.period)
-
+        #print(self.sigma)
         if photon_noise:
             sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(2 * self.sampling.period)
             self.sigma = np.sqrt(self.sigma ** 2 + sigma_photon ** 2)
+            #print(sigma_photon[0])
         else:
             pass
                 # sigma_photon = 0
@@ -434,7 +439,8 @@ class QubicAcquisition(Acquisition):
             #print(out)
 
             if self.effective_duration is not None:
-                nsamplings = self.comm.allreduce(len(self.sampling))
+                #nsamplings = self.comm.allreduce(len(self.sampling))
+                nsamplings = self.sampling.comm.allreduce(len(self.sampling))
                 out /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
             return out
 
@@ -663,7 +669,7 @@ class PlanckAcquisition:
         
         if beam_correction != 0:
             factor = (4*np.pi*(np.rad2deg(beam_correction)/2.35/np.degrees(hp.nside2resol(self.scene.nside)))**2)
-            print(f'corrected by {factor}')
+            #print(f'corrected by {factor}')
             varnew = hp.smoothing(self.var.T, fwhm=beam_correction/np.sqrt(2)) / factor
             self.sigma = 1e6 * np.sqrt(varnew.T)
         
@@ -680,9 +686,9 @@ class PlanckAcquisition:
         return DiagonalOperator(myweight, broadcast='leftward',
                                 shapein=myweight.shape)
 
-    def get_noise(self):
+    def get_noise(self, seed):
         state = np.random.get_state()
-        np.random.seed(None)
+        np.random.seed(seed)
         out = np.random.standard_normal(np.ones((12*self.nside**2, 3)).shape) * self.sigma
         np.random.set_state(state)
         return out
@@ -705,74 +711,6 @@ class PlanckAcquisition:
             m[i] = C(m[i])
     
         return np.mean(m, axis=0)
-
-
-class QubicPlanckAcquisition:
-
-    def __init__(self, qubic, planck):
-
-        self.qubic = qubic
-        self.planck = planck
-    def get_noise(self):
-
-        """
-        Return a noise realization compatible with the fused noise
-        covariance matrix.
-        """
-
-        n = self.qubic.get_noise().ravel()
-        n = np.r_[n, self.planck.get_noise().ravel()]
-
-        return n
-    def get_invntt_operator(self):
-        """
-        Return the inverse covariance matrix of the fused observation
-        as an operator.
-        """
-
-
-        Operator = []
-        invntt_qubic = self.qubic.get_invntt_operator()
-        R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
-        Operator.append(R_qubic(invntt_qubic(R_qubic.T)))
-
-        invntt_planck = self.planck.get_invntt_operator()
-        R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
-        Operator.append(R_planck(invntt_planck(R_planck.T)))
-
-        return BlockDiagonalOperator(Operator, axisout=0)
-    def get_operator(self, convolution=False):
-        """
-        Return the fused observation as an operator.
-        """
-
-        Operator = []
-
-        H_qubic = self.qubic.get_operator()
-        R_qubic = ReshapeOperator(H_qubic.shapeout, H_qubic.shape[0])
-        Operator.append(R_qubic(H_qubic))
-
-        H_planck = self.planck.get_operator()
-        R_planck = ReshapeOperator(H_planck.shapeout, H_planck.shape[0])
-        Operator.append(R_planck(H_planck))
-        return BlockColumnOperator(Operator, axisout=0)
-    def get_observation(self, noiseless=False, convolution=False):
-        """
-        Return the fused observation.
-        Parameters
-        ----------
-        noiseless : boolean, optional
-            If set, return a noiseless observation
-        """
-        obs_qubic_ = self.qubic.get_observation(
-            self.planck._true_sky, noiseless=noiseless,
-            convolution=convolution)
-        obs_qubic = obs_qubic_[0] if convolution else obs_qubic_
-        obs_planck = self.planck.get_observation(noiseless=noiseless)
-        obs = np.r_[obs_qubic.ravel(), obs_planck.ravel()]
-        if convolution:
-            return obs, obs_qubic_[1]
-        return obs
 class QubicPolyAcquisition:
     def __init__(self, multiinstrument, sampling, scene, d):
         """
@@ -916,102 +854,22 @@ class QubicPolyAcquisition:
         Return the inverse noise covariance matrix as operator
         """
         return self[0].get_invntt_operator()
-class QubicMultibandAcquisition(QubicPolyAcquisition):
-    def __init__(self, multiinstrument, sampling, scene, d, nus):
-        '''
-        Parameters:
-        -----------
-        nus : array
-            edge frequencies for reconstructed subbands, for example:
-            [140, 150, 160] means two bands: one from 140 to 150 GHz and
-            one from 150 to 160 GHz
-        Note, that number of subbands is not equal to len(self)
-        Within each subband there are multiple frequencies
-        Documentation for other parameters see in QubicPolyAcquisition
-        '''
-        QubicPolyAcquisition.__init__(self, multiinstrument, sampling, scene, d)
-
-        if len(nus) > 1:
-            self.bands = np.array([[nus[i], nus[i + 1]] for i in range(len(nus) - 1)])
-        else:
-            raise ValueError('The QubicMultibandAcquisition class is designed to '
-                             'work with multiple reconstructed subbands. '
-                             'If you reconstruct only one subband, you can use '
-                             'the QubicPolyAcquisition class')
-        self.nus = np.array([q.filter.nu / 1e9 for q in multiinstrument])
-
-    def get_operator(self):
-        op = np.array(self._get_array_of_operators())
-        op_sum = []
-        for band in self.bands:
-            op_sum.append(op[(self.nus > band[0]) * (self.nus < band[1])].sum(axis=0))
-        return BlockRowOperator(op_sum, new_axisin=0)
-    def convolved_maps(self, m):
-        _maps_convolved = np.zeros(m.shape)  # array of sky maps, each convolved with its own gaussian
-        for i in range(len(self)):
-            C = self[i].get_convolution_peak_operator()
-            _maps_convolved[i] = C(m[i])
-        return _maps_convolved
-
-    def get_observation(self, m, convolution=True, noiseless=False):
-        '''
-        Return TOD for polychromatic synthesised beam,
-        just the same way as QubicPolyAcquisition.get_observation does
-        Parameters
-        ----------
-        m : np.array((N, npix, 3)) if self.scene.kind == 'IQU', else np.array((npix))
-            where N = len(self) if convolution == True or
-                  N = len(self.bands) if convolution == False
-            Helpix map of CMB for all the frequencies
-        convolution : boolean, optional [default and recommended = True]
-            - if True, convolve the input map with gaussian kernel
-            with width specific for each subfrequency and
-            return TOD, convolved map,
-            (for example, we use 4 monochromatic frequencies and divide them
-                to 2 subbands)
-            where TOD = [H1, H2, H3, H4] * [m_conv1, m_conv2, m_conv3, m_conv4].T
-            and convolved map = [average([m_conv1, m_conv2]), average([m_conv3, m_conv4])]
-            - if False, the input map is considered as already convolved
-            and the return is just TOD, which is equal to
-            [sum(H1, H2, H3, ...)] * input_map
-        noiseless : boolean, optional [default=False]
-            if False, add noise to the TOD due to the model
-        '''
-
-        if self.scene.kind != 'I':
-            shape = (len(self), m.shape[1], m.shape[2])
-        else:
-            shape = m.shape
-
-        if convolution:
-            _maps_convolved = np.zeros(shape)  # array of sky maps, each convolved with its own gaussian
-            for i in range(len(self)):
-                C = self[i].get_convolution_peak_operator()
-                _maps_convolved[i] = C(m[i])
-            tod = self.get_operator_to_make_TOD() * _maps_convolved
-        else:
-            tod = self.get_operator() * m
-
-        if not noiseless:
-            tod += self.get_noise()
-
-        return tod
 class QubicPlanckMultiBandAcquisition:
 
     def __init__(self, qubic, planck):
 
         self.qubic = qubic
-        self.Nsamples = self.qubic.Nsamples
-        self.Ndets = self.qubic.Ndets
-        self.type = self.qubic.type
+        #self.Nsamples = self.qubic.Nsamples
+        #self.Ndets = self.qubic.Ndets
+        self.type = self.qubic.kind
         self.Nsub = self.qubic.Nsub
         self.Nrec = self.qubic.Nrec
         self.scene = self.qubic.scene
-        self.final_fwhm = self.qubic.final_fwhm
+        #self.final_fwhm = self.qubic.final_fwhm
         self.planck = planck
         self.nside = self.scene.nside
 
-        self.nueff = self.qubic.nueff
+        #self.nueff = self.qubic.nueff
         self.allnus = self.qubic.allnus
 
     def sed_for_scaling(self, nus, comp, beta):
@@ -1054,178 +912,82 @@ class QubicPlanckMultiBandAcquisition:
             
             # Get QUBIC operator
             H_qubic = self.qubic.get_operator(convolution=convolution, myfwhm=myfwhm)
-            # Reshape the operator to match a desired input and output shape
             R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
             R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
 
             # Create an empty list to hold operators
             full_operator = []
 
-            # Loop over the number of frequencies
-            for i in range(self.Nrec):
-                # Check if there is only one effective frequency
-                if len(self.nueff) == 1:
-                    # Reshape the operator to match a desired input and output shape
-                    Operator = [R_qubic(H_qubic)]
-                else:
-                    # Reshape the operator to match a desired input and output shape
-                    Operator = [R_qubic(H_qubic.operands[i])]
-
-                # If convolution is True, create a convolution operator with a specified fwhm
-                # Otherwise, create an identity operator
-                #if convolution:
-                #    target = 0
-                #    C = HealpixConvolutionGaussianOperator(fwhm=target)
-                #else:
-                C = IdentityOperator()
-
+            if self.Nrec == 1:
+                Operator = [R_qubic(H_qubic), R_planck]
+                return BlockColumnOperator(Operator, axisout=0)
             
-                # Loop over the number of frequencies again
-                for j in range(self.Nrec):
-
-                    # Create an Operator list that includes the appropriate operator for each frequency
-                    if i == j :
-                        Operator.append(R_planck*C)
-                    else:
-                        Operator.append(R_planck*0*C)
-
-                # Append a BlockColumnOperator instance to the full_operator list
-                full_operator.append(BlockColumnOperator(Operator, axisout=0))
-
-            # Return a BlockRowOperator instance that concatenates the full_operator list together along a new axis
-            return BlockRowOperator(full_operator, new_axisin=0)
-
-        elif self.qubic.type == 'TwoBands':  # TwoBands instrument
-            
-            # Get QUBIC operator
-            H_qubic = self.qubic.get_operator(convolution=convolution)
-            # Reshape the operator to match a desired input and output shape
-            R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
-            Ndets, Nsamples = R_qubic.shapein
-            if self.Nrec == 2:
-                Ndets /= int(2)
-                Ndets = int(Ndets)
-                #print(Ndets, Nsamples)
-                R_qubic = ReshapeOperator((Ndets, Nsamples), Ndets*Nsamples)
-            #print(R_qubic.shapein, R_qubic.shapeout)
-            
-            R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
-
-            # Create an empty list to hold operators
-            
-            if self.Nsub != 1:
-                k=0
-                huge_operator=[]
-                for ifp in range(2):
-                    full_operator = []
-                    for inu in range(int(self.Nrec/2)):
-                        #print(H_qubic.operands[1].operands[ifp])
-                        #print(H_qubic.operands[1].operands[ifp].shapein, H_qubic.operands[1].operands[ifp].shapeout)
-                        if self.Nrec != 2:
-                            operator = [R_qubic * H_qubic.operands[ifp].operands[inu]]
-                        else:
-                            operator = [R_qubic * H_qubic.operands[1].operands[ifp]]
-                        for jnu in range(int(self.Nrec/2)):
-                            if inu == jnu :
-                                operator.append(R_planck)
-                            else:
-                                operator.append(R_planck*0)
-                            k+=1
-                        full_operator.append(BlockColumnOperator(operator, axisout=0))
-                    huge_operator.append(BlockRowOperator(full_operator, new_axisin=0))
-
-            if self.Nrec != 2:
-                D = BlockDiagonalOperator(huge_operator, axisin=0)
-                #print('shape 1 -> ', D.shapein, D.shapeout)
-                #R = ReshapeOperator(D.shapeout, (D.shapeout[0]*D.shapeout[1]))
-                return D
             else:
-                D = BlockDiagonalOperator(huge_operator, new_axisin=0)
-                #print('shape 2 -> ', D.shapein, D.shapeout)
-                R = ReshapeOperator(D.shapeout, D.shapeout[0]*D.shapeout[1])
-                return R * D
+                
+                for irec in range(self.Nrec):
+                    Operator = [R_qubic(H_qubic.operands[irec])]
+                    for jrec in range(self.Nrec):
+                        if irec == jrec:
+                            Operator += [R_planck]
+                        else:
+                            Operator += [R_planck*0]
+                        
+                    full_operator += [BlockColumnOperator(Operator, axisout=0)]
+                
+                return BlockRowOperator(full_operator, new_axisin=0)
 
         
-        else:      # WideBand intrument
+        elif self.type == 'Wide':      # WideBand intrument
 
             # Get QUBIC operator
             H_qubic = self.qubic.get_operator(convolution=convolution, myfwhm=myfwhm)
-            # Reshape the operator to match a desired input and output shape
             R_qubic = ReshapeOperator(H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0])
             R_planck = ReshapeOperator((12*self.qubic.scene.nside**2, 3), (12*self.qubic.scene.nside**2*3))
-
-            H = H_qubic.copy()
             
 
-            if self.Nrec == 2:
-                #if self.Nsub == 2:
-                h150 = BlockColumnOperator([R_qubic * H.operands[0], R_planck, 0*R_planck], axisout=0)
-                h220 = BlockColumnOperator([R_qubic * H.operands[1], 0*R_planck, R_planck], axisout=0)
-
-                return BlockRowOperator([h150, h220], new_axisin=0)
+            if self.Nrec == 1:
+                operator = [R_qubic(H_qubic), R_planck, R_planck]
+                return BlockColumnOperator(operator, axisout=0)
             
             else:
-                op = []
+
+                full_operator = []
+                for irec in range(self.Nrec):
+                    operator = [R_qubic(H_qubic.operands[irec])]
+                    for jrec in range(self.Nrec):
+                        if irec == jrec:
+                            operator += [R_planck]
+                        else:
+                            operator += [R_planck*0]
+                    full_operator += [BlockColumnOperator(operator, axisout=0)]
                 
-                k=0
-                for ifp in range(2):
-                    for irec in range(int(len(self.nueff)/2)):
-                        sub_op = [R_qubic * H.operands[ifp].operands[irec]]
-                        sub_op += self._loop(k)
-                        k+=1
-
-                        op += [BlockColumnOperator(sub_op, axisout=0)]
-                
-                return BlockRowOperator(op, new_axisin=0)
+                return BlockRowOperator(full_operator, new_axisin=0)
 
 
-
-            """
-            # Create an empty list to hold operators
-            full_operator = []
-            k=0
-            for inu in range(len(self.nueff)):
-                #print(k, len(H_qubic.operands))
-                operator = [R_qubic * H_qubic.operands[k]]
-                for jnu in range(len(self.nueff)):
-                    if inu == jnu:
-                        operator.append(R_planck)
-                    else:
-                        operator.append(R_planck*0)
-                k+=1
-                full_operator.append(BlockColumnOperator(operator, axisout=0))
-
-            return BlockRowOperator(full_operator, new_axisin=0)
-            """
-                
-    def get_planck_noise(self):
-        npix = 12*self.nside**2
-        npl = np.zeros((self.qubic.d['nf_recon']*npix*3))
-        for i in range(self.qubic.d['nf_recon']):
-            npl[i*npix*3:(i+1)*npix*3] = self.planck.get_noise().ravel()
-        return npl
-    def get_invntt_operator(self, weight_planck=1, beam_correction=None, seenpix=None, mask=None):
+    def get_invntt_operator(self, det_noise, photon_noise, weight_planck=1, beam_correction=None, seenpix=None, mask=None):
         
 
         if beam_correction is None :
                 beam_correction = [0]*self.Nrec
 
-        if self.type == 'WideBand':
+        if self.type == 'Wide':
 
-
-            invn_q = self.qubic.get_invntt_operator()
+            photon_noise150, photon_noise220 = photon_noise
+            invn_q = self.qubic.get_invntt_operator(det_noise, photon_noise150, photon_noise220)
             R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
-            invn_q = R(invn_q(R.T))
+            invn_q = [R(invn_q(R.T))]
 
 
             invntt_planck143 = weight_planck*self.planck[0].get_invntt_operator(beam_correction=beam_correction[0], mask=mask, seenpix=seenpix)
             invntt_planck217 = weight_planck*self.planck[1].get_invntt_operator(beam_correction=beam_correction[0], mask=mask, seenpix=seenpix)
             R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
-            invN_143 = [R_planck(invntt_planck143(R_planck.T))]*int(self.Nrec/2)
-            invN_217 = [R_planck(invntt_planck217(R_planck.T))]*int(self.Nrec/2)
-            invN_pl = invN_143 + invN_217
-            invN = [invn_q] + invN_pl
-
+            invN_143 = R_planck(invntt_planck143(R_planck.T))
+            invN_217 = R_planck(invntt_planck217(R_planck.T))
+            if self.Nrec == 1:
+                invNe = [invN_143, invN_217]
+            else:
+                invNe = [invN_143]*int(self.Nrec/2) + [invN_217]*int(self.Nrec/2)
+            invN = invn_q + invNe
             return BlockDiagonalOperator(invN, axisout=0)
 
 
@@ -1241,7 +1003,7 @@ class QubicPlanckMultiBandAcquisition:
                     raise TypeError('List of beam correction should have Nrec elements')
 
 
-            invntt_qubic = self.qubic.get_invntt_operator()
+            invntt_qubic = self.qubic.get_invntt_operator(det_noise, photon_noise)
             R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
             Operator = [R_qubic(invntt_qubic(R_qubic.T))]
 
@@ -1251,79 +1013,6 @@ class QubicPlanckMultiBandAcquisition:
                 Operator.append(R_planck(invntt_planck(R_planck.T)))
 
             return BlockDiagonalOperator(Operator, axisout=0)
-
-        elif self.type == 'TwoBands':
-
-            invntt_qubic150 = self.qubic.qubic150.get_invntt_operator()
-            invntt_qubic220 = self.qubic.qubic220.get_invntt_operator()
-            R_qubic150 = ReshapeOperator(invntt_qubic150.shapeout, invntt_qubic150.shape[0])
-            R_qubic220 = ReshapeOperator(invntt_qubic220.shapeout, invntt_qubic220.shape[0])
-
-            if beam_correction is None :
-                beam_correction = [0]*self.nfreqs
-            else:
-                if type(beam_correction) is not list:
-                    raise TypeError('Beam correction should be a list')
-                if len(beam_correction) != self.Nrec:
-                    raise TypeError('List of beam correction should have Nrec elements')
-
-
-            Operator150 = [R_qubic150(invntt_qubic150(R_qubic150.T))]
-            Operator220 = [R_qubic150(invntt_qubic220(R_qubic220.T))]
-            for i in range(int(self.Nrec/2)):
-                invntt_planck143 = weight_planck*self.planck[0].get_invntt_operator(beam_correction=beam_correction[i], mask=None, seenpix=seenpix)
-                invntt_planck217 = weight_planck*self.planck[1].get_invntt_operator(beam_correction=beam_correction[i], mask=None, seenpix=seenpix)
-                R_planck143 = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
-                R_planck217 = ReshapeOperator(invntt_planck217.shapeout, invntt_planck217.shape[0])
-                Operator150.append(R_planck143(invntt_planck143(R_planck143.T)))
-                Operator220.append(R_planck217(invntt_planck217(R_planck217.T)))
-            
-            #ope = [BlockDiagonalOperator(Operator150, axisout=0), BlockDiagonalOperator(Operator220, axisout=0)]
-            return BlockDiagonalOperator(Operator150 + Operator220, axisin=0)
-    def get_noise(self):
-
-        if self.type == 'QubicIntegrated':
-            # Get QUBIC noise
-            n = self.qubic.get_noise()
-            sh = n.shape
-
-            # Flatten the noise array and create an empty array to hold the noise values
-            n = n.ravel()
-            narray = np.array([])
-            # Loop over the number of frequencies
-            for i in range(self.nfreqs):
-                # Append the noise array of the Planck instrument
-                n = np.r_[n, self.planck.get_noise().ravel()]
-                narray = n.copy()
-            return narray
-
-        elif self.type == 'TwoBands' :
-
-            n150 = self.qubic.qubic150.get_noise().ravel()
-            n220 = self.qubic.qubic220.get_noise().ravel()
-
-            # Loop over the number of frequencies
-            for i in range(int(self.Nrec/2)):
-                # Append the noise array of the Planck instrument
-                n150 = np.r_[n150, self.planck[0].get_noise().ravel()]
-                n220 = np.r_[n220, self.planck[1].get_noise().ravel()]
-                
-            return np.r_[n150, n220]
-
-        else:     # WideBand instrument
-
-            n = self.qubic.get_noise().ravel()
-            narray = np.array([])
-            for i in range(self.Nrec):
-                if i < int(self.Nrec/2):
-                    # Append the noise array of the Planck instrument
-                    n = np.r_[n, self.planck[0].get_noise().ravel()]
-                else:
-                    n = np.r_[n, self.planck[1].get_noise().ravel()]
-                narray = n.copy()
-            return narray
-    #def generate_planck_tod(self):
-
 
 
 
@@ -1426,29 +1115,28 @@ class QubicIntegrated(QubicPolyAcquisition):
         self.Nsub = Nsub
         self.Nrec = Nrec
         self.fact = int(self.Nsub / self.Nrec)
-        self.type = 'QubicIntegrated'
+        self.kind = 'QubicIntegrated'
         if self.Nrec == 1 and self.Nsub == 1:
             self.integration = ''
         else:
             self.integration = 'Trapeze'
         
         self.sampling = qubic.get_pointing(self.d)
-        self.Nsamples = self.sampling.shape[0]
-        self.Ndets = 992
 
         self.scene = qubic.QubicScene(self.d)
 
-        self.multiinstrument = instr.QubicMultibandInstrument(self.d, self.integration)
+        self.multiinstrument = instr.QubicMultibandInstrument(self.d)
 
-        QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
+        if self.d['nf_sub'] > 1:
+            QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
+        else:
+            self.subacqs = [QubicAcquisition(self.multiinstrument[0], self.sampling, self.scene, self.d)]
 
         if self.integration == 'Trapeze':
-            _, _, self.nueff, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=self.Nrec, relative_bandwidth=self.d['filter_relative_bandwidth'])
+            _, _, self.nueff, _, _, _ = qubic.compute_freq(self.d['filter_nu'], Nfreq=self.Nrec, relative_bandwidth=self.d['filter_relative_bandwidth'])
             
         else:
-            _, self.nus_edge, self.nueff, _, _, _ = qubic.compute_freq(int(self.d['filter_nu']/1e9), Nfreq=(self.d['nf_recon']))
-
-        print(self.nueff)
+            _, self.nus_edge, self.nueff, _, _, _ = qubic.compute_freq(self.d['filter_nu'], Nfreq=(self.d['nf_recon']))
         
         self.nside = self.scene.nside
         self.allnus = np.array([q.filter.nu / 1e9 for q in self.multiinstrument])
@@ -1509,16 +1197,16 @@ class QubicIntegrated(QubicPolyAcquisition):
         # s = create_random_pointings([0., 0.], nsamplings, 10., period=s_.period)
         a = QubicAcquisition(q, self.sampling, self.scene, d1)
         return a
-    def get_noise(self):
+    def get_noise(self, det_noise, photon_noise, seed=None):
 
         """
         
         Method which compute the noise of QUBIC.
 
         """
-        np.random.seed(None)
+        np.random.seed(seed)
         a = self._get_average_instrument_acq()
-        return a.get_noise()
+        return a.get_noise(det_noise=det_noise, photon_noise=photon_noise, seed=seed)
     def get_TOD(self, skyconfig, beta, convolution=False, myfwhm=None, noise=False, bandpass_correction=False):
 
         """
@@ -1619,13 +1307,15 @@ class QubicIntegrated(QubicPolyAcquisition):
             op_sum += [op[(self.allnus >= self.allnus[imin]) * (self.allnus <= self.allnus[imax])].sum(axis=0)]
             
         return BlockRowOperator(op_sum, new_axisin=0)# * MPIDistributionIdentityOperator(self.d['comm'])
-    
     def get_coverage(self):
         return self.subacqs[0].get_coverage()
-    def get_invntt_operator(self):
+    def get_invntt_operator(self, det_noise, photon_noise):
         # Get the inverse noise variance covariance matrix from the first sub-acquisition
-        invN = self.subacqs[0].get_invntt_operator()
+        invN = self.subacqs[0].get_invntt_operator(det_noise, photon_noise)
         return invN
+
+
+'''
 class QubicTwoBands:
 
     def __init__(self, qubic150, qubic220):
@@ -1797,7 +1487,6 @@ class QubicWideBand:
 
     def get_coverage(self):
         return self.qubic150.get_coverage()
-
 class QubicUltraWideBand(QubicIntegrated):
 
     def __init__(self, d, Nsub, Nrec):
@@ -2001,7 +1690,6 @@ class QubicUltraWideBand(QubicIntegrated):
 
     def get_coverage(self):
         return self.qubic150.get_coverage()
-
 class QubicDualBand(QubicIntegrated):
 
     def __init__(self, d, Nsub, Nrec):
@@ -2096,6 +1784,133 @@ class QubicDualBand(QubicIntegrated):
         self.invn220 = self.qubic220.get_invntt_operator()
 
         return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
+
+
+'''
+
+
+class QubicFullBand(QubicPolyAcquisition):
+
+
+    def __init__(self, d, Nsub, Nrec, relative_bandwidth=0.6138613861386139):
+
+        if Nrec%2 != 0 and Nrec!=1:
+            raise TypeError('You should put a number of reconstructed sub-bands divisible by 2')
+        self.relative_bandwidth = relative_bandwidth
+
+        if Nsub == 1:
+            raise TypeError('You should use Nsub > 1')
+        
+        self.d = d
+        self.Nsub = int(Nsub/2)
+        self.Nrec = Nrec
+        self.d['nf_sub'] = self.Nsub
+        self.d['nf_recon'] = Nrec
+        self.kind = 'Wide'
+        self.number_FP = 1
+        
+        self.nu_down = 131.25
+        self.nu_up = 247.5
+
+        
+
+        #self.nu_average = np.mean(np.array([self.nu_down, self.nu_up]))
+        #self.d['filter_nu'] = self.nu_average * 1e9
+        if Nsub != 1:
+            _, allnus150, _, _, _, _ = qubic.compute_freq(150, Nfreq=int(self.Nsub)-1, relative_bandwidth=0.25)
+            _, allnus220, _, _, _, _ = qubic.compute_freq(220, Nfreq=int(self.Nsub)-1, relative_bandwidth=0.25)
+        else:
+            _, _, allnus150, _, _, _ = qubic.compute_freq(150, Nfreq=int(self.Nsub), relative_bandwidth=0.25)
+            _, _, allnus220, _, _, _ = qubic.compute_freq(220, Nfreq=int(self.Nsub), relative_bandwidth=0.25)
+        self.allnus = np.array(list(allnus150) + list(allnus220))
+
+        self.Nsub *= 2
+        
+        #self.d['nf_sub'] = 2 * self.d['nf_sub']
+        self.multiinstrument = instr.QubicMultibandInstrument(self.d)
+        self.sampling = qubic.get_pointing(self.d)
+        self.scene = qubic.QubicScene(self.d)
+
+        self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
+        self.subacqs150 = self.subacqs[:int(self.Nsub/2)]
+        self.subacqs220 = self.subacqs[int(self.Nsub/2):self.Nsub]
+        
+        ### For MPI distribution
+        if self.Nsub > 1:
+            QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
+
+        self.allfwhm = np.zeros(len(self.multiinstrument))
+        for i in range(len(self.multiinstrument)):
+            self.allfwhm[i] = self.subacqs[i].get_convolution_peak_operator().fwhm
+
+        self.nside = self.scene.nside
+        self.npix = 12*self.nside**2
+
+        invn = self.get_invntt_operator(True, True, True)
+        self.Ndets, self.Nsamples = invn.shapein
+
+    def _get_array_operators(self, convolution=False, myfwhm=None):
+
+
+        '''
+        
+        Compute all the Nsub sub-acquisition in one list. Each sub-acquisition contain the instrument specificities and describe the 
+        synthetic beam for each frequencies.
+
+        '''
+
+        operator = []
+        R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
+        for inu, i in enumerate(self.subacqs):
+            if convolution:
+                if myfwhm is not None:
+                    C = HealpixConvolutionGaussianOperator(fwhm = myfwhm[inu])
+                else:
+                    C = HealpixConvolutionGaussianOperator(fwhm = self.allfwhm[inu])
+            else:
+                C = IdentityOperator()
+
+            P = i.get_operator() * C
+
+            operator.append(P)
+
+        self.Ndets, self.Nsamples = operator[0].shapeout
+
+        return operator
+    
+    def get_operator(self, convolution, myfwhm=None):
+
+        operator = self._get_array_operators(convolution=convolution, myfwhm=myfwhm)
+        array_operator = np.array(operator)
+        op_sum = []
+
+        f = int(self.Nsub/self.Nrec)
+
+        ### 150 GHz
+        for irec in range(self.Nrec):
+            imin = irec*f
+            imax = (irec+1)*f-1
+            op_sum += [array_operator[(self.allnus >= self.allnus[imin]) * (self.allnus <= self.allnus[imax])].sum(axis=0)]
+
+        return BlockRowOperator(op_sum, new_axisin=0)
+            
+        
+    def get_invntt_operator(self, det_noise, photon_noise150, photon_noise220):
+
+        invn150 = self.subacqs150[0].get_invntt_operator(det_noise=False, photon_noise=photon_noise150)
+        invn220 = self.subacqs220[0].get_invntt_operator(det_noise=det_noise, photon_noise=photon_noise220)
+
+        return (invn150 + invn220)/2   # factor 2 because it added twice the detector noise
+    
+    def get_noise(self, det_noise, photon_noise150, photon_noise220):
+        
+        np.random.seed(None)
+        ndet = self.subacqs150[0].get_noise(det_noise, False)
+        npho150 = self.subacqs150[0].get_noise(False, photon_noise150)# - ndet
+        npho220 = self.subacqs220[0].get_noise(False, photon_noise220)# - ndet
+        return ndet, npho150, npho220
+
+        
 
 
 

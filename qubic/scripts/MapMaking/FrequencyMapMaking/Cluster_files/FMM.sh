@@ -6,11 +6,11 @@
 #SBATCH --nodes=1                # c
 #SBATCH --ntasks-per-node=4      # n
 #SBATCH --cpus-per-task=4        # N
-#SBATCH --mem-per-cpu=1500MB
+#SBATCH --mem-per-cpu=3000MB
 #SBATCH --partition=bigmem
 
 # run for five minutes d-hh:mm:ss
-#SBATCH --time=0-01:00:00
+#SBATCH --time=0-03:00:00
 
 ### nodes [1-16] -> --mca btl_tcp_if_include enp24s0f0np0
 ### nodes [17-23] -> --mca btl_tcp_if_include enp24s0f1

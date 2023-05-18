@@ -632,12 +632,20 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	except:
 	
 		cf_status = 'No CF info'
+		
+	try:
 	
-	if calsource_dict['calsource']['status'] == 'ON' and cf_status == 'ON':
+		extcal_status = calsource_dict['calsource']['status']
+	
+	except:
+		
+		extcal_status = 'No external calsoruce info'
+	
+	if extcal_status == 'ON' and cf_status == 'ON':
 		
 		raise Exception('This is weird, external calibration and carbon fibres are both ON.')
 		
-	elif calsource_dict['calsource']['status'] == 'ON':
+	elif extcal_status == 'ON':
 		
 		try:
 		

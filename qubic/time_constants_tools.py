@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from numpy import *
 from matplotlib.pyplot import *
 from matplotlib import pyplot as plt
@@ -25,11 +26,11 @@ from qubic.instrument import QubicInstrument
 import qubic
 from qubic.qubicdict import qubicDict
 from qubic.instrument import QubicInstrument
-import qubicpack
-print('qubicpack:', qubicpack.__file__)
-from qubicpack.qubicfp import qubicfp as qubicfp
+#import qubicpack
+#print('qubicpack:', qubicpack.__file__)
+from qubicpack.qubicfp import qubicfp
 from qubic import fibtools as ft
-print('ft:', ft.__file__)
+#print('ft:', ft.__file__)
 from qubicpack.utilities import Qubic_DataDir
 from qubic import selfcal_lib as scal
 from qubic import time_domain_tools as tdt
@@ -40,7 +41,7 @@ def normalize(x):
 	"""
 	return (x-np.nanmean(x))/np.nanstd(x)
 
-def plot_folded_data_on_FP(datain, time = None, datain_error = None, tes_ok_saturation = np.ones(256,dtype=bool), tes_ok_signal = np.ones(256,dtype=bool), analytical_function = None, eval_domain = None, params_function = None, save=True, figname = 'figname', format='png', doplot = False ,**kwargs):
+def plot_folded_data_on_FP(datain, time = None, datain_error = None, tes_ok_saturation = np.ones(256,dtype=bool), tes_ok_signal = np.ones(256,dtype=bool), analytical_function = None, eval_domain = None, params_function = None, saveplot = True, save_path = None, figname = 'figname', format='png', doplot = False ,**kwargs):
 
     basedir = Qubic_DataDir()
     dictfilename = basedir + '/dicts/global_source_oneDet_multiband.dict'
@@ -81,75 +82,89 @@ def plot_folded_data_on_FP(datain, time = None, datain_error = None, tes_ok_satu
     discarded_tes_signal_asic2 = TES_asic2[discarded_tes_signal[128:]]
     discarded_tes_saturation_asic2 = TES_asic2[discarded_tes_saturation[128:]]
     
-    plt.ioff()
+    if doplot or saveplot:
+        
+        plt.ion()	
     
-    fig, axs = subplots(nrows=17, ncols=17, figsize=(50, 50))
+        if not doplot:
+        
+            plt.ioff()
+		
+        fig, axs = subplots(nrows=17, ncols=17, figsize=(20, 20))
 
-#    if time is None:
-#    	time = np.arange(1,len(datain)+1)
-#    else:
-#    	if eval_domain is None:
-#    	    eval_domain = time
+#        if time is None:
+#            time = np.arange(1,len(datain)+1)
+#        else:
+#            if eval_domain is None:
+#                eval_domain = time
 
-    for j in [1,2]:
-        if j==1:
-            for tes in TES_asic1_notherm:
+        for j in [1,2]:
+            if j==1:
+                for tes in TES_asic1_notherm:
+    
+                    xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
+                    ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
 
-                xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
-                ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
-
-                if datain_error is not None:
-                    axs[ind[0][0], ind[1][0]].errorbar(time, datain[tes-1], yerr=datain_error[tes-1], fmt='bo', label='{}'.format(tes), alpha=0.5, **kwargs)
-                else:
-                    axs[ind[0][0], ind[1][0]].scatter(time, datain[tes-1], fmt='bo', label='{}'.format(tes), alpha=0.5, **kwargs)
-                leg = axs[ind[0][0], ind[1][0]].legend(handlelength=0, handletextpad=0, fancybox=True,fontsize=22,loc='upper center')
-                for item in leg.legendHandles:
-                    item.set_visible(False)
-                axs[ind[0][0], ind[1][0]].get_xaxis().set_visible(False)
-                axs[ind[0][0], ind[1][0]].get_yaxis().set_visible(False)
-
-                if analytical_function is not None:
-                    axs[ind[0][0], ind[1][0]].plot(eval_domain, analytical_function(eval_domain,params_function[tes-1]),color = 'black')
-                
-                if tes in discarded_tes_asic1:
-                    if tes in discarded_tes_saturation_asic1:
-                        axs[ind[0][0], ind[1][0]].set_facecolor('xkcd:red')
+                    if datain_error is not None:
+                        axs[ind[0][0], ind[1][0]].errorbar(time, datain[tes-1], yerr=datain_error[tes-1], fmt='b.', alpha=0.5, **kwargs)#, label='{}'.format(tes)
                     else:
-                        axs[ind[0][0], ind[1][0]].set_facecolor('xkcd:salmon')
+                        axs[ind[0][0], ind[1][0]].scatter(time, datain[tes-1], fmt='b.', alpha=0.5, **kwargs)#, label='{}'.format(tes)
+                    leg = axs[ind[0][0], ind[1][0]].legend(handlelength=0, handletextpad=0, fancybox=True,fontsize=10,loc='upper center', title='{}'.format(tes))
+                    for item in leg.legendHandles:
+                        item.set_visible(False)
+                    axs[ind[0][0], ind[1][0]].get_xaxis().set_visible(False)
+                    axs[ind[0][0], ind[1][0]].get_yaxis().set_visible(False)
 
-        elif j==2:
-            for tes in TES_asic2_notherm:
+                    if analytical_function is not None:
+                        axs[ind[0][0], ind[1][0]].plot(eval_domain, analytical_function(eval_domain,params_function[tes-1]),color = 'black')
                 
-                xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
-                ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+                    if tes in discarded_tes_asic1:
+                        if tes in discarded_tes_saturation_asic1:
+                            axs[ind[0][0], ind[1][0]].set_facecolor('xkcd:red')
+                        else:
+                            axs[ind[0][0], ind[1][0]].set_facecolor('xkcd:salmon')
 
-                if datain_error is not None:
-                    axs[ind[0][0], ind[1][0]].errorbar(time, datain[tes-1+128], yerr=datain_error[tes-1+128], fmt='ro', label='{}'.format(tes), alpha=0.5, **kwargs)
-                else:
-                    axs[ind[0][0], ind[1][0]].scatter(time, datain[tes-1+128], fmt='ro', label='{}'.format(tes), alpha=0.5, **kwargs)
-                leg = axs[ind[0][0], ind[1][0]].legend(handlelength=0, handletextpad=0, fancybox=True,fontsize=22,loc='upper center')
-                for item in leg.legendHandles:
-                    item.set_visible(False)
-                axs[ind[0][0], ind[1][0]].get_xaxis().set_visible(False)
-                axs[ind[0][0], ind[1][0]].get_yaxis().set_visible(False)
+            elif j==2:
+                for tes in TES_asic2_notherm:
                 
-                if analytical_function is not None:
-                    axs[ind[0][0], ind[1][0]].plot(eval_domain, analytical_function(eval_domain,params_function[tes-1+128]),color = 'black')
+                    xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=tes, ASIC=j, q=q, frame='ONAFP', verbose=False)
+                    ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
 
-                if tes in discarded_tes_asic2:
-                    if tes in discarded_tes_saturation_asic2:
-                        axs[ind[0][0], ind[1][0]].set_facecolor('xkcd:red')
+                    if datain_error is not None:
+                        axs[ind[0][0], ind[1][0]].errorbar(time, datain[tes-1+128], yerr=datain_error[tes-1+128], fmt='r.', alpha=0.5, **kwargs)#, label='{}'.format(tes)
                     else:
-                        axs[ind[0][0], ind[1][0]].set_facecolor('xkcd:salmon')
+                        axs[ind[0][0], ind[1][0]].scatter(time, datain[tes-1+128], fmt='r.', alpha=0.5, **kwargs)#, label='{}'.format(tes)
+                    leg = axs[ind[0][0], ind[1][0]].legend(fontsize=10,title='{}'.format(tes),loc='upper center',handlelength=0, handletextpad=0, fancybox=True)
+#                    txt = axs[ind[0][0], ind[1][0]].text()
+                    for item in leg.legendHandles:
+                        item.set_visible(False)
+                    axs[ind[0][0], ind[1][0]].get_xaxis().set_visible(False)
+                    axs[ind[0][0], ind[1][0]].get_yaxis().set_visible(False)
+               
+                    if analytical_function is not None:
+                        axs[ind[0][0], ind[1][0]].plot(eval_domain, analytical_function(eval_domain,params_function[tes-1+128]),color = 'black')
+    
+                    if tes in discarded_tes_asic2:
+                        if tes in discarded_tes_saturation_asic2:
+                            axs[ind[0][0], ind[1][0]].set_facecolor('xkcd:red')
+                        else:
+                            axs[ind[0][0], ind[1][0]].set_facecolor('xkcd:salmon')
 
-#    if doplot:
-#    	show()
-#    	            
-#    if save:
-#    	show()
-    savefig(figname+'.'+format, bbox_inches="tight",format=format)
-    close(fig)
-    plt.ion()
+        if saveplot:
+			
+            if save_path is None:
+        
+                save_path = os.getcwd()
+        
+                print('None save_path given to run_DBScan funciton, saving figure in the current working directory {}'.format(save_path))
+
+            savefig(save_path+'/'+figname+'.'+format, bbox_inches="tight",format=format)
+			
+            if not doplot:
+                
+                close()
+        
+        plt.ion()
 
 
 class asymsig_spl_class:
@@ -257,49 +272,74 @@ def fit_one(t, tofit, errors, initguess, fctfit = asymsig_poly, fixpars = None, 
         print('Minuit Failed')
         return 0., 0., 0.
 
-def run_DBSCAN(results, doplot=False, parnames = None, eps_cpar = 1.3, min_samples_cpar = 10):
-    clustering = DBSCAN(eps=eps_cpar, min_samples=min_samples_cpar).fit(np.nan_to_num(results))
-    labels = clustering.labels_
-    nfound = len(np.unique(np.sort(labels)))
-    unique_labels = unique(labels)  
-    colors = [plt.cm.jet(each)
-              for each in np.linspace(0, 1, len(unique_labels))]
+def run_DBSCAN(results, doplot = False, saveplot = False, save_path = None, dataset_info = None, parnames = None, eps_cpar = 1.3, min_samples_cpar = 10):
+
+	clustering = DBSCAN(eps=eps_cpar, min_samples=min_samples_cpar).fit(np.nan_to_num(results))
+	labels = clustering.labels_
+	nfound = len(np.unique(np.sort(labels)))
+	unique_labels = unique(labels)  
+	colors = [plt.cm.jet(each) for each in np.linspace(0, 1, len(unique_labels))]
     
-    nnn = np.shape(results)[1]
-    if doplot:
-        if nnn>1:
-            figure(figsize=(11,8))
-            for i in range(nnn):
-                for j in range(i+1, nnn):
-                    subplot(nnn-1, nnn-1, i*(nnn-1)+j)
-                    if parnames is None:
-                        xlabel('Param {}'.format(j))
-                        ylabel('Param {}'.format(i))
-                    else:
-                        xlabel(parnames[j])
-                        ylabel(parnames[i])
-                    plot(results[:,j], results[:,i], 'k.')
-                    for k in range(len(unique_labels)):
-                        thisone = labels == unique_labels[k]
-                        plot(results[thisone,j],results[thisone,i], '.',
-                                label='Type {} : n={}'.format(unique_labels[k],thisone.sum()))
-                    if (i+j-1)==0: legend()
-        elif nnn==1:
-            figure()
-            if parnames is None:
-                xlabel('TES Number')
-                ylabel('Parameter')
-            else:
-                xlabel('TES Number')
-                ylabel(parnames[0])
-            plot(np.arange(1,257),results, 'k.')
-            for k in range(len(unique_labels)):
-                thisone = labels == unique_labels[k]
-                plot(np.arange(1,257)[thisone],results[thisone], '.',
-                        label='Type {} : n={}'.format(unique_labels[k],thisone.sum()))
-        legend()
-        tight_layout()
-    return (labels)
+	nnn = np.shape(results)[1]
+    
+	if doplot or saveplot:
+		
+		plt.ion()
+		
+		if not doplot:
+	
+			plt.ioff()
+			
+		if nnn>1:
+		
+			figure(figsize=(11,8))
+		
+			for i in range(nnn):
+				for j in range(i+1, nnn):
+					subplot(nnn-1, nnn-1, i*(nnn-1)+j)
+					if parnames is None:
+						xlabel('Param {}'.format(j))
+						ylabel('Param {}'.format(i))
+					else:
+						xlabel(parnames[j])
+						ylabel(parnames[i])
+					plot(results[:,j], results[:,i], 'k.')
+					for k in range(len(unique_labels)):
+						thisone = labels == unique_labels[k]
+						plot(results[thisone,j],results[thisone,i], '.', label='Type {} : n={}'.format( unique_labels[k], thisone.sum()))
+					if (i+j-1)==0: legend()
+		elif nnn==1:
+		
+			figure()
+		
+			if parnames is None:
+				xlabel('TES Number')
+				ylabel('Parameter')
+			else:
+				xlabel('TES Number')
+				ylabel(parnames[0])
+			plot(np.arange(1,257),results, 'k.')
+			for k in range(len(unique_labels)):
+				thisone = labels == unique_labels[k]
+				plot(np.arange(1,257)[thisone],results[thisone], '.', label = 'Type {} : n = {}'.format( unique_labels[k], thisone.sum()))
+		legend()
+		tight_layout()
+
+		if saveplot:
+			
+			if save_path is None:
+				save_path = os.getcwd()
+				print('None save_path given to run_DBScan funciton, saving figure in the current working directory {}'.format(save_path))
+
+			savefig(save_path+'/clustering_'+dataset_info+'.png')
+			
+			if not doplot:
+			
+				close()
+		
+		plt.ion()
+
+	return (labels)
 
 def run_OPTICS(results, doplot=False, parnames = None, min_samples_optics = 10):
     clustering = OPTICS(min_samples=min_samples_optics).fit(np.nan_to_num(results))
@@ -346,668 +386,12 @@ def run_OPTICS(results, doplot=False, parnames = None, min_samples_optics = 10):
     return (labels)
 
 
-def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, doplot = False, doplot_onebyone = True, verbose = False,save_path =None,only_overview=False):
-
-	"""
-	Compute the time constants from a square modulation
+def get_best_initial_guess(tofit,t,nbins,dutycycle,risetime,falltime,nparams_ext,typefit,fctfit):
 	
-	thedatadir : 		directory where to read the dataset
-	nbins (= 100) : 	nbins to fold the data
-	lowcut (= None) : 	lowcut frequency. See fibtools.fold_data() for more info.
-	highcut (= None) : 	highcut frequency. See fibtools.fold_data() for more info.
-	notch (= None) : 	several frequencies to notch filter. See fibtools.fold_data() for more info.
-	fmod (= None) : 	modulation frequency, this is only required if the calsource information is not available in the housekeeping data.
-	dutycycle (= None) : 	dutycycle in %, this is only required if the calsource information is not available in the housekeeping data.
-	typefit (= 'just_exp') : 	on top of the exponential behaviour we can chose to also fit a slow varying function. 'just_exp' means an exponential model, 'spl' means adding a slow varying function with splines on top of the exponential behaviour (nparams_ext_spl must be >=4 and defines the number of spline parameters) and 'poly' means adding a slow varying function with polynomials on top of the exponential behaviour (nparams_ext_poly must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial).
-	nparams_ext_spl (=4) :	must be >=4 and defines the number of spline parameters.
-	nparams_ext_poly (=1) :	must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial.
-	doplot (= False) :	to show several plots.
-	doplot_onebyone (= True) :	to show one plot per TES (fit and folded data, three plots per figure). If doplot= False, then doplot_onebyone will be also False.
-	verbose (= True) :	to show some intermediate output messages.
-	save_path (= None) :	if not None, one dictionary (with all the information, see Output) and one focal plane plot (with the fits and folded data) per dataset.
+#	global nparams_ext
+#	global typefit
+#	global fctfit
 	
-	Output:
-	d :	dictionary with all the relevant information. Elaborate...
-	
-
-	"""
-	
-	dataset_info = str.split(thedatadir,'/')[-1]
-	
-	d_results = {}
-	d_results['dataset_info'] = dataset_info
-	
-	a = qubicfp()
-	
-	if not verbose:
-		a.assign_verbosity(0)
-	
-	a.read_qubicstudio_dataset(thedatadir)
-
-	minVbias_asic1 = a.asic(1).min_bias
-	minVbias_asic2 = a.asic(2).min_bias
-	maxVbias_asic1 = a.asic(1).max_bias
-	maxVbias_asic2 = a.asic(2).max_bias
-
-	tt, alltod = a.tod()
-	calsource_dict = a.calsource_info()
-	
-	shape = None
-	
-	try:
-		RF = calsource_dict['calsource']['frequency'] # in GHz
-		fmod = calsource_dict['modulator']['frequency'] # in Hz
-		dutycycle = calsource_dict['modulator']['duty_cycle'] # in %
-		shape = calsource_dict['modulator']['shape']
-#		amplifier_invert = calsource_dict['amplifier']['invert']
-		
-	except:
-		calsource_analysis = False
-		print('No calsource information.')
-		if fmod is None or dutycycle is None:
-			raise Exception('Insert modulation frequency and dutycyle in the arguments.')	
-
-	if shape is not None:
-		if shape == 'square':
-			calsource_analysis = True
-		else:
-			raise Exception('ERROR: The shape of the modulation is not square. This analysis is intended to be performed for square modulation. Returning an empty dictionary.')
-#			d_results['Exception'] = 'The shape of the modulation is not square.'
-#			
-#			return d_results
-			
-	else:
-		calsource_analysis = False
-		print('No calsource analysis performed since no calsource data is available')
-	
-	if calsource_analysis:
-	
-		caltime, calsourcedata = a.calsource()
-		caldata = []
-		caldata.append(calsourcedata)
-		caldata = np.asarray(caldata)
-		caldata = caldata[0,:]
-	#	if amplifier_invert == 'ON':
-	#		caldata = caldata[0,:]
-	#	else:
-	#		caldata = -caldata[0,:]
-	
-	del(a)
-	gc.collect()
-	
-	period = 1./ fmod
-	
-	
-	if calsource_analysis:
-		try:
-			print('Folding the calsource data.')
-	 		########## Folding
-			folded_cal, t_fold_cal, folded_nonorm_cal, dfolded_cal, dfolded_nonorm_cal, newdata_cal, fn_cal, nn_cal= ft.fold_data(caltime,
-	 												np.reshape(caldata, (1,len(caldata))),
-	 						                                                period, nbins, lowcut = lowcut, highcut = highcut,
-	 						                                                notch = notch, median = True, rebin = False,
-	 						                                                verbose = verbose, return_error = True,
-	 						                                                return_noise_harmonics = 30)
-			folded_cal = folded_cal[0,:]
-			dfolded_cal = dfolded_cal[0,:]
-			folded_nonorm_cal = folded_nonorm_cal[0,:]
-			dfolded_nonorm_cal = dfolded_nonorm_cal[0,:]
-
-			t_cal = t_fold_cal.copy()
-			
-			print('Folding the calsource data finished')
-	 	
-		except:
-	 		print('Error when folding the calsource data.')
-	 		if caldata is None:
-	 			print('No calsource data.')
-
-		if doplot:
-			figure()
-			plot(caltime, caldata)
-			xlabel('t [s]')
-			ylabel('Calsource data [a.u.]')
-			
-			figure()
-			############ Power spectrum
-			subplot(2,1,1)
-			spectrum_f, freq_f = ft.power_spectrum(caltime, caldata, rebin=True)
-			plot(freq_f, scfilt.gaussian_filter1d(spectrum_f,1),label='Calsource Data')
-			yscale('log')
-			xscale('log')
-			xlabel('Frequency [Hz]')
-			ylabel('Power Spectrum')
-			title('Calsource data')
-		
-			for i in range(20):
-			    axvline(1./period*i,color='k',linestyle='--',alpha=0.3)
-		
-			if lowcut is not None:
-			    axvline(lowcut,color='k')
-			if highcut is not None:
-			    axvline(highcut,color='k')
-			legend()
-		
-			subplot(2,1,2)
-			errorbar(t_cal, folded_nonorm_cal, yerr=dfolded_nonorm_cal, fmt='ro',
-				label='Filtered Data {} < f < {} Hz'.format(lowcut,highcut))
-			xlim(0,period)
-			xlabel('Time [sec]')
-			ylabel('Folded Signal Calsource [ADU]')
-			grid()
-			legend()
-		
-			########## New Power spectrum
-			spectrum_f2, freq_f2 = ft.power_spectrum(caltime, newdata_cal[0,:], rebin=True)
-			subplot(2,1,1)
-			plot(freq_f2, scfilt.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
-		
-			plot(fn_cal, nn_cal[0,:]**2,'ro-', label='Noise level between peaks')
-			grid()
-			legend()
-
-			tight_layout()
-
-	#	try:
-		print('Fitting the calibration source data.')
-
-		### Vectors to fit
-
-		tofit = np.reshape(folded_nonorm_cal, nbins)
-		errors = np.reshape(dfolded_nonorm_cal, nbins)
-		t = t_cal
-
-		###Fit type
-		if typefit == 'spl':
-		### Instanciate timecst+spline object
-			nparams_ext = nparams_ext_spl
-			fctfit = asymsig_spl_class(t, tofit, errors, nparams_ext)
-
-		elif typefit == 'poly':
-		### Instanciate timecst+polynomials object
-			nparams_ext = nparams_ext_poly
-			fctfit = asymsig_poly
-
-		elif typefit == 'just_exp':
-		### Instanciate just timecst object
-			nparams_ext = 0
-			fctfit = simsig_asym
-
-		else:
-			print('Give a valid typefit: \'just_exp\', \'spl\' or \'poly\' ')
-
-
-		### Initial guess
-
-		pnames = ['cycle', 'risetime', 'falltime', 't0']
-
-		risetime = 0.05
-		falltime = 0.05
-
-		smoothed_tofit = savgol_filter(tofit, int(nbins/5), 3)
-
-		tstart = t[argmin(np.gradient(smoothed_tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_1 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(smoothed_tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_2 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_3 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_4 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_5 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_6 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_7 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_8 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-
-		if nparams_ext == 0:
-		    allguess_1 = guess_1
-		    allguess_2 = guess_2
-		    allguess_3 = guess_3
-		    allguess_4 = guess_4
-		    allguess_5 = guess_5
-		    allguess_6 = guess_6
-		    allguess_7 = guess_7
-		    allguess_8 = guess_8
-		else:
-			if typefit == 'poly':
-				if nparams_ext == 1:
-					allguess_1 = guess_1
-					allguess_2 = guess_2
-					allguess_3 = guess_3
-					allguess_4 = guess_4
-					allguess_5 = guess_5
-					allguess_6 = guess_6
-					allguess_7 = guess_7
-					allguess_8 = guess_8
-				elif nparams_ext > 1:
-					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1))
-					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1))
-					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1))
-					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1))
-					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1))
-					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1))
-					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1))
-					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1))
-
-			elif typefit == 'spl':
-				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
-				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
-				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
-				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
-				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
-				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
-				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
-				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
-
-		guesses = [guess_1, guess_2, guess_3, guess_4, guess_5, guess_6, guess_7, guess_8]
-		allguesses = [allguess_1, allguess_2, allguess_3, allguess_4, allguess_5, allguess_6, allguess_7, allguess_8]
-
-		difference_guess_1 = np.abs(simps((tofit-fctfit(t, allguess_1))**2,t))
-		difference_guess_2 = np.abs(simps((tofit-fctfit(t, allguess_2))**2,t))
-		difference_guess_3 = np.abs(simps((tofit-fctfit(t, allguess_3))**2,t))
-		difference_guess_4 = np.abs(simps((tofit-fctfit(t, allguess_4))**2,t))
-		difference_guess_5 = np.abs(simps((tofit-fctfit(t, allguess_5))**2,t))
-		difference_guess_6 = np.abs(simps((tofit-fctfit(t, allguess_6))**2,t))
-		difference_guess_7 = np.abs(simps((tofit-fctfit(t, allguess_7))**2,t))
-		difference_guess_8 = np.abs(simps((tofit-fctfit(t, allguess_8))**2,t))
-
-		difference_guesses_tofit = [difference_guess_1, difference_guess_2, difference_guess_3, difference_guess_4, difference_guess_5, difference_guess_6, difference_guess_7, difference_guess_8]
-
-		guess = guesses[np.argmin(difference_guesses_tofit)]
-		allguess = allguesses[np.argmin(difference_guesses_tofit)]
-
-		### Limits
-		# limits = [[0, 0., 1], [1, 0., 1.], [2, 0., 1.], [3, 0., period]]
-
-		limits = [[0,np.maximum(dutycycle/100-0.2,0.),dutycycle/100+0.2], [1,0., risetime*10],
-				   [2,0., falltime*10], [3,allguess[3]-period/2,allguess[3]+period/2],
-				   [4,-1.2*np.abs(allguess[4]),1.2*np.abs(allguess[4])],[5,np.min(tofit)-0.1*np.abs(allguess[4]),np.max(tofit)+0.1*np.abs(allguess[4])]]
-
-		### Fixed parameters
-		fixpars = []
-
-		m, ch2, ndf = fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
-		
-		if m != 0:
-		
-			ch2vals_cal = ch2
-			ndfvals_cal = ndf
-			dcfit_cal = m.values[0]
-			dcerr_cal = m.errors[0]
-			risefit_cal = m.values[1]
-			riseerr_cal = m.errors[1]
-			fallfit_cal = m.values[2]
-			fallerr_cal = m.errors[2]
-			t0fit_cal = m.values[3]
-			t0err_cal = m.errors[3]
-			ampfit_cal = m.values[4]
-			amperr_cal = m.errors [4]
-			validfit_cal = m.valid
-		
-		else:
-			print('Folded calsource')
-		
-		d_cal = {'dutycycle':dcfit_cal, 'dutycyle_error':dcerr_cal, 'risetime':risefit_cal, 'risetime_error' : riseerr_cal, 'falltime' : fallfit_cal, 'falltime_error' : fallerr_cal, 't0' : t0fit_cal, 't0_error' : t0err_cal, 'amplitude' : ampfit_cal, 'amplitude_error' :amperr_cal, 'ch2' : ch2vals_cal, 'ndf' : ndfvals_cal, 'valid_minuitfit' : validfit_cal,'calsource_info':calsource_dict}
-		
-		print('Fitting the calibration source data finished.')	
-
-		if doplot:
-			
-			### Plotting different guesses
-#			guess_fct_1 = fctfit(t, allguess_1)
-#			myguesspars_1 = allguess_1.copy()
-#			myguesspars_1[4] = 0
-#			myslowguess_1 = fctfit(t, myguesspars_1)
-#
-#			guess_fct_2 = fctfit(t, allguess_2)
-#			myguesspars_2 = allguess_2.copy()
-#			myguesspars_2[4] = 0
-#			myslowguess_2 = fctfit(t, myguesspars_2)
-#
-#			guess_fct_3 = fctfit(t, allguess_3)
-#			myguesspars_3 = allguess_3.copy()
-#			myguesspars_3[4] = 0
-#			myslowguess_3 = fctfit(t, myguesspars_3)
-#
-#			guess_fct_4 = fctfit(t, allguess_4)
-#			myguesspars_4 = allguess_4.copy()
-#			myguesspars_4[4] = 0
-#			myslowguess_4 = fctfit(t, myguesspars_4)
-#
-#			guess_fct_5 = fctfit(t, allguess_5)
-#			myguesspars_5 = allguess_5.copy()
-#			myguesspars_5[4] = 0
-#			myslowguess_5 = fctfit(t, myguesspars_5)
-#
-#			guess_fct_6 = fctfit(t, allguess_6)
-#			myguesspars_6 = allguess_6.copy()
-#			myguesspars_6[4] = 0
-#			myslowguess_6 = fctfit(t, myguesspars_6)
-#
-#			guess_fct_7 = fctfit(t, allguess_7)
-#			myguesspars_7 = allguess_7.copy()
-#			myguesspars_7[4] = 0
-#			myslowguess_7 = fctfit(t, myguesspars_7)
-#
-#			guess_fct_8 = fctfit(t, allguess_8)
-#			myguesspars_8 = allguess_8.copy()
-#			myguesspars_8[4] = 0
-#			myslowguess_8 = fctfit(t, myguesspars_8)
-#
-			guess_fct = fctfit(t, allguess)
-			myguesspars = allguess.copy()
-			myguesspars[4] = 0
-			myslowguess = fctfit(t, myguesspars)
-
-			figure()
-
-#			plot(t, guess_fct_1, label='guess 1',color='C0')
-#			axvline(allguess_1[3],linestyle='--',color='C0',label='t0 1')
-#			# # plot(t, myslowguess_1, label='slow guess 1',color='C0')
-#
-#			plot(t, guess_fct_2, label='guess 2',color='C1')
-#			axvline(allguess_2[3],linestyle='--',color='C1',label='t0 2')
-#			# # plot(t, myslowguess_2, label='slow guess 2',color='C1')
-#
-#			plot(t, guess_fct_3, label='guess 3',color='C2')
-#			axvline(allguess_3[3],linestyle='--',color='C2',label='t0 3')
-#			# # plot(t, myslowguess_3, label='slow guess 3',color='C2')
-#
-#			plot(t, guess_fct_4, label='guess 4',color='C3')
-#			axvline(allguess_4[3],linestyle='--',color='C3',label='t0 4')
-#			# # plot(t, myslowguess_4, label='slow guess 4',color='C3')
-#
-#			plot(t, guess_fct_5, label='guess 5',color='C4')
-#			axvline(allguess_5[3],linestyle='--',color='C4',label='t0 5')
-#			# # plot(t, myslowguess_5, label='slow guess 5',color='C4')
-#
-#			plot(t, guess_fct_6, label='guess 6',color='C5')
-#			axvline(allguess_6[3],linestyle='--',color='C5',label='t0 6')
-#			# # plot(t, myslowguess_6, label='slow guess 6',color='C5')
-#
-#			plot(t, guess_fct_7, label='guess 7',color='C6')
-#			axvline(allguess_7[3],linestyle='--',color='C6',label='t0 7')
-#			# # plot(t, myslowguess_7, label='slow guess 7',color='C6')
-#
-#			plot(t, guess_fct_8, label='guess 8',color='C7')
-#			axvline(allguess_8[3],linestyle='--',color='C7',label='t0 8')
-#			# # plot(t, myslowguess_8, label='slow guess 8',color='C7')
-#
-			plot(t, guess_fct, label='best guess')
-			axvline(allguess[3],linestyle='--',label='t0')
-			plot(t, myslowguess, label='slow guess')
-
-#			plot(t,smoothed_tofit,label='Smoothed folded')
-#			plot(t,np.gradient(smoothed_tofit),label='Diff smoothed folded')
-			errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
-
-			grid()
-			legend()
-			tight_layout
-
-			figure(figsize=(11,4))
-			### Plot the fit
-			subplot(1,3,1)
-			# plot(t, guess_fct, label='guess')
-			# plot(t, myslowguess, label='slow guess')
-			errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
-			plot(t, fctfit(t, m.values), label="Time-cst + "+typefit)
-			fit_info = [
-			f"$\\chi^2$ / $n_\\mathrm{{dof}}$ = {ch2:.1f} / {ndf}",
-			]
-			for i in range(4):
-				vi = m.values[i]
-				ei = m.errors[i]
-				fit_info.append(f"{pnames[i]} = ${vi:.3f} \\pm {ei:.3f}$")
-			grid()
-			legend(title="\n".join(fit_info));
-
-
-			### Plot the data and fit corrected for slow-variations fitted with splines or polynomial
-			# slow variations are obtained with the same params but amplitude 0
-			myslowpars = np.array(m.values)
-			myslowpars[4] = 0.
-			myslow = fctfit(t, myslowpars)
-
-			subplot(1,3,2)
-			errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
-			plot(t, fctfit(t, m.values), label='Fitted')
-			plot(t, myslow, label='Slow component')
-			grid()
-			legend()
-
-			subplot(1,3,3)
-			errorbar(t, tofit-myslow, yerr=errors, fmt='ro', label='Data Corrected', alpha=0.5)
-			plot(t, fctfit(t, m.values)-myslow, label='Time-CSt Fit')
-			grid()
-			legend(title="\n".join(fit_info))
-
-	#	except:
-	#		print('Error when fitting the calibration source data to compute the their time constants (+powermeter ones), probably no calsource data available')
-	else:
-		d_cal = {'No external calibration source analysis'}
-	
-	##Now for all the TODs
-
-	##first define de Vbias
-	
-	minVbias= min(minVbias_asic1,minVbias_asic2,maxVbias_asic1,maxVbias_asic2)
-	maxVbias= max(minVbias_asic1,minVbias_asic2,maxVbias_asic1,maxVbias_asic2)	
-	
-	if (maxVbias-minVbias)/np.mean([maxVbias,minVbias]) < 0.001:
-		Vbias = np.mean([maxVbias,minVbias])
-	else:
-		Vbias = 'Vbias not well defined'
-		print('Different min and max Vbias, or different ASIC\'s Vbias')
-
-	upper_satval = 4194175
-	lower_satval = -4194175
-
-	frac_sat_pertes = np.zeros(256)
-
-	for i in range(256):
-	    mask1 = alltod[i] > upper_satval
-	    mask2 = alltod[i] < lower_satval
-	    frac_sat_pertes[i] = (np.sum(mask1)+np.sum(mask2))/len(alltod[i])
-
-	nonsaturated_tes = (frac_sat_pertes < 0.05) #frac_sat_pertes == 0
-	fraction_no_saturated_tes = np.sum(nonsaturated_tes) / 256
-	fraction_saturated_tes = np.sum(~nonsaturated_tes) / 256
-
-	d_ok = {} # dictionary to store the boolean ok's array for different criteria
-		
-	d_ok['Saturation'] = nonsaturated_tes
-
-	if doplot:
-		figure()
-		for i in range(256):
-		    plot(tt,alltod[i])
-		plot(tt,np.ones(len(tt))*upper_satval,color='black')
-		plot(tt,np.ones(len(tt))*lower_satval,color='black')
-		title('{} % detectors reaches saturation'.format(100*(fraction_saturated_tes)))
-		xlabel('Time [s]')
-		ylabel('ADU')
-		tight_layout
-		
-		figure()
-		for i in range(256):
-			if nonsaturated_tes[i]:
-				plot(tt,alltod[i])
-		plot(tt,np.ones(len(tt))*upper_satval,color='black')
-		plot(tt,np.ones(len(tt))*lower_satval,color='black')
-		title('Timelines for nonsaturated TESs')
-		xlabel('Time [s]')
-		ylabel('ADU')
-		tight_layout
-		
-		spectra = []
-		smooth_param = 2
-		smooth_spectra = []
-
-		for i in np.arange(256):
-		    spectrum_f, freq_f = ft.power_spectrum(tt, alltod[i], rebin=True)
-		    spectra.append(spectrum_f)
-		    smooth_spectrum_f = f.gaussian_filter1d(spectra[i],smooth_param)
-		    smooth_spectra.append(smooth_spectrum_f)
-		    
-		spectra = np.asarray(spectra)
-		smooth_spectra = np.asarray(smooth_spectra)
-		
-		figure()
-
-		# notch = np.array([[0.852, 0.003, 1],
-		#                   [1.724, 0.003, 3],
-		#                   [2.35, 0.03, 1],
-		#                   [6.939, 0.003, 1]])
-
-		# for i in range(notch.shape[0]):
-		#     nharms = notch[i,2].astype(int)
-		#     for j in range(nharms):
-		#         if j==0:
-		#             axvline(notch[i,0]*(j+1),linestyle='-.',color='blue')   
-		#         else:
-		#             axvline(notch[i,0]*(j+1),linestyle='-.',color='blue') 
-
-		for i in np.arange(10):
-			if i==0:
-				axvline(i*fmod,linestyle='--',color='gray',label='fmod')
-			else:
-				axvline(i*fmod,linestyle='--',color='gray')
-
-		for i in np.arange(256):
-			if nonsaturated_tes[i]:
-				plot(freq_f, smooth_spectra[i],'k-',alpha=0.1)
-
-# 		yscale('log')
-# 		xscale('log')
-# 		legend()
-# 		xlabel('Frequency [Hz]')
-# 		ylabel('Smoothed spectra')
-# 		tight_layout			
-
-	print('Folding TOD\'s timelines')	
-	
-	folded, t_fold, folded_nonorm, dfolded, dfolded_nonorm, newdata, fn, nn= ft.fold_data(tt, alltod, period, nbins, lowcut=lowcut,
-						highcut=highcut, notch=notch, median=True, rebin=False, verbose=verbose, return_error=True,
-						return_noise_harmonics=30)
-
-	t = t_fold.copy()
-
-	print('Folding TOD\'s timelines finished')
-	
-	if doplot:
-		spectra = []
-		smooth_param = 2
-		smooth_spectra = []
-
-		for i in np.arange(256):
-		    spectrum_f, freq_f = ft.power_spectrum(tt, newdata[i], rebin=True)
-		    spectra.append(spectrum_f)
-		    smooth_spectrum_f = f.gaussian_filter1d(spectra[i],smooth_param)
-		    smooth_spectra.append(smooth_spectrum_f)
-		    
-		spectra = np.asarray(spectra)
-		smooth_spectra = np.asarray(smooth_spectra)
-		
-		# notch = np.array([[0.852, 0.003, 1],
-		#                   [1.724, 0.003, 3],
-		#                   [2.35, 0.03, 1],
-		#                   [6.939, 0.003, 1]])
-
-		# for i in range(notch.shape[0]):
-		#     nharms = notch[i,2].astype(int)
-		#     for j in range(nharms):
-		#         if j==0:
-		#             axvline(notch[i,0]*(j+1),linestyle='-.',color='blue')   
-		#         else:
-		#             axvline(notch[i,0]*(j+1),linestyle='-.',color='blue') 
-
-# 		for i in np.arange(10):
-# 			if i==0:
-# 				axvline(i*fmod,linestyle='--',color='gray',label='fmod')
-# 			else:
-# 				axvline(i*fmod,linestyle='--',color='gray')
-
-		for i in np.arange(256):
-			if nonsaturated_tes[i]:
-				plot(freq_f, smooth_spectra[i],'b-',alpha=0.1)
-
-		yscale('log')
-		xscale('log')
-		legend()
-		xlabel('Frequency [Hz]')
-		ylabel('Smoothed spectra')
-		tight_layout
-
-#	try:
-	print('Fitting no normalized folded data.')
-
-	### Fit the folded median
-
-	mean_fold = np.nanmean(folded[nonsaturated_tes],axis=0)
-	median_fold = np.nanmedian(folded[nonsaturated_tes],axis=0)
-	smoothed_median_fold = savgol_filter(median_fold, int(nbins/5), 3)
-	sigma_fold = np.nanstd(folded[nonsaturated_tes],axis=0)
-	error_mean = sigma_fold / np.sqrt(len(nonsaturated_tes)) # revisit this
-	errors_median = 1.253 * sigma_fold / np.sqrt(len(nonsaturated_tes)) #revisit this
-
-	tofit = median_fold
-	errors = errors_median
-
-	###Fit type
-	if typefit == 'spl':
-	### Instanciate timecst+spline object
-		nparams_ext = nparams_ext_spl
-		fctfit = asymsig_spl_class(t, tofit, errors, nparams_ext)
-
-	elif typefit == 'poly':
-	### Instanciate timecst+polynomials object
-		nparams_ext = nparams_ext_poly
-		fctfit = asymsig_poly
-
-	elif typefit == 'just_exp':
-	### Instanciate just timecst object
-		nparams_ext = 0
-		fctfit = simsig_asym
-
-	else:
-		print('Give a valid typefit: \'just_exp\', \'spl\' or \'poly\' ')
-
-	### Initial guess
-
-	pnames = ['cycle', 'risetime', 'falltime', 't0']
-
-	risetime = 0.1
-	falltime = 0.1
-
 	smoothed_tofit = savgol_filter(tofit, int(nbins/5), 3)
 
 	tstart = t[argmin(np.gradient(smoothed_tofit))]
@@ -1049,6 +433,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	amplitude = -(np.max(tofit) - np.min(tofit))
 	offset = np.min(tofit)
 	guess_8 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
+
 
 	if nparams_ext == 0:
 	    allguess_1 = guess_1
@@ -1106,6 +491,776 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 	guess = guesses[np.argmin(difference_guesses_tofit)]
 	allguess = allguesses[np.argmin(difference_guesses_tofit)]
+	
+	return guess, allguess
+
+
+
+
+def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, save_path = None, doplot = None, saveplot = 'focal_plane', verbose = False, only_overview = False, save_dict = True):
+
+	"""
+	Compute the time constants from a square modulation
+	
+	thedatadir :  directory where to read the dataset
+	nbins (= 100) :  nbins to fold the data
+	lowcut (= None) :  lowcut frequency. See fibtools.fold_data() for more info.
+	highcut (= None) :  highcut frequency. See fibtools.fold_data() for more info.
+	notch (= None) :  several frequencies to notch filter. See fibtools.fold_data() for more info.
+	fmod (= None) :  modulation frequency, this is only required if the calsource information is not available in the housekeeping data.
+	dutycycle (= None) :  dutycycle in %, this is only required if the calsource information is not available in the housekeeping data.
+	typefit (= 'just_exp') :  on top of the exponential behaviour we can chose to also fit a slow varying function. 'just_exp' means an exponential model, 'spl' means adding a slow varying function with splines on top of the exponential behaviour (nparams_ext_spl must be >=4 and defines the number of spline parameters) and 'poly' means adding a slow varying function with polynomials on top of the exponential behaviour (nparams_ext_poly must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial).
+	nparams_ext_spl (= 4) :  must be >=4 and defines the number of spline parameters.
+	nparams_ext_poly (= 1) :  must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial.
+	doplot (= None) :  array of strings that determines the plots to show. It can contain some of the following: 'all', 'calsource', 'timelines', 'spectra', 'folded_data', 'each_tes', 'clustering', 'focal_plane'
+	save_path (= None) :  if not None, one dictionary (with all the information, see Output) and one focal plane plot (with the fits and folded data) per dataset.
+	saveplot (= 'focal_plane') :  array of strings that determines which plots will be saved. It can contain some of the following: 'all', 'calsource', 'timelines', 'spectra', 'folded_data', 'each_tes', 'clustering', 'focal_plane'
+	savedict (= True) :  True to save the dictionary as a .npy file
+	verbose (= False) :  to show some intermediate output messages. (needs to be defined)
+	only_overview (= False) :  run only the overview part of the analysis (not fitting each TES signal)
+
+	Output:
+	d :	dictionary with all the relevant information. Please, elaborate...
+	
+
+	"""
+	
+	if saveplot is not None or save_dict:
+		if save_path is None:
+			save_path = os.getcwd()
+			print('Assuming working directory as save path, so save_path = {}'.format(save_path))
+	
+	plt.ioff()
+	
+	doplot_all = False
+	doplot_calsource = False
+	doplot_timelines = False
+	doplot_spectra = False
+	doplot_folded_data = False
+	doplot_each_tes = False
+	doplot_clustering = False
+	doplot_focal_plane = False
+	
+	saveplot_all = False
+	saveplot_calsource = False
+	saveplot_timelines = False
+	saveplot_spectra = False
+	saveplot_folded_data = False
+	saveplot_each_tes = False
+	saveplot_clustering = False
+	saveplot_focal_plane = False
+	
+	if doplot is not None:
+		
+		plt.ion()
+		
+		if 'all' in doplot:
+			doplot_all = True
+		if 'calsource' in doplot:
+			doplot_calsource = True
+		if 'timelines' in doplot:
+			doplot_timelines = True
+		if 'spectra' in doplot:
+			doplot_spectra = True
+		if 'folded_data' in doplot:
+			doplot_folded_data = True
+		if 'each_tes' in doplot:
+			doplot_each_tes = True
+		if 'clustering' in doplot:
+			doplot_clustering = True
+		if 'focal_plane' in doplot:
+			doplot_focal_plane = True
+
+	if saveplot is not None:
+		if 'all' in saveplot:
+			saveplot_all = True
+		if 'calsource' in saveplot:
+			saveplot_calsource = True
+		if 'timelines' in saveplot:
+			saveplot_timelines = True
+		if 'spectra' in saveplot:
+			saveplot_spectra = True
+		if 'folded_data' in saveplot:
+			saveplot_folded_data = True
+		if 'each_tes' in saveplot:
+			saveplot_each_tes = True
+		if 'clustering' in saveplot:
+			saveplot_clustering = True
+		if 'focal_plane' in saveplot:
+			saveplot_focal_plane = True
+
+
+	
+	dataset_info = str.split(thedatadir,'/')[-1]
+	
+	d_results = {}
+	d_results['dataset_info'] = dataset_info
+	
+	a = qubicfp()
+	
+	if not verbose:
+		a.assign_verbosity(0)
+	
+	a.read_qubicstudio_dataset(thedatadir)
+
+	minVbias_asic1 = a.asic(1).min_bias
+	minVbias_asic2 = a.asic(2).min_bias
+	maxVbias_asic1 = a.asic(1).max_bias
+	maxVbias_asic2 = a.asic(2).max_bias
+
+	## define Vbias
+	
+	minVbias= min(minVbias_asic1,minVbias_asic2,maxVbias_asic1,maxVbias_asic2)
+	maxVbias= max(minVbias_asic1,minVbias_asic2,maxVbias_asic1,maxVbias_asic2)	
+	
+	if (maxVbias-minVbias)/np.mean([maxVbias,minVbias]) < 0.001:
+		Vbias = np.mean([maxVbias,minVbias])
+	else:
+		Vbias = 'Vbias not well defined'
+		print('Different min and max Vbias, or different ASIC\'s Vbias')
+
+
+	tt, alltod = a.tod()
+	calsource_dict = a.calsource_info()
+	
+	shape = None
+	
+	try:
+	
+		cf_status = calsource_dict['cf']['status']
+	
+	except:
+	
+		cf_status = 'No CF info'
+	
+	if calsource_dict['calsource']['status'] == 'ON' and cf_status == 'ON':
+		
+		raise Exception('This is weird, external calibration and carbon fibres are both ON.')
+		
+	elif calsource_dict['calsource']['status'] == 'ON':
+		
+		try:
+		
+			RF = calsource_dict['calsource']['frequency'] # in GHz
+			fmod = calsource_dict['modulator']['frequency'] # in Hz
+			dutycycle = calsource_dict['modulator']['duty_cycle'] # in %
+			shape = calsource_dict['modulator']['shape']
+	#		amplifier_invert = calsource_dict['amplifier']['invert']
+			
+			if shape == 'square':
+
+				calsource_analysis = True
+
+			else:
+
+				raise Exception('ERROR: The shape of the modulation is {}, not square. This analysis is intended to be performed for square modulation.'.format(shape))
+	
+			print('Source: external calibration. Reading parameters from housekeeping information')
+
+		except:
+			calsource_analysis = False
+
+			print('Source: external calibration with NO housekeeping information')
+
+			if fmod is None or dutycycle is None:
+			
+				raise Exception('No hk information about the calibration source. Insert modulation frequency and dutycyle explicitly in the arguments.')
+			
+			else:
+			
+				print('Reading fmod and dc from the explicit external arguments.')
+
+			print('No calsource analysis performed since no calsource data are available.')
+
+	elif cf_status == 'ON':	
+		
+		calsource_analysis = False # there are no caldata from the cf
+		
+		try:
+		
+			fmod = calsource_dict['cf']['frequency'] # in Hz
+			dutycycle = calsource_dict['cf']['duty_cycle'] # in %
+			shape = calsource_dict['cf']['shape']
+			
+			if shape != 'square':
+				
+				raise Exception('ERROR: The shape of the modulation is {}, not square. This analysis is intended to be performed for square modulation.'.format(shape))
+				
+			print('Source: carbon fibres reading parameters from housekeeping information')
+			
+		except:
+
+			print('Source: carbon fibres with NO housekeeping information')
+
+			if fmod is None or dutycycle is None:
+			
+				raise Exception('No hk information about the calibration source. Insert modulation frequency and dutycyle explicitly in the arguments.')
+			
+			else:
+			
+				print('Reading fmod and dc from the explicit external arguments.')
+
+		print('No calsource analysis performed since no calsource data are available.')
+
+	else:
+	
+		print('No housekeeping information about the calibration source')
+	
+		calsource_analysis = False
+		
+		if fmod is None or dutycycle is None:
+			
+			raise Exception('No hk information about the calibration source. Insert modulation frequency and dutycyle explicitly in the arguments.')
+
+		print('Reading fmod and dc from explicit external arguments.')
+		print('No calsource analysis performed since no calsource data are available.')
+	
+	if calsource_analysis:
+	
+		caltime, calsourcedata = a.calsource()
+		caldata = []
+		caldata.append(calsourcedata)
+		caldata = np.asarray(caldata)
+		caldata = caldata[0,:]
+	
+	del(a)
+	gc.collect()
+	
+	period = 1./ fmod
+	
+	
+	if calsource_analysis:
+		try:
+			print('Folding the calsource data.')
+	 		########## Folding
+			folded_cal, t_fold_cal, folded_nonorm_cal, dfolded_cal, dfolded_nonorm_cal, newdata_cal, fn_cal, nn_cal= ft.fold_data(caltime,
+	 												np.reshape(caldata, (1,len(caldata))),
+	 						                                                period, nbins, lowcut = lowcut, highcut = highcut,
+	 						                                                notch = notch, median = True, rebin = False,
+	 						                                                verbose = verbose, return_error = True,
+	 						                                                return_noise_harmonics = 30)
+			folded_cal = folded_cal[0,:]
+			dfolded_cal = dfolded_cal[0,:]
+			folded_nonorm_cal = folded_nonorm_cal[0,:]
+			dfolded_nonorm_cal = dfolded_nonorm_cal[0,:]
+
+			t_cal = t_fold_cal.copy()
+			
+			print('Folding the calsource data finished')
+	 	
+		except:
+	 		print('Error when folding the calsource data.')
+	 		if caldata is None:
+	 			print('No calsource data.')
+
+		if doplot_all or saveplot_all or doplot_calsource or saveplot_calsource:
+		
+			if not (doplot_all or doplot_calsource):
+	
+				plt.ioff()
+		
+			figure()
+			
+			plot(caltime, caldata)
+			xlabel('t [s]')
+			ylabel('Calsource data [a.u.]')
+			
+			if saveplot_all or saveplot_calsource:
+				
+				savefig(save_path+'/calsource0_'+dataset_info+'.png')
+				
+				if not (doplot_all or doplot_calsource):
+				
+					close()
+			
+			figure()
+			############ Power spectrum
+			subplot(2,1,1)
+			spectrum_f, freq_f = ft.power_spectrum(caltime, caldata, rebin=True)
+			plot(freq_f, scfilt.gaussian_filter1d(spectrum_f,1),label='Calsource Data')
+			yscale('log')
+			xscale('log')
+			xlabel('Frequency [Hz]')
+			ylabel('Power Spectrum')
+			title('Calsource data')
+		
+			for i in range(20):
+			    axvline(1./period*i,color='k',linestyle='--',alpha=0.3)
+		
+			if lowcut is not None:
+			    axvline(lowcut,color='k')
+			if highcut is not None:
+			    axvline(highcut,color='k')
+			legend()
+		
+			subplot(2,1,2)
+			errorbar(t_cal, folded_nonorm_cal, yerr=dfolded_nonorm_cal, fmt='ro',
+				label='Filtered Data {} < f < {} Hz'.format(lowcut,highcut))
+			xlim(0,period)
+			xlabel('Time [sec]')
+			ylabel('Folded Signal Calsource [ADU]')
+			grid()
+			legend()
+		
+			########## New Power spectrum
+			spectrum_f2, freq_f2 = ft.power_spectrum(caltime, newdata_cal[0,:], rebin=True)
+			subplot(2,1,1)
+			plot(freq_f2, scfilt.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
+		
+			plot(fn_cal, nn_cal[0,:]**2,'ro-', label='Noise level between peaks')
+			grid()
+			legend()
+
+			tight_layout()
+			
+			if saveplot_all or saveplot_calsource:
+				
+				savefig(save_path+'/calsource1_'+dataset_info+'.png')
+				
+				if not (doplot_all or doplot_calsource):
+				
+					close()
+
+#		try:
+		print('Fitting the calibration source data.')
+
+		### Vectors to fit
+
+		tofit = np.reshape(folded_nonorm_cal, nbins)
+		errors = np.reshape(dfolded_nonorm_cal, nbins)
+		t = t_cal
+
+		###Fit type
+		if typefit == 'spl':
+		### Instanciate timecst+spline object
+			nparams_ext = nparams_ext_spl
+			fctfit = asymsig_spl_class(t, tofit, errors, nparams_ext)
+
+		elif typefit == 'poly':
+		### Instanciate timecst+polynomials object
+			nparams_ext = nparams_ext_poly
+			fctfit = asymsig_poly
+
+		elif typefit == 'just_exp':
+		### Instanciate just timecst object
+			nparams_ext = 0
+			fctfit = simsig_asym
+
+		else:
+			print('Give a valid typefit: \'just_exp\', \'spl\' or \'poly\' ')
+
+
+		### Initial guess
+
+		pnames = ['cycle', 'risetime', 'falltime', 't0']
+
+		risetime = 0.05
+		falltime = 0.05
+
+		guess, allguess = get_best_initial_guess(tofit = tofit, t = t, nbins = nbins, dutycycle = dutycycle, risetime = risetime, falltime = falltime, nparams_ext = nparams_ext, typefit = typefit, fctfit = fctfit)
+		
+		### Limits
+		# limits = [[0, 0., 1], [1, 0., 1.], [2, 0., 1.], [3, 0., period]]
+
+		limits = [[0,np.maximum(dutycycle/100-0.2,0.),dutycycle/100+0.2], [1,0., risetime*10],
+				   [2,0., falltime*10], [3,allguess[3]-period/2,allguess[3]+period/2],
+				   [4,-1.2*np.abs(allguess[4]),1.2*np.abs(allguess[4])],[5,np.min(tofit)-0.1*np.abs(allguess[4]),np.max(tofit)+0.1*np.abs(allguess[4])]]
+
+		### Fixed parameters
+		fixpars = []
+
+		m, ch2, ndf = fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
+		
+		if m != 0:
+		
+			ch2vals_cal = ch2
+			ndfvals_cal = ndf
+			dcfit_cal = m.values[0]
+			dcerr_cal = m.errors[0]
+			risefit_cal = m.values[1]
+			riseerr_cal = m.errors[1]
+			fallfit_cal = m.values[2]
+			fallerr_cal = m.errors[2]
+			t0fit_cal = m.values[3]
+			t0err_cal = m.errors[3]
+			ampfit_cal = m.values[4]
+			amperr_cal = m.errors [4]
+			validfit_cal = m.valid
+		
+			d_cal = {'status':'ok, no errors','dutycycle':dcfit_cal, 'dutycyle_error':dcerr_cal, 'risetime':risefit_cal, 'risetime_error' : riseerr_cal, 'falltime' : fallfit_cal, 'falltime_error' : fallerr_cal, 't0' : t0fit_cal, 't0_error' : t0err_cal, 'amplitude' : ampfit_cal, 'amplitude_error' :amperr_cal, 'ch2' : ch2vals_cal, 'ndf' : ndfvals_cal, 'valid_minuitfit' : validfit_cal,'calsource_info':calsource_dict}
+		
+			print('Fitting the calibration source data finished.')
+		
+		else:
+		
+			print(' Folded calsource')#this is related to the previous print output if minuit fails
+			
+			d_cal = {'status':'fit error','calsource_info':calsource_dict}	
+		
+		if doplot_all or doplot_calsource or saveplot_calsource or saveplot_all:
+				
+			### Plotting different guesses
+#			guess_fct_1 = fctfit(t, allguess_1)
+#			myguesspars_1 = allguess_1.copy()
+#			myguesspars_1[4] = 0
+#			myslowguess_1 = fctfit(t, myguesspars_1)
+#
+#			guess_fct_2 = fctfit(t, allguess_2)
+#			myguesspars_2 = allguess_2.copy()
+#			myguesspars_2[4] = 0
+#			myslowguess_2 = fctfit(t, myguesspars_2)
+#
+#			guess_fct_3 = fctfit(t, allguess_3)
+#			myguesspars_3 = allguess_3.copy()
+#			myguesspars_3[4] = 0
+#			myslowguess_3 = fctfit(t, myguesspars_3)
+#
+#			guess_fct_4 = fctfit(t, allguess_4)
+#			myguesspars_4 = allguess_4.copy()
+#			myguesspars_4[4] = 0
+#			myslowguess_4 = fctfit(t, myguesspars_4)
+#
+#			guess_fct_5 = fctfit(t, allguess_5)
+#			myguesspars_5 = allguess_5.copy()
+#			myguesspars_5[4] = 0
+#			myslowguess_5 = fctfit(t, myguesspars_5)
+#
+#			guess_fct_6 = fctfit(t, allguess_6)
+#			myguesspars_6 = allguess_6.copy()
+#			myguesspars_6[4] = 0
+#			myslowguess_6 = fctfit(t, myguesspars_6)
+#
+#			guess_fct_7 = fctfit(t, allguess_7)
+#			myguesspars_7 = allguess_7.copy()
+#			myguesspars_7[4] = 0
+#			myslowguess_7 = fctfit(t, myguesspars_7)
+#
+#			guess_fct_8 = fctfit(t, allguess_8)
+#			myguesspars_8 = allguess_8.copy()
+#			myguesspars_8[4] = 0
+#			myslowguess_8 = fctfit(t, myguesspars_8)
+#
+			guess_fct = fctfit(t, allguess)
+			myguesspars = allguess.copy()
+			myguesspars[4] = 0
+			myslowguess = fctfit(t, myguesspars)
+
+#			figure()
+
+#			plot(t, guess_fct_1, label='guess 1',color='C0')
+#			axvline(allguess_1[3],linestyle='--',color='C0',label='t0 1')
+#			# # plot(t, myslowguess_1, label='slow guess 1',color='C0')
+#
+#			plot(t, guess_fct_2, label='guess 2',color='C1')
+#			axvline(allguess_2[3],linestyle='--',color='C1',label='t0 2')
+#			# # plot(t, myslowguess_2, label='slow guess 2',color='C1')
+#
+#			plot(t, guess_fct_3, label='guess 3',color='C2')
+#			axvline(allguess_3[3],linestyle='--',color='C2',label='t0 3')
+#			# # plot(t, myslowguess_3, label='slow guess 3',color='C2')
+#
+#			plot(t, guess_fct_4, label='guess 4',color='C3')
+#			axvline(allguess_4[3],linestyle='--',color='C3',label='t0 4')
+#			# # plot(t, myslowguess_4, label='slow guess 4',color='C3')
+#
+#			plot(t, guess_fct_5, label='guess 5',color='C4')
+#			axvline(allguess_5[3],linestyle='--',color='C4',label='t0 5')
+#			# # plot(t, myslowguess_5, label='slow guess 5',color='C4')
+#
+#			plot(t, guess_fct_6, label='guess 6',color='C5')
+#			axvline(allguess_6[3],linestyle='--',color='C5',label='t0 6')
+#			# # plot(t, myslowguess_6, label='slow guess 6',color='C5')
+#
+#			plot(t, guess_fct_7, label='guess 7',color='C6')
+#			axvline(allguess_7[3],linestyle='--',color='C6',label='t0 7')
+#			# # plot(t, myslowguess_7, label='slow guess 7',color='C6')
+#
+#			plot(t, guess_fct_8, label='guess 8',color='C7')
+#			axvline(allguess_8[3],linestyle='--',color='C7',label='t0 8')
+#			# # plot(t, myslowguess_8, label='slow guess 8',color='C7')
+#
+#			plot(t, guess_fct, label='best guess')
+#			axvline(allguess[3],linestyle='--',label='t0')
+#			plot(t, myslowguess, label='slow guess')
+
+#			plot(t,smoothed_tofit,label='Smoothed folded')
+#			plot(t,np.gradient(smoothed_tofit),label='Diff smoothed folded')
+#			errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
+
+#			grid()
+#			legend()
+#			tight_layout
+								
+			figure(figsize=(11,4))
+			### Plot the fit
+			subplot(1,3,1)
+			plot(t, guess_fct, label='best guess')
+			axvline(allguess[3],linestyle='--',label='t0')
+			plot(t, myslowguess, label='slow guess')
+			errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
+			plot(t, fctfit(t, m.values), label="Time-cst + "+typefit)
+			grid()
+			legend()
+			fit_info = [
+			f"$\\chi^2$ / $n_\\mathrm{{dof}}$ = {ch2:.1f} / {ndf}",
+			]
+			for i in range(4):
+				vi = m.values[i]
+				ei = m.errors[i]
+				fit_info.append(f"{pnames[i]} = ${vi:.3f} \\pm {ei:.3f}$")
+
+			### Plot the data and fit corrected for slow-variations fitted with splines or polynomial
+			# slow variations are obtained with the same params but amplitude 0
+			myslowpars = np.array(m.values)
+			myslowpars[4] = 0.
+			myslow = fctfit(t, myslowpars)
+
+			subplot(1,3,2)
+			errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
+			plot(t, fctfit(t, m.values), label='Fitted')
+			plot(t, myslow, label='Slow component')
+			grid()
+			legend()
+
+			subplot(1,3,3)
+			errorbar(t, tofit-myslow, yerr=errors, fmt='ro', label='Data Corrected', alpha=0.5)
+			plot(t, fctfit(t, m.values)-myslow, label='Time-CSt Fit')
+			grid()
+			legend(title="\n".join(fit_info))
+			
+			if saveplot_all or saveplot_calsource:
+				
+				savefig(save_path+'/calsource2_'+dataset_info+'.png')
+		
+				if not (doplot_all or doplot_calsource):
+				
+					close()
+					
+			plt.ion()
+
+	else:
+
+		d_cal = {'status':'No external calibration source analysis','calsource_info':calsource_dict}
+	
+	##Now for all the TODs
+
+	upper_satval = 4194175
+	lower_satval = -4194175
+
+	frac_sat_pertes = np.zeros(256)
+
+	for i in range(256):
+	    mask1 = alltod[i] > upper_satval
+	    mask2 = alltod[i] < lower_satval
+	    frac_sat_pertes[i] = (np.sum(mask1)+np.sum(mask2))/len(alltod[i])
+
+	nonsaturated_tes = (frac_sat_pertes < 0.05) #frac_sat_pertes == 0
+	fraction_no_saturated_tes = np.sum(nonsaturated_tes) / 256
+	fraction_saturated_tes = np.sum(~nonsaturated_tes) / 256
+
+	d_ok = {} # dictionary to store the boolean ok's array for different criteria
+		
+	d_ok['Saturation'] = nonsaturated_tes
+
+	if doplot_all or doplot_timelines or saveplot_timelines or saveplot_all:
+
+		if not (doplot_all or doplot_timelines):
+		
+			plt.ioff()
+				
+		figure()
+		for i in range(256):
+		    plot(tt,alltod[i])
+		plot(tt,np.ones(len(tt))*upper_satval,color='black')
+		plot(tt,np.ones(len(tt))*lower_satval,color='black')
+		title('{} % detectors reaches saturation'.format(100*(fraction_saturated_tes)))
+		xlabel('Time [s]')
+		ylabel('ADU')
+		tight_layout
+
+		if saveplot_all or saveplot_timelines:
+			
+			savefig(save_path+'/timelines_'+dataset_info+'.png')
+			
+			if not (doplot_all or doplot_timelines):
+			
+				close()
+		plt.ion()
+		
+#		figure()
+#		for i in range(256):
+#			if nonsaturated_tes[i]:
+#				plot(tt,alltod[i])
+#		plot(tt,np.ones(len(tt))*upper_satval,color='black')
+#		plot(tt,np.ones(len(tt))*lower_satval,color='black')
+#		title('Timelines for nonsaturated TESs')
+#		xlabel('Time [s]')
+#		ylabel('ADU')
+#		tight_layout
+		
+	if doplot_all or doplot_spectra or saveplot_spectra or saveplot_all:
+
+		if not (doplot_all or doplot_spectra):
+		
+			plt.ioff()
+					
+		spectra = []
+		smooth_param = 2
+		smooth_spectra = []
+
+		for i in np.arange(256):
+		    spectrum_f, freq_f = ft.power_spectrum(tt, alltod[i], rebin=True)
+		    spectra.append(spectrum_f)
+		    smooth_spectrum_f = f.gaussian_filter1d(spectra[i],smooth_param)
+		    smooth_spectra.append(smooth_spectrum_f)
+		    
+		spectra = np.asarray(spectra)
+		smooth_spectra = np.asarray(smooth_spectra)
+		
+		figure()
+
+		# notch = np.array([[0.852, 0.003, 1],
+		#                   [1.724, 0.003, 3],
+		#                   [2.35, 0.03, 1],
+		#                   [6.939, 0.003, 1]])
+
+		# for i in range(notch.shape[0]):
+		#     nharms = notch[i,2].astype(int)
+		#     for j in range(nharms):
+		#         if j==0:
+		#             axvline(notch[i,0]*(j+1),linestyle='-.',color='blue')   
+		#         else:
+		#             axvline(notch[i,0]*(j+1),linestyle='-.',color='blue') 
+
+		for i in np.arange(10):
+			if i==0:
+				axvline(i*fmod,linestyle='--',color='gray',label='fmod')
+			else:
+				axvline(i*fmod,linestyle='--',color='gray')
+
+		for i in np.arange(256):
+			if nonsaturated_tes[i]:
+				plot(freq_f, smooth_spectra[i],'k-',alpha=0.1)
+
+# 		yscale('log')
+# 		xscale('log')
+# 		legend()
+# 		xlabel('Frequency [Hz]')
+# 		ylabel('Smoothed spectra')
+# 		tight_layout			
+
+	print('Folding TOD\'s timelines')	
+	
+	folded, t_fold, folded_nonorm, dfolded, dfolded_nonorm, newdata, fn, nn= ft.fold_data(tt, alltod, period, nbins, lowcut=lowcut,
+						highcut=highcut, notch=notch, median=True, rebin=False, verbose=verbose, return_error=True,
+						return_noise_harmonics=30)
+
+	t = t_fold.copy()
+
+	print('Folding TOD\'s timelines finished')
+	
+	if doplot_all or doplot_spectra or saveplot_spectra or saveplot_all:
+	
+		if not (doplot_all or doplot_spectra):
+		
+			plt.ioff()
+				
+		spectra = []
+		smooth_param = 2
+		smooth_spectra = []
+
+		for i in np.arange(256):
+		    spectrum_f, freq_f = ft.power_spectrum(tt, newdata[i], rebin=True)
+		    spectra.append(spectrum_f)
+		    smooth_spectrum_f = f.gaussian_filter1d(spectra[i],smooth_param)
+		    smooth_spectra.append(smooth_spectrum_f)
+		    
+		spectra = np.asarray(spectra)
+		smooth_spectra = np.asarray(smooth_spectra)
+		
+		# notch = np.array([[0.852, 0.003, 1],
+		#                   [1.724, 0.003, 3],
+		#                   [2.35, 0.03, 1],
+		#                   [6.939, 0.003, 1]])
+
+		# for i in range(notch.shape[0]):
+		#     nharms = notch[i,2].astype(int)
+		#     for j in range(nharms):
+		#         if j==0:
+		#             axvline(notch[i,0]*(j+1),linestyle='-.',color='blue')   
+		#         else:
+		#             axvline(notch[i,0]*(j+1),linestyle='-.',color='blue') 
+
+# 		for i in np.arange(10):
+# 			if i==0:
+# 				axvline(i*fmod,linestyle='--',color='gray',label='fmod')
+# 			else:
+# 				axvline(i*fmod,linestyle='--',color='gray')
+
+		for i in np.arange(256):
+			if nonsaturated_tes[i]:
+				plot(freq_f, smooth_spectra[i],'b-',alpha=0.1)
+
+		yscale('log')
+		xscale('log')
+		legend()
+		xlabel('Frequency [Hz]')
+		ylabel('Smoothed spectra')
+		tight_layout
+		
+		if saveplot_all or saveplot_spectra:
+			
+			savefig(save_path+'/spectra_'+dataset_info+'.png')
+			
+			if not (doplot_all or doplot_spectra):
+			
+				close()
+		
+		plt.ion()
+#	try:
+	
+	print('Fitting the folded data median.')
+	
+	### Fit the folded median
+
+	mean_fold = np.nanmean(folded[nonsaturated_tes],axis=0)
+	median_fold = np.nanmedian(folded[nonsaturated_tes],axis=0)
+	smoothed_median_fold = savgol_filter(median_fold, int(nbins/5), 3)
+	sigma_fold = np.nanstd(folded[nonsaturated_tes],axis=0)
+	error_mean = sigma_fold / np.sqrt(len(nonsaturated_tes)) # revisit this
+	errors_median = 1.253 * sigma_fold / np.sqrt(len(nonsaturated_tes)) #revisit this
+
+	tofit = median_fold
+	errors = errors_median
+
+	###Fit type
+	
+	if typefit == 'spl':
+	### Instanciate timecst+spline object
+		nparams_ext = nparams_ext_spl
+		fctfit = asymsig_spl_class(t, tofit, errors, nparams_ext)
+
+	elif typefit == 'poly':
+	### Instanciate timecst+polynomials object
+		nparams_ext = nparams_ext_poly
+		fctfit = asymsig_poly
+
+	elif typefit == 'just_exp':
+	### Instanciate just timecst object
+		nparams_ext = 0
+		fctfit = simsig_asym
+
+	else:
+		print('Give a valid typefit: \'just_exp\', \'spl\' or \'poly\' ')
+
+	### Initial guess
+
+	pnames = ['cycle', 'risetime', 'falltime', 't0']
+
+	risetime = 0.1
+	falltime = 0.1
+
+	guess, allguess = get_best_initial_guess(tofit = tofit, t = t, nbins = nbins, dutycycle = dutycycle, risetime = risetime, falltime = falltime, nparams_ext = nparams_ext, typefit = typefit, fctfit = fctfit)
 
 	### Limits
 	# limits = [[0, 0., 1], [1, 0., 1.], [2, 0., 1.], [3, 0., period]]
@@ -1151,33 +1306,51 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		validfit_folded_median = m.valid
 		allpars_folded_median = np.array(m.values)
 		allerrs_folded_median = np.array(m.errors)
+		
+		print('Fitting the folded data median finished.')
+
 	else:
-		print('Folded median nonsaturated TES\'s')
+		print(' Folded median nonsaturated TES\'s')
 	
 	d_folded_median = {'dutycycle':dcfit_folded_median, 'dutycyle_error':dcerr_folded_median, 'risetime':risefit_folded_median, 'risetime_error' : riseerr_folded_median, 'falltime' : fallfit_folded_median, 'falltime_error' : fallerr_folded_median, 't0' : t0fit_folded_median, 't0_error' : t0err_folded_median, 'amplitude' : ampfit_folded_median, 'amplitude_error' :amperr_folded_median, 'ch2' : ch2vals_folded_median, 'ndf' : ndfvals_folded_median, 'valid_minuitfit' : validfit_folded_median}
 
-	if doplot:			
+	if doplot_all or doplot_folded_data or saveplot_all or saveplot_folded_data:
+		
+		if not (doplot_all or doplot_folded_data):
+		
+			plt.ioff()
+				
 		figure()
+	
 		for order,i in enumerate(np.arange(256)):#[nonsaturated_tes]
 			if order == 0:
 				plot(t,folded[i,:], 'k-',alpha=0.1,label='Folded data for all detectors')
 			plot(t, folded[i,:], 'k-',alpha=0.1)
-		plot(t,median_fold,'bo',label='Median over nonsaturated folded')
-		plot(t,fctfit(t,allguess),color='green',label='Media guess')
-		plot(t,-median_fold,'ro',label='- Median over nonsaturated folded')
+		plot(t,median_fold,'b.',label='Median over nonsaturated folded')
+#		plot(t,fctfit(t,allguess),color='green',label='Media guess')
+#		plot(t,-median_fold,'ro',label='- Median over nonsaturated folded')
 		
-		if m !=0:
-			plot(t,fctfit(t,allpars_folded_median),color='blue',label='Fitted median')	
-			plot(t,-fctfit(t,allpars_folded_median),color='red',label='-Fitted median')
+#		if m !=0:
+#			plot(t,fctfit(t,allpars_folded_median),color='blue',label='Fitted median')	
+#			plot(t,-fctfit(t,allpars_folded_median),color='red',label='-Fitted median')
 		
-		if calsource_analysis:
-			plot(t_cal,folded_cal,color='red',label='Folded calsource data')
+#		if calsource_analysis:
+#			plot(t_cal,folded_cal,color='red',label='Folded calsource data')
 		ylim(-2,2)
 		legend()
 		xlabel('Time [s]')
 		ylabel('Stacked folded data')
 		tight_layout
-		savefig(save_path+'/folded_data.png')
+		
+		if saveplot_all or saveplot_folded_data:
+			
+			savefig(save_path+'/folded_data_'+dataset_info+'.png')
+			
+			if not (doplot_all or doplot_folded_data):
+			
+				close()
+		
+		plt.ion()
 
 	if only_overview:
 
@@ -1186,6 +1359,8 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		d_results['folded_median'] = d_folded_median
 
 		return d_results
+
+	print('Fitting the no normalized folded data.')
 
 	ch2vals = np.zeros(256)
 	ndfvals = np.zeros(256)
@@ -1228,114 +1403,8 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		risetime = 0.1
 		falltime = 0.1
 
-		smoothed_tofit = savgol_filter(tofit, int(nbins/5), 3)
-
-		tstart = t[argmin(np.gradient(smoothed_tofit))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_1 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(smoothed_tofit))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_2 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_tofit))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_3 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_tofit))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_4 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(smoothed_median_fold))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_5 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(smoothed_median_fold))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_6 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_median_fold))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_7 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_median_fold))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_8 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-
-		if nparams_ext == 0:
-		    allguess_1 = guess_1
-		    allguess_2 = guess_2
-		    allguess_3 = guess_3
-		    allguess_4 = guess_4
-		    allguess_5 = guess_5
-		    allguess_6 = guess_6
-		    allguess_7 = guess_7
-		    allguess_8 = guess_8
-		else:
-			if typefit == 'poly':
-				if nparams_ext == 1:
-					allguess_1 = guess_1
-					allguess_2 = guess_2
-					allguess_3 = guess_3
-					allguess_4 = guess_4
-					allguess_5 = guess_5
-					allguess_6 = guess_6
-					allguess_7 = guess_7
-					allguess_8 = guess_8
-				elif nparams_ext > 1:
-					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1))
-					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1))
-					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1))
-					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1))
-					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1))
-					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1))
-					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1))
-					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1))
-
-			elif typefit == 'spl':
-				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
-				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
-				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
-				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
-				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
-				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
-				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
-				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
-
-		guesses = [guess_1, guess_2, guess_3, guess_4, guess_5, guess_6, guess_7, guess_8]
-		allguesses = [allguess_1, allguess_2, allguess_3, allguess_4, allguess_5, allguess_6, allguess_7, allguess_8]
-
-		difference_guess_1 = np.abs(simps((tofit-fctfit(t, allguess_1))**2,t))
-		difference_guess_2 = np.abs(simps((tofit-fctfit(t, allguess_2))**2,t))
-		difference_guess_3 = np.abs(simps((tofit-fctfit(t, allguess_3))**2,t))
-		difference_guess_4 = np.abs(simps((tofit-fctfit(t, allguess_4))**2,t))
-		difference_guess_5 = np.abs(simps((tofit-fctfit(t, allguess_5))**2,t))
-		difference_guess_6 = np.abs(simps((tofit-fctfit(t, allguess_6))**2,t))
-		difference_guess_7 = np.abs(simps((tofit-fctfit(t, allguess_7))**2,t))
-		difference_guess_8 = np.abs(simps((tofit-fctfit(t, allguess_8))**2,t))
-
-		difference_guesses_tofit = [difference_guess_1, difference_guess_2, difference_guess_3, difference_guess_4, difference_guess_5, difference_guess_6, difference_guess_7, difference_guess_8]
-
-		guess = guesses[np.argmin(difference_guesses_tofit)]
-		allguess = allguesses[np.argmin(difference_guesses_tofit)]
-
+		guess, allguess = get_best_initial_guess(tofit = tofit, t = t, nbins = nbins, dutycycle = dutycycle, risetime = risetime, falltime = falltime, nparams_ext = nparams_ext, typefit = typefit, fctfit = fctfit)
+		
 		### Limits
 		# limits = [[0, 0., 1], [1, 0., 1.], [2, 0., 1.], [3, 0., period]]
 
@@ -1369,10 +1438,14 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		else:
 			print('TES# {}'.format(i+1))		
 		
-		if doplot and doplot_onebyone:
+		if doplot_all or saveplot_all or doplot_each_tes or saveplot_each_tes:
+		
+			if not (doplot_all or doplot_each_tes):
+	
+				plt.ioff()
 		
 			if ((i)%nh) == 0:
-				show()
+#				show()
 				fig, axs = plt.subplots(2, nh, sharex=True)
 				fig.subplots_adjust(hspace=0)
 
@@ -1401,11 +1474,29 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 				axs[1][i%nh].plot(t, fctfit(t, m.values)-myslow, 'b', lw=3, label='Tcst fit',zorder=5)
 				axs[1][i%nh].legend(fontsize=8, framealpha=0, title="\n".join(fit_info), title_fontsize=8, loc='lower right')
 
+			if saveplot_all or saveplot_each_tes:
+				
+				if i%nh == 2:
+				
+					savefig(save_path+'/each_tes_{}-{}-{}_'.format(i-1,i,i+1) + dataset_info+'.png')
+				
+				if  i == 255:
+					
+					savefig(save_path+'/each_tes_{}_'.format(i+1) + dataset_info+'.png')
+					
+				if not (doplot_all or doplot_each_tes):
+				
+					if i%nh == 2 or i == 255:
+		
+						close()
+			
+			plt.ion()
+
 	d_alltod_nonorm = {'dutycycle':dcfit, 'dutycyle_error':dcerr, 'risetime':risefit, 'risetime_error' : riseerr, 'falltime' : fallfit, 'falltime_error' : fallerr, 't0' : t0fit, 't0_error' : t0err, 'amplitude' : ampfit, 'amplitude_error' :amperr, 'ch2' : ch2vals, 'ndf' : ndfvals, 'valid_minuitfit' : validfit,'saturated_timeline_fraction':frac_sat_pertes}
 	
-	print('Fitting No normalized folded data finished')				
+	print('Fitting No normalized folded data finished.')				
 
-	print('Fitting normalized folded data.')
+	print('Fitting normalized folded data')
 
 	### Fit the folded data
 	
@@ -1453,114 +1544,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		risetime = 0.1
 		falltime = 0.1
 
-		smoothed_tofit = savgol_filter(tofit, int(nbins/5), 3)
-
-
-		tstart = t[argmin(np.gradient(smoothed_tofit))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_1 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(smoothed_tofit))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_2 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_tofit))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_3 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_tofit))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_4 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(smoothed_median_fold))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_5 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmin(np.gradient(smoothed_median_fold))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_6 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_median_fold))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = (np.max(tofit) - np.min(tofit))
-		offset = np.max(tofit)
-		guess_7 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-		tstart = t[argmax(np.gradient(smoothed_median_fold))]
-		# tstart = t[argmin(np.gradient(tofit))]
-		amplitude = -(np.max(tofit) - np.min(tofit))
-		offset = np.min(tofit)
-		guess_8 = [dutycycle/100, risetime, falltime, tstart, amplitude, offset]
-
-
-		if nparams_ext == 0:
-		    allguess_1 = guess_1
-		    allguess_2 = guess_2
-		    allguess_3 = guess_3
-		    allguess_4 = guess_4
-		    allguess_5 = guess_5
-		    allguess_6 = guess_6
-		    allguess_7 = guess_7
-		    allguess_8 = guess_8
-		else:
-			if typefit == 'poly':
-				if nparams_ext == 1:
-					allguess_1 = guess_1
-					allguess_2 = guess_2
-					allguess_3 = guess_3
-					allguess_4 = guess_4
-					allguess_5 = guess_5
-					allguess_6 = guess_6
-					allguess_7 = guess_7
-					allguess_8 = guess_8
-				elif nparams_ext > 1:
-					allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1))
-					allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1))
-					allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1))
-					allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1))
-					allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1))
-					allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1))
-					allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1))
-					allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1))
-
-			elif typefit == 'spl':
-				allguess_1 = np.append(guess_1, np.zeros(nparams_ext-1) + guess_1[-1])
-				allguess_2 = np.append(guess_2, np.zeros(nparams_ext-1) + guess_2[-1])
-				allguess_3 = np.append(guess_3, np.zeros(nparams_ext-1) + guess_3[-1])
-				allguess_4 = np.append(guess_4, np.zeros(nparams_ext-1) + guess_4[-1])
-				allguess_5 = np.append(guess_5, np.zeros(nparams_ext-1) + guess_5[-1])
-				allguess_6 = np.append(guess_6, np.zeros(nparams_ext-1) + guess_6[-1])
-				allguess_7 = np.append(guess_7, np.zeros(nparams_ext-1) + guess_7[-1])
-				allguess_8 = np.append(guess_8, np.zeros(nparams_ext-1) + guess_8[-1])
-
-		guesses = [guess_1, guess_2, guess_3, guess_4, guess_5, guess_6, guess_7, guess_8]
-		allguesses = [allguess_1, allguess_2, allguess_3, allguess_4, allguess_5, allguess_6, allguess_7, allguess_8]
-
-		difference_guess_1 = np.abs(simps((tofit-fctfit(t, allguess_1))**2,t))
-		difference_guess_2 = np.abs(simps((tofit-fctfit(t, allguess_2))**2,t))
-		difference_guess_3 = np.abs(simps((tofit-fctfit(t, allguess_3))**2,t))
-		difference_guess_4 = np.abs(simps((tofit-fctfit(t, allguess_4))**2,t))
-		difference_guess_5 = np.abs(simps((tofit-fctfit(t, allguess_5))**2,t))
-		difference_guess_6 = np.abs(simps((tofit-fctfit(t, allguess_6))**2,t))
-		difference_guess_7 = np.abs(simps((tofit-fctfit(t, allguess_7))**2,t))
-		difference_guess_8 = np.abs(simps((tofit-fctfit(t, allguess_8))**2,t))
-
-		difference_guesses_tofit = [difference_guess_1, difference_guess_2, difference_guess_3, difference_guess_4, difference_guess_5, difference_guess_6, difference_guess_7, difference_guess_8]
-
-		guess = guesses[np.argmin(difference_guesses_tofit)]
-		allguess = allguesses[np.argmin(difference_guesses_tofit)]
+		guess, allguess = get_best_initial_guess(tofit = tofit, t = t, nbins = nbins, dutycycle = dutycycle, risetime = risetime, falltime = falltime, nparams_ext = nparams_ext, typefit = typefit, fctfit = fctfit)
 
 		### Limits
 		# limits = [[0, 0., 1], [1, 0., 1.], [2, 0., 1.], [3, 0., period]]
@@ -1622,6 +1606,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 	print('Fitting normalized folded data finished')				
 	
 	### different types of discarding process
+	
 #	## by clustering the residuals [ integrate((folded-foldedmedian[nonsaturated])**2) ]
 #	results = np.array([residuals]).T
 #	labels = run_DBSCAN(results, doplot=doplot, parnames = ['Residuals'],eps_cpar=0.6,min_samples_cpar = 20)
@@ -1641,7 +1626,7 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
  	## by clustering the residuals [ integrate((fitted_folded-fitted_foldedmedian[nonsaturated])**2) ]
 	results = np.array([residuals_combined]).T
-	labels = run_DBSCAN(results, doplot=doplot, parnames = ['Residuals combined'],eps_cpar=0.6,min_samples_cpar = 20)
+	labels = run_DBSCAN(results, parnames = ['Residuals combined'],eps_cpar=0.6,min_samples_cpar = 20, doplot = doplot_all or doplot_clustering, saveplot = saveplot_all or saveplot_clustering, save_path = save_path, dataset_info = dataset_info)
 	total_labels = np.max(labels)+1 #without considering the noisy data in label=-1 that could appear
 
 	if total_labels == 0:
@@ -1735,15 +1720,15 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 
 
-	if save_path is not None:
-		wdir = os.getcwd()
-		os.chdir(save_path)
-		dictname = 'd__{}.npy'.format(d_results['dataset_info'])
+	if save_dict:
+#		wdir = os.getcwd()
+#		os.chdir(save_path)
+		dictname = save_path + '/d__' + dataset_info + '.npy'
 		np.save(dictname,d_results)
 
 #		plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-residualsdb-'+dataset_info)
 
-		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_combined, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-residualscombined-typefit-{}_'.format(typefit)+dataset_info)
+	plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_combined, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, doplot = doplot_all or doplot_focal_plane, saveplot = saveplot_all or saveplot_focal_plane, save_path = save_path, figname = 'Folded-data-and-fits-residualscombined-typefit-{}_'.format(typefit)+dataset_info)
 		
 #		plot_folded_data_on_FP(folded, time = t, datain_error = dfolded, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_dbs_residuals_fit, analytical_function = fctfit, eval_domain = t, params_function = allpars_folded, save=True, figname = 'Folded-data-and-fits-on-FP-residualsfitdb-'+dataset_info)
 
@@ -1753,13 +1738,12 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 	# 	plot_folded_data_on_FP(folded_nonorm, time = t, datain_error = dfolded_nonorm, tes_ok_saturation = nonsaturated_tes, tes_ok_signal = ok_optics_parerrch2, analytical_function = fctfit, eval_domain = t, params_function = allpars, save=True, figname = 'Folded-data-and-fits-on-FP-parerrch2op'+dataset_info)			
 
-		os.chdir(wdir)
 
-
-# 	except:
-# 		print('Error when fitting folded TOD data in the first pass.')
-
-
+	if doplot is None:
+		
+		close('all')	
+	
+	gc.collect()
 	
 	return d_results
 

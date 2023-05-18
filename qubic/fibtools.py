@@ -817,7 +817,8 @@ def fold_data(time, dd, period, nbins, lowcut=None, highcut=None,
         return_error
         """
         tfold = time % period
-        FREQ_SAMPLING = 1. / (time[1] - time[0])
+#        FREQ_SAMPLING = 1. / (time[1] - time[0])
+        FREQ_SAMPLING = (len(time) - 1) / (time[-1] - time[0])        
         sh = np.shape(dd)
         ndet = sh[0]
 

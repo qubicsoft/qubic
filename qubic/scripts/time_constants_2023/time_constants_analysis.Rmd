@@ -15,41 +15,6 @@ jupyter:
 ```{python}
 import os
 import glob
-import numpy as np
-
-from qubic import time_constants_tools as tct
-
-thedatadir = '/sps/qubic/Data/Calib-TD/2023-04-17/2023-04-17_13.41.41__dome-open_carbon-fiber_0.2Hz_sq_duty33_2vpp_Vbias3.0'
-
-fmod = 0.2
-dc = 33
-
-base_save_path = '/sps/qubic/Users/nahuelmg'
-save_path = base_save_path + '/time_constants_results/alldatasets_to_may_2023/'
-
-d = tct.compute_tc_squaremod( thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path )
-```
-
-```{python}
-import os
-import glob
-import numpy as np
-
-from qubic import time_constants_tools as tct
-
-thedatadir = '/home/nahue/Downloads/2023-04-17/2023-04-17_13.41.41__dome-open_carbon-fiber_0.2Hz_sq_duty33_2vpp_Vbias3.0'
-
-fmod = 0.2
-dc = 33
-
-save_path = '/home/nahue/Downloads/2023-04-17/results/'
-
-d = tct.compute_tc_squaremod( thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path )
-```
-
-```{python}
-import os
-import glob
 import gc
 from numpy import *
 import numpy as np
@@ -57,15 +22,14 @@ from importlib import reload
 
 from matplotlib.pyplot import *
 from matplotlib import pyplot as plt
-# from IPython.display import display, HTML
-# display(HTML("<style>.container { width:97% !important; }</style>"))
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:97% !important; }</style>"))
 
-# # %matplotlib notebook
-# rc('figure',figsize=(11,6))
-# rc('font',size=12)
+# %matplotlib notebook
+rc('figure',figsize=(11,6))
+rc('font',size=12)
 
 # from qubicpack.qubicfp import qubicfp
-# from qubic import time_domain_tools as tdt
 from qubic import time_constants_tools as tct
 ```
 
@@ -93,21 +57,21 @@ close('all')
 ```{python}
 ## To plot the raw timelines
 
-a = qubicfp()
-a.assign_verbosity(0)
-a.read_qubicstudio_dataset(thedatadir)
+# a = qubicfp()
+# a.assign_verbosity(0)
+# a.read_qubicstudio_dataset(thedatadir)
 
-tt, alltod = a.tod()
+# tt, alltod = a.tod()
 
-figure()
-for i in [22]:#np.arange(256)[21:24]:
-    plot(tt,alltod[i])
+# figure()
+# for i in [22]:#np.arange(256)[21:24]:
+#     plot(tt,alltod[i])
 ```
 
 ```{python}
 only_overview = False
-doplot = False
-doplot_onebyone = False
+doplot = True
+doplot_onebyone = True
 lowcut = None
 highcut = None
 notch = None
@@ -117,11 +81,12 @@ typefit = 'just_exp'
 
 fmod = 0.2
 dc = 33
-# numfile = 0
-# thedatadir = thedirs[numfile]
 
-# print('We will analyse:')
-# print(numfile, thedatadir)
+numfile = -1
+thedatadir = thedirs[numfile]
+
+print('We will analyse:')
+print(numfile, thedatadir)
 
 # base_save_path = os.getcwd()
 base_save_path = data_dir
@@ -133,15 +98,15 @@ print(save_path)
 ```
 
 ```{python}
-# d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
-#                              highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
-#                              save_path=save_path,only_overview = only_overview,nparams_ext_spl=params_spl,
-#                              nparams_ext_poly=params_poly)
+d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
+                             highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=0.2,dutycycle=33,
+                             save_path=save_path,only_overview = only_overview,nparams_ext_spl=params_spl,
+                             nparams_ext_poly=params_poly)
 
-for thedatadir in thedirs:
-    d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
-                                 highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=fmod,dutycycle=dc,
-                                 save_path=save_path)
+# for thedatadir in thedirs:
+#     d = tct.compute_tc_squaremod(thedatadir, doplot=doplot, doplot_onebyone = doplot_onebyone,verbose = False,
+#                                  highcut=highcut,lowcut=lowcut,notch=notch,typefit=typefit,fmod=fmod,dutycycle=dc,
+#                                  save_path=save_path)
 ```
 
 ```{python}

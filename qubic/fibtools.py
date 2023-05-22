@@ -887,7 +887,13 @@ def power_spectrum(time_in, data_in, rebin=True):
         return spectrum_f, freq_f
 
 
-def filter_data(time_in, data_in, lowcut = None, highcut = None, rebin=True, verbose=False, notch=None, order=5):
+def filter_data(time_in, data_in, lowcut = None, highcut = None, rebin=False, verbose=False, notch=None, order=5):
+
+        """
+        We have to take care on the one hand about the initialization to avoid spikes at the very beginning of the filtered signal and on the other hand the time delay introduced by the filters.
+        Elaborate
+        """
+        
         sh = np.shape(data_in)
         if rebin:
                 if verbose: printnow('Rebinning before Filtering')
@@ -902,7 +908,7 @@ def filter_data(time_in, data_in, lowcut = None, highcut = None, rebin=True, ver
                 time = time_in
                 data = data_in
 
-        FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / len(time))
+        FREQ_SAMPLING = 1. / ((np.max(time) - np.min(time)) / (len(time)-1))
         
         if lowcut is None and highcut is None:
             dataf = data

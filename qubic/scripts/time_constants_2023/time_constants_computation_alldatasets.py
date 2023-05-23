@@ -9,13 +9,13 @@ from matplotlib.pyplot import *
 from qubic import time_constants_tools as tct
 
 # +
-# base_dir = '/sps/qubic/Data/Calib-TD/' # where to read the datasets
-# base_save_path = '/sps/qubic/Users/nahuelmg'
+base_dir = '/sps/qubic/Data/Calib-TD/' # where to read the datasets
+base_save_path = '/sps/qubic/Users/nahuelmg'
 
-base_dir = '/media/nahue/files_hdd/heavy-data/'
-base_save_path = '/media/nahue/files_hdd/heavy-data'
+# base_dir = '/media/nahue/files_hdd/heavy-data/'
+# base_save_path = '/media/nahue/files_hdd/heavy-data'
 
-specific_save_folder = '/time_constants_results/all_TC_datasets_up_to_may_2'
+specific_save_folder = '/time_constants_results/all_TC_datasets_up_to_may'
 
 save_path = base_save_path+specific_save_folder # where to store the results
 

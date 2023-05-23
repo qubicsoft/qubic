@@ -9,11 +9,13 @@ from matplotlib.pyplot import *
 from qubic import time_constants_tools as tct
 
 # +
-# base_dir = '/sps/qubic/Data/Calib-TD/'
-base_dir = '/media/nahue/files_hdd/heavy-data/' # where to read the datasets
+# base_dir = '/sps/qubic/Data/Calib-TD/' # where to read the datasets
+# base_save_path = '/sps/qubic/Users/nahuelmg'
 
+base_dir = '/media/nahue/files_hdd/heavy-data/'
 base_save_path = '/media/nahue/files_hdd/heavy-data'
-specific_save_folder = '/time_constants_results/all_TC_datasets_my_computer_4'
+
+specific_save_folder = '/time_constants_results/all_TC_datasets_up_to_may_2'
 
 save_path = base_save_path+specific_save_folder # where to store the results
 
@@ -38,10 +40,10 @@ dcs = [[30],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[3
        [33],[60],[None],[30],[66],[66, 66],[33, 66, 66, 66],[33],[33]]
 
 # +
-# index_ini = sys.argv[0]
-# index_fin = sys.argv[1]
-index_ini = 0
-index_fin = 1
+index_ini = sys.argv[0]
+index_fin = sys.argv[1]
+# index_ini = 0
+# index_fin = 1
 
 days = days[index_ini:index_fin]
 keywords = keywords[index_ini:index_fin]
@@ -49,11 +51,12 @@ fmods = fmods[index_ini:index_fin]
 dcs = dcs[index_ini:index_fin]
 
 # +
-reload(tct)
+# reload(tct)
 
-only_overview = True
 doplot = None
+save_dict = True
 saveplot = ['focal_plane', 'folded_data']
+force_sync = True
 
 for i in range(len(days)):#enumerate(zip(keywords,days)):  #, (keyword, day)
     
@@ -86,7 +89,7 @@ for i in range(len(days)):#enumerate(zip(keywords,days)):  #, (keyword, day)
                 
             print('{}/{}'.format(j+1,len(thedirs)),'TC computation started for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
-            d = tct.compute_tc_squaremod(thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path, only_overview = only_overview, doplot = doplot, saveplot = saveplot)
+            d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod = fmod, dutycycle = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync)
 
             print('{}/{}'.format(j+1,len(thedirs)),'TC computation finished for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
                 
@@ -106,7 +109,7 @@ for i in range(len(days)):#enumerate(zip(keywords,days)):  #, (keyword, day)
                 
             print('{}/{}'.format(j+1,len(thedirs)),'TC computation started for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
-            d = tct.compute_tc_squaremod(thedatadir, fmod = fmod, dutycycle = dc, save_path = save_path, only_overview = only_overview, doplot = doplot, saveplot = saveplot)
+            d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod = fmod, dutycycle = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync)
 
             print('{}/{}'.format(j+1,len(thedirs)),'TC computation finished for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 

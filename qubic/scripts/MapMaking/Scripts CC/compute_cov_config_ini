@@ -1,0 +1,14 @@
+[SAVE]
+
+dir_name = /sps/qubic/Users/TomLaclavere/results/mapmaking/id/data/  
+path = /sps/qubic/Users/TomLaclavere/results/compute_cov/
+
+[CONFIG]
+
+nmb_id = 40
+effective_duration = 3
+nf_tod = 8
+sub_band_number = 1
+sky_name = CMB
+pointing = 8000
+seenpix_lim = 0.2

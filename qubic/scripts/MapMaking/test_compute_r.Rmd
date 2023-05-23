@@ -103,7 +103,7 @@ fact_sub = 1
 Nf_TOD = Nf_recon*fact_sub
 
 sky_config = {'cmb':1}#, 'dust':'d0'}
-npointings = 5000
+npointings = 1000
 
 convolution = False
 
@@ -455,7 +455,7 @@ def give_all_dl(allr, ndim, ell, Alens):
 ```
 
 ```{python}
-n_realisation = 6000
+n_realisation = 1000
 rv=np.linspace(0.0, 0.1, n_realisation)
 
 ell, _ = namaster.get_binning(nside)
@@ -517,7 +517,7 @@ spectra_BB
 ```
 
 ```{python}
-error_pcg = np.zeros(13)
+error_pcg = np.ones(13) * 0.001
 ```
 
 ```{python}
@@ -530,6 +530,10 @@ plt.plot(rv, likelihood_pcg)
 
 ```{python}
 print(sigma_r_pcg, r_pcg)
+```
+
+```{python}
+
 ```
 
 ```{python}

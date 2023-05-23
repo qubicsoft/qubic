@@ -17,9 +17,9 @@ from qubic import AnalysisMC as amc
 import os
 import sys
 import os.path as op
-sys.path.append('/pbs/home/t/tlaclave/mypackages')
+sys.path.append('/sps/qubic/Users/TomLaclavere/mypackages')
 import instrument as instr
-import frequency_acquisition as Acq
+import frequency_acquisition_old as Acq
 
 # Display packages
 import healpy as hp
@@ -79,7 +79,7 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 
 #### Load the global variables in the config file ####
-external = load_config('config_mapmaking.ini')
+external = load_config('mapmaking_config.ini')
 print(sent_job)
 if sent_job == True:
     id_index = int(sys.argv[1])
@@ -109,7 +109,7 @@ d_TOD['DEC_center'] = int(dec)
 center = qubic.equ2gal(d_TOD['RA_center'], d_TOD['DEC_center'])
 d_TOD['effective_duration'] = effective_duration
 d_TOD['npointings'] = npointings
-d_TOD['filter_nu'] = band * 1e9
+d_TOD['filter_nu'] = 150 * 1e9
 d_TOD['photon_noise'] = photon_noise
 d_TOD['noiseless'] = noiseless
 d_TOD['config'] = 'FI'
@@ -260,7 +260,7 @@ residual = (solution_noise - sky_nu[:nf_recon])
 # solution['x'][~seenpix, :] = hp.UNSEEN
 stk = ['I', 'Q', 'U']
 sub_band = list(str(sub_band))
-if plot_save == "True":
+if plot_save == True:
     for sub_band_index in range(len(sub_band)):
         if sub_band[sub_band_index] == '1':
             plt.figure(figsize=(12, 12))
@@ -279,8 +279,8 @@ if plot_save == "True":
                 hp.gnomview(residual[sub_band_index, :, i], rot=center, reso=reso, cmap='jet', sub=(3, 3, k+3), min=-minr, max=minr, title=f'{stk[i]} - Residuals')
                 k+=3
 
-            plt.suptitle(f'Frequency Map - {qubic_config} - ' + f'{sky_name} - ' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands' + f' - {round(qubic_acquisition.nueff[sub_band_index],1)} GHz', fontsize = 10, va = 'center')
-            plt.savefig(path + 'map/' + f'map_{qubic_config}_' + f'{sky_name}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands' + f'_{round(qubic_acquisition.nueff[sub_band_index], 1)}GHz.png')
+            plt.suptitle(f'Frequency Map - {qubic_config} - ' + f'{sky_name} - ' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands' + f' - {npointings}_pointing' + f' - {round(qubic_acquisition.nueff[sub_band_index],1)} GHz' + f'_{id_index}_ID', fontsize = 10, va = 'center')
+            plt.savefig(path + 'map/' + f'map_{qubic_config}_' + f'{sky_name}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands' + f'_{npointings}_pointing' + f'_{round(qubic_acquisition.nueff[sub_band_index], 1)}GHz' + f'_{id_index}_ID.png')
 
 #### RMS ####
 rms_profil_list = []
@@ -289,7 +289,7 @@ for sub_band_index in range(len(sub_band)):
         plt.figure()
         rms_profil = qss.get_angular_profile(np.array([residual[sub_band_index][ :, 0], residual[sub_band_index][ :, 1], residual[sub_band_index][ :, 2]]).T, nbins=30, separate=True, center=center, thmax=30)
         rms_profil_list.append(rms_profil)
-        if plot_save == "True":
+        if plot_save == True:
             xx, yyI, yyQ, yyU = rms_profil
             plt.plot(xx, yyI, 'r.', label='I')
             plt.plot(xx, yyQ, 'b*', label='Q')
@@ -297,17 +297,16 @@ for sub_band_index in range(len(sub_band)):
             plt.xlabel("Degrees")
             plt.ylabel('RMS')
             plt.legend()
-            plt.title(f'RMS - {qubic_config} - ' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands_' + f'{sky_name}' + f'_{round(qubic_acquisition.nueff[sub_band_index], 1)}GHz')
-            plt.savefig(path + 'rms/' + f'RMS_noise_{qubic_config}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands_' + f'{sky_name}' + f'_{round(qubic_acquisition.nueff[sub_band_index], 1)}GHz.png')
+            plt.title(f'RMS - {qubic_config} - ' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands_' + f' - {npointings}_pointing' + f'{sky_name}' + f'_{round(qubic_acquisition.nueff[sub_band_index], 1)}GHz' + f'_{id_index}_ID')
+            plt.savefig(path + 'rms/' + f'RMS_noise_{qubic_config}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands_' + f'_{npointings}_pointing' + f'{sky_name}' + f'_{round(qubic_acquisition.nueff[sub_band_index], 1)}GHz' + f'_{id_index}_ID.png')
 
 # Planck's pixels set at 0
-# need to set "seenpix_lim" at a higher value
+
 for pix in range(len(seenpix)):
     if seenpix[pix] == False:
         for stk_ind in range(3):
             for sb in range(2*nf_recon):
                 residual[sb,pix,stk_ind] = 0
-#                residual_noiseless[sb, pix, stk_ind] = 0
 
 #### Covariance Matrix ####
 cov_res = np.zeros((nf_recon*2, nf_recon*2, 3))
@@ -324,10 +323,10 @@ for idx in range(3):
     for (i, j), z in np.ndenumerate(cov_res[:,:,idx]):
         ax[idx].text(j, i, '{:0.5f}'.format(z), ha='center', va='center')
 plt.tight_layout()
-plt.suptitle(f'Covariance Matrix - Residuals - {qubic_config} - ' + f'{sky_name} - ' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number} sub bands', fontsize = 25, va = 'center')
+plt.suptitle(f'Covariance Matrix - Residuals - {qubic_config} - ' + f'{sky_name} - ' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number} sub bands' + f' - {npointings}_pointing' + f'_{id_index}_ID', fontsize = 25, va = 'center')
 
-if plot_save == "True":
-    plt.savefig(path + 'cov_matrix/' + f'cov_{qubic_config}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
+if plot_save == True:
+    plt.savefig(path + 'cov_matrix/' + f'cov_{qubic_config}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands_' + f'{npointings}_pointing' + f'{sky_name}' + f'_{id_index}_ID.png')
 
 #### Covariance Matrix of the difference between solution with noise and solution noiseless ####
 # sol_diff = solution_noise - solution_noiseless
@@ -363,12 +362,12 @@ for idx in range(3):
     for (i, j), z in np.ndenumerate(corr_res[:,:,idx]):
         ax[idx].text(j, i, '{:0.5f}'.format(z), ha='center', va='center')
 plt.tight_layout()
-plt.suptitle(f'Correlation Matrix - Residuals - {qubic_config} - ' + f'{sky_name} - ' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number} sub bands', fontsize = 25, va = 'center')
+plt.suptitle(f'Correlation Matrix - Residuals - {qubic_config} - ' + f'{sky_name} - ' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number} sub bands' + f' - {npointings}_pointing' + f'_{id_index}_ID', fontsize = 25, va = 'center')
 
-if plot_save == "True":
-    plt.savefig(path + 'corr_matrix/' + f'corr_{qubic_config}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands_' + f'{sky_name}.png')
+if plot_save == True:
+    plt.savefig(path + 'corr_matrix/' + f'corr_{qubic_config}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_'  + f'{sub_band_number}_sub_bands_' + f'{npointings}_pointing' + f'{sky_name}' + f'_{id_index}_ID.png')
 
-if plot_save != 'True':
+if plot_save != True:
     print("No plot asked !")
 
 #### Export the data ####
@@ -379,13 +378,14 @@ mydict = {'sky':sky_sub,
          'Nf_recon':nf_recon,
          'fact_sub':fact_sub,
          'coverage':coverage,
+         'pointing':npointings,
          'parameters':dict_parameters,
          'frequencies':qubic_acquisition.nueff,
          'RMS':rms_profil_list,
          'covariance':cov_res,
          'correlation':corr_res}
 
-output = open(path + 'data/' + f'{qubic_config}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_' + f'{sub_band_number}_sub_bands_' + f'{sky_name}_' + f'{id_index}.pkl', 'wb')
+output = open(path + 'data/' + f'{qubic_config}_' + f'{effective_duration}_years_' + f'{nf_tod}_TOD_' + f'{sub_band_number}_sub_bands_' + f'{npointings}_pointing' + f'{sky_name}_' + f'{id_index}.pkl', 'wb')
 pickle.dump(mydict, output)
 output.close()
 print(qubic_acquisition.nueff)

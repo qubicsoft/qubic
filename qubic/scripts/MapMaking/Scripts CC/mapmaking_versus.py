@@ -6,7 +6,7 @@ center = qubic.equ2gal(0, -57)
 
 import os
 import sys
-sys.path.append('/pbs/home/t/tlaclave/mypackages')
+sys.path.append('/sps/qubic/Users/TomLaclavere/mypackages')
 import frequency_acquisition as Acq
 
 #### Display packages ####
@@ -55,7 +55,7 @@ def load_config(config_file):
     return external, global_variables
 
 #### Load the global variables in the config file ####
-external = load_config('config_mapmaking_versus.ini')
+external = load_config('mapmaking_versus__config.ini')
 dict_parameters = external[1]
 
 #### Create name variables from config file ####

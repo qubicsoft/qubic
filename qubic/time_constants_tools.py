@@ -497,7 +497,7 @@ def get_best_initial_guess(tofit,t,nbins,dutycycle,risetime,falltime,nparams_ext
 
 
 
-def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, save_path = None, doplot = None, saveplot = 'focal_plane', verbose = False, only_overview = False, save_dict = True):
+def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, save_path = None, doplot = None, saveplot = 'focal_plane', verbose = False, only_overview = False, save_dict = True):
 
 	"""
 	Compute the time constants from a square modulation
@@ -620,7 +620,35 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		print('Different min and max Vbias, or different ASIC\'s Vbias')
 
 
-	tt, alltod = a.tod()
+	if force_sync:
+
+		tt1 = a.timeaxis(asic=1,axistype=timeaxistype)
+		tt2 = a.timeaxis(asic=2,axistype=timeaxistype)
+		tt1 -= tt1[0]
+		tt2 -= tt2[0]
+		
+		nsamples = np.max([len(tt1),len(tt2)])
+		tt = np.empty(nsamples,dtype=float)
+		t0 = np.min([tt1[0],tt2[0]])
+		tfinal = np.max([tt1[-1],tt2[-1]])
+		tt = t0 + (tfinal-t0)*np.arange(nsamples)/(nsamples-1)
+		alltod = np.empty((256,nsamples),dtype=float)
+		alltod[:] = np.nan
+
+		tod1 = a.timeline_array(asic=1)
+		tod2 = a.timeline_array(asic=2)		
+		
+		for i in range(128):
+
+			tline_interp = np.interp(tt, tt1, tod1[i,:])
+			alltod[i,:] = tline_interp
+			tline_interp = np.interp(tt, tt2, tod2[i,:])
+			alltod[i+128,:] = tline_interp       
+	
+	else:
+	
+		tt, alltod = a.tod(axistype=timeaxistype)     
+		
 	calsource_dict = a.calsource_info()
 	
 	shape = None
@@ -730,6 +758,9 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 		caldata.append(calsourcedata)
 		caldata = np.asarray(caldata)
 		caldata = caldata[0,:]
+		
+		if force_sync:
+			caltime -= caltime[0]
 	
 	del(a)
 	gc.collect()
@@ -1324,17 +1355,21 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 
 	if doplot_all or doplot_folded_data or saveplot_all or saveplot_folded_data:
 		
+		plt.ion()
+		
 		if not (doplot_all or doplot_folded_data):
 		
 			plt.ioff()
 				
 		figure()
 	
-		for order,i in enumerate(np.arange(256)):#[nonsaturated_tes]
-			if order == 0:
-				plot(t,folded[i,:], 'k-',alpha=0.1,label='Folded data for all detectors')
-			plot(t, folded[i,:], 'k-',alpha=0.1)
-		plot(t,median_fold,'b.',label='Median over nonsaturated folded')
+		for i in np.arange(128):#[nonsaturated_tes]
+			if i == 0:
+				plot(t, folded[i,:], 'b-',alpha=0.1,label='ASIC1')
+				plot(t, folded[i+128,:], 'r-',alpha=0.1,label='ASIC2')
+			plot(t, folded[i,:], 'b-',alpha=0.1)
+			plot(t, folded[i+128,:], 'r-',alpha=0.1)
+		plot(t,median_fold,'k.',label='Median over nonsaturated folded')
 #		plot(t,fctfit(t,allguess),color='green',label='Media guess')
 #		plot(t,-median_fold,'ro',label='- Median over nonsaturated folded')
 		
@@ -1345,7 +1380,12 @@ def compute_tc_squaremod(thedatadir, nbins = 100, lowcut = None, highcut = None,
 #		if calsource_analysis:
 #			plot(t_cal,folded_cal,color='red',label='Folded calsource data')
 		ylim(-2,2)
-		legend()
+		leg = legend()
+		
+		for lh in leg.legendHandles: 
+			lh.set_alpha(1)
+		
+		title('Folded data for all detectors')
 		xlabel('Time [s]')
 		ylabel('Stacked folded data')
 		tight_layout

@@ -2,7 +2,9 @@ from __future__ import division
 from pyoperators import pcg
 from pysimulators import profile
 
+########################
 #### QUBIC packages ####
+########################
 import qubic
 import pymaster as nmt
 from qubicpack.utilities import Qubic_DataDir
@@ -13,7 +15,7 @@ from qubic import camb_interface as qc
 from qubic import SpectroImLib as si
 from qubic import mcmc
 from qubic import AnalysisMC as amc
-
+ 
 import os
 import sys
 import os.path as op
@@ -37,8 +39,11 @@ import copy
 import random
 import configparser
 import scipy
+import time
 
+###################################################################
 #### Function to read the config file and extract informations ####
+###################################################################
 def load_config(config_file):
     # Créer un objet ConfigParser
     config = configparser.ConfigParser()
@@ -70,7 +75,9 @@ def load_config(config_file):
             
     return external, global_variables
 
+##############################
 #### PyOperators packages ####
+##############################
 from pyoperators import (
     BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
     CompositionOperator, DiagonalOperator, I, IdentityOperator,
@@ -79,7 +86,9 @@ from pyoperators import (
 
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
-#### Class use to compute r ####
+#################################
+#### Class used to compute r ####
+#################################
 class find_r(object):
 
     def __init__(self, model, nside):
@@ -146,7 +155,9 @@ class find_r(object):
         else:
             return like, cumint, allrlim, other, maxL
 
+########################################
 #### Usefull functions to compute r ####
+########################################
 # function to compute the Dl from the Cl
 def cl_to_dl(ell, cl):
     dl=np.zeros(ell.shape[0])
@@ -170,7 +181,9 @@ def myBBth(r, ell):
     dlBB = cl_to_dl(ell, get_pw_from_planck(Alens=1, r=r)[2, ell.astype(int)-1])
     return dlBB
 
+######################################################
 #### Load the global variables in the config file ####
+######################################################
 external = load_config('FMM_compute_r_config.ini')
 dict_parameters = external[1]
 print(dict_parameters)
@@ -178,66 +191,115 @@ if dir_name == "/sps/qubic/Users/TomLaclavere/results/FMM/band150/":
     band_real = 150
 elif dir_name == "/sps/qubic/Users/TomLaclavere/results/FMM/band220/":
     band_real = 220
+else :
+    band_real = "wide"
 
+###################################################
 #### import solutions computed in mapmaking.py ####
+###################################################
 import pickle
 solution = []
 
+# Compute the list of the pixels seen by QUBIC
+# WARNING : False means seen by QUBIC
 pickle_dict = pickle.load(open(dir_name + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{1}.pkl', 'rb'))
 coverage = pickle_dict['coverage']
 seenpix = coverage/np.max(coverage) < seenpix_lim
 
-for real_index in range(1, nreal + 1):
-    pickle_dict = pickle.load(open(dir_name + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{real_index}.pkl', 'rb'))
-    sol = pickle_dict['output']
-    for pix in range(len(seenpix)):
-        if seenpix[pix] == True:
-            for stk_ind in range(3):
-                    sol[pix,stk_ind] = 0
-    solution.append(sol)  
+# Extract solution in Wide Band & Two Bands from pickle files
+# keeping only QUBIC pixels to speed up 'analysisMC.py' commands used after 
+list_pix_qubix = []
+for ipix in range(len(seenpix)):
+    if seenpix[ipix] == False:
+        list_pix_qubix.append(ipix)
 
+for id_index in range(1, nreal + 1):
+    pickle_dict = pickle.load(open(dir_name + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{id_index}.pkl', 'rb'))
+    sol = pickle_dict['output']
+    sol_qubic = np.zeros((nrec, len(list_pix_qubix), 3))
+    print(np.shape(sol))
+    cpt = 0
+    for pix in list_pix_qubix:
+        for stk_ind in range(3):
+            for sb in range(nrec):
+                sol_qubic[sb, cpt, stk_ind] = sol[sb, pix, stk_ind]
+        cpt += 1
+    solution.append(sol_qubic)  
+
+print('solution', np.shape(solution))
+
+
+###############################
 #### Create Namaster class ####
+###############################
 from qubic import NamasterLib as nam
 
 lmin, lmax, delta_ell = lmin, 2*nside-1, delta_ell
 namaster = nam.Namaster(weight_mask = list(~np.array(seenpix)), lmin = lmin, lmax = lmax, delta_ell = delta_ell)
 
+###################################
 #### Compute usefull varaibles ####
+###################################
 ell = namaster.get_binning(nside)[0]
 rv = np.linspace(rmin, rmax, nmb_r)
 
-print(np.shape(solution))
+############################################################################################################
+#### Compute the average solution between sub-bands, using the covariance matrix, for each realisations ####
+############################################################################################################
+cp = analysis.get_Cp(solution)
+solution_avg = analysis.make_weighted_av(solution, cp, verbose = True)
 
-#### Compute the power spectrum for each sub-bands for each realisations ####
+print('solution two', np.shape(solution))
+print('cp', np.shape(cp))
+print('solu avg', np.shape(solution_avg))
+print('solu avg [0]', np.shape(solution_avg[0]))
+
+solution = np.zeros((nreal, len(seenpix), 3))
+cpt = 0
+for qubic_pix in list_pix_qubix:
+    for id_index in range(nreal):    
+        for istokes in range(3):
+            solution[id_index, qubic_pix, istokes] = solution_avg[0][id_index, cpt, istokes]
+    cpt += 1
+
+print('solution shape', np.shape(solution))
+
+#########################################################
+#### Compute the power spectrum for each realisation ####
+#########################################################
 spectra_BB = []
+for id_index in range(int(nreal/2)):
+    # solution_1_t = np.mean(solution_two[id_index], axis = 0)
+    # solution_2_t = np.mean(solution_two[id_index + int(nreal/2)], axis = 0)
+    # dl_t = namaster.get_spectra(map = solution_1_t.T, map2 = solution_2_t.T)[1][:, 2]
+    # spectra_BB_two.append(dl_t)
 
-for real_index in range(0, int(nreal/2)):
-    solution_1 = solution[real_index]
-    solution_2 = solution[real_index + int(nreal/2)]
-    dl = namaster.get_spectra(map = solution_1.T, map2 = solution_2.T)[1][:, 2]
+    dl = namaster.get_spectra(map = solution[id_index].T, map2 = solution[id_index + int(nreal/2)].T)[1][:, 2]
     spectra_BB.append(dl)
+
 print(np.shape(dl))
 print(np.shape(spectra_BB))
 
+###################################################
 #### Compute the mean and the error ont the dl ####
+###################################################
 mean = np.mean(spectra_BB, axis = 0)
 error = np.std(spectra_BB, axis = 0)
 print(mean)
 print(error)
 
-plt.figure()
-plt.plot(mean)
-plt.title('Mean Spectra')
-plt.savefig(path + f'compute_r/Mean_Spectra_band_{band_real}_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}')
-
+###########################
 #### Fitting to find r ####
+###########################
 likelihood, cumint, sigma_r, r = find_r(myBBth, nside).explore_like(ell, mean, error*np.sqrt(2), rv)
 
 print(np.shape(mean))
 print(error)
 print(sigma_r)
 
+#########################
 #### plot likelihood ####
+#########################
 plt.figure()
 plt.plot(rv, likelihood, label = f'r = {r[0]:.4f}, sigma_r = {sigma_r:.4f}')
 plt.ylim((0,1))

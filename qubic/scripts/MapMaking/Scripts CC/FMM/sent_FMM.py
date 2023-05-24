@@ -9,4 +9,4 @@ seed = np.arange(1, 2, 1)
 for iseed in seed:
     for i in range(1, ite + 1):
         print(iseed, i)
-        os.system(f'sbatch FMM.sh {iseed} {i} wide 1 0 0')
+        os.system(f'sbatch FMM.sh {iseed} {i} 0 1 1 1')

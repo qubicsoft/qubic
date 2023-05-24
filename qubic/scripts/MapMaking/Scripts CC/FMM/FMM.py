@@ -15,8 +15,8 @@ import pysm3.units as u
 from pysm3 import utils
 import sys
 import os
-path = os.path.dirname(os.getcwd()) + '/data/'
-sys.path.append(os.path.dirname(os.getcwd()))
+path = '/sps/qubic/Users/TomLaclavere/results/FMM'
+sys.path.append('/sps/qubic/Users/TomLaclavere/mypackages')
 import os.path as op
 import configparser
 import pickle
@@ -25,6 +25,7 @@ import time
 
 ### PyOperators
 from pyoperators import *
+from pyoperators import MPI
 
 ### Modfied PCG to display execution time
 from cg import pcg
@@ -117,7 +118,7 @@ def load_config(config_file):
             globals()[option] = value
 
 ### Read configuration file
-load_config('config.ini')
+load_config('FMM_config.ini')
 relative_bandwidth = 0.25
 
 ### Configuration panel
@@ -361,7 +362,7 @@ if doplot:
             res = Creconv(mysolution[0, :, 1])-Creconv(C(mean_sky[0, :, 1]))
             res[~seenpix] = hp.UNSEEN
             hp.gnomview(res, min=-4, max=4, cmap='jet', sub=(1, 3, 3), rot=center, reso=15)
-            plt.savefig(f'band{band}_ndet{ndet}_npho150{npho150}_npho220{npho220}_{seed}_{iteration}.png')
+            plt.savefig('/sps/qubic/Users/TomLaclavere/results/FMM/plot/' + f'band{band}_ndet{ndet}_npho150{npho150}_npho220{npho220}_{seed}_{iteration}.png')
             plt.close()
         else:
             plt.figure(figsize=(15, 5))
@@ -375,7 +376,7 @@ if doplot:
                 res = mysolution[irec, :, 1]-mean_sky[irec, :, 1]
                 res[~seenpix] = hp.UNSEEN
                 hp.gnomview(res, min=-4, max=4, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15)
-            plt.savefig(f'band{band}_ndet{ndet}_npho150{npho150}_npho220{npho220}_{seed}_{iteration}.png')
+            plt.savefig('/sps/qubic/Users/TomLaclavere/results/FMM/plot/' + f'band{band}_ndet{ndet}_npho150{npho150}_npho220{npho220}_{seed}_{iteration}.png')
             plt.close()
 
 end = time.time()
@@ -387,12 +388,10 @@ if rank == 0:
 dict_i = {'output':mysolution, 'input':mean_sky, 'allfwhm':a.allfwhm, 'coverage':cov, 'center':center, 'nsub':nsub, 'nrec':nrec, 
           'covcut':covcut, 'execution_time':execution_time, 'size':size}
 
-
-
 ### If the folder is not here, you will create it
 if rank == 0:
     save_each_ite = f'band{band}'
-    current_path = os.getcwd() + '/'
+    current_path = '/sps/qubic/Users/TomLaclavere/results/FMM/'
     if not os.path.exists(current_path + save_each_ite):
         os.makedirs(current_path + save_each_ite)
 

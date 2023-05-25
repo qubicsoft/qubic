@@ -497,7 +497,7 @@ def get_best_initial_guess(tofit,t,nbins,dutycycle,risetime,falltime,nparams_ext
 
 
 
-def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, nbins = 100, lowcut = None, highcut = None, notch = None, fmod = None, dutycycle = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, save_path = None, doplot = None, saveplot = 'focal_plane', verbose = False, only_overview = False, save_dict = True):
+def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, nbins = 100, lowcut = None, highcut = None, notch = None, fmod_explicit = None, dutycycle_explicit = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, save_path = None, doplot = None, saveplot = 'focal_plane', verbose = False, only_overview = False, save_dict = True):
 
 	"""
 	Compute the time constants from a square modulation
@@ -507,8 +507,8 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 	lowcut (= None) :  lowcut frequency. See fibtools.fold_data() for more info.
 	highcut (= None) :  highcut frequency. See fibtools.fold_data() for more info.
 	notch (= None) :  several frequencies to notch filter. See fibtools.fold_data() for more info.
-	fmod (= None) :  modulation frequency, this is only required if the calsource information is not available in the housekeeping data.
-	dutycycle (= None) :  dutycycle in %, this is only required if the calsource information is not available in the housekeeping data.
+	fmod_explicit (= None) :  modulation frequency, this is only required if the calsource information is not available in the housekeeping data.
+	dutycycle_explicit (= None) :  dutycycle in %, this is only required if the calsource information is not available in the housekeeping data.
 	typefit (= 'just_exp') :  on top of the exponential behaviour we can chose to also fit a slow varying function. 'just_exp' means an exponential model, 'spl' means adding a slow varying function with splines on top of the exponential behaviour (nparams_ext_spl must be >=4 and defines the number of spline parameters) and 'poly' means adding a slow varying function with polynomials on top of the exponential behaviour (nparams_ext_poly must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial).
 	nparams_ext_spl (= 4) :  must be >=4 and defines the number of spline parameters.
 	nparams_ext_poly (= 1) :  must be >=1 and nparams_ext_poly-1 defines the degree of the polynomial.
@@ -697,7 +697,11 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 			calsource_analysis = False
 
 			print('Source: external calibration with NO housekeeping information')
-
+			
+			fmod = fmod_explicit
+			
+			dutycycle = dutycycle_explicit
+			
 			if fmod is None or dutycycle is None:
 			
 				raise Exception('No hk information about the calibration source. Insert modulation frequency and dutycyle explicitly in the arguments.')
@@ -727,7 +731,11 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 		except:
 
 			print('Source: carbon fibres with NO housekeeping information')
-
+			
+			fmod = fmod_explicit
+			
+			dutycycle = dutycycle_explicit
+			
 			if fmod is None or dutycycle is None:
 			
 				raise Exception('No hk information about the calibration source. Insert modulation frequency and dutycyle explicitly in the arguments.')
@@ -743,6 +751,10 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 		print('No housekeeping information about the calibration source')
 	
 		calsource_analysis = False
+		
+		fmod = fmod_explicit
+		
+		dutycycle = dutycycle_explicit
 		
 		if fmod is None or dutycycle is None:
 			
@@ -1377,8 +1389,9 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 #			plot(t,fctfit(t,allpars_folded_median),color='blue',label='Fitted median')	
 #			plot(t,-fctfit(t,allpars_folded_median),color='red',label='-Fitted median')
 		
-#		if calsource_analysis:
-#			plot(t_cal,folded_cal,color='red',label='Folded calsource data')
+		if calsource_analysis:
+			plot(t_cal,folded_cal,color='red',label='Folded calsource data')
+
 		ylim(-2,2)
 		leg = legend()
 		

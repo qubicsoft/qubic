@@ -1,14 +1,20 @@
 #!/bin/bash
 
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/pbs/home/n/nmirongr/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/pbs/home/n/nmirongr/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/pbs/home/n/nmirongr/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/pbs/home/n/nmirongr/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
+
 conda activate myqubic
 
-srun -N 1 -n 1 python time_constants_computation_alldatasets.py 0 2 &
-srun -N 1 -n 1 python time_constants_computation_alldatasets.py 2 4 &
-srun -N 1 -n 1 python time_constants_computation_alldatasets.py 4 6 &
-srun -N 1 -n 1 python time_constants_computation_alldatasets.py 6 8 &
-srun -N 1 -n 1 python time_constants_computation_alldatasets.py 8 10 &
-srun -N 1 -n 1 python time_constants_computation_alldatasets.py 10 12 &
-srun -N 1 -n 1 python time_constants_computation_alldatasets.py 12 14 &
-srun -N 1 -n 1 python time_constants_computation_alldatasets.py 14 17&
-
-wait
+python time_constants_computation_alldatasets.py 0 2

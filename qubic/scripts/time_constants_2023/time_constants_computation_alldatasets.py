@@ -9,19 +9,19 @@ from matplotlib.pyplot import *
 from qubic import time_constants_tools as tct
 
 # +
-base_dir = '/sps/qubic/Data/Calib-TD/' # where to read the datasets
-base_save_path = '/sps/qubic/Users/nahuelmg'
+# base_dir = '/sps/qubic/Data/Calib-TD/' # where to read the datasets
+# base_save_path = '/sps/qubic/Users/nahuelmg'
 
-# base_dir = '/media/nahue/files_hdd/heavy-data/'
-# base_save_path = '/media/nahue/files_hdd/heavy-data'
+base_dir = '/media/nahue/files_hdd/heavy-data/'
+base_save_path = '/media/nahue/files_hdd/heavy-data'
 
-specific_save_folder = '/time_constants_results/all_TC_datasets_up_to_may'
+specific_save_folder = '/time_constants_results/all_TC_datasets_up_to_may_mypc'
 
 save_path = base_save_path+specific_save_folder # where to store the results
 
 Path(save_path).mkdir( parents=True, exist_ok=True )
     
-# print(save_path)
+print(save_path)
 
 # +
 days = [['2019-06-27'],['2019-07-03'],['2019-11-12'],['2019-11-14'],['2020-07-24'],['2020-07-25'],
@@ -40,10 +40,10 @@ dcs = [[30],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[3
        [33],[60],[None],[30],[66],[66, 66],[33, 66, 66, 66],[33],[33]]
 
 # +
-index_ini = sys.argv[1]
-index_fin = sys.argv[2]
-# index_ini = 0
-# index_fin = 1
+# index_ini = sys.argv[1]
+# index_fin = sys.argv[2]
+index_ini = -5
+index_fin = -4
 
 days = days[index_ini:index_fin]
 keywords = keywords[index_ini:index_fin]
@@ -51,8 +51,13 @@ fmods = fmods[index_ini:index_fin]
 dcs = dcs[index_ini:index_fin]
 
 # +
-# reload(tct)
+reload(tct)
 
+import warnings
+warnings.filterwarnings('ignore')
+print('Warnings deactivated through \'warnings.filterwarnings(\'ignore\')\'')
+
+only_overview = False
 doplot = None
 save_dict = True
 saveplot = ['focal_plane', 'folded_data']
@@ -89,7 +94,7 @@ for i in range(len(days)):#enumerate(zip(keywords,days)):  #, (keyword, day)
 
                 print('{}/{}'.format(j+1,len(thedirs)),'TC computation started for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
-                d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod = fmod, dutycycle = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync)
+                d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod_explicit = fmod, dutycycle_explicit = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync, only_overview = only_overview)
 
                 print('{}/{}'.format(j+1,len(thedirs)),'TC computation finished for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
@@ -111,7 +116,7 @@ for i in range(len(days)):#enumerate(zip(keywords,days)):  #, (keyword, day)
 
                 print('{}/{}'.format(j+1,len(thedirs)),'TC computation started for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
-                d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod = fmod, dutycycle = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync)
+                d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod_explicit = fmod, dutycycle_explicit = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync, only_overview = only_overview)
 
                 print('{}/{}'.format(j+1,len(thedirs)),'TC computation finished for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
@@ -120,3 +125,5 @@ for i in range(len(days)):#enumerate(zip(keywords,days)):  #, (keyword, day)
                 print('{}/{}'.format(j+1,len(thedirs)),'TC computation did not work for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
                 print('Exception:',e)
+# -
+

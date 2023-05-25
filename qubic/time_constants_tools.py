@@ -110,9 +110,11 @@ def plot_folded_data_on_FP(datain, time = None, datain_error = None, tes_ok_satu
                         axs[ind[0][0], ind[1][0]].errorbar(time, datain[tes-1], yerr=datain_error[tes-1], fmt='b.', alpha=0.5, **kwargs)#, label='{}'.format(tes)
                     else:
                         axs[ind[0][0], ind[1][0]].scatter(time, datain[tes-1], fmt='b.', alpha=0.5, **kwargs)#, label='{}'.format(tes)
-                    leg = axs[ind[0][0], ind[1][0]].legend(handlelength=0, handletextpad=0, fancybox=True,fontsize=10,loc='upper center', title='{}'.format(tes))
-                    for item in leg.legendHandles:
-                        item.set_visible(False)
+                    axs[ind[0][0], ind[1][0]].text(0.5,0.9,'{}'.format(tes),horizontalalignment='center', verticalalignment='top',
+                    transform = axs[ind[0][0], ind[1][0]].transAxes,fontsize = 12, bbox={'facecolor':'white', 'edgecolor':'none','pad':0, 'alpha':0.5})
+#                    leg = axs[ind[0][0], ind[1][0]].legend(handlelength=0, handletextpad=0, fancybox=True,fontsize=10,loc='upper center', title='{}'.format(tes))
+#                    for item in leg.legendHandles:
+#                        item.set_visible(False)
                     axs[ind[0][0], ind[1][0]].get_xaxis().set_visible(False)
                     axs[ind[0][0], ind[1][0]].get_yaxis().set_visible(False)
 
@@ -135,10 +137,12 @@ def plot_folded_data_on_FP(datain, time = None, datain_error = None, tes_ok_satu
                         axs[ind[0][0], ind[1][0]].errorbar(time, datain[tes-1+128], yerr=datain_error[tes-1+128], fmt='r.', alpha=0.5, **kwargs)#, label='{}'.format(tes)
                     else:
                         axs[ind[0][0], ind[1][0]].scatter(time, datain[tes-1+128], fmt='r.', alpha=0.5, **kwargs)#, label='{}'.format(tes)
-                    leg = axs[ind[0][0], ind[1][0]].legend(fontsize=10,title='{}'.format(tes),loc='upper center',handlelength=0, handletextpad=0, fancybox=True)
-#                    txt = axs[ind[0][0], ind[1][0]].text()
-                    for item in leg.legendHandles:
-                        item.set_visible(False)
+                    axs[ind[0][0], ind[1][0]].text(0.5,0.9,'{}'.format(tes),horizontalalignment='center', verticalalignment='top',
+                    transform = axs[ind[0][0], ind[1][0]].transAxes,fontsize = 12, bbox={'facecolor':'white', 'edgecolor':'none','pad':0, 'alpha':0.5})
+#                    leg = axs[ind[0][0], ind[1][0]].legend(fontsize=10,title='{}'.format(tes),loc='upper center',handlelength=0, handletextpad=0, fancybox=True)
+
+#                    for item in leg.legendHandles:
+#                        item.set_visible(False)
                     axs[ind[0][0], ind[1][0]].get_xaxis().set_visible(False)
                     axs[ind[0][0], ind[1][0]].get_yaxis().set_visible(False)
                
@@ -498,7 +502,7 @@ def get_best_initial_guess(tofit,t,nbins,dutycycle,risetime,falltime,nparams_ext
 
 
 
-def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, nbins = 100, lowcut = None, highcut = None, notch = None, fmod_explicit = None, dutycycle_explicit = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, save_path = None, doplot = None, saveplot = 'focal_plane', verbose = False, only_overview = False, save_dict = True):
+def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, nbins = 100, lowcut = None, highcut = None, notch = None, fmod_explicit = None, dutycycle_explicit = None, typefit = 'just_exp', nparams_ext_spl=4, nparams_ext_poly=1, save_path = None, doplot = None, saveplot = 'focal_plane', verbose_qubicpack = True, verbose = False, only_overview = False, save_dict = True):
 
 	"""
 	Compute the time constants from a square modulation
@@ -517,6 +521,7 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 	save_path (= None) :  if not None, one dictionary (with all the information, see Output) and one focal plane plot (with the fits and folded data) per dataset.
 	saveplot (= 'focal_plane') :  array of strings that determines which plots will be saved. It can contain some of the following: 'all', 'calsource', 'timelines', 'spectra', 'folded_data', 'each_tes', 'clustering', 'focal_plane'
 	savedict (= True) :  True to save the dictionary as a .npy file
+	verbose_qubicpack (= True) :  to show the output messages for qubicpack. In this case is just for loading the data.
 	verbose (= False) :  to show some intermediate output messages. (needs to be defined)
 	only_overview (= False) :  run only the overview part of the analysis (not fitting each TES signal)
 
@@ -601,7 +606,7 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 	
 	a = qubicfp()
 	
-	if not verbose:
+	if not verbose_qubicpack:
 		a.assign_verbosity(0)
 	
 	a.read_qubicstudio_dataset(thedatadir)
@@ -1399,7 +1404,7 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 #			plot(t,-fctfit(t,allpars_folded_median),color='red',label='-Fitted median')
 		
 		if calsource_analysis:
-			plot(t_cal,folded_cal,color='red',label='Folded calsource data')
+			plot(t_cal,folded_cal,color='green',label='Folded calsource data')
 
 		ylim(-2,2)
 		leg = legend()
@@ -1814,6 +1819,8 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 		close('all')	
 	
 	gc.collect()
+	
+	print('\'compute_tc_squaremod\' finished for {}'.format(dataset_info))
 	
 	return d_results
 

@@ -93,7 +93,8 @@ print(save_path)
 reload(tct)
 
 import warnings
-warnings.filterwarnings('default')
+warnings.filterwarnings('ignore')
+print('Be aware that warnings won\'t be printed')
 
 only_overview = False
 doplot = None

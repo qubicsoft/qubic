@@ -43,7 +43,7 @@ dcs = [[30],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[3
 ```
 
 ```{python}
-numberday = -1
+numberday = -5
 day = days[numberday]
 keyword = keywords[numberday]
 
@@ -55,7 +55,7 @@ for j,thedir in enumerate(thedirs):
 ```
 
 ```{python}
-numfile = 0
+numfile = 3
 thedatadir = thedirs[numfile]
 
 print('\n')
@@ -68,8 +68,9 @@ a = qubicfp()
 a.assign_verbosity(0)
 a.read_qubicstudio_dataset(thedatadir)
 
-# calsource_dict = a.calsource_info()
-# print(calsource_dict)
+calsource_dict = a.calsource_info()
+print(calsource_dict)
+calsource_dict['modulator']['shapea']
 # caltime, calsourcedata = a.calsource()
 ```
 

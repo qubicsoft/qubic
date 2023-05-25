@@ -38,12 +38,12 @@ from qubic import time_constants_tools as tct
 
 ```{python}
 ## Select a dataset corresponding to the TC measurement thorugh square modulation (external calsource or carbon fibres)
-day = '2023-03-02'
-# day = '2023-04-17'
+# day = '2023-03-02'
+day = '2023-04-17'
 # base_dir = '/home/nahue/Downloads/'
 base_dir = '/media/nahue/files_hdd/heavy-data/'
 data_dir = base_dir + day + '/'
-thedirs = np.sort(glob.glob(data_dir+'*calsource*'))
+thedirs = np.sort(glob.glob(data_dir+'*carbon-fiber*'))
 
 print('Here are all the available files')
 for i in range(len(thedirs)):
@@ -74,7 +74,7 @@ for i in range(len(thedirs)):
 # params_poly = 1
 # typefit = 'just_exp'
 
-numfile = 2
+numfile = 3
 thedatadir = thedirs[numfile]
 
 print('We will analyse:')
@@ -92,6 +92,9 @@ print(save_path)
 ```{python}
 reload(tct)
 
+import warnings
+warnings.filterwarnings('default')
+
 only_overview = False
 doplot = None
 saveplot = ['folded_data','focal_plane']#None
@@ -101,7 +104,8 @@ fmod = 0.2 #None
 dutycycle = 66 #None
 
 d = tct.compute_tc_squaremod(thedatadir, save_path = save_path, only_overview = only_overview, doplot = doplot,
-                             saveplot = saveplot, save_dict = save_dict, fmod_explicit = fmod, dutycycle_explicit = dutycycle, force_sync = force_sync)
+                             saveplot = saveplot, save_dict = save_dict, fmod_explicit = fmod, dutycycle_explicit = dutycycle,
+                             force_sync = force_sync)
 
 # d = tct.compute_tc_squaremod(thedatadir, save_path = save_path, fmod = fmod, dutycycle = dc)
 

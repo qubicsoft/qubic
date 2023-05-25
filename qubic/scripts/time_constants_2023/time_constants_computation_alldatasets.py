@@ -85,18 +85,20 @@ for i in range(len(days)):#enumerate(zip(keywords,days)):  #, (keyword, day)
 
         for j,thedatadir in enumerate(thedirs):
                         
-#             try:
-                
-            print('{}/{}'.format(j+1,len(thedirs)),'TC computation started for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
+            try:
 
-            d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod = fmod, dutycycle = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync)
+                print('{}/{}'.format(j+1,len(thedirs)),'TC computation started for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
-            print('{}/{}'.format(j+1,len(thedirs)),'TC computation finished for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
+                d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod = fmod, dutycycle = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync)
+
+                print('{}/{}'.format(j+1,len(thedirs)),'TC computation finished for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
+
+            except Exception as e:
                 
-#             except:
+                print('{}/{}'.format(j+1,len(thedirs)),'TC computation did not work for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
                 
-#                 print('{}/{}'.format(j+1,len(thedirs)),'tct.compute_tc_squaremod did not work for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
-            
+                print('Exception:',e)
+                
     elif len(fmods[i])>1 and len(fmods[i])==len(thedirs):
         
         for k in range(len(fmods[i])):
@@ -105,20 +107,16 @@ for i in range(len(days)):#enumerate(zip(keywords,days)):  #, (keyword, day)
             dc = dcs[i][k]
             thedatadir = thedirs[k]
             
-#             try:
+            try:
+
+                print('{}/{}'.format(j+1,len(thedirs)),'TC computation started for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
+
+                d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod = fmod, dutycycle = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync)
+
+                print('{}/{}'.format(j+1,len(thedirs)),'TC computation finished for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
+
+            except Exception as e:
                 
-            print('{}/{}'.format(j+1,len(thedirs)),'TC computation started for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
+                print('{}/{}'.format(j+1,len(thedirs)),'TC computation did not work for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
 
-            d = tct.compute_tc_squaremod(thedatadir, save_dict = save_dict, fmod = fmod, dutycycle = dc, save_path = save_path, doplot = doplot, saveplot = saveplot, force_sync = force_sync)
-
-            print('{}/{}'.format(j+1,len(thedirs)),'TC computation finished for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
-
-#             except:
-                
-#                 print('{}/{}'.format(j+1,len(thedirs)),'tct.compute_tc_squaremod did not work for the dataset {}'.format(str.split(thedatadir,'/')[-1]))
-# -
-
-
-
-
-
+                print('Exception:',e)

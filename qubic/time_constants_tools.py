@@ -1,6 +1,7 @@
 import numpy as np
 import os
 from numpy import *
+#import warnings
 from matplotlib.pyplot import *
 from matplotlib import pyplot as plt
 import iminuit
@@ -525,6 +526,8 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 
 	"""
 	
+#	warnings.filterwarnings( "default")#, module = "matplotlib\..*" )
+	
 	if saveplot is not None or save_dict:
 		if save_path is None:
 			save_path = os.getcwd()
@@ -675,28 +678,23 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 		
 	elif extcal_status == 'ON':
 		
-		try:
+		print('Source: external calibration')
 		
+		try:
+			
+			shape = calsource_dict['modulator']['shape']
 			RF = calsource_dict['calsource']['frequency'] # in GHz
 			fmod = calsource_dict['modulator']['frequency'] # in Hz
 			dutycycle = calsource_dict['modulator']['duty_cycle'] # in %
-			shape = calsource_dict['modulator']['shape']
-	#		amplifier_invert = calsource_dict['amplifier']['invert']
-			
-			if shape == 'square':
-
-				calsource_analysis = True
-
-			else:
-
-				raise Exception('ERROR: The shape of the modulation is {}, not square. This analysis is intended to be performed for square modulation.'.format(shape))
 	
-			print('Source: external calibration. Reading parameters from housekeeping information')
+			print('Reading parameters from housekeeping information')
+
 
 		except:
+
 			calsource_analysis = False
 
-			print('Source: external calibration with NO housekeeping information')
+			print('NO housekeeping information of the calibration source')
 			
 			fmod = fmod_explicit
 			
@@ -704,15 +702,25 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 			
 			if fmod is None or dutycycle is None:
 			
-				raise Exception('No hk information about the calibration source. Insert modulation frequency and dutycyle explicitly in the arguments.')
+				raise Exception('No hk information about the calibration source, insert modulation frequency and dutycyle explicitly in the arguments.')
 			
 			else:
 			
-				print('Reading fmod and dc from the explicit external arguments.')
+				print('Reading modulation frequency and dutycycle from the explicit external arguments.')
 
 			print('No calsource analysis performed since no calsource data are available.')
+		
+		if shape == 'square':
 
+			calsource_analysis = True
+
+		elif shape is not None:
+		
+			raise Exception('ERROR: The modulation shape is \'{}\', not \'square\'. This analysis is intended to be performed for square modulation.'.format(shape))
+		
 	elif cf_status == 'ON':	
+		
+		print('Source: carbon fibres')
 		
 		calsource_analysis = False # there are no caldata from the cf
 		
@@ -721,16 +729,12 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 			fmod = calsource_dict['cf']['frequency'] # in Hz
 			dutycycle = calsource_dict['cf']['duty_cycle'] # in %
 			shape = calsource_dict['cf']['shape']
-			
-			if shape != 'square':
-				
-				raise Exception('ERROR: The shape of the modulation is {}, not square. This analysis is intended to be performed for square modulation.'.format(shape))
-				
-			print('Source: carbon fibres reading parameters from housekeeping information')
+							
+			print('Reading parameters from housekeeping information')
 			
 		except:
 
-			print('Source: carbon fibres with NO housekeeping information')
+			print('NO housekeeping information about the calibration source')
 			
 			fmod = fmod_explicit
 			
@@ -738,11 +742,16 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 			
 			if fmod is None or dutycycle is None:
 			
-				raise Exception('No hk information about the calibration source. Insert modulation frequency and dutycyle explicitly in the arguments.')
+				raise Exception('No hk information about the calibration source, insert modulation frequency and dutycyle explicitly in the arguments.')
 			
 			else:
 			
 				print('Reading fmod and dc from the explicit external arguments.')
+
+		if shape != 'square' and shape is not None:
+			
+			raise Exception('ERROR: The modulation shape is \'{}\', not \'square\'. This analysis is intended to be performed for square modulation.'.format(shape))
+
 
 		print('No calsource analysis performed since no calsource data are available.')
 
@@ -758,9 +767,9 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 		
 		if fmod is None or dutycycle is None:
 			
-			raise Exception('No hk information about the calibration source. Insert modulation frequency and dutycyle explicitly in the arguments.')
+			raise Exception('No hk information about the calibration source, insert modulation frequency and dutycyle explicitly in the arguments.')
 
-		print('Reading fmod and dc from explicit external arguments.')
+		print('Reading modulation frequency and dutycycle from explicit external arguments.')
 		print('No calsource analysis performed since no calsource data are available.')
 	
 	if calsource_analysis:

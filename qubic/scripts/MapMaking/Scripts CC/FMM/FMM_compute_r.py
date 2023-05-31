@@ -41,6 +41,8 @@ import configparser
 import scipy
 import time
 
+start_time = time.time()
+
 ###################################################################
 #### Function to read the config file and extract informations ####
 ###################################################################
@@ -187,22 +189,34 @@ def myBBth(r, ell):
 external = load_config('FMM_compute_r_config.ini')
 dict_parameters = external[1]
 print(dict_parameters)
-if dir_name == "/sps/qubic/Users/TomLaclavere/results/FMM/band150/":
+
+
+if config == "wide":
+    band_real = 'wide'
+    dir_name = dir_name + "band0/"
+elif config == 150:
+    dir_name = dir_name + "/band150/"
     band_real = 150
-elif dir_name == "/sps/qubic/Users/TomLaclavere/results/FMM/band220/":
+elif config == 220:
+    dir_name = dir_name + "/band220/"
     band_real = 220
 else :
-    band_real = "wide"
+    band_real = "two"
+    dir_name_1 = dir_name + "/band150/"
+    dir_name_2 = dir_name + "/band220/"
+
 
 ###################################################
 #### import solutions computed in mapmaking.py ####
 ###################################################
 import pickle
-solution = []
 
 # Compute the list of the pixels seen by QUBIC
 # WARNING : False means seen by QUBIC
-pickle_dict = pickle.load(open(dir_name + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{1}.pkl', 'rb'))
+if band_real == "two":
+    pickle_dict = pickle.load(open(dir_name_1 + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220False_seed{seed}_iteration{1}.pkl', 'rb'))
+else:
+    pickle_dict = pickle.load(open(dir_name + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{1}.pkl', 'rb'))
 coverage = pickle_dict['coverage']
 seenpix = coverage/np.max(coverage) < seenpix_lim
 
@@ -213,21 +227,41 @@ for ipix in range(len(seenpix)):
     if seenpix[ipix] == False:
         list_pix_qubix.append(ipix)
 
-for id_index in range(1, nreal + 1):
-    pickle_dict = pickle.load(open(dir_name + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{id_index}.pkl', 'rb'))
-    sol = pickle_dict['output']
-    sol_qubic = np.zeros((nrec, len(list_pix_qubix), 3))
-    print(np.shape(sol))
-    cpt = 0
-    for pix in list_pix_qubix:
-        for stk_ind in range(3):
-            for sb in range(nrec):
-                sol_qubic[sb, cpt, stk_ind] = sol[sb, pix, stk_ind]
-        cpt += 1
-    solution.append(sol_qubic)  
+solution = []
+if band_real != "two":
+    for id_index in range(first_real + 1, nreal + 1):
+        pickle_dict = pickle.load(open(dir_name + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}_iteration{id_index}.pkl', 'rb'))
+        sol = pickle_dict['output']
+        sol_qubic = np.zeros((np.shape(sol)[0], len(list_pix_qubix), 3))
+        print(np.shape(sol))
+        cpt = 0
+        for pix in list_pix_qubix:
+            for stk_ind in range(3):
+                for sb in range(np.shape(sol)[0]):
+                    sol_qubic[sb, cpt, stk_ind] = sol[sb, pix, stk_ind]
+            cpt += 1
+        solution.append(sol_qubic)  
+
+else:
+    for id_index in range(first_real + 1, nreal + 1):
+        pickle_dict_1 = pickle.load(open(dir_name_1 + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220False_seed{seed}_iteration{id_index}.pkl', 'rb'))
+        pickle_dict_2 = pickle.load(open(dir_name_2 + f'MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150False_npho220{npho220}_seed{seed}_iteration{id_index}.pkl', 'rb'))
+        sol_1 = pickle_dict_1['output']
+        sol_2 = pickle_dict_2['output']
+        sol = np.concatenate((sol_1, sol_2))
+        sol_qubic = np.zeros((np.shape(sol)[0], len(list_pix_qubix), 3))
+        print(np.shape(sol))
+        cpt = 0
+        for pix in list_pix_qubix:
+            for stk_ind in range(3):
+                for sb in range(np.shape(sol)[0]):
+                    sol_qubic[sb, cpt, stk_ind] = sol[sb, pix, stk_ind]
+            cpt += 1
+        solution.append(sol_qubic)  
 
 print('solution', np.shape(solution))
 
+import_time = time.time()
 
 ###############################
 #### Create Namaster class ####
@@ -247,17 +281,22 @@ rv = np.linspace(rmin, rmax, nmb_r)
 #### Compute the average solution between sub-bands, using the covariance matrix, for each realisations ####
 ############################################################################################################
 cp = analysis.get_Cp(solution)
+
+cp_time = time.time()
+
 solution_avg = analysis.make_weighted_av(solution, cp, verbose = True)
 
-print('solution two', np.shape(solution))
+solution_avg_time = time.time()
+
+print('solution', np.shape(solution))
 print('cp', np.shape(cp))
 print('solu avg', np.shape(solution_avg))
 print('solu avg [0]', np.shape(solution_avg[0]))
 
-solution = np.zeros((nreal, len(seenpix), 3))
+solution = np.zeros((nreal - first_real, len(seenpix), 3))
 cpt = 0
 for qubic_pix in list_pix_qubix:
-    for id_index in range(nreal):    
+    for id_index in range(nreal - first_real):    
         for istokes in range(3):
             solution[id_index, qubic_pix, istokes] = solution_avg[0][id_index, cpt, istokes]
     cpt += 1
@@ -268,17 +307,19 @@ print('solution shape', np.shape(solution))
 #### Compute the power spectrum for each realisation ####
 #########################################################
 spectra_BB = []
-for id_index in range(int(nreal/2)):
+for id_index in range(int((nreal-first_real)/2)):
     # solution_1_t = np.mean(solution_two[id_index], axis = 0)
     # solution_2_t = np.mean(solution_two[id_index + int(nreal/2)], axis = 0)
     # dl_t = namaster.get_spectra(map = solution_1_t.T, map2 = solution_2_t.T)[1][:, 2]
     # spectra_BB_two.append(dl_t)
 
-    dl = namaster.get_spectra(map = solution[id_index].T, map2 = solution[id_index + int(nreal/2)].T)[1][:, 2]
+    dl = namaster.get_spectra(map = solution[id_index].T, map2 = solution[id_index + int((nreal-first_real)/2)].T)[1][:, 2]
     spectra_BB.append(dl)
 
 print(np.shape(dl))
 print(np.shape(spectra_BB))
+
+spectra_time = time.time()
 
 ###################################################
 #### Compute the mean and the error ont the dl ####
@@ -297,14 +338,40 @@ print(np.shape(mean))
 print(error)
 print(sigma_r)
 
+explore_like_time = time.time()
+
 #########################
 #### plot likelihood ####
 #########################
 plt.figure()
-plt.plot(rv, likelihood, label = f'r = {r[0]:.4f}, sigma_r = {sigma_r:.4f}')
-plt.ylim((0,1))
+maximum = np.max(likelihood)
+plt.plot(rv, likelihood/maximum, label = f'r = {r[0]:.5f}, sigma_r = {sigma_r:.5f}')
+plt.xlim((np.min(rv),np.max(rv)))
+plt.ylim((0,1.1))
 plt.xlabel('r')
 plt.ylabel('Likelihood')
 plt.legend()
 plt.title(f'band_{band_real}_convolution{fc}_ndet{ndet}_npho150{npho150}_npho220{npho220}')
 plt.savefig(path + f'/compute_r/likelihood_band_{band_real}_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}')
+
+dict_i = {'likelihood':likelihood, 'cumint':cumint, 'sigma_r':sigma_r, 'r':r}
+
+current_path = '/sps/qubic/Users/TomLaclavere/results/FMM/'
+fullpath = current_path + '/data/'
+if not os.path.exists(fullpath):
+    os.makedirs(fullpath)
+
+
+output = open(fullpath+f'band{band_real}_MM_maxiter{maxiter}_convolution{fc}_npointing{npointings}_nrec{nrec}_nsub{nsub}_ndet{ndet}_npho150{npho150}_npho220{npho220}_seed{seed}.pkl', 'wb')
+pickle.dump(dict_i, output)
+output.close()
+
+
+final_time = time.time()
+
+print('The script took ', final_time - start_time, 's')
+print('The solutions importation took ', import_time - start_time, 's')
+print('The cov matrix took ', cp_time - import_time, 's')
+print('Averaging solutions took ', solution_avg_time - cp_time, 's')
+print('The spectra took ', spectra_time - solution_avg_time, 's')
+print('The explore_like took ', explore_like_time - spectra_time, 's')

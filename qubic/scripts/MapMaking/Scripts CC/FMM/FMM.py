@@ -153,14 +153,14 @@ d = get_dict({'npointings':npointings, 'nf_recon':nrec, 'nf_sub':nsub, 'nside':n
               'filter_nu':filter_nu*1e9, 'noiseless':False, 'comm':comm, 'nprocs_sampling':1, 'nprocs_instrument':size,
               'photon_noise':True, 'nhwp_angles':3, 'effective_duration':3, 'filter_relative_bandwidth':relative_bandwidth, 
               'type_instrument':type, 'TemperatureAtmosphere150':None, 'TemperatureAtmosphere220':None,
-              'EmissivityAtmosphere150':None, 'EmissivityAtmosphere220':None})
+              'EmissivityAtmosphere150':None, 'EmissivityAtmosphere220':None, 'RA_center':0, 'DEC_center':-57})
 
 ### Dictionary for noise generation
 dmono = get_dict({'npointings':npointings, 'nf_recon':1, 'nf_sub':1, 'nside':nside, 'MultiBand':True, 'period':1,
               'filter_nu':filter_nu*1e9, 'noiseless':False, 'comm':comm, 'nprocs_sampling':1, 'nprocs_instrument':size,
               'photon_noise':True, 'nhwp_angles':3, 'effective_duration':3, 'filter_relative_bandwidth':relative_bandwidth, 
               'type_instrument':type, 'TemperatureAtmosphere150':None, 'TemperatureAtmosphere220':None,
-              'EmissivityAtmosphere150':None, 'EmissivityAtmosphere220':None})
+              'EmissivityAtmosphere150':None, 'EmissivityAtmosphere220':None, 'RA_center':0, 'DEC_center':-57})
 
 
 
@@ -346,6 +346,7 @@ else:
 
 
 if doplot:
+    stk = ['I', 'Q', 'U']
     if rank == 0:
         if convolution:
             Creconv = HealpixConvolutionGaussianOperator(fwhm=np.max(a.allfwhm))
@@ -357,28 +358,28 @@ if doplot:
         if nrec == 1:
             plt.figure(figsize=(15, 5))
 
-            hp.gnomview(Creconv(mysolution[0, :, 1]), min=-8, max=8, cmap='jet', sub=(1, 3, 1), rot=center, reso=15)
-            hp.gnomview(Creconv(C(mean_sky[0, :, 1])), min=-8, max=8, cmap='jet', sub=(1, 3, 2), rot=center, reso=15)
-            res = Creconv(mysolution[0, :, 1])-Creconv(C(mean_sky[0, :, 1]))
+            hp.gnomview(Creconv(mysolution[0, :, stk_parameter]), min=-8, max=8, cmap='jet', sub=(1, 3, 1), rot=center, reso=15, title=f'{stk[stk_parameter]} - Input')
+            hp.gnomview(Creconv(C(mean_sky[0, :, stk_parameter])), min=-8, max=8, cmap='jet', sub=(1, 3, 2), rot=center, reso=15, title=f'{stk[stk_parameter]} - Output')
+            res = Creconv(mysolution[0, :, stk_parameter])-Creconv(C(mean_sky[0, :, stk_parameter]))
             res[~seenpix] = hp.UNSEEN
-            hp.gnomview(res, min=-4, max=4, cmap='jet', sub=(1, 3, 3), rot=center, reso=15)
+            hp.gnomview(res, min=-4, max=4, cmap='jet', sub=(1, 3, 3), rot=center, reso=15, title=f'{stk[stk_parameter]} - Residuals')
             plt.savefig('/sps/qubic/Users/TomLaclavere/results/FMM/plot/' + f'band{band}_ndet{ndet}_npho150{npho150}_npho220{npho220}_{seed}_{iteration}.png')
             plt.close()
         else:
-            plt.figure(figsize=(15, 5))
+            plt.figure(figsize=(8, 12))
             k = 0
             for irec in range(nrec):
                 k+=1
-                hp.gnomview(mysolution[irec, :, 1], min=-8, max=8, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15)
+                hp.gnomview(mysolution[irec, :, stk_parameter], min=-8, max=8, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15, title=f'{stk[stk_parameter]} - Input - {round(a.allnus[irec],1)} GHz')
                 k+=1
-                hp.gnomview(mean_sky[irec, :, 1], min=-8, max=8, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15)
+                hp.gnomview(mean_sky[irec, :, stk_parameter], min=-8, max=8, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15, title=f'{stk[stk_parameter]} - Output - {round(a.allnus[irec],1)} GHz')
                 k+=1
-                res = mysolution[irec, :, 1]-mean_sky[irec, :, 1]
+                res = mysolution[irec, :, stk_parameter]-mean_sky[irec, :, stk_parameter]
                 res[~seenpix] = hp.UNSEEN
-                hp.gnomview(res, min=-4, max=4, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15)
+                hp.gnomview(res, min=-4, max=4, cmap='jet', sub=(nrec, 3, k), rot=center, reso=15, title=f'{stk[stk_parameter]} - Residuals - {round(a.allnus[irec],1)} GHz')
             plt.savefig('/sps/qubic/Users/TomLaclavere/results/FMM/plot/' + f'band{band}_ndet{ndet}_npho150{npho150}_npho220{npho220}_{seed}_{iteration}.png')
             plt.close()
-
+print(np.shape(mysolution))
 end = time.time()
 execution_time = end - t0
 

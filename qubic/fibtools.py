@@ -883,7 +883,7 @@ def power_spectrum(time_in, data_in, rebin=True):
                 time = time_in
                 data = data_in
 
-        spectrum_f, freq_f = mlab.psd(data, Fs=1. / (time[1] - time[0]), NFFT=len(data), window=mlab.window_hanning)
+        spectrum_f, freq_f = mlab.psd(data, Fs= ( len(time) - 1 ) / ( time[-1] - time[0]), NFFT=len(data), window=mlab.window_hanning)
         return spectrum_f, freq_f
 
 

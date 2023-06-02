@@ -40,8 +40,8 @@ dcs = [[30],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[3
        [33],[60],[None],[30],[66],[66, 66],[33, 66, 66, 66],[33],[33]]
 
 # +
-# index_ini = sys.argv[1]
-# index_fin = sys.argv[2]
+# index_ini = int(sys.argv[1])
+# index_fin = int(sys.argv[2])
 index_ini = -5
 index_fin = -4
 

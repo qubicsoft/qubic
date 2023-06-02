@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 import iminuit
 from iminuit.cost import LeastSquares
 import scipy.ndimage.filters as scfilt
-import scipy.ndimage.filters as f
+import scipy.ndimage as f
 from scipy.interpolate import interp1d
 import gc
 from scipy.integrate import simpson as simps
@@ -679,7 +679,7 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 	
 	if extcal_status == 'ON' and cf_status == 'ON':
 		
-		raise Exception('This is weird, external calibration and carbon fibres are both ON.')
+		raise Exception('External calibration and carbon fibres are both ON. This is not intended to happen for this kind of analysis')
 		
 	elif extcal_status == 'ON':
 		

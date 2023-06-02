@@ -49,7 +49,7 @@ rc('font',size=12)
 Define the path where all the dictionaries are stored and then construct a list with those dictionaries
 
 ```{python}
-save_path = '/media/nahue/files_hdd/heavy-data/time_constants_results/all_TC_datasets_my_computer_2/'
+save_path = '/media/nahue/files_hdd/heavy-data/time_constants_results/all_TC_datasets_up_to_may_2023_3/'
 # save_path = '/media/nahue/files_hdd/heavy-data/all_TC_datasets_up_to_may_2023/'
 # save_path = '/home/nahue/Downloads/2023-04-17/results/'
 thedicts = np.sort(glob.glob(save_path+'d__*'))
@@ -129,7 +129,7 @@ for i,thedict in enumerate(thedicts):
 Here we extract the time constants values, their errors and the ok arrays. We define some additional cuts and compute mean values.
 
 ```{python}
-figure()
+figure(1)
 title('Histograms risetime - all datasets up to May 2023 - Different Vbias')
 ylabel('Counts')
 xlabel('Risetime [ ms ]')
@@ -174,7 +174,7 @@ grid()
 # legend()
 tight_layout
 
-figure()
+figure(2)
 title('Histograms falltime - all datasets up to May - Different Vbias')
 ylabel('Counts')
 xlabel('Falltime [ ms ]')
@@ -197,11 +197,13 @@ ok_fortes = np.transpose(ok)
 
 tesnum = 21
 
-figure()
+tes_to_plot = [21,96,95,203]
+
+figure(3)
 
 ax = axes()
 ax.set_axisbelow(True)
-ax.set_title('TES #{} for all the datasets'.format(tesnum))
+ax.set_title('TES #{} for all the datasets'.format(tes_to_plot))
 ax.set_ylabel('Time constant [ ms ]')
 ax.set_xlabel('Vbias [V]')
 ax.set_yscale("log")
@@ -209,44 +211,56 @@ ax.set_yscale("log")
 # for tesnum in np.arange(1,257):
 #     ax.errorbar(Vbias[ok_fortes[tesnum-1]],1e3*rt[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*rt_error[ok_fortes[tesnum-1],tesnum-1],fmt='bo',alpha=0.6)#,label='Risetime')
 #     ax.errorbar(Vbias[ok_fortes[tesnum-1]],1e3*ft[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*ft_error[ok_fortes[tesnum-1],tesnum-1],fmt='ro',alpha=0.6)#,label='Falltime')
+for i,tesnum in enumerate(tes_to_plot):
+    if i == 0:        
+        ax.errorbar(Vbias[ok_fortes[tesnum-1]],1e3*rt[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*rt_error[ok_fortes[tesnum-1],tesnum-1],fmt='bo',alpha=0.6,label='Risetime')
+        ax.errorbar(Vbias[ok_fortes[tesnum-1]],1e3*ft[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*ft_error[ok_fortes[tesnum-1],tesnum-1],fmt='ro',alpha=0.6,label='Falltime')
 
-ax.errorbar(Vbias[ok_fortes[tesnum-1]],1e3*rt[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*rt_error[ok_fortes[tesnum-1],tesnum-1],fmt='bo',alpha=0.6,label='Risetime')
-ax.errorbar(Vbias[ok_fortes[tesnum-1]],1e3*ft[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*ft_error[ok_fortes[tesnum-1],tesnum-1],fmt='ro',alpha=0.6,label='Falltime')
+    ax.errorbar(Vbias[ok_fortes[tesnum-1]],1e3*rt[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*rt_error[ok_fortes[tesnum-1],tesnum-1],fmt='bo',alpha=0.6)
+    ax.errorbar(Vbias[ok_fortes[tesnum-1]],1e3*ft[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*ft_error[ok_fortes[tesnum-1],tesnum-1],fmt='ro',alpha=0.6)
 
+        
 grid(which='both',linestyle='--')
 legend()
 tight_layout
 
-fig = figure()
+figure(4)
 
 ax = axes()
 ax.set_axisbelow(True)
-ax.set_title('TES #{} for all the datasets'.format(tesnum))
+ax.set_title('TES #{} for all the datasets'.format(tes_to_plot))
 ax.set_ylabel('Time constant [ ms ]')
 ax.set_xlabel('Amplitude [ADU]')
 ax.set_xscale("log")
 ax.set_yscale("log")
-ax.errorbar(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*rt[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*rt_error[ok_fortes[tesnum-1],tesnum-1], xerr = amps_error[ok_fortes[tesnum-1],tesnum-1],fmt='bo',alpha=0.7,label='Risetime')
-ax.errorbar(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*ft[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*ft_error[ok_fortes[tesnum-1],tesnum-1], xerr = amps_error[ok_fortes[tesnum-1],tesnum-1],fmt='ro',alpha=0.7,label='Falltime')
+for i, tesnum in enumerate(tes_to_plot):
+    if i == 0:
+        ax.errorbar(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*rt[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*rt_error[ok_fortes[tesnum-1],tesnum-1], xerr = amps_error[ok_fortes[tesnum-1],tesnum-1],fmt='bo',alpha=0.7,label='Risetime')
+        ax.errorbar(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*ft[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*ft_error[ok_fortes[tesnum-1],tesnum-1], xerr = amps_error[ok_fortes[tesnum-1],tesnum-1],fmt='ro',alpha=0.7,label='Falltime')
+
+    ax.errorbar(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*rt[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*rt_error[ok_fortes[tesnum-1],tesnum-1], xerr = amps_error[ok_fortes[tesnum-1],tesnum-1],fmt='bo',alpha=0.7)
+    ax.errorbar(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*ft[ok_fortes[tesnum-1],tesnum-1],yerr = 1e3*ft_error[ok_fortes[tesnum-1],tesnum-1], xerr = amps_error[ok_fortes[tesnum-1],tesnum-1],fmt='ro',alpha=0.7)
+
 grid(which='both',linestyle='--')
 legend()
 tight_layout
 
 cmap = plt.colormaps['magma']
-colors = cmap(0.1+0.9*(Vbias[ok_fortes[tesnum-1]]-np.min(Vbias[ok_fortes[tesnum-1]]))/(np.max(Vbias[ok_fortes[tesnum-1]])-np.min(Vbias[ok_fortes[tesnum-1]])))
 
-fig = figure()
+figure(5)
 
 ax = axes()
 ax.set_axisbelow(True)
-ax.set_title('TES #{} for all the datasets'.format(tesnum))
+ax.set_title('TES #{} for all the datasets'.format(tes_to_plot))
 ax.set_ylabel('Time constant [ ms ]')
 ax.set_xlabel('Amplitude [ADU]')
 ax.set_xscale("log")
 ax.set_yscale("log")
 grid(which='both',linestyle='--')
-ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*rt[ok_fortes[tesnum-1],tesnum-1],alpha=0.9,c=colors)#,label='Risetime')
-ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*ft[ok_fortes[tesnum-1],tesnum-1],alpha=0.9,c=colors)#,label='Falltime')
+for tesnum in tes_to_plot:
+    colors = cmap(0.1+0.9*(Vbias[ok_fortes[tesnum-1]]-np.min(Vbias[ok_fortes[tesnum-1]]))/(np.max(Vbias[ok_fortes[tesnum-1]])-np.min(Vbias[ok_fortes[tesnum-1]])))
+    ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*rt[ok_fortes[tesnum-1],tesnum-1],alpha=0.9,c=colors)#,label='Risetime')
+    ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*ft[ok_fortes[tesnum-1],tesnum-1],alpha=0.9,c=colors)#,label='Falltime')
 
 # legend()
 tight_layout

@@ -84,7 +84,7 @@ class QubicIntegratedComponentsMapMaking(QubicPolyAcquisition):
 
         _, allnus, _, _, _, _ = qubic.compute_freq(self.d['filter_nu']/1e9, Nfreq=self.Nsub, relative_bandwidth=self.d['filter_relative_bandwidth'])
         
-        self.multiinstrument = instr.QubicMultibandInstrument(self.d, integration = 'Trapeze')
+        self.multiinstrument = instr.QubicMultibandInstrument(self.d)#, integration = 'Trapeze')
         self.nside = self.scene.nside
         self.allnus = allnus
         self.comp = comp

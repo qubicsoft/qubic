@@ -1,0 +1,11 @@
+#!/bin/sh
+
+export NUMBA_NUM_THREADS=5
+export MKL_NUM_THREADS=5
+export NUMEXPR_NUM_THREADS=5
+export OMP_NUM_THREADS=5
+export OPENBLAS_NUM_THREADS=5
+export VECLIB_MAXIMUM_THREADS=5
+export PYOPERATORS_NO_MPI=5
+
+python myplots.py

@@ -5,9 +5,9 @@ from qubic.data import PATH
 from qubic.io import read_map
 from qubic import QubicSkySim as qss
 import sys
-sys.path.insert(1,'/pbs/home/n/nmirongr/qubic/qubic/qubic/scripts/MapMaking-mr')
+sys.path.insert(1,'/pbs/home/n/nmirongr/qubic/qubic/scripts/MapMaking-mr')
 
-import /pbs/home/n/nmirongr/qubic/qubic/scripts/MapMaking-mr/component_acquisition as Acq
+import component_acquisition as Acq
 import pickle
 
 # Display packages

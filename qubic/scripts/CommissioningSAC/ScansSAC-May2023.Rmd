@@ -1,0 +1,412 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Analaysis for first sky scans from Alto Chorillos
+JCH - June 2023
+
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+rc('figure',figsize=(20,12))
+rc('font',size=12)
+
+from scipy.signal import medfilt
+from scipy.interpolate import interp1d
+import glob
+
+from qubicpack.qubicfp import qubicfp
+from qubic import fibtools as ft
+
+from importlib import reload
+import healpy as hp
+from datetime import datetime
+
+from astropy.visualization import astropy_mpl_style, quantity_support
+# plt.style.use(astropy_mpl_style)
+quantity_support()
+import astropy.units as u
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, get_moon, get_sun, get_body
+
+
+import sys
+reps = ['/Users/hamilton/Python/GitQubic/qubic/qubic/scripts/DiversJC/CalibSalta/']
+for rep in reps:     
+    if rep not in sys.path:
+        sys.path.append(rep)
+import fitting as fit
+import time_domain_tools as tdt
+
+```
+
+### Files (from Giuseppe D'Alessandro): 
+- 2023-05-29_01.45.22__SkyScan-2.5V-DomeOpened-Night
+- 2023-05-29_15.21.00__SkyScan-2V-DomeOpened-Day
+- 2023-05-29_11.20.47__SkyScan-2.5V-DomeOpened-Day
+- 2023-05-28_16.24.20__SkyScan-2.75V-DomeOpened
+- 2023-05-28_12.32.03__SkyScan-2.25V-DomeOpened
+- 2023-05-27_16.28.40__SkyScan-2.5V-DomeOpened-Daytime
+
+### Copy them: 
+rsync -avzu cca:/sps/qubic/Data/Calib-TD/2023-05-29/2023-05-29_01.45.22__SkyScan-2.5V-DomeOpened-Night /Volumes/HD\ JCH\ SSD/Qubic/QubicData/CommissioningTD/2023-05-29/ \
+rsync -avzu cca:/sps/qubic/Data/Calib-TD/2023-05-29/2023-05-29_15.21.00__SkyScan-2V-DomeOpened-Day /Volumes/HD\ JCH\ SSD/Qubic/QubicData/CommissioningTD/2023-05-29/ \
+rsync -avzu cca:/sps/qubic/Data/Calib-TD/2023-05-29/2023-05-29_11.20.47__SkyScan-2.5V-DomeOpened-Day /Volumes/HD\ JCH\ SSD/Qubic/QubicData/CommissioningTD/2023-05-29/ \
+rsync -avzu cca:/sps/qubic/Data/Calib-TD/2023-05-28/2023-05-28_16.24.20__SkyScan-2.75V-DomeOpened /Volumes/HD\ JCH\ SSD/Qubic/QubicData/CommissioningTD/2023-05-28/ \
+rsync -avzu cca:/sps/qubic/Data/Calib-TD/2023-05-28/2023-05-28_12.32.03__SkyScan-2.25V-DomeOpened /Volumes/HD\ JCH\ SSD/Qubic/QubicData/CommissioningTD/2023-05-28/ \
+rsync -avzu cca:/sps/qubic/Data/Calib-TD/2023-05-27/2023-05-27_16.28.40__SkyScan-2.5V-DomeOpened-Daytime /Volumes/HD\ JCH\ SSD/Qubic/QubicData/CommissioningTD/2023-05-27/
+
+```{python}
+DirData = '/Volumes/HD JCH SSD/Qubic/QubicData/CommissioningTD/'
+
+files = [
+    '2023-05-29_01.45.22__SkyScan-2.5V-DomeOpened-Night', 
+    '2023-05-29_15.21.00__SkyScan-2V-DomeOpened-Day',     
+    '2023-05-29_11.20.47__SkyScan-2.5V-DomeOpened-Day',   
+    '2023-05-28_16.24.20__SkyScan-2.75V-DomeOpened',      
+    '2023-05-28_12.32.03__SkyScan-2.25V-DomeOpened',      
+    '2023-05-27_16.28.40__SkyScan-2.5V-DomeOpened-Daytime'
+]
+
+### Read one file
+file = files[0]
+day = file[:10]
+print("Reading:")
+print(day, file)
+
+thedata = DirData + '/' + day +'/' + file
+### Read data
+a = qubicfp()
+a.read_qubicstudio_dataset(thedata)
+
+tt, alltod = a.tod()
+
+thk = a.timeaxis(datatype='platform')
+az = a.azimuth()
+el = a.elevation()
+
+Tbath = a.Tbath
+del(a)
+
+### We remove tt[0]
+tinit = tt[0]
+tt -= tinit
+thk -= tinit
+
+```
+
+```{python}
+rc('figure',figsize=(20,12))
+rc('font',size=12)
+
+TESnum = 33
+tod = alltod[TESnum-1,:]
+
+subplot(2,2,1)
+plot(tt, tod, label='TES #{}'.format(TESnum))
+xlabel('t')
+ylabel('TOD')
+
+subplot(2,2,2)
+plot(Tbath[0]-tinit, Tbath[1], label='TBath')
+xlabel('t')
+ylabel('TBath')
+
+subplot(2,3,4)
+plot(az, el)
+xlabel('az')
+ylabel('el')
+
+subplot(2,3,5)
+plot(thk, az)
+xlabel('t')
+ylabel('az')
+
+subplot(2,3,6)
+plot(thk, el)
+xlabel('t')
+ylabel('el')
+
+```
+
+```{python}
+azqubic = 170.
+##### -24.18629364167771, -66.478206557511
+AltoChorrillos = EarthLocation(lat=-24.18629364167771*u.deg, lon=-66.478206557511*u.deg, height=4890*u.m)
+####utcoffset = -3*u.hour  # Eastern Daylight Time
+
+### Create a QubicSampling object from these
+from qubic.samplings import QubicSampling
+
+### Don;t forget the UTC offset
+####utcoffset = 3.
+
+date_obs = str(datetime.utcfromtimestamp(tinit))
+print('Observations started at: {} UTC'.format(date_obs))
+
+qs = QubicSampling(azimuth=az + azqubic, elevation=el, time=thk,
+                   #period=np.median(thk[1:]-thk[:-1]), 
+                   date_obs=date_obs, longitude=float(AltoChorrillos.lon/u.deg), latitude = float(AltoChorrillos.lat/u.deg))
+
+# subplot(2,2,1)
+# plot(az, el)
+# xlabel('az')
+# ylabel('el')
+
+# # %matplotlib inline
+subplot(2,3,1)
+plot(qs.time, qs.equatorial[:,0])
+xlabel('UTC Time from QS (sec)')
+ylabel('RA from QS (deg)')
+subplot(2,3,2)
+plot(qs.time , qs.equatorial[:,1])
+xlabel('UTC Time from QS (sec)')
+ylabel('DEC from QS (deg)')
+subplot(2,3,3)
+plot(qs.equatorial[:,0], qs.equatorial[:,1])
+xlabel('RA from QS (deg)')
+ylabel('DEC from QS (deg)')
+tight_layout()
+
+subplot(2,3,4)
+plot(qs.azimuth, qs.elevation, label='From QS')
+plot(az + azqubic, el, '--', label='From HK')
+xlabel('az (deg)')
+ylabel('el (deg)')
+
+subplot(2,3,5)
+plot(qs.time, qs.azimuth, label='From QS')
+plot(thk, az + azqubic, '--', label='From HK')
+xlabel('time (sec)')
+ylabel('az (deg)')
+
+subplot(2,3,6)
+plot(qs.time, qs.elevation, label='From QS')
+plot(thk, el, '--', label='From HK')
+xlabel('time (sec)')
+ylabel('el (deg)')
+
+
+
+
+
+fig = figure()
+
+fig.suptitle(file, fontsize=14, y=0.75)
+
+
+ax = fig.add_subplot(1,2,1,projection='mollweide')
+grid()
+title('Equatorial')
+
+phi = np.radians(((qs.equatorial[:,0]+180) % 360)-180)
+theta = np.radians(qs.equatorial[:,1])
+
+plot(phi, theta ,'ro')
+xlabel('RA from QS (deg)')
+ylabel('DEC from QS (deg)')
+
+
+ax = fig.add_subplot(1,2,2,projection='mollweide')
+grid()
+title('Galactic')
+
+phi = np.radians(((qs.galactic[:,0]+180) % 360)-180)
+theta = np.radians(qs.galactic[:,1])
+
+plot(phi, theta ,'ro')
+xlabel('RA from QS (deg)')
+ylabel('DEC from QS (deg)')
+tight_layout()
+
+```
+
+```{python}
+def healpix_map(azt, elt, tod, flags=None, flaglimit=0, nside=128, countcut=0, unseen_val=hp.UNSEEN):
+    if flags is None:
+        flags = np.zeros(len(azt))
+    
+    ok = flags <= flaglimit 
+    return healpix_map_(azt[ok], elt[ok], tod[ok], nside=nside, countcut=countcut, unseen_val=unseen_val)
+
+
+def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
+    ips = hp.ang2pix(nside, azt, elt, lonlat=True)
+    mymap = np.zeros(12*nside**2)
+    mapcount = np.zeros(12*nside**2)
+    for i in range(len(azt)):
+        mymap[ips[i]] += tod[i]
+        mapcount[ips[i]] += 1
+    unseen = mapcount <= countcut
+    mymap[unseen] = unseen_val
+    mapcount[unseen] = unseen_val
+    mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
+    return mymap, mapcount
+
+def display_one(mapsb, anatype='', sub=(1,1,1), nlo=3, nhi=3, reso=12, rot=[0,50]):
+    unseen = (mapsb == hp.UNSEEN)
+    mm, ss = ft.meancut(mapsb[~unseen], 3)
+    hp.gnomview(mapsb, rot=rot, reso=reso, sub=sub, title=anatype+'\n Both scans $\sigma$ = {0:5.3g}'.format(ss), min=-nlo*ss, max=nhi*ss)
+
+
+def do_display_all(mapsb, mapsb_pos, mapsb_neg, mapav, mapdiff, mapdiff2, rot=[0,50], anatype='', reso=12, myrange=None, TESNum = None, graticule=True):
+    unseen = (mapsb == hp.UNSEEN) | (mapsb_pos == hp.UNSEEN) | (mapsb_neg == hp.UNSEEN)
+    mm, ss = ft.meancut(mapsb[~unseen], 3)
+    
+    if myrange is None:
+        mini = -3*ss
+        maxi = 3*ss
+    else:
+        mini = myrange[0]
+        maxi = myrange[1]
+        
+    if TESNum != None:
+        anatype += '\n TES# {}'.format(TESNum)
+
+    figure()
+    hp.gnomview(mapsb, rot=rot, reso=reso, sub=(2,3,1), title=anatype+'\n Both scans $\sigma$ = {0:5.4g}'.format(ss), min=mini, max=maxi)
+    if graticule:
+        hp.graticule()
+    mmp, ssp = ft.meancut(mapsb_pos[~unseen], 3)
+    hp.gnomview(mapsb_pos, rot=rot, reso=reso, sub=(2,3,2), title=anatype+'\n Pos scans $\sigma$ = {0:5.4g}'.format(ssp), min=mini, max=maxi)
+    if graticule:
+        hp.graticule()
+    mmn, ssn = ft.meancut(mapsb_neg[~unseen], 3)
+    hp.gnomview(mapsb_neg, rot=rot, reso=reso, sub=(2,3,3), title=anatype+'\n Neg scans $\sigma$ = {0:5.4g}'.format(ssn), min=mini, max=maxi)
+    if graticule:
+        hp.graticule()
+    mma, ssa = ft.meancut(mapav[~unseen], 3)
+    hp.gnomview(mapav, rot=rot, reso=reso, sub=(2,3,4), title=anatype+'\n Av of Both scans $\sigma$ = {0:5.4g}'.format(ssa), min=mini, max=maxi)
+    if graticule:
+        hp.graticule()
+    mmd, ssd = ft.meancut(mapdiff[~unseen], 3)
+    hp.gnomview(mapdiff, rot=rot, reso=reso, sub=(2,3,5), title=anatype+'\n Diff of both scans $\sigma$ = {0:5.4g}'.format(ssd), min=mini/ss*ssd, max=maxi/ss*ssd)
+    if graticule:
+        hp.graticule()
+    mmd2, ssd2 = ft.meancut(mapdiff2[~unseen], 3)
+    hp.gnomview(mapdiff2, rot=rot, reso=reso, sub=(2,3,6), title=anatype+'\n Both - Av $\sigma$ = {0:5.4g}'.format(ssd2), min=mini/ss**ssd, max=maxi/ss*ssd)
+    if graticule:
+        hp.graticule()
+    
+
+def display_all(mapsb, mapsb_pos, mapsb_neg, anatype='', rot=[0,50], highcontrast=False, reso=12, myrange=None, TESNum=None):
+    unseen = (mapsb == hp.UNSEEN) | (mapsb_pos == hp.UNSEEN) | (mapsb_neg == hp.UNSEEN)
+
+    ### Average of back and Forth
+    mapav = (mapsb_pos + mapsb_neg)/2
+    mapav[unseen] = hp.UNSEEN
+
+    ### Difference of back and Forth
+    mapdiff = (mapsb_pos - mapsb_neg) / 2
+    mapdiff[unseen] = hp.UNSEEN
+
+    ### Difference of All and Av
+    mapdiff2 = (mapav - mapsb)
+    mapdiff2[unseen] = hp.UNSEEN
+    
+    if highcontrast:
+        myrange = [-np.max(mapsb[~unseen])/10, np.max(mapsb[~unseen])*0.8]
+        
+    do_display_all(mapsb, mapsb_pos, mapsb_neg, mapav, mapdiff, mapdiff2, rot=rot, anatype=anatype, reso=reso, myrange=myrange, TESNum=TESNum)
+    
+    
+```
+
+## Level 0 treatment & Coaddition in local coordinates
+
+```{python}
+### 0: Identify scan types and numbers
+speedmin = 0.05
+scantype_hk, azt, elt, scantype = tdt.identify_scans(thk, az, el, tt=tt, doplot=True, plotrange=[0,2000], thr_speedmin=speedmin)
+
+date_obs = str(datetime.utcfromtimestamp(tinit))
+print('Observations started at: {} UTC'.format(date_obs))
+
+qst = QubicSampling(azimuth=azt + azqubic, elevation=elt, time=tt,
+                   #period=np.median(thk[1:]-thk[:-1]), 
+                   date_obs=date_obs, longitude=float(AltoChorrillos.lon/u.deg), latitude = float(AltoChorrillos.lat/u.deg))
+
+
+```
+
+```{python}
+reload(tdt)
+
+TESNum = 96#133#95#33
+tod = alltod[TESNum-1,:]
+
+
+
+# 1. Remove a slow spline to the data
+tod = tdt.remove_drifts_spline(tt, tod, nsplines=40, doplot=True)
+
+reload(tdt)
+reload(ft)
+
+# 2. Offset removal scan by scan using median 
+#    (here we just want to have all scans at the same level before decorrelating from azimuth)
+mytod = -tod.copy()
+mytod = tdt.remove_offset_scan(mytod, scantype, method='median')
+
+# 3. Remove azimuth correlation
+# low degree polynomials or splines...
+mytod = tdt.decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=30, n_el=np.max(np.abs(scantype)), nbspl=5)
+
+# 4. remove offsets again but this time with mode method as it appears to be less affected 
+#    by the presence of the peaks (no underestimation of the offset resultingg is shadow around the peaks)
+mytod = tdt.remove_offset_scan(mytod, scantype, method='mode')
+
+# Map-making
+anatype = ''
+
+nside = 180
+mapsb, mapcount = healpix_map(azt[scantype != 0] + azqubic, elt[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(azt[scantype > 0] + azqubic, elt[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(azt[scantype < 0] + azqubic, elt[scantype < 0], mytod[scantype < 0], nside=nside)
+
+# Display Results
+# display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az), np.mean(el)], reso=8, highcontrast=True)
+display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(az) + azqubic, np.mean(el)], reso=8, myrange=[-5e3, 2.5e4], TESNum=TESNum)
+
+
+figure()
+# Map-making
+anatype = ''
+
+ra, dec = qst.equatorial.T
+ll, bb = qst.galactic.T
+
+nside = 80
+mapsb, mapcount = healpix_map(ll[scantype != 0], bb[scantype != 0], mytod[scantype != 0], nside=nside)
+mapsb_pos, _ = healpix_map(ll[scantype > 0], bb[scantype > 0], mytod[scantype > 0], nside=nside)
+mapsb_neg, _ = healpix_map(ll[scantype < 0], bb[scantype < 0], mytod[scantype < 0], nside=nside)
+
+# Display Results
+display_all(mapsb, mapsb_pos, mapsb_neg, anatype=anatype, rot=[np.mean(ll), np.mean(bb)], reso=15, myrange=[-5e3, 2.5e4], TESNum=TESNum)
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

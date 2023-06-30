@@ -271,7 +271,7 @@ def decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=50, n_el=20, degr
             ok = oks[i] & (elt >= el_lims[j]) & (elt < el_lims[j+1])
             if np.sum(ok)==0:
                 break
-            xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=nbins, mode=True, dispersion=True, plot=False)
+            xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=nbins, median=True, dispersion=True, plot=False)
 
             if degree != None:
                 ### Polynomial Fitting

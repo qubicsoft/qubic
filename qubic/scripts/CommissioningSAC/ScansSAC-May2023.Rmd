@@ -70,7 +70,8 @@ rsync -avzu cca:/sps/qubic/Data/Calib-TD/2023-05-28/2023-05-28_12.32.03__SkyScan
 rsync -avzu cca:/sps/qubic/Data/Calib-TD/2023-05-27/2023-05-27_16.28.40__SkyScan-2.5V-DomeOpened-Daytime /Volumes/HD\ JCH\ SSD/Qubic/QubicData/CommissioningTD/2023-05-27/
 
 ```{python}
-DirData = '/Volumes/HD JCH SSD/Qubic/QubicData/CommissioningTD/'
+# DirData = '/Volumes/HD JCH SSD/Qubic/QubicData/CommissioningTD/'
+DirData = '/Users/hamilton/Qubic/Data/CommissioningTD/'
 
 files = [
     '2023-05-29_01.45.22__SkyScan-2.5V-DomeOpened-Night', 
@@ -529,13 +530,13 @@ nside = 64
 
 allmaps = np.zeros((len(allTES), 12*nside**2))
 allsig = np.zeros(len(allTES))
-
+allmean = np.zeros(len(allTES))
 for i, TESNum in enumerate(allTES):
     tod = alltod[TESNum-1,:]
     mytod = mypipe(tod, tt, azt, elt, scantype, doplot=False, 
            nsplines_global=100,
            nbspl_scan=10,
-           nbins_scan=50)
+           nbins_scan=30)
     mapscan, mapcount = healpix_map(ll[scantype != 0], bb[scantype != 0], mytod[scantype != 0], nside=nside)
 
     if i % 4 == 0:
@@ -545,6 +546,7 @@ for i, TESNum in enumerate(allTES):
     ok = mapscan != hp.UNSEEN
     mm, ss = ft.meancut(mapscan[ok], 3)
     mapscan[ok] -= mm
+    allmean[i] = mm
     allsig[i] = ss
     allmaps[i,:] = mapscan
     nsig = 3
@@ -555,9 +557,15 @@ for i, TESNum in enumerate(allTES):
 
 ```{python}
 ### Select the not too crazy one
+# hist(np.log10(allsig), range=[-1, 6], bins=50)
+# good = (np.log10(allsig) > 2) & (np.log10(allsig) < 4.3)
+# hist(np.log10(allsig[good]), range=[-1, 6], bins=50, alpha=0.5)
+
+### Select the not too crazy one
 hist(np.log10(allsig), range=[-1, 6], bins=50)
 good = (np.log10(allsig) > 2) & (np.log10(allsig) < 4.3)
 hist(np.log10(allsig[good]), range=[-1, 6], bins=50, alpha=0.5)
+
 
 ```
 
@@ -580,9 +588,91 @@ mm, ss = ft.meancut(medmap[ok], 3)
 hp.gnomview(medmap, rot=[np.mean(ll), np.mean(bb)], reso=15, min=-nsig*ss, max=nsig*ss, title='Median', sub=[1,3,2])
 hp.graticule()
 
-hp.gnomview(mydust, rot=[np.mean(ll), np.mean(bb)], reso=15, title='PySM 150 GHz', sub=[1,3,3])
+sky=pysm3.Sky(nside=64, preset_strings=['d0'], output_unit="uK_CMB")
+mydust=np.array(sky.get_emission(150 * u.GHz, None).T * utils.bandpass_unit_conversion(150*u.GHz, None, u.uK_CMB))[:,0]
+mydust[mapscan == hp.UNSEEN] = hp.UNSEEN
+hp.gnomview(mydust, rot=[np.mean(ll), np.mean(bb)], reso=15, title='PySM 150 GHz', sub=[1,3,3], max=1000)
 hp.graticule()
 
+```
+
+```{python}
+### Select the not too crazy one
+hist(np.log10(allsig), range=[-1, 6], bins=50)
+good = (np.log10(allsig) > 2) & (np.log10(allsig) < 4.3)
+hist(np.log10(allsig[good]), range=[-1, 6], bins=50, alpha=0.5)
+
+
+pixnums = np.arange(12*64**2)
+mymedmap = np.zeros(12*64**2)
+allcalib = np.zeros(256)+1
+alloffsets = np.zeros(256)+0
+allchi2 = np.zeros(256)
+oktes = good.copy()
+tesnums = np.arange(256)
+
+niter = 100
+n_in = np.zeros(niter)
+m_in = np.zeros(niter)
+s_in = np.zeros(niter)
+
+### Intital Median
+for ipix in pixnums[okpix]:
+    mymedmap[ipix] = np.median(allmaps[oktes,ipix])
+    
+### Iterations
+for jiter in range(niter):
+    for ites in tesnums[oktes]:
+        xdata = mymedmap[okpix]
+        ydata = allmaps[ites,okpix]
+        errdata = allsig[ites]+np.zeros(okpix.sum())
+
+        allcalib[ites], alloffsets[ites] = np.polyfit(xdata, ydata, 1, w=1./errdata**2)
+        residuals = (ydata - (allcalib[ites]*xdata + alloffsets[ites]))/errdata
+        allchi2[ites] = np.sum(residuals**2)
+
+    mm, ss = ft.meancut(allchi2, 3)
+    ncut = 2.
+    oktes = (allchi2 > (mm-ncut*ss)) & (allchi2 < (mm+ncut*ss))
+    
+    ### New median
+    for ipix in pixnums[okpix]:
+        mymedmap[ipix] = np.median(allmaps[oktes,ipix] * allcalib[oktes] + alloffsets[oktes])
+
+    n_in[jiter] = oktes.sum()
+    m_in[jiter] = np.mean(mymedmap[okpix])
+    s_in[jiter] = np.std(mymedmap[okpix])
+    print('Iteration {}: Nok={}   Medmap: {} +/- {}'.format(jiter, oktes.sum(), np.mean(mymedmap[okpix]), np.std(mymedmap[okpix])))
+
+
+subplot(1,3,1)
+plot(n_in)
+subplot(1,3,2)
+plot(m_in)
+subplot(1,3,3)
+plot(s_in)
+
+figure()
+mymedmap[~okpix] = hp.UNSEEN
+mm, ss = ft.meancut(mymedmap[ok], 3)
+hp.gnomview(mymedmap, rot=[np.mean(ll), np.mean(bb)], reso=15, min=-nsig*ss, max=nsig*ss, title='Median', sub=[1,3,2])
+hp.graticule()
+
+sky=pysm3.Sky(nside=64, preset_strings=['d0'], output_unit="uK_CMB")
+mydust=np.array(sky.get_emission(150 * u.GHz, None).T * utils.bandpass_unit_conversion(150*u.GHz, None, u.uK_CMB))[:,0]
+mydust[mapscan == hp.UNSEEN] = hp.UNSEEN
+hp.gnomview(mydust, rot=[np.mean(ll), np.mean(bb)], reso=15, title='PySM 150 GHz', sub=[1,3,3], max=1000)
+hp.graticule()
+
+```
+
+```{python}
+plot(tesnums[oktes], allcalib[oktes], 'ro')
+```
+
+```{python}
+import qubic
+import plot_fp
 ```
 
 ```{python}

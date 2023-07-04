@@ -414,7 +414,7 @@ def identify_scans(inthk, az, el, tt=None, median_size=101, thr_speedmin=0.1, do
 		xlabel('Azimuth [deg]')
 		ylabel('Ang. velocity [deg/s]')
 		legend(loc='upper left')
-
+		print(np.mean(medaz_dt[cpos]), np.mean(medaz_dt[cpos]))
 		subplot(2,2,2)
 		title('Angular Velocity Vs. time - Dead time = {0:4.1f}%'.format(dead_time*100))
 		plot(thk, medaz_dt)
@@ -474,6 +474,7 @@ def identify_scans(inthk, az, el, tt=None, median_size=101, thr_speedmin=0.1, do
 
 		tight_layout()
 
+	vmean = 0.5 * (np.abs(np.mean(medaz_dt[cpos])) +  np.abs(np.mean(medaz_dt[cneg])))
 	if tt is not None:
 		### We propagate these at TOD sampling rate  (this is an "step interpolation": we do not want intermediatee values")
 		scantype = interp1d(thk, scantype_hk, kind='previous', fill_value='extrapolate')(tt)
@@ -486,7 +487,7 @@ def identify_scans(inthk, az, el, tt=None, median_size=101, thr_speedmin=0.1, do
 		azt = np.interp(tt, thk, az)
 		elt = np.interp(tt, thk, el)
 		### Return evereything
-		return scantype_hk, azt, elt, scantype
+		return scantype_hk, azt, elt, scantype, vmean
 	else:
 		### Return scantype at HK sampling only
 		return scantype_hk

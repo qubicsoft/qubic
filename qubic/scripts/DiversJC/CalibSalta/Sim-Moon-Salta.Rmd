@@ -29,7 +29,7 @@ import mpld3
 import cartopy.crs as ccrs
 import os
 
-rc('figure',figsize=(16,8))
+rc('figure',figsize=(20,12))
 rc('font',size=12)
 
 
@@ -48,11 +48,12 @@ Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.
 utcoffset = -3*u.hour  # Eastern Daylight Time
 
 # Hard Limit from Salta:
-mini = 115-20
-maxi = 115+25
-# maxi = 125
+# mini = 115-20
+# maxi = 115+25
+mini = -30
+maxi = 30
 el_min = 30.
-el_max = 50.
+el_max = 70.
 
 
 door_az = (maxi+mini)/2
@@ -70,18 +71,25 @@ print(door_az + az_span/2)
 
 ```{python}
 reload(qubic)
+dead_time = 5.
 
 ### all days in July:
 # days = ['2022-07-10', '2022-07-11', '2022-07-12', '2022-07-13', '2022-07-14'] 
 ### Just one day in July
 days = ['2022-07-14']
 
-
 ### all days in August:
 # days = ['2022-08-06', '2022-08-07', '2022-08-08', '2022-08-09', '2022-08-10'] 
 ### Just one day in AUgust
 # days = ['2022-08-10']
 
+
+
+
+### April 2023 
+days = ['2023-04-19', '2023-04-20']
+
+>>>>>>> mathias_dev2
 save_html = False
 
 
@@ -110,7 +118,7 @@ for day in days:
     sunaltazs_Salta = sun_Salta.transform_to(frame_Salta)  
 
     delta_el = 20
-    valid = (moonaltazs_Salta.alt.value < (el_max+delta_el)) & (moonaltazs_Salta.alt.value > (el_min-delta_el)) & (moonaltazs_Salta.az.value > 70) & (moonaltazs_Salta.az.value < 140)
+    valid = (moonaltazs_Salta.alt.value < (el_max+delta_el)) & (moonaltazs_Salta.alt.value > (el_min-delta_el)) & (moonaltazs_Salta.az.value > 0) & (moonaltazs_Salta.az.value < 360)
     tstart = np.min(local_time_hours[valid])
     tstop = np.max(local_time_hours[valid])
     local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
@@ -143,6 +151,7 @@ for day in days:
     d['angspeed_psi'] = 0. #deg/s
     backforthdt = d['delta_az'] / d['angspeed'] * 2
     print('Scan Duration: ',backforthdt)
+    d['dead_time'] = dead_time
     print('Dead Time = {}'.format(d['dead_time']))
     print('Total time between two start-scan = {}'.format(backforthdt+d['dead_time']))
     
@@ -357,7 +366,7 @@ title('Operations from {} to {} (local time)'.format(local_start, local_stop))
 ```{python}
 # days = ['2022-07-01', '2022-07-15', '2022-08-01', '2022-08-15', '2022-09-01']
 
-days = ['2022-07-05']
+days = ['2023-04-19']
 
 save_html = False
 

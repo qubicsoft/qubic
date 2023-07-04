@@ -33,6 +33,12 @@ from qubic import fibtools as ft
 from importlib import reload
 import healpy as hp
 
+import sys
+reps = ['/Users/hamilton/Python/GitQubic/qubic/qubic/scripts/DiversJC/CalibSalta/']
+for rep in reps:     
+    if rep not in sys.path:
+        sys.path.append(rep)
+import fitting as fit
 import time_domain_tools as tdt
 
 ```

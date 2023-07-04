@@ -106,7 +106,7 @@ def gauss_pdf(x, mu, sigma):
     return (numba_stats.norm.pdf(x, mu, sigma))
 
 
-def myhist(x, unbinned=True, nsig=4, **kwargs):
+def myhist(x, unbinned=True, nsig=4, errorbars=True, **kwargs):
     thelabel = None
     if 'alpha' not in kwargs:
         kwargs['alpha']=0.5
@@ -136,7 +136,8 @@ def myhist(x, unbinned=True, nsig=4, **kwargs):
         xx = 0.5 * (xe[1:] + xe[:-1])
         dx = np.diff(xe)
         notzero = yy != 0    
-        p=errorbar(xx[notzero], yy[notzero], yerr=np.sqrt(yy[notzero]), fmt='o', color=a[0].get_facecolor(), alpha=1)
+        if errorbars:
+            p=errorbar(xx[notzero], yy[notzero], yerr=np.sqrt(yy[notzero]), fmt='o', color=a[0].get_facecolor(), alpha=1)
         xm = np.linspace(np.min(xx), np.max(xx), 1000)
         plot(xm, gauss_pdf(xm, *m.values) * len(x) * dx[0], color=a[0].get_facecolor(), alpha=1, label = thelabel+' {0:5.2g} $\pm$ {1:5.2g}'.format(mu, sigma))
     else:

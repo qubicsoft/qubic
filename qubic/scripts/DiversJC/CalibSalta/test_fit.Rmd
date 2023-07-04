@@ -62,7 +62,6 @@ y = 3*x+1 + errors
 def linearfit(x, pars):
     return pars[0] + pars[1] * x
 
-
 mydata = fit.Data(x,y,sig, linearfit, pnames=['a', 'b'])
 
 guess = [0., 0.]
@@ -220,20 +219,24 @@ class mychi2:
 mydata = fit.Data(x,y,sig, linearfit, pnames=['a', 'b'])
 
 guess = [0., 0.]
-mydata.fit_minuit(guess, minimizer=mychi2)
+fitted, ch2, ndf = mydata.fit_minuit(guess, minimizer=mychi2)
+
 mydata.plot()
 ```
 
 ```{python}
-
+print(fitted.values)
+print(np.array(fitted.values))
 ```
 
 ```{python}
-
+print(fitted.errors)
+print(np.array(fitted.errors))
 ```
 
 ```{python}
-
+print(fitted.covariance)
+print(np.array(fitted.covariance))
 ```
 
 ```{python}

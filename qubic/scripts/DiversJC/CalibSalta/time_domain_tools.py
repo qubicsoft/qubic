@@ -108,7 +108,211 @@ def get_mode(y, nbinsmin=51):
 	return mymode
 
 
-def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, doplot=False, plotrange=[0,1000]):
+
+def remove_offset_scan(mytod, scantype, method='meancut', apply_to_bad = True):
+    ### We remove offsets for each good scan but we also need to remove a coomparable offset for the scantype==0 reggiions in order to keep coninuity 
+    ### This si donee by apply_to_bad=True
+    
+    indices = np.arange(len(mytod))
+    last_index = 0
+    myoffsetn = 0
+    myoffsetp = 0
+    donefirst = 0
+    
+    nscans = np.max(np.abs(scantype))
+    for n in range(1, nscans+1):
+        # scan +
+        ok = scantype == n
+        if method == 'meancut':
+            myoffsetp, _ = ft.meancut(mytod[ok], 3)
+        elif method == 'median':
+            myoffsetp = np.median(mytod[ok])
+        elif method == 'mode':
+            myoffsetp = get_mode(mytod[ok])
+        else:
+            break
+        mytod[ok] -= myoffsetp        
+        if apply_to_bad:
+            first_index = np.min(indices[ok])
+            if (n==1) & (donefirst==0): myoffsetn = myoffsetp ### deal with first region
+            vals_offsets = myoffsetn + np.linspace(0,1, first_index-last_index-1)*(myoffsetp-myoffsetn)
+            mytod[last_index+1:first_index] -= vals_offsets
+            last_index = np.max(indices[ok])
+            donefirst = 1
+        
+        
+        # scan -
+        ok = scantype == (-n)
+        if method == 'meancut':
+            myoffsetn, _ = ft.meancut(mytod[ok], 3)
+        elif method == 'median':
+            myoffsetn = np.median(mytod[ok])
+        elif method == 'mode':
+            myoffsetn = get_mode(mytod[ok])
+        else:
+            break
+        mytod[ok] -= myoffsetn
+        if apply_to_bad:
+            first_index = np.min(indices[ok])
+            if (n==1) & (donefirst==0): myoffsetp = myoffsetn ### deal with first region
+            vals_offsets = myoffsetp + np.linspace(0,1, first_index-last_index-1)*(myoffsetn-myoffsetp)
+            mytod[last_index+1:first_index] -= vals_offsets
+            last_index = np.max(indices[ok])
+            donefirst = 1
+    
+    return mytod
+
+
+def decorel_azimuth(mytod, azt, scantype, degree=2, doplot=True):
+    ### Profiling in Azimuth
+    okall = np.abs(scantype) > 0 
+    okpos = scantype > 0 
+    okneg = scantype < 0 
+    oks = [okpos, okneg]
+    oks_names = ['+ scans', '- scans']
+    polys = []
+    if doplot:
+        figure()
+    for i in range(len(oks)):
+        ok = oks[i]
+        minaz = np.min(azt[ok])
+        maxaz = np.max(azt[ok])
+        xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=25, mode=True, dispersion=True, plot=False)
+        z = polyfit(xc, yc, degree, w=1./dy)
+        p = np.poly1d(z)
+        polys.append(p)
+        xaz = np.linspace(minaz, maxaz, 100)
+        if doplot:
+            pl = errorbar(xc, yc, yerr=dy, xerr=dx, fmt='o')
+            plot(xaz, p(xaz), label=oks_names[i], color=pl[0].get_color())
+    if doplot:
+        xlabel('Azimuth [deg]')
+        ylabel('Mode of TOD')
+        legend()
+
+    ### Removing the azimuthal effect
+    ok = scantype >= 0
+    mytod[ok] -= polys[0](azt[ok])
+    ok = scantype < 0
+    mytod[ok] -= polys[1](azt[ok])
+    
+    return mytod
+
+def get_chunks(mytod, scantype, value):
+    ### returns chunks corresponding to a given value
+    current_chunk = []
+    chunk_idx = []
+    inchunk = 0
+    chunknum = 0
+    for i in range(len(scantype)):
+        if scantype[i]==value:
+            inchunk = 1
+            current_chunk.append(i)
+        else:
+            if inchunk == 1:
+                chunknum += 1
+                chunk_idx.append([current_chunk[0], current_chunk[len(current_chunk)-1]])
+                current_chunk = []
+                inchunk = 0
+    if inchunk == 1:
+        chunk_idx.append([current_chunk[0], current_chunk[len(current_chunk)-1]])
+    return chunk_idx
+
+
+def linear_rescale_chunks(mytod, chunks, sz=1000):
+    for i in range(len(chunks)):
+        thechunk = chunks[i]
+        chunklen = thechunk[1] - thechunk[0]+1
+        if thechunk[0] == 0:
+            # this is the starting index => just the average
+            vals = np.zeros(chunklen) + np.median(mytod[thechunk[1]+1: thechunk[1]+sz]) + np.median(mytod[thechunk[0]:thechunk[1]])
+            mytod[thechunk[0]:thechunk[1]+1] -= vals
+        elif thechunk[1]==(len(mytod)-1):
+            # this is the last one => just the average
+            vals = np.zeros(chunklen) + np.median(mytod[thechunk[0]-1-sz: thechunk[0]-1]) + np.median(mytod[thechunk[0]:thechunk[1]])
+            mytod[thechunk[0]:thechunk[1]+1] -= vals
+        else:
+            left = np.median(mytod[thechunk[0]-1-sz: thechunk[0]-1])
+            right = np.median(mytod[thechunk[1]+1: thechunk[1]+sz])
+            vals = left + np.linspace(0,1, chunklen)*(right-left)
+            mytod[thechunk[0]:thechunk[1]+1] -= np.median(mytod[thechunk[0]:thechunk[1]+1]) - vals
+            
+    return mytod
+
+def decorel_azel(mytod, azt, elt, scantype, doplot=True, nbins=50, n_el=20, degree=None, nbspl=10):
+    ### Profiling in Azimuth and elevation
+    el_lims = np.linspace(np.min(elt)-0.0001, np.max(elt)+0.0001, n_el+1)
+    el_av = 0.5 * (el_lims[1:] + el_lims[:-1])
+
+    okall = np.abs(scantype) > 0 
+    okpos = scantype > 0 
+    okneg = scantype < 0 
+    oks = [okpos, okneg]
+    oks_names = ['+ scans', '- scans']
+    minaz = np.min(azt[okall])
+    maxaz = np.max(azt[okall])
+    xaz = np.linspace(minaz, maxaz, 100)
+    
+    ### Use polynomials or spline fitting to remove drifts and large features
+    if degree != None:
+        coefficients = np.zeros((2, n_el, degree+1))
+    else:
+        coefficients = np.zeros((2, n_el, nbspl))
+
+    if doplot: 
+        figure()
+    for i in range(len(oks)):
+        if doplot: 
+            subplot(1,2,i+1)
+            xlabel('Az')
+            ylabel('TOD')
+            title(oks_names[i])
+        for j in range(n_el):
+            ok = oks[i] & (elt >= el_lims[j]) & (elt < el_lims[j+1])
+            if np.sum(ok)==0:
+                break
+            xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=nbins, median=True, dispersion=True, plot=False)
+
+            if degree != None:
+                ### Polynomial Fitting
+                z = polyfit(xc, yc, degree, w=1./dy)
+                coefficients[i,j,:] = z
+                p = np.poly1d(z)
+                fitted = p(xaz)
+            else:
+                ### Spline Fitting
+                splfit = MySplineFitting(xc, yc, dy, nbspl)
+                coefficients[i,j,:] = splfit.alpha
+                fitted = splfit(xaz)
+            if doplot:
+                pl = errorbar(xc, yc, yerr=dy, xerr=dx, fmt='o')
+                plot(xaz, fitted, color=pl[0].get_color(), label = oks_names[i] + ' - El = {0:5.1f}'.format(np.mean(elt[ok])))
+    #if doplot: legend()
+
+    ### Now interpolate this to remove it to the data
+    nscans = np.max(np.abs(scantype))
+    for i in range(1, nscans+1):
+        okp = scantype == i
+        okn = scantype == (-i)
+        for ok in [okp, okn]:
+            the_el = np.median(elt[ok])
+            if degree != None:
+                myp = np.poly1d([np.interp(the_el, el_av, coefficients[0,:,i]) for i in arange(degree+1)])
+                mytod[ok] -= myp(azt[ok])
+            else:
+                myalpha = [np.interp(the_el, el_av, coefficients[0,:,i]) for i in arange(nbspl)]
+                mytod[ok] -= splfit.with_alpha(azt[ok], myalpha)
+                    
+                    
+    ### And interpolate for scantype==0 regions
+    bad_chunks = get_chunks(mytod, scantype, 0)
+    mytod = linear_rescale_chunks(mytod, bad_chunks, sz=100)
+    return mytod
+
+
+
+
+def identify_scans(inthk, az, el, tt=None, median_size=101, thr_speedmin=0.1, doplot=False, plotrange=[0,1000]):
 	"""
 	This function identifies and assign numbers the various regions of a back-and-forth scanning using the housepkeeping time, az, el
 		- a numbering for each back & forth scan
@@ -148,6 +352,8 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 			same as scantype_hk, but interpolated at TOD sampling rate
 	"""
 	
+	thk = inthk - inthk[0]
+
 	### Sampling for HK data
 	timesample = np.median(thk[1:]-thk[:-1])
 	### angular velocity 
@@ -162,13 +368,23 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 	
 	### Scan identification at HK sampling
 	scantype_hk = np.zeros(len(thk), dtype='int')-10
-	scantype_hk[c0] =0
+	scantype_hk[c0] = 0
 	scantype_hk[cpos] = 1
 	scantype_hk[cneg] = -1
+
+	# if doplot:
+	# 	title('total: {} Identified: {}'.format(len(thk), c0.sum()+cpos.sum()+cneg.sum()))
+	# 	plot(thk, medaz_dt)
+	# 	plot(thk[c0], medaz_dt[c0], '.', label='Low Velocity {}'.format(c0.sum()))
+	# 	plot(thk[cpos], medaz_dt[cpos], '.', label='Positive Scan {}'.format(cpos.sum()))
+	# 	plot(thk[cneg], medaz_dt[cneg], '.', label='Negative Scan {}'.format(cneg.sum()))
+	# 	legend()
+
+
 	# check that we have them all
 	count_them = np.sum(scantype_hk==0) + np.sum(scantype_hk==-1) + np.sum(scantype_hk==1)
 	if count_them != len(scantype_hk):
-		print('Identify_scans: Bad Scan counting at HK sampling level - Error')
+		print('Identify_scans: Bad Scan counting at HK sampling level - Error: {} {}'.format(len(scantype_hk), count_them))
 		stop
 	
 	### Now give a number to each back and forth scan
@@ -188,6 +404,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 	
 	if doplot:
 		### Some plotting
+		figure()
 		subplot(2,2,1)
 		title('Angular Velocity Vs. Azimuth - Dead time = {0:4.1f}%'.format(dead_time*100))
 		plot(az, medaz_dt)
@@ -197,6 +414,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 		xlabel('Azimuth [deg]')
 		ylabel('Ang. velocity [deg/s]')
 		legend(loc='upper left')
+		print(np.mean(medaz_dt[cpos]), np.mean(medaz_dt[cpos]))
 
 		subplot(2,2,2)
 		title('Angular Velocity Vs. time - Dead time = {0:4.1f}%'.format(dead_time*100))
@@ -257,6 +475,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 
 		tight_layout()
 
+	vmean = 0.5 * (np.abs(np.mean(medaz_dt[cpos])) +  np.abs(np.mean(medaz_dt[cneg])))
 	if tt is not None:
 		### We propagate these at TOD sampling rate  (this is an "step interpolation": we do not want intermediatee values")
 		scantype = interp1d(thk, scantype_hk, kind='previous', fill_value='extrapolate')(tt)
@@ -269,7 +488,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 		azt = np.interp(tt, thk, az)
 		elt = np.interp(tt, thk, el)
 		### Return evereything
-		return scantype_hk, azt, elt, scantype
+		return scantype_hk, azt, elt, scantype, vmean
 	else:
 		### Return scantype at HK sampling only
 		return scantype_hk

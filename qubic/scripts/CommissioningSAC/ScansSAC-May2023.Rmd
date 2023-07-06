@@ -94,7 +94,7 @@ files = [
 ]
 
 ### Read one file
-file = files[5]
+file = files[0]
 day = file[:10]
 print("Reading:")
 print(day, file)
@@ -107,8 +107,8 @@ a.read_qubicstudio_dataset(thedata)
 tt_init, alltod_init = a.tod()
 ### We directly resample to 10Hz ########################################
 ### Current sampling
-deltat = np.max(tt)-np.min(tt)
-ns = len(tt)
+deltat = np.max(tt_init)-np.min(tt_init)
+ns = len(tt_init)
 fs = ns/deltat
 
 ### Target sampling
@@ -134,7 +134,10 @@ thk -= tinit
 ```
 
 ```{python}
-TESNum = 93
+rc('figure',figsize=(20,10))
+rc('font',size=12)
+
+TESNum = 96
 new_fsample = 10.
 new_nsample = np.max(tt)-np.min(tt)
 
@@ -212,30 +215,31 @@ ylabel('el')
 ```
 
 ```{python}
-azqubic = 168.5
-##### -24.18629364167771, -66.478206557511
-AltoChorrillos = EarthLocation(lat=-24.18629364167771*u.deg, lon=-66.478206557511*u.deg, height=4890*u.m)
-####utcoffset = -3*u.hour  # Eastern Daylight Time
+reload(tdt)
+### 0: Identify scan types and numbers
+speedmin = 0.035
+scantype_hk, azt, elt, scantype, vmean = tdt.identify_scans(thk, az, el, tt=tt, doplot=True, plotrange=[0,2000], thr_speedmin=speedmin)
+print('Mean Velocity: {0:5.3f} deg/s'.format(vmean))
+daz = max(azt)-min(azt)
+print('Delta_az = {}'.format(daz))
+fsignal = vmean/daz*np.cos(np.radians(np.mean(el)))
+print('Signal location in frequency: {} Hz'.format(fsignal))
+
 
 ### Create a QubicSampling object from these
+azqubic = 168.5
+AltoChorrillos = EarthLocation(lat=-24.18629364167771*u.deg, lon=-66.478206557511*u.deg, height=4890*u.m)
 from qubic.samplings import QubicSampling
-
-### Don;t forget the UTC offset
-####utcoffset = 3.
-
 date_obs = str(datetime.utcfromtimestamp(tinit))
 print('Observations started at: {} UTC'.format(date_obs))
 
-qs = QubicSampling(azimuth=az + azqubic, elevation=el, time=thk+tinit,
-                   #period=np.median(thk[1:]-thk[:-1]), 
+qs = QubicSampling(azimuth=azt + azqubic, elevation=elt, time=tt+tinit,
                    date_obs=date_obs, longitude=float(AltoChorrillos.lon/u.deg), latitude = float(AltoChorrillos.lat/u.deg))
 
-# subplot(2,2,1)
-# plot(az, el)
-# xlabel('az')
-# ylabel('el')
+ra, dec = qs.equatorial.T
+ll, bb = qs.galactic.T
 
-# # %matplotlib inline
+figure()
 subplot(2,3,1)
 plot(qs.time, qs.equatorial[:,0])
 xlabel('UTC Time from QS (sec)')
@@ -268,10 +272,6 @@ plot(thk, el, '--', label='From HK')
 xlabel('time (sec)')
 ylabel('el (deg)')
 
-
-
-
-
 fig = figure()
 
 fig.suptitle(file, fontsize=14, y=0.75)
@@ -300,6 +300,7 @@ plot(phi, theta ,'ro')
 xlabel('RA from QS (deg)')
 ylabel('DEC from QS (deg)')
 tight_layout()
+
 
 ```
 
@@ -337,6 +338,19 @@ legend()
 # What does PySM say ?
 import qubic
 from qubicpack.utilities import Qubic_DataDir
+import gc
+import qubicpack as qp
+# Function to go from QubicSoft (Sims) indices (0-247) to QubicPack (data) indices (0-255)
+### The 8 thermometers are not in QubicSoft
+
+def iQS2iQP(indexQS):
+    qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
+    return qpnumi+(qpasici-1)*128-1
+
+def iQP2iQS(indexQP):
+    QStesnum = qp.pix2tes.tes2pix(indexQP%128+1, indexQP//128+1)
+    return QStesnum-1
+
 
 global_dir = Qubic_DataDir()
 dictfilename = global_dir + '/dicts/pipeline_MoonSalta.dict'
@@ -350,32 +364,23 @@ d['nf_recon'] = 2
 d['MultiBand'] = True
 d['sweeping_pointing_deadtime'] = False
 d['noiseless'] = True
+d['detector_tau'] = 0.01
 
+s = qubic.QubicScene(d)
+q = qubic.QubicInstrument(d)
 
+y0 = fakesky.copy()
 
+### We use our fake moon-frame pointing qsmoon
+qs.fix_az = False
+a = qubic.QubicAcquisition(q, qs, s, d)
 
-# nspysm = 256
-# #### Build "simple" simulateed TOD (assuming single peak)
-# sky=pysm3.Sky(nside=nspysm, preset_strings=['d0'], output_unit="uK_CMB")
-# fakesky=np.array(sky.get_emission(150 * u.GHz, None).T * utils.bandpass_unit_conversion(150*u.GHz, None, u.uK_CMB))[:,0]
-# fakesky = hp.smoothing(fakesky, fwhm=np.radians(1))
+TOD_sim, mapconv = a.get_observation(y0, noiseless=d['noiseless'], convolution = True)
+del a
+gc.collect()   ### Important ! Frees the meory
 
-# hp.mollview(fakesky, sub=(1,2,1))
-
-# ip = hp.ang2pix(nspysm, np.radians(90-bb), np.radians(ll))
-# simtod = fakesky[ip]
-
-# psfake, fffake = ft.power_spectrum(tt, simtod)
-
-# subplot(1,2,2)
-# plot(fffake, psfake, label='Initial', alpha=0.5)
-# axvline(x=fsignal, ls=':', label='Expected signal location')
-# xscale('log')
-# yscale('log')
-# xlabel('Frequency [Hz]')
-# ylabel('PSD')
-# legend()
-
+subplot(2,1,1)
+plot(TOD_sim[0,:])
 ```
 
 ```{python}
@@ -477,28 +482,31 @@ reload(ft)
 def mypipe(mytod, tt, azt, elt, scantype, doplot=False, 
            nsplines_global=40,
            nbspl_scan=5,
-           nbins_scan=30, highpass=False, order=5):
+           nbins_scan=30, lowcut=None, highcut=None, order=5, verbose=False, offsets=True):
     
     # 1. High-Pass or Remove a slow spline to the data
-    if highpass:
-        mytod = ft.filter_data(tt, mytod, lowcut = highpass, highcut = None, rebin=True, verbose=False, notch=None, order=order)
+    if highcut or lowcut:
+        mytod = ft.filter_data(tt, mytod, lowcut = lowcut, highcut = highcut, rebin=False, verbose=verbose, notch=None, order=order)
     else:
         mytod = tdt.remove_drifts_spline(tt, mytod, nsplines=nsplines_global, doplot=doplot)
 
     # 2. Offset removal scan by scan using median 
     #    (here we just want to have all scans at the same level before decorrelating from azimuth)
     mytod = -mytod
-    mytod = tdt.remove_offset_scan(mytod, scantype, method='median')
+    if offsets:
+        mytod = tdt.remove_offset_scan(mytod, scantype, method='median')
 
     # 3. Remove azimuth correlation
     # low degree polynomials or splines...
-    mytod = tdt.decorel_azel(mytod, azt, elt, scantype, doplot=doplot, nbins=nbins_scan, n_el=np.max(np.abs(scantype)), 
-                             nbspl=nbspl_scan)
+    if nbins_scan !=0:
+        mytod = tdt.decorel_azel(mytod, azt, elt, scantype, doplot=doplot, nbins=nbins_scan, n_el=np.max(np.abs(scantype)), 
+                                 nbspl=nbspl_scan)
 
     # 4. remove offsets again but this time with mode method as it appears to be less affected 
     #    by the presence of the peaks (no underestimation of the offset resultingg is shadow around the peaks)
     #mytod = tdt.remove_offset_scan(mytod, scantype, method='mode')
-    mytod = tdt.remove_offset_scan(mytod, scantype, method='median')
+    if offsets:
+        mytod = tdt.remove_offset_scan(mytod, scantype, method='median')
     
     return mytod
 
@@ -507,47 +515,27 @@ def mypipe(mytod, tt, azt, elt, scantype, doplot=False,
     
 ```
 
-```{python}
-reload(tdt)
-### 0: Identify scan types and numbers
-speedmin = 0.05
-scantype_hk, azt, elt, scantype, vmean = tdt.identify_scans(thk, az, el, tt=tt, doplot=True, plotrange=[0,2000], thr_speedmin=speedmin)
-print('Mean Velocity: {0:5.3f} deg/s'.format(vmean))
-daz = max(azt)-min(azt)
-print('Delta_az = {}'.format(daz))
-fsignal = vmean/daz*np.cos(np.radians(np.mean(el)))
-print('Signal location in frequency: {} Hz'.format(fsignal))
-
-date_obs = str(datetime.utcfromtimestamp(tinit))
-print('Observations started at: {} UTC'.format(date_obs))
-
-qst = QubicSampling(azimuth=azt + azqubic, elevation=elt, time=tt+tinit,
-                   #period=np.median(thk[1:]-thk[:-1]), 
-                   date_obs=date_obs, longitude=float(AltoChorrillos.lon/u.deg), latitude = float(AltoChorrillos.lat/u.deg))
-
-ra, dec = qst.equatorial.T
-ll, bb = qst.galactic.T
-
-```
-
-```{python}
-25/0.21
-```
-
 # From Michel: NET
 96: ~ 30mK.sqrt(s)
 
 
 
 ```{python}
+rc('figure',figsize=(16,10))
+rc('font',size=12)
+
 # Filtering params
 thr_seconds = 16.
 counts_thr = thr_seconds / (tt[1]-tt[0]) * 0 + 1
+
 nsplines_global = 100
-highpass = 0.002
+lowcut = 0.0038
+highcut = 0.10
 nbspl_scan = 10
-nbins_scan = 50
+nbins_scan = 0#50
+order = 5
 nsig = 3
+offsets=False
 
 
 reload(tdt)
@@ -555,16 +543,19 @@ reload(tdt)
 anatype = ''
 
 TESNum = 96#3#133#95#33
+
 tod = alltod[TESNum-1,:]
 
 ps, ff = ft.power_spectrum(tt, tod)
 
 
-mytod = mypipe(tod, tt, azt, elt, scantype, doplot=True, 
+mytod = mypipe(tod, tt, azt, elt, scantype, doplot=True, verbose=True,
                nsplines_global=nsplines_global,
-               highpass = highpass,
+               lowcut = lowcut,
+               highcut = highcut,
                nbspl_scan=nbspl_scan,
-               nbins_scan=nbins_scan)
+               nbins_scan=nbins_scan,
+               order=order, offsets=offsets)
 
 ps2, ff2 = ft.power_spectrum(tt, mytod)
 
@@ -572,10 +563,13 @@ figure()
 plot(ff, ps, label='Initial', alpha=0.5)
 plot(ff2, ps2, label='Final', alpha=0.5)
 axvline(x=fsignal, ls=':', label='Expected signal location')
+axvline(x=lowcut, ls='--', lw=2, color='g', label='High Pass')
+axvline(x=highcut, ls=':', lw=2, color='g', label='Low Pass')
 xscale('log')
 yscale('log')
 xlabel('Frequency [Hz]')
 ylabel('PSD')
+title('Data TES #{}'.format(TESNum))
 legend()
 
 nside = 64
@@ -590,24 +584,17 @@ display_all(mapscan, mapscan_pos, mapscan_neg, anatype=anatype, rot=[np.mean(ll)
 
 ```{python}
 # What does PySM say ?
-import pysm3
-import pysm3.units as u
-from pysm3 import utils
+QPindex = iQP2iQS(TESNum-1)
+simtod = TOD_sim[QPindex,:]*1e19
 
-nspysm = 256
-#### Build "simple" simulateed TOD (assuming single peak)
-sky=pysm3.Sky(nside=nspysm, preset_strings=['d0'], output_unit="uK_CMB")
-fakesky=np.array(sky.get_emission(150 * u.GHz, None).T * utils.bandpass_unit_conversion(150*u.GHz, None, u.uK_CMB))[:,0]
-fakesky = hp.smoothing(fakesky, fwhm=np.radians(1))
 
-ip = hp.ang2pix(nspysm, np.radians(90-bb), np.radians(ll))
-simtod = fakesky[ip]
-
-mysimtod = mypipe(simtod, tt, azt, elt, scantype, doplot=False, 
+mysimtod = mypipe(simtod, tt, azt, elt, scantype, doplot=False, verbose=True,
                   nsplines_global=nsplines_global,
-                  highpass=highpass,
+                  lowcut=lowcut,
+                  highcut=highcut,
                   nbspl_scan=nbspl_scan,
-                  nbins_scan=nbins_scan)
+                  nbins_scan=nbins_scan,
+                  order=order, offsets=offsets)
 
 psfake, fffake = ft.power_spectrum(tt, simtod)
 psfake2, fffake2 = ft.power_spectrum(tt, mysimtod)
@@ -616,17 +603,18 @@ figure()
 plot(fffake, psfake, label='Initial', alpha=0.5)
 plot(fffake2, psfake2, label='Final', alpha=0.5)
 axvline(x=fsignal, ls=':', label='Expected signal location')
+axvline(x=lowcut, ls='--', lw=2, color='g', label='High Pass')
+axvline(x=highcut, ls=':', lw=2, color='g', label='Low Pass')
 xscale('log')
 yscale('log')
 xlabel('Frequency [Hz]')
 ylabel('PSD')
+title('PySM through QUBIC')
 legend()
 
 
 figure()
 mapscan_sim, mapcount_sim = healpix_map(ll[scantype != 0], bb[scantype != 0], mysimtod[scantype != 0], nside=nside)
-
-
 
 
 maptoplot = mapscan.copy()
@@ -677,9 +665,11 @@ for i, TESNum in enumerate(allTES):
     tod = alltod[TESNum-1,:]
     mytod = mypipe(tod, tt, azt, elt, scantype, doplot=False, 
                    nsplines_global=nsplines_global,
-                   highpass=highpass,
+                   highcut=highcut,
+                   lowcut=lowcut,
                    nbspl_scan=nbspl_scan,
-                   nbins_scan=nbins_scan)
+                   nbins_scan=nbins_scan,
+                   order=order, offsets=offsets)
     mapscan, mapcount = healpix_map(ll[scantype != 0], bb[scantype != 0], mytod[scantype != 0], nside=nside, countcut=counts_thr)
 
     # Display Results
@@ -729,9 +719,11 @@ for i, TESNum in enumerate(allTES):
     tod = alltod[TESNum-1,:]
     mytod = mypipe(tod, tt, azt, elt, scantype, doplot=False, 
                    nsplines_global=nsplines_global,
-                   highpass = highpass,
+                   highcut=highcut,
+                   lowcut=lowcut,
                    nbspl_scan=nbspl_scan,
-                   nbins_scan=nbins_scan)
+                   nbins_scan=nbins_scan,
+                   order=order, offsets=offsets)
     mapscan, mapcount = healpix_map(ll[scantype != 0], bb[scantype != 0], mytod[scantype != 0], nside=nside)
 
     if i % 4 == 0:
@@ -751,16 +743,21 @@ for i, TESNum in enumerate(allTES):
 ```
 
 ```{python}
+
+```
+
+```{python}
 ### Select the not too crazy one
 # hist(np.log10(allsig), range=[-1, 6], bins=50)
 # good = (np.log10(allsig) > 2) & (np.log10(allsig) < 4.3)
 # hist(np.log10(allsig[good]), range=[-1, 6], bins=50, alpha=0.5)
 
 ### Select the not too crazy one
-hist(np.log10(allsig), range=[-1, 6], bins=50)
+subplot(2,2,1)
+hist(np.log10(allsig), range=[np.min(np.log10(allsig)), np.max(np.log10(allsig))], bins=50)
 good = (np.log10(allsig) > 2) & (np.log10(allsig) < 4.3)
-hist(np.log10(allsig[good]), range=[-1, 6], bins=50, alpha=0.5)
-
+hist(np.log10(allsig[good]), range=[np.min(np.log10(allsig)), np.max(np.log10(allsig))], bins=50, alpha=0.5)
+xlabel('Log10(RMS Map)')
 
 ```
 
@@ -776,17 +773,15 @@ for i in pixnums[okpix]:
     
     
 mm, ss = ft.meancut(avmap[ok], 3)
-hp.gnomview(avmap, rot=[np.mean(ll), np.mean(bb)], reso=15, min=-nsig*ss, max=nsig*ss, title='Average', sub=[1,3,1])
+hp.gnomview(avmap, rot=[np.mean(ll), np.mean(bb)], reso=15, min=-nsig*ss, max=nsig*ss, title='Average {} TES'.format(good.sum()), sub=[1,3,1])
 hp.graticule()
 
 mm, ss = ft.meancut(medmap[ok], 3)
-hp.gnomview(medmap, rot=[np.mean(ll), np.mean(bb)], reso=15, min=-nsig*ss, max=nsig*ss, title='Median', sub=[1,3,2])
+hp.gnomview(medmap, rot=[np.mean(ll), np.mean(bb)], reso=15, min=-nsig*ss, max=nsig*ss, title='Median {} TES'.format(good.sum()), sub=[1,3,2])
 hp.graticule()
 
-sky=pysm3.Sky(nside=64, preset_strings=['d0'], output_unit="uK_CMB")
-mydust=np.array(sky.get_emission(150 * u.GHz, None).T * utils.bandpass_unit_conversion(150*u.GHz, None, u.uK_CMB))[:,0]
-mydust[mapscan == hp.UNSEEN] = hp.UNSEEN
-hp.gnomview(mydust, rot=[np.mean(ll), np.mean(bb)], reso=15, title='PySM 150 GHz', sub=[1,3,3], max=1000)
+mm, ss = ft.meancut(mapscan_sim[maptoplot != hp.UNSEEN], 3)
+hp.gnomview(mapscan_sim, rot=[np.mean(ll), np.mean(bb)], reso=15, title='PySM Filtered', sub=(1,3,3), min=-nsig*ss, max=+nsig*ss)
 hp.graticule()
 
 ```
@@ -806,7 +801,7 @@ allchi2 = np.zeros(256)
 oktes = good.copy()
 tesnums = np.arange(256)
 
-niter = 10
+niter = 20
 n_in = np.zeros(niter)
 m_in = np.zeros(niter)
 s_in = np.zeros(niter)
@@ -847,20 +842,109 @@ plot(m_in)
 subplot(1,3,3)
 plot(s_in)
 
-figure()
+fig=figure()
 res=25
 mymedmap[~okpix] = hp.UNSEEN
 mm, ss = ft.meancut(mymedmap[ok], 3)
-hp.gnomview(mymedmap, rot=[np.mean(ll), np.mean(bb)*0], reso=res, min=-nsig*ss, max=nsig*ss, title='Median', sub=[1,3,2])
+hp.gnomview(mymedmap, rot=[np.mean(ll), np.mean(bb)], reso=res, min=-nsig*ss, max=nsig*ss, title='Median {} TES'.format(oktes.sum()), sub=[2,4,1])
 hp.graticule()
 
-hp.gnomview(mapscan_sim, rot=[np.mean(ll), np.mean(bb)*0], reso=res, title='PySM 150 GHz', sub=[1,3,3])
+mms, sss = ft.meancut(mapscan_sim[maptoplot != hp.UNSEEN], 3)
+hp.gnomview(mapscan_sim, rot=[np.mean(ll), np.mean(bb)], reso=res, title='PySM 150 GHz', sub=[2,4,2], min=-nsig*sss, max=+nsig*sss)
 hp.graticule()
+
+def coeff_fit(x, pars):
+    return pars[0]*x + pars[1]
+
+
+#figure()
+subplot(2,2,2)
+plot(mapscan_sim[okpix], mymedmap[okpix], 'k.')
+xxx, yyy, dx, dy, _ = ft.profile(mapscan_sim[okpix], mymedmap[okpix], nbins=10, median=True, rng=[-nsig*sss, nsig*sss], dispersion=False)
+errorbar(xxx, yyy, yerr=dy, fmt='ro')
+ff = fit.Data(xxx, yyy, dy, coeff_fit)
+res = ff.fit_minuit([1., 0])
+coeff = res[0].values[0]
+errcoeff = res[0].errors[0]
+plot(mapscan_sim[okpix], coeff * mapscan_sim[okpix], label='Coeff = {0:5.3f} +/- {1:5.3f}  ({2:4.2f}$\sigma$)'.format(coeff, errcoeff, coeff/errcoeff))
+legend()
+xlim(mms-6*sss, mms+6*sss)
+ylim(mm-6*ss, mm+6*ss)
+xlabel('PySM through QUBIC')
+ylabel('Median maps with {} TES'.format(oktes.sum()))
+title(file)
+tight_layout()
+
+
+
+ax = fig.add_subplot(2,2,3,projection='mollweide')
+grid()
+title('Galactic')
+
+phi = np.radians(((qs.galactic[:,0]+180) % 360)-180)
+theta = np.radians(qs.galactic[:,1])
+
+plot(phi, theta ,'ro')
+xlabel('RA from QS (deg)')
+ylabel('DEC from QS (deg)')
+tight_layout()
+
+
+[lowcut, highcut, coeff/errcoeff]
+```
+
+```{python}
+### Done on file #3  16.24.20
+vals = np.array([
+        [0.003, 0.1, 1.947481077392674],
+        [0.0035, 0.1, 1.2186627708657343],
+        [0.0037, 0.1, 1.9234083690839046],
+        [0.0038, 0.1, 3.9751534577855234],
+        [0.00385, 0.1, 3.7867200415148496],
+        [0.0039, 0.1, 3.928096609593341],
+        [0.004, 0.1, 2.5417357432779975],
+        [0.0045, 0.1, 0.025557650673950844],
+        [0.005, 0.1, 0.5351185312405917]
+       ])
+
+subplot(2,2,1)
+plot(vals[:,0], vals[:,2])
+xlabel('Low cut [Hz]')
+ylabel('Slope significance (#σ)')
+
+
+vals = np.array([
+    [0.0038, 0.05, 1.1683219828254923],
+    [0.0038, 0.08, 2.5293827009127274],
+    [0.0038, 0.09, 2.925867960406169],
+    [0.0038, 0.095, 2.5391268030652085],
+    [0.0038, 0.1, 3.9751534577855234],
+    [0.0038, 0.102, 3.580791387669208],
+    [0.0038, 0.105, 3.9814124579219317],
+    [0.0038, 0.11, 3.897865764760337],
+    [0.0038, 0.12, 3.188545525930687],
+    [0.0038, 0.15, 2.832994591273594]
+       ])
+
+subplot(2,2,3)
+plot(vals[:,1], vals[:,2])
+xlabel('High cut [Hz]')
+ylabel('Slope significance (#σ)')
+tight_layout()
+```
+
+```{python}
+import pickle
+
+mystuff = [allmaps, mapscan_sim, mymedmap]
+
+with open(file+'.pickle', 'wb') as f:
+    pickle.dump(mystuff, f)
 
 ```
 
 ```{python}
-plot(tesnums[oktes], allcalib[oktes], 'ro')
+
 ```
 
 ```{python}

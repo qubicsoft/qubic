@@ -185,7 +185,7 @@ class asymsig_spl_class:
         return asym_sig + splvals
 
 def simsig_asym(x, pars): #needs 6 parameters
-        dx = x[1] - x[0]
+        x -= x[0]
         cycle = np.nan_to_num(pars[0])
         ctime_rise = np.nan_to_num(pars[1])
         ctime_fall = np.nan_to_num(pars[2])
@@ -205,7 +205,7 @@ def simsig_asym(x, pars): #needs 6 parameters
         return np.nan_to_num(thesim)
 
 def simsig_asym_nooffset(x, pars): #needs 5 parameters
-        dx = x[1] - x[0]
+        x -= x[0]
         cycle = np.nan_to_num(pars[0])
         ctime_rise = np.nan_to_num(pars[1])
         ctime_fall = np.nan_to_num(pars[2])

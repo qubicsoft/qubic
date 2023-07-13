@@ -726,7 +726,7 @@ def simsig_nonorm(x, pars, extra_args=None):
 
 
 def simsig_asym(x, pars, extra_args=None):
-        dx = x[1] - x[0]
+        x -= x[0]
         cycle = np.nan_to_num(pars[0])
         ctime_rise = np.nan_to_num(pars[1])
         ctime_fall = np.nan_to_num(pars[2])

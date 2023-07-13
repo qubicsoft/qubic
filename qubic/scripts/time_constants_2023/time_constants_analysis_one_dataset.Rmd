@@ -38,12 +38,12 @@ from qubic import time_constants_tools as tct
 
 ```{python}
 ## Select a dataset corresponding to the TC measurement thorugh square modulation (external calsource or carbon fibres)
-# day = '2023-03-02'
+# day = '2023-03-31'
 day = '2023-04-17'
 # base_dir = '/home/nahue/Downloads/'
 base_dir = '/media/nahue/files_hdd/heavy-data/'
 data_dir = base_dir + day + '/'
-thedirs = np.sort(glob.glob(data_dir+'*carbon-fiber*'))
+thedirs = np.sort(glob.glob(data_dir+'**'))
 
 print('Here are all the available files')
 for i in range(len(thedirs)):
@@ -74,7 +74,7 @@ for i in range(len(thedirs)):
 # params_poly = 1
 # typefit = 'just_exp'
 
-numfile = 3
+numfile = 2
 thedatadir = thedirs[numfile]
 
 print('We will analyse:')
@@ -97,9 +97,9 @@ warnings.filterwarnings('ignore')
 print('Be aware that warnings won\'t be printed')
 
 only_overview = False
-doplot = None
+doplot = ['all']
 saveplot = ['folded_data','focal_plane']#None
-save_dict = True
+save_dict = False
 force_sync = True
 fmod = 0.2 #None
 dutycycle = 66 #None

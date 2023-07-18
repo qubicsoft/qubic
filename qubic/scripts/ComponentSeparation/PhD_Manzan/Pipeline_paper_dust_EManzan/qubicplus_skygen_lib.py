@@ -8,6 +8,7 @@ import string
 from pylab import *
 from importlib import reload
 from scipy import constants
+import pickle
 
 import pysm3
 import pysm3.units as u
@@ -58,6 +59,19 @@ def get_coverage(fsky, nside, center_radec=[0, -57.]):
     mask = np.zeros(12*nside**2)
     mask[okpix] = 1
     return mask
+
+def closest_value(input_list, input_value):
+    #To be used with Mathias's approach to bp integration
+    arr = np.asarray(input_list)
+    i = (np.abs(arr - input_value)).argmin()
+    return arr[i]
+
+
+def where_closest_value(input_list, input_value):
+    #To be used with Mathias's approach to bp integration
+    i=closest_value(input_list, input_value)
+    argi = np.where(input_list == i)[0][0]
+    return argi
 
 def eval_sed(freq_maps):
     '''
@@ -140,8 +154,8 @@ def create_noisemaps(nus, nside, depth_i, depth_p, npix, spectra_type='cross'):
         sig_p=depth_p[ind_nu]/(np.sqrt(hp.nside2pixarea(nside, degrees=True)) * 60)
         #generate noise for all pixels from normal distrib with sigma=noise/pixel
         N[ind_nu, 0] = np.random.normal(0, 1., npix)*sig_i
-        N[ind_nu, 1] = np.random.normal(0, 1., npix)*sig_p*np.sqrt(2) #Multiply by: sqrt(2) because from P to Q and U
-        N[ind_nu, 2] = np.random.normal(0, 1., npix)*sig_p*np.sqrt(2)
+        N[ind_nu, 1] = np.random.normal(0, 1., npix)*sig_p#*np.sqrt(2) #Multiply by: sqrt(2) because from P to Q and U
+        N[ind_nu, 2] = np.random.normal(0, 1., npix)*sig_p#*np.sqrt(2)
         
         '''
         if spectra_type == 'auto':
@@ -248,10 +262,11 @@ class BImaps(object):
             cmb_cls[2] += self.r * hp.read_cl(CMB_CL_FILE%'unlensed_scalar_and_tensor_r1')[2,:4000]#[:,:4000] #this takes unlensed cmb B-modes for r=1 and scales them to whatever r is given
             
         # set EE and TE to zero a' la Mathias
-        cmb_cls[1] = np.zeros(4000)
-        cmb_cls[3] = np.zeros(4000)
+        #cmb_cls[1] = np.zeros(4000)
+        #cmb_cls[3] = np.zeros(4000)
         
         #gen maps from Cls
+        print('CMB seed = ', self.seed)
         np.random.seed(self.seed)
         maps = hp.synfast(cmb_cls, self.nside, verbose=False, new=True)
         if self.save_figs:
@@ -294,6 +309,7 @@ class BImaps(object):
         mycls = qc.Dl2Cl_without_monopole(ell, Dls)
         
         #create map
+        print('CMB seed = ', self.seed)
         np.random.seed(self.seed)
         maps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
         
@@ -328,18 +344,19 @@ class BImaps(object):
                     print('Doing Pysm3 models...')
                     #get emission
                     foreg_maps[f,:,:] = sky.get_emission(self.nus[f] * u.GHz)*utils.bandpass_unit_conversion(self.nus[f]*u.GHz,None, u.uK_CMB)
-            return foreg_maps, sky
+            return foreg_maps, sky #exit
         else:
             pass
                 
-        #apply bandpass integration if required
+
+        #apply standard bandpass integration 
         weights_flat = np.ones(N_SAMPLE_BAND)
         for f in range(len(self.nus)):
             print('Integrate band: {0} GHz with {1} steps'.format(self.nus[f],N_SAMPLE_BAND))
             fmin = self.nus[f]-self.bw[f]/2
             fmax = self.nus[f]+self.bw[f]/2        
             freqs = np.linspace(fmin, fmax, N_SAMPLE_BAND)
-            
+
             if preset_strings is not None:
                 print('Doing Pysm3 models...')
                 #apply band integration
@@ -354,6 +371,58 @@ class BImaps(object):
         else:
             return foreg_maps, 1
         
+        
+    def get_fg_maps_same_real(self, fg_seed, fg_freqs, N_SAMPLE_BAND=100, Nside_patch=0):
+        '''
+        This function generates fg maps integrated over the frequency band. In the d6 case, it uses and external realization of the emission (i.e. an external array of seeds).
+        '''
+        #def output maps
+        foreg_maps = np.zeros((len(self.nus), 3, self.npix))
+        sky = self.sky
+        if 'pysm_fg' in self.skyconfig:
+            preset_strings = self.skyconfig['pysm_fg']
+        else:
+            preset_strings = None
+            
+        #set the first seed for each frequency band
+        nus_eff=np.zeros(len(self.nus))
+        seed_eff = np.zeros(len(self.nus))
+        for i in range(len(self.nus)):
+            myargs = where_closest_value(fg_freqs, self.nus[i])
+            nus_eff[i] = np.round(fg_freqs[myargs], 3).copy()
+            seed_eff[i] = fg_seed[myargs].copy()
+        
+        #get emission using a fixed fg realization
+        if N_SAMPLE_BAND == 1: #no bandpass integration is required
+            for f in range(len(self.nus)):
+                if preset_strings is not None:
+                    print('Doing Pysm3 models...')
+                    #generate d6 real. from given seed
+                    np.random.seed(int(seed_eff[f]))
+                    #get emission
+                    foreg_maps[f,:,:] = sky.get_emission(nus_eff[f] * u.GHz)*utils.bandpass_unit_conversion(nus_eff[f]*u.GHz,None, u.uK_CMB)
+        else:
+            #apply bandpass integration
+            weights_flat = np.ones(N_SAMPLE_BAND)
+
+            for f in range(len(self.nus)):
+                print('Integrate band: {0} GHz with {1} steps'.format(self.nus[f],N_SAMPLE_BAND))
+                fmin = self.nus[f]-self.bw[f]/2
+                fmax = self.nus[f]+self.bw[f]/2        
+                freqs = np.linspace(fmin, fmax, N_SAMPLE_BAND)
+                #generate d6 real. from given seed
+                np.random.seed(int(seed_eff[f]))
+
+                if preset_strings is not None:
+                    print('Doing Pysm3 models...')
+                    #apply band integration
+                    foreg_maps[f,:,:] = sky.get_emission(freqs * u.GHz, weights_flat) * bandpass_unit_conversion(freqs * u.GHz, weights_flat, u.uK_CMB)
+                    #hp.fitsfunc.write_map('./input_maps/{}_map_f{}GHz_bp{}pts_patch{}nside_{}.fits'.format(preset_strings, self.nus[f], N_SAMPLE_BAND,Nside_patch, self.name),foreg_maps[f,:,:], coord='G', overwrite=True)
+                    print('...Done.')
+        
+        pickle.dump({'d6s1map' : foreg_maps, 'freqs': self.nus}, open('./input_maps/{}_map_bp{}pts_patch{}nside_{}.pkl'.format(preset_strings, N_SAMPLE_BAND,Nside_patch, self.name), "wb"))
+        return foreg_maps, sky
+      
         
     def get_sky_maps(self, N_SAMPLE_BAND=100, Nside_patch=0, same_resol=None, verbose=False, coverage=False, noise=False):
         """

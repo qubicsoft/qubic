@@ -1,0 +1,66 @@
+{
+"num_of_iter": 500, # total number of iterations
+
+"r" : 0.0, # input r
+"Alens" : 0.5, # lensing residual
+
+"center_ra_dec" : [0,-45], # not important for SO (we use hit map)
+"fsky" : 0.1, # not important for SO (we use hit map)
+"sky_patch_type" : "external fits", #specify if sky patch is circular, otherwise use an external fits file
+"coverage_threshold" : 0.425105, # threshold to use for binary coverage map
+"nside" : 256, # nside input maps
+"apo_deg" : 10.0, # apodization scale for namaster
+"ell_min" : 30, 
+"ell_max" : 300,
+"delta_ell" : 10,
+"purify_b" : "True", # if True, compute pure-BB spectrum with NaMaster
+"purify_e" : "False", # if True, compute pure-EE spectrum with NaMaster
+
+"CMB_from_Planck" : "True", # if True, generate CMB realizations using Planck best-fit from FGB templates
+"CMB_from_CAMB" : "False", # if True, generate CMB realizations using CAMB
+"use_full_spectra" : "True", # if True, use all CMB spectra for map realization. if False, put TE,EE = 0
+"change_cmb_seed": "True", # if True, change CMB seed at each iteration
+
+"pysm_fg" : ["d1","s1"], ["d6","s1"],
+"Nside_fit" : 4, # nside of parameter reconstruction patch
+"temp_is_fixed" : "True", # if True, T dust is fixed
+"temp" : 20.0, # dust temperature over sky, if fixed
+"Add_Planck" : "False", # if True, add Planck data
+"corr_l" : 10.0, # for d6 model. If zero, no decorrelation
+"d6_num_seeds" : 100000, # for d6 model. Number of frequencies to use for d6 generations (between 1 GHz and maximum frequency)
+
+"nu0" : 95, # reference FGB frequency. Does not change anything in terms of compsep.
+"FGB_options" : "None", # add here FGB options
+"compsep_full_sky" : "False", # if True, do compsep full sky. otherwise, mask input maps before compsep
+
+"n_stk" : 2, # if 2, use only polarization for compsep
+"stk" : ["Q","U"],
+
+"sim_SO" : "True",
+"SO_freqs" : [27., 39., 93., 145., 225., 280.],
+"SO_bandwidth" : [8., 12., 28., 46, 70, 84],
+"SO_beam_fwhm" : [91., 63, 30, 17, 11, 9],
+"SO_mukarcmin_TT" : [35, 21, 2.6, 3.3, 6.3, 16],
+"SO_mukarcmin_P" : mukarcmin_TT*np.sqrt(2),
+"sim_BI" : "True",
+"n_subbands" : [3,5,7], # number of sub-bands to use for BI
+"N_sample_band" : 100, # number of frequencies used for bandpass integration (if 1, no bandpass integration)
+"split_low_freq_channels" : "False", # if False, will do spectral imaging only above 70 GHz
+"add_sup_opt" : "True", # if True, add sub-optimality in the noise level
+
+"spectra_type" : "cross", # either auto or cross. If cross, should add a sqrt(2) either in the maps or in the likelihood
+"add_sqrt2_4cross_maps" : "False", # if True, will multiply depth_p for sqrt(2) to mimic half-mission input maps to perform cross-spectra
+"add_sqrt2_4cross_likelihood" : "True", # if True, will multiply the noise covariance matrix used in the likelihood for sqrt(2) to mimic the case of cross-spectra (proxy)
+
+"add_one_over_f_noise" : "False", # if True, add 1/f noise
+"convolve_FHWM" : "False", # if True, convolve for beam
+"add_FG_marginalization" : "False", # if True, add foreground marginalization
+
+"noise_cov_matrix_4likelihood" : "diagonal", # Noise cov matrix for likelihood computation. Either diagonal or dense
+"Add_knox_covar_externally" : "False", # if True, adds the knox covar in the noise covariance matrix for likelihood computation. If CMB seeds were changed, should be False
+"remove_last_bin_Dl" : "True", # if True, remove last junk Dl bin
+"rv_vec" : np.linspace(0.0, 0.01, 600), # r range to use for Likelihood computation
+"with_d6_use_noise_from_d1" : "True", # if True, use noise covariance matrix N from d1 simulation with Dls from the d6 simulation. If False, use N from d6 simulation
+"compute_like_on_mean_Dl" : "True", # if True, compute L(r) only on the average Dl. If False, compute it for each iteration and take max-L value of r
+"flatprior" : [[-1,1]] # specify your prior here
+}

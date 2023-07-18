@@ -87,14 +87,16 @@ def fct_subopt(nus, nsubs):
     L.Mousset's work (QUBIC paper II)
     '''
     subnus = [150., 220]
-    nsubs_vec = [2,3,4,5,7]
+    nsubs_vec = [2,3,4,5,6,7,8]
     subval = []
     subval.append([1.25,1.1]) #2
     subval.append([1.35,1.15]) #3
     subval.append([1.35, 1.1]) #4
     subval.append([1.4, 1.2]) #5
+    subval.append([1.52, 1.32]) #6
     subval.append([1.5, 1.4]) #7
-    #subval.append([1.65,1.45]) #8
+    subval.append([1.65,1.45]) #8
+    print('Subopt from: {}'.format(subval[nsubs_vec.index(nsubs)]))
     fct_subopt = np.poly1d(np.polyfit(subnus, subval[nsubs_vec.index(nsubs)], 1))
     return fct_subopt(nus)
 
@@ -134,7 +136,8 @@ def qubicify(config, qp_nsubs, qp_effective_fraction, include_sub_opt = True):
         #add sup-opt on r
         if qp_nsubs[i]>1:
             if include_sub_opt:
-                scalefactor_noise *= fct_subopt(config['frequency'][i], np.max(qp_nsubs))
+                print('Adding subopt for {} sub in the {} channel'.format(qp_nsubs[i], config['frequency'][i]))
+                scalefactor_noise *= fct_subopt(config['frequency'][i], qp_nsubs[i])#np.max(qp_nsubs)
                 
         #rescale noise
         newdepth_p = config['depth_p'][i] * np.ones(qp_nsubs[i]) * scalefactor_noise
@@ -181,7 +184,7 @@ def plot_s4_bi_config_sensitivity(s4_config, qp_config):
     s4_freq = s4_config['frequency']
     bi_freq = qp_config['frequency']
     
-    figure(figsize=(16, 12))
+    figure(figsize=(20, 20))
     subplot(2, 2, 1)
     title('Depth I')
     errorbar(s4_freq, s4_config['depth_i'], xerr = s4_config['bandwidth']/2, fmt='ro', label='S4')
@@ -206,7 +209,48 @@ def plot_s4_bi_config_sensitivity(s4_config, qp_config):
     ylabel('FWHM [arcmin]')
     legend(loc='best')
     
+    tight_layout()
     savefig('./Instrumental_performance_comparison.png')
+    close()
+    return
+
+def plot_all_s4_bi_config_sensitivity(instrum_config):
+        #plot info
+    figure(figsize=(20, 20))
+    subplot(2,2,1)
+    if len(instrum_config)==4:
+        colors = ['r', 'orange', 'g', 'b']
+    else:
+        colors = ['r', 'm', 'orange', 'y', 'g', 'c', 'b', 'purple']
+    for i in range(len(instrum_config)):
+        errorbar(instrum_config[i]['frequency'], instrum_config[i]['depth_i'], xerr=instrum_config[i]['bandwidth']/2, color = colors[i],  fmt='o', label=instrum_config[i]['name'])
+
+    xlabel('Frequency [GHz]')
+    ylabel(r'Depth_i [$\mu$K.arcmin]')
+    legend(loc='best')
+    title('Experimental configurations')
+
+    subplot(2,2,2)
+    for i in range(len(instrum_config)):
+        errorbar(instrum_config[i]['frequency'], instrum_config[i]['depth_p'], xerr=instrum_config[i]['bandwidth']/2, color = colors[i],  fmt='o', label=instrum_config[i]['name'])
+    xlabel('Frequency [GHz]')
+    ylabel(r'$\mathrm{{Depth}}_{{p}}$ [$\mu$K $\times$ arcmin]')
+    legend(loc='best')
+    title('Experimental configurations')
+    #title(s4_config['name']+' and '+qp_config['name']+' Configuration')
+
+    subplot(2,2,3)
+    for i in range(len(instrum_config)):
+        errorbar(instrum_config[i]['frequency'], instrum_config[i]['fwhm'], xerr=instrum_config[i]['bandwidth']/2, color = colors[i],  fmt='o', label=instrum_config[i]['name'])
+    xlabel('Frequency [GHz]')
+    ylabel('FWHM [arcmin]')
+    title('Experimental configurations')
+    #title(s4_config['name']+' and '+qp_config['name']+' Configuration')
+    legend(loc='best')
+
+    tight_layout()
+    savefig('./Instrumental_performance_comparison.png')
+    close()
     return
 
 def check_s4_bi_noise_proportion(s4_config, qp_config):
@@ -499,22 +543,32 @@ def configure_fgb_instrument(conf, Nsample, Add_Planck=False):
     if Add_Planck == False:
         #set experiment name to be one of the experiments in the cmbdb experiment file
         if len(nus) == 9:
-            name='CMBS4'
-        elif ((len(nus)-3) % 6) == 0: #e.g. if n_subbands=5, then len(nus)==33
+            name='CMBS4'   
+        elif ((len(nus)-3) % 6) == 0: #len(nus)==21 or len(nus)==33 or len(nus)==45  e.g. if n_subbands=5, then len(nus)==33
             n_subs = int((len(nus)-3)/6)
             print(n_subs)
             name='QubicPlus_{}subbands'.format(n_subs)
             print(name)
+            
         else:
             name='CMBS4BI'
+            
+        '''
+        elif len(nus)==27 or len(nus)==45 or len(nus)==63:
+            n_subs = int(len(nus)/9)
+            print(n_subs)
+            name='QubicPlus_{}subbands'.format(n_subs)
+            print(name)
+        '''
         print()
         print('Define instrument taking into account bandpass integration')
         #def instrument and instrument.frequency taking bandpass integration into account
         if Nsample==1:
             instr = fgbuster.observation_helpers.get_instrument(name)
             #set depth manually to make sure it's the same level as the simulated instrument
+            instr.frequency = conf['frequency']
             instr.depth_i = conf['depth_i']
-            instr.depth_p = conf['depth_p']*np.sqrt(2) #take this as depth_q and depth_u, not actual depth_p
+            instr.depth_p = conf['depth_p']#*np.sqrt(2) #take this as depth_q and depth_u, not actual depth_p
             print('###################')
             print('Instrument is: {}'.format(name))
             print('Number of samples for bandpass integration: {}'.format(Nsample))
@@ -523,7 +577,7 @@ def configure_fgb_instrument(conf, Nsample, Add_Planck=False):
             instr = get_instr(conf, name, Nsample)
             #set depth manually to make sure it's the same level as the simulated instrument
             instr.depth_i = conf['depth_i']
-            instr.depth_p = conf['depth_p']*np.sqrt(2)
+            instr.depth_p = conf['depth_p']#*np.sqrt(2)
         else:
             print('ERROR: Set correct number of freq. for bandpass integration! At least 1')
     
@@ -546,7 +600,7 @@ def configure_fgb_instrument(conf, Nsample, Add_Planck=False):
             instr = fgbuster.observation_helpers.get_instrument(name)
             #set depth manually to make sure it's the same level as the simulated instrument
             instr.depth_i[0:-1] = conf['depth_i']
-            instr.depth_p[0:-1] = conf['depth_p']*np.sqrt(2) #take this as depth_q and depth_u, not actual depth_p
+            instr.depth_p[0:-1] = conf['depth_p']#*np.sqrt(2) #take this as depth_q and depth_u, not actual depth_p
             #instr.depth_p[-1] = instr.depth_p[-1]*np.sqrt(2) #multiply Planck noise-per-pixel by sqrt(2) cause it's an half-mission
             print('###################')
             print('Instrument is: {}'.format(name))
@@ -556,11 +610,11 @@ def configure_fgb_instrument(conf, Nsample, Add_Planck=False):
             instr = get_instr(conf, name, Nsample)
             #set depth manually to make sure it's the same level as the simulated instrument
             instr.depth_i[0:-1] = conf['depth_i']
-            instr.depth_p[0:-1] = conf['depth_p']*np.sqrt(2)
+            instr.depth_p[0:-1] = conf['depth_p']#*np.sqrt(2)
             #instr.depth_p[-1] = instr.depth_p[-1]*np.sqrt(2) #multiply Planck noise-per-pixel by sqrt(2) cause it's an half-mission
         else:
             print('ERROR: Set correct number of freq. for bandpass integration! At least 1')        
-        
+    print(instr.frequency)    
     print(instr.depth_p)
     return instr
 
@@ -653,6 +707,39 @@ def get_name_params(n_par, temp_is_fixed=True):
         return 1
 
     return params
+
+def eval_recon_freq_maps(n_stk, pixok, instrum_config, n_comp, n_par, A_beta, recons_maps, idx_to_use):
+    '''
+    Evaluates and returns the reconstructed frequency maps (Q and U) after the component separation. 
+    '''
+    
+    npixok = np.count_nonzero(pixok)
+    recon_pixel_over_freq = np.zeros((instrum_config['nbands'], n_stk))
+    
+    if n_stk == 2:
+        stk = ['Q','U']
+    else:
+        stk = ['I','Q','U']
+        
+    #eval single pixel reconstructed fg emission
+    for istk in range(n_stk):
+        #eval reconstructed frequency maps
+        mapout = np.zeros((instrum_config['nbands'], npixok))
+        if A_beta.ndim==3: #spatially varying parameters
+            for icomp in range(n_comp):
+                #exclude CMB. Use only fg
+                if icomp==0: #exclude CMB
+                    pass
+                else:
+                    mapout += A_beta[:, :, icomp].T*recons_maps[icomp, istk, pixok] #matrix [Nf,Npixok]
+        elif A_beta.ndim==2: #spatially constant parameters
+            mapout = np.dot(A_beta, recons_maps[:, istk, pixok]) #matrix [Nf,Npixok]
+        else:
+            print('Error! Check mixing matrix!')
+            
+        recon_pixel_over_freq[:,istk] = mapout[:,idx_to_use]
+
+    return recon_pixel_over_freq
 
 
 def eval_redu_chi_square_map(n_stk, npix, pixok, instrum_config, n_comp, n_par, A_beta, recons_maps, input_map, skyconfig, j, center, save_figs=True):

@@ -92,6 +92,18 @@ def ClsXX_2_DlsXX_binned(ell, Cls_XX):
     return Dls_XX
 
 
+def give_r_sigr(r, like):
+    maxL = r[np.argmax(like)]#r[like == like.max()]
+    
+    cumint = scipy.integrate.cumtrapz(like, x=r)
+    cumint = cumint / np.max(cumint)
+    onesigma = np.interp(0.68, cumint, r[1:])
+    #if len(maxL) != 1:
+    #    maxL = maxL[0]
+    
+    return maxL, onesigma
+
+
 #Likelihood Class --------------------------------------------------------------------------
 class binned_theo_Dls(object):
     def __init__(self, Alens, nside, coverage, cambfilepath, lmin=21, delta_ell=35, lmax_used=335):
@@ -193,8 +205,10 @@ class binned_theo_Dls(object):
     
     
     def get_DlsBB_from_Planck(self, ell, r):
+        #print('My results:\n')
         ell_to_use = np.round(ell,0).astype(int)
         #print('Ell for theo Dls:', ell_to_use)
+        
         cls_BB = self.planck_Cls_BB(r)
         #print('Cls for theo Dls:', cls_BB)
         
@@ -204,8 +218,18 @@ class binned_theo_Dls(object):
         Dls_BB = np.zeros(len(ell_to_use))
         for i in range(len(ell_to_use)):
             Dls_BB[i] = cls_BB[ell_to_use[i]-1]*ell_to_use[i]*(ell_to_use[i]+1)/(2*np.pi)
-            
-        #print('Dls for theo Dls:', Dls_BB)
+        #print('Dls that I would have used: ', Dls_BB)
+        '''
+        #print('Mathias results:\n')
+        #print('Ell: ', ell)
+        #print('Ell index used by Mathias: {}'.format(ell.astype(int))-1)
+        cls_BB = self.planck_Cls_BB(r)[ell.astype(int)-1]
+        
+        Dls_BB = np.zeros(len(ell))
+        for i in range(len(ell)):
+            Dls_BB[i] = (ell[i]*(ell[i]+1)*cls_BB[i])/(2*np.pi)
+        #print('Dls used by Mathias: ', Dls_BB)
+        '''
         return Dls_BB
         
 
@@ -221,3 +245,5 @@ class binned_theo_Dls(object):
         DlsBB = self.get_DlsBB_from_Planck(ell, r) 
         
         return DlsBB[:] #clBB[:] #clBB[:]
+    
+

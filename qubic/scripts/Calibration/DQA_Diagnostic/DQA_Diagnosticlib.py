@@ -693,25 +693,33 @@ class Diagnostic:
             #if for some reason we only have part of the focalplane, set the missing tod info to zero
             self.tod = np.zeros((self.num_det, tod_input.shape[-1]))
             self.tod[:tod_input.shape[0],:] = tod_input
+            #make a 2D time array (N_det, N_timestamp)
+            self.time_fp = np.tile(self.timeaxis, (self.num_det,1))
             
             #create directory name to save focal plane plots using the dataset name
             self.path_FP = './FocalPlane_{}'.format(self.data_date)
             
         else:
             #there's more than one qubicfc (dataset) to load
-            self.timeaxis, _= self.a[0].tod()
+            tmp_time_array, _= self.a[0].tod()
             self.num_datasets = len(self.a)
             print('There are {} datasets'.format(self.num_datasets))
-            self.tod = np.zeros((self.num_datasets, self.num_det, len(self.timeaxis))) #[]
+            self.tod = np.zeros((self.num_datasets, self.num_det, len(tmp_time_array))) 
+            self.timeaxis = np.zeros((self.num_datasets, len(tmp_time_array))) 
+            self.time_fp = np.zeros((self.num_datasets, self.num_det, len(tmp_time_array))) 
             for i in range(self.num_datasets):
-                _, tod_input = self.a[i].tod()
-                self.tod[i, :tod_input.shape[0], :] = tod_input 
+                time_input, tod_input = self.a[i].tod()
+                self.tod[i, :tod_input.shape[0], :] = tod_input
+                self.timeaxis[i] = time_input
+                #make a 2D time array (N_det, N_timestamp) #THIS NEEDS TO BE FIXED!!!!!!!!!!!!!!!!!!
+                self.time_fp[i] = np.tile(self.timeaxis, (self.num_det,1))
                 
             #create directory name to save focal plane plots: use only the DATE of the set of datasets in this case
             self.path_FP = './FocalPlane_{}'.format(self.data_date[0].split('_')[0])
 
         print('Timeline : ', self.timeaxis.shape)
         print('ADU : ', self.tod.shape)
+        print('Timeline focalplane: ', self.time_fp.shape)
         #create directory to save focal plane plots    
         if not os.path.exists(self.path_FP):
             print('Creating directory : ', self.path_FP)
@@ -733,10 +741,10 @@ class Diagnostic:
         - do_plot: if True, plots the focal plane
         '''
 
-        frac_sat_time = np.zeros(self.num_det)
-        tes_to_use = np.ones(self.num_det, dtype=bool)
+        frac_sat_time = np.zeros(self.num_det) # to be filled with fraction of saturation time of each detector
+        tes_to_use = np.ones(self.num_det, dtype=bool) # to be filled with a saturation Bool for each detector (False = saturated)
 
-        colors = np.ones(self.num_det, dtype=str) 
+        colors = np.ones(self.num_det, dtype=str) # to be filled with a color based on the saturation state of the detector 
 
         for i in range(self.num_det):
             mask1 = adu[i] > self.upper_satval
@@ -765,7 +773,7 @@ class Diagnostic:
                                                                                                     fraction_saturated_tes*100,
                                                                                                     fraction_not_saturated_tes*100)
             savefig_path_and_filename = self.path_FP+'/Focal_plane_saturation_{}'.format(data_date_full)
-            self.plot_focal_plane(self.timeaxis, adu, colors, plot_suptitle=suptitle_to_use, path_and_filename=savefig_path_and_filename, frac_sat_time=frac_sat_time)
+            self.plot_focal_plane(self.time_fp, adu, colors, plot_suptitle=suptitle_to_use, path_and_filename=savefig_path_and_filename, frac_sat_time=frac_sat_time)
 
         return tes_to_use, colors, fraction_saturated_tes, frac_sat_time
         
@@ -787,6 +795,7 @@ class Diagnostic:
             self.frac_sat_time = np.zeros((self.num_datasets, self.num_det)) 
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
+                ############################################ FIX THIS: ADD TIME self.time_fp[j] and change do_saturation_diagnostic!!!!!!!!!!!!!!
                 self.tes_to_use[j,:], self.colors[j,:], self.frac_saturation[j], self.frac_sat_time[j] = self.do_saturation_diagnostic(self.tod[j], self.data_date[j], do_plot)
             pickle.dump([self.tes_to_use, self.frac_saturation, len(self.timeaxis), self.frac_sat_time], open(self.path_FP+'/{}_Saturated_TES_statistics.pkl'.format(self.data_date[0].split('_')[0]),'wb'))
                 
@@ -817,7 +826,7 @@ class Diagnostic:
         estimate = np.zeros(ndet)
         spectrum_density = []
         for i in range(ndet):
-            spectrum_f, freq_f = ft.power_spectrum(time, adu[i, :], rebin=True)
+            spectrum_f, freq_f = ft.power_spectrum(time[i], adu[i, :], rebin=True)
             spectrum_density.append(spectrum_f)
             mean_level = np.mean(spectrum_f[np.abs(freq_f) > (3*np.max(freq_f) / 4)])
             samplefreq = 1. / (time[1] - time[0])
@@ -844,14 +853,14 @@ class Diagnostic:
         
         print('-----> Power spectrum computation ')
         if isinstance(self.data_date, str): #there's only one dataset
-            self.noise_level, self.spectrum_density, self.frequency = self.hf_noise_estimate_and_spectrum(self.timeaxis, self.tod, self.data_date, self.colors, do_plot)
+            self.noise_level, self.spectrum_density, self.frequency = self.hf_noise_estimate_and_spectrum(self.time_fp, self.tod, self.data_date, self.colors, do_plot)
         else: #there is more than one dataset. loop over all of them 
             noise_level = []
             spectrum_density = []
             freq = []
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
-                noise_level_tmp, spectrum_density_tmp, freq_tmp  = self.hf_noise_estimate_and_spectrum(self.timeaxis, self.tod[j], self.data_date[j], self.colors[j], do_plot)
+                noise_level_tmp, spectrum_density_tmp, freq_tmp  = self.hf_noise_estimate_and_spectrum(self.time_fp[j], self.tod[j], self.data_date[j], self.colors[j], do_plot)
                 noise_level.append(noise_level_tmp)
                 spectrum_density.append(spectrum_density_tmp)
                 freq.append(freq_tmp)
@@ -933,7 +942,7 @@ class Diagnostic:
                                                                                                     fraction_saturated_tes*100,
                                                                                                     frac_flux*100)
             savefig_path_and_filename = self.path_FP+'/Focal_plane_saturation_and_jumps_{}'.format(data_date_full)
-            self.plot_focal_plane(self.timeaxis, adu, colors_to_use, plot_suptitle=suptitle_to_use, path_and_filename=savefig_path_and_filename)
+            self.plot_focal_plane(self.time_fp, adu, colors_to_use, plot_suptitle=suptitle_to_use, path_and_filename=savefig_path_and_filename)
 
         return tes_to_use, colors_to_use, frac_flux
         
@@ -951,12 +960,12 @@ class Diagnostic:
         print()
         print('-----> Flux jump detection')
         if isinstance(self.data_date, str): #there's only one dataset
-            self.tes_to_use, self.colors, self.frac_flux = self.do_fluxjump_diagnostic(self.timeaxis, self.tod, self.data_date, self.tes_to_use ,self.colors, self.frac_saturation, do_plot) 
+            self.tes_to_use, self.colors, self.frac_flux = self.do_fluxjump_diagnostic(self.time_fp, self.tod, self.data_date, self.tes_to_use ,self.colors, self.frac_saturation, do_plot) 
         else: #there is more than one dataset. loop over all of them
             self.frac_flux = np.zeros(self.num_datasets) 
             for j in tqdm(range(self.num_datasets)):
                 print('Doing dataset nr. {}'.format(j+1))
-                self.tes_to_use[j,:], self.colors[j,:], self.frac_flux[j] = self.do_fluxjump_diagnostic(self.timeaxis, self.tod[j], self.data_date[j], self.tes_to_use[j], self.colors[j], self.frac_saturation[j], do_plot)
+                self.tes_to_use[j,:], self.colors[j,:], self.frac_flux[j] = self.do_fluxjump_diagnostic(self.time_fp[j], self.tod[j], self.data_date[j], self.tes_to_use[j], self.colors[j], self.frac_saturation[j], do_plot)
                 
         return
 
@@ -1084,7 +1093,7 @@ class Diagnostic:
                 plot_suptitle = '{} : FP timeline'.format(self.data_date[j])
                 print('Plotting:', plot_suptitle)
                 path_and_filename = self.path_FP+'/Focal_plane_{}'.format(self.data_date[j])
-                self.plot_focal_plane(self.timeaxis, self.tod[j], colors_plot, plot_suptitle, path_and_filename)
+                self.plot_focal_plane(self.timeaxis[j], self.tod[j], colors_plot, plot_suptitle, path_and_filename)
         return
     
 

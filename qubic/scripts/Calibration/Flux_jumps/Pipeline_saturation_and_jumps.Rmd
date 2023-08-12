@@ -1,0 +1,535 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.5.0
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+General idea of a pipeline for the detection of the time samples with saturation and flux jumps
+
+Author: Belén Costanza, Elenia Manzan, Mathias Regnier
+
+```{python}
+import numpy as np
+from qubicpack.qubicfp import qubicfp
+import sys,os
+import numpy as np
+import glob
+
+from qubic import fibtools as ft
+
+import matplotlib.pyplot as plt
+from pysimulators import FitsArray
+
+from qubic import fibtools as ft
+from qubic.plotters import *
+from qubicpack.qubicfp import qubicfp
+import qubic.demodulation_lib as dl
+import qubic.sb_fitting as sbfit
+from qubic.io import write_map
+
+import matplotlib.mlab as mlab
+import scipy.ndimage.filters as f
+
+from scipy.signal import argrelextrema, find_peaks, find_peaks_cwt, savgol_filter 
+
+import bottleneck as bn
+from sklearn.cluster import DBSCAN
+```
+
+```{python}
+# %matplotlib notebook
+```
+
+Put the day that you want to analyze 
+
+```{python}
+day = '2023-03-06'
+data_dir = '/home/qubic/Calib-TD/'+day+'/'
+words = ['DomeOpen']
+keywords = ['*{}*'.format(word) for word in words]
+for keyword in keywords:
+    dirs = np.sort(glob.glob(data_dir+keyword))
+    print(dirs)
+```
+
+```{python}
+dirs[0]
+```
+
+```{python}
+if len(dirs)==1: 
+    dataset0 = dirs[0]
+    a = qubicfp()
+    a.read_qubicstudio_dataset(dataset0)
+
+
+else: 
+    for ifile in range(len(dirs)):
+        thedir = dirs[ifile]
+        print('================', thedir,)
+        locals()['qfp_{}'.format(ifile)] = qubicfp()
+        locals()['qfp_{}'.format(ifile)].read_qubicstudio_dataset(thedir)
+        locals()['tod_{}'.format(ifile)] = locals()['qfp_{}'.format(ifile)].tod()
+```
+
+```{python}
+tod = a.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+
+
+```
+
+```{python}
+init = timeaxis[0]
+tt = timeaxis - init
+```
+
+```{python}
+
+```
+
+### Saturation function
+
+```{python}
+def saturation(todarray): 
+    
+    #returns  ok = array of True and False, True if it's saturated, False if's not
+    #         bad_idx = idx of the saturated TES in the focalplane 
+    #         frac_sat_pertes = fraction of the TOD saturated in the TES
+    #         number = number of TES saturated 
+    
+    ok = np.ones(256,dtype=bool)
+    maxis = np.max(abs(todarray), axis=1)
+    upper_satval = 4.19e6
+    lower_satval = -4.19e6
+    
+    frac_sat_pertes = np.zeros((256))
+    size = todarray.shape[1]
+
+    for i in range(len(todarray)): 
+        mask1 = todarray[i] > upper_satval
+        mask2 = todarray[i] < lower_satval
+        frac = (np.sum(mask1)+np.sum(mask2))/size
+        frac_sat_pertes[i] = frac
+    
+        if frac_sat_pertes[i] ==0:
+            ok[i] = True #good, no saturated
+        elif frac_sat_pertes[i] > 0.:
+            ok[i] = False #bad, saturated
+        else:
+            ok[i] = True
+    
+    bad_idx = np.array(np.where(ok==False))
+    bad_idx = np.reshape(bad_idx, bad_idx.shape[1])        
+    number = len(bad_idx)    
+        
+    return ok, bad_idx, frac_sat_pertes, number
+```
+
+```{python}
+ok, bad_idx, frac, number = saturation(todarray)
+```
+
+- How many TES are saturated? 
+- Which ones? 
+
+```{python}
+print('number of TES saturated in the focal plane:', number)
+```
+
+```{python}
+print('index TES saturated:')
+print(bad_idx)
+```
+
+```{python}
+TES_saved = (frac < 0.1) & (frac >0.)
+TES_number = np.arange(256)
+index_TES_saved = TES_number[TES_saved]
+print('TES with saturation less than 10% and the signal can be saved')
+print(index_TES_saved)
+```
+
+```{python}
+plt.title('TES with saturation less than 10%')
+for i in range(len(index_TES_saved)):
+    index = index_TES_saved[i]
+    plt.plot(tt, todarray[index])
+```
+
+```{python}
+bad_tod = np.array(np.where(ok==False))
+bad_tod = np.reshape(bad_tod, (bad_tod.shape[1]))
+```
+
+```{python}
+TES_saturated = bad_tod
+```
+
+### Jumps functions
+
+We are going to look out the TES with no saturation and identify the jumps candidates
+
+```{python}
+print('index TES with no saturation:')
+good_tod = np.array(np.where(ok==True))
+good_tod = np.reshape(good_tod, (good_tod.shape[1]))
+print(good_tod)
+```
+
+Necessary functions for the detection
+
+```{python}
+def haar(x, size=100):
+    out = np.zeros(x.size)
+    xf = bn.move_median(x, size)[size:]   
+    out[size+size//2:-size+size//2] = xf[:-size] - xf[size:]
+    return out
+
+def find_jumps(tod_haar, thr):    #Elenia's version, function that iterate through many thresholds
+    number = 0
+    jumps = 0
+    thr_used = 0 
+        #iterate over the amplitude thresholds
+    for j,thr_val in enumerate(thr):
+        if number == 0: #haven't detected any jump yet
+            if max(abs(tod_haar)) < thr_val:
+                print('No jump')
+            else: #there's a jump
+                number += 1
+                thr_used = thr_val
+                print('Found jump')
+                jumps = (abs(tod_haar) >= thr_val) #save the timestamp of the jump
+                threshold_TES = thr_val
+        else:
+            pass
+    return jumps, thr_used
+
+def clusters(todarray,jumps):
+    size=130
+    idx = np.arange(len(todarray))
+    idx_jumps = idx[jumps]
+    if idx_jumps.size > 1:
+        clust = DBSCAN(eps=size//5, min_samples=1).fit(np.reshape(idx_jumps, (len(idx_jumps),1)))
+        nc = np.max(clust.labels_)+1
+    else: 
+        nc = 0.
+        idx_jumps = 0.
+        clust = 0.
+    return nc, idx_jumps, clust
+
+def star_end(nc, idx_jumps, tod_haar, thr_used, clust):
+    #consider the jump to be over when it's (filtered) amplitude is reduced by 95% (beware: now use raw tod!)
+    xc = np.zeros(nc, dtype=int) 
+    xcf = np.zeros(nc, dtype=int)
+    
+    for i in range(nc):
+        idx_jumps_from_thr = idx_jumps[clust.labels_ == i]
+        idx_delta_end_jump = np.where( tod_haar[idx_jumps_from_thr[-1]:] < thr_used*0.05 )[0][0]
+        idx_delta_start_jump = idx_jumps_from_thr[0] - np.where( tod_haar[:idx_jumps_from_thr[0]] < thr_used*0.05 )[0][-1]
+        xc[i] = idx_jumps_from_thr[0] - idx_delta_start_jump
+        xcf[i] = idx_jumps_from_thr[-1] + idx_delta_end_jump
+        
+    delta = xcf - xc
+    return xc, xcf, delta 
+        
+```
+
+Function that detect the time samples of the jumps using the functions defined in the cell above
+
+```{python}
+def jumps_detection(todarray):
+    size = 130
+    thr = np.array([2e5, 1.5e5, 1e5, 5e4, 4e4, 3e4])
+    
+    tod_haar = haar(todarray,size) #1. make the haar filter of the raw TOD
+    
+    jumps, thr_used= find_jumps(tod_haar, thr) #2. if the haar filter is higher than a threshold then is a jump 
+                                               #   (iterate through an array of possible thresholds)
+   
+    nc, idx_jumps, clust = clusters(todarray, jumps) #3. Cluster the jumps and find the number of jumps detected in every TES
+    
+    if nc==0.:
+        xc=0
+        xcf=0
+        delta=0
+        return nc, xc, xcf, delta
+    
+    if nc > 10:                                         #4. Elenia's idea: if the number of jumps is higher than 10, then filter the raw TOD with Salvitzky golay                                                       # then filter
+        thr = np.array([2e5, 1.5e5, 1e5, 5e4, 4e4, 3e4])
+        tod_sav = savgol_filter(todarray,window_length=401,polyorder=3, mode='nearest')
+        tod_haar_sav = haar(tod_sav, size)
+        jumps_sav, thr_used = find_jumps(tod_haar_sav, thr)
+        nc, idx_jumps, clust = clusters(tod_sav, jumps_sav)
+        if nc==0:
+            xc=0
+            xcf=0
+            delta=0
+            return nc, xc, xcf, delta
+    
+    xc, xcf, delta = star_end(nc, idx_jumps, tod_haar, thr_used, clust) #5. find the beginning and the end of a jump, also the size of the jump
+
+    
+    return nc, xc, xcf, delta
+    
+
+```
+
+run the code over the entire set of TES with no saturation
+
+```{python}
+for i in range(len(good_tod)):
+    idx_good = good_tod[i]
+    print('Analisis TES', idx_good)
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)],  locals()['delta_{}'.format(idx_good)]=jumps_detection(todarray[idx_good])
+```
+
+```{python}
+TES_jump = np.ones(len(good_tod), dtype=int)
+for i in range(len(good_tod)):
+    idx = good_tod[i]   
+    result = locals()['nc_{}'.format(idx)]
+    if result == 0.:
+        TES_jump[i] = 0 
+        
+TES_yes = np.array(np.where(TES_jump==1))
+TES_yes = good_tod[TES_yes]
+TES_no = np.array(np.where(TES_jump==0))
+TES_no = good_tod[TES_no]
+```
+
+```{python}
+print('index of TES with candidates to flux jumps detected:')
+print(TES_yes)
+```
+
+```{python}
+TES_yes = np.reshape(TES_yes, TES_yes.shape[1])
+TES_no = np.reshape(TES_no, TES_no.shape[1])
+```
+
+```{python}
+
+```
+
+```{python}
+np.save('TES_candidates_jumps_0306.npy', TES_yes)
+np.save('TES_nojumps_0306.npy', TES_no)
+np.save('TES_saturated_0306.npy', TES_saturated)
+```
+
+```{python}
+
+```
+
+If you have enough memory you can plot the function of Mathias that plot all the TES in the focalplane with the raw TOD and colors.
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+### Discrimination functions
+
+Not all of the TES with flux jumps detected have real flux jumps, some of them are only very noisy TES with higher peaks that the code confuses as jumps. 
+
+Apply discrimination functions that can estimate if it's a real jump or not: 
+
+- Threshold to the size of a jump (very tiny jumps are probably not jumps)
+- Take a region near the jump detected and analyze the derivation, the derivative of a peak won't change a lot as the derivative of a jump (in general it's deeper). Here we made an iteration over many characteristic thresholds in the derivative 
+
+```{python}
+def redefine_jumps(nc, xc, xcf, delta):
+    delta_thr = np.rint(len(tt)/4915.2)
+    del_idx = np.reshape(np.array(np.where(delta<delta_thr)),np.array(np.where(delta<delta_thr)).shape[1])
+    xc = np.delete(xc, del_idx) #if the amount of time samples is less than 90 probably is not a jump 
+    xcf = np.delete(xcf, del_idx)
+    nc -= len(del_idx)
+    return nc, xc, xcf   
+
+def derivation(todarray, xc, xcf, region=10):
+    ini, fin = xc, xcf
+    tod_portion, time_portion = todarray[ini-region:fin+region], tt[ini-region:fin+region]
+    smooth_tod = savgol_filter(tod_portion, window_length=401, polyorder=4, mode='nearest')
+    deriv_tod_smooth = np.diff(smooth_tod)
+    deriv_tod_raw = np.diff(tod_portion)
+    return time_portion, tod_portion, smooth_tod, deriv_tod_smooth    
+```
+
+```{python}
+nc_171_new, xc_171_new, xcf_171_new = redefine_jumps(nc_171, xc_171, xcf_171, delta_171)
+```
+
+only an example
+
+```{python}
+fig, ax=plt.subplots(1,2)
+
+ax[0].plot(tt, todarray[171])
+ax[0].set_title('TES 171: jumps before')
+ax[0].plot(tt[xc_171], todarray[171][xc_171], 'r.')
+ax[0].plot(tt[xcf_171], todarray[171][xcf_171], 'g.')
+
+ax[1].plot(tt, todarray[171])
+ax[1].set_title('TES 171: jumps after')
+ax[1].plot(tt[xc_171_new], todarray[171][xc_171_new], 'r.')
+ax[1].plot(tt[xcf_171_new], todarray[171][xcf_171_new], 'g.')
+```
+
+run the discrimination functions over the entire set of TES with flux jumps detected:
+
+```{python}
+thr_deriv = np.array([4000,3000,2500, 2300, 1800])
+idx_real = np.zeros(len(TES_yes), dtype=int)
+for i in range(len(TES_yes)):
+    index = TES_yes[i]
+    tod = todarray[index] 
+    nc_old = locals()['nc_{}'.format(index)]
+    xc_old = locals()['xc_{}'.format(index)]
+    xcf_old = locals()['xcf_{}'.format(index)]
+    delta = locals()['delta_{}'.format(index)]
+    locals()['nc_new_{}'.format(index)], locals()['xc_new_{}'.format(index)], locals()['xcf_new_{}'.format(index)] = redefine_jumps(nc_old, xc_old, xcf_old, delta)
+    
+    nc_new = locals()['nc_new_{}'.format(index)]    
+    xc_new = locals()['xc_new_{}'.format(index)]
+    xcf_new = locals()['xcf_new_{}'.format(index)]
+    
+    for j in range(nc_new):            
+        time_portion, tod_portion, smooth_tod, deriv_tod = derivation(tod, xc_new[j], xcf_new[j], region=10)
+        for k in range(len(thr_deriv)):
+            if max(abs(deriv_tod)) > thr_deriv[k]:
+                idx_real[i] = 1
+```
+
+```{python}
+tes_real_jump = TES_yes[idx_real==1]
+tes_no_jump = TES_yes[idx_real == 0]
+```
+
+```{python}
+TES_yesjumps = tes_real_jump
+```
+
+```{python}
+print('index of TES with real flux jumps:')
+tes_real_jump
+```
+
+```{python}
+plt.title('TES with real jumps')
+for i in range(len(tes_real_jump)):
+    index = tes_real_jump[i]
+    plt.plot(tt, todarray[index])
+```
+
+```{python}
+TES_nojumps = np.concatenate((TES_no, tes_no_jump))
+```
+
+```{python}
+TES_nojumps = np.sort(TES_nojumps)
+```
+
+```{python}
+TES_nojumps
+```
+
+```{python}
+plt.title('TES with no jumps')
+for i in range(len(TES_nojumps)):
+    index = TES_nojumps[i]
+    plt.plot(tt, todarray[index])
+```
+
+```{python}
+
+```
+
+Until now you have three important arrays: 
+ - TES_saturated = index of the TES with saturation 
+ - TES_yesjumps = index of the TES with flux jumps (detected by this process)
+ - TES_nojumps = index of TES with no flux jumps and no saturation 
+
+```{python}
+np.save('TES_real_jumps_0306.npy', TES_yesjumps)
+np.save('TES_real_nojumps_0306.npy', TES_nojumps)
+```
+
+```{python}
+def offset_func(todarray, xc, xcf, number, region=50, order=1):  
+    #tod_new = todarray.copy()
+    offset_lin = np.zeros(number)
+    idx = np.arange(len(todarray))
+    for i in range(len(xc)): 
+        offset_lin[i] = np.median(todarray[xcf[i]:xcf[i]+region])-np.median(todarray[xc[i]-region:xc[i]])
+    
+    pol = np.zeros(len(xc))
+    offset_pol = np.zeros(len(xc))
+    for i in range(len(xc)):        
+        tp = tt[xc[i]-region:xcf[i]+region]
+        adup = todarray[xc[i]-region:xcf[i]+region]
+        z = np.polyfit(tp, adup, order)
+        p = np.poly1d(z)
+        pol = p(tp)
+        offset_pol[i] = pol[-1]-pol[0]
+    
+    return offset_lin, offset_pol
+```
+
+```{python}
+index_TES_saved
+```
+
+```{python}
+nc_sat_3
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+for i in range(len(index_TES_saved)):
+    index = index_TES_saved[i]
+    tod = todarray[index]
+    locals()['nc_sat_{}'.format(index)], locals()['xc_sat_{}'.format(index)], locals()['xcf_sat_{}'.format(index)], locals()['delta_sat_{}'.format(index)] = jumps_detection(tod)
+    locals()['off_lin_{}'.format(index)], locals()['off_pol_{}'.format(index)] = offset_func(tod, locals()['xc_sat_{}'.format(index)], locals()['xcf_sat_{}'.format(index)], locals()['nc_sat_{}'.format(index)])
+    
+```
+
+```{python}
+for i in range(len(index_TES_saved)):
+    index = index_TES_saved[i]
+    print('TES',index) 
+    print('offset',locals()['off_lin_{}'.format(index)])
+```
+
+```{python}
+plt.plot(tt, todarray[13])
+plt.plot(tt[xc_sat_13], todarray[13][xc_sat_13], 'r.')
+plt.plot(tt[xcf_sat_13], todarray[13][xcf_sat_13], 'g.')
+```
+
+```{python}
+
+```

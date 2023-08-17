@@ -144,7 +144,7 @@ We would like to perform the following displays:
 
 ```{python}
 def getP(maps, mask):
-    P = np.sqrt(maps[:,1]**2 + maps[:,2]**2) / maps[:,0]
+    P = np.sqrt(maps[:,1]**2 + maps[:,2]**2) / (2.7e6+maps[:,0])
     PQ = P.copy()
     PQ[~mask] = hp.UNSEEN
     return P, PQ
@@ -154,7 +154,7 @@ Pcmb, PcmbQ = getP(mycmb, mask)
 Psky, PskyQ = getP(mysky, mask)
 
 mini = 0
-maxi = 1
+maxi = 1e-5
 hp.mollview(Pdust, sub=(2,3,1), title='Dust P @ {} GHz'.format(nu_ref), min=mini, max=maxi)
 hp.mollview(Pcmb, sub=(2,3,2), title='CMB P @ {} GHz'.format(nu_ref), min=mini, max=maxi)
 hp.mollview(Psky, sub=(2,3,3), title='Both P @ {} GHz'.format(nu_ref), min=mini, max=maxi)
@@ -234,45 +234,242 @@ hp.mollview(maphs, sub=(1,2,1), title='Hot: {}   - Cold: {}'.format(len(minpix),
 ```
 
 ```{python}
-np.argsort(map2use[maxpix])[::-1]
-```
-
-```{python}
 def show_gnom_around_pix(themap, pix, reso, sub=None, no_plot=True, xsize=None):
     ns = hp.npix2nside(len(themap))
     rot = hp.pix2ang(ns, pix, lonlat=True)
-    mm = hp.gnomview(themap, rot=rot, reso=reso, sub=sub, return_projected_map=True, no_plot=True, xsize=xsize)
+    mm = hp.gnomview(themap, rot=rot, reso=reso, sub=sub, return_projected_map=True, no_plot=no_plot, xsize=xsize)
     return mm
+
+def iterate_allpix(mapmax, mapQ, mapU, maxpixels, npixmap=100):
+    reso = 2.5*60/(npixmap/2)
+    mm = np.zeros((npixmap, npixmap))
+    mmQ = np.zeros((npixmap, npixmap))
+    mmU = np.zeros((npixmap, npixmap))
+
+    ### The big loop
+    bar = qubic.progress_bar(len(maxpixels))
+    for i in range(len(maxpixels)):
+        bar.update()
+        mm += show_gnom_around_pix(mapmax, maxpixels[i], reso, xsize=npixmap) / nb
+        mmQ += show_gnom_around_pix(mapQ, maxpixels[i], reso, xsize=npixmap) / nb
+        mmU += show_gnom_around_pix(mapU, maxpixels[i], reso, xsize=npixmap) / nb
+
+    ### Remove offsets
+    newQ = mmQ - np.median(mmQ)
+    newU = mmU - np.median(mmU)
+
+    ### Transform into the radial Q & U
+    x0 = (np.arange(npixmap)-npixmap/2+0.5) * reso / 60
+    xx, yy = np.meshgrid(x0, x0)
+    theta = sqrt(xx**2+yy**2)
+    phi = (np.pi-arctan2(yy,xx))
+    Qr = -newQ * cos(2*phi) - newU * sin(2*phi)
+    Ur = newQ * sin(2*phi) - newU * cos(2*phi)
+    
+    return mm, mmQ, mmU, Qr, Ur
 
 npixmap = 100
 reso = 2.5*60/(npixmap/2)
 nn = 3
 
-
-mm = np.zeros((npixmap, npixmap))
-mmQ = np.zeros((npixmap, npixmap))
-mmU = np.zeros((npixmap, npixmap))
-
 themap = hp.ud_grade(mycmb.T, ns_used).T
+mypixels = maxpix.copy()
 
-### Order from the highest to smallest
-mymaxpix = maxpix.copy()
-
-show_gnom_around_pix(themap[:,0], mymaxpix[0], reso, xsize=npixmap, no_plot=False)
+show_gnom_around_pix(themap[:,0], mypixels[0], reso, xsize=npixmap, no_plot=False)
 show()
-
-nb = len(maxpix)#*0+300
-for i in range(nb):
-    if (i%100) == 0: print(i)
-    mm += show_gnom_around_pix(themap[:,0], mymaxpix[i], reso, xsize=npixmap) / nb
-    mmQ += show_gnom_around_pix(themap[:,1], mymaxpix[i], reso, xsize=npixmap) / nb
-    mmU += show_gnom_around_pix(themap[:,2], mymaxpix[i], reso, xsize=npixmap) / nb
 
 ```
 
 ```{python}
+### Stacking on maxima
+print('Doing Maxima')
+mmpos, mmQpos, mmUpos, Qrpos, Urpos = iterate_allpix(themap[:,0], themap[:,1], themap[:,2], maxpix, npixmap=100)
+
+### Stacking on minima
+print('Doing Minima')
+mmneg, mmQneg, mmUneg, Qrneg, Urneg = iterate_allpix(themap[:,0], themap[:,1], themap[:,2], minpix, npixmap=100)
+```
+
+```{python}
+
+```
+
+```{python}
+import skimage.measure #(conda install scikit-image)
+
+
+def plot_vector_resample(xx, yy, Q, U, Z, nrs=5):
+    new_xx = skimage.measure.block_reduce(xx, (nrs,nrs), np.mean)
+    new_yy = skimage.measure.block_reduce(yy, (nrs,nrs), np.mean)
+    new_mmQ = skimage.measure.block_reduce(Q, (nrs,nrs), np.mean)
+    new_mmU = skimage.measure.block_reduce(U, (nrs,nrs), np.mean)
+    new_Z = skimage.measure.block_reduce(Z, (nrs,nrs), np.mean)
+    
+    gamma = -0.5 * arctan2(-new_mmU,-new_mmQ)
+    xP = new_Z * cos(gamma)
+    yP = new_Z * sin(gamma)
+
+    quiver(new_xx,new_yy,xP,yP, width=0.005, headwidth=0, headlength=0, headaxislength=0, pivot='mid')
+
+
+```
+
+```{python}
+subplot(2,3,1)
+imshow(mmpos, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], 
+       cmap = 'jet', origin='lower', vmin=-140, vmax=140)
+xlabel('Degrees')
+ylabel('Degrees')
+title('Stokes I')
+colorbar()
+grid()
+
+subplot(2,3,2)
+imshow(mmQpos, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', 
+       cmap='jet', vmin=-0.5, vmax=0.5)
+xlabel('Degrees')
+ylabel('Degrees')
+title('Stokes Q')
+colorbar()
+grid()
+
+subplot(2,3,3)
+imshow(mmUpos, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', 
+       cmap='jet', vmin=-0.5, vmax=0.5)
+xlabel('Degrees')
+ylabel('Degrees')
+title('Stokes U')
+colorbar()
+grid()
+
+subplot(2,2,3)
+imshow(Qrpos, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', 
+       cmap='jet', vmin=-0.5, vmax=0.5)
+xlabel('Degrees')
+ylabel('Degrees')
+colorbar()
+title('Qr')
+grid()
+Prpos = sqrt(Qrpos**2 + Urpos**2)
+plot_vector_resample(xx, yy, mmQpos, mmUpos, Prpos, nrs=4)
+
+subplot(2,2,4)
+imshow(Urpos, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', cmap='jet', vmin=-0.5, vmax=0.5)
+xlabel('Degrees')
+ylabel('Degrees')
+colorbar()
+title('Ur')
+grid()
+
+tight_layout()
+```
+
+```{python}
+subplot(2,3,1)
+imshow(mmneg, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], 
+       cmap = 'jet', origin='lower', vmin=-140, vmax=140)
+xlabel('Degrees')
+ylabel('Degrees')
+title('Stokes I')
+colorbar()
+grid()
+
+subplot(2,3,2)
+imshow(mmQneg, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', 
+       cmap='jet', vmin=-0.5, vmax=0.5)
+xlabel('Degrees')
+ylabel('Degrees')
+title('Stokes Q')
+colorbar()
+grid()
+
+subplot(2,3,3)
+imshow(mmUneg, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', 
+       cmap='jet', vmin=-0.5, vmax=0.5)
+xlabel('Degrees')
+ylabel('Degrees')
+title('Stokes U')
+colorbar()
+grid()
+
+subplot(2,2,3)
+imshow(Qrneg, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', 
+       cmap='jet', vmin=-0.5, vmax=0.5)
+xlabel('Degrees')
+ylabel('Degrees')
+colorbar()
+title('Qr')
+grid()
+Prneg = sqrt(Qrneg**2 + Urneg**2)
+plot_vector_resample(xx, yy, mmQneg, mmUneg, Prneg, nrs=4)
+
+subplot(2,2,4)
+imshow(Urneg, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', cmap='jet', vmin=-0.5, vmax=0.5)
+xlabel('Degrees')
+ylabel('Degrees')
+colorbar()
+title('Ur')
+grid()
+
+tight_layout()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+mm = np.zeros((npixmap, npixmap))
+mmQ = np.zeros((npixmap, npixmap))
+mmU = np.zeros((npixmap, npixmap))
+
+nb = len(maxpix)#*0+300
+for i in range(nb):
+    if (i%100) == 0: print(i)
+    mm += show_gnom_around_pix(themap[:,0], mypixels[i], reso, xsize=npixmap) / nb
+    mmQ += show_gnom_around_pix(themap[:,1], mypixels[i], reso, xsize=npixmap) / nb
+    mmU += show_gnom_around_pix(themap[:,2], mypixels[i], reso, xsize=npixmap) / nb
+
 newQ = mmQ - np.median(mmQ)
 newU = mmU - np.median(mmU)
+
+x0 = (np.arange(npixmap)-npixmap/2+0.5) * reso / 60
+xx, yy = np.meshgrid(x0, x0)
+#xx *= cos(np.radians(yy))
+
+theta = sqrt(xx**2+yy**2)
+phi = (np.pi-arctan2(yy,xx))
+
+Qr = -newQ * cos(2*phi) - newU * sin(2*phi)
+Ur = newQ * sin(2*phi) - newU * cos(2*phi)
+
+```
+
+```{python}
 
 
 subplot(2,4,1)
@@ -302,29 +499,11 @@ title('Stokes U')
 colorbar()
 grid()
 
-P = np.sqrt(newQ**2 + newU**2)
-subplot(2,4,4)
-imshow(P, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower',
-      cmap='jet', vmin=-0.5, vmax=0.5)
-xlabel('Degrees')
-ylabel('Degrees')
-title('$P=\sqrt{Q^2+U^2}$')
-colorbar()
-grid()
 
 tight_layout()
 ```
 
 ```{python}
-x0 = (np.arange(npixmap)-npixmap/2+0.5) * reso / 60
-xx, yy = np.meshgrid(x0, x0)
-#xx *= cos(np.radians(yy))
-
-theta = sqrt(xx**2+yy**2)
-phi = (np.pi-arctan2(yy,xx))
-
-Qr = -newQ * cos(2*phi) - newU * sin(2*phi)
-Ur = newQ * sin(2*phi) - newU * cos(2*phi)
 
 subplot(2,2,1)
 imshow(Qr, extent=[-npixmap/2*reso/60, npixmap/2*reso/60, -npixmap/2*reso/60, npixmap/2*reso/60], origin='lower', 

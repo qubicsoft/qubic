@@ -25,16 +25,6 @@ import datetime as dt
 from glob import glob
 import qubic
 
-hdr_keys = ['TELESCOP',
-            'FILETYPE',
-            'DATASET',
-            'ANALYSIS',
-            'ANALYSER',
-            'ELOG',
-            'WIKIPAGE',
-            'FILENAME',
-            'FILEDATE']
-
 hdr_comment = {}
 hdr_comment['TELESCOP'] ='Telescope used for the observation'
 hdr_comment['FILETYPE'] = 'File identification'
@@ -45,6 +35,8 @@ hdr_comment['ELOG'] = 'link to the elog entry for the data'
 hdr_comment['WIKIPAGE'] = 'link to the wiki page where there is more information'
 hdr_comment['FILENAME'] = 'name of this file'
 hdr_comment['FILEDATE'] = 'UT date this file was created'
+
+hdr_keys = hdr_comment.keys()
 
 def get_header_values(dataset=None,
                       analysis=None,

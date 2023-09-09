@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qubic.compact_sources_sed &mdash; Qubicsoft 5.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=ee801c84"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">qubic.compact_sources_sed</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for qubic.compact_sources_sed</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python</span>
+<span class="c1"># coding: utf-8</span>
+
+<span class="c1"># &lt;p style=&quot;font-size:260%;line-height:1.5&quot;&gt;Generate SEDs of compact sources from the Planck Catalog of Compact Sources &lt;/p&gt;</span>
+
+<span class="c1"># &lt;p style=&quot;font-size:140%;line-height:1.2&quot;&gt;</span>
+<span class="c1">#     Here I develop a set of functions to read the Planck PCCS and derive the SEDs of compact sources that are seen at all frequencies</span>
+<span class="c1">#     &lt;/p&gt;</span>
+
+<span class="c1"># # Common data</span>
+
+
+<span class="kn">import</span> <span class="nn">qubic</span>
+
+<span class="n">freqs</span>    <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;030&#39;</span><span class="p">,</span><span class="s1">&#39;044&#39;</span><span class="p">,</span><span class="s1">&#39;070&#39;</span><span class="p">,</span><span class="s1">&#39;100&#39;</span><span class="p">,</span><span class="s1">&#39;143&#39;</span><span class="p">,</span><span class="s1">&#39;217&#39;</span><span class="p">,</span><span class="s1">&#39;353&#39;</span><span class="p">]</span>
+<span class="n">freqs_ex</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;100&#39;</span><span class="p">,</span><span class="s1">&#39;143&#39;</span><span class="p">,</span><span class="s1">&#39;217&#39;</span><span class="p">,</span><span class="s1">&#39;353&#39;</span><span class="p">]</span>
+<span class="n">altnames</span> <span class="o">=</span> <span class="p">{</span>           <span class="s1">&#39;Crab&#39;</span>       <span class="p">:</span> <span class="s1">&#39;184.5-05.8&#39;</span><span class="p">,</span>           <span class="s1">&#39;RCW38&#39;</span>      <span class="p">:</span> <span class="s1">&#39;267.9-01.1&#39;</span><span class="p">,</span>           <span class="s1">&#39;Orion&#39;</span>      <span class="p">:</span> <span class="s1">&#39;209.0-19.4&#39;</span><span class="p">}</span>
+
+<span class="n">catalog_dir</span> <span class="o">=</span> <span class="n">qubic</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">PATH</span>
+
+
+<span class="c1"># # Functions</span>
+
+<span class="c1"># ## Check if source is in catalog</span>
+
+<span class="c1"># In[1]:</span>
+    
+<div class="viewcode-block" id="isincatalog">
+<a class="viewcode-back" href="../../qubic.html#qubic.compact_sources_sed.isincatalog">[docs]</a>
+<span class="k">def</span> <span class="nf">isincatalog</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This function checks if a certain source is in the catalog and returns the list of</span>
+<span class="sd">    frequencies where the source has data</span>
+<span class="sd">    </span>
+<span class="sd">    INPUT</span>
+<span class="sd">    source     -  STR - The source name. It can be in human-comprehensible form (e.g.</span>
+<span class="sd">                  &quot;Crab&quot;) or in the catalog format (e.g. &quot;209.0-19.4&quot;)</span>
+
+<span class="sd">    catalog    - DICT - The dictionary with point source catalog</span>
+<span class="sd">    </span>
+<span class="sd">    OUTPUT</span>
+<span class="sd">    isincatalog, source, freqs - BOOL, STR, LIST - </span>
+<span class="sd">                               - isincatalog tells if the source is present (True) or not (False)</span>
+<span class="sd">                               - source is the source name in the catalog format</span>
+<span class="sd">                               - freqs is the list of frequencies where the source is present</span>
+<span class="sd">                                 in the catalog</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    
+    <span class="n">result</span> <span class="o">=</span> <span class="kc">False</span>
+    
+    <span class="n">freqs</span>    <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;030&#39;</span><span class="p">,</span><span class="s1">&#39;044&#39;</span><span class="p">,</span><span class="s1">&#39;070&#39;</span><span class="p">,</span><span class="s1">&#39;100&#39;</span><span class="p">,</span><span class="s1">&#39;143&#39;</span><span class="p">,</span><span class="s1">&#39;217&#39;</span><span class="p">,</span><span class="s1">&#39;353&#39;</span><span class="p">]</span>
+    
+    <span class="n">freq_list</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># This is the list of frequencies where the source is present in the catalog</span>
+    
+    <span class="k">if</span> <span class="n">source</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">altnames</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+        <span class="n">my_source</span> <span class="o">=</span> <span class="n">altnames</span><span class="p">[</span><span class="n">source</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">my_source</span> <span class="o">=</span> <span class="n">source</span>
+    
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freqs</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">my_source</span> <span class="ow">in</span> <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                <span class="n">freq_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">freq_list</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">return</span> <span class="n">result</span><span class="p">,</span> <span class="n">my_source</span><span class="p">,</span> <span class="n">freq_list</span>     </div>
+
+
+
+<span class="c1"># ## Build catalog from PCCS</span>
+
+<span class="c1"># In[2]:</span>
+
+
+<div class="viewcode-block" id="build_catalog">
+<a class="viewcode-back" href="../../qubic.html#qubic.compact_sources_sed.build_catalog">[docs]</a>
+<span class="k">def</span> <span class="nf">build_catalog</span><span class="p">(</span><span class="n">freqs</span> <span class="o">=</span> <span class="s1">&#39;All&#39;</span><span class="p">,</span> <span class="n">freqs_ex</span> <span class="o">=</span> <span class="s1">&#39;All&#39;</span><span class="p">,</span> <span class="n">excluded</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This function builds a dictionary containing the main parameters of the compact sources</span>
+<span class="sd">    contained in the PCCS</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    freqs       - LIST  - List of frequencies in the catalog (Default </span>
+<span class="sd">                          [&#39;030&#39;,&#39;044&#39;,&#39;070&#39;,&#39;100&#39;,&#39;143&#39;,&#39;217&#39;,&#39;353&#39;])</span>
+<span class="sd">    freqs_ex     - LIST - List of frequencies of excluded catalogs (Default</span>
+<span class="sd">                          [&#39;100&#39;,&#39;143&#39;,&#39;217&#39;,&#39;353&#39;])</span>
+<span class="sd">    excluded     - BOOL - Whether to include the excluded catalogs (Default: True)</span>
+<span class="sd">        </span>
+<span class="sd">    Output</span>
+<span class="sd">    catalog      - DICT - Dictionary containing the data</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="kn">from</span> <span class="nn">astropy.io.fits</span> <span class="kn">import</span> <span class="nb">open</span> <span class="k">as</span> <span class="n">fitsOpen</span> <span class="c1"># For FITS files</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+    
+    <span class="k">if</span> <span class="n">freqs</span> <span class="o">==</span> <span class="s1">&#39;All&#39;</span><span class="p">:</span>
+        <span class="n">freqs</span>    <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;030&#39;</span><span class="p">,</span><span class="s1">&#39;044&#39;</span><span class="p">,</span><span class="s1">&#39;070&#39;</span><span class="p">,</span><span class="s1">&#39;100&#39;</span><span class="p">,</span><span class="s1">&#39;143&#39;</span><span class="p">,</span><span class="s1">&#39;217&#39;</span><span class="p">,</span><span class="s1">&#39;353&#39;</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">freqs_ex</span> <span class="o">==</span> <span class="s1">&#39;All&#39;</span><span class="p">:</span>
+        <span class="n">freqs_ex</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;100&#39;</span><span class="p">,</span><span class="s1">&#39;143&#39;</span><span class="p">,</span><span class="s1">&#39;217&#39;</span><span class="p">,</span><span class="s1">&#39;353&#39;</span><span class="p">]</span>
+    
+    <span class="n">catalog</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="c1"># Read normal catalogs</span>
+    <span class="n">global_namelist</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freqs</span><span class="p">:</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Building catalog at </span><span class="si">%s</span><span class="s1"> GHz from PCCS2&#39;</span> <span class="o">%</span> <span class="n">f</span><span class="p">)</span>
+        <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">fname</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">COM_PCCS_</span><span class="si">%s</span><span class="s1">_R2.01.fits&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">catalog_dir</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+        <span class="n">fd</span> <span class="o">=</span> <span class="n">fitsOpen</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s2">&quot;readonly&quot;</span><span class="p">)</span>
+        <span class="n">names</span>    <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;NAME    &#39;</span><span class="p">]</span>
+        
+        <span class="c1"># Position</span>
+        <span class="n">ras</span>      <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;RA      &#39;</span><span class="p">]</span>
+        <span class="n">decs</span>     <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;DEC     &#39;</span><span class="p">]</span>
+        <span class="n">gLons</span>    <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;GLON    &#39;</span><span class="p">]</span>
+        <span class="n">gLats</span>    <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;GLAT    &#39;</span><span class="p">]</span>
+        
+        <span class="c1"># Intensity flux</span>
+        <span class="n">detFluxs</span>       <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;DETFLUX      &#39;</span><span class="p">]</span>
+        <span class="n">detFluxs_err</span>   <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;DETFLUX_ERR  &#39;</span><span class="p">]</span>
+        <span class="n">aperFluxs</span>      <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APERFLUX     &#39;</span><span class="p">]</span>
+        <span class="n">aperFluxs_err</span>  <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APERFLUX_ERR &#39;</span><span class="p">]</span>
+        <span class="n">psfFluxs</span>       <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;PSFFLUX      &#39;</span><span class="p">]</span>
+        <span class="n">psfFluxs_err</span>   <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;PSFFLUX_ERR  &#39;</span><span class="p">]</span>
+        <span class="n">gauFluxs</span>       <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;GAUFLUX      &#39;</span><span class="p">]</span>
+        <span class="n">gauFluxs_err</span>   <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;GAUFLUX_ERR  &#39;</span><span class="p">]</span>
+        
+        <span class="c1"># Polarized flux</span>
+        <span class="n">ps</span>                <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;P                  &#39;</span><span class="p">]</span>
+        <span class="n">ps_err</span>            <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;P_ERR              &#39;</span><span class="p">]</span>
+        <span class="n">angle_ps</span>          <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;ANGLE_P            &#39;</span><span class="p">]</span>
+        <span class="n">angle_ps_err</span>      <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;ANGLE_P_ERR        &#39;</span><span class="p">]</span>
+        <span class="n">aper_ps</span>           <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APER_P             &#39;</span><span class="p">]</span>
+        <span class="n">aper_ps_err</span>       <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APER_P_ERR         &#39;</span><span class="p">]</span>
+        <span class="n">aper_angle_ps</span>     <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APER_ANGLE_P       &#39;</span><span class="p">]</span>
+        <span class="n">aper_angle_ps_err</span> <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APER_ANGLE_P_ERR   &#39;</span><span class="p">]</span>
+        
+        <span class="n">fd</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">ra</span><span class="p">,</span> <span class="n">dec</span><span class="p">,</span> <span class="n">gLon</span><span class="p">,</span> <span class="n">gLat</span><span class="p">,</span> <span class="n">detFlux</span><span class="p">,</span> <span class="n">detFlux_err</span><span class="p">,</span> <span class="n">aperFlux</span><span class="p">,</span> <span class="n">aperFlux_err</span><span class="p">,</span>              <span class="n">psfFlux</span><span class="p">,</span> <span class="n">psfFlux_err</span><span class="p">,</span> <span class="n">gauFlux</span><span class="p">,</span> <span class="n">gauFlux_err</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">p_err</span><span class="p">,</span> <span class="n">angle_p</span><span class="p">,</span> <span class="n">angle_p_err</span><span class="p">,</span> <span class="n">aper_p</span><span class="p">,</span>            <span class="n">aper_p_err</span><span class="p">,</span> <span class="n">aper_angle_p</span><span class="p">,</span> <span class="n">aper_angle_p_err</span> <span class="ow">in</span>         <span class="nb">zip</span> <span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">ras</span><span class="p">,</span> <span class="n">decs</span><span class="p">,</span> <span class="n">gLons</span><span class="p">,</span> <span class="n">gLats</span><span class="p">,</span> <span class="n">detFluxs</span><span class="p">,</span> <span class="n">detFluxs_err</span><span class="p">,</span> <span class="n">aperFluxs</span><span class="p">,</span> <span class="n">aperFluxs_err</span><span class="p">,</span>              <span class="n">psfFluxs</span><span class="p">,</span> <span class="n">psfFluxs_err</span><span class="p">,</span> <span class="n">gauFluxs</span><span class="p">,</span> <span class="n">gauFluxs_err</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">ps_err</span><span class="p">,</span> <span class="n">angle_ps</span><span class="p">,</span> <span class="n">angle_ps_err</span><span class="p">,</span> <span class="n">aper_ps</span><span class="p">,</span>            <span class="n">aper_ps_err</span><span class="p">,</span> <span class="n">aper_angle_ps</span><span class="p">,</span> <span class="n">aper_angle_ps_err</span><span class="p">):</span>
+            
+            <span class="k">if</span> <span class="n">f</span> <span class="o">==</span> <span class="n">freqs</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+                <span class="c1"># If we are scanning the first frequency then define names based on GLON and GLAT</span>
+                <span class="c1"># Rounded to 1 decimal place</span>
+                
+                <span class="n">new_name</span> <span class="o">=</span> <span class="n">build_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                
+                <span class="n">global_namelist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_name</span><span class="p">)</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># For other frequencies see if each source is close enough to be one of the first frequency</span>
+                <span class="c1"># set. In this case use the name already used in the first set, otherwise define new name </span>
+                <span class="c1"># based on rounded GLON GLAT</span>
+                
+                <span class="n">new_name</span> <span class="o">=</span> <span class="n">build_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                
+                <span class="n">source_exist</span><span class="p">,</span> <span class="n">new_name</span> <span class="o">=</span> <span class="n">duplicate_source</span><span class="p">(</span><span class="n">new_name</span><span class="p">,</span> <span class="n">global_namelist</span><span class="p">)</span>
+                
+                <span class="k">if</span> <span class="n">source_exist</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
+                    <span class="n">global_namelist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_name</span><span class="p">)</span>
+                
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">]</span>    <span class="o">=</span> <span class="p">{}</span>
+            
+            <span class="c1"># Name</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;NAME&#39;</span><span class="p">]</span>    <span class="o">=</span> <span class="n">new_name</span>
+            
+            <span class="c1"># Position</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;RA&#39;</span>  <span class="p">]</span>    <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">ra</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;DEC&#39;</span> <span class="p">]</span>    <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">dec</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;GLON&#39;</span><span class="p">]</span>    <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gLon</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;GLAT&#39;</span><span class="p">]</span>    <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gLat</span><span class="p">)</span>
+            
+            <span class="c1"># Intensity flux</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;DETFLUX&#39;</span>      <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">detFlux</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;DETFLUX_ERR&#39;</span>  <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">detFlux_err</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APERFLUX&#39;</span>     <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aperFlux</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APERFLUX_ERR&#39;</span> <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aperFlux_err</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;PSFFLUX&#39;</span>      <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">psfFlux</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;PSFFLUX_ERR&#39;</span>  <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">psfFlux_err</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;GAUFLUX&#39;</span>      <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gauFlux</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;GAUFLUX_ERR&#39;</span>  <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gauFlux_err</span><span class="p">)</span>
+            
+            <span class="c1"># Polarized flux</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;PFLUX&#39;</span>           <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;PFLUX_ERR&#39;</span>       <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">p_err</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;ANGLE_P&#39;</span>         <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">angle_p</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;ANGLE_P_ERR&#39;</span>     <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">angle_p_err</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APER_P&#39;</span>          <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aper_p</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APER_P_ERR&#39;</span>      <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aper_p_err</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APER_ANGLE_P&#39;</span>    <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aper_angle_p</span><span class="p">)</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APER_ANGLE_P_ERR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aper_angle_p_err</span><span class="p">)</span>
+            
+            <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;ALTNAME&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        
+    <span class="k">if</span> <span class="n">excluded</span><span class="p">:</span>
+
+        <span class="c1"># Read excluded catalogs</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freqs_ex</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Building catalog at </span><span class="si">%s</span><span class="s1"> GHz from PCCS2E&#39;</span> <span class="o">%</span> <span class="n">f</span><span class="p">)</span>
+            <span class="n">fname</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%s</span><span class="s1">COM_PCCS_</span><span class="si">%s</span><span class="s1">-excluded_R2.01.fits&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">catalog_dir</span><span class="p">,</span> <span class="n">f</span><span class="p">)</span>
+            <span class="n">fd</span> <span class="o">=</span> <span class="n">fitsOpen</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="s2">&quot;readonly&quot;</span><span class="p">)</span>
+            <span class="n">names</span>    <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;NAME    &#39;</span><span class="p">]</span>
+
+            <span class="c1"># Position</span>
+            <span class="n">ras</span>      <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;RA      &#39;</span><span class="p">]</span>
+            <span class="n">decs</span>     <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;DEC     &#39;</span><span class="p">]</span>
+            <span class="n">gLons</span>    <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;GLON    &#39;</span><span class="p">]</span>
+            <span class="n">gLats</span>    <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;GLAT    &#39;</span><span class="p">]</span>
+
+            <span class="c1"># Intensity flux</span>
+            <span class="n">detFluxs</span>       <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;DETFLUX      &#39;</span><span class="p">]</span>
+            <span class="n">detFluxs_err</span>   <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;DETFLUX_ERR  &#39;</span><span class="p">]</span>
+            <span class="n">aperFluxs</span>      <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APERFLUX     &#39;</span><span class="p">]</span>
+            <span class="n">aperFluxs_err</span>  <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APERFLUX_ERR &#39;</span><span class="p">]</span>
+            <span class="n">psfFluxs</span>       <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;PSFFLUX      &#39;</span><span class="p">]</span>
+            <span class="n">psfFluxs_err</span>   <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;PSFFLUX_ERR  &#39;</span><span class="p">]</span>
+            <span class="n">gauFluxs</span>       <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;GAUFLUX      &#39;</span><span class="p">]</span>
+            <span class="n">gauFluxs_err</span>   <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;GAUFLUX_ERR  &#39;</span><span class="p">]</span>
+
+            <span class="c1"># Polarized flux</span>
+            <span class="n">ps</span>                <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;P                  &#39;</span><span class="p">]</span>
+            <span class="n">ps_err</span>            <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;P_ERR              &#39;</span><span class="p">]</span>
+            <span class="n">angle_ps</span>          <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;ANGLE_P            &#39;</span><span class="p">]</span>
+            <span class="n">angle_ps_err</span>      <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;ANGLE_P_ERR        &#39;</span><span class="p">]</span>
+            <span class="n">aper_ps</span>           <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APER_P             &#39;</span><span class="p">]</span>
+            <span class="n">aper_ps_err</span>       <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APER_P_ERR         &#39;</span><span class="p">]</span>
+            <span class="n">aper_angle_ps</span>     <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APER_ANGLE_P       &#39;</span><span class="p">]</span>
+            <span class="n">aper_angle_ps_err</span> <span class="o">=</span> <span class="n">fd</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;APER_ANGLE_P_ERR   &#39;</span><span class="p">]</span>
+            <span class="n">fd</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">ra</span><span class="p">,</span> <span class="n">dec</span><span class="p">,</span> <span class="n">gLon</span><span class="p">,</span> <span class="n">gLat</span><span class="p">,</span> <span class="n">detFlux</span><span class="p">,</span> <span class="n">detFlux_err</span><span class="p">,</span> <span class="n">aperFlux</span><span class="p">,</span> <span class="n">aperFlux_err</span><span class="p">,</span>                  <span class="n">psfFlux</span><span class="p">,</span> <span class="n">psfFlux_err</span><span class="p">,</span> <span class="n">gauFlux</span><span class="p">,</span> <span class="n">gauFlux_err</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">p_err</span><span class="p">,</span> <span class="n">angle_p</span><span class="p">,</span> <span class="n">angle_p_err</span><span class="p">,</span> <span class="n">aper_p</span><span class="p">,</span>                <span class="n">aper_p_err</span><span class="p">,</span> <span class="n">aper_angle_p</span><span class="p">,</span> <span class="n">aper_angle_p_err</span> <span class="ow">in</span>             <span class="nb">zip</span> <span class="p">(</span><span class="n">names</span><span class="p">,</span> <span class="n">ras</span><span class="p">,</span> <span class="n">decs</span><span class="p">,</span> <span class="n">gLons</span><span class="p">,</span> <span class="n">gLats</span><span class="p">,</span> <span class="n">detFluxs</span><span class="p">,</span> <span class="n">detFluxs_err</span><span class="p">,</span> <span class="n">aperFluxs</span><span class="p">,</span> <span class="n">aperFluxs_err</span><span class="p">,</span>                  <span class="n">psfFluxs</span><span class="p">,</span> <span class="n">psfFluxs_err</span><span class="p">,</span> <span class="n">gauFluxs</span><span class="p">,</span> <span class="n">gauFluxs_err</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">ps_err</span><span class="p">,</span> <span class="n">angle_ps</span><span class="p">,</span> <span class="n">angle_ps_err</span><span class="p">,</span> <span class="n">aper_ps</span><span class="p">,</span>                <span class="n">aper_ps_err</span><span class="p">,</span> <span class="n">aper_angle_ps</span><span class="p">,</span> <span class="n">aper_angle_ps_err</span><span class="p">):</span>
+
+                <span class="n">new_name</span> <span class="o">=</span> <span class="n">build_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+                <span class="n">source_exist</span><span class="p">,</span> <span class="n">new_name</span> <span class="o">=</span> <span class="n">duplicate_source</span><span class="p">(</span><span class="n">new_name</span><span class="p">,</span> <span class="n">global_namelist</span><span class="p">)</span>
+                
+                <span class="k">if</span> <span class="n">source_exist</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
+                    <span class="n">global_namelist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_name</span><span class="p">)</span>
+ 
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">]</span>    <span class="o">=</span> <span class="p">{}</span>
+            
+                <span class="c1"># Name</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;NAME&#39;</span><span class="p">]</span>    <span class="o">=</span> <span class="n">new_name</span>
+
+                <span class="c1"># Position</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;RA&#39;</span>  <span class="p">]</span>    <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">ra</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;DEC&#39;</span> <span class="p">]</span>    <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">dec</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;GLON&#39;</span><span class="p">]</span>    <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gLon</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;GLAT&#39;</span><span class="p">]</span>    <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gLat</span><span class="p">)</span>
+
+                <span class="c1"># Intensity flux</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;DETFLUX&#39;</span>      <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">detFlux</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;DETFLUX_ERR&#39;</span>  <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">detFlux_err</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APERFLUX&#39;</span>     <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aperFlux</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APERFLUX_ERR&#39;</span> <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aperFlux_err</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;PSFFLUX&#39;</span>      <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">psfFlux</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;PSFFLUX_ERR&#39;</span>  <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">psfFlux_err</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;GAUFLUX&#39;</span>      <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gauFlux</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;GAUFLUX_ERR&#39;</span>  <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gauFlux_err</span><span class="p">)</span>
+
+                <span class="c1"># Polarized flux</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;PFLUX&#39;</span>           <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;PFLUX_ERR&#39;</span>       <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">p_err</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;ANGLE_P&#39;</span>         <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">angle_p</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;ANGLE_P_ERR&#39;</span>     <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">angle_p_err</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APER_P&#39;</span>          <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aper_p</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APER_P_ERR&#39;</span>      <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aper_p_err</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APER_ANGLE_P&#39;</span>    <span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aper_angle_p</span><span class="p">)</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;APER_ANGLE_P_ERR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">aper_angle_p_err</span><span class="p">)</span>
+
+                <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">new_name</span><span class="p">][</span><span class="s1">&#39;ALTNAME&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+
+    <span class="k">return</span> <span class="n">catalog</span></div>
+
+
+
+<span class="c1"># In[3]:</span>
+
+
+<div class="viewcode-block" id="build_name">
+<a class="viewcode-back" href="../../qubic.html#qubic.compact_sources_sed.build_name">[docs]</a>
+<span class="k">def</span> <span class="nf">build_name</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This function builds a source name from the PCCS name by rounding l and b to the first decimal place</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    name         - STRING - source name as defined in the PCCS (Glll.ll±bb.bb)</span>
+<span class="sd">        </span>
+<span class="sd">    Output</span>
+<span class="sd">    new_name     - STRING - source new name defined as lll.l±bb.b</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+    
+    <span class="n">name_l</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">name</span><span class="p">[</span><span class="o">-</span><span class="mi">12</span><span class="p">:</span><span class="o">-</span><span class="mi">6</span><span class="p">]),</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">str_l</span>  <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%05.1f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">name_l</span>
+    <span class="n">sign_b</span> <span class="o">=</span> <span class="n">name</span><span class="p">[</span><span class="o">-</span><span class="mi">6</span><span class="p">]</span>
+    <span class="n">name_b</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">name</span><span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">:]),</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">str_b</span> <span class="o">=</span> <span class="s1">&#39;</span><span class="si">%04.1f</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">name_b</span>
+    <span class="n">new_name</span> <span class="o">=</span> <span class="n">str_l</span><span class="o">.</span><span class="n">rjust</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="s1">&#39;0&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">sign_b</span> <span class="o">+</span> <span class="n">str_b</span><span class="o">.</span><span class="n">rjust</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="s1">&#39;0&#39;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">new_name</span></div>
+
+
+
+<span class="c1"># In[4]:</span>
+
+
+<div class="viewcode-block" id="duplicate_source">
+<a class="viewcode-back" href="../../qubic.html#qubic.compact_sources_sed.duplicate_source">[docs]</a>
+<span class="k">def</span> <span class="nf">duplicate_source</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">global_namelist</span><span class="p">,</span> <span class="n">threshold</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This function finds if a given source is a duplicate of others already found in catalogs</span>
+<span class="sd">    relative to other frequencies by checking the distance in GLON and GLAT</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    name                   - STRING       - source name modified by the catalog building routine</span>
+<span class="sd">                                            (Glll.l±bb.b)</span>
+<span class="sd">    global_namelist        - LIST         - list of modified names of sources already loaded from other </span>
+<span class="sd">                                            frequency catalogs</span>
+<span class="sd">    threshold              - FLOAT        - maximum distance in degrees to decide whether two sources  </span>
+<span class="sd">                                            coincide (Default threshold = 0.1)</span>
+<span class="sd">    Output</span>
+<span class="sd">    isduplicate, new_name  - BOOL, STRING - whether a duplicate has been found, new name</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+    
+    <span class="n">name_l</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">name</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">5</span><span class="p">])</span>
+    <span class="n">name_b</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">name</span><span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">:])</span>
+    
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">global_namelist</span><span class="p">:</span>
+        <span class="n">ex_l</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="mi">5</span><span class="p">])</span>
+        <span class="n">ex_b</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">:])</span>
+        
+        <span class="k">if</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">name_l</span> <span class="o">-</span> <span class="n">ex_l</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">threshold</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">name_b</span> <span class="o">-</span> <span class="n">ex_b</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">threshold</span><span class="p">):</span>
+            <span class="c1"># In this case we have the same source, return True and the name</span>
+            <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">item</span>
+    
+    <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="n">name</span>    </div>
+
+
+
+<span class="c1"># ## Build SEDs</span>
+
+<span class="c1"># ### SEDs of common sources</span>
+
+<span class="c1"># In[6]:</span>
+
+
+<div class="viewcode-block" id="build_sed_allfreqs">
+<a class="viewcode-back" href="../../qubic.html#qubic.compact_sources_sed.build_sed_allfreqs">[docs]</a>
+<span class="k">def</span> <span class="nf">build_sed_allfreqs</span><span class="p">(</span><span class="n">catalog</span><span class="p">,</span> <span class="n">freqs</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;030&#39;</span><span class="p">,</span><span class="s1">&#39;044&#39;</span><span class="p">,</span><span class="s1">&#39;070&#39;</span><span class="p">,</span><span class="s1">&#39;100&#39;</span><span class="p">,</span><span class="s1">&#39;143&#39;</span><span class="p">,</span><span class="s1">&#39;217&#39;</span><span class="p">,</span><span class="s1">&#39;353&#39;</span><span class="p">]):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This function builds the SED of the sources in the catalog using data across frequencies specified</span>
+<span class="sd">    in freqs</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    catalog      - DICT - The dictionary with the source catalog</span>
+
+<span class="sd">    freqs        - LIST - List of frequencies (Default [&#39;030&#39;, &#39;044&#39;, &#39;070&#39;, 100&#39;,&#39;143&#39;,&#39;217&#39;,&#39;353&#39;])</span>
+<span class="sd">        </span>
+<span class="sd">    Output</span>
+<span class="sd">    SED          - DICT - Dictionary containing the SED (frequencies, measured I_flux, measured P_flux</span>
+<span class="sd">                          4th order polinomial fits to measured I_flux and P_flux</span>
+<span class="sd">    &#39;&#39;&#39;</span>   
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+    
+    <span class="c1"># Build common set of sources</span>
+    <span class="n">inters</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freqs</span><span class="p">:</span>
+        <span class="n">inters</span> <span class="o">=</span> <span class="n">inters</span> <span class="o">+</span> <span class="p">(</span><span class="s1">&#39;set(catalog[&quot;</span><span class="si">%s</span><span class="s1">&quot;].keys()) &amp; &#39;</span> <span class="o">%</span> <span class="n">f</span><span class="p">)</span>
+    <span class="n">inters</span> <span class="o">=</span> <span class="s1">&#39;list(&#39;</span> <span class="o">+</span> <span class="n">inters</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+    <span class="n">common_sources</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="n">inters</span><span class="p">)</span>
+    
+    <span class="n">flist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span><span class="n">freqs</span><span class="p">)))</span>
+    
+    <span class="n">SED</span> <span class="o">=</span> <span class="p">{}</span>
+    
+    <span class="k">for</span> <span class="n">source</span> <span class="ow">in</span> <span class="n">common_sources</span><span class="p">:</span>
+        <span class="n">SED</span><span class="p">[</span><span class="n">source</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">i_flux</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">source</span><span class="p">][</span><span class="s1">&#39;DETFLUX&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freqs</span><span class="p">])</span>
+        <span class="n">p_flux</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">source</span><span class="p">][</span><span class="s1">&#39;PFLUX&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freqs</span><span class="p">])</span>
+        <span class="n">sed_i_fit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polyfit</span><span class="p">(</span><span class="n">flist</span><span class="p">,</span> <span class="n">i_flux</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+        <span class="n">sed_p_fit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polyfit</span><span class="p">(</span><span class="n">flist</span><span class="p">,</span> <span class="n">p_flux</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+        <span class="n">SED</span><span class="p">[</span><span class="n">source</span><span class="p">][</span><span class="s1">&#39;freq&#39;</span><span class="p">]</span>   <span class="o">=</span> <span class="n">flist</span>
+        <span class="n">SED</span><span class="p">[</span><span class="n">source</span><span class="p">][</span><span class="s1">&#39;i_flux&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">i_flux</span>
+        <span class="n">SED</span><span class="p">[</span><span class="n">source</span><span class="p">][</span><span class="s1">&#39;p_flux&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_flux</span>
+        <span class="n">SED</span><span class="p">[</span><span class="n">source</span><span class="p">][</span><span class="s1">&#39;i_fit&#39;</span><span class="p">]</span>  <span class="o">=</span> <span class="n">sed_i_fit</span>
+        <span class="n">SED</span><span class="p">[</span><span class="n">source</span><span class="p">][</span><span class="s1">&#39;p_fit&#39;</span><span class="p">]</span>  <span class="o">=</span> <span class="n">sed_p_fit</span>
+
+    <span class="k">return</span> <span class="n">SED</span></div>
+
+
+
+<span class="c1"># ### SED of a given source</span>
+
+<span class="c1"># In[7]:</span>
+
+
+<div class="viewcode-block" id="build_sed">
+<a class="viewcode-back" href="../../qubic.html#qubic.compact_sources_sed.build_sed">[docs]</a>
+<span class="k">def</span> <span class="nf">build_sed</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">plot</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">polyfit</span> <span class="o">=</span> <span class="mi">3</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This function builds the SED of a given source</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    source       - STRING - The source name, either in the stanard lll.ll±bb.bb format or in the common </span>
+<span class="sd">                            name format if a translation is available (e.g. Crab)</span>
+
+<span class="sd">    catalog      - DICT - The dictionary with the source catalog</span>
+
+<span class="sd">    plot         - BOOL - Whether to plot intensity and polarized fluxes. Default: False</span>
+
+<span class="sd">    polyfit      - INT  - Order of the polynomial fit. Default: 3</span>
+
+<span class="sd">    Output</span>
+<span class="sd">    SED          - DICT - Dictionary containing the SED (frequencies, measured I_flux, measured P_flux</span>
+<span class="sd">                          4th order polinomial fits to measured I_flux and P_flux</span>
+<span class="sd">    &#39;&#39;&#39;</span>    
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+    <span class="kn">import</span> <span class="nn">pylab</span> <span class="k">as</span> <span class="nn">pl</span>
+    
+    <span class="c1"># Check if source is in catalog</span>
+    <span class="n">exists</span><span class="p">,</span> <span class="n">sourcename</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">isincatalog</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">exists</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Source </span><span class="si">%s</span><span class="s1"> is not in catalog&#39;</span> <span class="o">%</span> <span class="n">source</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+    
+    <span class="c1"># Get the number of frequencies at which we have data</span>
+    <span class="n">s_freqs</span> <span class="o">=</span> <span class="n">source2freqs</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">s_freqs</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Not enough frequencies to build a SED&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="n">flist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span><span class="n">s_freqs</span><span class="p">)))</span>
+
+    <span class="n">SED</span> <span class="o">=</span> <span class="p">{}</span>
+    
+    <span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    
+    <span class="n">i_flux</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;DETFLUX&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">s_freqs</span><span class="p">])</span>
+    <span class="n">p_flux</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">][</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;PFLUX&#39;</span><span class="p">]</span>   <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">s_freqs</span><span class="p">])</span>
+    <span class="n">sed_i_fit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polyfit</span><span class="p">(</span><span class="n">flist</span><span class="p">,</span> <span class="n">i_flux</span><span class="p">,</span> <span class="n">polyfit</span><span class="p">)</span>
+    <span class="n">sed_p_fit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polyfit</span><span class="p">(</span><span class="n">flist</span><span class="p">,</span> <span class="n">p_flux</span><span class="p">,</span> <span class="n">polyfit</span><span class="p">)</span>
+    <span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;freq&#39;</span><span class="p">]</span>   <span class="o">=</span> <span class="n">flist</span>
+    <span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;i_flux&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">i_flux</span>
+    <span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;p_flux&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_flux</span>
+    <span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;i_fit&#39;</span><span class="p">]</span>  <span class="o">=</span> <span class="n">sed_i_fit</span>
+    <span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;p_fit&#39;</span><span class="p">]</span>  <span class="o">=</span> <span class="n">sed_p_fit</span>
+    
+    <span class="k">if</span> <span class="n">plot</span><span class="p">:</span>
+        <span class="n">newfreq</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">flist</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">flist</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">fi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">poly1d</span><span class="p">(</span><span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;i_fit&#39;</span><span class="p">])</span>
+        <span class="n">fp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">poly1d</span><span class="p">(</span><span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;p_fit&#39;</span><span class="p">])</span>
+        
+        <span class="n">pl</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">13</span><span class="p">,</span><span class="mi">7</span><span class="p">))</span>
+        
+        <span class="c1"># Intensity plot</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">121</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;freq&#39;</span><span class="p">],</span><span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;i_flux&#39;</span><span class="p">],</span><span class="s1">&#39;.&#39;</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">newfreq</span><span class="p">,</span> <span class="n">fi</span><span class="p">(</span><span class="n">newfreq</span><span class="p">))</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Frequency [GHz]&#39;</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Flux [mJy]&#39;</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1"> - Intensity flux&#39;</span> <span class="o">%</span> <span class="n">source</span><span class="p">)</span>
+        
+        <span class="c1"># Polarization plot</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">122</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;freq&#39;</span><span class="p">],</span><span class="n">SED</span><span class="p">[</span><span class="n">sourcename</span><span class="p">][</span><span class="s1">&#39;p_flux&#39;</span><span class="p">],</span><span class="s1">&#39;.&#39;</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">newfreq</span><span class="p">,</span> <span class="n">fp</span><span class="p">(</span><span class="n">newfreq</span><span class="p">))</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Frequency [GHz]&#39;</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Flux [mJy]&#39;</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1"> - Polarized flux&#39;</span> <span class="o">%</span> <span class="n">source</span><span class="p">)</span>
+        
+
+    <span class="k">return</span> <span class="n">SED</span></div>
+
+
+
+<span class="c1"># ## Translate from common source name to catalog name</span>
+
+<span class="c1"># In[8]:</span>
+
+
+<div class="viewcode-block" id="name2cat">
+<a class="viewcode-back" href="../../qubic.html#qubic.compact_sources_sed.name2cat">[docs]</a>
+<span class="k">def</span> <span class="nf">name2cat</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">altnames</span><span class="p">):</span>
+
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">altnames</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Name </span><span class="si">%s</span><span class="s1"> not known&#39;</span> <span class="o">%</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+    
+    <span class="k">return</span> <span class="n">altnames</span><span class="p">[</span><span class="n">name</span><span class="p">]</span></div>
+
+
+
+<span class="c1"># ## Return the frequencies of a given source name </span>
+
+<span class="c1"># In[12]:</span>
+
+
+<div class="viewcode-block" id="source2freqs">
+<a class="viewcode-back" href="../../qubic.html#qubic.compact_sources_sed.source2freqs">[docs]</a>
+<span class="k">def</span> <span class="nf">source2freqs</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">altnames</span> <span class="o">=</span> <span class="n">altnames</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This function return the list of frequencies in the catalog given a certain source</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    source       - STRING - The source name, either in the stanard lll.ll±bb.bb format or in the common </span>
+<span class="sd">                            name format if a translation is available (e.g. Crab)</span>
+
+<span class="sd">    catalog      - DICT   - The PCCS in Qubic format</span>
+<span class="sd">        </span>
+<span class="sd">    altnames     - DICT   - The correspondence between common name and catalog standard name (Defaults to </span>
+<span class="sd">                            altnames defined at the top of the notebook)</span>
+<span class="sd"> </span>
+<span class="sd">    Output</span>
+<span class="sd">    freqlist     - LIST - List of frequencies where a source is found</span>
+<span class="sd">    &#39;&#39;&#39;</span>        
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+    
+    <span class="n">exists</span><span class="p">,</span> <span class="n">sourcename</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">isincatalog</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">exists</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Source </span><span class="si">%s</span><span class="s1"> is not in catalog&#39;</span> <span class="o">%</span> <span class="n">source</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>        
+    
+    <span class="n">isinfreq</span> <span class="o">=</span> <span class="p">[</span><span class="n">sourcename</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freqs</span><span class="p">]</span>
+    
+    <span class="k">return</span> <span class="p">[</span><span class="n">freqs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">isinfreq</span><span class="p">)[</span><span class="mi">0</span><span class="p">])]</span></div>
+
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, QUBIC Collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qubic.xpol &mdash; Qubicsoft 5.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=ee801c84"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">qubic.xpol</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for qubic.xpol</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pysimulators._flib</span> <span class="k">as</span> <span class="nn">flib</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Xpol&#39;</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="Xpol">
+<a class="viewcode-back" href="../../qubic.html#qubic.xpol.Xpol">[docs]</a>
+<span class="k">class</span> <span class="nc">Xpol</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    (Cross-) power spectra estimation using the Xpol method.</span>
+<span class="sd">    Hinshaw et al. 2003, Tristram 2005.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    xpol = Xpol(mask, lmin, lmax, delta_ell)</span>
+<span class="sd">    ell_binned = xpol.ell_binned</span>
+<span class="sd">    biased, unbiased = xpol.get_spectra(map)</span>
+<span class="sd">    biased, unbiased = xpol.get_spectra(map1, map2)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">lmin</span><span class="p">,</span> <span class="n">lmax</span><span class="p">,</span> <span class="n">delta_ell</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        mask : boolean Healpix map</span>
+<span class="sd">            Mask defining the region of interest (of value True)</span>
+<span class="sd">        lmin : int</span>
+<span class="sd">            Lower bound of the first l bin.</span>
+<span class="sd">        lmax : int</span>
+<span class="sd">            Highest l value to be considered. The inclusive upper bound of</span>
+<span class="sd">            the last l bin is lesser or equal to this value.</span>
+<span class="sd">        delta_ell :</span>
+<span class="sd">            The l bin width.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+        <span class="n">lmin</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">lmin</span><span class="p">)</span>
+        <span class="n">lmax</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">lmax</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">lmin</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Input lmin is less than 1.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">lmax</span> <span class="o">&lt;</span> <span class="n">lmin</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Input lmax is less than lmin.&#39;</span><span class="p">)</span>
+        <span class="n">delta_ell</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">delta_ell</span><span class="p">)</span>
+        <span class="n">wl</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">anafast</span><span class="p">(</span><span class="n">mask</span><span class="p">)[:</span><span class="n">lmax</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lmin</span> <span class="o">=</span> <span class="n">lmin</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lmax</span> <span class="o">=</span> <span class="n">lmax</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">delta_ell</span> <span class="o">=</span> <span class="n">delta_ell</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">wl</span> <span class="o">=</span> <span class="n">wl</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ell_binned</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_p</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_q</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bin_ell</span><span class="p">()</span>
+        <span class="n">mll_binned</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_Mll</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mll_binned_inv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">mll_binned</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Xpol.bin_spectra">
+<a class="viewcode-back" href="../../qubic.html#qubic.xpol.Xpol.bin_spectra">[docs]</a>
+    <span class="k">def</span> <span class="nf">bin_spectra</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spectra</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Average spectra in bins specified by lmin, lmax and delta_ell,</span>
+<span class="sd">        weighted by `l(l+1)`.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">spectra</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">spectra</span><span class="p">)</span>
+        <span class="n">lmax</span> <span class="o">=</span> <span class="n">spectra</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">lmax</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">lmax</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The input spectra do not have enough l.&#39;</span><span class="p">)</span>
+        <span class="n">fact_binned</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ell_binned</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ell_binned</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">spectra</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">lmax</span><span class="o">+</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_p</span><span class="o">.</span><span class="n">T</span><span class="p">)</span> <span class="o">*</span> <span class="n">fact_binned</span></div>
+
+
+<div class="viewcode-block" id="Xpol.get_spectra">
+<a class="viewcode-back" href="../../qubic.html#qubic.xpol.Xpol.get_spectra">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_spectra</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">map1</span><span class="p">,</span> <span class="n">map2</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return biased and Xpol-debiased estimations of the power spectra of</span>
+<span class="sd">        a Healpix map or of the cross-power spectra if *map2* is provided.</span>
+
+<span class="sd">        xpol = Xpol(mask, lmin, lmax, delta_ell)</span>
+<span class="sd">        biased, unbiased = xpol.get_spectra(map1, [map2])</span>
+
+<span class="sd">        The unbiased Cls are binned. The number of bins is given by</span>
+<span class="sd">        (lmax - lmin) // delta_ell, using the values specified in the Xpol&#39;s</span>
+<span class="sd">        object initialisation. As a consequence, the upper bound of the highest</span>
+<span class="sd">        l bin may be less than lmax. The central value of the bins can be</span>
+<span class="sd">        obtained through the attribute `xpol.ell_binned`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        map1 : Nx3 or 3xN array</span>
+<span class="sd">            The I, Q, U Healpix maps.</span>
+<span class="sd">        map2 : Nx3 or 3xN array, optional</span>
+<span class="sd">            The I, Q, U Healpix maps.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        biased : float array of shape (6, lmax+1)</span>
+<span class="sd">            The anafast&#39;s pseudo (cross-) power spectra for TT, EE, BB, TE, EB,</span>
+<span class="sd">            TB. The corresponding l values are given by `np.arange(lmax + 1)`.</span>
+
+<span class="sd">        unbiased : float array of shape (6, nbins)</span>
+<span class="sd">            The Xpol&#39;s (cross-) power spectra for TT, EE, BB, TE, EB, TB.</span>
+<span class="sd">            The corresponding l values are given by `xpol.ell_binned`.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">map1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">map1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">map1</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">map1</span> <span class="o">=</span> <span class="n">map1</span><span class="o">.</span><span class="n">T</span>
+        <span class="k">if</span> <span class="n">map2</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">biased</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">anafast</span><span class="p">(</span><span class="n">map1</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">pol</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">map2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">map2</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">map2</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">map2</span> <span class="o">=</span> <span class="n">map2</span><span class="o">.</span><span class="n">T</span>
+            <span class="n">biased</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">anafast</span><span class="p">(</span><span class="n">map1</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">map2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">mask</span><span class="p">,</span> <span class="n">pol</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">biased</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">cl</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">lmax</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">cl</span> <span class="ow">in</span> <span class="n">biased</span><span class="p">])</span>
+        <span class="n">binned</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bin_spectra</span><span class="p">(</span><span class="n">biased</span><span class="p">)</span>
+        <span class="n">fact_binned</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ell_binned</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ell_binned</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+        <span class="n">binned</span> <span class="o">*=</span> <span class="n">fact_binned</span>
+        <span class="n">unbiased</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mll_binned_inv</span><span class="p">,</span> <span class="n">binned</span><span class="o">.</span><span class="n">ravel</span><span class="p">())</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">unbiased</span> <span class="o">/=</span> <span class="n">fact_binned</span>
+        <span class="k">return</span> <span class="n">biased</span><span class="p">,</span> <span class="n">unbiased</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_bin_ell</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">nbins</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lmax</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">lmin</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta_ell</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lmin</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">nbins</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta_ell</span>
+        <span class="n">stop</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">delta_ell</span>
+        <span class="n">ell_binned</span> <span class="o">=</span> <span class="p">(</span><span class="n">start</span> <span class="o">+</span> <span class="n">stop</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+
+        <span class="n">ell2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">ell2</span> <span class="o">=</span> <span class="n">ell2</span> <span class="o">*</span> <span class="p">(</span><span class="n">ell2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nbins</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">nbins</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">)):</span>
+            <span class="n">p</span><span class="p">[</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span><span class="n">z</span><span class="p">]</span> <span class="o">=</span> <span class="n">ell2</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">z</span><span class="p">]</span> <span class="o">/</span> <span class="p">(</span><span class="n">z</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span>
+            <span class="n">q</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">z</span><span class="p">,</span> <span class="n">b</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">ell2</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">z</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">ell_binned</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">q</span>
+
+    <span class="k">def</span> <span class="nf">_get_Mll_blocks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">TT_TT</span><span class="p">,</span> <span class="n">EE_EE</span><span class="p">,</span> <span class="n">EE_BB</span><span class="p">,</span> <span class="n">TE_TE</span><span class="p">,</span> <span class="n">EB_EB</span><span class="p">,</span> <span class="n">ier</span> <span class="o">=</span> <span class="n">flib</span><span class="o">.</span><span class="n">xpol</span><span class="o">.</span><span class="n">mll_blocks_pol</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lmax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">wl</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ier</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Either L2 &lt; ABS(M2) or L3 &lt; ABS(M3).&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;Either L2+ABS(M2) or L3+ABS(M3) non-integer.&#39;</span>
+                   <span class="s1">&#39;L1MAX-L1MIN not an integer.&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;L1MAX less than L1MIN.&#39;</span><span class="p">,</span>
+                   <span class="s1">&#39;NDIM less than L1MAX-L1MIN+1.&#39;</span><span class="p">][</span><span class="n">ier</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">TT_TT</span><span class="p">,</span> <span class="n">EE_EE</span><span class="p">,</span> <span class="n">EE_BB</span><span class="p">,</span> <span class="n">TE_TE</span><span class="p">,</span> <span class="n">EB_EB</span>
+
+    <span class="k">def</span> <span class="nf">_get_Mll</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">binning</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">TT_TT</span><span class="p">,</span> <span class="n">EE_EE</span><span class="p">,</span> <span class="n">EE_BB</span><span class="p">,</span> <span class="n">TE_TE</span><span class="p">,</span> <span class="n">EB_EB</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_Mll_blocks</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">binning</span><span class="p">:</span>
+            <span class="k">def</span> <span class="nf">func</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_p</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_q</span><span class="p">)</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ell_binned</span><span class="p">)</span>
+            <span class="n">TT_TT</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">TT_TT</span><span class="p">)</span>
+            <span class="n">EE_EE</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">EE_EE</span><span class="p">)</span>
+            <span class="n">EE_BB</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">EE_BB</span><span class="p">)</span>
+            <span class="n">TE_TE</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">TE_TE</span><span class="p">)</span>
+            <span class="n">EB_EB</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="n">EB_EB</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">6</span><span class="o">*</span><span class="n">n</span><span class="p">,</span> <span class="mi">6</span><span class="o">*</span><span class="n">n</span><span class="p">))</span>
+        <span class="n">out</span><span class="p">[</span>  <span class="mi">0</span><span class="p">:</span>  <span class="n">n</span><span class="p">,</span>   <span class="mi">0</span><span class="p">:</span>  <span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">TT_TT</span>
+        <span class="n">out</span><span class="p">[</span>  <span class="n">n</span><span class="p">:</span><span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">,</span>   <span class="n">n</span><span class="p">:</span><span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">EE_EE</span>
+        <span class="n">out</span><span class="p">[</span><span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">3</span><span class="o">*</span><span class="n">n</span><span class="p">,</span> <span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">3</span><span class="o">*</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">EE_EE</span>
+        <span class="n">out</span><span class="p">[</span>  <span class="n">n</span><span class="p">:</span><span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">,</span> <span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">3</span><span class="o">*</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">EE_BB</span>
+        <span class="n">out</span><span class="p">[</span><span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">3</span><span class="o">*</span><span class="n">n</span><span class="p">,</span>   <span class="n">n</span><span class="p">:</span><span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">EE_BB</span>
+        <span class="n">out</span><span class="p">[</span><span class="mi">3</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">4</span><span class="o">*</span><span class="n">n</span><span class="p">,</span> <span class="mi">3</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">4</span><span class="o">*</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">TE_TE</span>
+        <span class="n">out</span><span class="p">[</span><span class="mi">4</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">5</span><span class="o">*</span><span class="n">n</span><span class="p">,</span> <span class="mi">4</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">5</span><span class="o">*</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">TE_TE</span>
+        <span class="n">out</span><span class="p">[</span><span class="mi">5</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">6</span><span class="o">*</span><span class="n">n</span><span class="p">,</span> <span class="mi">5</span><span class="o">*</span><span class="n">n</span><span class="p">:</span><span class="mi">6</span><span class="o">*</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">EB_EB</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, QUBIC Collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

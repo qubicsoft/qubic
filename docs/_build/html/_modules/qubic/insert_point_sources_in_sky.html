@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qubic.insert_point_sources_in_sky &mdash; Qubicsoft 5.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=ee801c84"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">qubic.insert_point_sources_in_sky</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for qubic.insert_point_sources_in_sky</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python</span>
+<span class="c1">## Module to insert point sources into a PySM sky map</span>
+<span class="c1">## Version 1.0 - Dec 3rd 2021</span>
+<span class="c1">## Aniello Mennella</span>
+<span class="c1">##</span>
+<span class="c1">## CHANGELOG</span>
+<span class="c1">## Version 1.0 - first working version of the module</span>
+
+
+<div class="viewcode-block" id="gaussian2D">
+<a class="viewcode-back" href="../../qubic.html#qubic.insert_point_sources_in_sky.gaussian2D">[docs]</a>
+<span class="k">def</span> <span class="nf">gaussian2D</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="n">theta0</span><span class="p">,</span> <span class="n">phi</span><span class="p">,</span> <span class="n">phi0</span><span class="p">,</span> <span class="n">fwhm</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This the 2D gaussian function centered in theta0, phi0</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    theta        - FLOAT - angle theta in radians</span>
+<span class="sd">    theta0       - FLOAT - center angle theta in radians</span>
+<span class="sd">    phi          - FLOAT - angle phi in radians</span>
+<span class="sd">    phi0         - FLOAT - center angle phi in radians</span>
+<span class="sd">    fwhm         - FLOAT - fwhm of the gaussian in radians</span>
+<span class="sd">        </span>
+<span class="sd">    Output</span>
+<span class="sd">    The gaussian function defined as: </span>
+<span class="sd">    1/(np.pi * sigma**2) * np.exp(-((theta-theta0)**2 + (phi-phi0)**2) / sigma**2) (Normalized to unit </span>
+<span class="sd">    integral)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+    <span class="c1"># Here we center the angles so that theta is in [-180, 180]  or  [-pi,pi]</span>
+    <span class="c1"># and phi is in [-90, 90] or in [-pi/2, pi/2]</span>
+
+    <span class="n">sigma</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">2.0</span><span class="p">)))</span> <span class="o">*</span> <span class="n">fwhm</span>
+
+    <span class="n">new_angles</span> <span class="o">=</span> <span class="n">center_ang</span><span class="p">((</span><span class="n">theta</span><span class="p">,</span> <span class="n">phi</span><span class="p">),</span> <span class="n">degree</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">new_center</span> <span class="o">=</span> <span class="n">center_ang</span><span class="p">((</span><span class="n">theta0</span><span class="p">,</span> <span class="n">phi0</span><span class="p">),</span> <span class="n">degree</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># This is the Gaussian normalized so that the integral is 1</span>
+
+    <span class="n">gaussval</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span>
+        <span class="o">-</span><span class="p">((</span><span class="n">new_angles</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">new_center</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">new_angles</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">new_center</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">sigma</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">gaussval</span></div>
+
+
+
+<span class="c1"># ### Generate a 2D grid for the Gaussian values</span>
+
+<span class="c1"># In[6]:</span>
+
+
+<div class="viewcode-block" id="gaussian2D_grid">
+<a class="viewcode-back" href="../../qubic.html#qubic.insert_point_sources_in_sky.gaussian2D_grid">[docs]</a>
+<span class="k">def</span> <span class="nf">gaussian2D_grid</span><span class="p">(</span><span class="n">source_center_deg</span><span class="p">,</span> <span class="n">fwhm_deg</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This generates the grid for the gaussian smoothing around the source</span>
+<span class="sd">    center. The grid is generated in an interval of 4 times the fwhm</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    source_center_deg      - TUPLE - the LonLat coordinates of the source in degrees</span>
+<span class="sd">    fwhm_deg               - FLOAT - fwhm of the gaussian in degrees</span>
+<span class="sd">        </span>
+<span class="sd">    Output</span>
+<span class="sd">    theta_range, phi_range - NDARRAYS - Two arrays containing the theta and phi ranges in degrees</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+    <span class="c1"># The number of points for each axis in the grid is 30 points times the fwhm in degrees</span>
+    <span class="k">if</span> <span class="n">fwhm_deg</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">npoints</span> <span class="o">=</span> <span class="mi">30</span> <span class="o">*</span> <span class="n">fwhm_deg</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">npoints</span> <span class="o">=</span> <span class="mi">50</span>
+
+    <span class="n">factor_fwhm</span> <span class="o">=</span> <span class="mi">2</span>
+
+    <span class="c1"># Convert angles in radians</span>
+    <span class="c1">#     source_center_rad = np.pi * np.array(source_center_deg) / 180.</span>
+    <span class="c1">#     fwhm_rad = np.pi * fwhm_deg / 180.</span>
+
+    <span class="c1"># Generate ranges</span>
+    <span class="n">theta_range_deg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span>
+        <span class="o">-</span><span class="n">factor_fwhm</span> <span class="o">*</span> <span class="n">fwhm_deg</span><span class="p">,</span> <span class="n">factor_fwhm</span> <span class="o">*</span> <span class="n">fwhm_deg</span><span class="p">,</span> <span class="n">fwhm_deg</span> <span class="o">/</span> <span class="n">npoints</span>
+    <span class="p">)</span>
+    <span class="n">phi_range_deg</span> <span class="o">=</span> <span class="n">theta_range_deg</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="c1">#     integral = -1/(2*np.sqrt(np.log(4))) * \</span>
+    <span class="c1">#                 np.exp(-(fwhm_rad**2/np.log(256))) * \</span>
+    <span class="c1">#                 fwhm_rad * np.pi ** (3/2) *\</span>
+    <span class="c1">#                 (\</span>
+    <span class="c1">#                  -2 * special.erfi(fwhm_rad/(2 * np.sqrt(np.log(4)))) + \</span>
+    <span class="c1">#                       special.erfi((fwhm_rad**2 - 2j * np.pi * np.log(4))/(2 * fwhm_rad * np.sqrt(np.log(4)))) + \</span>
+    <span class="c1">#                       special.erfi((fwhm_rad**2 + 2j * np.pi * np.log(4))/(2 * fwhm_rad * np.sqrt(np.log(4)))))</span>
+
+    <span class="k">return</span> <span class="n">theta_range_deg</span> <span class="o">+</span> <span class="n">source_center_deg</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">phi_range_deg</span> <span class="o">+</span> <span class="n">source_center_deg</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span></div>
+
+
+
+<span class="c1"># ### Insert the source to a map that may be provided in input smoothing it with a Gaussian</span>
+
+<span class="c1"># In[7]:</span>
+
+
+<div class="viewcode-block" id="insert_source">
+<a class="viewcode-back" href="../../qubic.html#qubic.insert_point_sources_in_sky.insert_source">[docs]</a>
+<span class="k">def</span> <span class="nf">insert_source</span><span class="p">(</span>
+    <span class="n">source_center_deg</span><span class="p">,</span>
+    <span class="n">fwhm_deg</span><span class="p">,</span>
+    <span class="n">flux_Jy</span><span class="p">,</span>
+    <span class="n">nside</span><span class="p">,</span>
+    <span class="n">units</span><span class="o">=</span><span class="s2">&quot;uK_CMB&quot;</span><span class="p">,</span>
+    <span class="n">input_map</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">frequency</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function smooth a source with a given flux with a gaussian and returns a map </span>
+<span class="sd">    with the source in its position</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    source_center_deg      - TUPLE   - the LonLat coordinates of the source in degrees</span>
+<span class="sd">    fwhm_deg               - FLOAT   - fwhm of the gaussian in degrees</span>
+<span class="sd">    flux_Jy                - FLOAT   - source flux in Jy</span>
+<span class="sd">    nside                  - INT     - output map NSIDE</span>
+<span class="sd">    units                  - STRING  - the units we want the map to be produced. Can be &#39;Flux&#39;</span>
+<span class="sd">                                       [Jy/sr], &#39;K_CMB&#39; or &#39;uK_CMB&#39;</span>
+<span class="sd">    input_map              - NDARRAY - An input map that may be used to add the point source to. Default</span>
+<span class="sd">                                       is input_map = None, which means that the map will be initialized</span>
+<span class="sd">                                       at the desired NSIDE</span>
+<span class="sd">    frequency              - FLOAT   - the frequency at which we want the conversion to take place</span>
+<span class="sd">        </span>
+<span class="sd">    Output</span>
+<span class="sd">    return_map             - NDARRAY - The HEALPix map</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">h</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+    <span class="c1"># Check if the nside provided by the input map is consistent with the required nside</span>
+    <span class="k">if</span> <span class="n">input_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">map_nside</span> <span class="o">=</span> <span class="n">h</span><span class="o">.</span><span class="n">get_nside</span><span class="p">(</span><span class="n">input_map</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">map_nside</span> <span class="o">!=</span> <span class="n">nside</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="s2">&quot;The required Nside (</span><span class="si">%s</span><span class="s2">) is not consistent with the input map (</span><span class="si">%s</span><span class="s2">)&quot;</span>
+                <span class="o">%</span> <span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">map_nside</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="k">if</span> <span class="n">nside</span> <span class="o">&lt;</span> <span class="mi">1024</span><span class="p">:</span>
+        <span class="n">internal_nside</span> <span class="o">=</span> <span class="mi">1024</span>  <span class="c1"># The Nside at which the smoothing is done</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">internal_nside</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">nside</span>
+
+    <span class="n">internal_npixels</span> <span class="o">=</span> <span class="mi">12</span> <span class="o">*</span> <span class="n">internal_nside</span> <span class="o">**</span> <span class="mi">2</span>  <span class="c1"># The corresponding number of pixels</span>
+    <span class="n">degrade_map</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># If to degrade the map at the end</span>
+
+    <span class="c1"># Here we check if we require a higher Nside than the internal. In general this should</span>
+    <span class="c1"># not happen. In case the required Nside is larger than the internal, then all the computation</span>
+    <span class="c1"># is run at the required Nside and there is no degradation at the end</span>
+    <span class="k">if</span> <span class="n">internal_nside</span> <span class="o">&lt;=</span> <span class="n">nside</span><span class="p">:</span>
+        <span class="n">internal_nside</span> <span class="o">=</span> <span class="n">nside</span>
+        <span class="n">degrade_map</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="c1"># Generate 2D gaussian array</span>
+    <span class="n">source_center_rad</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">source_center_deg</span><span class="p">)</span> <span class="o">/</span> <span class="mf">180.0</span>
+    <span class="n">fwhm_rad</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">fwhm_deg</span> <span class="o">/</span> <span class="mf">180.0</span>
+
+    <span class="n">theta_deg</span><span class="p">,</span> <span class="n">phi_deg</span> <span class="o">=</span> <span class="n">gaussian2D_grid</span><span class="p">(</span><span class="n">source_center_deg</span><span class="p">,</span> <span class="n">fwhm_deg</span><span class="p">)</span>
+
+    <span class="c1"># Find correct pixels removing duplicates</span>
+    <span class="n">pixels</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">h</span><span class="o">.</span><span class="n">ang2pix</span><span class="p">(</span><span class="n">internal_nside</span><span class="p">,</span> <span class="n">th</span><span class="p">,</span> <span class="n">ph</span><span class="p">,</span> <span class="n">lonlat</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">th</span> <span class="ow">in</span> <span class="n">theta_deg</span>
+        <span class="k">for</span> <span class="n">ph</span> <span class="ow">in</span> <span class="n">phi_deg</span>
+    <span class="p">]</span>
+    <span class="n">pixels</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">pixels</span><span class="p">))</span>
+
+    <span class="c1"># Find now the angles corresponding to pixels</span>
+    <span class="n">angles_deg</span> <span class="o">=</span> <span class="p">[</span><span class="n">h</span><span class="o">.</span><span class="n">pix2ang</span><span class="p">(</span><span class="n">internal_nside</span><span class="p">,</span> <span class="n">px</span><span class="p">,</span> <span class="n">lonlat</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">px</span> <span class="ow">in</span> <span class="n">pixels</span><span class="p">]</span>
+
+    <span class="c1"># Shift the angles in the [-180,180] and [-90,90] ranges for gaussian computation</span>
+    <span class="n">angles_deg</span> <span class="o">=</span> <span class="p">[</span><span class="n">center_ang</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">angles_deg</span><span class="p">]</span>
+
+    <span class="c1"># Convert to radians</span>
+    <span class="n">newtheta_rad</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mi">180</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">ang</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">ang</span> <span class="ow">in</span> <span class="n">angles_deg</span><span class="p">])</span>
+    <span class="n">newphi_rad</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mi">180</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">ang</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">ang</span> <span class="ow">in</span> <span class="n">angles_deg</span><span class="p">])</span>
+
+    <span class="c1"># Now calculate gaussian values</span>
+    <span class="n">gaussian_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+        <span class="p">[</span>
+            <span class="n">gaussian2D</span><span class="p">(</span><span class="n">th</span><span class="p">,</span> <span class="n">source_center_rad</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ph</span><span class="p">,</span> <span class="n">source_center_rad</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">fwhm_rad</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">th</span><span class="p">,</span> <span class="n">ph</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">newtheta_rad</span><span class="p">,</span> <span class="n">newphi_rad</span><span class="p">)</span>
+        <span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Multiply beam values by flux normalized to beam solid angle</span>
+    <span class="n">sigma</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mf">2.0</span><span class="p">)))</span> <span class="o">*</span> <span class="n">fwhm_rad</span>
+    <span class="n">beam_solid_angle</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">sigma</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">factor</span> <span class="o">=</span> <span class="n">flux_Jy</span> <span class="o">/</span> <span class="n">beam_solid_angle</span>
+
+    <span class="c1"># Pixel solid angle</span>
+    <span class="n">output_map</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">internal_npixels</span><span class="p">)</span>
+    <span class="n">output_map</span><span class="p">[</span><span class="n">pixels</span><span class="p">]</span> <span class="o">=</span> <span class="n">gaussian_values</span> <span class="o">*</span> <span class="n">factor</span>
+
+    <span class="c1"># Perform the conversion to K_CMB if required</span>
+    <span class="k">if</span> <span class="n">units</span> <span class="o">==</span> <span class="s2">&quot;K_CMB&quot;</span> <span class="ow">or</span> <span class="n">units</span> <span class="o">==</span> <span class="s2">&quot;uK_CMB&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">frequency</span> <span class="o">==</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="s2">&quot;Need to specify frequency to convert to thermodynamic temperature. Proceeding in Jansky&quot;</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># If we want in uK_CMB then multiply by 1e6</span>
+            <span class="n">output_factor</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="n">output_factor</span><span class="p">[</span><span class="s2">&quot;K_CMB&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="n">output_factor</span><span class="p">[</span><span class="s2">&quot;uK_CMB&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1e6</span>
+
+            <span class="n">Jysr2K_CMB</span> <span class="o">=</span> <span class="n">Jansky_invsr_to_K_CMB</span><span class="p">(</span><span class="n">frequency</span><span class="p">)</span>
+            <span class="n">output_map</span> <span class="o">=</span> <span class="n">output_map</span> <span class="o">*</span> <span class="n">Jysr2K_CMB</span> <span class="o">*</span> <span class="n">output_factor</span><span class="p">[</span><span class="n">units</span><span class="p">]</span>
+
+    <span class="c1"># Final degradation</span>
+    <span class="c1">#     degrade_map = False</span>
+    <span class="k">if</span> <span class="n">degrade_map</span><span class="p">:</span>
+        <span class="n">return_map</span> <span class="o">=</span> <span class="n">h</span><span class="o">.</span><span class="n">ud_grade</span><span class="p">(</span><span class="n">output_map</span><span class="p">,</span> <span class="n">nside</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">return_map</span> <span class="o">=</span> <span class="n">output_map</span>
+
+    <span class="k">if</span> <span class="n">input_map</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">return_map</span> <span class="o">=</span> <span class="n">return_map</span> <span class="o">+</span> <span class="n">input_map</span>
+
+    <span class="k">return</span> <span class="n">return_map</span></div>
+
+
+
+<span class="c1"># ### Center angles in the [-180,180] and [-90,90] ranges</span>
+
+<span class="c1"># In[8]:</span>
+
+
+<div class="viewcode-block" id="center_ang">
+<a class="viewcode-back" href="../../qubic.html#qubic.insert_point_sources_in_sky.center_ang">[docs]</a>
+<span class="k">def</span> <span class="nf">center_ang</span><span class="p">(</span><span class="n">angle</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function centers a pair of (theta,phi) angles so that it lies in the [-180,180]</span>
+<span class="sd">    and [-90,90] degrees ranges</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    angle                  - TUPLE   - the angle pair to be centered</span>
+<span class="sd">    degree                 - BOOL    - whether the angles are in degree or radians</span>
+
+<span class="sd">    Output</span>
+<span class="sd">    new_angle              - TUPLE   - the centered angle pair</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+    <span class="n">th</span> <span class="o">=</span> <span class="n">angle</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">ph</span> <span class="o">=</span> <span class="n">angle</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">degree</span><span class="p">:</span>
+        <span class="n">shift</span> <span class="o">=</span> <span class="mi">180</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">shift</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+
+    <span class="k">if</span> <span class="n">th</span> <span class="o">&gt;</span> <span class="n">shift</span><span class="p">:</span>
+        <span class="n">th</span> <span class="o">=</span> <span class="n">th</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">shift</span>
+    <span class="k">if</span> <span class="n">th</span> <span class="o">&lt;</span> <span class="o">-</span><span class="n">shift</span><span class="p">:</span>
+        <span class="n">th</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">shift</span> <span class="o">+</span> <span class="n">th</span>
+
+    <span class="c1"># Phi in the -Pi/2, Pi/2 range</span>
+
+    <span class="k">if</span> <span class="n">ph</span> <span class="o">&gt;</span> <span class="n">shift</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">:</span>
+        <span class="n">ph</span> <span class="o">=</span> <span class="o">-</span><span class="n">shift</span> <span class="o">+</span> <span class="n">ph</span>
+    <span class="k">if</span> <span class="n">ph</span> <span class="o">&lt;</span> <span class="o">-</span><span class="n">shift</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">:</span>
+        <span class="n">ph</span> <span class="o">=</span> <span class="n">shift</span> <span class="o">+</span> <span class="n">ph</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">th</span><span class="p">,</span> <span class="n">ph</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ### Convert Jansky to K_CMB</span>
+
+<span class="c1"># In[9]:</span>
+
+
+<div class="viewcode-block" id="Jansky_invsr_to_K_CMB">
+<a class="viewcode-back" href="../../qubic.html#qubic.insert_point_sources_in_sky.Jansky_invsr_to_K_CMB">[docs]</a>
+<span class="k">def</span> <span class="nf">Jansky_invsr_to_K_CMB</span><span class="p">(</span><span class="n">frequency</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function converts flux density from Jansy/sr to K_CMB using the astropy units.equivalencies</span>
+<span class="sd">    class</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    frequency        - FLOAT - the frequency in hertz at which we the conversion is needed</span>
+
+<span class="sd">    Output</span>
+<span class="sd">    Jysr2K_CMB.value - TUPLE - the conversion factor from 1 Jy to K_CMB</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">from</span> <span class="nn">astropy</span> <span class="kn">import</span> <span class="n">units</span>
+    <span class="kn">from</span> <span class="nn">astropy.cosmology</span> <span class="kn">import</span> <span class="n">Planck15</span>
+
+    <span class="n">freq</span> <span class="o">=</span> <span class="n">frequency</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">Hz</span>
+    <span class="n">equiv</span> <span class="o">=</span> <span class="n">units</span><span class="o">.</span><span class="n">equivalencies</span><span class="o">.</span><span class="n">thermodynamic_temperature</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="n">Planck15</span><span class="o">.</span><span class="n">Tcmb0</span><span class="p">)</span>
+    <span class="n">Jysr2K_CMB</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">Jy</span> <span class="o">/</span> <span class="n">units</span><span class="o">.</span><span class="n">sr</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">units</span><span class="o">.</span><span class="n">K</span><span class="p">,</span> <span class="n">equivalencies</span><span class="o">=</span><span class="n">equiv</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">Jysr2K_CMB</span><span class="o">.</span><span class="n">value</span></div>
+
+
+
+<span class="c1"># ## Add sources to a PYSM map array (defined in the QUBIC band)</span>
+
+<span class="c1"># &lt;p style=&quot;font-size:120%;line-height:1.5&quot;&gt;</span>
+<span class="c1"># This is the main function in the module. It takes a PySM map array and adds point sources with a frequency behaviour consistent with their SED as derived from the PCCS catalog</span>
+<span class="c1"># &lt;/p&gt;</span>
+<span class="c1">#</span>
+<span class="c1"># &lt;p style=&quot;font-size:120%;line-height:1.5&quot;&gt;</span>
+<span class="c1"># It adds the point source both in temperature and polarization ($Q$ and $U$). For polarization the $Q$ and $U$ components are calculated according to the following equation:</span>
+<span class="c1"># &lt;/p&gt;</span>
+<span class="c1">#</span>
+<span class="c1"># &lt;p style=&quot;font-size:120%;line-height:1.5&quot;&gt;</span>
+<span class="c1"># $$</span>
+<span class="c1"># Q = P\cos{2\Psi},\,U = P\sin{2\Psi}</span>
+<span class="c1"># $$</span>
+<span class="c1"># &lt;/p&gt;</span>
+<span class="c1">#</span>
+<span class="c1"># &lt;p style=&quot;font-size:120%;line-height:1.5&quot;&gt;</span>
+<span class="c1"># \noindent where $\Psi$ is the polarization angle and $P$ the point source polarized flux. Both are derived from the PCCS. The total intensity flux in mJy is extracted from the catalog field specified by the &#39;DETFLUX&#39; keyword, the polarized flux in mJy is extracted from the catalog field specified by the &#39;PFLUX&#39; keyword, the polarization angle in degrees is extracted from the catalog field specified by the &#39;ANGLE_P&#39; keyword.</span>
+<span class="c1"># &lt;/p&gt;</span>
+
+<span class="c1"># In[54]:</span>
+
+
+<div class="viewcode-block" id="add_sources_to_sky_map">
+<a class="viewcode-back" href="../../qubic.html#qubic.insert_point_sources_in_sky.add_sources_to_sky_map">[docs]</a>
+<span class="k">def</span> <span class="nf">add_sources_to_sky_map</span><span class="p">(</span>
+    <span class="n">input_map</span><span class="p">,</span>
+    <span class="n">frequencies</span><span class="p">,</span>
+    <span class="n">sources</span><span class="p">,</span>
+    <span class="n">fwhm_deg</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;Auto&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">catalog_file</span><span class="o">=</span><span class="s2">&quot;Auto&quot;</span><span class="p">,</span>
+    <span class="n">reference_frequency</span><span class="o">=</span><span class="s2">&quot;143&quot;</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function takes a PySM map array and adds point sources with a frequency behaviour</span>
+<span class="sd">    consistent with their SED as derived from the PCCS catalog. The point source is added in total intensity</span>
+<span class="sd">    and polarization (Q and U). Stokes parameters Q and U are derived using the polarization angle present in</span>
+<span class="sd">    the catalog</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    input_map        - NDARRAY         - An array shaped (nfreq, npix, 3) containing sky maps in the </span>
+<span class="sd">                                         frequencies defined in the QUBIC dictionary (n_sub is the number </span>
+<span class="sd">                                         of frequencies, filter_nu is the center frequency, </span>
+<span class="sd">                                         filter_relative_bandwidth is the relative bandwidth</span>
+<span class="sd">    frequencies      - LIST or NDARRAY - list of frequencies in Hz</span>
+<span class="sd">    sources          - LIST or NDARRAY - list of sources ad defined in the QUBIC pccs</span>
+<span class="sd">    fwhm_deg         - TUPLE           - The fwhm in degrees of the gaussian used to smooth the source. </span>
+<span class="sd">                                         fwhm_deg is specified as a tuple. If fwhm_deg[0] == &#39;Auto&#39; then</span>
+<span class="sd">                                         the fwhm is derived automatically by the pixel size multiplying it</span>
+<span class="sd">                                         by the factor specified in fwhm_deg[1]. If fwhm_deg[0] == &#39;Man&#39; then</span>
+<span class="sd">                                         the fwhm is specified directly, in degrees, in fwhm_deg[1]. Default</span>
+<span class="sd">                                         is fwhm_deg = (&#39;Auto&#39;, 1)</span>
+<span class="sd">    catalog_file        - STRING       - the catalog filename (in pickle format) If catalog_file = &#39;Auto&#39;</span>
+<span class="sd">                                         (Default) then catalog_file = qubic.data.PATH + &#39;qubic_pccs2.pickle&#39;</span>
+<span class="sd">    reference_frequency - STRING       - the reference frequency in GHz in the catalog to derive the source</span>
+<span class="sd">                                         coordinates. It defaults to 143 GHz. Can be left to this value also</span>
+<span class="sd">                                         for 220 GHz, as the source location is weakly dependent on the </span>
+<span class="sd">                                         frequency</span>
+<span class="sd">    </span>
+<span class="sd">    Output</span>
+<span class="sd">    output_map       - NDARRAY         - An array shaped (nfreq, npix, 3) containing sky + point </span>
+<span class="sd">                                         sources maps </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="kn">import</span> <span class="nn">qubic</span>
+    <span class="kn">import</span> <span class="nn">pickle</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+    <span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">h</span>
+
+    <span class="n">catalog_frequencies</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;030&#39;</span><span class="p">,</span> <span class="s1">&#39;044&#39;</span><span class="p">,</span> <span class="s1">&#39;070&#39;</span><span class="p">,</span> <span class="s1">&#39;100&#39;</span><span class="p">,</span> <span class="s1">&#39;143&#39;</span><span class="p">,</span> <span class="s1">&#39;217&#39;</span><span class="p">,</span> <span class="s1">&#39;353&#39;</span><span class="p">]</span>
+    <span class="n">complement_frequencies</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">catalog_frequencies</span> <span class="k">if</span> <span class="n">f</span> <span class="o">!=</span> <span class="n">reference_frequency</span><span class="p">]</span>
+    
+    <span class="n">output_map</span> <span class="o">=</span> <span class="n">input_map</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="c1"># Check that the number of frequencies is consistent with the input map</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">input_map</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">frequencies</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;The number of maps and frequencies are inconsistent.&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span>
+            <span class="s2">&quot;There are </span><span class="si">%i</span><span class="s2"> maps and </span><span class="si">%i</span><span class="s2"> frequencies&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">input_map</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">frequencies</span><span class="p">))</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="n">nside</span> <span class="o">=</span> <span class="n">h</span><span class="o">.</span><span class="n">get_nside</span><span class="p">(</span><span class="n">input_map</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">])</span>
+
+    <span class="c1"># Define catalog file if not provided manually</span>
+    <span class="k">if</span> <span class="n">catalog_file</span> <span class="o">==</span> <span class="s2">&quot;Auto&quot;</span><span class="p">:</span>
+        <span class="n">catalog_file</span> <span class="o">=</span> <span class="n">qubic</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">PATH</span> <span class="o">+</span> <span class="s2">&quot;qubic_pccs2.pickle&quot;</span>
+
+    <span class="c1"># Define fwhm in degrees</span>
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">fwhm_deg</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">tuple</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span>
+            <span class="s2">&quot;The variable fwhm_deg must be a tuple. Call help(add_sources_to_sky_map) for more info&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="k">if</span> <span class="n">fwhm_deg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">&quot;Auto&quot;</span> <span class="ow">and</span> <span class="n">fwhm_deg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">&quot;Man&quot;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;fwhm_deg[0] must be either &#39;Auto&#39; or &#39;Man&#39;&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="k">if</span> <span class="n">fwhm_deg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Auto&quot;</span><span class="p">:</span>  <span class="c1"># Then fwhm is the map pixel size</span>
+        <span class="n">npix</span> <span class="o">=</span> <span class="n">h</span><span class="o">.</span><span class="n">get_map_size</span><span class="p">(</span><span class="n">input_map</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">])</span>
+        <span class="n">pix_size_deg</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="n">npix</span><span class="p">)</span> <span class="o">*</span> <span class="mi">180</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+        <span class="p">)</span>  <span class="c1"># It&#39;s sqrt(4pi/npix) converted to deg</span>
+        <span class="n">fwhm</span> <span class="o">=</span> <span class="n">fwhm_deg</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">pix_size_deg</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">fwhm</span> <span class="o">=</span> <span class="n">fwhm_deg</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="c1"># Open point source catalog</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">catalog_file</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">handle</span><span class="p">:</span>
+        <span class="n">catalog</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">handle</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">source</span> <span class="ow">in</span> <span class="n">sources</span><span class="p">:</span>
+        
+        <span class="c1"># Check if source is in catalog with the reference frequency otherwise shift to the previous</span>
+        <span class="c1"># frequency</span>
+        
+        <span class="k">if</span> <span class="n">source</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">catalog</span><span class="p">[</span><span class="n">reference_frequency</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">isincatalog</span> <span class="o">=</span> <span class="p">[</span><span class="n">source</span> <span class="ow">in</span> <span class="n">catalog</span><span class="p">[</span><span class="n">f</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">complement_frequencies</span><span class="p">]</span>
+            <span class="k">if</span> <span class="kc">True</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">isincatalog</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Source </span><span class="si">%s</span><span class="s1"> is not in catalog&#39;</span> <span class="o">%</span> <span class="n">source</span><span class="p">)</span>
+                <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Source </span><span class="si">%s</span><span class="s1"> is not in catalog at frequency </span><span class="si">%s</span><span class="s1"> GHz&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">reference_frequency</span><span class="p">))</span>
+            <span class="n">goodfreq</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">isincatalog</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="p">]</span> 
+            <span class="n">diff_freq</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="p">[</span><span class="n">complement_frequencies</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">goodfreq</span><span class="p">])))</span> <span class="o">-</span> <span class="nb">float</span><span class="p">(</span><span class="n">reference_frequency</span><span class="p">))</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">diff_freq</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">diff_freq</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">reference_frequency</span> <span class="o">=</span> <span class="n">complement_frequencies</span><span class="p">[</span><span class="n">index</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Switched to new reference frequency </span><span class="si">%s</span><span class="s1"> GHz&#39;</span> <span class="o">%</span> <span class="n">reference_frequency</span><span class="p">)</span>
+            	            
+        <span class="nb">print</span><span class="p">(</span>
+            <span class="s2">&quot;Processing source </span><span class="si">%s</span><span class="s2"> (</span><span class="si">%i</span><span class="s2">/</span><span class="si">%i</span><span class="s2">)&quot;</span>
+            <span class="o">%</span> <span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">sources</span><span class="p">)</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">source</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">sources</span><span class="p">))</span>
+        <span class="p">)</span>
+        <span class="n">source_center_deg</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">reference_frequency</span><span class="p">][</span><span class="n">source</span><span class="p">][</span><span class="s2">&quot;GLON&quot;</span><span class="p">],</span>
+            <span class="n">catalog</span><span class="p">[</span><span class="n">reference_frequency</span><span class="p">][</span><span class="n">source</span><span class="p">][</span><span class="s2">&quot;GLAT&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Calculate SED of source in T and P and fitting polynomial</span>
+        <span class="n">sed</span> <span class="o">=</span> <span class="n">qubic</span><span class="o">.</span><span class="n">compact_sources_sed</span><span class="o">.</span><span class="n">build_sed</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">fi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">poly1d</span><span class="p">(</span><span class="n">sed</span><span class="p">[</span><span class="n">source</span><span class="p">][</span><span class="s2">&quot;i_fit&quot;</span><span class="p">])</span>
+        <span class="n">fp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">poly1d</span><span class="p">(</span><span class="n">sed</span><span class="p">[</span><span class="n">source</span><span class="p">][</span><span class="s2">&quot;p_fit&quot;</span><span class="p">])</span>
+
+        <span class="c1"># Loop over frequencies, for each frequency get the corresponding flux in I and P</span>
+        <span class="k">for</span> <span class="n">fq</span> <span class="ow">in</span> <span class="n">frequencies</span><span class="p">:</span>
+            <span class="n">fq_index</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">frequencies</span><span class="p">)</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">fq</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Processing frequency # </span><span class="si">%i</span><span class="s2"> of </span><span class="si">%i</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">fq_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">frequencies</span><span class="p">)))</span>
+            <span class="n">i_flux</span> <span class="o">=</span> <span class="n">fi</span><span class="p">(</span><span class="n">fq</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1e3</span>  <span class="c1"># Conversion from mJy -&gt; Jy</span>
+            <span class="n">p_flux</span> <span class="o">=</span> <span class="n">fp</span><span class="p">(</span><span class="n">fq</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">)</span> <span class="o">/</span> <span class="mf">1e3</span>  <span class="c1"># Conversion from mJy -&gt; Jy</span>
+
+            <span class="n">polarization_angle</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">catalog</span><span class="p">[</span><span class="n">reference_frequency</span><span class="p">][</span><span class="n">source</span><span class="p">][</span><span class="s2">&quot;ANGLE_P&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mf">180.0</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">p_flux</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+                <span class="n">q_flux</span> <span class="o">=</span> <span class="n">p_flux</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">polarization_angle</span><span class="p">)</span>
+                <span class="n">u_flux</span> <span class="o">=</span> <span class="n">p_flux</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">polarization_angle</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">q_flux</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">u_flux</span> <span class="o">=</span> <span class="mi">0</span>
+
+            <span class="n">flux</span> <span class="o">=</span> <span class="p">[</span><span class="n">i_flux</span><span class="p">,</span> <span class="n">q_flux</span><span class="p">,</span> <span class="n">u_flux</span><span class="p">]</span>
+
+            <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]:</span>
+                <span class="n">outmap</span> <span class="o">=</span> <span class="n">insert_source</span><span class="p">(</span>
+                    <span class="n">source_center_deg</span><span class="p">,</span>
+                    <span class="n">fwhm</span><span class="p">,</span>
+                    <span class="n">flux</span><span class="p">[</span><span class="n">index</span><span class="p">],</span>
+                    <span class="n">nside</span><span class="p">,</span>
+                    <span class="n">units</span><span class="o">=</span><span class="s2">&quot;uK_CMB&quot;</span><span class="p">,</span>
+                    <span class="n">input_map</span><span class="o">=</span><span class="n">input_map</span><span class="p">[</span><span class="n">fq_index</span><span class="p">,</span> <span class="p">:,</span> <span class="n">index</span><span class="p">],</span>
+                    <span class="n">frequency</span><span class="o">=</span><span class="n">fq</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="n">output_map</span><span class="p">[</span><span class="n">fq_index</span><span class="p">,</span> <span class="p">:,</span> <span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">outmap</span>
+
+        <span class="n">input_map</span> <span class="o">=</span> <span class="n">output_map</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">output_map</span></div>
+
+
+
+<span class="c1"># ## Get source from catalog</span>
+
+<span class="c1"># In[11]:</span>
+
+
+<div class="viewcode-block" id="getsource">
+<a class="viewcode-back" href="../../qubic.html#qubic.insert_point_sources_in_sky.getsource">[docs]</a>
+<span class="k">def</span> <span class="nf">getsource</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">frequency</span><span class="p">,</span> <span class="n">catalog</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function gets a source from the compact source database and returnts its inputs</span>
+<span class="sd">        </span>
+<span class="sd">    Input</span>
+<span class="sd">    source     - STRING - the source name in the convention of the database or with the common name</span>
+<span class="sd">    frequency  - FLOAT  - the frequency in GHz</span>
+<span class="sd">    catalog    - DICT   - the QUBIC PCCS catalog</span>
+<span class="sd">    </span>
+<span class="sd">    Output</span>
+<span class="sd">    out_source - DICT   - the source parameters</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">qubic.compact_sources_sed</span> <span class="k">as</span> <span class="nn">pccs</span>
+    <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+    <span class="c1"># Check if source is in catalog</span>
+    <span class="n">exists</span><span class="p">,</span> <span class="n">sourcename</span> <span class="o">=</span> <span class="n">pccs</span><span class="o">.</span><span class="n">isincatalog</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">exists</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Source </span><span class="si">%s</span><span class="s2"> does not exist in catalog&quot;</span> <span class="o">%</span> <span class="n">source</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="c1"># Check if frequency is present</span>
+    <span class="n">sourcefreqs</span> <span class="o">=</span> <span class="n">pccs</span><span class="o">.</span><span class="n">source2freqs</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">catalog</span><span class="p">,</span> <span class="n">altnames</span><span class="o">=</span><span class="n">pccs</span><span class="o">.</span><span class="n">altnames</span><span class="p">)</span>
+    <span class="n">freq_string</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">%03i</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">frequency</span>
+    <span class="k">if</span> <span class="n">freq_string</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sourcefreqs</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Frequency </span><span class="si">%s</span><span class="s2"> GHz is not in the catalog&quot;</span> <span class="o">%</span> <span class="n">frequency</span><span class="p">)</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="n">out_source</span> <span class="o">=</span> <span class="n">catalog</span><span class="p">[</span><span class="n">freq_string</span><span class="p">][</span><span class="n">sourcename</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">out_source</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, QUBIC Collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

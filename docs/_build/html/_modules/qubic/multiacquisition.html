@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qubic.multiacquisition &mdash; Qubicsoft 5.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=ee801c84"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">qubic.multiacquisition</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for qubic.multiacquisition</h1><div class="highlight"><pre>
+<span></span><span class="c1"># coding: utf-8</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span>
+
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">pyoperators</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BlockColumnOperator</span><span class="p">,</span> <span class="n">BlockDiagonalOperator</span><span class="p">,</span> <span class="n">BlockRowOperator</span><span class="p">,</span>
+    <span class="n">CompositionOperator</span><span class="p">,</span> <span class="n">DiagonalOperator</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">IdentityOperator</span><span class="p">,</span>
+    <span class="n">MPIDistributionIdentityOperator</span><span class="p">,</span> <span class="n">MPI</span><span class="p">,</span> <span class="n">proxy_group</span><span class="p">,</span> <span class="n">ReshapeOperator</span><span class="p">,</span>
+    <span class="n">rule_manager</span><span class="p">,</span> <span class="n">pcg</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">pyoperators.utils.mpi</span> <span class="kn">import</span> <span class="n">as_mpi</span>
+<span class="kn">from</span> <span class="nn">pysimulators</span> <span class="kn">import</span> <span class="n">Acquisition</span><span class="p">,</span> <span class="n">FitsArray</span>
+<span class="kn">from</span> <span class="nn">pysimulators.interfaces.healpy</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">.data</span> <span class="kn">import</span> <span class="n">PATH</span>
+<span class="kn">from</span> <span class="nn">.instrument</span> <span class="kn">import</span> <span class="n">QubicInstrument</span>
+<span class="kn">from</span> <span class="nn">.scene</span> <span class="kn">import</span> <span class="n">QubicScene</span>
+<span class="kn">from</span> <span class="nn">.samplings</span> <span class="kn">import</span> <span class="n">create_random_pointings</span>
+<span class="kn">from</span> <span class="nn">.acquisition</span> <span class="kn">import</span> <span class="p">(</span><span class="n">QubicAcquisition</span><span class="p">,</span>
+                          <span class="n">PlanckAcquisition</span><span class="p">,</span>
+                          <span class="n">QubicPlanckAcquisition</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">.polyacquisition</span> <span class="kn">import</span> <span class="p">(</span><span class="n">QubicPolyAcquisition</span><span class="p">,</span>
+                              <span class="n">QubicPolyPlanckAcquisition</span><span class="p">)</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;QubicMultibandAcquisition&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;QubicMultibandPlanckAcquisition&#39;</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="QubicMultibandAcquisition">
+<a class="viewcode-back" href="../../qubic.html#qubic.multiacquisition.QubicMultibandAcquisition">[docs]</a>
+<span class="k">class</span> <span class="nc">QubicMultibandAcquisition</span><span class="p">(</span><span class="n">QubicPolyAcquisition</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">multiinstrument</span><span class="p">,</span> <span class="n">sampling</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">nus</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        -----------</span>
+<span class="sd">        nus : array</span>
+<span class="sd">            edge frequencies for reconstructed subbands, for example:</span>
+<span class="sd">            [140, 150, 160] means two bands: one from 140 to 150 GHz and</span>
+<span class="sd">            one from 150 to 160 GHz</span>
+<span class="sd">        Note, that number of subbands is not equal to len(self)</span>
+<span class="sd">        Within each subband there are multiple frequencies</span>
+<span class="sd">        Documentation for other parameters see in QubicPolyAcquisition</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="n">QubicPolyAcquisition</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">multiinstrument</span><span class="p">,</span> <span class="n">sampling</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">nus</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">bands</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="n">nus</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">nus</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nus</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The QubicMultibandAcquisition class is designed to &#39;</span>
+                             <span class="s1">&#39;work with multiple reconstructed subbands. &#39;</span>
+                             <span class="s1">&#39;If you reconstruct only one subband, you can use &#39;</span>
+                             <span class="s1">&#39;the QubicPolyAcquisition class&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">q</span><span class="o">.</span><span class="n">filter</span><span class="o">.</span><span class="n">nu</span> <span class="o">/</span> <span class="mf">1e9</span> <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">multiinstrument</span><span class="p">])</span>
+
+<div class="viewcode-block" id="QubicMultibandAcquisition.get_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.multiacquisition.QubicMultibandAcquisition.get_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">op</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_array_of_operators</span><span class="p">())</span>
+        <span class="n">op_sum</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">band</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bands</span><span class="p">:</span>
+            <span class="n">op_sum</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">op</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">&gt;</span> <span class="n">band</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">&lt;</span> <span class="n">band</span><span class="p">[</span><span class="mi">1</span><span class="p">])]</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">BlockRowOperator</span><span class="p">(</span><span class="n">op_sum</span><span class="p">,</span> <span class="n">new_axisin</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="QubicMultibandAcquisition.get_preconditioner">
+<a class="viewcode-back" href="../../qubic.html#qubic.multiacquisition.QubicMultibandAcquisition.get_preconditioner">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_preconditioner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cov</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;This is the new preconditionner&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cov</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cov_av</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">cov</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">&gt;</span> <span class="n">mi</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">&lt;</span> <span class="n">ma</span><span class="p">)]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> \
+                                <span class="k">for</span> <span class="p">(</span><span class="n">mi</span><span class="p">,</span> <span class="n">ma</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bands</span><span class="p">])</span>
+            <span class="n">cov_inv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">cov_av</span><span class="p">)</span>
+            <span class="n">seenpix</span> <span class="o">=</span> <span class="n">cov_av</span> <span class="o">!=</span><span class="mi">0</span>
+            <span class="n">cov_inv</span><span class="p">[</span><span class="n">seenpix</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">cov_av</span><span class="p">[</span><span class="n">seenpix</span><span class="p">]</span>
+
+            <span class="k">return</span> <span class="n">BlockDiagonalOperator</span><span class="p">(</span> \
+                <span class="p">[</span><span class="n">DiagonalOperator</span><span class="p">(</span><span class="n">ci</span><span class="p">,</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;rightward&#39;</span><span class="p">)</span> <span class="k">for</span> <span class="n">ci</span> <span class="ow">in</span> <span class="n">cov_inv</span><span class="p">],</span>
+                <span class="n">new_axisin</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="QubicMultibandPlanckAcquisition">
+<a class="viewcode-back" href="../../qubic.html#qubic.multiacquisition.QubicMultibandPlanckAcquisition">[docs]</a>
+<span class="k">class</span> <span class="nc">QubicMultibandPlanckAcquisition</span><span class="p">(</span><span class="n">QubicPolyPlanckAcquisition</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The QubicMultibandPlanckAcquisition class, which combines the QubicMultiband and Planck</span>
+<span class="sd">    acquisitions.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">qubic</span><span class="p">,</span> <span class="n">planck</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        acq = QubicPlanckAcquisition(qubic_acquisition, planck_acquisition)</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        qubic_acquisition : QubicAcquisition</span>
+<span class="sd">            The QUBIC acquisition.</span>
+<span class="sd">        planck_acquisition : PlanckAcquisition</span>
+<span class="sd">            The Planck acquisition.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">qubic</span><span class="p">,</span> <span class="n">QubicMultibandAcquisition</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;The first argument is not a QubicMultibandAcquisition.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">planck</span><span class="p">,</span> <span class="n">PlanckAcquisition</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;The second argument is not a PlanckAcquisition.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">qubic</span><span class="o">.</span><span class="n">scene</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">planck</span><span class="o">.</span><span class="n">scene</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The Qubic and Planck scenes are different.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span> <span class="o">=</span> <span class="n">qubic</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">planck</span> <span class="o">=</span> <span class="n">planck</span>
+        <span class="k">if</span> <span class="n">weights</span> <span class="o">==</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>  <span class="c1"># / len(self)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">weights</span>
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="p">)</span>
+
+<div class="viewcode-block" id="QubicMultibandPlanckAcquisition.get_observation">
+<a class="viewcode-back" href="../../qubic.html#qubic.multiacquisition.QubicMultibandPlanckAcquisition.get_observation">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_observation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">maps</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the fused observation.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        maps : numpy array of shape (nbands, npix, 3)</span>
+<span class="sd">            True input multiband maps</span>
+<span class="sd">        noiseless : boolean, optional</span>
+<span class="sd">            If set, return a noiseless observation</span>
+<span class="sd">        convolution : boolean, optional</span>
+<span class="sd">            If set, </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">obs_qubic_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">get_observation</span><span class="p">(</span>
+            <span class="n">maps</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="n">noiseless</span><span class="p">,</span>
+            <span class="n">convolution</span><span class="o">=</span><span class="n">convolution</span><span class="p">)</span>
+        <span class="n">obs_qubic</span> <span class="o">=</span> <span class="n">obs_qubic_</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">convolution</span> <span class="k">else</span> <span class="n">obs_qubic_</span>
+        <span class="n">obs_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">planck</span><span class="o">.</span><span class="n">get_observation</span><span class="p">(</span><span class="n">noiseless</span><span class="o">=</span><span class="n">noiseless</span><span class="p">)</span>
+        <span class="n">obs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">obs_qubic</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">obs_planck</span><span class="o">.</span><span class="n">ravel</span><span class="p">()]</span>
+        <span class="k">if</span> <span class="n">convolution</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">obs</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">obs_qubic_</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">obs</span></div>
+
+
+<div class="viewcode-block" id="QubicMultibandPlanckAcquisition.get_preconditioner">
+<a class="viewcode-back" href="../../qubic.html#qubic.multiacquisition.QubicMultibandPlanckAcquisition.get_preconditioner">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_preconditioner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cov</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">cov</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cov</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">cov</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">*</span> <span class="n">cov</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">*</span> <span class="mf">0.001</span>
+            <span class="n">cov_inv</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">cov</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nus</span> <span class="o">&gt;</span> <span class="n">mi</span><span class="p">)</span> <span class="o">*</span> \
+                                         <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nus</span> <span class="o">&lt;</span> <span class="n">ma</span><span class="p">)]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> \
+                                <span class="k">for</span> <span class="p">(</span><span class="n">mi</span><span class="p">,</span> <span class="n">ma</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">bands</span><span class="p">])</span>
+            <span class="k">return</span> <span class="n">DiagonalOperator</span><span class="p">(</span><span class="n">cov_inv</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;rightward&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="QubicMultibandPlanckAcquisition.tod2map">
+<a class="viewcode-back" href="../../qubic.html#qubic.multiacquisition.QubicMultibandPlanckAcquisition.tod2map">[docs]</a>
+    <span class="k">def</span> <span class="nf">tod2map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tod</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">cov</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;tol&#39;</span><span class="p">]</span>
+        <span class="n">maxiter</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;maxiter&#39;</span><span class="p">]</span>
+        <span class="n">verbose</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;verbose&#39;</span><span class="p">]</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">planck</span>
+        <span class="n">H</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">q</span><span class="p">,</span> <span class="n">w</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">):</span>
+            <span class="n">H</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">QubicPlanckAcquisition</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span> <span class="o">*</span> <span class="n">w</span><span class="p">)</span>
+        <span class="n">H</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">H</span><span class="p">)</span>
+        <span class="n">H</span> <span class="o">=</span> <span class="p">[</span><span class="n">H</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nus</span> <span class="o">&gt;</span> <span class="n">mi</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nus</span> <span class="o">&lt;</span> <span class="n">ma</span><span class="p">)]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">*</span> \
+             <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nus</span> <span class="o">&gt;</span> <span class="n">mi</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nus</span> <span class="o">&lt;</span> <span class="n">ma</span><span class="p">)]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> \
+             <span class="k">for</span> <span class="p">(</span><span class="n">mi</span><span class="p">,</span> <span class="n">ma</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">bands</span><span class="p">]</span>
+        <span class="n">invntt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_invntt_operator</span><span class="p">()</span>
+
+        <span class="n">A_columns</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">h1</span> <span class="ow">in</span> <span class="n">H</span><span class="p">:</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">h2</span> <span class="ow">in</span> <span class="n">H</span><span class="p">:</span>
+                <span class="n">c</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">h2</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">invntt</span> <span class="o">*</span> <span class="n">h1</span><span class="p">)</span>
+            <span class="n">A_columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">BlockColumnOperator</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">axisout</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">BlockRowOperator</span><span class="p">(</span><span class="n">A_columns</span><span class="p">,</span> <span class="n">axisin</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">H</span> <span class="o">=</span> <span class="p">[</span><span class="n">h</span><span class="o">.</span><span class="n">T</span> <span class="k">for</span> <span class="n">h</span> <span class="ow">in</span> <span class="n">H</span><span class="p">]</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">BlockColumnOperator</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">new_axisout</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">invntt</span> <span class="o">*</span> <span class="n">tod</span><span class="p">)</span>
+        <span class="n">sh</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">if</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nus</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># If number of subbands is more than one</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sh</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="n">b</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">sh</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">sh</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">b</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">sh</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+
+        <span class="n">preconditioner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_preconditioner</span><span class="p">(</span><span class="n">cov</span><span class="p">)</span>
+        <span class="n">solution</span> <span class="o">=</span> <span class="n">pcg</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">preconditioner</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="n">tol</span><span class="p">,</span> <span class="n">maxiter</span><span class="o">=</span><span class="n">maxiter</span><span class="p">)</span>
+        <span class="c1">#        solution = pcg(A, b, disp=verbose, tol=tol, maxiter=maxiter)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sh</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">maps_recon</span> <span class="o">=</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">sh</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">sh</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">maps_recon</span> <span class="o">=</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">sh</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">maps_recon</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, QUBIC Collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

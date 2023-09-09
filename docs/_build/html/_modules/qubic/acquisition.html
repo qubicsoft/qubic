@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qubic.acquisition &mdash; Qubicsoft 5.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=ee801c84"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">qubic.acquisition</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for qubic.acquisition</h1><div class="highlight"><pre>
+<span></span><span class="c1"># coding: utf-8</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span>
+
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">pyoperators</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BlockColumnOperator</span><span class="p">,</span> <span class="n">BlockDiagonalOperator</span><span class="p">,</span> <span class="n">BlockRowOperator</span><span class="p">,</span>
+    <span class="n">CompositionOperator</span><span class="p">,</span> <span class="n">DiagonalOperator</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">IdentityOperator</span><span class="p">,</span>
+    <span class="n">MPIDistributionIdentityOperator</span><span class="p">,</span> <span class="n">MPI</span><span class="p">,</span> <span class="n">proxy_group</span><span class="p">,</span> <span class="n">ReshapeOperator</span><span class="p">,</span>
+    <span class="n">rule_manager</span><span class="p">,</span> <span class="n">pcg</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">pyoperators.utils.mpi</span> <span class="kn">import</span> <span class="n">as_mpi</span>
+<span class="kn">from</span> <span class="nn">pysimulators</span> <span class="kn">import</span> <span class="n">Acquisition</span><span class="p">,</span> <span class="n">FitsArray</span>
+<span class="kn">from</span> <span class="nn">pysimulators.interfaces.healpy</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">.data</span> <span class="kn">import</span> <span class="n">PATH</span>
+<span class="kn">from</span> <span class="nn">.calibration</span> <span class="kn">import</span> <span class="n">QubicCalibration</span>
+<span class="kn">from</span> <span class="nn">.samplings</span> <span class="kn">import</span> <span class="n">create_random_pointings</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;PlanckAcquisition&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;QubicAcquisition&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;QubicPlanckAcquisition&#39;</span><span class="p">]</span>
+
+
+
+<div class="viewcode-block" id="QubicAcquisition">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition">[docs]</a>
+<span class="k">class</span> <span class="nc">QubicAcquisition</span><span class="p">(</span><span class="n">Acquisition</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The QubicAcquisition class, which combines the instrument, sampling and</span>
+<span class="sd">    scene models.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="n">sampling</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        acq = QubicAcquisition(instrument, sampling, scene, d)</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        instrument : QubicInstrument, optional</span>
+<span class="sd">            The QubicInstrument instance.</span>
+<span class="sd">        sampling : pointing</span>
+<span class="sd">            Pointing obtained with get_pointing().</span>
+<span class="sd">        scene : QubicScene, optional</span>
+<span class="sd">            The discretized observed scene (the sky).</span>
+<span class="sd">        d : dictionary with lot of parameters:</span>
+<span class="sd">            block : tuple of slices, optional</span>
+<span class="sd">                Partition of the samplings.</span>
+<span class="sd">            effective_duration : float, optional</span>
+<span class="sd">                If not None, the noise properties are rescaled so that this</span>
+<span class="sd">                acquisition has an effective duration equal to the specified value,</span>
+<span class="sd">                in years.</span>
+<span class="sd">            photon_noise : boolean, optional</span>
+<span class="sd">                If true, the photon noise contribution is included.</span>
+<span class="sd">            max_nbytes : int or None, optional</span>
+<span class="sd">                Maximum number of bytes to be allocated for the acquisition&#39;s</span>
+<span class="sd">                operator.</span>
+<span class="sd">            nprocs_instrument : int, optional</span>
+<span class="sd">                For a given sampling slice, number of procs dedicated to</span>
+<span class="sd">                the instrument.</span>
+<span class="sd">            nprocs_sampling : int, optional</span>
+<span class="sd">                For a given detector slice, number of procs dedicated to</span>
+<span class="sd">                the sampling.</span>
+<span class="sd">            comm : mpi4py.MPI.Comm, optional</span>
+<span class="sd">                The acquisition&#39;s MPI communicator. Note that it is transformed</span>
+<span class="sd">                into a 2d cartesian communicator before being stored as the &#39;comm&#39;</span>
+<span class="sd">                attribute. The following relationship must hold:</span>
+<span class="sd">                    comm.size = nprocs_instrument * nprocs_sampling</span>
+<span class="sd">            psd : array-like, optional</span>
+<span class="sd">                The one-sided or two-sided power spectrum density</span>
+<span class="sd">                [signal unit/sqrt Hz].</span>
+<span class="sd">            bandwidth : float, optional</span>
+<span class="sd">                The PSD frequency increment [Hz].</span>
+<span class="sd">            twosided : boolean, optional</span>
+<span class="sd">                Whether or not the input psd is one-sided (only positive</span>
+<span class="sd">                frequencies) or two-sided (positive and negative frequencies).</span>
+<span class="sd">            sigma : float</span>
+<span class="sd">                Standard deviation of the white noise component.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">block</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;block&#39;</span><span class="p">]</span>
+        <span class="n">effective_duration</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;effective_duration&#39;</span><span class="p">]</span>
+        <span class="n">photon_noise</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;photon_noise&#39;</span><span class="p">]</span>
+        <span class="n">max_nbytes</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;max_nbytes&#39;</span><span class="p">]</span>
+        <span class="n">nprocs_instrument</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;nprocs_instrument&#39;</span><span class="p">]</span>
+        <span class="n">nprocs_sampling</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;nprocs_sampling&#39;</span><span class="p">]</span>
+        <span class="n">comm</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;comm&#39;</span><span class="p">]</span>
+        <span class="n">psd</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;psd&#39;</span><span class="p">]</span>
+        <span class="n">bandwidth</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;bandwidth&#39;</span><span class="p">]</span>
+        <span class="n">twosided</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;twosided&#39;</span><span class="p">]</span>
+        <span class="n">sigma</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;sigma&#39;</span><span class="p">]</span>
+
+        <span class="n">Acquisition</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">instrument</span><span class="p">,</span> <span class="n">sampling</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">block</span><span class="o">=</span><span class="n">block</span><span class="p">,</span>
+            <span class="n">max_nbytes</span><span class="o">=</span><span class="n">max_nbytes</span><span class="p">,</span> <span class="n">nprocs_instrument</span><span class="o">=</span><span class="n">nprocs_instrument</span><span class="p">,</span>
+            <span class="n">nprocs_sampling</span><span class="o">=</span><span class="n">nprocs_sampling</span><span class="p">,</span> <span class="n">comm</span><span class="o">=</span><span class="n">comm</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">photon_noise</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">photon_noise</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="o">=</span> <span class="n">effective_duration</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">bandwidth</span> <span class="o">=</span> <span class="n">bandwidth</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">psd</span> <span class="o">=</span> <span class="n">psd</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">twosided</span> <span class="o">=</span> <span class="n">twosided</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="n">sigma</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">forced_sigma</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="QubicAcquisition.get_coverage">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_coverage">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_coverage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the acquisition scene coverage as given by H.T(1), normalized</span>
+<span class="sd">        so that its integral over the sky is the number of detectors times</span>
+<span class="sd">        the duration of the acquisition.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">H</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">H</span><span class="o">.</span><span class="n">T</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">))))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="s1">&#39;I&#39;</span><span class="p">:</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>  <span class="c1"># to avoid keeping QU in memory</span>
+        <span class="n">ndetectors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">))</span>
+        <span class="n">nsamplings</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">))</span>
+        <span class="n">out</span> <span class="o">*=</span> <span class="n">ndetectors</span> <span class="o">*</span> <span class="n">nsamplings</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_hitmap">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_hitmap">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_hitmap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a healpy map whose values are the number of times a pointing</span>
+<span class="sd">        hits the pixel.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">nside</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">nside</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">nside</span>
+        <span class="n">ipixel</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">healpix</span><span class="p">(</span><span class="n">nside</span><span class="p">)</span>
+        <span class="n">npixel</span> <span class="o">=</span> <span class="mi">12</span> <span class="o">*</span> <span class="n">nside</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="n">hit</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">histogram</span><span class="p">(</span><span class="n">ipixel</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="n">npixel</span><span class="p">,</span> <span class="nb">range</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">npixel</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">Allreduce</span><span class="p">(</span><span class="n">MPI</span><span class="o">.</span><span class="n">IN_PLACE</span><span class="p">,</span> <span class="n">as_mpi</span><span class="p">(</span><span class="n">hit</span><span class="p">),</span> <span class="n">op</span><span class="o">=</span><span class="n">MPI</span><span class="o">.</span><span class="n">SUM</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">hit</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_noise">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_noise">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_noise</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="p">,</span> <span class="n">photon_noise</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">photon_noise</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">nsamplings</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">))</span>
+            <span class="n">out</span> <span class="o">*=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">nsamplings</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span> <span class="o">/</span>
+                           <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="o">*</span> <span class="mi">31557600</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+    <span class="n">get_noise</span><span class="o">.</span><span class="vm">__doc__</span> <span class="o">=</span> <span class="n">Acquisition</span><span class="o">.</span><span class="n">get_noise</span><span class="o">.</span><span class="vm">__doc__</span>
+
+<div class="viewcode-block" id="QubicAcquisition.get_aperture_integration_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_aperture_integration_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_aperture_integration_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Integrate flux density in the telescope aperture.</span>
+<span class="sd">        Convert signal from W / m^2 / Hz into W / Hz.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_aperture_integration_operator</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_convolution_peak_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_convolution_peak_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_convolution_peak_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">keywords</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return an operator that convolves the Healpix sky by the gaussian</span>
+<span class="sd">        kernel that, if used in conjonction with the peak sampling operator,</span>
+<span class="sd">        best approximates the synthetic beam.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_convolution_peak_operator</span><span class="p">(</span><span class="o">**</span><span class="n">keywords</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_detector_integration_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_detector_integration_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_detector_integration_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Integrate flux density in detector solid angles.</span>
+<span class="sd">        Convert W / sr into W.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_detector_integration_operator</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_detector_response_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_detector_response_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_detector_response_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the operator for the bolometer responses.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">BlockDiagonalOperator</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_detector_response_operator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">[</span><span class="n">b</span><span class="p">])</span>
+             <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">block</span><span class="p">],</span> <span class="n">axisin</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_distribution_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_distribution_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_distribution_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the MPI distribution operator.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">MPIDistributionIdentityOperator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">comm</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_filter_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_filter_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_filter_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the filter operator.</span>
+<span class="sd">        Convert units from W/Hz to W.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_filter_operator</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_hwp_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_hwp_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_hwp_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the operator for the bolometer responses.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">BlockDiagonalOperator</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_hwp_operator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">[</span><span class="n">b</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="p">)</span>
+             <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">block</span><span class="p">],</span> <span class="n">axisin</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_diag_invntt_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_diag_invntt_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_diag_invntt_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Use diagonal noise covariance matrix&#39;</span><span class="p">)</span>
+
+        <span class="n">sigma_detector</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">nep</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">photon_noise</span><span class="p">:</span>
+            <span class="n">sigma_photon</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">_get_noise_photon_nep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sigma_photon</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="n">out</span> <span class="o">=</span> <span class="n">DiagonalOperator</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="n">sigma_detector</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">sigma_photon</span> <span class="o">**</span> <span class="mi">2</span><span class="p">),</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;rightward&#39;</span><span class="p">,</span>
+                               <span class="n">shapein</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">nsamplings</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">))</span>
+            <span class="n">out</span> <span class="o">/=</span> <span class="p">(</span><span class="n">nsamplings</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="o">*</span> <span class="mi">31557600</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_invntt_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_invntt_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_invntt_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the inverse time-time noise correlation matrix as an Operator.</span>
+<span class="sd">            </span>
+<span class="sd">        The input Power Spectrum Density can either be fully specified by using</span>
+<span class="sd">        the &#39;bandwidth&#39; and &#39;psd&#39; keywords, or by providing the parameters of</span>
+<span class="sd">        the gaussian distribution:</span>
+<span class="sd">        psd = sigma**2 * (1 + (fknee/f)**fslope) / B</span>
+<span class="sd">        where B is the sampling bandwidth equal to sampling_frequency / N.</span>
+<span class="sd">            </span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        sampling : Sampling</span>
+<span class="sd">            The temporal sampling.</span>
+<span class="sd">        psd : array-like, optional</span>
+<span class="sd">            The one-sided or two-sided power spectrum density</span>
+<span class="sd">            [signal unit/sqrt Hz].</span>
+<span class="sd">        bandwidth : float, optional</span>
+<span class="sd">            The PSD frequency increment [Hz].</span>
+<span class="sd">        twosided : boolean, optional</span>
+<span class="sd">            Whether or not the input psd is one-sided (only positive</span>
+<span class="sd">            frequencies) or two-sided (positive and negative frequencies).</span>
+<span class="sd">        sigma : float</span>
+<span class="sd">            Standard deviation of the white noise component.</span>
+<span class="sd">        sampling_frequency : float</span>
+<span class="sd">            The sampling frequency [Hz].</span>
+<span class="sd">        fftw_flag : string, optional</span>
+<span class="sd">            The flags FFTW_ESTIMATE, FFTW_MEASURE, FFTW_PATIENT and</span>
+<span class="sd">            FFTW_EXHAUSTIVE can be used to describe the increasing amount of</span>
+<span class="sd">            effort spent during the planning stage to create the fastest</span>
+<span class="sd">            possible transform. Usually, FFTW_MEASURE is a good compromise</span>
+<span class="sd">            and is the default.</span>
+<span class="sd">        nthreads : int, optional</span>
+<span class="sd">            Tells how many threads to use when invoking FFTW or MKL. Default is</span>
+<span class="sd">            the number of cores.</span>
+<span class="sd">            </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">fftw_flag</span> <span class="o">=</span> <span class="s1">&#39;FFTW_MEASURE&#39;</span>
+        <span class="n">nthreads</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="c1">#if self.bandwidth is None or self.psd is None:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bandwidth</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">psd</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">bandwidth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">psd</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The bandwidth or the PSD is not specified.&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Get sigma in Watt</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">nep</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">nep</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">photon_noise</span><span class="p">:</span>
+                <span class="n">sigma_photon</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">_get_noise_photon_nep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">sigma_photon</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">pass</span>
+                <span class="c1"># sigma_photon = 0</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bandwidth</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">psd</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The noise model is not specified.&#39;</span><span class="p">)</span>
+
+
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;In acquisition.py: self.forced_sigma=</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">forced_sigma</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;and self.sigma is:</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sigma</span><span class="p">))</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">forced_sigma</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Using theoretical TES noises&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Using self.forced_sigma as TES noises&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">forced_sigma</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="n">shapein</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bandwidth</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">fknee</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;diagonal case&#39;</span><span class="p">)</span>
+
+            <span class="n">out</span> <span class="o">=</span> <span class="n">DiagonalOperator</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;rightward&#39;</span><span class="p">,</span>
+                                   <span class="n">shapein</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">)))</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">nsamplings</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">))</span>
+                <span class="n">out</span> <span class="o">/=</span> <span class="p">(</span><span class="n">nsamplings</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="o">*</span> <span class="mi">31557600</span><span class="p">))</span>
+            <span class="k">return</span> <span class="n">out</span>
+
+        <span class="n">sampling_frequency</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span>
+
+        <span class="n">nsamples_max</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">)</span>
+        <span class="n">fftsize</span> <span class="o">=</span> <span class="mi">2</span>
+        <span class="k">while</span> <span class="n">fftsize</span> <span class="o">&lt;</span> <span class="n">nsamples_max</span><span class="p">:</span>
+            <span class="n">fftsize</span> <span class="o">*=</span> <span class="mi">2</span>
+
+        <span class="n">new_bandwidth</span> <span class="o">=</span> <span class="n">sampling_frequency</span> <span class="o">/</span> <span class="n">fftsize</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">bandwidth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">psd</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">twosided</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">psd</span> <span class="o">=</span> <span class="n">_fold_psd</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">psd</span><span class="p">)</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">fftsize</span> <span class="o">//</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="o">*</span> <span class="n">new_bandwidth</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">_unfold_psd</span><span class="p">(</span><span class="n">_logloginterp_psd</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bandwidth</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">psd</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">_gaussian_psd_1f</span><span class="p">(</span><span class="n">fftsize</span><span class="p">,</span> <span class="n">sampling_frequency</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">fknee</span><span class="p">,</span>
+                                 <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">fslope</span><span class="p">,</span> <span class="n">twosided</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">p</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">invntt</span> <span class="o">=</span> <span class="n">_psd2invntt</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">new_bandwidth</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">ncorr</span><span class="p">,</span> <span class="n">fftw_flag</span><span class="o">=</span><span class="n">fftw_flag</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;non diagonal case&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">nsamplings</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">))</span>
+            <span class="n">invntt</span> <span class="o">/=</span> <span class="p">(</span><span class="n">nsamplings</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">period</span> <span class="o">/</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">effective_duration</span> <span class="o">*</span> <span class="mi">31557600</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">SymmetricBandToeplitzOperator</span><span class="p">(</span><span class="n">shapein</span><span class="p">,</span> <span class="n">invntt</span><span class="p">,</span> <span class="n">fftw_flag</span><span class="o">=</span><span class="n">fftw_flag</span><span class="p">,</span> <span class="n">nthreads</span><span class="o">=</span><span class="n">nthreads</span><span class="p">)</span></div>
+
+
+    <span class="n">get_invntt_operator</span><span class="o">.</span><span class="vm">__doc__</span> <span class="o">=</span> <span class="n">Acquisition</span><span class="o">.</span><span class="n">get_invntt_operator</span><span class="o">.</span><span class="vm">__doc__</span>
+
+<div class="viewcode-block" id="QubicAcquisition.get_unit_conversion_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_unit_conversion_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_unit_conversion_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert sky temperature into W / m^2 / Hz.</span>
+
+<span class="sd">        If the scene has been initialised with the &#39;absolute&#39; keyword, the</span>
+<span class="sd">        scene is assumed to include the CMB background and the fluctuations</span>
+<span class="sd">        (in Kelvin) and the operator follows the non-linear Planck law.</span>
+<span class="sd">        Otherwise, the scene only includes the fluctuations (in microKelvin)</span>
+<span class="sd">        and the operator is linear (i.e. the output also corresponds to power</span>
+<span class="sd">        fluctuations).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">nu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">filter</span><span class="o">.</span><span class="n">nu</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">get_unit_conversion_operator</span><span class="p">(</span><span class="n">nu</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the operator of the acquisition. Note that the operator is only</span>
+<span class="sd">        linear if the scene temperature is differential (absolute=False).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">distribution</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_distribution_operator</span><span class="p">()</span>
+        <span class="n">temp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_unit_conversion_operator</span><span class="p">()</span>
+        <span class="n">aperture</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_aperture_integration_operator</span><span class="p">()</span>
+        <span class="nb">filter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_filter_operator</span><span class="p">()</span>
+        <span class="n">projection</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_projection_operator</span><span class="p">()</span>
+        <span class="n">hwp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_hwp_operator</span><span class="p">()</span>
+        <span class="n">polarizer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_polarizer_operator</span><span class="p">()</span>
+        <span class="n">integ</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_detector_integration_operator</span><span class="p">()</span>
+        <span class="n">trans_inst</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_transmission_operator</span><span class="p">()</span>
+        <span class="n">trans_atm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">atmosphere</span><span class="o">.</span><span class="n">transmission</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_detector_response_operator</span><span class="p">()</span>
+
+        <span class="k">with</span> <span class="n">rule_manager</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">H</span> <span class="o">=</span> <span class="n">CompositionOperator</span><span class="p">([</span>
+                <span class="n">response</span><span class="p">,</span> <span class="n">trans_inst</span><span class="p">,</span> <span class="n">integ</span><span class="p">,</span> <span class="n">polarizer</span><span class="p">,</span> <span class="n">hwp</span> <span class="o">*</span> <span class="n">projection</span><span class="p">,</span>
+                <span class="nb">filter</span><span class="p">,</span> <span class="n">aperture</span><span class="p">,</span> <span class="n">trans_atm</span><span class="p">,</span> <span class="n">temp</span><span class="p">,</span> <span class="n">distribution</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span> <span class="o">==</span> <span class="s1">&#39;QU&#39;</span><span class="p">:</span>
+            <span class="n">H</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_subtract_grid_operator</span><span class="p">()(</span><span class="n">H</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">H</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_polarizer_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_polarizer_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_polarizer_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return operator for the polarizer grid.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">BlockDiagonalOperator</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_polarizer_operator</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">[</span><span class="n">b</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">block</span><span class="p">],</span> <span class="n">axisin</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_projection_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_projection_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_projection_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the projection operator for the peak sampling.</span>
+<span class="sd">        Convert units from W to W/sr.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        verbose : bool, optional</span>
+<span class="sd">            If true, display information about the memory allocation.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">get_projection_operator</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">block</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">BlockColumnOperator</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">f</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">[</span><span class="n">b</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">)</span>
+                 <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">block</span><span class="p">],</span> <span class="n">axisout</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># XXX HACK</span>
+        <span class="k">def</span> <span class="nf">callback</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sampling</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">block</span><span class="p">[</span><span class="n">i</span><span class="p">]],</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">p</span>
+
+        <span class="n">shapeouts</span> <span class="o">=</span> <span class="p">[(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">),</span> <span class="n">s</span><span class="o">.</span><span class="n">stop</span> <span class="o">-</span> <span class="n">s</span><span class="o">.</span><span class="n">start</span><span class="p">)</span> <span class="o">+</span>
+                     <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">block</span><span class="p">]</span>
+        <span class="n">proxies</span> <span class="o">=</span> <span class="n">proxy_group</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">block</span><span class="p">),</span> <span class="n">callback</span><span class="p">,</span> <span class="n">shapeouts</span><span class="o">=</span><span class="n">shapeouts</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">BlockColumnOperator</span><span class="p">(</span><span class="n">proxies</span><span class="p">,</span> <span class="n">axisout</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_add_grids_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_add_grids_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_add_grids_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return operator to add signal from detector pairs. &quot;&quot;&quot;</span>
+        <span class="n">nd</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">nd</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Odd number of detectors.&#39;</span><span class="p">)</span>
+        <span class="n">partitionin</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,)</span>
+        <span class="k">return</span> <span class="n">BlockRowOperator</span><span class="p">([</span><span class="n">I</span><span class="p">,</span> <span class="n">I</span><span class="p">],</span> <span class="n">axisin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">partitionin</span><span class="o">=</span><span class="n">partitionin</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_subtract_grids_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_subtract_grids_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_subtract_grids_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot; Return operator to subtract signal from detector pairs. &quot;&quot;&quot;</span>
+        <span class="n">nd</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">nd</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Odd number of detectors.&#39;</span><span class="p">)</span>
+        <span class="n">partitionin</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">instrument</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,)</span>
+        <span class="k">return</span> <span class="n">BlockRowOperator</span><span class="p">([</span><span class="n">I</span><span class="p">,</span> <span class="o">-</span><span class="n">I</span><span class="p">],</span> <span class="n">axisin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">partitionin</span><span class="o">=</span><span class="n">partitionin</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_observation">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_observation">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_observation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">map</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        tod = map2tod(acquisition, map)</span>
+<span class="sd">        tod, convolved_map = map2tod(acquisition, map, convolution=True)</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        map : I, QU or IQU maps</span>
+<span class="sd">            Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)</span>
+<span class="sd">            with npix = 12 * nside**2</span>
+<span class="sd">        noiseless : boolean, optional</span>
+<span class="sd">            If True, no noise is added to the observation.</span>
+<span class="sd">        convolution : boolean, optional</span>
+<span class="sd">            Set to True to convolve the input map by a gaussian and return it.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        tod : array</span>
+<span class="sd">            The Time-Ordered-Data of shape (ndetectors, ntimes).</span>
+<span class="sd">        convolved_map : array, optional</span>
+<span class="sd">            The convolved map, if the convolution keyword is set.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">convolution</span><span class="p">:</span>
+            <span class="n">convolution</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_convolution_peak_operator</span><span class="p">()</span>
+            <span class="nb">map</span> <span class="o">=</span> <span class="n">convolution</span><span class="p">(</span><span class="nb">map</span><span class="p">)</span>
+
+        <span class="n">H</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">tod</span> <span class="o">=</span> <span class="n">H</span><span class="p">(</span><span class="nb">map</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">noiseless</span><span class="p">:</span>
+            <span class="n">tod</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_noise</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">convolution</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">tod</span><span class="p">,</span> <span class="nb">map</span>
+
+        <span class="k">return</span> <span class="n">tod</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.tod2map">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.tod2map">[docs]</a>
+    <span class="k">def</span> <span class="nf">tod2map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tod</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">cov</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Reconstruct map from tod</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;tol&#39;</span><span class="p">]</span>
+        <span class="n">maxiter</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;maxiter&#39;</span><span class="p">]</span>
+        <span class="n">verbose</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;verbose&#39;</span><span class="p">]</span>
+
+        <span class="n">H</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">invntt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_invntt_operator</span><span class="p">()</span>
+
+        <span class="n">A</span> <span class="o">=</span> <span class="n">H</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">invntt</span> <span class="o">*</span> <span class="n">H</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">H</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">invntt</span> <span class="o">*</span> <span class="n">tod</span>
+
+        <span class="n">preconditioner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_preconditioner</span><span class="p">(</span><span class="n">cov</span><span class="p">)</span>
+        <span class="n">solution</span> <span class="o">=</span> <span class="n">pcg</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">preconditioner</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="n">tol</span><span class="p">,</span> <span class="n">maxiter</span><span class="o">=</span><span class="n">maxiter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">],</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;nit&#39;</span><span class="p">],</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;error&#39;</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="QubicAcquisition.get_preconditioner">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicAcquisition.get_preconditioner">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_preconditioner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cov</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">cov</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cov_inv</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">cov</span>
+            <span class="n">cov_inv</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="n">cov_inv</span><span class="p">)]</span> <span class="o">=</span> <span class="mf">0.</span>
+            <span class="n">preconditioner</span> <span class="o">=</span> <span class="n">DiagonalOperator</span><span class="p">(</span><span class="n">cov_inv</span><span class="p">,</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;rightward&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">preconditioner</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">preconditioner</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="PlanckAcquisition">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.PlanckAcquisition">[docs]</a>
+<span class="k">class</span> <span class="nc">PlanckAcquisition</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">band</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">true_sky</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">fwhm</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">convolution_operator</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        band : int</span>
+<span class="sd">            The band 150 or 220.</span>
+<span class="sd">        scene : Scene</span>
+<span class="sd">            The acquisition scene.</span>
+<span class="sd">        true_sky : array of shape (npixel,) or (npixel, 3)</span>
+<span class="sd">            The true CMB sky (temperature or polarized). The Planck observation</span>
+<span class="sd">            will be this true sky plus a random independent gaussian noise</span>
+<span class="sd">            realization.</span>
+<span class="sd">        factor : 1 or 3 floats, optional</span>
+<span class="sd">            The factor by which the Planck standard deviation is multiplied.</span>
+<span class="sd">        fwhm : float, optional, !not used!</span>
+<span class="sd">            The fwhm of the Gaussian used to smooth the map [radians].</span>
+<span class="sd">        mask : array of shape (npixel, ) or None</span>
+<span class="sd">            The boolean mask, which is equal True at pixels where we need Planck,</span>
+<span class="sd">            that is outside the QUBIC field.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">band</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">150</span><span class="p">,</span> <span class="mi">220</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid band &#39;</span><span class="si">{}</span><span class="s2">&#39;.&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">band</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">true_sky</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The Planck Q &amp; U maps are not released yet.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">scene</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;IQU&#39;</span> <span class="ow">and</span> <span class="n">true_sky</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;The Planck sky shape is not (npix, 3).&#39;</span><span class="p">)</span>
+        <span class="n">true_sky</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">hp</span><span class="o">.</span><span class="n">ud_grade</span><span class="p">(</span><span class="n">true_sky</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">nside_out</span><span class="o">=</span><span class="n">scene</span><span class="o">.</span><span class="n">nside</span><span class="p">),</span>
+                            <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+        <span class="k">if</span> <span class="n">scene</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;IQU&#39;</span> <span class="ow">and</span> <span class="n">true_sky</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;The Planck sky shape is not (npix, 3).&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scene</span> <span class="o">=</span> <span class="n">scene</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span> <span class="o">=</span> <span class="n">fwhm</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_true_sky</span> <span class="o">=</span> <span class="n">true_sky</span>
+        <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mask</span> <span class="o">=</span> <span class="n">mask</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">scene</span><span class="o">.</span><span class="n">npixel</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">band</span> <span class="o">==</span> <span class="mi">150</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;Variance_Planck143GHz_Kcmb2_ns256.fits&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;Variance_Planck217GHz_Kcmb2_ns256.fits&#39;</span>
+        <span class="n">sigma</span> <span class="o">=</span> <span class="mf">1e6</span> <span class="o">*</span> <span class="n">factor</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">FitsArray</span><span class="p">(</span><span class="n">PATH</span> <span class="o">+</span> <span class="n">filename</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">scene</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;I&#39;</span><span class="p">:</span>
+            <span class="n">sigma</span> <span class="o">=</span> <span class="n">sigma</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">scene</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;QU&#39;</span><span class="p">:</span>
+            <span class="n">sigma</span> <span class="o">=</span> <span class="n">sigma</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">nside</span> <span class="o">!=</span> <span class="mi">256</span><span class="p">:</span>
+            <span class="n">sigma</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">hp</span><span class="o">.</span><span class="n">ud_grade</span><span class="p">(</span><span class="n">sigma</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">nside</span><span class="p">,</span> <span class="n">power</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>
+                             <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">=</span> <span class="n">sigma</span>
+        <span class="k">if</span> <span class="n">convolution_operator</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">IdentityOperator</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">C</span> <span class="o">=</span> <span class="n">convolution_operator</span>
+
+    <span class="n">_SIMULATED_PLANCK_SEED</span> <span class="o">=</span> <span class="mi">0</span>
+
+<div class="viewcode-block" id="PlanckAcquisition.get_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.PlanckAcquisition.get_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">DiagonalOperator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mask</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">),</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;rightward&#39;</span><span class="p">,</span>
+                                <span class="n">shapein</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="PlanckAcquisition.get_invntt_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.PlanckAcquisition.get_invntt_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_invntt_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">DiagonalOperator</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;leftward&#39;</span><span class="p">,</span>
+                                <span class="n">shapein</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="PlanckAcquisition.get_noise">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.PlanckAcquisition.get_noise">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">get_state</span><span class="p">()</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_SIMULATED_PLANCK_SEED</span><span class="p">)</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_true_sky</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">sigma</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">set_state</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="PlanckAcquisition.get_observation">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.PlanckAcquisition.get_observation">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_observation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_true_sky</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">noiseless</span><span class="p">:</span>
+            <span class="n">obs</span> <span class="o">=</span> <span class="n">obs</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">C</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_noise</span><span class="p">())</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                <span class="n">obs</span><span class="p">[</span><span class="o">~</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mask</span><span class="p">),</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">obs</span><span class="p">[</span><span class="o">~</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">mask</span><span class="p">)]</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="k">return</span> <span class="n">obs</span>
+        <span class="c1"># XXX neglecting convolution effects...</span>
+        <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span><span class="n">fwhm</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span><span class="p">)(</span><span class="n">obs</span><span class="p">,</span> <span class="n">obs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">obs</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="QubicPlanckAcquisition">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicPlanckAcquisition">[docs]</a>
+<span class="k">class</span> <span class="nc">QubicPlanckAcquisition</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The QubicPlanckAcquisition class, which combines the Qubic and Planck</span>
+<span class="sd">    acquisitions.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">qubic</span><span class="p">,</span> <span class="n">planck</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        acq = QubicPlanckAcquisition(qubic_acquisition, planck_acquisition)</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        qubic_acquisition : QubicAcquisition</span>
+<span class="sd">            The QUBIC acquisition.</span>
+<span class="sd">        planck_acquisition : PlanckAcquisition</span>
+<span class="sd">            The Planck acquisition.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">qubic</span><span class="p">,</span> <span class="n">QubicAcquisition</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;The first argument is not a QubicAcquisition.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">planck</span><span class="p">,</span> <span class="n">PlanckAcquisition</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;The second argument is not a PlanckAcquisition.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">qubic</span><span class="o">.</span><span class="n">scene</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">planck</span><span class="o">.</span><span class="n">scene</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The Qubic and Planck scenes are different.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span> <span class="o">=</span> <span class="n">qubic</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">planck</span> <span class="o">=</span> <span class="n">planck</span>
+
+<div class="viewcode-block" id="QubicPlanckAcquisition.get_noise">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicPlanckAcquisition.get_noise">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a noise realization compatible with the fused noise</span>
+<span class="sd">        covariance matrix.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">noise_qubic</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">get_noise</span><span class="p">()</span>
+        <span class="n">noise_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">planck</span><span class="o">.</span><span class="n">get_noise</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">noise_qubic</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">noise_planck</span><span class="o">.</span><span class="n">ravel</span><span class="p">()]</span></div>
+
+
+<div class="viewcode-block" id="QubicPlanckAcquisition.get_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicPlanckAcquisition.get_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the fused observation as an operator.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">H_qubic</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">R_qubic</span> <span class="o">=</span> <span class="n">ReshapeOperator</span><span class="p">(</span><span class="n">H_qubic</span><span class="o">.</span><span class="n">shapeout</span><span class="p">,</span> <span class="n">H_qubic</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">H_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">planck</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">R_planck</span> <span class="o">=</span> <span class="n">ReshapeOperator</span><span class="p">(</span><span class="n">H_planck</span><span class="o">.</span><span class="n">shapeout</span><span class="p">,</span> <span class="n">H_planck</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">BlockColumnOperator</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">R_qubic</span><span class="p">(</span><span class="n">H_qubic</span><span class="p">),</span> <span class="n">R_planck</span><span class="p">(</span><span class="n">H_planck</span><span class="p">)],</span> <span class="n">axisout</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicPlanckAcquisition.get_invntt_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicPlanckAcquisition.get_invntt_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_invntt_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the inverse covariance matrix of the fused observation</span>
+<span class="sd">        as an operator.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">invntt_qubic</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">get_invntt_operator</span><span class="p">()</span>
+        <span class="n">R_qubic</span> <span class="o">=</span> <span class="n">ReshapeOperator</span><span class="p">(</span><span class="n">invntt_qubic</span><span class="o">.</span><span class="n">shapeout</span><span class="p">,</span> <span class="n">invntt_qubic</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">invntt_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">planck</span><span class="o">.</span><span class="n">get_invntt_operator</span><span class="p">()</span>
+        <span class="n">R_planck</span> <span class="o">=</span> <span class="n">ReshapeOperator</span><span class="p">(</span><span class="n">invntt_planck</span><span class="o">.</span><span class="n">shapeout</span><span class="p">,</span>
+                                   <span class="n">invntt_planck</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">BlockDiagonalOperator</span><span class="p">(</span>
+            <span class="p">[</span><span class="n">R_qubic</span><span class="p">(</span><span class="n">invntt_qubic</span><span class="p">(</span><span class="n">R_qubic</span><span class="o">.</span><span class="n">T</span><span class="p">)),</span>
+             <span class="n">R_planck</span><span class="p">(</span><span class="n">invntt_planck</span><span class="p">(</span><span class="n">R_planck</span><span class="o">.</span><span class="n">T</span><span class="p">))],</span> <span class="n">axisout</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicPlanckAcquisition.get_observation">
+<a class="viewcode-back" href="../../qubic.html#qubic.acquisition.QubicPlanckAcquisition.get_observation">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_observation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the fused observation.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        noiseless : boolean, optional</span>
+<span class="sd">            If set, return a noiseless observation</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">obs_qubic_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">get_observation</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">planck</span><span class="o">.</span><span class="n">_true_sky</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="n">noiseless</span><span class="p">,</span>
+            <span class="n">convolution</span><span class="o">=</span><span class="n">convolution</span><span class="p">)</span>
+        <span class="n">obs_qubic</span> <span class="o">=</span> <span class="n">obs_qubic_</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">convolution</span> <span class="k">else</span> <span class="n">obs_qubic_</span>
+        <span class="n">obs_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">planck</span><span class="o">.</span><span class="n">get_observation</span><span class="p">(</span><span class="n">noiseless</span><span class="o">=</span><span class="n">noiseless</span><span class="p">)</span>
+        <span class="n">obs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">obs_qubic</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">obs_planck</span><span class="o">.</span><span class="n">ravel</span><span class="p">()]</span>
+        <span class="k">if</span> <span class="n">convolution</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">obs</span><span class="p">,</span> <span class="n">obs_qubic_</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">obs</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, QUBIC Collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

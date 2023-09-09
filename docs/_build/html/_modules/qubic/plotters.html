@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qubic.plotters &mdash; Qubicsoft 5.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=ee801c84"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">qubic.plotters</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for qubic.plotters</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python2</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Created on Tue Jan 29 09:44:35 2019</span>
+
+<span class="sd">@author: james, louise, JCH</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">qubic.fibtools</span> <span class="k">as</span> <span class="nn">ft</span>
+<span class="kn">from</span> <span class="nn">matplotlib.pyplot</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pysimulators</span> <span class="kn">import</span> <span class="n">FitsArray</span>
+<span class="kn">import</span> <span class="nn">matplotlib.mlab</span> <span class="k">as</span> <span class="nn">mlab</span>
+<span class="kn">import</span> <span class="nn">scipy.ndimage.filters</span> <span class="k">as</span> <span class="nn">f</span>
+
+
+<div class="viewcode-block" id="TimeSigPlot">
+<a class="viewcode-back" href="../../qubic.html#qubic.plotters.TimeSigPlot">[docs]</a>
+<span class="k">def</span> <span class="nf">TimeSigPlot</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">dd</span><span class="p">,</span> <span class="n">theTES</span><span class="p">):</span>
+    <span class="n">figure</span><span class="p">()</span>
+    <span class="n">clf</span><span class="p">()</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="n">dd</span><span class="p">[</span><span class="n">theTES</span><span class="p">,</span> <span class="p">:])</span>
+    <span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Time [s]&#39;</span><span class="p">)</span>
+    <span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Current [nA]&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span></div>
+
+
+
+<div class="viewcode-block" id="FreqResp">
+<a class="viewcode-back" href="../../qubic.html#qubic.plotters.FreqResp">[docs]</a>
+<span class="k">def</span> <span class="nf">FreqResp</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="n">frange</span><span class="p">,</span> <span class="n">filtered_spec</span><span class="p">,</span> <span class="n">theTES</span><span class="p">,</span> <span class="n">fff</span><span class="p">):</span>
+    <span class="n">figure</span><span class="p">()</span>
+    <span class="c1"># setup plot params</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="p">(</span><span class="n">freq</span> <span class="o">&gt;</span> <span class="n">frange</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">freq</span> <span class="o">&lt;</span> <span class="n">frange</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">loglog</span><span class="p">(</span><span class="n">freq</span><span class="p">[</span><span class="n">rng</span><span class="p">],</span> <span class="n">filtered_spec</span><span class="p">[</span><span class="n">rng</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Data&#39;</span><span class="p">)</span>
+
+    <span class="c1"># do plot</span>
+    <span class="n">xlim</span><span class="p">(</span><span class="n">frange</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">frange</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;Tes #</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">theTES</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">ylim</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">filtered_spec</span><span class="p">[</span><span class="n">rng</span><span class="p">])</span> <span class="o">*</span> <span class="mf">0.8</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">filtered_spec</span><span class="p">[</span><span class="n">rng</span><span class="p">])</span> <span class="o">*</span> <span class="mf">1.2</span><span class="p">)</span>
+    <span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Freq [Hz]&#39;</span><span class="p">)</span>
+    <span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Power Spectrum [$nA^2.Hz^{-1}$]&#39;</span><span class="p">)</span>
+    <span class="c1">#### Show where the signal is expected</span>
+    <span class="k">for</span> <span class="n">ii</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span> <span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">fff</span><span class="p">,</span> <span class="n">fff</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">ii</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="p">[</span><span class="mf">1e-20</span><span class="p">,</span> <span class="mf">1e-10</span><span class="p">],</span> <span class="s1">&#39;r--&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+    <span class="c1">#### PT frequencies</span>
+    <span class="n">fpt</span> <span class="o">=</span> <span class="mf">1.724</span>
+    <span class="k">for</span> <span class="n">ii</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span> <span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">fpt</span><span class="p">,</span> <span class="n">fpt</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">ii</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="p">[</span><span class="mf">1e-20</span><span class="p">,</span> <span class="mf">1e-10</span><span class="p">],</span> <span class="s1">&#39;k--&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+
+    <span class="k">return</span></div>
+
+
+
+
+<div class="viewcode-block" id="FiltFreqResp">
+<a class="viewcode-back" href="../../qubic.html#qubic.plotters.FiltFreqResp">[docs]</a>
+<span class="k">def</span> <span class="nf">FiltFreqResp</span><span class="p">(</span><span class="n">theTES</span><span class="p">,</span> <span class="n">frange</span><span class="p">,</span> <span class="n">fff</span><span class="p">,</span> <span class="n">filt</span><span class="p">,</span> <span class="n">dd</span><span class="p">,</span> <span class="n">notch</span><span class="p">,</span> <span class="n">FREQ_SAMPLING</span><span class="p">,</span> <span class="n">nsamples</span><span class="p">,</span> <span class="n">freq</span><span class="p">,</span> <span class="n">spectrum</span><span class="p">,</span> <span class="n">filtered_spec</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Plot original and notch filtered frequency.</span>
+<span class="sd">    sigfilt requires you select for which TES you would like to</span>
+<span class="sd">    apply the notch filter - single TES analysis</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># notch filter according to notch - must select TES</span>
+
+    <span class="n">sigfilt</span> <span class="o">=</span> <span class="n">dd</span><span class="p">[</span><span class="n">theTES</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">notch</span><span class="p">)):</span>
+        <span class="n">sigfilt</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">notch_filter</span><span class="p">(</span><span class="n">sigfilt</span><span class="p">,</span> <span class="n">notch</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">notch</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">FREQ_SAMPLING</span><span class="p">)</span>
+
+    <span class="c1"># get new spectrum with notch filter applied</span>
+    <span class="n">spectrum_f</span><span class="p">,</span> <span class="n">freq_f</span> <span class="o">=</span> <span class="n">mlab</span><span class="o">.</span><span class="n">psd</span><span class="p">(</span><span class="n">sigfilt</span><span class="p">,</span> <span class="n">Fs</span><span class="o">=</span><span class="n">FREQ_SAMPLING</span><span class="p">,</span> <span class="n">NFFT</span><span class="o">=</span><span class="n">nsamples</span><span class="p">,</span> <span class="n">window</span><span class="o">=</span><span class="n">mlab</span><span class="o">.</span><span class="n">window_hanning</span><span class="p">)</span>
+
+    <span class="c1"># start plotting</span>
+    <span class="n">figure</span><span class="p">()</span>
+    <span class="n">xlim</span><span class="p">(</span><span class="n">frange</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">frange</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="p">(</span><span class="n">freq</span> <span class="o">&gt;</span> <span class="n">frange</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">freq</span> <span class="o">&lt;</span> <span class="n">frange</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">loglog</span><span class="p">(</span><span class="n">freq</span><span class="p">[</span><span class="n">rng</span><span class="p">],</span> <span class="n">filtered_spec</span><span class="p">[</span><span class="n">rng</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Data&#39;</span><span class="p">)</span>
+    <span class="n">loglog</span><span class="p">(</span><span class="n">freq</span><span class="p">[</span><span class="n">rng</span><span class="p">],</span> <span class="n">f</span><span class="o">.</span><span class="n">gaussian_filter1d</span><span class="p">(</span><span class="n">spectrum_f</span><span class="p">,</span> <span class="n">filt</span><span class="p">)[</span><span class="n">rng</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Filt&#39;</span><span class="p">)</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;Tes #</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">theTES</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">ylim</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">filtered_spec</span><span class="p">[</span><span class="n">rng</span><span class="p">])</span> <span class="o">*</span> <span class="mf">0.8</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">filtered_spec</span><span class="p">[</span><span class="n">rng</span><span class="p">])</span> <span class="o">*</span> <span class="mf">1.2</span><span class="p">)</span>
+    <span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Freq [Hz]&#39;</span><span class="p">)</span>
+    <span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Power Spectrum [$nA^2.Hz^{-1}$]&#39;</span><span class="p">)</span>
+    <span class="c1">#### Show where the signal is expected</span>
+    <span class="k">for</span> <span class="n">ii</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span> <span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">fff</span><span class="p">,</span> <span class="n">fff</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">ii</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="p">[</span><span class="mf">1e-20</span><span class="p">,</span> <span class="mf">1e-10</span><span class="p">],</span> <span class="s1">&#39;r--&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+    <span class="c1">#### PT frequencies</span>
+    <span class="n">fpt</span> <span class="o">=</span> <span class="mf">1.724</span>
+    <span class="k">for</span> <span class="n">ii</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span> <span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">fpt</span><span class="p">,</span> <span class="n">fpt</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">ii</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="p">[</span><span class="mf">1e-20</span><span class="p">,</span> <span class="mf">1e-10</span><span class="p">],</span> <span class="s1">&#39;k--&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+
+    <span class="k">return</span></div>
+
+
+
+<div class="viewcode-block" id="FoldedFiltTES">
+<a class="viewcode-back" href="../../qubic.html#qubic.plotters.FoldedFiltTES">[docs]</a>
+<span class="k">def</span> <span class="nf">FoldedFiltTES</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">pars</span><span class="p">,</span> <span class="n">theTES</span><span class="p">,</span> <span class="n">folded</span><span class="p">,</span> <span class="n">folded_notch</span><span class="p">):</span>
+    <span class="n">figure</span><span class="p">()</span>
+    <span class="c1">### Plot it along with a guess for fiber signal</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">folded</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Median of Folding&#39;</span><span class="p">)</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">folded</span><span class="p">[</span><span class="n">theTES</span><span class="p">,</span> <span class="p">:],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Data TES #</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">theTES</span><span class="p">))</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">folded_notch</span><span class="p">[</span><span class="n">theTES</span><span class="p">,</span> <span class="p">:],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Data TES #</span><span class="si">{}</span><span class="s1"> (with Notch filter)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">theTES</span><span class="p">))</span>
+    <span class="c1"># for simsig, we should pass in &#39;pars&#39; values</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">ft</span><span class="o">.</span><span class="n">simsig</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">pars</span><span class="p">),</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Expected&#39;</span><span class="p">)</span>
+    <span class="n">legend</span><span class="p">()</span>
+    <span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Current [nA]&#39;</span><span class="p">)</span>
+    <span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;time [s]&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span></div>
+
+
+
+<div class="viewcode-block" id="FoldedTESFreeFit">
+<a class="viewcode-back" href="../../qubic.html#qubic.plotters.FoldedTESFreeFit">[docs]</a>
+<span class="k">def</span> <span class="nf">FoldedTESFreeFit</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">bla</span><span class="p">,</span> <span class="n">theTES</span><span class="p">,</span> <span class="n">folded</span><span class="p">):</span>
+    <span class="n">figure</span><span class="p">()</span>
+    <span class="c1"># takes in free fit result as &#39;bla&#39;</span>
+    <span class="n">params</span> <span class="o">=</span> <span class="n">bla</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">err</span> <span class="o">=</span> <span class="n">bla</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">folded</span><span class="p">[</span><span class="n">theTES</span><span class="p">,</span> <span class="p">:],</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Data TES #</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">theTES</span><span class="p">))</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">ft</span><span class="o">.</span><span class="n">simsig</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">bla</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+             <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Fitted: </span><span class="se">\n</span><span class="s1"> cycle=</span><span class="si">{0:8.3f}</span><span class="s1">+/-</span><span class="si">{1:8.3f}</span><span class="s1"> </span><span class="se">\n</span><span class="s1"> tau = </span><span class="si">{2:8.3f}</span><span class="s1">+/-</span><span class="si">{3:8.3f}</span><span class="s1">s </span><span class="se">\n</span><span class="s1"> t0 = </span><span class="si">{4:8.3f}</span><span class="s1">+/-</span><span class="si">{5:8.3f}</span><span class="s1">s </span><span class="se">\n</span><span class="s1"> amp = </span><span class="si">{6:8.3f}</span><span class="s1">+/-</span><span class="si">{7:8.3f}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                 <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">err</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">err</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">err</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">err</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
+    <span class="n">legend</span><span class="p">()</span>
+    <span class="n">ylabel</span><span class="p">(</span><span class="s1">&#39;Current [nA]&#39;</span><span class="p">)</span>
+    <span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;time [s]&#39;</span><span class="p">)</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;TES </span><span class="si">{}</span><span class="s1"> folded with simsig params&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">theTES</span><span class="p">))</span>
+
+    <span class="k">return</span></div>
+
+
+
+<div class="viewcode-block" id="Allplots">
+<a class="viewcode-back" href="../../qubic.html#qubic.plotters.Allplots">[docs]</a>
+<span class="k">def</span> <span class="nf">Allplots</span><span class="p">(</span><span class="n">fib</span><span class="p">,</span> <span class="n">allparams</span><span class="p">,</span> <span class="n">allparams1</span><span class="p">,</span> <span class="n">allparams2</span><span class="p">,</span> <span class="n">okfinal</span><span class="p">,</span> <span class="n">okfinal1</span><span class="p">,</span> <span class="n">okfinal2</span><span class="p">,</span> <span class="n">asic</span><span class="p">,</span> <span class="n">med</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">rng</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+             <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;viridis&#39;</span><span class="p">):</span>
+    <span class="n">figure</span><span class="p">()</span>
+
+    <span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">mmt</span><span class="p">,</span> <span class="n">sst</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">meancut</span><span class="p">(</span><span class="n">allparams</span><span class="p">[</span><span class="n">okfinal</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">hist</span><span class="p">(</span><span class="n">allparams</span><span class="p">[</span><span class="n">okfinal</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="nb">range</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">mmt</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">sst</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+             <span class="n">label</span><span class="o">=</span><span class="s1">&#39;All (</span><span class="si">{}</span><span class="s1">) &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">okfinal</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">+</span> <span class="n">ft</span><span class="o">.</span><span class="n">statstr</span><span class="p">(</span><span class="n">allparams</span><span class="p">[</span><span class="n">okfinal</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">median</span><span class="o">=</span><span class="n">med</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; ms&#39;</span><span class="p">,</span>
+             <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">hist</span><span class="p">(</span><span class="n">allparams1</span><span class="p">[</span><span class="n">okfinal1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="nb">range</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">mmt</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">sst</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+             <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Asic1 (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">okfinal1</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">+</span> <span class="n">ft</span><span class="o">.</span><span class="n">statstr</span><span class="p">(</span><span class="n">allparams1</span><span class="p">[</span><span class="n">okfinal1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">median</span><span class="o">=</span><span class="n">med</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; ms&#39;</span><span class="p">,</span>
+             <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">hist</span><span class="p">(</span><span class="n">allparams1</span><span class="p">[</span><span class="n">okfinal2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="nb">range</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">mmt</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">sst</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+             <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Asic2 (</span><span class="si">{}</span><span class="s1">)&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">okfinal2</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">+</span> <span class="n">ft</span><span class="o">.</span><span class="n">statstr</span><span class="p">(</span><span class="n">allparams2</span><span class="p">[</span><span class="n">okfinal2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">median</span><span class="o">=</span><span class="n">med</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; ms&#39;</span><span class="p">,</span>
+             <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Tau [sec]&#39;</span><span class="p">)</span>
+    <span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;Fib </span><span class="si">{}</span><span class="s1"> - Tau [s]&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fib</span><span class="p">))</span>
+
+    <span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">mma</span><span class="p">,</span> <span class="n">ssa</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">meancut</span><span class="p">(</span><span class="n">allparams</span><span class="p">[</span><span class="n">okfinal</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">hist</span><span class="p">(</span><span class="n">allparams</span><span class="p">[</span><span class="n">okfinal</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="nb">range</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">mma</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">ssa</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+             <span class="n">label</span><span class="o">=</span><span class="s1">&#39;All (</span><span class="si">{}</span><span class="s1">) &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">okfinal</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">+</span> <span class="n">ft</span><span class="o">.</span><span class="n">statstr</span><span class="p">(</span><span class="n">allparams</span><span class="p">[</span><span class="n">okfinal</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">median</span><span class="o">=</span><span class="n">med</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; nA&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">hist</span><span class="p">(</span><span class="n">allparams1</span><span class="p">[</span><span class="n">okfinal1</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="nb">range</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">mma</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">ssa</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+             <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Asic1 (</span><span class="si">{}</span><span class="s1">) &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">okfinal1</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">+</span> <span class="n">ft</span><span class="o">.</span><span class="n">statstr</span><span class="p">(</span><span class="n">allparams1</span><span class="p">[</span><span class="n">okfinal1</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">median</span><span class="o">=</span><span class="n">med</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; nA&#39;</span><span class="p">,</span>
+             <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">hist</span><span class="p">(</span><span class="n">allparams1</span><span class="p">[</span><span class="n">okfinal2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="nb">range</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">mma</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">ssa</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+             <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Asic2 (</span><span class="si">{}</span><span class="s1">) &#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">okfinal2</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">+</span> <span class="n">ft</span><span class="o">.</span><span class="n">statstr</span><span class="p">(</span><span class="n">allparams2</span><span class="p">[</span><span class="n">okfinal2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">median</span><span class="o">=</span><span class="n">med</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; nA&#39;</span><span class="p">,</span>
+             <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+    <span class="n">xlabel</span><span class="p">(</span><span class="s1">&#39;Amp [nA]&#39;</span><span class="p">)</span>
+    <span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">frameon</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;Fib </span><span class="si">{}</span><span class="s1"> - Amp [nA]&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fib</span><span class="p">))</span>
+
+    <span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">imtau</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">image_asics</span><span class="p">(</span><span class="n">data1</span><span class="o">=</span><span class="n">allparams1</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">data2</span><span class="o">=</span><span class="n">allparams2</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span>
+    <span class="n">imshow</span><span class="p">(</span><span class="n">imtau</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">mmt</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">sst</span><span class="p">,</span> <span class="n">interpolation</span><span class="o">=</span><span class="s1">&#39;nearest&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">)</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;Tau [s] - Fiber </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fib</span><span class="p">,</span> <span class="n">asic</span><span class="p">))</span>
+    <span class="n">colorbar</span><span class="p">()</span>
+
+    <span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+    <span class="n">imamp</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">image_asics</span><span class="p">(</span><span class="n">data1</span><span class="o">=</span><span class="n">allparams1</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">data2</span><span class="o">=</span><span class="n">allparams2</span><span class="p">[:,</span> <span class="mi">3</span><span class="p">])</span>
+    <span class="n">imshow</span><span class="p">(</span><span class="n">imamp</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">mma</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">ssa</span><span class="p">,</span> <span class="n">interpolation</span><span class="o">=</span><span class="s1">&#39;nearest&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">)</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;Amp [nA] - Fiber </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fib</span><span class="p">,</span> <span class="n">asic</span><span class="p">))</span>
+    <span class="n">colorbar</span><span class="p">()</span>
+    <span class="n">tight_layout</span><span class="p">()</span>
+    <span class="k">return</span></div>
+
+
+
+<div class="viewcode-block" id="TESvsThermo">
+<a class="viewcode-back" href="../../qubic.html#qubic.plotters.TESvsThermo">[docs]</a>
+<span class="k">def</span> <span class="nf">TESvsThermo</span><span class="p">(</span><span class="n">fib</span><span class="p">,</span> <span class="n">tt</span><span class="p">,</span> <span class="n">folded1</span><span class="p">,</span> <span class="n">folded2</span><span class="p">,</span> <span class="n">okfinal1</span><span class="p">,</span> <span class="n">okfinal2</span><span class="p">,</span> <span class="n">thermos</span><span class="p">):</span>
+    <span class="n">figure</span><span class="p">()</span>
+    <span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">folded1</span><span class="p">[</span><span class="n">okfinal1</span> <span class="o">*</span> <span class="o">~</span><span class="n">thermos</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Valid TES average&#39;</span><span class="p">)</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">folded1</span><span class="p">[</span><span class="n">thermos</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Thermometers&#39;</span><span class="p">)</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;Fib = </span><span class="si">{}</span><span class="s1"> - ASIC 1&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fib</span><span class="p">))</span>
+    <span class="n">legend</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="s1">&#39;upper left&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+    <span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">folded2</span><span class="p">[</span><span class="n">okfinal2</span> <span class="o">*</span> <span class="o">~</span><span class="n">thermos</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Valid TES average&#39;</span><span class="p">)</span>
+    <span class="n">plot</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">folded2</span><span class="p">[</span><span class="n">thermos</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">,</span> <span class="n">lw</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;Thermometers&#39;</span><span class="p">)</span>
+    <span class="n">title</span><span class="p">(</span><span class="s1">&#39;Fib = </span><span class="si">{}</span><span class="s1"> - ASIC 2&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">fib</span><span class="p">))</span>
+
+    <span class="k">return</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, QUBIC Collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

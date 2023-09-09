@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qubic.TES.TES_parameters &mdash; Qubicsoft 5.0 documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=ee801c84"></script>
+        <script src="../../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            Qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">qubic.TES.TES_parameters</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for qubic.TES.TES_parameters</h1><div class="highlight"><pre>
+<span></span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">$Id: TES_parameters.py</span>
+<span class="sd">$auth: Steve Torchinsky &lt;satorchi@apc.in2p3.fr&gt;</span>
+<span class="sd">$created: Thu 08 Feb 2018 07:43:48 CET</span>
+<span class="sd">$license: GPLv3 or later, see https://www.gnu.org/licenses/gpl-3.0.txt</span>
+
+<span class="sd">          This is free software: you are free to change and</span>
+<span class="sd">          redistribute it.  There is NO WARRANTY, to the extent</span>
+<span class="sd">          permitted by law.</span>
+
+<span class="sd">Read a table which is a list of dictionary values giving the various parameters for each TES detector</span>
+<span class="sd">Details of each parameter can be found in the text file, for example: QUBIC_TES_parameters.v0.3.txt</span>
+
+
+<span class="sd">example:</span>
+<span class="sd"> </span>
+<span class="sd">   from qubic.TES.TES_parameters import *</span>
+<span class="sd">   filename=&#39;QUBIC_TES_parameters.v0.3.txt&#39;</span>
+<span class="sd">   TESparameters_dictionary_list=TEStable_readfile(filename) </span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+<div class="viewcode-block" id="TEStable_readfile">
+<a class="viewcode-back" href="../../../qubic.TES.html#qubic.TES.TES_parameters.TEStable_readfile">[docs]</a>
+<span class="k">def</span> <span class="nf">TEStable_readfile</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    read the text format table of TES parameters</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="nb">str</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;ERROR! File not found: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">str</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">TEStable</span><span class="o">=</span><span class="p">[]</span>
+
+    <span class="n">h</span><span class="o">=</span><span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="s1">&#39;r&#39;</span><span class="p">)</span>
+    <span class="n">contents</span><span class="o">=</span><span class="n">h</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+    <span class="n">h</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="n">lines</span><span class="o">=</span><span class="n">contents</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+
+    <span class="c1"># ignore all lines starting with &#39;#&#39;</span>
+    <span class="n">valid_lines</span><span class="o">=</span><span class="p">[]</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">line</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;#&#39;</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">line</span><span class="o">==</span><span class="s1">&#39;&#39;</span><span class="p">:</span>
+            <span class="n">valid_lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+
+    <span class="c1"># the first line should identify this as a valid file</span>
+    <span class="n">line</span><span class="o">=</span><span class="n">valid_lines</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">keyword</span><span class="p">,</span><span class="n">val</span><span class="o">=</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">keyword</span><span class="o">==</span><span class="s1">&#39;FILEID&#39;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;ERROR! This does not appear to be a valid QUBIC TES parameters table&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">val</span><span class="o">==</span><span class="s1">&#39;QUBIC table of TES parameters&#39;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;ERROR! This does not appear to be a valid QUBIC TES parameters table&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    
+
+    <span class="c1"># second line should tell us the keywords</span>
+    <span class="n">line</span><span class="o">=</span><span class="n">valid_lines</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">keyword</span><span class="p">,</span><span class="n">val</span><span class="o">=</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">keyword</span><span class="o">==</span><span class="s1">&#39;KEYWORDS&#39;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;ERROR! Missing the keyword list!&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">keywords</span><span class="o">=</span><span class="n">val</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;;&#39;</span><span class="p">)</span>
+    
+    <span class="n">msg</span><span class="o">=</span><span class="s1">&#39;Expect to find the following keywords: &#39;</span>
+    <span class="k">for</span> <span class="n">keyword</span> <span class="ow">in</span> <span class="n">keywords</span><span class="p">:</span>
+        <span class="n">msg</span><span class="o">+=</span><span class="n">keyword</span><span class="o">+</span><span class="s1">&#39; &#39;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">msg</span><span class="o">+</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+
+    <span class="n">val_keywords</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;INDEX&#39;</span><span class="p">,</span><span class="s1">&#39;R300&#39;</span><span class="p">,</span> <span class="s1">&#39;ASIC&#39;</span><span class="p">,</span> <span class="s1">&#39;PIX&#39;</span><span class="p">,</span> <span class="s1">&#39;TES&#39;</span><span class="p">,</span> <span class="s1">&#39;NEP&#39;</span><span class="p">,</span><span class="s1">&#39;G&#39;</span><span class="p">,</span><span class="s1">&#39;T0&#39;</span><span class="p">,</span><span class="s1">&#39;G&#39;</span><span class="p">,</span><span class="s1">&#39;K&#39;</span><span class="p">,</span><span class="s1">&#39;n&#39;</span><span class="p">]</span>
+    <span class="n">str_keywords</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;OpenLoop&#39;</span><span class="p">,</span> <span class="s1">&#39;CarbonFibre&#39;</span><span class="p">,</span> <span class="s1">&#39;IV&#39;</span><span class="p">,</span> <span class="s1">&#39;DET_NAME&#39;</span><span class="p">]</span>
+    
+    <span class="c1"># process the rest of the file</span>
+    <span class="k">del</span><span class="p">(</span><span class="n">valid_lines</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">del</span><span class="p">(</span><span class="n">valid_lines</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">idx_counter</span><span class="o">=-</span><span class="mi">1</span>
+    <span class="n">entry</span><span class="o">=</span><span class="p">{}</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">valid_lines</span><span class="p">:</span>
+        <span class="n">keyword</span><span class="p">,</span><span class="n">str_val</span><span class="o">=</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;=&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">keyword</span> <span class="ow">in</span> <span class="n">str_keywords</span> <span class="ow">or</span> <span class="n">str_val</span><span class="o">==</span><span class="s1">&#39;NaN&#39;</span><span class="p">:</span>
+            <span class="n">val</span><span class="o">=</span><span class="n">str_val</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">val</span><span class="o">=</span><span class="nb">eval</span><span class="p">(</span><span class="n">str_val</span><span class="p">)</span>
+            
+        <span class="k">if</span> <span class="n">keyword</span><span class="o">==</span><span class="s1">&#39;INDEX&#39;</span><span class="p">:</span>
+            <span class="n">TEStable</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span> <span class="c1"># store the previous entry</span>
+            <span class="n">entry</span><span class="o">=</span><span class="p">{}</span>
+            <span class="n">idx</span><span class="o">=</span><span class="n">val</span>
+            <span class="n">idx_counter</span><span class="o">+=</span><span class="mi">1</span>
+            <span class="k">if</span> <span class="n">idx</span><span class="o">!=</span><span class="n">idx_counter</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Weirdness: incompatible indeces.  INDEX=</span><span class="si">%i</span><span class="s1">, idx_counter=</span><span class="si">%i</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">idx</span><span class="p">,</span><span class="n">idx_counter</span><span class="p">))</span>
+
+        <span class="n">entry</span><span class="p">[</span><span class="n">keyword</span><span class="p">]</span><span class="o">=</span><span class="n">val</span>
+
+    <span class="c1"># add the last one</span>
+    <span class="n">TEStable</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>        
+    <span class="c1"># clean up:  the first entry is empty because of the way we did the loop</span>
+    <span class="k">del</span><span class="p">(</span><span class="n">TEStable</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    
+    
+    <span class="k">return</span> <span class="n">TEStable</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, QUBIC Collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

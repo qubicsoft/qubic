@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qubic.polyacquisition &mdash; Qubicsoft 5.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=ee801c84"></script>
+        <script src="../../_static/doctools.js?v=888ff710"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">qubic.polyacquisition</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for qubic.polyacquisition</h1><div class="highlight"><pre>
+<span></span><span class="c1"># coding: utf-8</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span>
+
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">from</span> <span class="nn">pyoperators</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BlockColumnOperator</span><span class="p">,</span> <span class="n">BlockDiagonalOperator</span><span class="p">,</span> <span class="n">BlockRowOperator</span><span class="p">,</span>
+    <span class="n">CompositionOperator</span><span class="p">,</span> <span class="n">DiagonalOperator</span><span class="p">,</span> <span class="n">I</span><span class="p">,</span> <span class="n">IdentityOperator</span><span class="p">,</span>
+    <span class="n">MPIDistributionIdentityOperator</span><span class="p">,</span> <span class="n">MPI</span><span class="p">,</span> <span class="n">proxy_group</span><span class="p">,</span> <span class="n">ReshapeOperator</span><span class="p">,</span>
+    <span class="n">rule_manager</span><span class="p">,</span> <span class="n">pcg</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">pyoperators.utils.mpi</span> <span class="kn">import</span> <span class="n">as_mpi</span>
+<span class="kn">from</span> <span class="nn">pysimulators</span> <span class="kn">import</span> <span class="n">Acquisition</span><span class="p">,</span> <span class="n">FitsArray</span>
+<span class="kn">from</span> <span class="nn">pysimulators.interfaces.healpy</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">)</span>
+<span class="kn">import</span> <span class="nn">qubic</span>
+<span class="kn">from</span> <span class="nn">.data</span> <span class="kn">import</span> <span class="n">PATH</span>
+<span class="kn">from</span> <span class="nn">.acquisition</span> <span class="kn">import</span> <span class="p">(</span><span class="n">QubicAcquisition</span><span class="p">,</span>
+                          <span class="n">PlanckAcquisition</span><span class="p">,</span>
+                          <span class="n">QubicPlanckAcquisition</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">.scene</span> <span class="kn">import</span> <span class="n">QubicScene</span>
+<span class="kn">from</span> <span class="nn">.samplings</span> <span class="kn">import</span> <span class="n">create_random_pointings</span><span class="p">,</span> <span class="n">get_pointing</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;compute_freq&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;QubicPolyAcquisition&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;QubicPolyPlanckAcquisition&#39;</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="compute_freq">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.compute_freq">[docs]</a>
+<span class="k">def</span> <span class="nf">compute_freq</span><span class="p">(</span><span class="n">band</span><span class="p">,</span> <span class="n">Nfreq</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">relative_bandwidth</span><span class="o">=</span><span class="mf">0.25</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Prepare frequency bands parameters</span>
+<span class="sd">    band -- int,</span>
+<span class="sd">        QUBIC frequency band, in GHz.</span>
+<span class="sd">        Typical values: 150, 220</span>
+<span class="sd">    relative_bandwidth -- float, optional</span>
+<span class="sd">        Ratio of the difference between the edges of the</span>
+<span class="sd">        frequency band over the average frequency of the band:</span>
+<span class="sd">        2 * (nu_max - nu_min) / (nu_max + nu_min)</span>
+<span class="sd">        Typical value: 0.25</span>
+<span class="sd">    Nfreq -- int, optional</span>
+<span class="sd">        Number of frequencies within the wide band.</span>
+<span class="sd">        If not specified, then Nfreq = 15 if band == 150</span>
+<span class="sd">        and Nfreq = 20 if band = 220</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">Nfreq</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">Nfreq</span> <span class="o">=</span> <span class="p">{</span><span class="mi">150</span><span class="p">:</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">220</span><span class="p">:</span> <span class="mi">20</span><span class="p">}[</span><span class="n">band</span><span class="p">]</span>
+
+    <span class="n">nu_min</span> <span class="o">=</span> <span class="n">band</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">relative_bandwidth</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">nu_max</span> <span class="o">=</span> <span class="n">band</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">relative_bandwidth</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">Nfreq_edges</span> <span class="o">=</span> <span class="n">Nfreq</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="p">(</span><span class="n">nu_max</span> <span class="o">/</span> <span class="n">nu_min</span><span class="p">)</span> <span class="o">**</span> <span class="p">(</span><span class="mf">1.</span> <span class="o">/</span> <span class="n">Nfreq</span><span class="p">)</span>
+
+    <span class="n">nus_edge</span> <span class="o">=</span> <span class="n">nu_min</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">logspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">Nfreq</span><span class="p">,</span> <span class="n">Nfreq_edges</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="n">base</span><span class="p">)</span>
+    <span class="n">nus</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([(</span><span class="n">nus_edge</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">nus_edge</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="mi">2</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">Nfreq_edges</span><span class="p">)])</span>
+    <span class="n">deltas</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([(</span><span class="n">nus_edge</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">nus_edge</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">Nfreq_edges</span><span class="p">)])</span>
+    <span class="n">Delta</span> <span class="o">=</span> <span class="n">nu_max</span> <span class="o">-</span> <span class="n">nu_min</span>
+    <span class="n">Nbbands</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">nus</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Nfreq_edges</span><span class="p">,</span> <span class="n">nus_edge</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">deltas</span><span class="p">,</span> <span class="n">Delta</span><span class="p">,</span> <span class="n">Nbbands</span></div>
+
+
+
+<div class="viewcode-block" id="QubicPolyAcquisition">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition">[docs]</a>
+<span class="k">class</span> <span class="nc">QubicPolyAcquisition</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">multiinstrument</span><span class="p">,</span> <span class="n">sampling</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        acq = QubicPolyAcquisition(QubicMultibandInstrument, sampling, scene)</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        multiinstrument : QubicMultibandInstrument</span>
+<span class="sd">            The sub-frequencies are set there</span>
+<span class="sd">        sampling : </span>
+<span class="sd">            QubicSampling instance</span>
+<span class="sd">        scene :</span>
+<span class="sd">            QubicScene instance</span>
+
+<span class="sd">        For other parameters see documentation for the QubicAcquisition class</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">weights</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;weights&#39;</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">warnings</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;MultiBand&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;nf_sub&#39;</span><span class="p">]</span><span class="o">&gt;</span><span class="mi">1</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">subacqs</span> <span class="o">=</span> <span class="p">[</span><span class="n">QubicAcquisition</span><span class="p">(</span><span class="n">multiinstrument</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                                             <span class="n">sampling</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">multiinstrument</span><span class="p">))]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;If you do not use a multiband instrument,&#39;</span>
+                             <span class="s1">&#39;you should use the QubicAcquisition class&#39;</span>
+                             <span class="s1">&#39;which is done for the monochromatic case.&#39;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+            <span class="n">a</span><span class="o">.</span><span class="n">comm</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">comm</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">scene</span> <span class="o">=</span> <span class="n">scene</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">d</span> <span class="o">=</span> <span class="n">d</span>
+        <span class="k">if</span> <span class="n">weights</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>  <span class="c1"># / len(self)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">weights</span>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">subacqs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">subacqs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="QubicPolyAcquisition.warnings">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.warnings">[docs]</a>
+    <span class="k">def</span> <span class="nf">warnings</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
+
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            This method prevent to you that beam is not a good </span>
+<span class="sd">            approximation in the 220 GHz band.</span>
+<span class="sd">            Also can be used to add new warnings when acquisition is created in </span>
+<span class="sd">            specific configuration.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        
+        <span class="k">if</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;filter_nu&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="mf">220e9</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;beam_shape&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;gaussian&#39;</span><span class="p">:</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s1">&#39;The nu dependency of the gausian beam FWHM &#39;</span>
+                        <span class="s1">&#39;is not a good approximation in the 220 GHz band.&#39;</span><span class="p">)</span>  
+            <span class="k">elif</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;beam_shape&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;fitted_beam&#39;</span><span class="p">:</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s1">&#39;Beam and solid angle frequency dependence implementation &#39;</span>
+                        <span class="s1">&#39;in the 220 GHz band for the fitted beam does not correctly describe &#39;</span>
+                        <span class="s1">&#39;the true behavior&#39;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="QubicPolyAcquisition.get_coverage">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.get_coverage">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_coverage</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return an array of monochromatic coverage maps, one for each of subacquisitions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">subacqs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get_coverage</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">subacqs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">get_coverage</span><span class="p">()</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">))])</span></div>
+
+
+<div class="viewcode-block" id="QubicPolyAcquisition.get_coverage_mask">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.get_coverage_mask">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_coverage_mask</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coverages</span><span class="p">,</span> <span class="n">covlim</span><span class="o">=</span><span class="mf">0.2</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a healpix boolean map with True on the pixels where ALL the</span>
+<span class="sd">            subcoverages are above covlim * subcoverage.max()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">coverages</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Use QubicMultibandAcquisition.get_coverage method to create input&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">cov</span> <span class="o">=</span> <span class="n">coverages</span>
+            <span class="k">return</span> <span class="n">cov</span> <span class="o">&gt;</span> <span class="n">covlim</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">cov</span><span class="p">)</span>
+        <span class="n">observed</span> <span class="o">=</span> <span class="p">[(</span><span class="n">coverages</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">covlim</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">coverages</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">))]</span>
+        <span class="n">obs</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">observed</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">))))</span>
+        <span class="k">return</span> <span class="n">obs</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_get_average_instrument_acq</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create and return a QubicAcquisition instance of a monochromatic</span>
+<span class="sd">            instrument with frequency correspondent to the mean of the</span>
+<span class="sd">            frequency range.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">q0</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">instrument</span>
+        <span class="n">nu_min</span> <span class="o">=</span> <span class="n">q0</span><span class="o">.</span><span class="n">filter</span><span class="o">.</span><span class="n">nu</span>
+        <span class="n">nu_max</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">filter</span><span class="o">.</span><span class="n">nu</span>
+        <span class="n">nep</span> <span class="o">=</span> <span class="n">q0</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">nep</span>
+        <span class="n">fknee</span> <span class="o">=</span> <span class="n">q0</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">fknee</span>
+        <span class="n">fslope</span> <span class="o">=</span> <span class="n">q0</span><span class="o">.</span><span class="n">detector</span><span class="o">.</span><span class="n">fslope</span>
+
+        <span class="n">d1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;filter_nu&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">nu_max</span> <span class="o">+</span> <span class="n">nu_min</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;filter_relative_bandwidth&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">nu_max</span> <span class="o">-</span> <span class="n">nu_min</span><span class="p">)</span> <span class="o">/</span> <span class="p">((</span><span class="n">nu_max</span> <span class="o">+</span> <span class="n">nu_min</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.</span><span class="p">)</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;detector_nep&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nep</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;detector_fknee&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">fknee</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;detector_fslope&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">fslope</span>
+
+        <span class="n">q</span> <span class="o">=</span> <span class="n">qubic</span><span class="o">.</span><span class="n">QubicInstrument</span><span class="p">(</span><span class="n">d1</span><span class="p">,</span> <span class="n">FRBW</span><span class="o">=</span><span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">FRBW</span><span class="p">)</span>
+        <span class="n">q</span><span class="o">.</span><span class="n">detector</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">instrument</span><span class="o">.</span><span class="n">detector</span>
+        <span class="n">s_</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sampling</span>
+        <span class="n">nsamplings</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sampling</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">s_</span><span class="p">))</span>
+
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;random_pointing&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;sweeping_pointing&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;repeat_pointing&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;RA_center&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;DEC_center&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;npointings&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nsamplings</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;dtheta&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">10.</span>
+        <span class="n">d1</span><span class="p">[</span><span class="s1">&#39;period&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">s_</span><span class="o">.</span><span class="n">period</span>
+
+        <span class="n">s</span> <span class="o">=</span> <span class="n">get_pointing</span><span class="p">(</span><span class="n">d1</span><span class="p">)</span>
+        <span class="c1"># s = create_random_pointings([0., 0.], nsamplings, 10., period=s_.period)</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">QubicAcquisition</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">scene</span><span class="p">,</span> <span class="n">d1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">a</span>
+
+<div class="viewcode-block" id="QubicPolyAcquisition.get_noise">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.get_noise">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_average_instrument_acq</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">a</span><span class="o">.</span><span class="n">get_noise</span><span class="p">()</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_get_array_of_operators</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span> <span class="o">*</span> <span class="n">w</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">w</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">)]</span>
+
+<div class="viewcode-block" id="QubicPolyAcquisition.get_operator_to_make_TOD">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.get_operator_to_make_TOD">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_operator_to_make_TOD</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return a BlockRowOperator of subacquisition operators</span>
+<span class="sd">        In polychromatic mode it is only applied to produce the TOD</span>
+<span class="sd">        To reconstruct maps one should use the get_operator function</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">op</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_array_of_operators</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">BlockRowOperator</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">new_axisin</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicPolyAcquisition.get_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.get_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return an sum of operators for subacquisitions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">op</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_array_of_operators</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="QubicPolyAcquisition.get_invntt_operator">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.get_invntt_operator">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_invntt_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the inverse noise covariance matrix as operator</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get_invntt_operator</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="QubicPolyAcquisition.get_observation">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.get_observation">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_observation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Return TOD for polychromatic synthesised beam,</span>
+<span class="sd">        just the same way as QubicPolyAcquisition.get_observation does</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        m : np.array((N, npix, 3)) if self.scene.kind == &#39;IQU&#39;, else np.array((npix))</span>
+<span class="sd">            where N = len(self) if convolution == True or</span>
+<span class="sd">                  N = len(self.bands) if convolution == False</span>
+<span class="sd">            Helpix map of CMB for all the frequencies</span>
+<span class="sd">        convolution : boolean, optional [default and recommended = True]</span>
+<span class="sd">            - if True, convolve the input map with gaussian kernel</span>
+<span class="sd">            with width specific for each subfrequency and</span>
+<span class="sd">            return TOD, convolved map,</span>
+<span class="sd">            (for example, we use 4 monochromatic frequencies and divide them</span>
+<span class="sd">                to 2 subbands)</span>
+<span class="sd">            where TOD = [H1, H2, H3, H4] * [m_conv1, m_conv2, m_conv3, m_conv4].T</span>
+<span class="sd">            and convolved map = [average([m_conv1, m_conv2]), average([m_conv3, m_conv4])]</span>
+<span class="sd">            - if False, the input map is considered as already convolved</span>
+<span class="sd">            and the return is just TOD, which is equal to</span>
+<span class="sd">            [sum(H1, H2, H3, ...)] * input_map</span>
+<span class="sd">        noiseless : boolean, optional [default=False]</span>
+<span class="sd">            if False, add noise to the TOD due to the model</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">kind</span> <span class="o">!=</span> <span class="s1">&#39;I&#39;</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="n">m</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">m</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="k">if</span> <span class="n">convolution</span><span class="p">:</span>
+            <span class="n">_maps_convolved</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>  <span class="c1"># array of sky maps, each convolved with its own gaussian</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)):</span>
+                <span class="n">C</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">get_convolution_peak_operator</span><span class="p">()</span>
+                <span class="n">_maps_convolved</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">m</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">tod</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_operator_to_make_TOD</span><span class="p">()</span> <span class="o">*</span> <span class="n">_maps_convolved</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">tod</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span> <span class="o">*</span> <span class="n">m</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">noiseless</span><span class="p">:</span>
+            <span class="n">tod</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_noise</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">convolution</span><span class="p">:</span>
+            <span class="n">maps_convolved</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">_maps_convolved</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">&gt;</span> <span class="n">mi</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">&lt;</span> <span class="n">ma</span><span class="p">)],</span>
+                                         <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">[(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">&gt;</span> <span class="n">mi</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">&lt;</span> <span class="n">ma</span><span class="p">)])</span> \
+                              <span class="k">for</span> <span class="p">(</span><span class="n">mi</span><span class="p">,</span> <span class="n">ma</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">bands</span><span class="p">]</span>
+            <span class="k">return</span> <span class="n">tod</span><span class="p">,</span> <span class="n">maps_convolved</span>
+
+        <span class="k">return</span> <span class="n">tod</span></div>
+
+
+<div class="viewcode-block" id="QubicPolyAcquisition.get_preconditioner">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.get_preconditioner">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_preconditioner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cov</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">cov</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">cov_inv</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">cov</span>
+            <span class="n">cov_inv</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="n">cov_inv</span><span class="p">)]</span> <span class="o">=</span> <span class="mf">0.</span>
+            <span class="n">preconditioner</span> <span class="o">=</span> <span class="n">DiagonalOperator</span><span class="p">(</span><span class="n">cov_inv</span><span class="p">,</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;rightward&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">preconditioner</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">preconditioner</span></div>
+
+
+<div class="viewcode-block" id="QubicPolyAcquisition.tod2map">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyAcquisition.tod2map">[docs]</a>
+    <span class="k">def</span> <span class="nf">tod2map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tod</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">cov</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Reconstruct map from tod</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;tol&#39;</span><span class="p">]</span>
+        <span class="n">maxiter</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;maxiter&#39;</span><span class="p">]</span>
+        <span class="n">verbose</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;verbose&#39;</span><span class="p">]</span>
+        <span class="n">H</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">invntt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_invntt_operator</span><span class="p">()</span>
+
+        <span class="n">A</span> <span class="o">=</span> <span class="n">H</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">invntt</span> <span class="o">*</span> <span class="n">H</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">H</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">invntt</span> <span class="o">*</span> <span class="n">tod</span>
+
+        <span class="n">preconditioner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_preconditioner</span><span class="p">(</span><span class="n">cov</span><span class="p">)</span>
+        <span class="n">solution</span> <span class="o">=</span> <span class="n">pcg</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">preconditioner</span><span class="p">,</span>
+                       <span class="n">disp</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="n">tol</span><span class="p">,</span> <span class="n">maxiter</span><span class="o">=</span><span class="n">maxiter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">],</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;nit&#39;</span><span class="p">],</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;error&#39;</span><span class="p">]</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="QubicPolyPlanckAcquisition">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyPlanckAcquisition">[docs]</a>
+<span class="k">class</span> <span class="nc">QubicPolyPlanckAcquisition</span><span class="p">(</span><span class="n">QubicPlanckAcquisition</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The QubicPolyAcquisition class, which combines the QubicPoly and Planck</span>
+<span class="sd">    acquisitions.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">qubic</span><span class="p">,</span> <span class="n">planck</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        acq = QubicPolyPlanckAcquisition(qubic_acquisition, planck_acquisition)</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        qubic_acquisition : QubicPolyAcquisition</span>
+<span class="sd">            The QUBIC polychromatic acquisition.</span>
+<span class="sd">        planck_acquisition : PlanckAcquisition</span>
+<span class="sd">            The Planck acquisition.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">qubic</span><span class="p">,</span> <span class="n">QubicPolyAcquisition</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;The first argument is not a QubicPolyAcquisition.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">planck</span><span class="p">,</span> <span class="n">PlanckAcquisition</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;The second argument is not a PlanckAcquisition.&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">qubic</span><span class="o">.</span><span class="n">scene</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">planck</span><span class="o">.</span><span class="n">scene</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The Qubic and Planck scenes are different.&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span> <span class="o">=</span> <span class="n">qubic</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">planck</span> <span class="o">=</span> <span class="n">planck</span>
+        <span class="k">if</span> <span class="n">weights</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>  <span class="c1"># / len(self)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">weights</span> <span class="o">=</span> <span class="n">weights</span>
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="p">)</span>
+
+<div class="viewcode-block" id="QubicPolyPlanckAcquisition.get_observation">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyPlanckAcquisition.get_observation">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_observation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return fusion observation as a sum of monochromatic fusion TODs</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">convolution</span> <span class="ow">and</span> <span class="n">m</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Define the map, if you want to use convolution option&#39;</span><span class="p">)</span>
+
+        <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">planck</span>
+        <span class="k">if</span> <span class="n">m</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">m</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">_true_sky</span>
+        <span class="n">tod_shape</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">instrument</span><span class="p">)</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">sampling</span><span class="p">)</span> <span class="o">+</span> \
+                    <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">kind</span><span class="p">)</span> <span class="o">*</span> <span class="n">hp</span><span class="o">.</span><span class="n">nside2npix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">nside</span><span class="p">)</span>
+        <span class="n">tod</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">tod_shape</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;IQU&#39;</span><span class="p">:</span>
+            <span class="n">maps_convolved</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="n">m</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">m</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">maps_convolved</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="n">m</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)):</span>
+            <span class="n">q</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">convolution</span><span class="p">:</span>
+                <span class="n">maps_convolved</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">get_convolution_peak_operator</span><span class="p">()</span> <span class="o">*</span> <span class="n">m</span>
+                <span class="n">p</span><span class="o">.</span><span class="n">_true_sky</span> <span class="o">=</span> <span class="n">maps_convolved</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="n">QubicPlanckAcquisition</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+            <span class="n">tod</span> <span class="o">+=</span> <span class="n">f</span><span class="o">.</span><span class="n">get_observation</span><span class="p">(</span><span class="n">convolution</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">noiseless</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">noiseless</span><span class="p">:</span>
+            <span class="n">tod</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_noise</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">convolution</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">tod</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">average</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">maps_convolved</span><span class="p">),</span>
+                                   <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                                   <span class="n">weights</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">weights</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">tod</span></div>
+
+
+<div class="viewcode-block" id="QubicPolyPlanckAcquisition.get_preconditioner">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyPlanckAcquisition.get_preconditioner">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_preconditioner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">H</span><span class="p">):</span>
+        <span class="n">M</span> <span class="o">=</span> <span class="p">(</span><span class="n">H</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">H</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">H</span><span class="o">.</span><span class="n">shapein</span><span class="p">))[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">preconditioner</span> <span class="o">=</span> <span class="n">DiagonalOperator</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">M</span><span class="p">,</span> <span class="n">broadcast</span><span class="o">=</span><span class="s1">&#39;rightward&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">preconditioner</span></div>
+
+
+<div class="viewcode-block" id="QubicPolyPlanckAcquisition.tod2map">
+<a class="viewcode-back" href="../../qubic.html#qubic.polyacquisition.QubicPolyPlanckAcquisition.tod2map">[docs]</a>
+    <span class="k">def</span> <span class="nf">tod2map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tod</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
+        <span class="n">tol</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;tol&#39;</span><span class="p">]</span>
+        <span class="n">maxiter</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;maxiter&#39;</span><span class="p">]</span>
+        <span class="n">verbose</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;verbose&#39;</span><span class="p">]</span>
+        <span class="n">H</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_operator</span><span class="p">()</span>
+        <span class="n">invntt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_invntt_operator</span><span class="p">()</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">H</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">invntt</span> <span class="o">*</span> <span class="n">H</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">H</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> <span class="n">invntt</span> <span class="o">*</span> <span class="n">tod</span>
+
+        <span class="n">preconditioner</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_preconditioner</span><span class="p">(</span><span class="n">H</span><span class="p">)</span>
+        <span class="n">solution</span> <span class="o">=</span> <span class="n">pcg</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">M</span><span class="o">=</span><span class="n">preconditioner</span><span class="p">,</span> <span class="n">disp</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="n">tol</span><span class="p">,</span> <span class="n">maxiter</span><span class="o">=</span><span class="n">maxiter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">solution</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, QUBIC Collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -16,7 +16,7 @@ from qubic import progress_bar
 from qubic import selfcal_lib as scal
 from qubic import fibtools as ft
 
-__all__ = ['MySplineFitting'
+__all__ = ['MySplineFitting',
            'Pip1Tes',
            'FocalPlane',
            'PipAllTes']
@@ -596,11 +596,11 @@ class FocalPlane:
 
 class PipAllTes:
     
-    """
+	"""
     
-    Instance to analyse and display all TES. 
+	Instance to analyse and display all TES. 
     
-    """
+	"""
     
 	def __init__(self, tt, tod, az, el, thk):
         
@@ -671,7 +671,7 @@ class PipAllTes:
 		fp = FocalPlane(self.tt, self.tod, self.az, self.el, self.thk)
   
 		if plot_FP:
-			fp._get_FP_line(type_of_data='line', color=color, save='plots/FP.png', **kwargs)
+			fp._get_FP_line(type_of_data='line', color=color, save='plots/FP.png')
 		if plot_FP_healpix:
 			fp._get_FP_line(type_of_data='healpix', color=color, save='plots/FP_healpix.png', center=center, reso=reso, nside=nside, **kwargs)
 

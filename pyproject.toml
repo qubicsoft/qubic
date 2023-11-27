@@ -46,7 +46,7 @@ dependencies = [
     'corner',
     'emcee',
     'GetDist',
-    'healpy>=0.6.1',
+    'healpy',
     'iminuit',
     'pandas',
     'progressbar',

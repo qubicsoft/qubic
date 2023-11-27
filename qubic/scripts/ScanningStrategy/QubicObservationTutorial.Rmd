@@ -1,0 +1,220 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+<h1>How to use the QubicObservation Class</h1>
+<p style="font-size:150%;">Imports and functions</p>
+
+```{python}
+#Python lib
+import numpy as np
+import pandas as pd
+
+#Maps and sky
+import healpy as hp
+
+#Plots
+import matplotlib
+import matplotlib.pyplot as plt
+
+#Astropy
+import astropy.coordinates as coord
+from astropy import units as u
+from astropy.coordinates import SkyCoord, AltAz, Galactic, ICRS, EarthLocation
+
+#Scanning strategy
+import QubicObservation as qobs
+
+#Qubic
+import qubic
+```
+
+<p style="font-size:150%;">Build folders structure and import Dictionary</p>
+
+```{python}
+dictfilename = 'pipeline_demo.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+```
+
+Dictionary parameters used by the QubicObservation object
+
+```{python}
+d['date_obs'] = '2023-01-01 10:00:00'
+d['duration'] = 9 #h
+d['angspeed'] =  0.4 #deg/s
+d['delta_az'] =  20 #deg
+d['nsweeps_per_elevation'] = 50
+d['period'] = 1. #sec
+
+d['RA_center'],d['DEC_center']
+```
+
+<p style="font-size:150%;">The QubicObservation object</p>
+
+
+The costructor QubicObservation() takes the dictionary and some initialized parameters as input. Then it builds and saves some attributes:
+
+hor_down --> lower limit of QUBIC field of view
+
+hor_up: --> upper limit of QUBIC field of view
+
+sun_sep: --> minumum angular distance that a point in the sky can have from the sun
+
+nsweep_even: --> boolean variable to True if the nsweeps_per_elevation is even
+
+dtsweepOneAz: --> time per one sweep in azimuth
+
+dt_centers: --> time per all the sweeps at the same elevation
+
+```{python}
+Obs = qobs.QubicObservation(d)#,hor_down=30,hor_up=70,sun_sep=40)
+Obs.__dict__
+```
+
+You can change the parameters of the QUBIC horizon and the sun distance
+
+```{python}
+print('before: ', Obs.hor_down)
+Obs.change_hor_down(40)
+#Obs.change_hor_up(70)
+#Obs.change_sun_sep(40)
+print('after: ', Obs.hor_down)
+Obs.change_hor_down(30)
+```
+
+<p style = "font-size:130%;">The get_pointing() function</p>
+
+
+This function returns the pointing in altazimuth coordinates where the effect of the limited field of view of QUBIC and the presence of the sun are considered.
+
+Return the pointing astropy.coordinates.builtin_frames.altaz.AltAz object:
+
+		- pointing.obstime is the array of time at which each point was taken. 
+		- pointing.az is the array of azimuth
+		- pointing.alt is the array of elevation
+        
+<p style="font-size:130%; color:red"> Attention: </p> The period of the sampling given as input in the dictionary  d['period'] cannot be below 1 second (This will be modified).
+The function should work with every resonable value of any other input parameters.
+
+```{python}
+pointing = Obs.get_pointing()
+```
+
+```{python}
+#this is the notation for an astropy coordinates object
+pointing.obstime, pointing.az, pointing.alt
+```
+
+A plot to show how to use the pointing object
+
+```{python}
+plt.rcParams["figure.figsize"] = (20,17)
+plt.rcParams.update({'font.size': 15})
+
+fig = plt.figure()
+
+ax1 = fig.add_subplot(4,1,1)
+ax2 = fig.add_subplot(4,1,2)
+ax3 = fig.add_subplot(4,1,3)
+
+x = np.arange(0,pointing.obstime.size)/3600
+print(x.size,pointing.alt.value.size)
+ax1.scatter(x,pointing.alt.value)
+ax2.plot(x,pointing.az.value,marker='.')
+ax3.plot(pointing.az.value,pointing.alt.value)
+
+
+
+ax1.set_xlabel('time [h]')
+ax1.set_ylabel('Elevation [deg]')
+
+ax2.set_xlabel('time [h]')
+ax2.set_ylabel('Azimuth [deg]')
+
+ax3.set_xlabel('Azimuth [deg]')
+ax3.set_ylabel('Elevation [deg]')
+
+```
+
+It can be useful have the pointing in galactic or horizontal coordinates. Here an example of how these changes of coordinates can be done using astropy with just one line of code
+
+```{python}
+Gal_pointing = pointing.transform_to(Galactic)
+#Eq_pointing = pointing.transform_to(ICRS)
+```
+
+Plot the pointing in galactic with astropy in mollview
+
+```{python}
+lon = Gal_pointing.l.value
+lat = Gal_pointing.b.value
+nside = d['nside']
+
+pix = hp.ang2pix(nside, lon, lat, lonlat=True)
+Map = np.zeros(12 * nside**2)
+
+Map[pix] = 500
+hp.mollview(Map)
+```
+
+<p style="font-size:150%;">How to get the coverage from the pointing using QUBIC pipeline</p>
+
+
+A very simple example with a single band instrument
+
+```{python}
+#Create a single band qubic instrument with all detectors (default)
+q = qubic.QubicInstrument(d)
+
+
+Time = Obs.DeltaTime(pointing.obstime)
+
+p = qubic.QubicSampling(azimuth = pointing.az.value, elevation = pointing.alt.value, 
+                        time = Time, date_obs = pointing.obstime[0].value,
+                        longitude = Obs.earth_location.lon.value,latitude = Obs.earth_location.lat.value)
+p.fix_az = False
+
+
+# Model of the scene at the time of observation
+s = qubic.QubicScene(d)
+
+
+#Create the Qubic Instrument
+a = qubic.QubicAcquisition(q, p, s, d)
+
+# Get coverage map
+# how many times were seen each pixel of the sky (not trivial because of the synthetic beam)
+cov = a.get_coverage()
+
+```
+
+A mollview and gnomview of the coverage
+
+```{python}
+plt.figure(figsize=(12,6))
+plt.rcParams["font.size"]=10
+
+hp.mollview(cov,title='Mollview of the Coverage',sub=(1,2,1))
+hp.gnomview(cov, rot=(Obs.gal.l.value,Obs.gal.b.value),
+            xsize=1500,title='Gnomonic projection of the Coverage',sub=(1,2,2))
+hp.graticule(5,5)
+```
+
+Check that the pointing and the coverage are the same
+
+```{python}
+hp.gnomview(cov + Map, rot=(Obs.gal.l.value,Obs.gal.b.value),
+            xsize=1700,title='Gnomonic projection of the Coverage and the pointing')
+hp.graticule(5,5)
+```

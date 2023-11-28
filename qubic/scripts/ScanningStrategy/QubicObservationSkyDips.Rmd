@@ -1,0 +1,138 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+<h1> How to simulate a Sky Dip with QubicObservation class</h1>
+<p style="font-size:150%;">Imports and functions</p>
+
+```{python}
+#Python lib
+import numpy as np
+import pandas as pd
+
+#Maps and sky
+import healpy as hp
+
+#Plots
+import matplotlib
+import matplotlib.pyplot as plt
+
+#Astropy
+import astropy.coordinates as coord
+from astropy import units as u
+from astropy.coordinates import SkyCoord
+
+#Scanning strategy
+import QubicObservation as qobs
+
+#Qubic
+import qubic
+#import qubic_functions as qf
+```
+
+<p style="font-size:150%;">Build folders structure and import Dictionary</p>
+
+```{python}
+#Dictionary
+dictfilename='pipeline_demo.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+```
+
+<p style="font-size:150%;">Observation parameters</p>
+
+<p style="font-size:130%; color:red"> Attention: </p>
+The following parameters of the dictionary:
+
+- Duration of the observation
+- The date
+- The sampling period 
+
+will be used for the skydips. Therefore, if you need to change them make sure to do it in the dictionary as follow
+
+```{python}
+#Observation Parameters
+d['date_obs'] = '2023-06-02 5:00:00'
+d['duration']=0.5 #h
+d['period'] = 1. #s
+
+#Not used for Skydips:
+#d['angspeed']= 0.4 #deg/s #This is scan in azimuth speed
+#d['delta_az']= 25 #deg #This is scan in azimuth amplitude
+#d['nsweeps_per_elevation']= 50 #this is number of sweeps in azimuth
+```
+
+<p style="font-size:150%;">Define new dictionary for sky dips</p>
+
+```{python}
+#SkyDips
+sky_dips = {
+             'az'        : 15, #deg fix azimuth of the sky dips
+             'start_el' : 40, #deg elevation at beginning of the sky dips
+             'delta_el': 40, #deg elevation amplitude of the sky dip
+             'angspeed_el': 0.4, #deg/sec angular speed of the elevation motion
+             'dead_time': 60 #sec time at the same elevation between a sky dip and the next one
+             }
+
+```
+
+<p style="font-size:150%;">Simulate skydips</p>
+
+To simulate a skydip you need to create the QubicObservation object (it's another observation)
+
+```{python}
+Obs = qobs.QubicObservation(d)
+```
+
+You can adjust the parameters of the field of view of Qubic if you need. Anyway the code will give you a warning if you go out of the boundaries with the sky dip
+
+```{python}
+#For Example
+Obs.change_hor_down(40)
+Obs.change_hor_up(80)
+```
+
+Call the function SkyDips to simulate the observation
+
+```{python}
+p = Obs.SkyDips(sky_dips['az'],sky_dips['start_el'],
+                sky_dips['delta_el'],sky_dips['angspeed_el'],
+                sky_dips['dead_time'])
+```
+
+<p style="font-size:150%;">Plot the pointing obtained</p>
+
+```{python}
+plt.rcParams['font.size'] = 10
+plt.rcParams['legend.handlelength'] = 1.0
+
+fig = plt.figure(figsize=(12,6))
+ax1 = fig.add_subplot(1,2,1)
+ax2 = fig.add_subplot(1,2,2)
+
+x = Obs.DeltaTime(p.obstime)/60
+
+ax1.plot(x,p.az,lw=8,c='blue',label='azimuth')
+#ax2.plot(x,p.alt,'.',c='blue',label='elevation',markersize=3)
+ax2.plot(x,p.alt,label='elevation',c='blue',lw=1)
+
+ax1.set_xlabel('Time [min]')
+ax2.set_xlabel('Time [min]')
+ax1.set_ylabel('Azimuth [deg]')
+ax2.set_ylabel('Elevation [deg]')
+
+ax2.tick_params(axis='x', labelrotation = 45)
+
+ax1.legend()
+ax2.legend()
+```

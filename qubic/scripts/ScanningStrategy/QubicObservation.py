@@ -8,7 +8,7 @@
 Project: Qubic Observation class - Object to model a realistic scanning strategy for QUBIC simulation.
 Author: Nicola brancadori - nicola.brancadori@studenti.unimi.it
 Creation Date: 10-Jan-2023
-Last edit: 22-Nov-2023
+Last edit: 28-Nov-2023
 
 '''
 import numpy as np
@@ -63,9 +63,6 @@ class QubicObservation:
 	def change_sun_sep(self,sun_sep):
 		self.sun_sep = sun_sep*u.deg
 	
-	#def change_delta_az(self,delta_az):
-	#	self.delta_az = delta_az	
-	
 	def get_pointing(self):
 		
 		"""
@@ -75,17 +72,19 @@ class QubicObservation:
 		- pointing.alt is the array of elevation
 		"""
 
+
 		self.centers = self.get_centers()
 
 		print("******* With these parameters ",self.centers.obstime.size-1," recentering are performed ***********")
 
+		#perform the azimuth sweeps around each center and build the pointing array
 		for i in range(0,np.size(self.centers.alt)):
 			if (i==0):
 				pointing = self.AzimuthSweep(self.centers[0],0)
 			else:
 				pointing = np.append(pointing,self.AzimuthSweep(self.centers[i],i),axis=0)
 
-		#Return the pointing array as astropy object
+		#Pointing array as astropy object
 		pointing = AltAz(az=pointing[:,1]*u.deg,alt=pointing[:,2]*u.deg,obstime=pointing[:,0],location=self.earth_location)
 		
 		return pointing
@@ -107,7 +106,6 @@ class QubicObservation:
 		#Horizon mask
 		hor_mask = (altaz.alt.value > self.hor_down.value) & (altaz.alt.value < self.hor_up.value)
 		altaz = altaz[hor_mask]
-		#print('altaz', altaz.obstime.value)
 		
 
 		#Compute the actual duration and start of the observation.
@@ -115,11 +113,10 @@ class QubicObservation:
 		if (np.any(altaz.obstime)==False):
 			raise ValueError('The source is never visible')
 		else:
-			#the source may not be always visible during the observation period (e.g multi-day observations). 
+			#The source may not be always visible during the observation period (e.g multi-day observations). 
 			#I formalize this by considering each interval in which the source is visible as a separate observation 
 			#with a beginning and an end:
 			
-			#print(np.diff(altaz.obstime.unix))
 			end_index = np.where(np.diff(altaz.obstime.unix) > 1)
 			end_index = np.append(end_index,altaz.obstime.size - 1)
 
@@ -127,16 +124,11 @@ class QubicObservation:
 			start_index = np.append(start_index,end_index[:-1] + 1)
 
 			durations = altaz.obstime[end_index].unix - altaz.obstime[start_index].unix
-			#print('start: ',start_index)
-			#print('end: ',end_index)
-			#print(durations)
-
 
 		if( np.any(durations < self.dt_centers.value) ):
-			#raise ValueError('You dont change elevation ever with this number of sweep, use Onesweep() method')
 			warnings.warn('You stay always on the same elevation with these parameters')
-			#recenter_time = np.array([0])*u.second
 
+		#Build the array of timecenter cycling through the different observations (durations)
 		for i in range(durations.size):
 			if (i==0):
 				recenter_time = np.arange(0,durations[0],self.nsweeps_per_elevation*self.dtsweepOneAz.value)*u.second
@@ -144,7 +136,7 @@ class QubicObservation:
 				start_time = altaz.obstime[start_index[i]].unix - altaz.obstime[0].unix
 				recenter_time = np.append(recenter_time, np.arange(start_time,durations[i]+start_time,self.nsweeps_per_elevation*self.dtsweepOneAz.value)*u.second)
 		
-
+		#Build the array of center as an astropy object
 		hor_frame = AltAz(obstime = altaz.obstime[0] + recenter_time, location = self.earth_location)
 		altaz = self.gal.transform_to(hor_frame) #--> This is the centers vector
 
@@ -226,30 +218,47 @@ class QubicObservation:
 		return Sweep
 
 
-	def SkyDips(self,azimuth,elevation,delta_elevation,ang_speed_elevation):
+	def SkyDips(self,azimuth,elevation,delta_elevation,ang_speed_elevation,dead_time = 0.):
+
+		"""
+		INPUT:
+	 	- azimuth (float) the azimuth at which perform the azimuth
+	 	- elevation (float) the initial elevation value
+	 	- delta_elevation (float) the elevation interval of the sky dips
+	 	- ang_speed_elevation (float) the angular velocity of the telescope motion
+	 	- dead_time (float) the time spent by the telescope at the same elevation 
+
+	 	Return the poiniting of the sky dips as astropy.coordinates.builtin_frames.altaz.AltAz object:
+		- pointing.obstime is the array of time at which each point was taken. 
+		- pointing.az is the array of azimuth
+		- pointing.alt is the array of elevation
+	 	"""
 
 		az = azimuth*u.deg
 		alt = elevation*u.deg
 		delta_alt = delta_elevation*u.deg
 
-		if (alt.value < self.hor_down.value):
-			warnings.warn('Elevation out of range')
-			alt = self.hor_down
-			print('The starting elevation is below QUBIC horizon adjusted to: ',alt)
-		elif ((alt + delta_alt).value > self.hor_up.value):
-			warnings.warn('Amplitude sweep out of range')
-			delta_alt = self.hor_up - alt
-			print('The amplitude of the sweep in elevation goes above QUBIC horizon adjusted to: ',delta_alt)
-		elif (alt.value > self.hor_up.value):
-			raise ValueError('The starting elevation is above QUBIC horizon (70 deg)')
+		min_tsampling = 0.1
 
-		
-		nsweeps = round(self.duration*3600/(delta_alt.value/ang_speed_elevation))
-		alt_step = 0.1 * ang_speed_elevation
-		
-		# Define the upward and downward sweeps
-		Up = lambda s,e,st : np.arange(s,e,st) #forward sweep (c,d,n) --> (center azimuth,delta azimuth,azimuth step)
-		Dn = lambda s,e,st : np.flip(np.arange(s,e,st)) #backwards sweep (c,d,n) --> (center azimuth,delta azimuth,azimuth step)
+		if (alt.value < self.hor_down.value):
+			warnings.warn('Elevation is below the QUBIC field of view: <',self.hor_down)
+		elif ((alt + delta_alt).value > self.hor_up.value):
+			warnings.warn('The elevation sweep is out of QUBIC field of view:', '[',self.hor_down,', ',self.hor_up,']')
+		elif (alt.value > self.hor_up.value):
+			raise ValueError('The starting elevation is above the QUBIC field of view: >',self.hor_up)
+
+		#Time to finish a sweep in Elevation plus teh deadtime
+		one_sweep_time = (delta_alt.value/ang_speed_elevation) + dead_time
+		#Compute the number of sweeps
+		nsweeps = round(self.duration*3600/one_sweep_time)
+		#Step in elevation for each measure
+		alt_step = min_tsampling * ang_speed_elevation #0.1 sec is the minimum time sampling
+		#Number of measures in the dead time
+		dead_samples = round(dead_time/min_tsampling)
+
+		#Define the upward and downward sweeps in elevation
+		Up = lambda s,e,st : np.arange(s,e,st) #upward sweep (s,e,st) --> (elevation start, elevation end, elevation step)
+		Dn = lambda s,e,st : np.flip(np.arange(s,e,st)) #downward sweep (s,e,st) --> (elevation start, elevation end, elevation step)
 
 		#Create the all sweep array to fill with elevation values
 		Sweep_Elevation = np.array([])
@@ -257,22 +266,31 @@ class QubicObservation:
 		for i in range(nsweeps):	
 			if (i%2 == 0):
 				sweep_el = Up(alt.value, alt.value + delta_alt.value, alt_step)
+				#Append the value at the same elevation taken in the deadtime 
+				sweep_el = np.append(sweep_el,np.ones(dead_samples)*(alt.value + delta_alt.value))
 			else:
 				sweep_el = Dn(alt.value, alt.value + delta_alt.value, alt_step)
+				#Append the value at the same elevation taken in the deadtime 
+				sweep_el = np.append(sweep_el,np.ones(dead_samples)*alt.value)
 
 			Sweep_Elevation = np.append(Sweep_Elevation,sweep_el)
 		
 		az = np.ones(Sweep_Elevation.size)*az
 
+		#Build the time array
 		start_time = self.date_obs
-		step_time = np.linspace(0,self.duration*36000,Sweep_Elevation.size)/10*u.second
-		#print('step_time: ',step_time)
+		step_time = np.linspace(0,self.duration*3600,Sweep_Elevation.size,endpoint=False)*u.second
 		time =  start_time + step_time
-		
+		#step_time = step_time.round(decimals = 6)
+		#print('step_time: ',np.diff(step_time))
+		#print('step_time: ',step_time[:50])
+		#print('start_time: ',start_time)
+		#print('step_time: ',np.diff( self.DeltaTime(time) ) )
+
 		pointing = AltAz(az,Sweep_Elevation*u.deg,obstime=time,location=self.earth_location)
 
-		#masked the array with the period of measure
-		ratio = self.period/0.1
+		#Masked the array with the period of measure
+		ratio = self.period/min_tsampling
 		indexes = np.arange(pointing.obstime.size)
 		indexes = indexes[ indexes%ratio == 0 ]
 		pointing = pointing[indexes]

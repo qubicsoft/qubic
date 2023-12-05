@@ -18,7 +18,7 @@ class Data:
             self.errors = cov
         else:
             self.diag = False
-            self.errors = 1./np.sqrt(cov)
+            self.errors = 1./np.sqrt(np.diag(cov))
             self.invcov = np.linalg.inv(cov)
         self.fit = None
         self.fitinfo = None

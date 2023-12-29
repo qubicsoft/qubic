@@ -4,17 +4,8 @@ import sys,os
 import numpy as np
 import glob
 
-from qubic import fibtools as ft
-
 import matplotlib.pyplot as plt
 from pysimulators import FitsArray
-
-from qubic import fibtools as ft
-from qubic.plotters import *
-from qubicpack.qubicfp import qubicfp
-import qubic.demodulation_lib as dl
-import qubic.sb_fitting as sbfit
-from qubic.io import write_map
 
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
@@ -106,15 +97,36 @@ def star_end(nc, idx_jumps, tod_haar, thr_used, clust):
     
     for i in range(nc):
         idx_jumps_from_thr = idx_jumps[clust.labels_ == i]
-        idx_delta_end_jump = np.where( tod_haar[idx_jumps_from_thr[-1]:] < thr_used*0.05 )[0][0]
-        idx_delta_start_jump = idx_jumps_from_thr[0] - np.where( tod_haar[:idx_jumps_from_thr[0]] < thr_used*0.05 )[0][-1]
+        idx_delta_end_jump = np.where( abs(tod_haar[idx_jumps_from_thr[-1]:]) < thr_used*0.05 )[0][0]
+        idx_delta_start_jump = idx_jumps_from_thr[0] - np.where( abs(tod_haar[:idx_jumps_from_thr[0]]) < thr_used*0.05 )[0][-1]
+        #idx_delta_start_jump = np.where( tod_haar[:idx_jumps_from_thr[0]] < thr_used*0.05 )[0][-1]
         xc[i] = idx_jumps_from_thr[0] - idx_delta_start_jump
         xcf[i] = idx_jumps_from_thr[-1] + idx_delta_end_jump
         
     delta = xcf - xc
     return xc, xcf, delta 
+    
+def offset_funct(tt, todarray, xc, xcf, number, region=5, order=1):
+    #tod_new = todarray.copy()
+    offset_lin = np.zeros(number)
+    idx = np.arange(len(todarray))
+    for i in range(len(xc)): 
+        offset_lin[i] = np.median(todarray[xcf[i]:xcf[i]+region])-np.median(todarray[xc[i]-region:xc[i]])
+    
+    pol = np.zeros(len(xc))
+    offset_pol = np.zeros(len(xc))
+    for i in range(len(xc)):        
+        tp = tt[xc[i]-region:xcf[i]+region]
+        adup = todarray[xc[i]-region:xcf[i]+region]
+        z = np.polyfit(tp, adup, order)
+        p = np.poly1d(z)
+        pol = p(tp)
+        offset_pol[i] = pol[-1]-pol[0]
+    
+    return offset_lin, offset_pol
 
-def jumps_detection(todarray):
+
+def jumps_detection(tt, todarray, offset_cond=False):
 
     #return nc: number of jumps in the TOD
     #       xc: beginning jumps
@@ -151,9 +163,24 @@ def jumps_detection(todarray):
     
     xc, xcf, delta = star_end(nc, idx_jumps, tod_haar, thr_used, clust) #5. find the beginning and the end of a jump, also the size of the jump
 
-    
-    return nc, xc, xcf, delta
 
+    if offset_cond == True:
+        offset_lin,_ = offset_funct(tt, todarray, xc, xcf, nc)
+        xc_list = []
+        xcf_list = []
+        delta_list = []
+        for j in range(len(offset_lin)):
+            if abs(offset_lin[j]) > 3.5e5:
+                xc_list.append(xc[j])
+                xcf_list.append(xcf[j])
+                delta_list.append(delta[j])
+        nc_list = len(xc_list)
+        return nc_list, xc_list, xcf_list, delta_list
+    else: 
+        return nc, xc, xcf, delta
+
+#-------------------------------------------------------
+####discrimination functions
 def redefine_jumps(tt, nc, xc, xcf, delta):
     delta_thr = np.rint(len(tt)/4915.2)
     del_idx = np.reshape(np.array(np.where(delta<delta_thr)),np.array(np.where(delta<delta_thr)).shape[1])
@@ -170,23 +197,6 @@ def derivation(tt, todarray, xc, xcf, region=10):
     deriv_tod_raw = np.diff(tod_portion)
     return time_portion, tod_portion, smooth_tod, deriv_tod_smooth    
 
-def offset_funct(tt, todarray, xc, xcf, number, region=5, order=1):
-    #tod_new = todarray.copy()
-    offset_lin = np.zeros(number)
-    idx = np.arange(len(todarray))
-    for i in range(len(xc)): 
-        offset_lin[i] = np.median(todarray[xcf[i]:xcf[i]+region])-np.median(todarray[xc[i]-region:xc[i]])
-    
-    pol = np.zeros(len(xc))
-    offset_pol = np.zeros(len(xc))
-    for i in range(len(xc)):        
-        tp = tt[xc[i]-region:xcf[i]+region]
-        adup = todarray[xc[i]-region:xcf[i]+region]
-        z = np.polyfit(tp, adup, order)
-        p = np.poly1d(z)
-        pol = p(tp)
-        offset_pol[i] = pol[-1]-pol[0]
-    
-    return offset_lin, offset_pol
+
 
 

@@ -21,17 +21,7 @@ import sys,os
 import numpy as np
 import glob
 
-from qubic import fibtools as ft
-
 import matplotlib.pyplot as plt
-from pysimulators import FitsArray
-
-from qubic import fibtools as ft
-from qubic.plotters import *
-from qubicpack.qubicfp import qubicfp
-import qubic.demodulation_lib as dl
-import qubic.sb_fitting as sbfit
-from qubic.io import write_map
 
 import matplotlib.mlab as mlab
 import scipy.ndimage.filters as f
@@ -115,54 +105,6 @@ We can find the jumps in the TES with not so much saturation
 
 The function 'jumps_detection' gives the number (nc) of flux jumps in a given TES, the time samples of the beginning of these jumps (xc) and the time samples of the end of the flux jumps (xcf)
 
-```{python}
-for i in range(len(index_TES_saved)):
-    idx_good = index_TES_saved[i]
-    print('Analisis TES', idx_good)
-    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)],  locals()['delta_{}'.format(idx_good)]=jumps_functions.jumps_detection(todarray[idx_good])
-```
-
-```{python}
-plt.plot(tt, todarray[102])
-plt.plot(tt[xc_102], todarray[102][xc_102], 'r.', label='beginning of the jumps')
-plt.plot(tt[xcf_102], todarray[102][xcf_102], 'g.', label='end of the jumps')
-plt.title('TES 103')
-plt.legend()
-```
-
-```{python}
-plt.plot(tt, todarray[187])
-plt.plot(tt[xc_187], todarray[187][xc_187], 'r.', label='beginning of the jumps')
-plt.plot(tt[xcf_187], todarray[187][xcf_187], 'g.', label='end of the jumps')
-plt.title('TES 188')
-plt.legend()
-```
-
-(optional) We can calculate the offset of the jumps detected. Not all of the jumps detected are real flux jumps, so seeing the amplitude can give an idea of the false jump
-
-```{python}
-for i in range(len(index_TES_saved)):
-    index = index_TES_saved[i]
-    tod = todarray[index]
-    if index != 20:
-        locals()['off_lin_{}'.format(index)], locals()['off_pol_{}'.format(index)] = jumps_functions.offset_funct(tt, tod, locals()['xc_{}'.format(index)], locals()['xcf_{}'.format(index)], locals()['nc_{}'.format(index)])
-  
-```
-
-```{python}
-for i in range(len(index_TES_saved)):
-    index = index_TES_saved[i]
-    if index != 20:
-        print('TES', index)
-        number = locals()['nc_{}'.format(index)]
-        for i in range(number):
-            print('offset jump %s: %.2f' % (i, abs(locals()['off_lin_{}'.format(index)][i])))
-            #print('offset lineal jump', i, locals()['off_lin_{}'.format(index)][])
-```
-
-```{python}
-
-```
 
 Now we can continue with the other TES with no saturation and see if they have flux jumps
 
@@ -177,7 +119,7 @@ print(good_tod)
 for i in range(len(good_tod)):
     idx_good = good_tod[i]
     print('Analisis TES', idx_good)
-    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)],  locals()['delta_{}'.format(idx_good)]=jumps_functions.jumps_detection(todarray[idx_good])
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)],  locals()['delta_{}'.format(idx_good)]=jumps_functions.jumps_detection(tt, todarray[idx_good], offset_cond=False)
 ```
 
 ```{python}
@@ -230,10 +172,6 @@ plt.plot(tt[xcf_140], todarray[140][xcf_140], 'g.')
 plt.plot(tt, todarray[103])
 plt.plot(tt[xc_103], todarray[103][xc_103], 'r.')
 plt.plot(tt[xcf_103], todarray[103][xcf_103], 'g.')
-```
-
-```{python}
-xc_119
 ```
 
 ```{python}
@@ -298,23 +236,36 @@ TES_yesjumps = tes_real_jump
 ```
 
 ```{python}
-TES_yesjumps  #these are probably the TES with real flux jumps. The only one detected as jumps is TES 90
+total = []
+for i in TES_yesjumps:
+    total.append(locals()['nc_new_{}'.format(i)])
+```
+
+```{python}
+TES_yesjumps
+```
+
+```{python}
+len(TES_yesjumps)
+```
+
+After discrimination functions we obtain 17 TES with flux jumps detected. If we plot them we can see that TES 30, 62, 90, 236 and 238 are confused as Jumps, which is not correct. 
+
+One important thing is that we are not losing any TES with possible flux jumps.
+
+
+```{python}
+total
+```
+
+```{python}
+np.sum(total)
 ```
 
 ```{python}
 for i in TES_yesjumps:
     plt.plot(tt, todarray[i])
     #plt.legend()
-```
-
-```{python}
-# %matplotlib notebook
-```
-
-```{python}
-plt.plot(tt, todarray[90])
-plt.plot(tt[xc_new_90], todarray[90][xc_new_90], 'r.')
-plt.plot(tt[xcf_new_90], todarray[90][xcf_new_90], 'g.')
 ```
 
 ```{python}
@@ -327,13 +278,6 @@ for i in tes_no_jump:
     #plt.legend()
 ```
 
-Whit all these functions, I'm detecting in general all the flux jumps but I'm losing only one in the TES (140). Also I'm confusing only one TES with no real flux jumps (TES 90)
-
-
-This pipeline so far works very well. In the future I think is important to study the amplitude of the real flux jumps (already detected) in order to see a pattern and help the detection function.
-
-Also I think it can be used to train a Machine learning algorithm like a Decision Tree
-
 ```{python}
 for i in TES_yesjumps:
     tod = todarray[i]    
@@ -342,18 +286,113 @@ for i in TES_yesjumps:
 ```
 
 ```{python}
-for i in index_TES_saved:
-    if i!=20:
-        plt.plot(abs(locals()['off_lin_{}'.format(i)]), marker='s', label='TES_{}'.format(i))
-        plt.legend()
+TES_yesjumps
 ```
 
 ```{python}
-for i in TES_yesjumps:
-    if i!=254:
-        plt.plot(abs(locals()['off_lin_{}'.format(i)]), marker='s', label='TES_{}'.format(i))
-        plt.legend()
+no = [30, 62, 90, 236, 238]
+yes = [15, 19, 54, 58, 103, 119, 140, 189, 206, 248, 250, 254]
 ```
+
+```{python}
+for i in yes:
+    plt.plot(abs(locals()['off_lin_{}'.format(i)]), marker='s', label='TES_{}'.format(i))
+    plt.legend()
+plt.axhspan(ymin=3.5e5, ymax=5.5e5, color='grey', alpha=0.3)
+plt.xlabel('Jump Number')
+plt.ylabel('Amplitude')
+plt.title('Real flux jumps')
+```
+
+```{python}
+for i in no:
+    plt.plot(abs(locals()['off_lin_{}'.format(i)]), marker='s', label='TES_{}'.format(i))
+    plt.legend()
+plt.axhspan(ymin=3.5e5, ymax=5.5e5, color='grey', alpha=0.3)
+plt.xlabel('Jump Number')
+plt.ylabel('Amplitude')
+plt.title('Non-real flux jumps')
+```
+
+```{python}
+fig, ax = plt.subplots(1,2, figsize=(10,7))
+
+for i in yes:
+    ax[0].plot(abs(locals()['off_lin_{}'.format(i)]), marker='s', label='TES_{}'.format(i))
+    ax[0].legend()
+ax[0].axhspan(ymin=3.5e5, ymax=5.5e5, color='grey', alpha=0.3)
+ax[0].set_xlim(-1,20)
+ax[0].set_xlabel('# jumps')
+ax[0].set_ylabel('Offset')
+ax[0].set_title('Real flux jumps')
+
+
+
+for i in no:
+    ax[1].plot(abs(locals()['off_lin_{}'.format(i)]), marker='s', label='TES_{}'.format(i))
+    ax[1].legend()
+ax[1].axhspan(ymin=3.5e5, ymax=5.5e5, color='grey', alpha=0.3)
+ax[1].set_xlabel('# jumps')
+ax[1].set_ylabel('Offset')
+ax[1].set_title('Non-real flux jumps')
+```
+
+We can notice that the non-real flux jumps have amplitudes smaller than the gray region, therefore study the amplitude of the flux jumps is a feasible method to use to distinguish between real and non-real.
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+<!-- #region -->
+## Amplitude condition
+
+
+We restart the analysis adding the condition in the amplitude to see if there is improvement. We only have to put True in the argument offset_cond of the jumps_detection function
+<!-- #endregion -->
+
+```{python}
+for i in range(len(good_tod)):
+    idx_good = good_tod[i]
+    print('Analisis TES', idx_good)
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)],  locals()['delta_{}'.format(idx_good)]=jumps_functions.jumps_detection(tt, todarray[idx_good], offset_cond=True)
+```
+
+```{python}
+TES_jump = np.ones(len(good_tod), dtype=int)
+for i in range(len(good_tod)):
+    idx = good_tod[i]   
+    result = locals()['nc_{}'.format(idx)]
+    if result == 0.:
+        TES_jump[i] = 0 
+        
+TES_yes = np.array(np.where(TES_jump==1))
+TES_yes = good_tod[TES_yes]
+TES_no = np.array(np.where(TES_jump==0))
+TES_no = good_tod[TES_no]
+
+TES_yes = np.reshape(TES_yes, TES_yes.shape[1])
+TES_no = np.reshape(TES_no, TES_no.shape[1])
+```
+
+```{python}
+TES_yes
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(tt, todarray[i])
+    #plt.legend()
+```
+
+```{python}
+
+```
+
+Using the condition in the amplitude in the gray region we have found the real flux jumps without confusion, therefore it is an improvement using the offset as a characterization. We have only lose the TES 103 
 
 ```{python}
 

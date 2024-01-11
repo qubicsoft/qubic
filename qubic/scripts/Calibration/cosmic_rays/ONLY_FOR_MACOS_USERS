@@ -1,0 +1,47 @@
+crd.py has been tested on Linux/MacOS/Windows.
+
+Linux
+------
+Distributor ID: Ubuntu
+Description:    Ubuntu 20.04.6 LTS
+Release:        20.04
+Codename:       focal
+
+Python 3.11.4
+
+numpy==1.23.5
+scipy==1.9.3
+
+MacOS (M2)
+-------
+ProductName:		macOS
+ProductVersion:		14.2.1
+BuildVersion:		23C71
+
+Python 3.11.5
+
+numpy==1.26.3
+SciPy==1.12.0rc1
+
+Windows
+-------
+Windows 11
+Version 22H2
+
+Python 3.11.4
+
+numpy==1.26.3
+scipy==1.11.4
+
+-----------------------------------------------------------------------------------------------------
+For users intending to run the script in a Python environment installed on the MacOS operating system,
+I recommend comparing the results obtained (in terms of time constants) with those present in the
+'crd_results.zip' archive.
+
+While running the script on different operating systems, I observed that the
+scipy.interpolate.LSQUnivariateSpline function (used for atmospheric drift removal)
+returns the same values for the signal cleaned from drift on Linux/Windows, whereas on MacOS,
+these values differ from the former by a maximum error on the order of 10^-9.
+
+This could lead to a slight deviation in the time constant values obtained on MacOS
+compared to those obtained on Linux/Windows

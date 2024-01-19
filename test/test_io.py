@@ -117,3 +117,5 @@ def test_write_errors():
     assert_raises(ValueError, write_map, 'test.fits', np.zeros((1, 1, 1)))
     assert_raises(ValueError, write_map, 'test.fits', np.zeros(12), 3)
     assert_raises(ValueError, write_map, 'test.fits', np.zeros(13))
+
+print('test_io completed.')

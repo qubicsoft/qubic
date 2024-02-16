@@ -44,6 +44,8 @@ hp.gnomview(sb, rot=[0,90], reso=10,sub=(1,3,1), title='Theory TES #{}'.format(i
 ```
 
 ```{python}
+#### My Original Code - does not work anymore ####
+
 reload(qubic)
 import glob
 rep = '/Users/hamilton/Qubic/SynthBeam/NewSimsMaynooth/QUBIC Basic/'
@@ -88,18 +90,83 @@ subplot(2,2,4)
 imshow(allphiY[horn_num,:,:])
 
 
-
-```
-
-```{python}
-importlib.reload(qubic)
 q = qubic.QubicInstrument(d)
 s = qubic.QubicScene(d)
 sb = q.get_synthbeam(s, idet, external_A=external_A)
 
-# hp.gnomview(10*np.log10(sb/np.max(sb)), rot=[0,90], 
-#         reso=10, min=-40, max=0, unit='dB', title='Sim Beam - Detector #{}'.format(idet), sub=(1,2,1))
+hp.gnomview(10*np.log10(sb/np.max(sb)), rot=[0,90], 
+        reso=10, min=-40, max=0, unit='dB', title='Sim Beam - Detector #{}'.format(idet), sub=(1,2,1))
 
+```
+
+```{python}
+###### New attempt tryong to account for a modification made by Louise in 2017 (!)
+###### according to Git: Commit f0075d587bd2d3f89063168352eb056ceabdc9f2
+
+reload(qubic)
+import glob
+rep = '/Users/hamilton/Qubic/SynthBeam/NewSimsMaynooth/QUBIC Basic/'
+files = glob.glob(rep+'*.dat')
+
+nn = 161
+xmin = -60./1000
+xmax = 60./1000
+ymin = -60./1000
+ymax = 60./1000
+xx = np.linspace(-60,60,nn)/1000
+yy = np.linspace(-60,60,nn)/1000
+nbhorns = len(q.horn)
+allampX = np.zeros((nn*nn, nbhorns))
+allphiX = np.zeros((nn*nn, nbhorns))
+allampY = np.zeros((nn*nn, nbhorns))
+allphiY = np.zeros((nn*nn, nbhorns))
+#### Read the files
+bar = qubic.progress_bar(nbhorns)
+for i in range(nbhorns):
+    bar.update()
+    data = np.loadtxt(rep+'x{0:02d}y{1:02d}.dat'.format(q.horn.row[i]-1, q.horn.column[i]-1), skiprows=4)
+    if i==0:
+        print(np.shape(data))
+    allampX[:,i] = data[:,0]
+    allphiX[:,i] = data[:,1]
+    allampY[:,i] = data[:,2]
+    allphiY[:,i] = data[:,3]
+#### Electric field
+Ax = allampX * (cos(allphiX) + 1j*sin(allphiX))
+Ay = allampY * (cos(allphiY) + 1j*sin(allphiY))
+external_A = [xx, yy, allampX, allampY, allphiX, allphiY]
+
+horn_num = 0
+subplot(2,2,1)
+imshow(np.reshape(allampX[:,horn_num], (nn,nn)))
+subplot(2,2,2)
+imshow(np.reshape(allampY[:,horn_num], (nn,nn)))
+subplot(2,2,3)
+imshow(np.reshape(allphiX[:,horn_num], (nn,nn)))
+subplot(2,2,4)
+imshow(np.reshape(allphiY[:,horn_num], (nn,nn)))
+
+```
+
+The next cell never finishes as the sizes of the arrays are huge
+- Shape A:  (25921, 64)
+- Shape B:  (64, 114720)
+- Shape E:  (25921, 114720)
+
+So there is something I don't understand here... I asked Louise.
+
+```{python}
+importlib.reload(qubic)
+
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+idet = 231
+sb = q.get_synthbeam(s, idet, external_A=external_A)
+
+```
+
+```{python}
+hp.gnomview(sb, rot=[0,90], reso=10,sub=(1,3,1), title='Theory TES #{}'.format(idet))
 ```
 
 ```{python}

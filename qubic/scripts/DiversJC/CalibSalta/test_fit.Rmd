@@ -240,7 +240,11 @@ print(np.array(fitted.covariance))
 ```
 
 ```{python}
+vals = np.random.randn(1000)*2.5+6
+```
 
+```{python}
+fit.myhist(vals, bins=10, unbinned=False)
 ```
 
 ```{python}

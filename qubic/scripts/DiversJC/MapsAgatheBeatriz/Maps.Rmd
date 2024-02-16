@@ -417,17 +417,18 @@ tight_layout()
 # Now for the QUBIC Patch
 
 ```{python}
-# ### Find extremas in the smoothed map
-# ns_used = nside
-# map2use = hp.ud_grade(hp.smoothing(mycmb[:,0], deg2rad(1.)), ns_used)
-# maphs, minpix, maxpix = hp.hotspots(map2use)
+### Find extremas in the smoothed map
+ns_used = nside
+map2use = hp.ud_grade(hp.smoothing(mycmb[:,0], deg2rad(1.)), ns_used)
+maphs, minpix, maxpix = hp.hotspots(map2use)
 
-# ### but we only keep thos in the QUBIC mask
-# maphs[~mask] = hp.UNSEEN
-# minpix = minpix[mask[minpix] == True]
-# maxpix = maxpix[mask[maxpix] == True]
+### but we only keep thos in the QUBIC mask
+maphs[~mask] = hp.UNSEEN
+minpix = minpix[mask[minpix] == True]
+maxpix = maxpix[mask[maxpix] == True]
 
-# hp.mollview(maphs, sub=(1,2,1), title='Hot: {}   - Cold: {}'.format(len(minpix), len(maxpix)))
+hp.mollview(maphs, sub=(1,2,1), title='Hot: {}   - Cold: {}'.format(len(minpix), len(maxpix)))
+hp.gnomview(maphs, sub=(1,2,2), rot=center, reso=20, title='Hot: {}   - Cold: {}'.format(len(minpix), len(maxpix)))
 ```
 
 ```{python}

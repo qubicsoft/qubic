@@ -475,6 +475,16 @@ class simulate_signal_intercal:
         myw = np.diag(self.w[1:]) 
         myDw = (myD.T @ myw).T
         mydw = (self.d[1:, :].T @ myw).T
+        print('myDw', np.shape(myDw))
+        print('mydw', np.shape(mydw))
+        print('\n np.sum(myD*myDw, axis=1)', np.shape(np.sum(myD*myDw, axis=1)), np.sum(myD*myDw, axis=1))
+        
+        truc = np.linalg.inv(myDw.T @ myD) @ myD.T @ mydw
+        print('\n res', np.shape(truc), truc)
+        
+        bla = 1/np.sum(myD*myDw, axis=1) * np.sum(myD * mydw, axis=1)
+        print('\n oldres', np.shape(bla), bla)
+        stop
         self.intercal = np.append(
              1,  1/np.sum(myD*myDw, axis=1) * np.sum(myD * mydw, axis=1))
         return D, self.intercal
@@ -509,7 +519,7 @@ print('Chi2 True = {}'.format(chi2_true))
 
 mymap2 = np.array(m.values)
 myintercals = myH.intercal
-#myresult2, myintercals2 = myH.give_intercals(m.values)
+myresult2, myintercals2 = myH.give_intercals(m.values)
 
 subplot(2, 3, 1)
 plot(xpix, truey, label='True Sky')
@@ -566,6 +576,10 @@ print('              Map.      Inter.      Map.        Inter     ')
 print('            {0:5.3g}   {1:5.3g}    {2:5.3g}   {3:5.3g}'.format(
     np.std(mymap2 - truey), np.std(myintercals2 - intercal),
     np.std(mymap - truey), np.std(myintercals - intercal)))
+```
+
+```{python}
+debug
 ```
 
 ### Ridge Likelihood
@@ -846,15 +860,47 @@ myintercals4
 ```
 
 ```{python}
+g = np.array([[1,2]]).T
+print(np.shape(g))
+print(g)
+print()
+M = np.array([[1,1,1,0,0,0],[0,0,0,1,1,1]]).T
+print(np.shape(M))
+print(M)
+print()
 
+G = M@g
+print(np.shape(G))
+print(G)
+print()
+
+D = np.array([[0.5, 1, 1.5, 0.3, 0.4, 0.5]]).T
+print(D)
+print()
+
+d = G * D
+print(d)
+print()
 ```
 
 ```{python}
-
+G2 = np.diag(M@g[:,0])
+G2 @ D
 ```
 
 ```{python}
+D = np.array([[0.5, 1, 1.5],[0.3, 0.4, 0.5]]).T
+print(D)
+print()
 
+M = np.array([[1,1,1],[1,1,1]]).T
+print(M)
+print()
+
+print(g)
+print()
+
+print(M@M.T)
 ```
 
 ```{python}

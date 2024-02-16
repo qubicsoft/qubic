@@ -263,8 +263,8 @@ class QubicAcquisition(Acquisition):
         out = H.T(np.ones((len(self.instrument), len(self.sampling))))
         if self.scene.kind != 'I':
             out = out[..., 0].copy()  # to avoid keeping QU in memory
-        ndetectors = self.comm.allreduce(len(self.instrument))
-        nsamplings = self.comm.allreduce(len(self.sampling))
+        ndetectors = self.instrument.comm.allreduce(len(self.instrument))
+        nsamplings = self.sampling.comm.allreduce(len(self.sampling))
         out *= ndetectors * nsamplings * self.sampling.period / np.sum(out)
         return out
 
@@ -278,7 +278,7 @@ class QubicAcquisition(Acquisition):
         ipixel = self.sampling.healpix(nside)
         npixel = 12 * nside ** 2
         hit = np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
-        self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
+        self.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
     def get_noise(self, out=None):
@@ -357,7 +357,7 @@ class QubicAcquisition(Acquisition):
         out = DiagonalOperator(1 / (sigma_detector ** 2 + sigma_photon ** 2), broadcast='rightward',
                                shapein=(len(self.instrument), len(self.sampling)))
         if self.effective_duration is not None:
-            nsamplings = self.comm.allreduce(len(self.sampling))
+            nsamplings = self.sampling.comm.allreduce(len(self.sampling))
             out /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
         return out
 
@@ -441,7 +441,7 @@ class QubicAcquisition(Acquisition):
             #print(out)
 
             if self.effective_duration is not None:
-                nsamplings = self.comm.allreduce(len(self.sampling))
+                nsamplings = self.sampling.comm.allreduce(len(self.sampling))
                 out /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
             return out
 
@@ -466,7 +466,7 @@ class QubicAcquisition(Acquisition):
 
         print('non diagonal case')
         if self.effective_duration is not None:
-            nsamplings = self.comm.allreduce(len(self.sampling))
+            nsamplings = self.sampling.comm.allreduce(len(self.sampling))
             invntt /= (nsamplings * self.sampling.period / (self.effective_duration * 31557600))
 
         return SymmetricBandToeplitzOperator(shapein, invntt, fftw_flag=fftw_flag, nthreads=nthreads)
@@ -887,7 +887,7 @@ class QubicPolyAcquisition:
         q = qubic.QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
         q.detector = self[0].instrument.detector
         s_ = self[0].sampling
-        nsamplings = self[0].comm.allreduce(len(s_))
+        nsamplings = self[0].sampling.comm.allreduce(len(s_))
 
         d1['random_pointing'] = True
         d1['sweeping_pointing'] = False

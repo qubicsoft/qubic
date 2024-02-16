@@ -31,8 +31,8 @@ for d in days:
         truc = str.split(dd[i], '_')
         the_el = truc[-1]
         try:
-            elfloat = np.float(the_el)
-            elevations.append(np.float(the_el))
+            elfloat = float(the_el)
+            elevations.append(float(the_el))
             dirs.append(dd[i])
         except:
             print('File ' + dd[i] + ' has a format that des not comply with expectations => rejected')

@@ -37,7 +37,7 @@ from qubic import QubicSkySim as qss
 from qubic import fibtools as ft
 from qubic import camb_interface as qc
 from qubic import SpectroImLib as si
-from qubic import NamasterLib as nam
+#from qubic import NamasterLib as nam
 from qubic import mcmc
 from qubic import AnalysisMC as amc
 
@@ -159,6 +159,10 @@ plt.rc('font', size=15)
 gnomit(cov, title='$\eta$={0:4.2f} fsky={1:4.2f}'.format(eta, fsky*100))
 
 hp.mollview(cov)
+```
+
+```{python}
+debug
 ```
 
 ### Now with 1 second sampling but splitting into 10 the pointing 

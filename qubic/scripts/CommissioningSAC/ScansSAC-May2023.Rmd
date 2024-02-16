@@ -94,7 +94,7 @@ files = [
 ]
 
 ### Read one file
-file = files[0]
+file = files[3]
 day = file[:10]
 print("Reading:")
 print(day, file)
@@ -134,18 +134,22 @@ thk -= tinit
 ```
 
 ```{python}
+
 rc('figure',figsize=(20,10))
 rc('font',size=12)
 
 TESNum = 96
+mytod = alltod[TESNum-1,:]
+
+
 new_fsample = 10.
 new_nsample = np.max(tt)-np.min(tt)
 
-ps, ff = ft.power_spectrum(tt, alltod[TESNum-1,:])
+ps, ff = ft.power_spectrum(tt, mytod)
 
 
 subplot(2,1,1)
-plot(tt, alltod[TESNum-1,:])
+plot(tt, mytod)
 xlabel('Time [sec]')
 ylabel('TOD')
 title('TES #{}'.format(TESNum))
@@ -381,6 +385,18 @@ gc.collect()   ### Important ! Frees the meory
 
 subplot(2,1,1)
 plot(TOD_sim[0,:])
+
+psfake, fffake = ft.power_spectrum(tt, TOD_sim[0,:])
+
+subplot(2,1,2)
+plot(fffake, psfake, label='Initial', alpha=0.5)
+axvline(x=fsignal, ls=':', label='Expected signal location')
+xscale('log')
+yscale('log')
+xlabel('Frequency [Hz]')
+ylabel('PSD')
+legend()
+
 ```
 
 ```{python}
@@ -572,7 +588,7 @@ ylabel('PSD')
 title('Data TES #{}'.format(TESNum))
 legend()
 
-nside = 64
+nside = 32
 mapscan, mapcount = healpix_map(ll[scantype != 0], bb[scantype != 0], mytod[scantype != 0], nside=nside, countcut=counts_thr)
 mapscan_pos, _ = healpix_map(ll[scantype > 0], bb[scantype > 0], mytod[scantype > 0], nside=nside, countcut=counts_thr)
 mapscan_neg, _ = healpix_map(ll[scantype < 0], bb[scantype < 0], mytod[scantype < 0], nside=nside, countcut=counts_thr)
@@ -710,7 +726,7 @@ reload(tdt)
 anatype = ''
 
 allTES = np.arange(256)+1
-nside = 64
+#nside = 32
 
 allmaps = np.zeros((len(allTES), 12*nside**2))
 allsig = np.zeros(len(allTES))
@@ -793,8 +809,8 @@ good = (np.log10(allsig) > 2) & (np.log10(allsig) < 4.3)
 hist(np.log10(allsig[good]), range=[-1, 6], bins=50, alpha=0.5)
 
 
-pixnums = np.arange(12*64**2)
-mymedmap = np.zeros(12*64**2)
+pixnums = np.arange(12*nside**2)
+mymedmap = np.zeros(12*nside**2)
 allcalib = np.zeros(256)+1
 alloffsets = np.zeros(256)+0
 allchi2 = np.zeros(256)
@@ -934,12 +950,12 @@ tight_layout()
 ```
 
 ```{python}
-import pickle
+# import pickle
 
-mystuff = [allmaps, mapscan_sim, mymedmap]
+# mystuff = [allmaps, mapscan_sim, mymedmap]
 
-with open(file+'.pickle', 'wb') as f:
-    pickle.dump(mystuff, f)
+# with open(file+'.pickle', 'wb') as f:
+#     pickle.dump(mystuff, f)
 
 ```
 

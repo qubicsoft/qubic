@@ -12,41 +12,50 @@ jupyter:
     name: python3
 ---
 
+# Comparing Ideal and NUI Synthesized Beams
+## JCH - Feb. 2024
+
 ```{python}
 # %config InlineBackend.figure_format='retina'
 from IPython.display import display, HTML
 display(HTML("<style>.container { width:95% !important; }</style>"))
 
-rc('figure',figsize=(20,10))
-rc('font',size=12)
 
 import importlib
 import healpy as hp
 import qubic
 from importlib import reload
 
-reload(qubic)
-ns = 256
+rc('figure',figsize=(20,10))
+rc('font',size=15)
+
+
+### QUBIC Instrument instanciation
+ns = 1024
 d = qubic.qubicdict.qubicDict()
 d.read_from_file('/Users/hamilton/Python/GitQubicMousset/qubic/qubic/dicts/global_source_oneDet.dict')
 d['nside']=ns
 q = qubic.QubicInstrument(d)
 s = qubic.QubicScene(d)
-
-
-
 ```
 
+## Ideal Synthesized beam
+There is a direct function to get the synthesized beam in the QUBIC library: `get_synthbeam()` from the class `QubicInstrument`.
+
 ```{python}
-idet = 231
+# idet = 64 ### This detector is on the edge of the focal plane
+idet = 231 ### This detector is near the center of the focal plane
 sb = q.get_synthbeam(s,idet)
-hp.gnomview(sb, rot=[0,90], reso=10,sub=(1,3,1), title='Theory TES #{}'.format(idet))
+hp.gnomview(sb/np.max(sb), rot=[0,90], reso=10, min=0, max=1,sub=(1,2,1), title='Theory TES #{}'.format(idet))
+hp.gnomview(10*np.log10(sb/np.max(sb)), rot=[0,90], reso=10, min=-40, max=0, unit='dB',sub=(1,2,2), title='Theory TES #{} [decibels]'.format(idet))
+print(np.shape(sb))
 ```
 
-```{python}
-#### My Original Code - does not work anymore ####
+## Beam from NUI calculations
+We have files with the phase and amplitude on the focal plane originating from each horn. They are obtained using Physical Optics simulations by Maynooth team (rather odl files... maybe there are more recent ones).
 
-reload(qubic)
+```{python}
+
 import glob
 rep = '/Users/hamilton/Qubic/SynthBeam/NewSimsMaynooth/QUBIC Basic/'
 files = glob.glob(rep+'*.dat')
@@ -74,99 +83,85 @@ for i in range(nbhorns):
     allphiX[i,:,:] = np.reshape(data[:,1],(nn,nn))
     allampY[i,:,:] = np.reshape(data[:,2],(nn,nn))
     allphiY[i,:,:] = np.reshape(data[:,3],(nn,nn))
-#### Electric field
-Ax = allampX * (cos(allphiX) + 1j*sin(allphiX))
-Ay = allampY * (cos(allphiY) + 1j*sin(allphiY))
 external_A = [xx, yy, allampX, allampY, allphiX, allphiY]
 
 horn_num = 0
 subplot(2,2,1)
-imshow(allampX[horn_num,:,:])
+imshow(allampX[horn_num,:,:], 
+       extent=[np.min(xx), np.max(xx), np.min(yy), np.max(yy)], 
+       origin='lower', vmin=0, vmax=1)
+xlabel('Xgrf [m]')
+xlabel('Ygrf [m]')
+title('Amplitude X')
+colorbar()
+
 subplot(2,2,2)
-imshow(allampY[horn_num,:,:])
+imshow(allampY[horn_num,:,:], 
+       extent=[np.min(xx), np.max(xx), np.min(yy), np.max(yy)], 
+       origin='lower', vmin=0, vmax=1)
+xlabel('Xgrf [m]')
+xlabel('Ygrf [m]')
+title('Amplitude Y')
+colorbar()
+
+
 subplot(2,2,3)
-imshow(allphiX[horn_num,:,:])
+imshow(allphiX[horn_num,:,:], 
+       extent=[np.min(xx), np.max(xx), np.min(yy), np.max(yy)], 
+       origin='lower', vmin=-np.pi, vmax=np.pi)
+xlabel('Xgrf [m]')
+xlabel('Ygrf [m]')
+title('Phase X')
+colorbar()
+
+
 subplot(2,2,4)
-imshow(allphiY[horn_num,:,:])
+imshow(allphiY[horn_num,:,:], 
+       extent=[np.min(xx), np.max(xx), np.min(yy), np.max(yy)], 
+       origin='lower', vmin=-np.pi, vmax=np.pi)
+xlabel('Xgrf [m]')
+xlabel('Ygrf [m]')
+title('Phase Y')
+colorbar()
 
+tight_layout()
+```
 
-q = qubic.QubicInstrument(d)
-s = qubic.QubicScene(d)
-sb = q.get_synthbeam(s, idet, external_A=external_A)
+We use the same `get_synthbeam()` function, but adding the `external_A` data from Maynooth.
 
-hp.gnomview(10*np.log10(sb/np.max(sb)), rot=[0,90], 
-        reso=10, min=-40, max=0, unit='dB', title='Sim Beam - Detector #{}'.format(idet), sub=(1,2,1))
+```{python}
+
+sb_nui = q.get_synthbeam(s, idet, external_A=external_A)
+figure()
+hp.gnomview(sb_nui/np.max(sb_nui), rot=[0,90], 
+        reso=10, min=0, max=1, title='Nui Beam - Detector #{}'.format(idet), sub=(1,2,1))
+hp.gnomview(10*np.log10(sb_nui/np.max(sb_nui)), rot=[0,90], 
+        reso=10, min=-40, max=0, unit='dB', title='NUI Beam - Detector #{}'.format(idet), sub=(1,2,2))
 
 ```
 
-```{python}
-###### New attempt tryong to account for a modification made by Louise in 2017 (!)
-###### according to Git: Commit f0075d587bd2d3f89063168352eb056ceabdc9f2
-
-reload(qubic)
-import glob
-rep = '/Users/hamilton/Qubic/SynthBeam/NewSimsMaynooth/QUBIC Basic/'
-files = glob.glob(rep+'*.dat')
-
-nn = 161
-xmin = -60./1000
-xmax = 60./1000
-ymin = -60./1000
-ymax = 60./1000
-xx = np.linspace(-60,60,nn)/1000
-yy = np.linspace(-60,60,nn)/1000
-nbhorns = len(q.horn)
-allampX = np.zeros((nn*nn, nbhorns))
-allphiX = np.zeros((nn*nn, nbhorns))
-allampY = np.zeros((nn*nn, nbhorns))
-allphiY = np.zeros((nn*nn, nbhorns))
-#### Read the files
-bar = qubic.progress_bar(nbhorns)
-for i in range(nbhorns):
-    bar.update()
-    data = np.loadtxt(rep+'x{0:02d}y{1:02d}.dat'.format(q.horn.row[i]-1, q.horn.column[i]-1), skiprows=4)
-    if i==0:
-        print(np.shape(data))
-    allampX[:,i] = data[:,0]
-    allphiX[:,i] = data[:,1]
-    allampY[:,i] = data[:,2]
-    allphiY[:,i] = data[:,3]
-#### Electric field
-Ax = allampX * (cos(allphiX) + 1j*sin(allphiX))
-Ay = allampY * (cos(allphiY) + 1j*sin(allphiY))
-external_A = [xx, yy, allampX, allampY, allphiX, allphiY]
-
-horn_num = 0
-subplot(2,2,1)
-imshow(np.reshape(allampX[:,horn_num], (nn,nn)))
-subplot(2,2,2)
-imshow(np.reshape(allampY[:,horn_num], (nn,nn)))
-subplot(2,2,3)
-imshow(np.reshape(allphiX[:,horn_num], (nn,nn)))
-subplot(2,2,4)
-imshow(np.reshape(allphiY[:,horn_num], (nn,nn)))
-
-```
-
-The next cell never finishes as the sizes of the arrays are huge
-- Shape A:  (25921, 64)
-- Shape B:  (64, 114720)
-- Shape E:  (25921, 114720)
-
-So there is something I don't understand here... I asked Louise.
+## Comparing Window functions
 
 ```{python}
-importlib.reload(qubic)
+wf = hp.anafast(sb/np.max(sb), lmax=512)
+wf_nui = hp.anafast(sb_nui / np.max(sb_nui), lmax=512)
+ell = np.arange(len(wf))+2
 
-q = qubic.QubicInstrument(d)
-s = qubic.QubicScene(d)
-idet = 231
-sb = q.get_synthbeam(s, idet, external_A=external_A)
+subplot(1,2,1)
+plot(ell, wf, label='Ideal beam')
+plot(ell, wf_nui, label='NUI Beam')
+#yscale('log')
+xlabel('$\ell$')
+ylabel('$W_\ell$')
+legend()
 
-```
-
-```{python}
-hp.gnomview(sb, rot=[0,90], reso=10,sub=(1,3,1), title='Theory TES #{}'.format(idet))
+subplot(1,2,2)
+plot(ell, wf/wf_nui, label=r'$\frac{W_\ell^{Ideal}}{W_\ell^{NUI}}$')
+xlabel('$\ell$')
+ylabel('Ratio')
+axhline(y=1, color='k', ls='--')
+legend()
+ylim(0,1.5)
 ```
 
 ```{python}

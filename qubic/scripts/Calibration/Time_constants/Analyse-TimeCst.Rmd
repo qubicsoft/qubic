@@ -4,10 +4,10 @@ jupyter:
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
-      format_version: '1.1'
-      jupytext_version: 1.2.4
+      format_version: '1.2'
+      jupytext_version: 1.14.0
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
@@ -121,7 +121,13 @@ for i in range(nv):
 rc('figure',figsize=(9, 7))
 
 errorbar(voltage, mean_rise, yerr=sig_rise,fmt='ro', label='Rise Time')
+pp = polyfit(voltage, mean_rise, 1, w=1./sig_rise*2)
+p = np.poly1d(pp)
+print(p)
 errorbar(voltage, mean_fall, yerr=sig_fall,fmt='bo', label='Fall Time')
+pp = polyfit(voltage, mean_fall, 1, w=1./sig_fall*2)
+p = np.poly1d(pp)
+print(p)
 ylabel('Average Time COnstant [sec]')
 xlabel('TES Bias [V]')
 legend()

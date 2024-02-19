@@ -1,0 +1,219 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# How to resample/interpolate flags ?
+JCH - Sept. 2022
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+from importlib import reload
+
+rc('figure',figsize=(20,6))
+rc('font',size=12)
+
+```
+
+We assume we have a dataset consiting in:
+- a TOD (just one detector for simplicity) sampled at a give sampling frequency representing the TES measurement as a function of time.
+- antoher TOD, an integer for each time sample, encoding possible flags for the instrument measured by bits. We consider four types of flags here (again for simplicity):
+    - 0: nothing special
+    - 1 = 2**0: end of scan
+    - 2 = 2**1: flux jump
+    - 4 = 2**2: cosmic ray
+
+```{python}
+nsamples = 2**15
+fsamp = 156.
+
+time = np.arange(nsamples)/fsamp
+tod = np.random.randn(nsamples)
+
+plot(time, tod)
+xlabel('Time (sec)')
+ylabel('TOD')
+```
+
+We randomly select chunks of data concerned by each of our non-zero flags
+
+```{python}
+flagtypes = ['Good', 'EoS', 'FJ', 'CR']
+flagnum = np.append(0, 2**np.arange(len(flagtypes)-1))
+
+flags = np.zeros(nsamples, dtype=int8)
+nmax = 100
+lmax = 100
+
+
+print('Flag Types:')
+for i in range(len(flagtypes)):
+    nchunks = np.random.randint(1, nmax)
+    print('{} ({}): nchunks={}'.format(flagnum[i], flagtypes[i], nchunks))
+    thisflag = np.zeros(nsamples, dtype=int8)
+    for k in range(nchunks):
+        chunklen = np.random.randint(1, lmax)
+        i0 = np.random.randint(0,nsamples-1-chunklen)
+        thisflag[i0:i0+chunklen] = flagnum[i]
+    flags += thisflag
+    
+plot(time,flags)
+xlabel('Time (sec)')
+ylabel('Flag')
+```
+
+# Interpolation
+Now we assume that we need to interpolate the signal onto a new regular grid. Here we take the example of a shift of a fraction of a period (here 0.3).
+
+```{python}
+newtime = time + 0.3/fsamp
+newtod = np.interp(newtime, time, tod)
+
+plot(newtime, newtod)
+xlabel('Time (sec)')
+
+```
+
+The question is: how do we deal with the flags ?
+
+What we want to do is that each new sample containing a signal from a flagged initial sample has to inherit of this flag.
+
+```{python}
+flags_interp = np.interp(newtime, time, flags)
+```
+
+```{python}
+from scipy.interpolate import interp1d
+flags_interp_sc_prev = interp1d(time, flags, kind='previous', fill_value='extrapolate')(newtime)
+flags_interp_sc_next = interp1d(time, flags, kind='next', fill_value='extrapolate')(newtime)
+flags_interp_best = np.max(np.array([flags_interp_sc_prev, flags_interp_sc_next]), axis=0)
+```
+
+```{python}
+subplot(1,2,1)
+step(time, flags, label='Initial Flags', lw=2)
+step(newtime, flags_interp, label='Brute Interpolated Flags', lw=2)
+step(newtime, flags_interp_best, label='Better Interpolated Flags', lw=2)
+step(time, tod, label='Initial signal', alpha=0.5)
+step(newtime, newtod, label='Interpolated signal', alpha=0.5)
+legend()
+xlabel('Time (sec)')
+title('Whole dataset')
+
+
+subplot(1,2,2)
+nmin = argmax(flags == 3)-10
+nmax = nmin + 30
+step(time, flags, label='Initial Flags', lw=2)
+step(newtime, flags_interp, label='Brute Interpolated Flags', lw=2)
+step(newtime, flags_interp_best, label='Better Interpolated Flags', lw=2)
+step(time, tod, label='Initial signal', alpha=0.5)
+step(newtime, newtod, label='Interpolated signal', alpha=0.5)
+legend()
+xlim(time[nmin], time[nmax])
+xlabel('Time (sec)')
+title('Zoom on interesting region')
+
+figure()
+title('Flags Histogram')
+a=hist(flags, bins=100, range=[0,5], alpha=0.3, label='Initial Flags')
+a=hist(flags_interp, bins=100, range=[0,5], alpha=0.3, label='Brute Interpolated Flags')
+a=hist(flags_interp_best, bins=100, range=[0,5], alpha=0.3, label='Better Interpolated Flags')
+yscale('log')
+xlabel('Flag value')
+legend()
+```
+
+However, this solution might not be fully optimal for execution time reasons:
+- 150 μs for brute interpolation
+- 7.8 ms for improved interpolation
+
+=> a factor 50...
+
+```{python}
+# %timeit flags_interp = np.interp(newtime, time, flags)
+```
+
+```{python}
+# %timeit flags_interp_best = np.max(np.array([interp1d(time, flags, kind='previous', fill_value='extrapolate')(newtime), 
+                                             interp1d(time, flags, kind='next', fill_value='extrapolate')(newtime)]), axis=0)
+```
+
+```{python}
+len(time)
+```
+
+# Resampling
+Now we assume we resample the data from fsamp to fsamp/np.pi (in order to avoid perfect superposition of new samples)
+
+```{python}
+new_fsamp = fsamp/np.pi
+new_nsamples = int(nsamples / np.pi)
+newtime = np.arange(new_nsamples)/new_fsamp
+t0 = 0.
+tend = (nsamples+1) /fsamp
+
+import scipy.signal
+newtod = scipy.signal.resample(tod, new_nsamples)
+plot(newtime, newtod)
+xlabel('Time (sec)')
+```
+
+We use the same trick to interpolate the flags on the new time axis.
+
+```{python}
+flags_interp = np.interp(newtime, time, flags)
+flags_interp_best = np.max(np.array([interp1d(time, flags, kind='previous', fill_value='extrapolate')(newtime), interp1d(time, flags, kind='next', fill_value='extrapolate')(newtime)]), axis=0)
+```
+
+```{python}
+subplot(1,2,1)
+step(time, flags, label='Initial Flags', lw=2)
+step(newtime, flags_interp, label='Brute Interpolated Flags', lw=2)
+step(newtime, flags_interp_best, label='Better Interpolated Flags', lw=2)
+step(time, tod, label='Initial', alpha=0.5)
+step(newtime, newtod, label='Resampled signal', alpha=0.5)
+legend()
+xlabel('Time (sec)')
+title('Whole dataset')
+
+
+subplot(1,2,2)
+nmin = argmax(flags == 3)-100
+nmax = nmin + 100
+print(nmin,nmax)
+step(time, flags, label='Initial Flags', lw=2)
+step(newtime, flags_interp, label='Brute Interpolated Flags', lw=2)
+step(newtime, flags_interp_best, label='Better Interpolated Flags', lw=2)
+step(time, tod, label='Initial', alpha=0.5)
+step(newtime, newtod, label='Interpolated signal', alpha=0.5)
+legend()
+xlim(time[nmin], time[nmax])
+xlabel('Time (sec)')
+title('Zoom on interesting region')
+
+figure()
+title('Flags Histogram')
+a=hist(flags, bins=100, range=[0,5], alpha=0.3, label='Initial Flags')
+a=hist(flags_interp, bins=100, range=[0,5], alpha=0.3, label='Brute Interpolated Flags')
+a=hist(flags_interp_best, bins=100, range=[0,5], alpha=0.3, label='Brute Interpolated Flags')
+yscale('log')
+xlabel('Flag value')
+legend()
+```
+
+```{python}
+
+```

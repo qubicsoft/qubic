@@ -100,7 +100,7 @@ def get_map_band(band, qubic_sky = None, duration=3., nsnew = None, spatial_nois
 
     ##### Getting FastSimulator output maps
     maps_qubicA, maps_noiselessA, maps_noiseA, coverageA = Qubic_sky_A.get_partial_sky_maps_withnoise(spatial_noise=spatial_noise,
-                                                                                 Nyears=duration, old_config=old_config)
+                                                                                 Nyears=duration)
 
     if nsnew is not None:
         print('Changinf to nside={}'.format(nsnew))
@@ -130,7 +130,7 @@ spatial_noise=False
 band = 150
 duration = 3.
 maps_noise_150, coverage_150, qubic_sky = get_map_band(band, duration=duration, nsnew = nsnew, 
-                                                       spatial_noise=spatial_noise, old_config=old_config)
+                                                       spatial_noise=spatial_noise)
 
 print(factornoise_150)
 maps_noise_150 *= factornoise_150
@@ -170,7 +170,7 @@ yyU150 = yyU.copy()
 band = 220
 
 maps_noise_220, coverage_220, qubic_sky = get_map_band(band, duration =duration, nsnew=nsnew, 
-                                                       spatial_noise=spatial_noise, old_config=old_config)
+                                                       spatial_noise=spatial_noise)
 maps_noise_220 *= factornoise_220
 
 
@@ -205,74 +205,74 @@ yyU220 = yyU.copy()
 ```
 
 ```{python}
-rc('figure', figsize=(15, 8))
-rc('font', size=15)
-subplot(1,2,1)
-pix_size = hp.nside2resol(nsnew, arcmin=True)
-print('pix_size={}'.format(pix_size))
-yyQU150 = 0.5*(yyQ150 + yyU150)
-yyQU220 = 0.5*(yyQ220 + yyU220)
-plot(xx, yyQU150 * pix_size , 'o', color='r',label='QU 150 GHz')
-plot(xx, yyQU220 * pix_size,'o', color='b',label='QU 220 GHz')
-limit = 10.
-meanvalQU150 = np.mean((yyQU150[xx<limit]+yyQU150[xx<limit])/2) * pix_size
-meanvalQU220 = np.mean((yyQU220[xx<limit]+yyQU220[xx<limit])/2) * pix_size
-axhline(y=meanvalQU150, label=r'QU 150 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU150), color='r', ls=':')
-axhline(y=meanvalQU220, label=r'QU 220 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU220), color='b', ls=':')
-xlim(0,20)
-xlabel('Degrees from center of the field')
-ylabel(r'Noise RMS $[\mu K.arcmin]$')
-legend(fontsize=11, loc='lower right')
-ylim(0,40)
-xlim(0,30)
-title('QUBIC FI - {} Years'.format(duration))
-savefig('noiseprofile_mukarcmin.png')
-yyQ220 = yyQ.copy()
-yyU220 = yyU.copy()
+# rc('figure', figsize=(15, 8))
+# rc('font', size=15)
+# subplot(1,2,1)
+# pix_size = hp.nside2resol(nsnew, arcmin=True)
+# print('pix_size={}'.format(pix_size))
+# yyQU150 = 0.5*(yyQ150 + yyU150)
+# yyQU220 = 0.5*(yyQ220 + yyU220)
+# plot(xx, yyQU150 * pix_size , 'o', color='r',label='QU 150 GHz')
+# plot(xx, yyQU220 * pix_size,'o', color='b',label='QU 220 GHz')
+# limit = 10.
+# meanvalQU150 = np.mean((yyQU150[xx<limit]+yyQU150[xx<limit])/2) * pix_size
+# meanvalQU220 = np.mean((yyQU220[xx<limit]+yyQU220[xx<limit])/2) * pix_size
+# axhline(y=meanvalQU150, label=r'QU 150 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU150), color='r', ls=':')
+# axhline(y=meanvalQU220, label=r'QU 220 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU220), color='b', ls=':')
+# xlim(0,20)
+# xlabel('Degrees from center of the field')
+# ylabel(r'Noise RMS $[\mu K.arcmin]$')
+# legend(fontsize=11, loc='lower right')
+# ylim(0,40)
+# xlim(0,30)
+# title('QUBIC FI - {} Years'.format(duration))
+# savefig('noiseprofile_mukarcmin.png')
+# yyQ220 = yyQ.copy()
+# yyU220 = yyU.copy()
 
 ```
 
 ```{python}
-# Make a loop
+# # Make a loop
 
-nbmc = 10
-allQU_150 = []
-allQU_220 = []
+# nbmc = 10
+# allQU_150 = []
+# allQU_220 = []
 
 
-for imc in range(nbmc):
-    print(imc,nbmc)
-    nsnew = 256
-    #### Figure with error for each band...
+# for imc in range(nbmc):
+#     print(imc,nbmc)
+#     nsnew = 256
+#     #### Figure with error for each band...
     
-    band = 150
-    duration = 2.
-    spatial_noise=True
-    maps_noise_150, coverage_150, qubic_sky = get_map_band(band, duration=duration, nsnew = nsnew, 
-                                                           spatial_noise=spatial_noise, old_config=old_config)
-    maps_noise_150 *= factornoise_150
-    xx, yyI, yyQ, yyU = qss.get_angular_profile(maps_noise_150[0,:,:], nbins=30, separate=True, center=[0,0])
-    pix_size = hp.nside2resol(nsnew, arcmin=True)
-    limit = 10.
-    meanvalI = np.mean(yyI[xx<limit]) * pix_size
-    meanvalQU = np.mean((yyQ[xx<limit]+yyQ[xx<limit])/2) * pix_size
-    yyQ150 = yyQ.copy()
-    yyU150 = yyU.copy()
-    allQU_150.append(0.5*(yyQ150 + yyU150))
+#     band = 150
+#     duration = 2.
+#     spatial_noise=True
+#     maps_noise_150, coverage_150, qubic_sky = get_map_band(band, duration=duration, nsnew = nsnew, 
+#                                                            spatial_noise=spatial_noise, old_config=old_config)
+#     maps_noise_150 *= factornoise_150
+#     xx, yyI, yyQ, yyU = qss.get_angular_profile(maps_noise_150[0,:,:], nbins=30, separate=True, center=[0,0])
+#     pix_size = hp.nside2resol(nsnew, arcmin=True)
+#     limit = 10.
+#     meanvalI = np.mean(yyI[xx<limit]) * pix_size
+#     meanvalQU = np.mean((yyQ[xx<limit]+yyQ[xx<limit])/2) * pix_size
+#     yyQ150 = yyQ.copy()
+#     yyU150 = yyU.copy()
+#     allQU_150.append(0.5*(yyQ150 + yyU150))
 
-    band = 220
-    maps_noise_220, coverage_220, qubic_sky = get_map_band(band, duration =duration, nsnew=nsnew, 
-                                                           spatial_noise=spatial_noise, old_config=old_config)
-    maps_noise_220 *= factornoise_220
-    xx, yyI, yyQ, yyU = qss.get_angular_profile(maps_noise_220[0,:,:], nbins=30, separate=True, center=[0,0])
-    pix_size = hp.nside2resol(256, arcmin=True)
-    limit = 3
-    meanvalI = np.mean(yyI[xx<limit]) * pix_size
-    limit = 10.
-    meanvalQU = np.mean((yyQ[xx<limit]+yyQ[xx<limit])/2) * pix_size
-    yyQ220 = yyQ.copy()
-    yyU220 = yyU.copy()
-    allQU_220.append(0.5*(yyQ220 + yyU220))
+#     band = 220
+#     maps_noise_220, coverage_220, qubic_sky = get_map_band(band, duration =duration, nsnew=nsnew, 
+#                                                            spatial_noise=spatial_noise, old_config=old_config)
+#     maps_noise_220 *= factornoise_220
+#     xx, yyI, yyQ, yyU = qss.get_angular_profile(maps_noise_220[0,:,:], nbins=30, separate=True, center=[0,0])
+#     pix_size = hp.nside2resol(256, arcmin=True)
+#     limit = 3
+#     meanvalI = np.mean(yyI[xx<limit]) * pix_size
+#     limit = 10.
+#     meanvalQU = np.mean((yyQ[xx<limit]+yyQ[xx<limit])/2) * pix_size
+#     yyQ220 = yyQ.copy()
+#     yyU220 = yyU.copy()
+#     allQU_220.append(0.5*(yyQ220 + yyU220))
     
 
 
@@ -280,93 +280,93 @@ for imc in range(nbmc):
 ```
 
 ```{python}
-allQU_150 = np.array(allQU_150)
-mQU_150 = np.mean(allQU_150, axis=0)
-sQU_150 = np.mean(allQU_150, axis=0)/sqrt(nbmc)
-allQU_220 = np.array(allQU_220)
-mQU_220 = np.mean(allQU_220, axis=0)
-sQU_220 = np.mean(allQU_220, axis=0)/sqrt(nbmc)
+# allQU_150 = np.array(allQU_150)
+# mQU_150 = np.mean(allQU_150, axis=0)
+# sQU_150 = np.mean(allQU_150, axis=0)/sqrt(nbmc)
+# allQU_220 = np.array(allQU_220)
+# mQU_220 = np.mean(allQU_220, axis=0)
+# sQU_220 = np.mean(allQU_220, axis=0)/sqrt(nbmc)
 
 
-rc('figure', figsize=(8,6))
-rc('font', size=12)
+# rc('figure', figsize=(8,6))
+# rc('font', size=12)
 
-pix_size = hp.nside2resol(nsnew, arcmin=True)
-print('pix_size={}'.format(pix_size))
-yyQU150 = 0.5*(yyQ150 + yyU150)
-yyQU220 = 0.5*(yyQ220 + yyU220)
-errorbar(xx, mQU_150 * pix_size , yerr= sQU_150 * pix_size,fmt='o', color='r',label='QU 150 GHz')
-errorbar(xx, mQU_220 * pix_size , yerr= sQU_220 * pix_size,fmt='o', color='b',label='QU 220 GHz')
-limit = 6.
-meanvalQU150 = np.mean((mQU_150[xx<limit]+mQU_150[xx<limit])/2) * pix_size
-meanvalQU220 = np.mean((mQU_220[xx<limit]+mQU_220[xx<limit])/2) * pix_size
-axhline(y=meanvalQU150, label=r'QU 150 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU150), color='r', ls=':')
-axhline(y=meanvalQU220, label=r'QU 220 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU220), color='b', ls=':')
-xlim(0,20)
-xlabel('Degrees from center of the field')
-ylabel(r'Noise RMS $[\mu K.arcmin]$')
-legend(fontsize=10, loc='lower right')
-ylim(0,40)
-xlim(0,15)
-title('QUBIC FI - {} Years'.format(duration))
-
-```
-
-```{python}
-
-
-
-
-rc('figure', figsize=(15, 8))
-rc('font', size=15)
-subplot(1,2,1)
-pix_size = hp.nside2resol(nsnew, arcmin=True)
-print('pix_size={}'.format(pix_size))
-yyQU150 = 0.5*(yyQ150 + yyU150)
-yyQU220 = 0.5*(yyQ220 + yyU220)
-plot(xx, yyQU150 * pix_size , 'o', color='r',label='QU 150 GHz')
-plot(xx, yyQU220 * pix_size,'o', color='b',label='QU 220 GHz')
-limit = 10.
-meanvalQU150 = np.mean((yyQU150[xx<limit]+yyQU150[xx<limit])/2) * pix_size
-meanvalQU220 = np.mean((yyQU220[xx<limit]+yyQU220[xx<limit])/2) * pix_size
-axhline(y=meanvalQU150, label=r'QU 150 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU150), color='r', ls=':')
-axhline(y=meanvalQU220, label=r'QU 220 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU220), color='b', ls=':')
-xlim(0,20)
-xlabel('Degrees from center of the field')
-ylabel(r'Noise RMS $[\mu K.arcmin]$')
-legend(fontsize=11, loc='lower right')
-ylim(0,40)
-xlim(0,15)
-title('QUBIC FI - {} Years'.format(duration))
-savefig('noiseprofile_mukarcmin.png')
-yyQ220 = yyQ.copy()
-yyU220 = yyU.copy()
+# pix_size = hp.nside2resol(nsnew, arcmin=True)
+# print('pix_size={}'.format(pix_size))
+# yyQU150 = 0.5*(yyQ150 + yyU150)
+# yyQU220 = 0.5*(yyQ220 + yyU220)
+# errorbar(xx, mQU_150 * pix_size , yerr= sQU_150 * pix_size,fmt='o', color='r',label='QU 150 GHz')
+# errorbar(xx, mQU_220 * pix_size , yerr= sQU_220 * pix_size,fmt='o', color='b',label='QU 220 GHz')
+# limit = 6.
+# meanvalQU150 = np.mean((mQU_150[xx<limit]+mQU_150[xx<limit])/2) * pix_size
+# meanvalQU220 = np.mean((mQU_220[xx<limit]+mQU_220[xx<limit])/2) * pix_size
+# axhline(y=meanvalQU150, label=r'QU 150 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU150), color='r', ls=':')
+# axhline(y=meanvalQU220, label=r'QU 220 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU220), color='b', ls=':')
+# xlim(0,20)
+# xlabel('Degrees from center of the field')
+# ylabel(r'Noise RMS $[\mu K.arcmin]$')
+# legend(fontsize=10, loc='lower right')
+# ylim(0,40)
+# xlim(0,15)
+# title('QUBIC FI - {} Years'.format(duration))
 
 ```
 
 ```{python}
-rc('figure', figsize=(12, 8))
-rc('font', size=15)
-badpix_150 = maps_noise_150 == 0
-maps_noise_150[badpix_150] = hp.UNSEEN
-badpix_220 = maps_noise_220 == 0
-maps_noise_220[badpix_220] = hp.UNSEEN
 
-stokes = ['I','Q','U']
-mm=5
-for i in range(2):
-    print(i)
-    hp.gnomview(maps_noise_150[0,:,i+1], sub=(2,2,i+1), reso=15, title=stokes[i+1]+' - 150 GHz - {} years'.format(duration), 
-                min=-mm, max=mm, unit=r'$\mu K$')
-    hp.gnomview(maps_noise_220[0,:,i+1], sub=(2,2,i+1+2), reso=15, title=stokes[i+1]+' - 220 GHz - {} years'.format(duration), 
-                min=-mm, max=mm, unit=r'$\mu K$')    
 
-tight_layout()
+
+
+# rc('figure', figsize=(15, 8))
+# rc('font', size=15)
+# subplot(1,2,1)
+# pix_size = hp.nside2resol(nsnew, arcmin=True)
+# print('pix_size={}'.format(pix_size))
+# yyQU150 = 0.5*(yyQ150 + yyU150)
+# yyQU220 = 0.5*(yyQ220 + yyU220)
+# plot(xx, yyQU150 * pix_size , 'o', color='r',label='QU 150 GHz')
+# plot(xx, yyQU220 * pix_size,'o', color='b',label='QU 220 GHz')
+# limit = 10.
+# meanvalQU150 = np.mean((yyQU150[xx<limit]+yyQU150[xx<limit])/2) * pix_size
+# meanvalQU220 = np.mean((yyQU220[xx<limit]+yyQU220[xx<limit])/2) * pix_size
+# axhline(y=meanvalQU150, label=r'QU 150 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU150), color='r', ls=':')
+# axhline(y=meanvalQU220, label=r'QU 220 GHz RMS = {0:5.1f} $\mu K.arcmin$'.format(meanvalQU220), color='b', ls=':')
+# xlim(0,20)
+# xlabel('Degrees from center of the field')
+# ylabel(r'Noise RMS $[\mu K.arcmin]$')
+# legend(fontsize=11, loc='lower right')
+# ylim(0,40)
+# xlim(0,15)
+# title('QUBIC FI - {} Years'.format(duration))
+# savefig('noiseprofile_mukarcmin.png')
+# yyQ220 = yyQ.copy()
+# yyU220 = yyU.copy()
+
 ```
 
 ```{python}
-okpix = maps_noise_150[0,:,1] != 0
-np.std(maps_noise_150[0,okpix,1])
+# rc('figure', figsize=(12, 8))
+# rc('font', size=15)
+# badpix_150 = maps_noise_150 == 0
+# maps_noise_150[badpix_150] = hp.UNSEEN
+# badpix_220 = maps_noise_220 == 0
+# maps_noise_220[badpix_220] = hp.UNSEEN
+
+# stokes = ['I','Q','U']
+# mm=5
+# for i in range(2):
+#     print(i)
+#     hp.gnomview(maps_noise_150[0,:,i+1], sub=(2,2,i+1), reso=15, title=stokes[i+1]+' - 150 GHz - {} years'.format(duration), 
+#                 min=-mm, max=mm, unit=r'$\mu K$')
+#     hp.gnomview(maps_noise_220[0,:,i+1], sub=(2,2,i+1+2), reso=15, title=stokes[i+1]+' - 220 GHz - {} years'.format(duration), 
+#                 min=-mm, max=mm, unit=r'$\mu K$')    
+
+# tight_layout()
+```
+
+```{python}
+# okpix = maps_noise_150[0,:,1] != 0
+# np.std(maps_noise_150[0,okpix,1])
 ```
 
 ## Now redoing the likelihood
@@ -502,11 +502,22 @@ def explore_like(leff, mcl_noise, errors, lmin, dl, cc, rv, otherp=None,
 
 ```{python}
 def get_results(directory, config, duration, nbmc, coverage, 
-                method, lmin=40, delta_ell=30, covcut=0.1, rv=None, factornoise=1.):
+                method, lmin=40, delta_ell=30, covcut=0.1, rv=None, factornoise=1, ellsok=None):
     nn = config+'_nbmc_{}_dur_{}_lmin_{}_dl_{}_cc_{}_meth_{}'.format(nbmc,duration,lmin,delta_ell,covcut,method)
     #print(nn)
     leff, mcl_noise_qubic, scl_noise_qubic, covbin, coverage, args = pickle.load(open(directory+'/MC_Cls_'+nn+'.pkl', 'rb'))
 
+    if ellsok is not None:
+        print('Using only the following ell bins:')
+        print(leff)
+        print(ellsok)
+        for i in range(len(leff)):
+            print(leff[i], ellsok[i])
+        print()
+        scl_noise_qubic[~ellsok, :] *= 1000000
+        covbin[~ellsok, :] *= 1000000
+        covbin[:, ~ellsok] *= 1000000
+    
     
     if factornoise != 1.:
         print('**** BEWARE ! Using Factornoise = {}'.format(factornoise))
@@ -515,9 +526,6 @@ def get_results(directory, config, duration, nbmc, coverage,
     BBcov = covbin[:, :, 2]*factornoise**2
     ### BB sigmas
     sclBB = scl_noise_qubic[:, 2]*factornoise
-#     figure()
-#     imshow(qss.cov2corr(BBcov))
-#     colorbar()
 
     if method=='sigma':
         to_use = sclBB.copy()
@@ -527,9 +535,6 @@ def get_results(directory, config, duration, nbmc, coverage,
     ### Likelihood
     if rv is None:
         rv = np.linspace(0,1,1000)
-#     like, cumint, rlim68, rlim95 = explore_like(leff, sclBB*0, to_use, lmin, delta_ell, covcut, rv,
-#                                      cov=coverage_150, plotlike=False, plotcls=False, 
-#                                      verbose=True, sample_variance=True, otherp=0.95)
 
     like, cumint, rlim68, rlim95 = explore_like(leff, sclBB*0, to_use, lmin, delta_ell, covcut, rv,
                                      cov=coverage_150, plotlike=False, plotcls=False, 
@@ -687,7 +692,7 @@ subplot(1,2,2)
 plot(rv,like, label='QUBIC FI {} - {} years'.format(band, duration))
 plot([rlim68, rlim68],[0,1.1],'k--', label='r < {0:5.3f} at 68% C.L.'.format(rlim68))
 plot([rlim95, rlim95],[0,1.1],'k:', label='r < {0:5.3f} at 95% C.L.'.format(rlim95))
-annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),
+annotate("BKP-2021\n 95% C.L.", xy=(0.036, 0.01), xytext=(0.036, 0.2),
             arrowprops=dict(width=10, headwidth=20), ha='center')
 title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lmin, delta_ell, covcut))
 legend()
@@ -700,21 +705,24 @@ ylim(0,1.1)
 ```
 
 ```{python}
-
-```
-
-```{python}
 durationA = 3.
 durationB = 3.
 meth='sigma'
+
+ellsok = np.array([ True,  True,  True,  True,  True,  True,  True,  True,  True,
+        True,  True,  True,  True,  True,  True,  True])
+
+# ellsok[0:1] = False
 leff_150, scl_150, rv_150, like_150, cumint_150, rlim68_150, rlim95_150 = get_results(directory, 'FI150_FI150', 
                                                                                       durationA, nbmc, 
                                                                                       coverage_150, meth,
-                                                                                     factornoise=factornoise_150)
+                                                                                     factornoise=factornoise_150)#,
+                                                                                     #ellsok = ellsok)
 leff_220, scl_220, rv_220, like_220, cumint_220, rlim68_220, rlim95_220 = get_results(directory, 'FI220_FI220', 
                                                                                       durationB, nbmc, 
                                                                                       coverage_220, meth,
-                                                                                     factornoise=factornoise_220)
+                                                                                     factornoise=factornoise_220,
+                                                                                     ellsok = ellsok)
 
 rv = rv_150.copy()
 like = like_150 * like_220
@@ -786,7 +794,7 @@ plot([rlim68, rlim68],[0,1.1],'k--', lw=3, label='r < {0:5.3f} at 68% C.L.'.form
 plot([rlim95, rlim95],[0,1.1],'k:', lw=3, label='r < {0:5.3f} at 95% C.L.'.format(rlim95))
 
 
-annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),
+annotate("BKP-2021\n 95% C.L.", xy=(0.036, 0.01), xytext=(0.036, 0.2),
             arrowprops=dict(width=10, headwidth=20), ha='center')
 title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lmin, delta_ell, covcut))
 legend(loc='upper right', fontsize=10)
@@ -812,7 +820,7 @@ plot([rlim68, rlim68],[0,1.1],'k--', lw=3, label='r < {0:5.3f} at 68% C.L.'.form
 plot([rlim95, rlim95],[0,1.1],'k:', lw=3, label='r < {0:5.3f} at 95% C.L.'.format(rlim95))
 
 
-annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),
+annotate("BKP-2021\n 95% C.L.", xy=(0.036, 0.01), xytext=(0.036, 0.2),
             arrowprops=dict(width=10, headwidth=20), ha='center')
 #title(r'$\ell_m = {} \;-\; \Delta_\ell = {} \;-\; Cov_c = {}$'.format(lmin, delta_ell, covcut))
 legend(loc='upper right', fontsize=10)
@@ -831,7 +839,7 @@ plot([rlim68, rlim68],[0,1.1],'k--', label='r < {0:5.3f} at 68% C.L.'.format(rli
 plot([rlim95, rlim95],[0,1.1],'k:', label='r < {0:5.3f} at 95% C.L.'.format(rlim95))
 
 
-annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),
+annotate("BKP-2021\n 95% C.L.", xy=(0.036, 0.01), xytext=(0.036, 0.2),
             arrowprops=dict(width=10, headwidth=20), ha='center')
 title('QUBIC FI - {} years'.format(durationA))
 legend(loc='upper right', fontsize=11)
@@ -849,7 +857,7 @@ plot([rlim68, rlim68],[0,1.1],'k--', label='r < {0:5.3f} at 68% C.L.'.format(rli
 plot([rlim95, rlim95],[0,1.1],'k:', label='r < {0:5.3f} at 95% C.L.'.format(rlim95))
 
 
-annotate("BKP-2018\n 95% C.L.", xy=(0.06, 0.01), xytext=(0.06, 0.2),
+annotate("BKP-2021\n 95% C.L.", xy=(0.036, 0.01), xytext=(0.036, 0.2),
             arrowprops=dict(width=10, headwidth=20), ha='center')
 title('QUBIC FI - {} years'.format(durationA))
 legend(loc='upper right', fontsize=11)
@@ -1180,43 +1188,6 @@ legend(loc='lower right', fontsize=10)
 
 
 
-
-bk_95 = np.array([46.433059275481995, 0.000016363373083250467,
-        73.30090115965963, 0.000008467313988088848,
-        106.46860302301367, 0.000008467313988088848,
-        137.7632570997738, 0.000010133987092963365,
-        168.3093383118515, 0.000012877352663610809,
-        196.61616342943307, 0.00001737338296755203,
-        224.1733385990737, 0.00002538775376513974,
-        253.96007611388364, 0.00004182031341493867,
-        281.13488672674396, 0.00007314116098614175]).reshape((9,2)).T
-
-bk_150 = np.array([46.1002405485944, 0.000007817422488608985,
-    73.73711987936669, 0.0000026072637776835965,
-    107.2861092162424, 0.000002222392737870747,
-    140.82325063727427, 0.0000023595673057687922,
-    173.9877212508527, 0.0000025052088119164897,
-    205.28452949412986, 0.000002880962280584777,
-    237.32237101927979, 0.000003588502844308589,
-    270.1023229095609, 0.000004745703248316066,
-    303.62653933149033, 0.0000064026296504511536]).reshape((9,2)).T
-
-bk_220 = np.array([46.237030122428465, 0.0006193091755230157,
-73.87390945320071, 0.00020655176087528687,
-108.17254873801745, 0.00016254838501503628,
-141.7118443255664, 0.00016582621162300422,
-174.50472121494994, 0.00017258149216887162,
-206.5522564894266, 0.00017961196331824357,
-239.3397479625175, 0.00020655176087528687,
-272.1283165188669, 0.00023283701509815285,
-305.657918357089, 0.00028428714721624303]).reshape((9,2)).T
-
-
-# plot(bk_95[0],bk_95[1] * bk_95[0] * (bk_95[0]+1) /2 / np.pi, color='red', ls=':', lw=3, label='BK95 from paper')
-# plot(bk_150[0],bk_150[1] * bk_150[0] * (bk_150[0]+1) /2 / np.pi, color='green', ls=':', lw=3, label='BK150 from paper')
-# plot(bk_220[0],bk_220[1] * bk_220[0] * (bk_220[0]+1) /2 / np.pi, color='blue', ls=':', lw=3, label='BK220 from paper')
-# legend(loc='lower right', fontsize=10)
-
 ```
 
 ```{python}
@@ -1224,6 +1195,59 @@ bk_220 = np.array([46.237030122428465, 0.0006193091755230157,
 ```
 
 ```{python}
+
+err_ref_wn_150 = mywnerr_150
+err_ref_wn_220 = mywnerr_220
+
+power = 0.5
+
+err_wth_150 = (fact_150_wn**2 * mywnerr_150 / err_ref_wn_150)**power
+err_wth_220 = (fact_220_wn**2 * mywnerr_220 / err_ref_wn_220)**power
+
+fact = 2.7 / np.mean(err_wth_150)
+
+
+err_mc_150 = np.reshape((scl_150[:,2] / err_ref_wn_150)**power * fact, (16, 1))
+err_mc_220 = np.reshape((scl_220[:,2] / err_ref_wn_220)**power * fact, (16, 1))
+
+err_th_150 = (fact_150_bi**2 * mytherr_150 / err_ref_wn_150)**power * fact
+err_th_220 = (fact_220_bi**2 * mytherr_220 / err_ref_wn_220)**power * fact
+
+err_wth_150 *= fact
+err_wth_220 *= fact
+
+############## Plotting QUBIC Error-bars
+rc('figure', figsize=(8,6))
+figure()
+s=2
+plot_errors_lines(leff_150, err_mc_150, delta_ell, 0, 'r', label='MC QUBIC FI 150 GHz - {} years ($\Delta D_\ell$)'.format(durationA))
+plot_errors_lines(leff_220, err_mc_220, delta_ell, 0, 'b', label='MC QUBIC FI 220 GHz - {} years ($\Delta D_\ell$)'.format(durationB))
+xlim(0,400)
+
+#### BI errors
+plot(leff_150, err_th_150, 
+     'r--',label='Th. Qubic noise 150 GHz')
+plot(leff_220, err_th_220, 
+     'b--',label='Th. Qubic noise 220 GHz')
+
+
+# #### WN Errors
+# plot(leff_150, err_wth_150, 
+#      'r:',label='Th. White noise: {0:3.1f} $\mu$K.arcmin ($\Delta D_\ell$)'.format(fact_150_wn/pix_size))
+# plot(leff_220, err_wth_220, 
+#      'b:',label='Th. White noise: {0:3.1f} $\mu$K.arcmin ($\Delta D_\ell$)'.format(fact_220_wn/pix_size))
+
+xlabel('$\\ell$', fontsize=17)
+ylabel('Equivalent map depth [$\mu$K.arcmin]'.format(clname[s]), fontsize=17)
+legend(loc='lower right', fontsize=10)
+
+
+
+
+```
+
+```{python}
+### This is from a papeer before BK21 => less data
 bk_95 = np.array([46.433059275481995, 0.000016363373083250467,
         73.30090115965963, 0.000008467313988088848,
         106.46860302301367, 0.000008467313988088848,
@@ -1258,9 +1282,9 @@ bk_220 = np.array([46.237030122428465, 0.0006193091755230157,
 s=2
 plot_errors_lines(leff_150, newscl_150, delta_ell, s, 'r', label='QUBIC FI 150 GHz - {} years'.format(durationA))
 plot_errors_lines(leff_220, newscl_220, delta_ell, s, 'b', label='QUBIC FI 220 GHz - {} years'.format(durationB))
-plot(bk_95[0],bk_95[1], color='red', ls=':', lw=3, label='BK95 from paper')
-plot(bk_150[0],bk_150[1], color='green', ls=':', lw=3, label='BK150 from paper')
-plot(bk_220[0],bk_220[1], color='blue', ls=':', lw=3, label='BK220 from paper')
+# plot(bk_95[0],bk_95[1], color='green', ls=':', lw=3, label='BK95 from paper')
+# plot(bk_150[0],bk_150[1], color='red', ls=':', lw=3, label='BK150 from paper')
+# plot(bk_220[0],bk_220[1], color='blue', ls=':', lw=3, label='BK220 from paper')
 xlim(0,400)
 yscale('log')
 xlabel('$\\ell$', fontsize=17)
@@ -1272,14 +1296,83 @@ legend(fontsize=10)
 errbk95 = err_cl_th(256, 0.55, 27, 0.01, lvalues=bk_150[0], myclnoise=None)
 errbk150 = err_cl_th(256, 0.55, 27, 0.01, lvalues=bk_95[0], myclnoise=None)
 errbk220 = err_cl_th(256, 0.55, 27, 0.01, lvalues=bk_220[0], myclnoise=None)
-plot(bk_95[0], errbk95/rad2arcmin*(5.2/pix_size)**2, color='red', ls='-.', label='White noise 5.2 $\mu$K.arcmin [from paper]')
-plot(bk_150[0], errbk150/rad2arcmin*(2.9/pix_size)**2, color='green', ls='-.', label='White noise 2.9 $\mu$K.arcmin [from paper]')
-plot(bk_220[0], errbk220/rad2arcmin*(26/pix_size)**2, color='blue', ls='-.', label='White noise 26 $\mu$K.arcmin [from paper]')
+plot(bk_95[0], errbk95/rad2arcmin*(2.8/pix_size)**2, color='green', ls='-.', label='BK21(95) 2.8 $\mu$K.arcmin [from paper]')
+plot(bk_150[0], errbk150/rad2arcmin*(2.8/pix_size)**2, color='red', ls='-.', label='BK21(150) 2.8 $\mu$K.arcmin [from paper]')
+plot(bk_220[0], errbk220/rad2arcmin*(8.8/pix_size)**2, color='blue', ls='-.', label='BK21(220) 8.8 $\mu$K.arcmin [from paper]')
+legend(fontsize=10)
+
+```
+
+```{python}
+s=2
+plot_errors_lines(leff_150, newscl_150, delta_ell, s, 'r', label='QUBIC FI 150 GHz - {} years'.format(durationA))
+plot_errors_lines(leff_220, newscl_220, delta_ell, s, 'b', label='QUBIC FI 220 GHz - {} years'.format(durationB))
+xlim(0,400)
+yscale('log')
+xlabel('$\\ell$', fontsize=17)
+ylabel(r'$\Delta C_\ell^{BB}$   [$\mu K^2$]')
+legend(fontsize=10)
+
+errthwhite = err_cl_th(256, 0.39, delta_ell, 0.01, lvalues=leff_150, myclnoise=None)
+wn = 7.
+plot(leff_150, errthwhite/rad2arcmin*(wn/pix_size)**2, color='k', ls='-.', label='White noise {}muk=K.arcmin'.format(wn))
 legend(fontsize=10)
 ```
 
 ```{python}
-fsky
+s=2
+errthwhite = err_cl_th(256, 0.39, delta_ell, 0.01, lvalues=leff_150, myclnoise=None)
+errthwhite_1mukarcmin = errthwhite/rad2arcmin*(1./pix_size)**2
+plot(leff_150, np.sqrt(newscl_150[:,s]/errthwhite_1mukarcmin), 'r', label='MC QUBIC FI 150 GHz - {} years'.format(durationA))
+plot(leff_220, np.sqrt(newscl_220[:,s]/errthwhite_1mukarcmin), 'b', label='MC QUBIC FI 220 GHz - {} years'.format(durationA))
+
+```
+
+```{python}
+#This is wrong: mixes Dl and Cl needs to be checked
+
+
+s=2
+errthwhite = err_cl_th(256, 0.39, delta_ell, 0.01, lvalues=leff_150, myclnoise=None)
+errthwhite_1mukarcmin = errthwhite/rad2arcmin*(1./pix_size)**2
+
+
+mukarcmin_150 = np.reshape(np.sqrt(newscl_150[:,s]/errthwhite_1mukarcmin), (16, 1))
+mukarcmin_220 = np.reshape(np.sqrt(newscl_220[:,s]/errthwhite_1mukarcmin), (16, 1))
+
+
+figure()
+plot_errors_lines(leff_150, mukarcmin_150, delta_ell, 0, 'r', label='MC QUBIC FI 150 GHz - {} years'.format(durationA))
+plot_errors_lines(leff_220, mukarcmin_220, delta_ell, 0, 'b', label='MC QUBIC FI 220 GHz - {} years'.format(durationA))
+xlim(0,400)
+xlabel('$\\ell$', fontsize=17)
+ylabel('Equivalent map depth [$\mu$K.arcmin]'.format(clname[s]), fontsize=17)
+
+axhline(y=2.8, color='g', ls='--', label='BK21 95 GHz: 2.8 $\mu$K.arcmin')
+axhline(y=2.8, color='r', ls='--', label='BK21 150 GHz: 2.8 $\mu$K.arcmin')
+axhline(y=8.8, color='b', ls='--', label='BK21 220 GHz: 8.8 $\mu$K.arcmin')
+
+legend(loc='upper right', fontsize=13)
+
+print('lmin   lmax  150  220')
+for i in range(len(leff_150)):
+    print('{0:5.0f} {1:5.0f} {2:4.2f} {3:4.2f}'.format(leff_150[i]-delta_ell/2+0.5, 
+                                                       leff_150[i]+delta_ell/2+0.5, 
+                                                       mukarcmin_150[i,0], 
+                                                       mukarcmin_220[i,0]))
+    
+print()
+print()
+thelmax = 190
+ok = leff_150 < thelmax
+print('Average < {}'.format(thelmax))
+print('150: {0:4.2f} muK.arcmin ; 220: {1:4.2f} muK.arcmin'.format(np.mean(mukarcmin_150[ok,0]), 
+                                                       np.mean(mukarcmin_220[ok,0])))
+
+```
+
+```{python}
+
 ```
 
 ```{python}

@@ -131,7 +131,7 @@ class QubicPointing(QubicSampling):
 
 
 def get_pointing(d):
-    if [d['random_pointing'], d['sweeping_pointing'], d['repeat_pointing']].count(True) != 1:
+    if [d['random_pointing'], d['sweeping_pointing'], d['sweeping_pointing_deadtime'], d['repeat_pointing']].count(True) != 1:
         raise ValueError("Error: you should choose one pointing")
 
     center = (d['RA_center'], d['DEC_center'])
@@ -157,6 +157,17 @@ def get_pointing(d):
                                          latitude=d['latitude'],
                                          longitude=d['longitude'],
                                          fix_azimuth=d['fix_azimuth'], random_hwp=d['random_hwp'])
+    elif d['sweeping_pointing_deadtime'] is True:
+        return create_sweeping_pointings_deadtime(center, d['duration'], d['period'],
+                                         d['angspeed'], d['delta_az'],
+                                         d['nsweeps_per_elevation'],
+                                         d['angspeed_psi'], d['maxpsi'], d['hwp_stepsize'],
+                                         date_obs=d['date_obs'],
+                                         latitude=d['latitude'],
+                                         longitude=d['longitude'],
+                                         fix_azimuth=d['fix_azimuth'], 
+                                         random_hwp=d['random_hwp'],
+                                         dead_time=d['dead_time'])
 
 
 def create_random_pointings(center, npointings, dtheta, hwp_stepsize, date_obs=None,
@@ -298,7 +309,8 @@ def create_repeat_pointings(center, npointings, dtheta, nhwp_angles, date_obs=No
 
 def create_sweeping_pointings(
         center, duration, period, angspeed, delta_az, nsweeps_per_elevation,
-        angspeed_psi, maxpsi, hwp_stepsize, date_obs=None, latitude=None, longitude=None, fix_azimuth=None, random_hwp=True):
+        angspeed_psi, maxpsi, hwp_stepsize, date_obs=None, latitude=None, longitude=None, fix_azimuth=None, 
+        random_hwp=True):
     """
     Return pointings according to the sweeping strategy:
     Sweep around the tracked FOV center azimuth at a fixed elevation, and
@@ -347,6 +359,7 @@ def create_sweeping_pointings(
     racenter = center[0]
     deccenter = center[1]
     backforthdt = delta_az / angspeed * 2
+    print(backforthdt)
 
     # compute the sweep number
     isweeps = np.floor(out.time / backforthdt).astype(int)
@@ -366,6 +379,130 @@ def create_sweeping_pointings(
     mask = daz > delta_az
     daz[mask] = -daz[mask] + 2 * delta_az
     daz -= delta_az / 2
+
+    # elevation is kept constant during nsweeps_per_elevation
+    elcst = np.zeros(nsamples)
+    ielevations = isweeps // nsweeps_per_elevation
+    nelevations = ielevations[-1] + 1
+    for i in range(nelevations):
+        mask = ielevations == i
+        elcst[mask] = np.mean(elcenter[mask])
+        if fix_azimuth is not None:
+            if fix_azimuth['apply']:
+                el_step = fix_azimuth['el_step']
+                elcst[mask] = elcenter[mask] - nelevations / 2 * el_step + i * el_step
+
+    # azimuth and elevations to use for pointing
+    azptg = azcenter + daz
+    elptg = elcst
+
+    ### scan psi as well
+    pitch = out.time * angspeed_psi
+    pitch = pitch % (4 * maxpsi)
+    mask = pitch > (2 * maxpsi)
+    pitch[mask] = -pitch[mask] + 4 * maxpsi
+    pitch -= maxpsi
+
+    out.azimuth = azptg
+    out.elevation = elptg
+    out.pitch = pitch
+    if random_hwp:
+        out.angle_hwp = np.random.randint(0, int(90 / hwp_stepsize + 1), nsamples) * hwp_stepsize
+    else:
+        out.angle_hwp = np.zeros(nsamples)
+        max_sweeps = np.max(isweeps)
+        delta = int(nsamples / max_sweeps)
+        for i in range(max_sweeps):
+            out.angle_hwp[i * delta:(i + 1) * delta] = hwp_stepsize * np.mod(i, int(90 / hwp_stepsize + 1))
+
+    if fix_azimuth['apply']:
+        out.fix_az = True
+        if fix_azimuth['fix_hwp']:
+            out.angle_hwp = out.pitch * 0 + hwp_stepsize
+        if fix_azimuth['fix_pitch']:
+            out.pitch = 0
+    else:
+        out.fix_az = False
+
+    return out
+
+
+def create_sweeping_pointings_deadtime(
+        center, duration, period, angspeed, delta_az, nsweeps_per_elevation,
+        angspeed_psi, maxpsi, hwp_stepsize, date_obs=None, latitude=None, longitude=None, fix_azimuth=None, 
+        random_hwp=True, dead_time=0):
+    """
+    Return pointings according to the sweeping strategy:
+    Sweep around the tracked FOV center azimuth at a fixed elevation, and
+    update elevation towards the FOV center at discrete times.
+
+    Parameters
+    ----------
+    center : array-like of size 2
+        The R.A. and Declination of the center of the FOV.
+    duration : float
+        The duration of the observation, in hours.
+    period : float
+        The sampling period of the pointings, in seconds.
+    angspeed : float
+        The pointing angular speed, in deg / s.
+    delta_az : float
+        The sweeping extent in degrees.
+    nsweeps_per_elevation : int
+        The number of sweeps during a phase of constant elevation.
+    angspeed_psi : float
+        The pitch angular speed, in deg / s.
+    maxpsi : float
+        The maximum pitch angle, in degrees.
+    latitude : float, optional
+        The observer's latitude [degrees]. Default is DOMEC's.
+    longitude : float, optional
+        The observer's longitude [degrees]. Default is DOMEC's.
+    fix_azimuth : bool
+    hwp_stepsize : float
+        Step angle size for the HWP.
+    date_obs : str or astropy.time.Time, optional
+        The starting date of the observation (UTC).
+    random_hwp : bool
+    dead_time : the dead time in seconds at the end of each scan
+
+    Returns
+    -------
+    pointings : QubicSampling
+        Structured array containing the azimuth, elevation and pitch angles,
+        in degrees.
+
+    """
+    nsamples = int(np.ceil(duration * 3600 / period))
+    out = QubicSampling(
+        nsamples, date_obs=date_obs, period=period, latitude=latitude,
+        longitude=longitude)
+    racenter = center[0]
+    deccenter = center[1]
+    backforthdt = delta_az / angspeed * 2
+
+    # compute the sweep number
+    isweeps = np.floor(out.time / (backforthdt + dead_time)).astype(int)
+
+    # azimuth/elevation of the center of the field as a function of time
+
+    if fix_azimuth['apply']:
+        azcenter = out.time * 0 + fix_azimuth['az']
+        elcenter = out.time * 0 + fix_azimuth['el']
+    else:
+        azcenter, elcenter = equ2hor(racenter, deccenter, out.time, date_obs=out.date_obs, latitude=out.latitude,
+                                     longitude=out.longitude)
+
+    # compute azimuth offset for all time samples
+    time_in_scan = out.time % (backforthdt+dead_time)
+    mask_plus = time_in_scan < (backforthdt / 2)
+    mask_minus = (time_in_scan >= (backforthdt / 2)) & (time_in_scan < backforthdt)
+    mask_dead = time_in_scan >= backforthdt
+
+    daz = np.zeros(len(out.time))
+    daz[mask_plus] = time_in_scan[mask_plus] * angspeed - delta_az / 2
+    daz[mask_minus] = delta_az*1.5  -(time_in_scan[mask_minus] * (angspeed % (delta_az * 2)))
+    daz[mask_dead] = -delta_az / 2
 
     # elevation is kept constant during nsweeps_per_elevation
     elcst = np.zeros(nsamples)

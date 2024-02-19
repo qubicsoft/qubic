@@ -5,9 +5,9 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.14.0
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
@@ -79,12 +79,12 @@ sbth = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=0.)
 #     f.write('{0:10.5f} {1:10.8f}\n'.format(th[i],sbth[i]))
 # f.close()
 
-rc('figure',figsize=(16,6))
+rc('figure',figsize=(8,7))
 rc('font',size=16)
 
 figure()
 
-subplot(1,2,1)
+#subplot(1,2,1)
 dist = [0.]
 for d in dist:
     nu0=140.
@@ -107,36 +107,36 @@ for d in dist:
     bb2 = b2/np.sqrt(np.sum(b2**2))
     print(np.sum(bb1*bb2))
     
-subplot(1,2,2)
-dist = [0.]
-for d in dist:
-    nu0=140.
-    nu1=160.
-    lam0 = 3e8/(nu0*1e9)
-    lam1 = 3e8/(nu1*1e9)
-    b1 = give_sbcut(th, dx, lam0, sqnh, Df=Df, detpos=d/1000)
-    b2 = give_sbcut(th, dx, lam1, sqnh, Df=Df, detpos=d/1000)
-    amps = [1., 1.5]
-    tod = (b1*amps[0]+b2*amps[1])
-    plot(th, tod, 'k', lw=2, label='{} at 140 GHZ \n {} at 160 GHz'.format(amps[0], amps[1]))
-    xlabel(r'$\theta$ [deg.]')
-    ylabel('TOD')
-    legend(title='Source brightness:')
-    draw()
-    ylim(0,2.6)
-    xlim(-20,20)
-    bb1 = b1/np.sqrt(np.sum(b1**2))
-    bb2 = b2/np.sqrt(np.sum(b2**2))
-    print(np.sum(bb1*bb2))
+# subplot(1,2,2)
+# dist = [0.]
+# for d in dist:
+#     nu0=140.
+#     nu1=160.
+#     lam0 = 3e8/(nu0*1e9)
+#     lam1 = 3e8/(nu1*1e9)
+#     b1 = give_sbcut(th, dx, lam0, sqnh, Df=Df, detpos=d/1000)
+#     b2 = give_sbcut(th, dx, lam1, sqnh, Df=Df, detpos=d/1000)
+#     amps = [1., 1.5]
+#     tod = (b1*amps[0]+b2*amps[1])
+#     plot(th, tod, 'k', lw=2, label='{} at 140 GHZ \n {} at 160 GHz'.format(amps[0], amps[1]))
+#     xlabel(r'$\theta$ [deg.]')
+#     ylabel('TOD')
+#     legend(title='Source brightness:')
+#     draw()
+#     ylim(0,2.6)
+#     xlim(-20,20)
+#     bb1 = b1/np.sqrt(np.sum(b1**2))
+#     bb2 = b2/np.sqrt(np.sum(b2**2))
+#     print(np.sum(bb1*bb2))
 
 ```
 
 ```{python}
-1./8
+
 ```
 
 ```{python}
-1./20
+
 ```
 
 ```{python}

@@ -84,7 +84,7 @@ def qubicify(config, qp_nsubs, qp_effective_fraction, suboptimality=None):
         newdnu_nu = newbandwidth / newfreqs
         newfwhm = config['fwhm'][i] * config['frequency'][i]/newfreqs
         scalefactor_noise = np.sqrt(qp_nsubs[i]) / qp_effective_fraction[i]
-        print(suboptimality[i])
+        #print(suboptimality[i])
         if suboptimality[i]:
             scalefactor_noise *= fct_subopt(config['frequency'][i])
         newdepth_p = config['depth_p'][i] * np.ones(qp_nsubs[i]) * scalefactor_noise

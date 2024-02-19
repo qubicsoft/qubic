@@ -1,0 +1,535 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Intercalibrate Moon maps
+##### (JCH - Oct. 2022)
+We use the Moon maps produced by `Analysis Moon July.Rmd` as well as the TES offsets from `Moon-FWHM-Offsets.Rmd` to get an intercalibrated Moon map.
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+rc('figure',figsize=(20,12))
+rc('font',size=12)
+
+### General python libraries
+from scipy.signal import medfilt
+from scipy.interpolate import interp1d
+import glob
+from importlib import reload
+import healpy as hp
+import pickle
+import xarray as xr
+
+### Qubic Specific libraries
+from qubicpack.qubicfp import qubicfp
+from qubic import fibtools as ft
+from qubic import progress_bar
+
+### JCH library "in development"
+import time_domain_tools as tdt
+import fitting as fit
+import plot_fp
+
+```
+
+```{python}
+class gauss2dfit:
+    def __init__(self, xx, yy):
+        self.xx = xx
+        self.yy = yy
+    def __call__(self, x, pars):
+        amp, xc, yc, sig = pars
+        mygauss = amp * np.exp(-0.5*((self.xx-xc)**2+(self.yy-yc)**2)/sig**2)
+        return np.ravel(mygauss)
+
+
+def fitgauss_img(mapxy, x, y, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False):
+    xx,yy = meshgrid(x,y)
+    
+    ### Displays the image as an array
+    mm, ss = ft.meancut(mapxy, 3)
+    if mini is None:
+        mini = mm-nsig*ss
+    if maxi is None:
+        maxi = np.max(mapxy)
+    if doplot:
+        subplot(2,3,1)
+        imshow(mapxy, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        xlabel('Degrees')
+        ylabel('Degrees')
+        colorbar()
+        if mytit:
+            title('Data '+mytit)
+
+    ### Guess where the maximum is and the other parameters
+    if guess is None:
+        maxii = mapxy == np.nanmax(mapxy)
+        maxx = np.mean(xx[maxii])
+        maxy = np.mean(yy[maxii])
+        guess = np.array([np.max(mapxy),maxx, maxy, 1.])
+    else:
+        maxx = guess[1]
+        maxy = guess[2]
+    if doplot:
+        # Plot a red cross at the expected location
+        plot(guess[1],guess[2],'yx', ms=ms, mew=2, label='Guess')
+        
+    ### Do the fit putting the UNSEEN to a very low weight
+    errpix = xx*0+ss
+    errpix[mapxy==0] *= 1e5
+    g2d = gauss2dfit(xx, yy)
+    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), g2d)
+    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 0.,1e8], [1, maxx-distok, maxx+distok], [2, maxy-distok, maxy+distok], [3, 0., 10.]], renorm=renorm)
+
+    if doplot:
+        plot(m.values[1], m.values[2], 'rx', ms=ms, mew=2, label='Fit')
+        legend()
+    ### Image of the fitted Gaussian
+    fitted = np.reshape(g2d(x, m.values), (xs, xs))
+    if doplot:
+        subplot(2,3,2)
+        imshow(fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        colorbar()
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('FWHMFit = {:5.3f} +/- {:5.3f} degrees'.format(m.values[3]*2.35, m.errors[3]*2.35))
+
+        ### Display residuals
+        subplot(2,3,3)
+        imshow(mapxy-fitted, origin='lower', extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+        colorbar()
+        xlabel('Degrees')
+        ylabel('Degrees')
+        title('Residuals')
+        
+    return m, fitted
+
+```
+
+# Reading the files
+
+```{python}
+### Read Moon Coadded maps (calculated using the notebook: Analysis Moon July.Rmd)
+# allTESNum, allmaps = pickle.load(open( "allmaps-July14-2022.pkl", "rb" ) )
+allTESNum, allmaps = pickle.load(open( "allmaps-July14-2022_V2.pkl", "rb" ) )
+sh = np.shape(allmaps)
+### Find the nside of the maps from number of pixels
+nside = hp.npix2nside(sh[1])
+
+### Read the Moon Offsets calculated in Moon-FWHM-Offsets.Rmd
+myrots = np.loadtxt('new_offsets_18082022_JC.txt')
+```
+
+```{python}
+reso = 10
+TESNum = 209
+hp.gnomview(allmaps[TESNum-1], reso=reso, min = -1e4, max=1e4)
+```
+
+## Make flatmaps from healpix maps
+
+```{python}
+xs = 201
+reso = 3
+allimg = np.zeros((256, xs, xs))
+bar=progress_bar(256, 'Working on TES')
+for idx in range(256):
+    bar.update()
+    mymap = allmaps[idx]
+    mymap[mymap==hp.UNSEEN] = 0
+    ### We apply a rotation with V1
+    #allimg[idx,:,:] = hp.gnomview(mymap, rot=myrots[idx], reso=reso, return_projected_map=True, no_plot=True, xsize=xs)
+    ### We apply no rotation with V2
+    allimg[idx,:,:] = hp.gnomview(mymap, reso=reso, return_projected_map=True, no_plot=True, xsize=xs)
+    
+```
+
+## Focal Plane image with maps rotated to the expected Moon location
+
+```{python}
+reload(plot_fp)
+
+def myfunc(mytes,ax):
+    idx = mytes-1
+    img = allimg[idx]
+    mm, ss = ft.meancut(img[img != 0], 3)
+    mini = mm-2*ss
+    maxi = mm+10*ss
+    x = (np.arange(xs)-(xs-1)/2)*reso/60
+    imshow(img, vmin=mini, vmax=maxi, extent=[np.min(x), np.max(x), np.min(x), np.max(x)])
+    annotate('{}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=8, color='black',
+                 fontstyle='italic', fontweight='bold', xytext=(0.05,0.85),backgroundcolor='pink')
+
+
+plot_fp.plot_fp(myfunc)
+```
+
+# Average image
+## List of TES which apparently see the Moon
+
+```{python}
+mylistQP = [99, 95, 96, 107, 76, 69, 87, 81, 82, 83, 57, 59, 86, 88, 63, 51, 52, 46, 218, 189, 80, 73, 
+            62, 64, 40, 34, 27, 28, 207, 172, 131, 67, 61, 33, 22, 206, 171, 152, 49, 26, 248, 205, 170, 
+            139, 212, 138, 150, 23, 242, 193, 200, 211, 178, 137, 199, 223, 247, 198, 210, 197, 209, 221, 
+            169, 182, 130, 142, 176, 181, 129, 153, 215, 162, 175, 188, 136, 187, 135, 159, 158, 180, 133,   
+            94, 112, 70, 89, 90, 92, 84, 78, 172, 71, 66, 50, 252, 54, 10, 32, 184, 237, 204, 216, 202, 201, 213, 173, 186, 134, 145,
+           115, 195, 246, 194,163]   #the last line here contain ghosts...
+myTESok = np.zeros(256, dtype=bool)
+for i in range(len(mylistQP)):
+    myTESok[mylistQP[i]-1]=True
+```
+
+## Raw average
+
+```{python}
+rc('figure',figsize=(20,6))
+rc('font',size=12)
+### Image without intercals
+imgavok = np.zeros((201,201))
+
+for i in range(201):
+    for j in range(201):
+        imgavok[i,j], ss = ft.meancut(allimg[myTESok==1,i,j],3)
+        
+
+x = (np.arange(xs)-(xs-1)/2)*reso/60
+y = x.copy()
+m, fitted = fitgauss_img(imgavok, x, y, doplot=True, nsig=3, mytit='Raw Av')
+
+```
+
+## Intercalibrated average
+
+```{python}
+### Method Full Minuit: 
+
+# class simulate_signal_intercal:
+#     def __init__(self, nx, ny, ndet):
+#         self.nx = nx
+#         self.ny = ny
+#         self.npix = nx * ny
+#         self.ndet = ndet
+#     def __call__(self, x, sky_and_intercal):
+#         sky = np.reshape(sky_and_intercal[:self.npix], (self.nx, self.ny))
+#         intercal = sky_and_intercal[self.npix:]
+#         allimg = np.zeros((self.ndet, self.nx, self.ny))
+#         for k in range(self.ndet):
+#             allimg[k, :,:] = intercal[k] * sky
+#         return np.ravel(allimg)
+
+# def combine_moonmaps(mymaps, guessmap, resample=10):
+#     ndet, ny, nx = np.shape(mymaps)
+    
+#     ##### Resample the maps to the desired resampling factor
+#     nxnew = nx//resample
+#     nynew = ny//resample
+#     # The guess map
+#     new_guessmap = xr.DataArray(guessmap, dims=['x', 'y']).coarsen(x=resample, y=resample, boundary="trim").mean()
+#     # all the maps
+#     newimgs = np.zeros((ndet, nynew, nxnew))
+#     newimgnoise = np.zeros((ndet, nynew, nxnew))
+#     noiseval = np.zeros(ndet)
+#     for i in range(ndet):
+#         mm, ss = ft.meancut(mymaps[i,:,:], 3)
+#         newimgs[i,:,:] = xr.DataArray(mymaps[i,:,:], dims=['x', 'y']).coarsen(x=resample, y=resample, boundary="trim").mean()
+#         newimgnoise[i,:,:] = ss / resample
+#         noiseval[i] = ss
+        
+#     ##### Now the map averaging including intercalibrations
+#     # Instanciate class to fit
+#     myH = simulate_signal_intercal(nxnew, nxnew, ndet)
+#     # Prepare the guess with nxnew*nynew unknowns for the average map and ndet unknowns for intercals
+#     guess_sky = np.append(np.ravel(new_guessmap), np.ones(ndet))
+#     # Declare the Data class
+#     xxx = np.zeros(ndet*nxnew*nynew)   # not used but necessary
+#     data = fit.Data(xxx, np.ravel(newimgs), np.ravel(newimgnoise), myH)
+#     # Run the fit with Minuit, fixing the first of the intercalibrations to 1
+#     m, ch2, ndf = data.fit_minuit(guess_sky, fixpars = [nxnew*nynew])
+#     intercals = m.values[nxnew*nynew:]
+    
+#     ##### Compute final HiRes weighted average
+#     # Apply intercals to HiRes maps using numpy broadcasting
+#     outimg_intercal = mymaps.T / intercals
+#     newerrors = noiseval / intercals
+#     # Weighted average
+#     w = 1./newerrors**2
+#     sumw = np.sum(w)
+#     mm = np.sum(outimg_intercal * w, axis=2) / sumw
+    
+#     return mm.T, intercals
+    
+
+    
+# ndet = np.sum(myTESok==1)
+# myimg = allimg[myTESok==1,:,:]
+
+# mapmean, intercals = combine_moonmaps(myimg, imgavok, resample=20)
+        
+# theimg_minuit = mapmean.copy()
+# imshow(theimg_minuit)
+# colorbar()
+```
+
+```{python}
+
+#### Method Minuit + Analytical for intercalibrations
+
+class simulate_signal_intercal_semiana:
+
+    def __init__(self, ndet, nsamples, d, w):
+        self.ndet = ndet
+        self.nsamples = nsamples
+        self.d = np.reshape(d, (ndet, nsamples))
+        self.w = w
+        self.intercal = None
+
+    def __call__(self, x, sky):
+        # get the intercalibrated TOD directly from the sky + the analytically calculated intercalibrations
+        D, intercal = self.give_intercals(sky)
+        # apply the intercalibrations
+        d = (D.T * intercal).T
+        return np.ravel(d)
+
+    def give_intercals(self, sky):
+        ### We remove the first detector from the fit as its intercalibration is forced to 1
+        D = self.give_D(sky)
+        myD = D[1:, :]
+        myw = np.diag(self.w[1:]) 
+        myDw = (myD.T @ myw).T
+        mydw = (self.d[1:, :].T @ myw).T
+        self.intercal = np.append(
+             1,  1/np.sum(myD*myDw, axis=1) * np.sum(myD * mydw, axis=1))
+        return D, self.intercal
+    
+    def give_D(self, sky):
+        return np.reshape(np.tile(sky, self.ndet).T, (self.ndet, self.nsamples))
+    
+def combine_moonmaps_semiana(mymaps, guessmap, resample=10):
+    ndet, ny, nx = np.shape(mymaps)
+    
+    ##### Resample the maps to the desired resampling factor
+    nxnew = nx//resample
+    nynew = ny//resample
+    # The guess map
+    new_guessmap = xr.DataArray(guessmap, dims=['x', 'y']).coarsen(x=resample, y=resample, boundary="trim").mean()
+    # all the maps
+    newimgs = np.zeros((ndet, nynew, nxnew))
+    newimgnoise = np.zeros((ndet, nynew, nxnew))
+    noiseval = np.zeros(ndet)
+    for i in range(ndet):
+        mm, ss = ft.meancut(mymaps[i,:,:], 3)
+        newimgs[i,:,:] = xr.DataArray(mymaps[i,:,:], dims=['x', 'y']).coarsen(x=resample, y=resample, boundary="trim").mean()
+        newimgnoise[i,:,:] = ss / resample
+        noiseval[i] = ss
+        
+    ##### Now the map averaging including intercalibrations derived in an analytical way at each iteration
+    # Instanciate class to fit
+    myH = simulate_signal_intercal_semiana(ndet, nxnew * nynew, newimgs, noiseval)
+    # Prepare the guess with nxnew*nynew unknowns for the average map
+    guess_sky = np.ravel(new_guessmap)
+    # Declare the Data class
+    xxx = np.zeros(ndet*nxnew*nynew)   # not used but necessary
+    data = fit.Data(xxx, np.ravel(newimgs), np.ravel(newimgnoise), myH)
+    m, ch2, ndf = data.fit_minuit(guess_sky)
+    intercals = myH.intercal
+    
+    ##### Compute final HiRes weighted average
+    # Apply intercals to HiRes maps using numpy broadcasting
+    outimg_intercal = mymaps.T / intercals
+    newerrors = noiseval / intercals
+    # Weighted average
+    w = 1./newerrors**2
+    sumw = np.sum(w)
+    mm = np.sum(outimg_intercal * w, axis=2) / sumw
+    
+    return mm.T, intercals
+    
+
+    
+ndet = np.sum(myTESok==1)
+myimg = allimg[myTESok==1,:,:]
+
+mapmean, intercals = combine_moonmaps_semiana(myimg, imgavok, resample=20)
+        
+theimg = mapmean.copy()
+imshow(theimg)
+colorbar()
+```
+
+```{python}
+all_intercals = np.zeros(256)
+all_intercals[myTESok==1] = intercals
+
+rc('figure',figsize=(20,6))
+rc('font',size=12)
+
+figure()
+x = (np.arange(xs)-(xs-1)/2)*reso/60
+y = x.copy()
+m, fitted = fitgauss_img(mapmean, x, y, doplot=True, nsig=3, mytit='(intercalibrated- {} dets)'.format(len(intercals)), ms=5, renorm=False)
+
+
+figure()
+subplot(1,3,1)
+plot(intercals)
+xlabel('Detector')
+ylabel('Relative intercalibrations')
+title('Intercalibrations')
+
+mymean, mysig = ft.meancut(mapmean, 3)
+mini = mymean - 2*mysig
+maxi = np.max(mapmean)
+print(mini,maxi)
+
+
+subplot(1,3,2)
+imshow(mapmean, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi, origin='lower')
+xlabel('$\Delta_{az}$ [Deg.]')
+ylabel('$\Delta_{el}$ [Deg.]')
+title('Moon Observation with QUBIC (07/14/2022 - {0:} dets) \n FWHM = {1:4.3f}+/-{2:4.3f} deg'.format(len(intercals), m.values[3]*2.35, m.errors[3]*2.35))
+cbar = colorbar()
+cbar.set_label('A.D.U.', rotation=270)
+tight_layout()
+
+subplot(1,3,3)
+mymean, mysig = ft.meancut(mapmean, 3)
+mini = mymean - 3*mysig
+maxi = mymean + 3*mysig
+print(mini,maxi)
+
+imshow(mapmean, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi, origin='lower')
+xlabel('$\Delta_{az}$ [Deg.]')
+ylabel('$\Delta_{el}$ [Deg.]')
+title('Moon Observation with QUBIC (07/14/2022 - {0:} dets) \n FWHM = {1:4.3f}+/-{2:4.3f} deg'.format(len(intercals), m.values[3]*2.35, m.errors[3]*2.35))
+cbar = colorbar()
+cbar.set_label('A.D.U.', rotation=270)
+
+tight_layout()
+
+```
+
+```{python}
+mymean, mysig = ft.meancut(mapmean, 3)
+mini = mymean - 2*mysig
+maxi = np.max(mapmean)
+print(mini,maxi)
+
+imshow(mapmean, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi, origin='lower')
+xlabel('$\Delta_{az}$ [Deg.]')
+ylabel('$\Delta_{el}$ [Deg.]')
+title('Moon Observation with QUBIC (07/14/2022 - {0:} dets) \n FWHM = {1:4.3f}+/-{2:4.3f} deg'.format(len(intercals), m.values[3]*2.35, m.errors[3]*2.35))
+cbar = colorbar()
+cbar.set_label('A.D.U.', rotation=270)
+tight_layout()
+
+```
+
+```{python}
+from matplotlib import cm
+from matplotlib.colors import LightSource
+
+xx, yy = np.meshgrid(x,x)
+
+# Set up plot
+fig, ax = subplots(subplot_kw=dict(projection='3d'))
+
+ls = LightSource(270, 45)
+# To use a custom hillshading mode, override the built-in shading and pass
+# in the rgb colors of the shaded surface calculated from "shade".
+rgb = ls.shade(mapmean, cmap=cm.gist_earth, vert_exag=0.1, blend_mode='soft')
+surf = ax.plot_surface(xx, yy, mapmean, rstride=1, cstride=1, facecolors=rgb,
+                       linewidth=0, antialiased=True, shade=True)
+
+```
+
+```{python}
+reload(plot_fp)
+
+mymean, mysig = ft.meancut(mapmean, 3)
+mini = mymean - 2*mysig
+maxi = np.max(mapmean)
+
+
+def myfunc(mytes, ax):
+    bgcol='pink'
+    if mytes in mylistQP:
+        idx = mytes-1
+        img = allimg[idx]
+        x = (np.arange(xs)-(xs-1)/2)*reso/60
+        imshow(img / all_intercals[idx], vmin=mini, vmax=maxi, extent=[np.min(x), np.max(x), np.min(x), np.max(x)])
+        bgcol = 'lightgreen'
+    annotate('{}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=8, color='black',
+                     fontstyle='italic', fontweight='bold', xytext=(0.05,0.85),backgroundcolor=bgcol)
+    #ax.axis('off')
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
+plot_fp.plot_fp(myfunc, savepdf='toto.pdf')
+
+```
+
+## Study of the Moon apparent FWHM
+the Moon is supposed to be a op-Hat with 0.26 deg FWHM. What do we expect when convolved with the QUBIC TD FWHM expected to be 0.68 deg ?
+
+```{python}
+### Calculation assuming a Gaussian shape
+moon_apparent_radius = 0.26
+np.sqrt(0.68**2 + (2.35*moon_apparent_radius)**2)
+```
+
+```{python}
+xxx = np.linspace(-10,10,1001)
+
+#### Moon apaprent radius 0.26 deg
+rmoon = 0.26
+moon = np.zeros(len(xxx))
+moon[np.abs(xxx) < rmoon] = 1
+
+#### QUBIC
+qFWHM = 0.68
+qsig = qFWHM/2.35
+qubic_beam = np.exp(-0.5 * xxx**2 / qsig**2)
+
+#### Convolve both
+moonqubic = np.convolve(moon, qubic_beam, mode='same')
+moonqubic = moonqubic/np.max(moonqubic)
+
+norm = np.trapz(moonqubic, x=xxx)
+fwhm_expected = np.sqrt(np.trapz(moonqubic/norm * xxx**2, x=xxx)) * 2.35
+
+
+plot(xxx, qubic_beam, label='QUBIC TD Resolution FWHM = {0:4.2f} deg'.format(qFWHM))
+plot(xxx, moon, label='Moon: radius = {0:4.2f} deg'.format(rmoon))
+plot(xxx, moonqubic, label='Convolution: FWHM = {0:4.2f} deg'.format(fwhm_expected))
+xlim(-3,3)
+legend()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

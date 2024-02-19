@@ -1,0 +1,131 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import sys
+import numpy as np
+sys.path.append('/Users/mregnier/Desktop/PhD Regnier/mypackages')
+#import instrument_mathias as instr
+import qubic
+import frequency_acquisition as Acq
+from importlib import reload
+import matplotlib.pyplot as plt
+
+dictfilename = 'dicts/pipeline_demo.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+d['nf_recon'] = 2
+d['nf_sub'] = 4
+d['nside'] = 128
+npix=12*d['nside']**2
+d['RA_center'] = 0
+d['DEC_center'] = -57
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+d['effective_duration'] = 3
+d['npointings'] = 300
+d['filter_nu'] = 220 * 1e9
+d['photon_noise'] = False
+d['noiseless'] = True
+d['config'] = 'FI'
+d['filter_relative_bandwidth'] = 0.25
+d['MultiBand'] = True
+d['planck'] = True
+d['dtheta'] = 15
+d['synthbeam_dtype'] = float
+d['debug'] = False
+
+# # # %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+scene = qubic.QubicScene(d)
+sampling = qubic.get_pointing(d)
+```
+
+```{python}
+reload(Acq)
+i = Acq.QubicIntegrated(d, Nrec=2, Nsub=2)
+#for o in range(10):
+#    i.multiinstrument[o].filter.bandwidth/i.nueff[o]# = 100
+```
+
+```{python}
+hh = i.get_operator()
+hh
+```
+
+```{python}
+m = i.get_PySM_maps({'cmb':42}, nus=i.nueff)
+```
+
+```{python}
+tod = hh(m)
+```
+
+```{python}
+nrec = 1
+liste = [5, 10, 20]
+tod_s = np.zeros((len(liste), 992, 300))
+k=0
+for i in liste:
+    ii = Acq.QubicIntegrated(d, Nrec=nrec, Nsub=nrec*i)
+    m = ii.get_PySM_maps({'cmb':42}, nus=ii.nueff)
+    h = ii.get_operator()
+    tod_i = h(m[0])
+    tod_s[k] = tod_i
+    k+=1
+```
+
+```{python}
+plt.figure(figsize=(15, 5))
+
+plt.plot(tod[0], alpha=0.2)
+plt.plot(tod[0] - tod_s[0, 0])
+plt.plot(tod[0] - tod_s[1, 0])
+plt.plot(tod[0] - tod_s[2, 0])
+
+plt.axhline(0, ls='--', color='black')
+
+#plt.ylim(-3e-18, 3e-18)
+plt.show()
+```
+
+```{python}
+diff = tod - tod_s
+np.mean(diff, axis=1)
+```
+
+```{python}
+#plt.plot(abs(np.mean(diff, axis=1)[:, 0]/tod[0, 0]))
+plt.plot(liste, abs(np.std(diff, axis=1)[:, 0]))
+plt.yscale('log')
+```
+
+```{python}
+
+```
+
+```{python}
+hh
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -1,0 +1,47 @@
+data:
+  path : '/home/regnier/work/regnier/Pipeline/signal'
+  name : 'test'
+  n_real : 20
+  pipeline : 'FMM'
+
+simu: 
+  nrec : 2 
+  qubic_config : DB
+  convo : True
+  noise : True
+  name : 'Sky'
+
+MCMC:
+  nwalkers : 70
+  mcmc_steps : 1000
+  discard : 800
+
+NUS:
+  qubic: [True, 2]
+  95GHz: False
+  150GHz: False
+  220GHz: False
+  30GHz: True
+  44GHz: True
+  70GHz: True
+  100GHz: False
+  143GHz: False
+  217GHz: False
+  353GHz: True
+
+
+SKY_PARAMETERS:
+  r : [True, -1, 1, 0.01, 0.01] 
+  Alens : [1, -100000, 100000, 1, 0.1]
+  nu0_d : [353, 0, 1, 0, 1000]
+  Ad : [True, 0, 10000, 9, 0.1]     #13.4
+  alphad : [True, -100000, 0, -0.5, 0.01]
+  betad : [True, 1, 2, 1.82, 0.1]    #1.52
+  deltad : [1, 0, 2, 1, 0.1]
+  nu0_s : [23, 0, 1, 0, 1000]
+  As : [True, -100000, 10000, 0, 0.1]
+  alphas : [0, -100000, 10000, -0.1, 0.01]
+  betas : [-3, -10, 0, -3, 0.1]
+  eps : [True, -1, 1, 0, 0.01]
+
+filename: 'test'

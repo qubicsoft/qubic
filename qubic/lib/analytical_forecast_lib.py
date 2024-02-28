@@ -14,6 +14,18 @@ def give_cl_cmb(ell, r=0, Alens=1.):
 
 class NoiseEquivalentTemperature:
     
+    '''
+    
+    Instance that convert Noise Equivalent Power [W/sqrt(Hz)] to Noise Equivalent Temperature [muK.sqrt(s)]
+    
+    Arguments :
+
+        - NEPs : array
+        - band : array
+        - relative_bandwidth : float between 0 and 1 for the value of dnu/nu. dnu/nu = 0.25 by default.
+    
+    '''
+    
     def __init__(self, NEPs, band, relative_bandwidth=0.25):
         
         self.band = band
@@ -28,6 +40,12 @@ class NoiseEquivalentTemperature:
         
     def _get_derivative_Bnu_db(self, band):
         
+        '''
+        
+        Derivative of the Plankc function w.r.t the temperature T
+        
+        '''
+        
         dnu = 0.5 * self.bw * 1e9
         nu = band * 1e9
         x = (self.h * nu) / (self.k * self.T)
@@ -36,7 +54,15 @@ class NoiseEquivalentTemperature:
         return dIdT
     
     def _NEP2NET_db(self, NEP, band):
-    
+        
+        '''
+        
+        Conversion using : 
+        
+                    NET = NEP / sqrt(2) * dI/dT
+        
+        '''
+        
         dIdT = self._get_derivative_Bnu_db(band)
     
         return np.array([NEP / (np.sqrt(2) * (dIdT * 1e-12))])
@@ -47,6 +73,12 @@ class AnalyticalForecast:
     
     Instance to produce analytical forecast
     
+    Arguments :
+
+        - nus : list 
+        - NEPdet : list
+        - NEPpho : list
+        
     '''
     
     def __init__(self, nus, NEPdet, NEPpho, Nyrs=3, Nh=400, fsky=0.0182, nside=256):
@@ -60,7 +92,7 @@ class AnalyticalForecast:
             raise TypeError("NEPdet and NEPpho should have the same length")
         
         self.nside = nside                              # Map pixelization
-        self.Nyrs = Nyrs
+        self.Nyrs = Nyrs                                # Nyrs
         self.Tobs = 3600 * 24 * 365 * self.Nyrs         # Observation time [s]
         self.Nh = Nh                                    # Number of horns (detectors for an imager)
         self.fsky = fsky                                # Observed sky fraction
@@ -100,12 +132,11 @@ class AnalyticalForecast:
         
         fwhm = np.array([0.0041, 0.0041])
         bl = np.array([hp.gauss_beam(b, lmax=2*self.nside) for b in fwhm])
-    
         nl = (bl / np.radians(depths/60.)[:, np.newaxis])**2
         AtNA = np.einsum('fi, fl, fj -> lij', A, nl, A)
 
-        sig2_00 =  np.linalg.pinv(AtNA)
-        Nl = sig2_00[0, 0, 0]
+        sig2_00 =  np.linalg.pinv(AtNA) / hp.nside2resol(self.nside, arcmin=True)
+        Nl = sig2_00[0, 0, 0] 
 
         return Nl
 
@@ -118,7 +149,9 @@ class AnalyticalForecast:
         '''
         
         ClBB = give_cl_cmb(ell, r=1, Alens=0.)
-        return np.sum(((2 * ell + 1)/2) * self.fsky * (ClBB / Nl)**2)**(-0.5)
+        s = np.sum((ell + 0.5) * self.fsky * (ClBB / Nl)**2)
+        #print('s ', s)
+        return s**(-0.5)
     
     def main(self, A, ell):
         
@@ -148,4 +181,11 @@ class AnalyticalForecast:
         return sigr
         
         
-        
+ell = np.array([40.5, 70.5, 100.5, 130.5, 160.5, 190.5, 220.5, 250.5, 280.5, 310.5, 340.5, 370.5, 400.5, 430.5, 460.5])
+A = np.array([[1],
+              [1]])   
+
+f = 0.7
+
+af = AnalyticalForecast([150, 220], [f * 4.7e-17, f * 4.7e-17], [5e-17, 1.16e-16], Nyrs=3, Nh=400, fsky=0.025, nside=256)
+af.main(A, ell)     

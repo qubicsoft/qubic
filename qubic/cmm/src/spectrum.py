@@ -15,7 +15,7 @@ import data
 
 t = 'varying'
 nside = 256
-lmin = 26
+lmin = 40
 lmax = 2 * nside
 aposize = 10
 dl = 30
@@ -31,7 +31,7 @@ class Spectrum:
     def __init__(self, path_to_data, lmin=40, lmax=512, dl=30, aposize=10, varying=True, center=qubic.equ2gal(0, -57)):
 
         self.files = os.listdir(path_to_data)
-        self.N = len(self.files) - 198
+        self.N = len(self.files)
         if self.N % 2 != 0:
             self.N -= 1
             
@@ -39,10 +39,9 @@ class Spectrum:
         self.lmin = lmin
         self.lmax = lmax
         self.aposize = aposize
-        self.covcut = 0.1
+        self.covcut = 0.2
         self.center = center
         self.jobid = os.environ.get('SLURM_JOB_ID')
-        #print(path_to_data.split('/')[-2])
         self.args_title = path_to_data.split('/')[-2].split('_')[:3]
         
         
@@ -89,7 +88,7 @@ class Spectrum:
                 for icomp in range(self.ncomps):
                     self.residuals[i, icomp] = self.components[i, icomp] - self.components_true[icomp]
                 print(f'Realization #{i+1}')
-                        
+                
             except OSError as e:
                     
                 list_not_read += [i]
@@ -112,9 +111,9 @@ class Spectrum:
         print('    -> Initialization of Namaster')
         self.N = self.components.shape[0]
         self.namaster = nam.Namaster(self.seenpix, lmin=self.lmin, lmax=self.lmax, delta_ell=self.dl, aposize=self.aposize)
-        print(self.namaster.mask_apo)
-        print(self.namaster.fsky, np.sum(self.seenpix), np.sum(self.namaster.mask_apo))
-        stop
+        #print(self.namaster.mask_apo)
+        #print(self.namaster.fsky, np.sum(self.seenpix), np.sum(self.namaster.mask_apo))
+        #stop
         self.ell, _ = self.namaster.get_binning(self.nside)
         self._f = self.ell * (self.ell + 1) / (2 * np.pi)
         
@@ -133,11 +132,9 @@ class Spectrum:
             self.BlBB[i] = self._get_BB_spectrum(_r[i], 
                                                  beam_correction=np.rad2deg(0.00415369), 
                                                  pixwin_correction=False)
-        #self.BlBB[1] = self._get_BB_spectrum(_r[1], beam_correction=np.rad2deg(0.00415369))
+
         self._plot_bias(Alens)
-        print(self.ell)
         print('Statistical bias -> ', self.BlBB)
-        #stop
 
     def _plot_bias(self, Alens):
         t = ['-o', '--', ':']
@@ -230,10 +227,12 @@ class Spectrum:
     def __repr__(self):
         return f"Spectrum class"
 
-path = 'data_forecast_paper/comparison_DB_vs_UWB/purCMB'
-foldername = f'parametric_d0_wide_inCMB_outCMB_ndet0_1'
 
-path_to_data = os.getcwd() + '/' + path + '/' + foldername + '/'
+
+path = 'data_forecast_paper/comparison_DB_vs_UWB/purCMB'
+#foldername = f'parametric_d0_two_inCMBDust_outCMBDust_ndet1_nyrs1_5'
+foldername = str(sys.argv[1])
+path_to_data = os.getcwd() + '/' + foldername + '/'
 spec = Spectrum(path_to_data, 
                 lmin=lmin, 
                 lmax=lmax, 

@@ -192,21 +192,34 @@ class Chi2ConstantBlindJC:
             x_reshape = np.append(x_reshape, x[:, i].ravel())
         return x_reshape
     def _reshape_A_transpose(self, x, nf):
-
-        nc = int(x.shape[0] / nf)
+        
+        #print(x, len(x))
+        nc = 1#int(len(x) / nf)
+        fsub = int(nf / len(x))
         x_reshape = np.ones((nf, nc))
-        for i in range(nc):
-            x_reshape[:, i] = x[i*nf:(i+1)*nf]
+        #print('fsub ', fsub)
+        #print('x ', x)
+        if fsub == 1:
+            for i in range(nc):
+                x_reshape[:, i] = x[i*nf:(i+1)*nf]
+        else:
+            for i in range(nc):
+                for j in range(len(x)):
+                    #print(j*fsub, (j+1)*fsub)
+                    x_reshape[j*fsub:(j+1)*fsub, i] = np.array([x[j]]*fsub)
+        #print('x_rec ', x_reshape)
+        #stop
         return x_reshape
     def _qu(self, x, tod_comp, A, icomp):
-        
-        x = self._reshape_A_transpose(x, self.nsub*2)
+        #print(x, x.shape)
+        x = self._reshape_A_transpose(x, 2*self.nsub)
+        #print(x, x.shape)
+        #stop
         if self.sims.params['MapMaking']['qubic']['type'] == 'two':
             ysim = np.zeros(2*self.nsnd)
             ysim[:self.nsnd] += np.sum(tod_comp[0, :self.nsub], axis=0)
             ysim[self.nsnd:self.nsnd*2] += np.sum(tod_comp[0, self.nsub:self.nsub*2], axis=0)
-            #print(x.shape)
-            #print(tod_comp.shape)
+
             for i in range(self.nc-1):
                 #print(i, icomp)
                 if i+1 == icomp:
@@ -228,57 +241,3 @@ class Chi2ConstantBlindJC:
         self.chi2 = _dot(_r.T, self.sims.invN.operands[0](_r), self.sims.comm)
         
         return self.chi2
-
-'''
-class Chi2VaryingParametric:
-    
-    def __init__(self, sims):
-        
-        self.sims = sims
-        self.nc = len(sims.comps)
-        self.nsnd = self.sims.joint.qubic.ndets*self.sims.joint.qubic.nsamples
-        self.nsub = self.sims.joint.qubic.Nsub
-        self.mixingmatrix = mm.MixingMatrix(*self.sims.comps)
-    
-    def _qu(self, x, patch_id, betamap, solution, tod_comp):
-        
-        
-        betamap[patch_id] = x
-        
-        index = np.arange(len(betamap))
-
-        A = np.zeros((len(betamap), self.nsub*2, len(self.sims.comps)))
-        for co in range(len(self.sims.comps)):
-            if self.sims.comps_name[co] == 'CMB':
-                A[:, :, co] = self.sims.comps[co].eval(self.sims.nus_eff[:self.nsub*2])#[0]
-            elif self.sims.comps_name[co] == 'Dust':
-                A[:, :, co] = self.sims.comps[co].eval(self.sims.nus_eff[:self.nsub*2], betamap)#[0]
-        
-        if self.sims.params['MapMaking']['qubic']['type'] == 'two':
-            ysim = np.zeros(self.nsnd*2)
-            
-            for co in range(len(self.sims.comps)):
-                for ii, i in enumerate(index):
-                    
-                    ysim[:self.nsnd] += A[ii, :self.nsub, co] @ tod_comp[i, :self.nsub, co, :self.nsnd]
-                    #print(ysim.shape, A.shape, tod_comp.shape)
-                    #stop
-                    ysim[self.nsnd:2*self.nsnd] += A[ii, self.nsub:2*self.nsub, co] @ tod_comp[i, self.nsub:self.nsub*2, co, :]
-        else:
-            ysim = np.zeros(self.nsnd)
-            for co in range(len(self.sims.comps)):
-                for ii, i in enumerate(index):
-                    
-                    ysim += A[ii, :self.nsub*2, co] @ tod_comp[i, :, co, :]
-                
-        
-        H_planck = self.sims.joint.get_operator(np.array([betamap]).T,  gain=self.sims.g_iter, fwhm=self.sims.fwhm_recon, nu_co=self.sims.nu_co).operands[1]
-        tod_pl_s = H_planck(solution)
-        
-        _r = self.sims.TOD_Q - ysim
-        _r_pl = self.sims.TOD_E - tod_pl_s
-        #_r = np.r_[_r, _r_pl]
-        
-        #return _dot(_r.T, self.sims.invN(_r), self.sims.comm)# + (_r_pl.T @ self.sims.invN.operands[1](_r_pl))
-        return  _dot(_r.T, self.sims.invN.operands[0](_r), self.sims.comm) + (_r_pl.T @ self.sims.invN.operands[1](_r_pl))
-'''

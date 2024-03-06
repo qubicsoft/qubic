@@ -289,16 +289,28 @@ class Pipeline:
             
             for i in range(len(self.sims.comps_out)):
                 if self.sims.comps_name_out[i] == 'Dust':
-                    print(self.sims.comps_name_out, i)
+                    #print(self.sims.comps_name_out, i)
                     ### Cost function depending of [Ad, As]
-                    fun = partial(self.chi2._qu, tod_comp=self._get_tod_comp(), A=self.sims.Amm_iter, icomp=i)
+                    tod_comp = self._get_tod_comp()    # (Nc, Nsub, NsNd)
+                    #print('tod_comp -> ', tod_comp.shape)
+                    #stop
+                    fun = partial(self.chi2._qu, tod_comp=tod_comp, A=self.sims.Amm_iter, icomp=i)
             
                     ### Minimization
-                    bnds = [(0, None) for _ in range(self.sims.joint_out.qubic.Nsub * 2)]
-                
-                    Ai = fmin_l_bfgs_b(fun, x0=self.sims.Amm_iter[:self.sims.joint_out.qubic.Nsub*2, i], approx_grad=True, bounds=bnds, maxiter=30, 
+                    x0 = np.ones(self.sims.params['MapMaking']['qubic']['nrec_blind'])
+                    #x0 = self.sims.Amm_iter[:self.sims.joint_out.qubic.Nsub*2, i]
+                    bnds = [(0, None) for _ in range(x0.shape[0])]
+
+                    
+                    Ai = fmin_l_bfgs_b(fun, x0=x0, approx_grad=True, bounds=bnds, maxiter=30, 
                                    callback=self._callback, epsilon = 1e-6)[0]
-                    self.sims.Amm_iter[:self.sims.joint_out.qubic.Nsub*2, i] = Ai.copy()
+                    
+                    fsub = int(self.sims.joint_out.qubic.Nsub*2 / self.sims.params['MapMaking']['qubic']['nrec_blind'])
+                    for ii in range(self.sims.params['MapMaking']['qubic']['nrec_blind']):
+                        self.sims.Amm_iter[ii*fsub:(ii+1)*fsub, i] = np.array([Ai[ii]]*fsub)
+                    #print(Ai)
+                    #stop
+                    #self.sims.Amm_iter[:self.sims.joint_out.qubic.Nsub*2, i] = Ai.copy()
                     
             
             
@@ -307,12 +319,12 @@ class Pipeline:
             if self.sims.rank == 0:
                 print(f'Iteration k     : {previous_step.ravel()}')
                 print(f'Iteration k + 1 : {self.sims.Amm_iter[:self.sims.joint_out.qubic.Nsub*2, 1:].ravel()}')
-                print(f'Truth           : {self.sims.Amm_out[:self.sims.joint_out.qubic.Nsub*2, 1:].ravel()}')
-                print(f'Residuals       : {self.sims.Amm_out[:self.sims.joint_out.qubic.Nsub*2, 1:].ravel() - self.sims.Amm_iter[:self.sims.joint_out.qubic.Nsub*2, 1:].ravel()}')
+                print(f'Truth           : {self.sims.Ammtrue[:self.sims.joint_out.qubic.Nsub*2, 1:].ravel()}')
+                print(f'Residuals       : {self.sims.Ammtrue[:self.sims.joint_out.qubic.Nsub*2, 1:].ravel() - self.sims.Amm_iter[:self.sims.joint_out.qubic.Nsub*2, 1:].ravel()}')
                
                 self.plots.plot_sed(self.sims.joint_out.qubic.allnus, 
                                         self.sims.allAmm_iter[:, :self.sims.joint_out.qubic.Nsub*2, 1:], 
-                                        ki=self._steps, truth=self.sims.Amm_out[:self.sims.joint_out.qubic.Nsub*2, 1:])
+                                        ki=self._steps, truth=self.sims.Ammtrue[:self.sims.joint_out.qubic.Nsub*2, 1:])
 
                 #print('Amm ', self.sims.Amm_out)
                 #print('Amm_iter ', self.sims.Amm_iter)
@@ -348,7 +360,8 @@ class Pipeline:
                                  'Atrue':self.sims.Amm_in,
                                  'allA':self.sims.allAmm_iter,
                                  'G':self.sims.G,
-                                 'nus':self.sims.nus_eff,
+                                 'nus_in':self.sims.nus_eff_in,
+                                 'nus_out':self.sims.nus_eff_out,
                                  'center':self.sims.center,
                                  'coverage':self.sims.coverage,
                                  'seenpix':self.sims.seenpix,

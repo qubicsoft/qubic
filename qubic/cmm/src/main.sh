@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=cmbonly
+#SBATCH --job-name=cmbdust
 
 # we ask for n MPI tasks with N cores each on c nodes
 
@@ -8,8 +8,8 @@
 #SBATCH --nodes=1                # c
 #SBATCH --ntasks-per-node=2      # n
 #SBATCH --cpus-per-task=2        # N
-#SBATCH --mem-per-cpu=9GB
-#SBATCH --time=0-07:00:00
+#SBATCH --mem-per-cpu=8GB
+#SBATCH --time=0-05:00:00
 #SBATCH --output=mulitple_jobs_%j.log
 #SBATCH --array=1-200
 

@@ -122,7 +122,8 @@ class PresetSims:
                                                          self.params['MapMaking']['planck']['nintegr'],
                                                          nu_co=self.nu_co)
         
-        self.joint_out = JointAcquisitionComponentsMapMaking(self.dict, 
+        if self.params['MapMaking']['qubic']['nsub'] == self.params['MapMaking']['qubic']['nsub_out']:
+            self.joint_out = JointAcquisitionComponentsMapMaking(self.dict, 
                                                          self.params['MapMaking']['qubic']['type'], 
                                                          self.comps_out, 
                                                          self.params['MapMaking']['qubic']['nsub'],
@@ -130,6 +131,15 @@ class PresetSims:
                                                          self.params['MapMaking']['planck']['nintegr'],
                                                          nu_co=self.nu_co,
                                                          H=self.joint_in.qubic.H)
+        else:
+            self.joint_out = JointAcquisitionComponentsMapMaking(self.dict, 
+                                                         self.params['MapMaking']['qubic']['type'], 
+                                                         self.comps_out, 
+                                                         self.params['MapMaking']['qubic']['nsub_out'],
+                                                         self.external_nus,
+                                                         self.params['MapMaking']['planck']['nintegr'],
+                                                         nu_co=self.nu_co,
+                                                         H=None)
         
         ### Compute coverage map
         self.coverage = self.joint_out.qubic.coverage
@@ -139,7 +149,6 @@ class PresetSims:
         self.seenpix_BB = self.coverage/self.coverage.max() > 0.3
         #self.seenpix_analysis = self.coverage/self.coverage.max() > 0.2
         self.seenpix = self.coverage/self.coverage.max() > self.params['MapMaking']['planck']['thr']
-        
         self.coverage_cut = self.coverage.copy()
         self.coverage_cut[~self.seenpix] = 1
         self.fsky = self.seenpix.astype(float).sum() / self.seenpix.size
@@ -306,11 +315,13 @@ class PresetSims:
         if self.params['MapMaking']['qubic']['type'] == 'wide':
             noise = QubicWideBandNoise(self.dict, 
                                        self.params['MapMaking']['qubic']['npointings'], 
-                                       detector_nep=self.params['MapMaking']['qubic']['detector_nep'])
+                                       detector_nep=self.params['MapMaking']['qubic']['detector_nep'],
+                                       duration=self.params['MapMaking']['qubic']['duration'])
         else:
             noise = QubicDualBandNoise(self.dict, 
                                        self.params['MapMaking']['qubic']['npointings'], 
-                                       detector_nep=self.params['MapMaking']['qubic']['detector_nep'])
+                                       detector_nep=self.params['MapMaking']['qubic']['detector_nep'],
+                                       duration=self.params['MapMaking']['qubic']['duration'])
 
         return noise.total_noise(self.params['MapMaking']['qubic']['ndet'], 
                                  self.params['MapMaking']['qubic']['npho150'], 
@@ -445,7 +456,8 @@ class PresetSims:
         
         """
         
-        self.nus_eff = np.array(list(self.joint_in.qubic.allnus) + list(self.joint_in.external.allnus))
+        self.nus_eff_in = np.array(list(self.joint_in.qubic.allnus) + list(self.joint_in.external.allnus))
+        self.nus_eff_out = np.array(list(self.joint_out.qubic.allnus) + list(self.joint_out.external.allnus))
         
         if self.params['Foregrounds']['type'] == 'parametric':
             self.Amm_in = None
@@ -477,21 +489,25 @@ class PresetSims:
                         raise TypeError(f'{name} is not implemented..')
             elif self.params['Foregrounds']['model_d'] == 'd6':
                 
-                self.Amm_in = self._get_Amm(self.comps_in, self.comps_name_in, self.nus_eff, init=False)
+                self.Amm_in = self._get_Amm(self.comps_in, self.comps_name_in, self.nus_eff_in, init=False)
                 #self.Amm_in[:2*self.joint_in.qubic.Nsub] = self._get_Amm(self.comps_in, self.comps_name_in, self.nus_eff, init=False)[:2*self.joint_in.qubic.Nsub]
                 #print(self.Amm_in.shape)
                 #stop
                 #self.Amm_in[2*self.joint_in.qubic.Nsub:] = self._get_Amm(self.comps_in, self.comps_name_in, self.nus_eff, init=True)[2*self.joint_in.qubic.Nsub:]
-                self.Amm_out = self._get_Amm(self.comps_out, self.comps_name_out, self.nus_eff, init=False)
+                self.Amm_out = self._get_Amm(self.comps_out, self.comps_name_out, self.nus_eff_out, init=False)
                 self.beta_in = np.array([float(i._REF_BETA) for i in self.comps_in[1:]])
                 self.beta_out = np.array([float(i._REF_BETA) for i in self.comps_out[1:]])
                 
         elif self.params['Foregrounds']['type'] == 'blind':
             self.beta_in = np.array([float(i._REF_BETA) for i in self.comps_in[1:]])
             self.beta_out = np.array([float(i._REF_BETA) for i in self.comps_out[1:]])
-            self.Amm_in = self._get_Amm(self.comps_in, self.comps_name_in, self.nus_eff, init=False)
-            self.Amm_out = self._get_Amm(self.comps_out, self.comps_name_out, self.nus_eff, init=False)
+            self.Amm_in = self._get_Amm(self.comps_in, self.comps_name_in, self.nus_eff_in, init=False)
 
+            self.Amm_in[len(self.joint_in.qubic.allnus):] = self._get_Amm(self.comps_in, self.comps_name_in, self.nus_eff_in, init=True)[len(self.joint_in.qubic.allnus):]
+            self.Amm_out = self._get_Amm(self.comps_out, self.comps_name_out, self.nus_eff_out, init=True)
+            #print(self.Amm_in)
+            #print(self.Amm_out)
+            #stop
         else:
             raise TypeError(f"method {self.params['Foregrounds']['type']} is not yet implemented..")
         

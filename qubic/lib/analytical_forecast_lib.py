@@ -12,19 +12,16 @@ def give_cl_cmb(ell, r=0, Alens=1.):
         power_spectrum += r * hp.read_cl('data/Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
     return np.interp(ell, np.arange(1, 4001, 1), power_spectrum[2])
 
-class NoiseEquivalentTemperature:
-    
-    '''
-    
-    Instance that convert Noise Equivalent Power [W/sqrt(Hz)] to Noise Equivalent Temperature [muK.sqrt(s)]
-    
-    Arguments :
+def give_cl_cmb(ell, r=0, Alens=1.):
+        
+    power_spectrum = hp.read_cl('data/Cls_Planck2018_lensed_scalar.fits')[:,:4000]
+    if Alens != 1.:
+        power_spectrum[2] *= Alens
+    if r:
+        power_spectrum += r * hp.read_cl('data/Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
+    return np.interp(ell, np.arange(1, 4001, 1), power_spectrum[2])
 
-        - NEPs : array
-        - band : array
-        - relative_bandwidth : float between 0 and 1 for the value of dnu/nu. dnu/nu = 0.25 by default.
-    
-    '''
+class NoiseEquivalentTemperature:
     
     def __init__(self, NEPs, band, relative_bandwidth=0.25):
         
@@ -40,12 +37,6 @@ class NoiseEquivalentTemperature:
         
     def _get_derivative_Bnu_db(self, band):
         
-        '''
-        
-        Derivative of the Plankc function w.r.t the temperature T
-        
-        '''
-        
         dnu = 0.5 * self.bw * 1e9
         nu = band * 1e9
         x = (self.h * nu) / (self.k * self.T)
@@ -54,15 +45,7 @@ class NoiseEquivalentTemperature:
         return dIdT
     
     def _NEP2NET_db(self, NEP, band):
-        
-        '''
-        
-        Conversion using : 
-        
-                    NET = NEP / sqrt(2) * dI/dT
-        
-        '''
-        
+    
         dIdT = self._get_derivative_Bnu_db(band)
     
         return np.array([NEP / (np.sqrt(2) * (dIdT * 1e-12))])
@@ -81,31 +64,43 @@ class AnalyticalForecast:
         
     '''
     
-    def __init__(self, nus, NEPdet, NEPpho, Nyrs=3, Nh=400, fsky=0.0182, nside=256):
+    def __init__(self, nus, NEPdet, NEPpho, Nyrs=3, Nh=400, fsky=0.0182, nside=256, instr='DB'):
     
         ### Check type of inputs
-        if type(NEPdet) is not list or type(NEPpho) is not list:
-            raise TypeError("NEP type should be a list")
+        if instr == 'DB':
+            if type(NEPdet) is not list or type(NEPpho) is not list:
+                raise TypeError("NEP type should be a list")
         
         ### Check length of inputs
-        if len(NEPdet) != len(NEPpho):
-            raise TypeError("NEPdet and NEPpho should have the same length")
+        if instr == 'DB':
+            if len(NEPdet) != len(NEPpho):
+                raise TypeError("NEPdet and NEPpho should have the same length")
         
         self.nside = nside                              # Map pixelization
-        self.Nyrs = Nyrs                                # Nyrs
+        self.Nyrs = Nyrs                                # Nyrs                    
         self.Tobs = 3600 * 24 * 365 * self.Nyrs         # Observation time [s]
         self.Nh = Nh                                    # Number of horns (detectors for an imager)
         self.fsky = fsky                                # Observed sky fraction
         self.nus = nus                                  # Physical bands
         self.nfreqs = len(NEPdet)                       # Number of frequencies
-        
+        self.intr = instr
         
         ### Store NEPs
-        self.NEPs = np.zeros((self.nfreqs, 2))
+        if self.intr == 'DB':
+            self.NEPs = np.zeros((self.nfreqs, 2))
+            for i in range(self.nfreqs):
+                self.NEPs[i, 0] = NEPdet[i] * 2     # factor 2 because sig^2 = NEP^2 / (2 * Ts) ???
+                self.NEPs[i, 1] = NEPpho[i]
+        elif self.intr == 'UWB':
+            self.Nyrs *= 2                          # Multiply Nyrs by two have the same effect than having twice less pointings
+            self.Tobs = 3600 * 24 * 365 * self.Nyrs         # Observation time [s]
+            self.NEPs = np.zeros((self.nfreqs, 3))
+            for i in range(self.nfreqs):
+                self.NEPs[i, 0] = NEPdet[0] * 2 * np.sqrt(2)
+                self.NEPs[i, 1] = NEPpho[0] #/ np.sqrt(2)
+                self.NEPs[i, 2] = NEPpho[1] #/ np.sqrt(2)
         
-        for i in range(self.nfreqs):
-            self.NEPs[i, 0] = NEPdet[i]
-            self.NEPs[i, 1] = NEPpho[i]
+        
         
     def _get_effective_depths(self, NETs):
         
@@ -115,12 +110,12 @@ class AnalyticalForecast:
         
         '''
         
-        Omega = (4.0 * np.pi * self.fsky) / ((np.pi / (180.0 * 60.0))**2)
-        depths = 4 * np.sqrt((Omega * np.power(NETs, 2.)) / (self.Tobs * self.Nh))
+        Omega = (4 * np.pi * self.fsky) / ((np.pi / (180 * 60))**2)
+        depths = 4 * np.sqrt((Omega * np.power(NETs, 2.)) / (self.Tobs * self.Nh)) #* 1/np.sqrt(2)
 
         return depths
     
-    def _get_power_spectra(self, depths, A):
+    def _get_power_spectra(self, depths, A, correlation=False):
         
         '''
         
@@ -134,9 +129,13 @@ class AnalyticalForecast:
         bl = np.array([hp.gauss_beam(b, lmax=2*self.nside) for b in fwhm])
         nl = (bl / np.radians(depths/60.)[:, np.newaxis])**2
         AtNA = np.einsum('fi, fl, fj -> lij', A, nl, A)
-
+        
         sig2_00 =  np.linalg.pinv(AtNA) / hp.nside2resol(self.nside, arcmin=True)
+
         Nl = sig2_00[0, 0, 0] 
+        if correlation:
+            Nl += np.sqrt(2) * sig2_00[0, 0, 1]
+            #Nl += sig2_00[0, 0, 1]
 
         return Nl
 
@@ -149,11 +148,11 @@ class AnalyticalForecast:
         '''
         
         ClBB = give_cl_cmb(ell, r=1, Alens=0.)
-        s = np.sum((ell + 0.5) * self.fsky * (ClBB / Nl)**2)
-        #print('s ', s)
-        return s**(-0.5)
+        s = np.sum((ell + 0.5) * self.fsky * (ClBB / Nl)**2)**(-1/2)
+
+        return s
     
-    def main(self, A, ell):
+    def main(self, A, ell, correlation=False):
         
         '''
         
@@ -165,27 +164,13 @@ class AnalyticalForecast:
         NETs = np.zeros(self.nfreqs)
         for i in range(self.nfreqs):
             NETs[i] = NoiseEquivalentTemperature(self.NEPs[i], self.nus[i]).NETs
-        print(NETs)
-        
+
         ### NETs [muK.sqrt(s)] -> depths [muK.arcmin]
         depths = self._get_effective_depths(NETs)
-        print(depths)
-        
+
         ### depths [muK.arcmin] -> Nl [muK^2]
-        Nl = self._get_power_spectra(depths, A)
-        print(Nl)
+        Nl = self._get_power_spectra(depths, A, correlation=correlation)
         
         sigr = self._fisher(ell, Nl)
-        print(sigr)
         
         return sigr
-        
-        
-ell = np.array([40.5, 70.5, 100.5, 130.5, 160.5, 190.5, 220.5, 250.5, 280.5, 310.5, 340.5, 370.5, 400.5, 430.5, 460.5])
-A = np.array([[1],
-              [1]])   
-
-f = 0.7
-
-af = AnalyticalForecast([150, 220], [f * 4.7e-17, f * 4.7e-17], [5e-17, 1.16e-16], Nyrs=3, Nh=400, fsky=0.025, nside=256)
-af.main(A, ell)     

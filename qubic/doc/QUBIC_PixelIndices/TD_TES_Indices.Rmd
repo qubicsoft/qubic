@@ -33,10 +33,14 @@ import qubicpack as qp
 
 ### Correspondance between QP and QS indices: see "Pixel Indices.Rmd"
 ### These functions will only work with the QUBIC TD, we'll need to update them later
+
+
+### Function to get QubicSoft (simulation/reconstruction) pixel indices converted into QubicPack (actual instrument data) pixel indices
 def iQS2iQP(indexQS):
     qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
     return qpnumi+(qpasici-1)*128-1
 
+### Function to get  QubicPack (actual instrument data) pixel indices converted into QubicSoft (simulation/reconstruction) pixel indices
 def iQP2iQS(indexQP):
     QStesnum = qp.pix2tes.tes2pix(indexQP%128+1, indexQP//128+1)
     return QStesnum-1

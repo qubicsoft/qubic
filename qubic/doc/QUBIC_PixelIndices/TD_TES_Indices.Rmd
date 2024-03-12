@@ -1,0 +1,117 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+
+import pickle
+import healpy as hp
+from importlib import reload
+import xarray as xr
+
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+
+import qubicpack as qp
+
+
+
+### Correspondance between QP and QS indices: see "Pixel Indices.Rmd"
+### These functions will only work with the QUBIC TD, we'll need to update them later
+def iQS2iQP(indexQS):
+    qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
+    return qpnumi+(qpasici-1)*128-1
+
+def iQP2iQS(indexQP):
+    QStesnum = qp.pix2tes.tes2pix(indexQP%128+1, indexQP//128+1)
+    return QStesnum-1
+
+```
+
+```{python}
+######## Technological Demonstrator #######
+
+basedir = Qubic_DataDir()
+print('basedir : ', basedir)
+dictfilename = basedir + '/dicts/global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+q = qubic.QubicInstrument(d)
+
+
+### QUBIC Soft location
+xQS, yQS = q.detector.center[:,0:2].T
+
+### QUBIC Pack locations (actual orientation the instrument)
+xTES = -yQS
+yTES = xQS
+# xTES = xQS
+# yTES = yQS
+
+
+rc('figure',figsize=(20,20))
+rc('font',size=20)
+
+col_asic1 = 'purple'
+col_asic2 = 'green'
+qp_color = 'b'
+qs_color = 'r'
+
+dx = -0.0012
+dy = 0.0003
+for i in range(248):
+    indexQubicSoft = i
+    indexQubicPack = iQS2iQP(i)
+    if indexQubicPack < 128:
+        c = col_asic1
+    else:
+        c = col_asic2
+    plot(xTES[i], yTES[i], 'ks', markerfacecolor=c, markeredgecolor='k', markeredgewidth=2, alpha=0.2, ms=58)
+    text(xTES[i]+dx, yTES[i]+1.*dy, 'QS: {0:3d}'.format(indexQubicSoft), color=qs_color, fontsize=12)
+    text(xTES[i]+dx, yTES[i]-2.2*dy, 'QP: {0:3d}'.format(indexQubicPack), color=qp_color, fontsize=12)
+xlabel('Y_ONAFP [m]')
+ylabel('Y_ONAFP [m]')
+xlim(-0.055,0.001)
+ylim(-0.055,0.001)
+
+thermos_xy = np.unique(np.sort(yTES))[3:7][::-1]
+for i in range(4):
+    plot(np.min(xTES), thermos_xy[i], 'ks', markerfacecolor=col_asic1, markeredgecolor='k', markeredgewidth=2, alpha=0.2, ms=58)
+    text(np.min(xTES)+dx, thermos_xy[i]+3.*dy, 'Thermo', color='k', fontsize=10)
+    text(np.min(xTES)+dx, thermos_xy[i]+0.6*dy, 'QS:   -', color=qs_color, fontsize=12)
+    text(np.min(xTES)+dx, thermos_xy[i]-2.6*dy, 'QP: {0:3d}'.format(32*i+4), color=qp_color, fontsize=12)
+    
+for i in range(4):
+    plot(thermos_xy[::-1][i], np.min(xTES), 'ks', markerfacecolor=col_asic2, markeredgecolor='k', markeredgewidth=2, alpha=0.2, ms=58)
+    text(thermos_xy[::-1][i]+dx, np.min(xTES)+3.*dy, 'Thermo', color='k', fontsize=10)
+    text(thermos_xy[::-1][i]+dx, np.min(xTES)+0.6*dy, 'QS:   -', color=qs_color, fontsize=12)
+    text(thermos_xy[::-1][i]+dx, np.min(xTES)-2.6*dy, 'QP: {0:3d}'.format(32*i+4+128), color=qp_color, fontsize=12)
+
+
+plot(1,1, 's', markerfacecolor=col_asic1, markeredgecolor='k', markeredgewidth=2, alpha=0.2, ms=20, label='ASIC 1', color=col_asic1)
+plot(1,1, 's', markerfacecolor=col_asic2, markeredgecolor='k', markeredgewidth=2, alpha=0.2, ms=20, label='ASIC 2', color=col_asic2)
+plot(1,1, qp_color+'-', label='QUBIC Pack '+r'$\bf{Indices}$'+' (starting at 0)')
+plot(1,1, qs_color+'-', label='QUBIC Soft '+r'$\bf{Indices}$'+' (starting at 0)')
+
+legend(loc='lower left', fontsize=14, frameon=False, labelcolor='linecolor')
+title('QUBIC Technological Demonstrator Focal Plane '+ r"$\bf{INDICES}$"+ ' (starting at 0)')
+```
+
+```{python}
+
+```

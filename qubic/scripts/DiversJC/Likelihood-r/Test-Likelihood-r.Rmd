@@ -168,8 +168,8 @@ maps = np.zeros_like(maps_full)
 
 for i in range(d['nf_sub']):
     maps_cmb[i,:,:] = (maps_cmb_full[i,:,:].T * mask).T
-    maps_dust[i,:,:] = (maps_dust_full[i,:,:].T * mask).T
-    maps[i,:,:] = (maps_full[i,:,:].T * mask).T
+    # maps_dust[i,:,:] = (maps_dust_full[i,:,:].T * mask).T
+    # maps[i,:,:] = (maps_full[i,:,:].T * mask).T
 
 ```
 

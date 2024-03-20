@@ -1,0 +1,172 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+rc('figure',figsize=(20,12))
+rc('font',size=12)
+
+import healpy as hp
+from importlib import reload
+import pysm3 as pysm
+
+from qubicpack.utilities import Qubic_DataDir
+import qubic
+from qubic import NamasterLib
+from qubic import QubicSkySim as qss
+from qubic import camb_interface as qc
+
+
+
+```
+
+# Generate full-sky maps
+
+```{python}
+d = qubic.qubicdict.qubicDict()
+d.read_from_file('likelihood_r_tests.dict')
+d['nf_sub'] = 2
+q = qubic.QubicInstrument(d)
+
+gal_center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+print(d['RA_center'], d['DEC_center'])
+print(gal_center)
+
+### Calculate CMB spectra with CAMB (through the QubicSkySim wrapper, or any other way)
+ell, totDL, unlensedDL = qc.get_camb_Dl(r=0.1, lmax=3*d['nside'])
+
+
+
+### Generate the maps
+seed = np.random.randint(0,1e6)
+cmb_dict = {'CAMBSpectra':totDL, 'ell':ell, 'seed':seed}
+sky_config_cmb = {'cmb': cmb_dict}                ### CMB Only
+sky_config_dust = {'dust':'d1'}                   ### Dust
+sky_config = {'cmb': cmb_dict, 'dust':'d1'}       ### CMB + Dust
+
+
+### Generate the maps at each sub-frequency
+seed = np.random.randint(0, 1e6)
+maps_cmb = qss.Qubic_sky(sky_config_cmb, d).get_simple_sky_map()
+maps_dust = qss.Qubic_sky(sky_config_dust, d).get_simple_sky_map()
+maps = qss.Qubic_sky(sky_config, d).get_simple_sky_map()
+
+
+```
+
+Now display them
+
+```{python}
+### Display all maps
+stn = ['I','Q','U']
+rng = (np.std(x0_2, axis=(0,1))*3).astype(int)
+rng[1:] = np.max(rng[1:])
+
+figure()
+numsub = 1
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.mollview(maps_cmb[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+                    sub=(d['nf_sub'],3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+suptitle('CMB')
+
+figure()
+numsub = 1
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.mollview(maps_dust[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+                    sub=(d['nf_sub'],3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+suptitle('Dust')
+
+figure()
+numsub = 1
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.mollview(maps[i,:,istokes], min=-rng[istokes], max=rng[istokes],
+                    sub=(d['nf_sub'],3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+suptitle('CMB + Dust')
+
+```
+
+# QUBIC Coverage
+
+```{python}
+# Very simplistic version
+my_center = gal_center
+ang_radius = 20. #degrees
+
+mask = np.zeros(12*d['nside']**2)
+v_center = np.array(hp.ang2vec(gal_center[0], gal_center[1], lonlat=True))
+v_all = np.array(hp.pix2vec(d['nside'], np.arange(12*d['nside']**2)))
+dang = np.degrees(np.arccos(np.dot(v_all.T, v_center)))
+okpix = dang <= ang_radius
+
+mask[okpix] = 1
+sky_frac = np.sum(okpix) / len(okpix)
+print(sky_frac)
+
+
+
+for i in range(d['nf_sub']):
+    maps_cmb[i,:,:] = (maps_cmb[i,:,:].T * mask).T
+    maps_dust[i,:,:] = (maps_dust[i,:,:].T * mask).T
+    maps[i,:,:] = (maps[i,:,:].T * mask).T
+
+```
+
+```{python}
+reso = 13
+
+figure()
+numsub = 1
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.gnomview(maps_cmb[i,:,istokes], min=-rng[istokes], max=rng[istokes], rot=gal_center, reso=reso,
+                    sub=(d['nf_sub'],3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+suptitle('CMB')
+
+figure()
+numsub = 1
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.gnomview(maps_dust[i,:,istokes], min=-rng[istokes], max=rng[istokes], rot=gal_center, reso=reso,
+                    sub=(d['nf_sub'],3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+suptitle('Dust')
+
+
+figure()
+numsub = 1
+for i in range(d['nf_sub']):
+    for istokes in [0,1,2]:
+        hp.gnomview(maps[i,:,istokes], min=-rng[istokes], max=rng[istokes], rot=gal_center, reso=reso,
+                    sub=(d['nf_sub'],3,numsub), title=stn[istokes]+' subfreq {}'.format(i))
+        numsub += 1
+suptitle('CMB + Dust')
+
+
+```
+
+# Spectra
+
+```{python}
+
+```

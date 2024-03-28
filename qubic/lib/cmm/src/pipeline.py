@@ -51,7 +51,11 @@ class Pipeline:
     def __init__(self, comm, seed, seed_noise=None):
         
         if seed_noise == -1:
-            seed_noise = np.random.randint(100000000)
+            if comm.Get_rank() == 0:
+                seed_noise = np.random.randint(100000000)
+            else:
+                seed_noise = None
+        seed_noise = comm.bcast(seed_noise, root=0)
         self.sims = PresetSims(comm, seed, seed_noise)
         
         if self.sims.params['Foregrounds']['type'] == 'parametric':
@@ -353,8 +357,8 @@ class Pipeline:
                                  'beta':self.sims.allbeta,
                                  'beta_true':self.sims.beta_in,
                                  'index_beta':self._index_seenpix_beta,
-                                 'g':self.sims.g,
-                                 'gi':self.sims.g_iter,
+                                 'g':self.sims.G,
+                                 'gi':self.sims.Gi,
                                  'allg':self.sims.allg,
                                  'A':self.sims.Amm_iter,
                                  'Atrue':self.sims.Amm_in,
@@ -473,7 +477,7 @@ class Pipeline:
             self.sims.components_iter = mypixels.copy()
         #stop
         if self.sims.rank == 0:
-            #self.plots.display_maps(self.sims.seenpix_plot, ngif=self._steps+1, ki=self._steps)
+            self.plots.display_maps(self.sims.seenpix_plot, ngif=self._steps+1, ki=self._steps)
             self.plots._display_allcomponents(self.sims.seenpix_plot, ki=self._steps)  
             self.plots.plot_rms_iteration(self.sims.rms_plot, ki=self._steps) 
     def _compute_map_noise_qubic_patch(self):
@@ -594,6 +598,7 @@ class Pipeline:
             #g220 /= g220[0]
             
             self.sims.g_iter = np.array([g150, g220]).T
+            self.sims.Gi = join_data(self.sims.comm, self.sims.g_iter)
             self.sims.allg = np.concatenate((self.sims.allg, np.array([self.sims.g_iter])), axis=0)
             #print()
             #stop

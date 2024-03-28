@@ -31,7 +31,7 @@ class QubicNoise:
         self.dict['type_instrument'] = ''
         self.dict['effective_duration'] = duration
         self.acq = frequency_acquisition.QubicIntegrated(self.dict, Nsub=1, Nrec=1)
-        
+        print(f'Duration at {band} GHz is {duration} yrs')
     def get_noise(self, det_noise, pho_noise):
         n = self.detector_noise() * 0
         
@@ -77,7 +77,7 @@ class QubicWideBandNoise:
 
 class QubicDualBandNoise:
 
-    def __init__(self, d, npointings, detector_nep=4.7e-17, duration=3):
+    def __init__(self, d, npointings, detector_nep=4.7e-17, duration=[3, 3]):
 
         self.d = d
         self.npointings = npointings
@@ -86,9 +86,9 @@ class QubicDualBandNoise:
 
     def total_noise(self, wdet, wpho150, wpho220, seed_noise=None):
         
-        Qubic150 = QubicNoise(150, self.npointings, comm=self.d['comm'], size=self.d['nprocs_instrument'], detector_nep=self.detector_nep, seed_noise=seed_noise, duration=self.duration)
-        Qubic220 = QubicNoise(220, self.npointings, comm=self.d['comm'], size=self.d['nprocs_instrument'], detector_nep=self.detector_nep, seed_noise=seed_noise+1, duration=self.duration)
-        
+        Qubic150 = QubicNoise(150, self.npointings, comm=self.d['comm'], size=self.d['nprocs_instrument'], detector_nep=self.detector_nep, seed_noise=seed_noise, duration=self.duration[0])
+        Qubic220 = QubicNoise(220, self.npointings, comm=self.d['comm'], size=self.d['nprocs_instrument'], detector_nep=self.detector_nep, seed_noise=seed_noise+1, duration=self.duration[1])
+        #stop
         ndet150 = wdet * Qubic150.detector_noise().ravel()
         ndet220 = wdet * Qubic220.detector_noise().ravel()
         npho150 = wpho150 * Qubic150.photon_noise().ravel()

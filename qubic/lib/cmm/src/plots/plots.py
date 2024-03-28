@@ -310,8 +310,9 @@ class Plots:
             plt.axvline(0, ls='--', color='black')
             plt.savefig(f'jobs/{self.job_id}/gain_iter{ki+1}.png')
 
-            if self._steps > 0:
-                os.remove(f'jobs/{self.job_id}/gain_iter{ki}.png')
+            if self.sims.rank == 0:
+                if ki > 0:
+                    os.remove(f'jobs/{self.job_id}/gain_iter{ki}.png')
 
             plt.close()
     def plot_rms_iteration(self, rms, figsize=(8, 6), ki=0):

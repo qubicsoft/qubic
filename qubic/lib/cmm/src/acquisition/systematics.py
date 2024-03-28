@@ -183,8 +183,6 @@ def get_mixingmatrix(beta, nus, comp, active=False):
                     #print('to zero', ii)
                     A_ev[0, ii] = 0
             #print(i, A, A.shape)    
-    
-    
     else:
         A_ev = A.evaluator(nus)
         if beta.shape[0] == 0:
@@ -347,7 +345,7 @@ class PlanckAcquisition:
         return np.mean(m, axis=0)
 class QubicFullBandSystematic(QubicPolyAcquisition):
 
-    def __init__(self, d, Nsub, Nrec=1, comp=[], kind='Two', nu_co=None, H=None):
+    def __init__(self, d, Nsub, Nrec=1, comp=[], kind='Two', nu_co=None, H=None, effective_duration150=3, effective_duration220=3):
         
         #if Nsub % 2 != 0:
         #    raise TypeError('Nsub should not be odd')
@@ -361,7 +359,8 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         self.kind = kind
         self.Nrec = Nrec
         self.nu_co = nu_co
-
+        self.effective_duration150=effective_duration150
+        self.effective_duration220=effective_duration220
         
         if self.kind == 'Two' and self.Nrec == 1 and len(self.comp) == 0:
             raise TypeError('Dual band instrument can not reconstruct one band')
@@ -561,10 +560,13 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         """
         d150 = self.d.copy()
         d150['filter_nu'] = 150 * 1e9
+        d150['effective_duration'] = self.effective_duration150
         ins150 = instr.QubicInstrument(d150)
 
         d220 = self.d.copy()
+        d220['effective_duration'] = self.effective_duration220
         d220['filter_nu'] = 220 * 1e9
+        
         ins220 = instr.QubicInstrument(d220)
 
         subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
@@ -952,7 +954,7 @@ class JointAcquisitionFrequencyMapMaking:
 
 class JointAcquisitionComponentsMapMaking:
 
-    def __init__(self, d, kind, comp, Nsub, nus_external, nintegr, nu_co=None, H=None):
+    def __init__(self, d, kind, comp, Nsub, nus_external, nintegr, nu_co=None, H=None, ef150=3, ef220=3):
 
         self.kind = kind
         self.d = d
@@ -961,7 +963,7 @@ class JointAcquisitionComponentsMapMaking:
         self.nus_external = nus_external
         self.nintegr = nintegr
         #self.qubic = qubic
-        self.qubic = QubicFullBandSystematic(self.d, comp=self.comp, Nsub=self.Nsub, Nrec=1, kind=self.kind, nu_co=nu_co, H=H)
+        self.qubic = QubicFullBandSystematic(self.d, comp=self.comp, Nsub=self.Nsub, Nrec=1, kind=self.kind, nu_co=nu_co, H=H, effective_duration150=ef150, effective_duration220=ef220)
         self.scene = self.qubic.scene
         self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nintegr)
 

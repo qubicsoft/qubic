@@ -9,7 +9,7 @@
 #SBATCH --ntasks-per-node=2      # n
 #SBATCH --cpus-per-task=2        # N
 #SBATCH --mem-per-cpu=8GB
-#SBATCH --time=0-05:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=mulitple_jobs_%j.log
 #SBATCH --array=1-200
 

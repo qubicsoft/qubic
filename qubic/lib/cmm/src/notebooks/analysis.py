@@ -16,7 +16,7 @@ class DataManagement:
         self.varying = varying
         self.path = path
         self.files = os.listdir(self.path)
-        self.N = len(self.files) - 199
+        self.N = len(self.files) - 190
         #self.ncomps, self.npix, self.nstk = self.open_data(self.files[0])['components_i'].T.shape
         self.components_true = self.open_data(self.files[0])['components']
         #print(path+self.files[0])
@@ -45,14 +45,17 @@ class DataManagement:
             self.components_true[i] = C(self.components_true[i])
         
         self.maps = np.zeros((self.N, self.ncomps, self.npix, self.nstk))
+        self.residuals = np.zeros((self.N, self.ncomps, self.npix, self.nstk))
         
         for i in tqdm(range(self.N)):
             
             if self.varying:
                 self.maps[i] = self.open_data(self.files[i])['components_i'].T.copy()
                 self.beta[i] = self.open_data(self.files[0])['beta'][-1, :, 0]
+                self.residuals[i] = self.maps[i] - self.components_true
             else:
                 self.maps[i] = self.open_data(self.files[i])['components_i'].copy()
+                self.residuals[i] = self.maps[i] - self.components_true
                 
         #if self.varying:
         #    self.beta[:, ~self.seenpix_nside_fit] = hp.UNSEEN
@@ -72,11 +75,15 @@ class DataManagement:
             data = pickle.load(f)
         return data
 
-path = '/pbs/home/m/mregnier/sps1/CMM-Pipeline/src/data_forecast_paper/CMM_paper_with_sync/'
-dm = DataManagement(path + 'parametric_d1_two_CMMpaper_inCMBDustSync_outCMBDust_nside8/',
-                    varying=True)
-
-plt.figure(figsize=(15, 10))
+path = '/pbs/home/m/mregnier/sps1/CMM-Pipeline/src/data_forecast_paper/comparison_DB_vs_UWB/purCMB/'
+dm = DataManagement(path + 'parametric_d0_two_inCMB_outCMB_ndet1/',
+                    varying=False)
+fsky = dm.seenpix.astype(float).sum() / dm.seenpix.size
+print(fsky, np.sum(dm.seenpix))
+rms_each = np.std(dm.residuals[:, 0, dm.seenpix, :], axis=1)
+print(np.mean(rms_each, axis=0))
+print(dm.maps.shape)
+plt.figure(figsize=(10, 6))
 
 reso = 12
 k=1
@@ -95,7 +102,7 @@ for icomp in range(dm.ncomps):
     notext=True, title=f'Residuals - {stk[1]}', min=-8, max=8)
     k+=3
 
-plt.savefig('maps.png')
+plt.savefig('maps_d0.png')
 plt.close()
 
 if dm.varying:

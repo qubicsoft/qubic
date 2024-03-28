@@ -2,30 +2,30 @@ CMB:
     cmb: True
     seed: 1
     r: 0
-    Alens: 1
+    Alens: 0.5
 
 Foregrounds:
 
-    fit_spectral_index: False
-    type: 'parametric'
+    fit_spectral_index: True
+    type: 'blind'
 
     # Thermal Dust emission
     Dust_in: True
     Dust_out: True
     beta_d_init: 1.54
-    model_d: 'd0'
+    model_d: 'd6'
     nu0_d: 150.00001
     temp: 20
-    l_corr: 10000000000
+    l_corr: 10
     Ad: 1
     
     # Synchrotron emission
-    Synchrotron_in: False
-    Synchrotron_out: False
+    Synchrotron_in: True
+    Synchrotron_out: True
     beta_s_init: -3
     model_s: 's0'
     nu0_s: 150
-    As: 1
+    As: 5
 
     # CO line emission
     CO_in: False
@@ -40,14 +40,14 @@ Foregrounds:
 MapMaking:
     qubic:
         npointings: 5000                       # Pointing
-        nsub: 6                                # Number of sub-acquisitions
-        nsub_out: 6                            # Number of sub-acquisitions for the reconstruction
-        nrec_blind: 4
+        nsub: 10                                # Number of sub-acquisitions
+        nsub_out: 10                            # Number of sub-acquisitions for the reconstruction
+        nrec_blind: 10
         nside: 256                             # Nside of components
         iteration: 1                           
-        ndet: 0.7                                # Level of detector noise
-        npho150: 1                             # Level of photon noise at 150 GHz
-        npho220: 1                             # Level of photon noise at 220 GHz
+        ndet: 0.1                                # Level of detector noise
+        npho150: 0.1                             # Level of photon noise at 150 GHz
+        npho220: 0.1                             # Level of photon noise at 220 GHz
         synthbeam_kmax: 1                      # Order of synthetized beam diffraction (k = 1 means 9 peaks)
         detector_nep: 4.7e-17                  # NEP of detector noise
         nhwp_angles: 3                         # Number of angle for HWP
@@ -56,12 +56,13 @@ MapMaking:
         convolution: False                     # Convolution for accounting angular resolution
         fake_convolution: True                 # Fake convolution to reconstruct convolved components
         sig_gain: 0                            # Standard deviation for detector gains
-        fit_gain: False                        # Fitting gain detectors
+        fit_gain: False                       # Fitting gain detectors
         noise_only: False
-        duration: 1.5
+        duration_150: 3
+        duration_220: 3
     sky:
         RA_center: 0          
-        DEC_center: -57
+        DEC_center: -45
     planck:
         level_planck_noise: 1                  # Noise level for Planck data
         nintegr: 2                             # Number of sub-acquisitions for Planck data
@@ -100,7 +101,7 @@ MapMaking:
 
 Plots:
     conv_beta: True
-    conv_gain: True
+    conv_gain: False
     conv_rms: True
     maps: True
     fake_conv: 0.
@@ -108,6 +109,6 @@ Plots:
     thr_plot: 0.2
 
 save: 1
-foldername: 'inCMBDust_outCMBDust_ndet0_7_nyrs1_5'
+foldername: 'CMMpaper_inCMBDustSync_outCMBDustSync_ini_diff'
 filename: 'file'
 lastite: True

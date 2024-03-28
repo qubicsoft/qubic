@@ -15,13 +15,13 @@ import data
 
 t = 'varying'
 nside = 256
-lmin = 40
+lmin = 26#40
 lmax = 2 * nside
 aposize = 10
 dl = 30
 ncomps = 1
 advanced_qubic = False
-Alens = 1
+Alens = 0.5
 
 def extract_seed(filename):
     return int(filename.split('_')[1][4:])
@@ -174,26 +174,30 @@ class Spectrum:
     def main(self, spec=False):
         
         if spec == False:
-            self.NlBB = np.zeros((self.N, self.ncomps**2, len(self.ell)))
+            self.NlBB = np.zeros((self.N, self.ncomps, self.ncomps, len(self.ell)))
             return self.NlBB, self.BlBB
         else:
-            self.NlBB = np.zeros((self.N, self.ncomps**2, len(self.ell)))
+            self.NlBB = np.zeros((self.N, self.ncomps, self.ncomps, len(self.ell)))
             for i in range(self.N):
                 print(f'********* Iteration {i+1}/{self.N} *********')
-                k=0
+
                 for icomp in range(self.ncomps):
-                    for jcomp in range(self.ncomps):
+                    for jcomp in range(icomp, self.ncomps):
                         print(f'===== {icomp} x {jcomp} =====')
                         if icomp == jcomp:
-                            self.NlBB[i, k] = self._get_BB_spectrum(self.residuals[i, icomp].T, map2=None, 
+                            self.NlBB[i, icomp, jcomp] = self._get_BB_spectrum(self.residuals[i, icomp].T, map2=None, 
                                                                     beam_correction=np.rad2deg(0.00415369),
                                                                     pixwin_correction=True)
                         else:
-                            self.NlBB[i, k] = self._get_BB_spectrum(self.residuals[i, icomp].T, map2=self.residuals[i, jcomp].T, 
+                            self.NlBB[i, icomp, jcomp] = self._get_BB_spectrum(self.residuals[i, icomp].T, map2=self.residuals[i, jcomp].T, 
                                                                     beam_correction=np.rad2deg(0.00415369),
                                                                     pixwin_correction=True)
-                        k+=1
-                print(np.std(self.NlBB[:(i+1), 0, :], axis=0))
+                            
+                            self.NlBB[i, jcomp, icomp, :] = self.NlBB[i, icomp, jcomp, :].copy()
+
+                print(np.std(self.NlBB[:(i+1), :, :, 0], axis=0))
+                #stop
+                
                 #print(np.std(self.NlBB[:i, 1, :], axis=0))
                     
             return self.NlBB, self.BlBB

@@ -55,8 +55,7 @@ class CMB:
         '''
 
         dlBB = self.cl_to_dl(self.get_pw_from_planck(r, Alens))
-        return dlBB
-    
+        return dlBB   
 class Foreground:
     '''
     Function to define the Dust model
@@ -149,7 +148,7 @@ class Foreground:
         
 class BBPip:
     
-    def __init__(self, path, path_noise):
+    def __init__(self, path):
     
         with open('sampling_config.yml', "r") as stream:
             self.params = yaml.safe_load(stream)
@@ -158,29 +157,31 @@ class BBPip:
         self.rank = COMM.Get_rank()
         self.size = COMM.Get_size()
         self.path = path
-        self.path_noise = path_noise
+        #self.path_noise = path_noise
         self.files = os.listdir(self.path)
-        self.files_noise = os.listdir(self.path_noise)
+        #self.files_noise = os.listdir(self.path_noise)
         self.N = len(self.files)
-        self.Nn = len(self.files_noise)
+        #self.Nn = len(self.files_noise)
         self.nus = self.open_data(self.path + '/' + self.files[0])['nus']
 
         self.bandpower = []
         s = np.zeros((len(self.nus), len(self.nus)))
-        
+        self.auto_spec = []
         ### Create list of all bands-power
         k=0
         for i in range(len(self.nus)):
             for j in range(i, len(self.nus)):
+                if self.nus[i] == self.nus[j]:
+                    self.auto_spec += [True]
+                else:
+                    self.auto_spec += [False]
                 self.bandpower += [f'{self.nus[i]:.2f}x{self.nus[j]:.2f}']
                 s[i, j] = k
                 k+=1
-        
+
         k=0
         bp_to_rm = []
-        #print(s)
         for ii, i in enumerate(self.nus):
-            #print(ii, i)
             if ii < self.params['NUS']['qubic'][1]:
                 if self.params['NUS']['qubic'][0]:
                     k += (self.params['NUS']['qubic'][1])
@@ -191,33 +192,29 @@ class BBPip:
             else:
                 if self.params['NUS'][f'{i:.0f}GHz'] is False:
                     bp_to_rm += [ii]
+        #print(bp_to_rm)
         self.nus = np.delete(self.nus, bp_to_rm, 0)
+        #print(s)
         s = np.delete(s, bp_to_rm, 0)
         s = np.delete(s, bp_to_rm, 1)
-        
+        #print(s)
         bp_to_keep = []
         for i in range(s.shape[0]):
             for j in range(i, s.shape[1]):
                 bp_to_keep += [int(s[i, j])]
-        
-        #print(bp_to_keep)
-        #print(self.nus)
-        #stop
+
         self.ell = self.open_data(self.path + '/' + self.files[0])['ell']
         sh = self.open_data(self.path + '/' + self.files[0])['Dls'].shape
+
         self.Dl = np.zeros((self.N, len(bp_to_keep), sh[1]))
-        self.Nl = np.zeros((self.Nn, len(bp_to_keep), sh[1]))
+        self.Nl = np.zeros((self.N, len(bp_to_keep), sh[1]))
         
-        #print(self.Dl.shape, self.N)
-        #print(self.open_data(self.files[0]).keys())
         for i in range(self.N):
             self.Dl[i] = self.open_data(self.path + '/' + self.files[i])['Dls'][bp_to_keep]
-        for i in range(self.Nn):
-            self.Nl[i] = self.open_data(self.path_noise + '/' + self.files_noise[i])['Dls'][bp_to_keep]
+            self.Nl[i] = self.open_data(self.path + '/' + self.files[i])['Nl'][bp_to_keep]
+            
         
-        
-        #stop
-        nbin = 8
+        nbin = -1
         self.ell = self.ell[:nbin].copy()
         self._f = self.ell * (self.ell + 1) / (2 * np.pi)
         self.Dl = self.Dl[:, :, :nbin].copy()
@@ -233,16 +230,10 @@ class BBPip:
         #self.DlBB = self.cmb_model(0, 1) + self.fg_model(10, -0.1, 1.54, 1, 353, As=0.5, alphas=0, betas=-3, nu0_s=23)
         self.DlBB -= self.NlBB
         
-        self.cov = np.zeros((self.DlBB.shape[0], len(self.ell), len(self.ell)))
-        self.invcov = np.zeros(self.cov.shape)
-        for i in range(self.DlBB.shape[0]):
-            self.cov[i] = np.cov(self.Nl[:, i], rowvar=False) * np.eye(len(self.ell))
-            self.invcov[i] = np.linalg.pinv(self.cov[i])
-        
-        model = self.cmb_model(0, 1) + self.fg_model(12, -0.3, 1.54, 1, 353)*0
+        model = self.cmb_model(0, 1) + self.fg_model(0, -0.1, 1.54, 1, 353)
 
         self._make_plots_Dl(self.DlBB, self.NlBB_err, model[:, :])
-        
+
         ### Define possible components
         self.is_cmb = False
         self.is_dust = False
@@ -283,6 +274,7 @@ class BBPip:
         self.p0 = np.delete(self.p0, 0, axis=0).T
         self.ndim = self.p0.shape[1]
         self.names = np.delete(self.names, self.index_notfree_param)
+        self._f = self.ell * (self.ell + 1) / (2 * np.pi)
     def _make_plots_Dl(self, Dl, Dl_err, model, model2=None, model3=None):
         
         plt.figure(figsize=(12, 12))
@@ -365,7 +357,6 @@ class BBPip:
     def loglike(self, x):
         
         logprob = self.log_prob(x)
-        
         x = self._fill_params(x)
         
         self.sample_cmb = np.zeros((len(self.ell), len(self.ell)))
@@ -389,13 +380,16 @@ class BBPip:
         
         
         _r = (self.DlBB - ymodel)
-        c = self.knox_covariance(cmbtheo)
+        
         L = logprob
+        
         for i in range(self.DlBB.shape[0]):
-            #d = self.knox_covariance(fgtheo[i])
+            d = self.knox_covariance(cmbtheo + fgtheo[i])
             
-            cov = np.cov(self.Nl[:, i], rowvar=False) * np.eye(len(self.ell))
+            cov = np.cov(self.Nl[:, i], rowvar=False) + d
+            #cov *= np.eye(len(self.ell))
             invcov = np.linalg.pinv(cov)
+            
             L -= 0.5 * (_r[i].T @ invcov @ _r[i])
 
         return L
@@ -419,10 +413,10 @@ class BBPip:
     def run(self):
         
         #print(self.p0)
-        
         with MPIPool() as pool:
             sampler = emcee.EnsembleSampler(self.params['MCMC']['nwalkers'], self.ndim, self.loglike, pool=pool)
             sampler.run_mcmc(self.p0, self.params['MCMC']['mcmc_steps'], progress=True)
+
         #print(self.samp_dust)
         
         #COMM.Barrier()
@@ -461,8 +455,8 @@ class BBPip:
         return chains, chains_flat
 
 
-pip = BBPip(path=os.path.dirname(os.getcwd()) + '/signal_all',
-            path_noise=os.path.dirname(os.getcwd()) + '/noise_all') 
+pip = BBPip(path=os.path.dirname(os.getcwd()) + '/E2E_nrec2/Xspectrum_nrec2_cmbdust/spectrum/')#,
+            #path_noise=os.path.dirname(os.getcwd()) + '/E2E_nrec2/cmbdust_noise/spectrum/')
 
 chains, chains_flat = pip.run()
 
@@ -470,9 +464,13 @@ chains, chains_flat = pip.run()
 
 
 if pip.rank == 0:
+    print('Average : ', np.mean(chains_flat, axis=0))
+    print('Error   : ', np.std(chains_flat, axis=0))
     filename = pip.params['filename']
     with open(f'{filename}.pkl', 'wb') as handle:
-        pickle.dump({'chains':chains, 'chains_flat':chains_flat, 'ell':pip.ell, 'Dls':pip.DlBB, 'Nl':pip.Nl}, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump({'chains':chains, 'chains_flat':chains_flat, 'ell':pip.ell, 
+                     'Dls':pip.Dl, 'Nl':pip.Nl, 
+                     'nus':pip.nus, 'names':pip.names, 'labels':pip.names}, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
     s = MCSamples(samples=chains_flat, names=pip.names, labels=pip.names)
     plt.figure()
@@ -485,4 +483,3 @@ if pip.rank == 0:
     plt.savefig('triangle_dist.png')
 
     plt.close()
-

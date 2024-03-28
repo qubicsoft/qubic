@@ -14,7 +14,7 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 class PipelineExternalData:
 
-    def __init__(self, file):
+    def __init__(self, file, noise_only=False):
         
         with open('params.yml', "r") as stream:
             self.params = yaml.safe_load(stream)
@@ -22,6 +22,11 @@ class PipelineExternalData:
         with open('noise.yml', "r") as stream:
             self.noise = yaml.safe_load(stream)
 
+        self.noise_only = noise_only
+        if self.noise_only:
+            self.factor = 0
+        else:
+            self.factor = 1
         self.external_nus = self._read_external_nus()
         #print('external nus : ', self.external_nus)
         
@@ -137,13 +142,13 @@ class PipelineExternalData:
             edges_min = central_nu - bw/2
             edges_max = central_nu + bw/2
             bandpass_frequencies = np.linspace(edges_min, edges_max, nb) * u.GHz
-            mysky += np.array(sky.get_emission(bandpass_frequencies)).T.copy()
+            mysky += np.array(sky.get_emission(bandpass_frequencies)).T 
 
         if is_cmb:
             cmb = self._get_cmb(self.skyconfig['cmb'])
-            mysky += cmb.copy()
+            mysky += cmb
             
-        return mysky      
+        return mysky * self.factor   
     def _get_fwhm(self, nu):
         return self.read_pkl(f'data/Planck{nu:.0f}GHz.pkl')[f'fwhm{nu:.0f}']
     def _get_noise(self, nu):

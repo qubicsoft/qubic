@@ -1,6 +1,6 @@
 data:
   path : '/home/regnier/work/regnier/Pipeline/signal'
-  name : 'test'
+  name : 'QU_wide_cmb'
   n_real : 20
   pipeline : 'FMM'
 
@@ -12,9 +12,9 @@ simu:
   name : 'Sky'
 
 MCMC:
-  nwalkers : 70
-  mcmc_steps : 1000
-  discard : 800
+  nwalkers : 50
+  mcmc_steps : 600
+  discard : 400
 
 NUS:
   qubic: [True, 2]
@@ -24,24 +24,23 @@ NUS:
   30GHz: True
   44GHz: True
   70GHz: True
-  100GHz: False
-  143GHz: False
-  217GHz: False
+  100GHz: True
+  143GHz: True
+  217GHz: True
   353GHz: True
 
-
 SKY_PARAMETERS:
-  r : [True, -1, 1, 0.01, 0.01] 
+  r : [True, -1, 1, 0.001, 0.005] 
   Alens : [1, -100000, 100000, 1, 0.1]
   nu0_d : [353, 0, 1, 0, 1000]
-  Ad : [True, 0, 10000, 9, 0.1]     #13.4
-  alphad : [True, -100000, 0, -0.5, 0.01]
-  betad : [True, 1, 2, 1.82, 0.1]    #1.52
+  Ad : [True, 0, 10000, 13.5, 0.1]     #13.4
+  alphad : [True, -100000, 0, -0.15, 0.01]
+  betad : [True, 1, 2, 1.54, 0.01]    #1.52
   deltad : [1, 0, 2, 1, 0.1]
   nu0_s : [23, 0, 1, 0, 1000]
   As : [True, -100000, 10000, 0, 0.1]
-  alphas : [0, -100000, 10000, -0.1, 0.01]
+  alphas : [0, -100000, 10000, 1, 0.1]
   betas : [-3, -10, 0, -3, 0.1]
-  eps : [True, -1, 1, 0, 0.01]
+  eps : [0, -1, 1, 0, 0.01]
 
-filename: 'test'
+filename: 'QU_cmbdust'

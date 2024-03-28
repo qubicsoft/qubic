@@ -148,7 +148,7 @@ class PlotsMM:
         self.params = params
         self.stk = ['I', 'Q', 'U']
 
-    def plot_FMM(self, m_in, m_out, center, seenpix, nus, job_id, figsize=(10, 8), istk=1, nsig=3, fwhm=0):
+    def plot_FMM(self, m_in, m_out, center, seenpix, nus, job_id, figsize=(10, 8), istk=1, nsig=3, fwhm=0, name='signal'):
         
         m_in[:, ~seenpix, :] = hp.UNSEEN
         m_out[:, ~seenpix, :] = hp.UNSEEN
@@ -167,7 +167,7 @@ class PlotsMM:
             hp.gnomview(res, rot=center, reso=15, cmap='jet', min = - nsig * np.std(m_out[0, seenpix, istk]), max = nsig * np.std(m_out[0, seenpix, istk]), sub=(self.params['QUBIC']['nrec'], 3, k+2))
 
             k+=3
-        plt.savefig(f'allplots_{job_id}/frequency_maps_{self.stk[istk]}.png')
+        plt.savefig(f'allplots_{job_id}/frequency_maps_{self.stk[istk]}_{name}.png')
         plt.close()
 
     def plot_FMM_mollview(self, m_in, m_out, nus, job_id, figsize=(10, 8), istk=1, nsig=3, fwhm=0):

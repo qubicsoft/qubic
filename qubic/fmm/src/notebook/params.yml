@@ -1,17 +1,17 @@
 Method: 'FMM'
-path_out: '/home/regnier/work/regnier/Pipeline/E2E_nrec2/Xspectrum_nrec2_cmbdust/'
+path_out: '/pbs/home/t/tlaclave/sps/Pipeline/data_with_convolution/DB_Nrec=4_Noise/'
 
 Sky:
     CMB:
 
-        cmb: True
+        cmb: False
         r: [0, 'f', 'r', 0.001]
         Alens: [1, 'f', 'A_{lens}', 1]
 
     Foregrounds:
 
         # Thermal Dust emission
-        Dust: True
+        Dust: False
         nu0_d: 353
         Ad: [4, 'nf', 'A_d', 4]
         betad: [1.54, 'nf', '\beta_d', 1.54]
@@ -19,7 +19,7 @@ Sky:
         deltad: [1, 'nf', '\Delta_d', 1]
 
         # Synchrotron emission
-        Synchrotron: True
+        Synchrotron: False
         nu0_s: 23
         As: [0, 'nf', 'A_s', 0]
         betas: [-3, 'nf', '\beta_s', -3]
@@ -33,9 +33,9 @@ Sky:
 QUBIC:
     method: 'MM'                                 # 'MM' for QUBIC map-making, 'fake' for fake map-making, 'spec' for spectrum based
     randomreal: True
-    npointings: 5000
-    nsub: 8
-    nrec: 2
+    npointings: 8000
+    nsub: 12
+    nrec: 4
     seed: 1
     iteration: 1
     ndet: 1
@@ -44,44 +44,54 @@ QUBIC:
     synthbeam_kmax: 1
     detector_nep: 4.7e-17
     nhwp_angles: 3
-    dtheta: 15
+    dtheta: 30
     type: 'two'
-    covcut: 0.1
+    covcut: 0.20
     kappa: 0
-    convolution: False
+    convolution: True
     bandpass_correction: True
     RA_center: 0
     DEC_center: -57
     dust_model: 'd0'
     sync_model: 's0'
     fsky: 0.035
-    do_noise_only: True
 
 Spectrum:
+    do_spectrum: False
+    method: 'namaster'
     dl: 30
     lmin: 40
-    lmax: 512
     aposize: 10
+    beam_correction: False
+    pixwin_correction: False
+    noise_correction: True
+    nbins: 10
 
 PCG:
-    maxiter: 300
+    maxiter: 400
     tol: 1.0e-20
     gif: False
 
+Sampler:
+    do_sampler: False
+    nsteps: 200
+    N: 5
+    ndim: 2
+    discard: 100
+    markers: False
+    sig_initial_guess: 0.01
+    title_limit: 1
+
 Data:
     datafilename: 'MC'
-    bicep:
-        95GHz: False
-        150GHz: False
-        220GHz: False
     planck: 
-        30GHz: True
-        44GHz: True
-        70GHz: True
-        100GHz: True
-        143GHz: True
-        217GHz: True
-        353GHz: True
-    level_planck_noise: 1
-    #use_external_data: True
+        30GHz: False
+        44GHz: False
+        70GHz: False
+        100GHz: False
+        143GHz: False
+        217GHz: False
+        353GHz: False
+    level_planck_noise: 0
+    use_external_data: True
 

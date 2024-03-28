@@ -96,7 +96,9 @@ class PCGAlgorithm(IterativeAlgorithm):
         self.figsize = figsize
         self.seenpix = seenpix
         self.jobid = jobid
-
+        self.IQU = np.std(x0[:, seenpix, :], axis=1)
+        #print(self.IQU, self.IQU.shape)
+        #stop
         dtype = A.dtype or np.dtype(float)
         if dtype.kind == 'c':
             raise TypeError('The complex case is not yet implemented.')
@@ -181,6 +183,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         self.A(self.d, self.q)
         alpha = self.delta / self.dot(self.d, self.q)
         self.x += alpha * self.d
+        self.IQU = np.std(self.x[:, self.seenpix, :], axis=1)
             
         self.r -= alpha * self.q
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)
@@ -198,7 +201,7 @@ class PCGAlgorithm(IterativeAlgorithm):
     @staticmethod
     def callback(self):
         if self.disp:
-            print(f'{self.niterations:4}: {self.error:.4e} {time.time() - self.t0:.5f}')
+            print(f'{self.niterations:4}: {self.error:.4e} {time.time() - self.t0:.5f} {self.IQU[:, 0]} {self.IQU[:, 1]} {self.IQU[:, 2]}')
 
 
 def pcg(

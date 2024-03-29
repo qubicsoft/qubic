@@ -1,0 +1,87 @@
+Method: 'FMM'
+path_out: 'put_your_path_here/'
+
+Sky:
+    CMB:
+
+        cmb: True
+        r: [0, 'f', 'r', 0.001]
+        Alens: [1, 'f', 'A_{lens}', 1]
+
+    Foregrounds:
+
+        # Thermal Dust emission
+        Dust: True
+        nu0_d: 353
+        Ad: [4, 'nf', 'A_d', 4]
+        betad: [1.54, 'nf', '\beta_d', 1.54]
+        alphad: [-0.4, 'nf', '\alpha_d', -0.4]
+        deltad: [1, 'nf', '\Delta_d', 1]
+
+        # Synchrotron emission
+        Synchrotron: True
+        nu0_s: 23
+        As: [0, 'nf', 'A_s', 0]
+        betas: [-3, 'nf', '\beta_s', -3]
+        alphas: [-0.4, 'nf', '\alpha_s', -0.4]
+        deltas: [1, 'nf', '\Delta_s', 1]
+        DustSync: False
+        eps: [0, 'nf', '\varepsilon', 0]
+
+    nside: 64
+
+QUBIC:
+    method: 'MM'                                 # 'MM' for QUBIC map-making, 'fake' for fake map-making, 'spec' for spectrum based
+    randomreal: True
+    npointings: 1000
+    nsub: 4
+    nrec: 2
+    seed: 1
+    iteration: 1
+    ndet: 1
+    npho150: 1
+    npho220: 1
+    synthbeam_kmax: 1
+    detector_nep: 4.7e-17
+    nhwp_angles: 3
+    dtheta: 15
+    type: 'two'
+    covcut: 0.1
+    kappa: 0
+    convolution: False
+    bandpass_correction: True
+    RA_center: 0
+    DEC_center: -57
+    dust_model: 'd0'
+    sync_model: 's0'
+    fsky: 0.035
+    do_noise_only: True
+
+Spectrum:
+    dl: 30
+    lmin: 40
+    lmax: 512
+    aposize: 10
+
+PCG:
+    maxiter: 100
+    tol: 1.0e-20
+    gif: False
+
+Data:
+    datafilename: 'MC'
+    bicep:
+        95GHz: False
+        150GHz: False
+        220GHz: False
+    planck: 
+        30GHz: True
+        44GHz: True
+        70GHz: True
+        100GHz: True
+        143GHz: True
+        217GHz: True
+        353GHz: True
+    level_planck_noise: 1
+    #use_external_data: True
+

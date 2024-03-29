@@ -9,7 +9,7 @@ import pickle
 #    cmb_dict = input_dict.get('CMB', {})
 #    foregrounds_dict = input_dict.get('Foregrounds', {})
 #    return cmb_dict, foregrounds_dict
-
+'''
 class CMBModel:
 
     """
@@ -410,3 +410,5 @@ class Sky(ForeGroundModels):
                     plt.legend(frameon=False, fontsize=12)
                 plt.xlim(20, 250)
         plt.show()
+        
+'''

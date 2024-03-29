@@ -146,7 +146,7 @@ class PipelineExternalData:
             mysky += np.array(sky.get_emission(bandpass_frequencies)).T 
 
         if is_cmb:
-            cmb = self._get_cmb(self.skyconfig['cmb'])
+            cmb = self._get_cmb(self.skyconfig['cmb'], r=self.params['Sky']['CMB']['r'], Alens=self.params['Sky']['CMB']['Alens'])
             mysky += cmb
             
         return mysky * self.factor   

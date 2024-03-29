@@ -1,3 +1,4 @@
+# Very general importations
 import numpy as np
 import os
 from PIL import Image
@@ -28,10 +29,6 @@ def create_folder_if_not_exists(comm, folder_name):
                 #print(f"Error creating the folder '{folder_name}': {e}")
         else:
             pass
-
-
-
-
 def do_gif(input_folder, N, jobid):
 
     nmaps = np.arange(1, N+1, 1)

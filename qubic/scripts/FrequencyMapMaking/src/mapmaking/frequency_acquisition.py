@@ -45,7 +45,7 @@ from scipy.optimize import minimize
 from pysimulators import *
 from pyoperators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
-
+'''
 def get_ultrawideband_config():
     
     nu_up = 247.5
@@ -1338,7 +1338,7 @@ class QubicIntegrated(QubicPolyAcquisition):
         return out
 
 
-'''
+
 class QubicTwoBands:
 
     def __init__(self, qubic150, qubic220):
@@ -1809,7 +1809,7 @@ class QubicDualBand(QubicIntegrated):
         return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
 
 
-'''
+
 
 
 class QubicFullBand(QubicPolyAcquisition):
@@ -1875,12 +1875,12 @@ class QubicFullBand(QubicPolyAcquisition):
     def _get_array_operators(self, convolution=False, myfwhm=None):
 
 
-        '''
+        """
         
         Compute all the Nsub sub-acquisition in one list. Each sub-acquisition contain the instrument specificities and describe the 
         synthetic beam for each frequencies.
 
-        '''
+        """
 
         operator = []
         R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
@@ -1934,7 +1934,7 @@ class QubicFullBand(QubicPolyAcquisition):
 
         
 
-
+'''
 
 
 

@@ -1,21 +1,23 @@
+# Very general importations
 import numpy as np
-import os.path as op
 import healpy as hp
 import os
 import sys
 import pickle
 import yaml
 import matplotlib.pyplot as plt
-from pyoperators import *
 import emcee
-from multiprocess import Pool
 from schwimmbad import MPIPool
 from getdist import plots, MCSamples
 
-sys.path.append(os.path.dirname(os.getcwd()))
+# Qubic importations
+from pyoperators import *
 
+# Local importations
 import fgb.component_model as c
 import fgb.mixing_matrix as mm
+
+sys.path.append(os.path.dirname(os.getcwd()))
 
 COMM = MPI.COMM_WORLD
 

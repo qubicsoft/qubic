@@ -8,13 +8,9 @@ from pyoperators.utils.mpi import MPI
 from pyoperators.iterative.core import AbnormalStopIteration, IterativeAlgorithm
 from pyoperators.iterative.stopconditions import MaxIterationStopCondition
 from tools.foldertools import *
-import matplotlib.pyplot as plt
-import healpy as hp
 import yaml
-import qubic
-import qubic.lib.Qacquisition as acq
-from mapmaking.planck_timeline import *
-from mapmaking.noise_timeline import *
+
+#from mapmaking.planck_timeline import *
 
  
 __all__ = ['pcg']

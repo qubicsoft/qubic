@@ -2,8 +2,7 @@
 import numpy as np
 
 # Qubic importation
-import qubic
-from qubic.lib import Qacquisition as acq
+from qubic.lib.Qacquisition import QubicIntegrated
 from qubic.lib.Qqubicdict import qubicDict
 
 
@@ -34,7 +33,7 @@ class QubicNoise:
         self.dict['nf_sub'] = 1
         self.dict['nf_recon'] = 1
         self.dict['type_instrument']=''
-        self.acq = acq.QubicIntegrated(self.dict, Nsub=1, Nrec=1)
+        self.acq = QubicIntegrated(self.dict, Nsub=1, Nrec=1)
         
     def get_noise(self, det_noise, pho_noise):
         n = self.detector_noise() * 0

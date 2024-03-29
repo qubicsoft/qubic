@@ -9,8 +9,9 @@ import os
 # Qubic libraries
 import qubic
 from qubic.lib import Qacquisition as acq
+from qubic.lib import Qnoise as Qn
 from qubic.lib import Qsamplings
-from  qubic.lib import Qqubicdict
+from qubic.lib import Qqubicdict
 from qubic import NamasterLib as nam
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pyoperators import MPI
@@ -20,7 +21,6 @@ from model.models import *
 from likelihood.likelihood import *
 from plots.plotter import *
 from mapmaking.planck_timeline import *
-from mapmaking.noise_timeline import *
 from model.externaldata import *
 from tools.foldertools import *
 from fgb.component_model import *
@@ -125,9 +125,9 @@ class PipelineFrequencyMapMaking:
         self.noise217 = self.planck_acquisition217.get_noise(seed_noise_planck+1) * self.params['Data']['level_planck_noise']
 
         if self.params['QUBIC']['type'] == 'two':
-            qubic_noise = QubicDualBandNoise(self.dict, self.params['QUBIC']['npointings'], self.params['QUBIC']['detector_nep'])
+            qubic_noise = Qn.QubicDualBandNoise(self.dict, self.params['QUBIC']['npointings'], self.params['QUBIC']['detector_nep'])
         elif self.params['QUBIC']['type'] == 'wide':
-            qubic_noise = QubicWideBandNoise(self.dict, self.params['QUBIC']['npointings'], self.params['QUBIC']['detector_nep'])
+            qubic_noise = Qn.QubicWideBandNoise(self.dict, self.params['QUBIC']['npointings'], self.params['QUBIC']['detector_nep'])
 
         self.noiseq = qubic_noise.total_noise(self.params['QUBIC']['ndet'], 
                                        self.params['QUBIC']['npho150'], 

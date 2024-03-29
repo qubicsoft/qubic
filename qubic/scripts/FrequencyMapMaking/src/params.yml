@@ -5,28 +5,16 @@ Sky:
     CMB:
 
         cmb: True
-        r: [0, 'f', 'r', 0.001]
-        Alens: [1, 'f', 'A_{lens}', 1]
+        r: 0 
+        Alens: 1
 
     Foregrounds:
 
         # Thermal Dust emission
         Dust: True
-        nu0_d: 353
-        Ad: [4, 'nf', 'A_d', 4]
-        betad: [1.54, 'nf', '\beta_d', 1.54]
-        alphad: [-0.4, 'nf', '\alpha_d', -0.4]
-        deltad: [1, 'nf', '\Delta_d', 1]
 
         # Synchrotron emission
         Synchrotron: True
-        nu0_s: 23
-        As: [0, 'nf', 'A_s', 0]
-        betas: [-3, 'nf', '\beta_s', -3]
-        alphas: [-0.4, 'nf', '\alpha_s', -0.4]
-        deltas: [1, 'nf', '\Delta_s', 1]
-        DustSync: False
-        eps: [0, 'nf', '\varepsilon', 0]
 
     nside: 64
 

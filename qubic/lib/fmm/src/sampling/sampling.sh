@@ -6,7 +6,7 @@
 
 #SBATCH --partition=bigmem
 #SBATCH --nodes=1                # c
-#SBATCH --ntasks-per-node=10      # n
+#SBATCH --ntasks-per-node=4      # n
 #SBATCH --cpus-per-task=4        # N
 #SBATCH --mem=10G
 #SBATCH --time=0-10:00:00

@@ -343,7 +343,7 @@ class BBPip:
                 pass
         return x
     def knox_errors(self, clth):
-        return np.sqrt(2. / ((2 * self.ell + 1) * 0.01 * 30)) * clth
+        return self._f * np.sqrt(2. / ((2 * self.ell + 1) * 0.01 * 30)) * clth
     def knox_covariance(self, clth):
         dcl = self.knox_errors(clth)
         return np.diag(dcl ** 2)
@@ -384,7 +384,8 @@ class BBPip:
         L = logprob
         
         for i in range(self.DlBB.shape[0]):
-            d = self.knox_covariance(cmbtheo + fgtheo[i])
+            #d = self.knox_covariance(cmbtheo/self._f + fgtheo[i]/self._f)
+            d = self.knox_covariance(fgtheo[i]/self._f)
             
             cov = np.cov(self.Nl[:, i], rowvar=False) + d
             #cov *= np.eye(len(self.ell))

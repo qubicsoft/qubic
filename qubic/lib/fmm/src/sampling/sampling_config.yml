@@ -12,22 +12,22 @@ simu:
   name : 'Sky'
 
 MCMC:
-  nwalkers : 50
-  mcmc_steps : 600
-  discard : 400
+  nwalkers : 20
+  mcmc_steps : 200
+  discard : 100
 
 NUS:
   qubic: [True, 2]
   95GHz: False
   150GHz: False
   220GHz: False
-  30GHz: True
-  44GHz: True
-  70GHz: True
-  100GHz: True
-  143GHz: True
-  217GHz: True
-  353GHz: True
+  30GHz: False
+  44GHz: False
+  70GHz: False
+  100GHz: False
+  143GHz: False
+  217GHz: False
+  353GHz: False
 
 SKY_PARAMETERS:
   r : [True, -1, 1, 0.001, 0.005] 
@@ -35,10 +35,10 @@ SKY_PARAMETERS:
   nu0_d : [353, 0, 1, 0, 1000]
   Ad : [True, 0, 10000, 13.5, 0.1]     #13.4
   alphad : [True, -100000, 0, -0.15, 0.01]
-  betad : [True, 1, 2, 1.54, 0.01]    #1.52
+  betad : [1.54, 1, 2, 1.54, 0.01]    #1.52
   deltad : [1, 0, 2, 1, 0.1]
   nu0_s : [23, 0, 1, 0, 1000]
-  As : [True, -100000, 10000, 0, 0.1]
+  As : [0, -100000, 10000, 0, 0.1]
   alphas : [0, -100000, 10000, 1, 0.1]
   betas : [-3, -10, 0, -3, 0.1]
   eps : [0, -1, 1, 0, 0.01]

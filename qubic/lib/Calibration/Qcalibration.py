@@ -1,5 +1,4 @@
 # coding: utf-8
-from __future__ import division, print_function
 from astropy.io import fits
 import sys
 import glob

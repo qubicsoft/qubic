@@ -132,7 +132,7 @@ class PipelineFrequencyMapMaking:
         self.noiseq = qubic_noise.total_noise(self.params['QUBIC']['ndet'], 
                                        self.params['QUBIC']['npho150'], 
                                        self.params['QUBIC']['npho220'],
-                                       seed=seed_noise_planck).ravel()
+                                       seed_noise=seed_noise_planck).ravel()
 
     def _get_random_value(self):
         

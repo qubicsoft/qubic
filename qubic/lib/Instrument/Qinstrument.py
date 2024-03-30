@@ -25,7 +25,7 @@ from qubic.calibration import QubicCalibration
 from qubic.utils import _compress_mask
 from qubic.ripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 from qubic.beams import (BeamGaussian, BeamFitted, MultiFreqBeam)
-import qubic.lib.Instrument.Qacquisition as acq
+from qubic.lib.Instrument.Qacquisition import compute_freq
 
 __all__ = ['QubicInstrument',
            'QubicMultibandInstrument']
@@ -1272,7 +1272,7 @@ class QubicMultibandInstrument:
 
         ### Monochromatic
         if d['nf_sub'] == 1 and d['type_instrument'] != 'wide' :
-            Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = acq.compute_freq(d['filter_nu'],
+            Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = compute_freq(d['filter_nu'],
                                                                         d['nf_sub'],
                                                                         d['filter_relative_bandwidth'])
             
@@ -1298,10 +1298,10 @@ class QubicMultibandInstrument:
         
         elif d['nf_sub'] == 1 and d['type_instrument'] == 'wide':
 
-            Nf, nus_edge150, filter_nus150, deltas150, Delta, Nbbands = acq.compute_freq(150,
+            Nf, nus_edge150, filter_nus150, deltas150, Delta, Nbbands = compute_freq(150,
                                                                         d['nf_sub'],
                                                                         0.25)
-            Nf, nus_edge220, filter_nus220, deltas220, Delta, Nbbands = acq.compute_freq(220,
+            Nf, nus_edge220, filter_nus220, deltas220, Delta, Nbbands = compute_freq(220,
                                                                         d['nf_sub'],
                                                                         0.25)
             
@@ -1331,10 +1331,10 @@ class QubicMultibandInstrument:
         ### Multichromatic
         else:
             #print(int(d['nf_sub']/2))
-            Nf, nus_edge150, filter_nus, deltas, Delta, Nbbands = acq.compute_freq(150,
+            Nf, nus_edge150, filter_nus, deltas, Delta, Nbbands = compute_freq(150,
                                                                         d['nf_sub']-1,
                                                                         0.25)
-            Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = acq.compute_freq(220,
+            Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = compute_freq(220,
                                                                         d['nf_sub']-1,
                                                                         0.25)
 

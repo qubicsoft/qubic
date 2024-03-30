@@ -10,7 +10,6 @@
 
 # QUBIC stuff
 import qubic
-from qubicpack.utilities import Qubic_DataDir
 from qubic.data import PATH
 from qubic.io import read_map
 from qubic.scene import QubicScene

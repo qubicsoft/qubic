@@ -1,5 +1,5 @@
-from qubic.lib.Qqubicdict import *
-from qubic.lib.Qacquisition import *
+import qubic
+import acquisition.frequency_acquisition as frequency_acquisition
 import numpy as np
 
 class QubicNoise:
@@ -10,7 +10,7 @@ class QubicNoise:
             raise TypeError('Please choose the QubicWideBandNoise method.')
         
         dictfilename = 'dicts/pipeline_demo.dict'
-        d = qubicDict()
+        d = qubic.qubicdict.qubicDict()
         d.read_from_file(dictfilename)
         self.seed_noise = seed_noise
         d['TemperatureAtmosphere150']=None
@@ -30,7 +30,7 @@ class QubicNoise:
         self.dict['nf_recon'] = 1
         self.dict['type_instrument'] = ''
         self.dict['effective_duration'] = duration
-        self.acq = QubicIntegrated(self.dict, Nsub=1, Nrec=1)
+        self.acq = frequency_acquisition.QubicIntegrated(self.dict, Nsub=1, Nrec=1)
         print(f'Duration at {band} GHz is {duration} yrs')
     def get_noise(self, det_noise, pho_noise):
         n = self.detector_noise() * 0

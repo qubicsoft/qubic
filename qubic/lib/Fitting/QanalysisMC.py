@@ -1,11 +1,11 @@
+import os
 import healpy as hp
 import numpy as np
 from scipy import interpolate
 import matplotlib.pyplot as plt
 
 import qubic
-from qubic import ReadMC as rmc
-from qubicpack.utilities import Qubic_DataDir
+from qubic.lib.Fitting import QreadMC as rmc
 
 
 # ============ Functions do statistical tests on maps ===========#
@@ -106,7 +106,7 @@ def get_residuals(fits_noise, fits_noiseless, residuals_way):
     return np.asarray(residuals)
 
 
-def rms_method(name, residuals_way, zones=1):
+def rms_method(name, residuals_way, zones=1, simulation_dir=None):
     """
     Get the std of the residuals from one simulation. 
     STD are computed over realisations and pixels for I, Q, U separately.
@@ -125,13 +125,23 @@ def rms_method(name, residuals_way, zones=1):
     rms_I, rms_Q, rms_U : dictionarys containing RMS for IQU 
     setpar : a dict with some parameters of the simu.
     """
-    # Get the repository where the simulation is
-    rep_simu = Qubic_DataDir(datafile=name + '.dict') + '/'
-    # print('rep_simu : ', rep_simu)
+
+    dictfile = name + '.dict'
+    if simulation_dir is not None:
+        dictfile = simulation_dir + os.sep + name + '.dict'
+        if not os.path.isfile(dictfile):
+            print('ERROR! Dictionary file does not exist: %s' % dictfile)
+            return None
+        
 
     # Dictionary saved during the simulation
+    # if the dictionary is given without an absolute path, it will search in the package directory
     d = qubic.qubicdict.qubicDict()
-    d.read_from_file(rep_simu + name + '.dict')
+    dict_ok = d.read_from_file(dictfile)
+    if not dict_ok:
+        print('ERROR! Dictionary not read.')
+        return None
+    
     setpar = {'tol': d['tol'], 'nep': d['detector_nep'], 'npoint': d['npointings']}
 
     nf_recon = d['nf_recon']

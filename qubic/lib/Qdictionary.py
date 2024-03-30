@@ -56,9 +56,9 @@ class qubicDict(dict):
                 # try to read from the package path
                 filename = self.dicts_dir + os.sep + basename
 
-                if not os.path.isfile(filename):
-                    print('Could not read dictionary.  File not found: %s' % basename)
-                    return
+            if not os.path.isfile(filename):
+                print('Could not read dictionary.  File not found: %s' % basename)
+                return False
 
         f = open(filename)
         old = ''

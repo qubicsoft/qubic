@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 from collections import OrderedDict
 from pyoperators import (
     MPI, asoperator, BlockColumnOperator, DiagonalOperator, PackOperator, pcg,
@@ -7,7 +6,7 @@ from pyoperators.memory import ones
 from pyoperators.utils import ndarraywrap
 from pyoperators.utils.mpi import as_mpi
 from pysimulators.interfaces.healpy import HealpixLaplacianOperator
-from .utils import progress_bar
+from qubic.Qutilities import progress_bar
 import healpy as hp
 import numpy as np
 

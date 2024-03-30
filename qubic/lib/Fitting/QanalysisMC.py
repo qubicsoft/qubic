@@ -1,4 +1,3 @@
-from __future__ import division, print_function
 import healpy as hp
 import numpy as np
 from scipy import interpolate

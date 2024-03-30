@@ -1,5 +1,5 @@
-import qubic.fibtools as ft
-import qubic.plotters as p
+import qubic.lib.Calibration.Qfiber as ft
+import qubic.lib.Qplotters as p
 
 import numpy as np
 from matplotlib.pyplot import *

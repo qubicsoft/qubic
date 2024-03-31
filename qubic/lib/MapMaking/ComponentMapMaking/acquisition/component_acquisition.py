@@ -27,7 +27,7 @@ import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
 
-from qubic.lib.Instrument.Qacquisition import compute_freq
+from qubic.lib.Instrument.Qinstrument import compute_freq
 from frequency_acquisition import compute_fwhm_to_convolve, arcmin2rad, give_cl_cmb, create_array, get_preconditioner, QubicPolyAcquisition, QubicAcquisition
 import instrument as instr
 # FG-Buster packages

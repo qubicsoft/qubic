@@ -14,7 +14,7 @@ from qubic.io import read_map
 from qubic.lib.Instrument.Qinstrument import QubicInstrument
 from qubic.lib.Qscene import QubicScene
 from qubic.lib.Qsamplings import create_random_pointings, get_pointing
-from qubic.lib.Instrument.Qacquisition import compute_freq
+from qubic.lib.Instrument.Qinstrument import compute_freq
 
 # General stuff
 import healpy as hp

@@ -4,7 +4,7 @@ import numpy as np
 from scipy import interpolate
 import matplotlib.pyplot as plt
 
-from qubic.lib.Instrument.Qacquisition import compute_freq
+from qubic.lib.Instrument.Qinstrument import compute_freq
 from qubic.lib.Fitting import QreadMC as rmc
 
 

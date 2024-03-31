@@ -56,6 +56,8 @@ dependencies = [
     'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
     'satorchipy @ git+https://github.com/satorchi/mypy@master',
     'scipy',
+    'bottleneck',
+    'scikit-learn'
 ]
 dynamic = ['version']
 

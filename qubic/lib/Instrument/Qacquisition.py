@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 
 # Qubic imports
 from qubic.data import PATH
-import qubic.lib.Instrument.Qinstrument as QubicInstrument
+from qubic.lib.Instrument.Qinstrument import QubicInstrument, QubicMultibandInstrument, compute_freq
 from qubic.lib.Qsamplings import get_pointing
 from qubic.lib.Qscene import QubicScene
 import qubic.lib.Qcomponent_model as c
@@ -21,38 +21,6 @@ from pyoperators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 
-def compute_freq(band, Nfreq=None, relative_bandwidth=0.25):
-    """
-    Prepare frequency bands parameters
-    band -- int,
-        QUBIC frequency band, in GHz.
-        Typical values: 150, 220
-    relative_bandwidth -- float, optional
-        Ratio of the difference between the edges of the
-        frequency band over the average frequency of the band:
-        2 * (nu_max - nu_min) / (nu_max + nu_min)
-        Typical value: 0.25
-    Nfreq -- int, optional
-        Number of frequencies within the wide band.
-        If not specified, then Nfreq = 15 if band == 150
-        and Nfreq = 20 if band = 220
-    """
-
-    if Nfreq is None:
-        Nfreq = {150: 15, 220: 20}[band]
-
-    nu_min = band * (1 - relative_bandwidth / 2)
-    nu_max = band * (1 + relative_bandwidth / 2)
-
-    Nfreq_edges = Nfreq + 1
-    base = (nu_max / nu_min) ** (1. / Nfreq)
-
-    nus_edge = nu_min * np.logspace(0, Nfreq, Nfreq_edges, endpoint=True, base=base)
-    nus = np.array([(nus_edge[i] + nus_edge[i - 1]) / 2 for i in range(1, Nfreq_edges)])
-    deltas = np.array([(nus_edge[i] - nus_edge[i - 1]) for i in range(1, Nfreq_edges)])
-    Delta = nu_max - nu_min
-    Nbbands = len(nus)
-    return Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands
 def polarized_I(m, nside, polarization_fraction=0.01):
     
     polangle = hp.ud_grade(hp.read_map(PATH+'psimap_dust90_512.fits'), nside)
@@ -780,7 +748,7 @@ class QubicPolyAcquisition:
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = QubicInstrument.QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
+        q = QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
         q.detector = self[0].instrument.detector
         s_ = self[0].sampling
         nsamplings = self[0].comm.allreduce(len(s_))
@@ -1124,7 +1092,7 @@ class QubicIntegrated(QubicPolyAcquisition):
         self.sampling = get_pointing(self.d)
         self.scene = QubicScene(self.d)
 
-        self.multiinstrument = QubicInstrument.QubicMultibandInstrument(self.d)
+        self.multiinstrument = QubicMultibandInstrument(self.d)
 
         if self.d['nf_sub'] > 1:
             QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
@@ -1179,7 +1147,7 @@ class QubicIntegrated(QubicPolyAcquisition):
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = QubicInstrument.QubicInstrument(d1, FRBW=q0.FRBW)
+        q = QubicInstrument(d1, FRBW=q0.FRBW)
         q.detector = q0.detector
         #s_ = self.sampling
         #nsamplings = self.multiinstrument[0].comm.allreduce(len(s_))
@@ -1380,7 +1348,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         self.allnus = np.array(list(allnus150) + list(allnus220))
         #print(self.nu_average, self.allnus)
 
-        self.multiinstrument = QubicInstrument.QubicMultibandInstrument(self.d)
+        self.multiinstrument = QubicMultibandInstrument(self.d)
        #print(self.multiinstrument.subinstruments)
        # stop
         self.sampling = get_pointing(self.d)
@@ -1401,7 +1369,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
             self.d['filter_nu'] = nu_co * 1e9
             sampling = qubic.get_pointing(self.d)
             scene = qubic.QubicScene(self.d)
-            instrument_co = QubicInstrument.QubicInstrument(self.d)
+            instrument_co = QubicInstrument(self.d)
             self.multiinstrument.subinstruments += [instrument_co]
             self.Proj += [QubicAcquisition(self.multiinstrument[-1], sampling, scene, self.d).get_projection_operator()]
             self.subacqs += [QubicAcquisition(self.multiinstrument[-1], sampling, scene, self.d)]
@@ -1553,13 +1521,13 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         d150 = self.d.copy()
         d150['filter_nu'] = 150 * 1e9
         d150['effective_duration'] = self.effective_duration150
-        ins150 = QubicInstrument.QubicInstrument(d150)
+        ins150 = QubicInstrument(d150)
 
         d220 = self.d.copy()
         d220['effective_duration'] = self.effective_duration220
         d220['filter_nu'] = 220 * 1e9
         
-        ins220 = QubicInstrument.QubicInstrument(d220)
+        ins220 = QubicInstrument(d220)
 
         subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
         subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)

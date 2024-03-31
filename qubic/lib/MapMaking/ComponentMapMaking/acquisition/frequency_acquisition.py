@@ -10,10 +10,10 @@
 
 # QUBIC stuff
 import qubic
-from qubic.data import PATH
+from qubic.data import PATH as data_dir
 from qubic.io import read_map
-from qubic.scene import QubicScene
-from qubic.samplings import create_random_pointings, get_pointing
+from qubic.lib.Qscene import QubicScene
+from qubic.lib.Qsamplings import create_random_pointings, get_pointing
 
 # General stuff
 import healpy as hp
@@ -23,7 +23,6 @@ import pysm3
 import sys
 import os
 sys.path.append(os.path.dirname(os.getcwd()))
-path = os.getcwd() + '/data/'
 import gc
 import time
 import warnings
@@ -107,11 +106,11 @@ def get_preconditioner(cov):
 def arcmin2rad(arcmin):
     return arcmin * 0.000290888
 def give_cl_cmb(r=0, Alens=1.):
-    power_spectrum = hp.read_cl(path+'Cls_Planck2018_lensed_scalar.fits')[:,:4000]
+    power_spectrum = hp.read_cl(data_dir+'Cls_Planck2018_lensed_scalar.fits')[:,:4000]
     if Alens != 1.:
         power_spectrum[2] *= Alens
     if r:
-        power_spectrum += r * hp.read_cl(path+'Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
+        power_spectrum += r * hp.read_cl(data_dir+'Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
     return power_spectrum
 def rad2arcmin(rad):
     return rad / 0.000290888
@@ -631,11 +630,11 @@ class PlanckAcquisition:
             sigma = 1e6 * np.sqrt(var)
         elif band == 143:
             filename = 'Variance_Planck143GHz_Kcmb2_ns256.fits'
-            self.var = np.array(FitsArray(PATH + filename))
+            self.var = np.array(FitsArray(data_dir + filename))
             sigma = 1e6 * np.sqrt(self.var)
         elif band == 217:
             filename = 'Variance_Planck217GHz_Kcmb2_ns256.fits'
-            self.var = np.array(FitsArray(PATH + filename))
+            self.var = np.array(FitsArray(data_dir + filename))
             sigma = 1e6 * np.sqrt(self.var)
         else:
             filename = 'Variance_Planck353GHz_Kcmb2_ns256.fits'

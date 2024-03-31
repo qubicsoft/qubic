@@ -11,10 +11,11 @@ from scipy import interpolate
 import os
 
 ### Specific modules 
-import qubic
-from qubic import progress_bar
-from qubic import selfcal_lib as scal
-from qubic import fibtools as ft
+from qubic.lib.Qdictionary import qubicDict
+from qubic.lib.Qutilities import progress_bar
+from qubic.lib.Instrument.Qinstrument import QubicInstrument
+from qubic.lib.Calibration import Qselfcal as scal
+from qubic.lib.Calibration import Qfiber as ft
 
 __all__ = ['MySplineFitting',
            'Pip1Tes',
@@ -482,10 +483,10 @@ class FocalPlane:
 		"""
 
 		dictfilename = 'global_source_oneDet.dict'
-		d = qubic.qubicdict.qubicDict()
+		d = qubicDict()
 		d.read_from_file(dictfilename)
 		d['synthbeam'] = 'CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
-		q = qubic.QubicInstrument(d)
+		q = QubicInstrument(d)
 		return q
 	def _get_place_ONAFP_with_TES(self, tes, asic):
 		

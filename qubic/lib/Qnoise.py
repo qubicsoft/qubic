@@ -1,6 +1,6 @@
-from qubic.lib.Qqubicdict import *
-from qubic.lib.Qacquisition import *
 import numpy as np
+from qubic.lib.Qdictionary import *
+from qubic.lib.Instrument.Qacquisition import *
 
 class QubicNoise:
     
@@ -9,7 +9,7 @@ class QubicNoise:
         if band != 150 and band != 220:
             raise TypeError('Please choose the QubicWideBandNoise method.')
         
-        dictfilename = 'dicts/pipeline_demo.dict'
+        dictfilename = 'pipeline_demo.dict'
         d = qubicDict()
         d.read_from_file(dictfilename)
         self.seed_noise = seed_noise

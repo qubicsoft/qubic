@@ -1,4 +1,4 @@
-# Very general importation
+# general imports
 import healpy as hp
 import numpy as np
 import pysm3
@@ -8,14 +8,14 @@ import pickle
 import warnings
 warnings.filterwarnings("ignore")
 
-# Qubic importation
-import qubic
+# Qubic imports
 from qubic.data import PATH
-import qubic.lib.Instrument.Qinstrument as instr
+import qubic.lib.Instrument.Qinstrument as QubicInstrument
 from qubic.lib.Qsamplings import get_pointing
 from qubic.lib.Qscene import QubicScene
 import qubic.lib.Qcomponent_model as c
 import qubic.lib.Qmixing_matrix as mm
+
 from pysimulators import *
 from pyoperators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
@@ -780,7 +780,7 @@ class QubicPolyAcquisition:
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = qubic.QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
+        q = QubicInstrument.QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
         q.detector = self[0].instrument.detector
         s_ = self[0].sampling
         nsamplings = self[0].comm.allreduce(len(s_))
@@ -1124,7 +1124,7 @@ class QubicIntegrated(QubicPolyAcquisition):
         self.sampling = get_pointing(self.d)
         self.scene = QubicScene(self.d)
 
-        self.multiinstrument = instr.QubicMultibandInstrument(self.d)
+        self.multiinstrument = QubicInstrument.QubicMultibandInstrument(self.d)
 
         if self.d['nf_sub'] > 1:
             QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
@@ -1179,7 +1179,7 @@ class QubicIntegrated(QubicPolyAcquisition):
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = instr.QubicInstrument(d1, FRBW=q0.FRBW)
+        q = QubicInstrument.QubicInstrument(d1, FRBW=q0.FRBW)
         q.detector = q0.detector
         #s_ = self.sampling
         #nsamplings = self.multiinstrument[0].comm.allreduce(len(s_))
@@ -1380,7 +1380,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         self.allnus = np.array(list(allnus150) + list(allnus220))
         #print(self.nu_average, self.allnus)
 
-        self.multiinstrument = instr.QubicMultibandInstrument(self.d)
+        self.multiinstrument = QubicInstrument.QubicMultibandInstrument(self.d)
        #print(self.multiinstrument.subinstruments)
        # stop
         self.sampling = get_pointing(self.d)
@@ -1401,7 +1401,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
             self.d['filter_nu'] = nu_co * 1e9
             sampling = qubic.get_pointing(self.d)
             scene = qubic.QubicScene(self.d)
-            instrument_co = instr.QubicInstrument(self.d)
+            instrument_co = QubicInstrument.QubicInstrument(self.d)
             self.multiinstrument.subinstruments += [instrument_co]
             self.Proj += [QubicAcquisition(self.multiinstrument[-1], sampling, scene, self.d).get_projection_operator()]
             self.subacqs += [QubicAcquisition(self.multiinstrument[-1], sampling, scene, self.d)]
@@ -1553,13 +1553,13 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         d150 = self.d.copy()
         d150['filter_nu'] = 150 * 1e9
         d150['effective_duration'] = self.effective_duration150
-        ins150 = instr.QubicInstrument(d150)
+        ins150 = QubicInstrument.QubicInstrument(d150)
 
         d220 = self.d.copy()
         d220['effective_duration'] = self.effective_duration220
         d220['filter_nu'] = 220 * 1e9
         
-        ins220 = instr.QubicInstrument(d220)
+        ins220 = QubicInstrument.QubicInstrument(d220)
 
         subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
         subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)

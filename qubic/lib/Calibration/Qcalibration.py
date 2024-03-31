@@ -2,15 +2,11 @@
 from astropy.io import fits
 import sys
 import glob
-if sys.version_info.major==2:
-    from ConfigParser import ConfigParser
-else:
-    from configparser import ConfigParser
-
+from configparser import ConfigParser
 from os.path import join
 from pysimulators import Layout, LayoutGrid
-from .calfiles import PATH
-from .horns import HornLayout
+from qubic.calfiles import PATH
+from qubic.lib.Qhorns import HornLayout
 import numpy as np
 import os
 import re

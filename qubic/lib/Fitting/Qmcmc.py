@@ -2,7 +2,7 @@ import emcee
 from scipy.optimize import curve_fit
 from scipy.integrate import cumtrapz
 from pylab import *
-from qubic import fibtools as ft
+from qubic.lib.Calibration import Qfiber as ft
 
 __all__ = ['LogLikelihood']
 

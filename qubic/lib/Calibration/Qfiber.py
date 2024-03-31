@@ -12,7 +12,7 @@ from glob import glob
 from astropy.io import fits
 from iminuit.util import describe, make_func_code
 from functools import partial, update_wrapper
-from qubic.utils import progress_bar
+from qubic.lib.Qutilities import progress_bar
 
 from qubicpack.pix2tes import assign_pix_grid, assign_pix2tes, tes2pix, pix2tes, TES2PIX
 

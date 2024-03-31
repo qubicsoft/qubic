@@ -4,7 +4,7 @@ import numpy as np
 from scipy import interpolate
 import matplotlib.pyplot as plt
 
-import qubic
+from qubic.lib.Instrument.Qacquisition import compute_freq
 from qubic.lib.Fitting import QreadMC as rmc
 
 
@@ -782,7 +782,7 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
     """
     nb = nf_sub // nf_recon  # Number of input subbands in each reconstructed subband
 
-    _, nus_edge, nus, deltas, Delta, _ = qubic.compute_freq(band, nf_sub, relative_bandwidth)
+    _, nus_edge, nus, deltas, Delta, _ = compute_freq(band, nf_sub, relative_bandwidth)
 
     corrections = []
     for isub in range(nf_recon):

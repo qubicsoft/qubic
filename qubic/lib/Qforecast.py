@@ -2,6 +2,7 @@
 renamed from analytical_forecast_lib.py
 '''
 from qubic.data import PATH as DataDir
+from qubic.lib.Instrument.Qacquisition import compute_freq
 import numpy as np
 import healpy as hp
 
@@ -35,7 +36,7 @@ class NoiseEquivalentTemperature:
         self.h = 6.62e-34
         self.k = 1.38e-23
         self.c = 3e8
-        _, _, _, _, self.bw, _ = qubic.compute_freq(self.band, Nfreq=1, relative_bandwidth=relative_bandwidth)
+        _, _, _, _, self.bw, _ = compute_freq(self.band, Nfreq=1, relative_bandwidth=relative_bandwidth)
         
         self.NETs = self._NEP2NET_db(np.sqrt(np.sum(self.NEPs**2)), self.band)
         

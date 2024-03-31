@@ -9,11 +9,12 @@
 
 
 # QUBIC stuff
-import qubic
 from qubic.data import PATH as data_dir
 from qubic.io import read_map
+from qubic.lib.Instrument.Qinstrument import QubicInstrument
 from qubic.lib.Qscene import QubicScene
 from qubic.lib.Qsamplings import create_random_pointings, get_pointing
+from qubic.lib.Instrument.Qacquisition import compute_freq
 
 # General stuff
 import healpy as hp
@@ -807,7 +808,7 @@ class QubicPolyAcquisition:
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = qubic.QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
+        q = QubicInstrument(d1, FRBW=self[0].instrument.FRBW)
         q.detector = self[0].instrument.detector
         s_ = self[0].sampling
         nsamplings = self[0].comm.allreduce(len(s_))
@@ -1119,9 +1120,9 @@ class QubicIntegrated(QubicPolyAcquisition):
         else:
             self.integration = 'Trapeze'
         
-        self.sampling = qubic.get_pointing(self.d)
+        self.sampling = get_pointing(self.d)
 
-        self.scene = qubic.QubicScene(self.d)
+        self.scene = QubicScene(self.d)
 
         self.multiinstrument = instr.QubicMultibandInstrument(self.d)
 
@@ -1131,10 +1132,10 @@ class QubicIntegrated(QubicPolyAcquisition):
             self.subacqs = [QubicAcquisition(self.multiinstrument[0], self.sampling, self.scene, self.d)]
 
         if self.integration == 'Trapeze':
-            _, _, self.nueff, _, _, _ = qubic.compute_freq(self.d['filter_nu'], Nfreq=self.Nrec, relative_bandwidth=self.d['filter_relative_bandwidth'])
+            _, _, self.nueff, _, _, _ = compute_freq(self.d['filter_nu'], Nfreq=self.Nrec, relative_bandwidth=self.d['filter_relative_bandwidth'])
             
         else:
-            _, self.nus_edge, self.nueff, _, _, _ = qubic.compute_freq(self.d['filter_nu'], Nfreq=(self.d['nf_recon']))
+            _, self.nus_edge, self.nueff, _, _, _ = compute_freq(self.d['filter_nu'], Nfreq=(self.d['nf_recon']))
         
         self.nside = self.scene.nside
         self.allnus = np.array([q.filter.nu / 1e9 for q in self.multiinstrument])
@@ -1364,19 +1365,19 @@ class QubicFullBand(QubicPolyAcquisition):
         #self.nu_average = np.mean(np.array([self.nu_down, self.nu_up]))
         #self.d['filter_nu'] = self.nu_average * 1e9
         if Nsub != 1:
-            _, allnus150, _, _, _, _ = qubic.compute_freq(150, Nfreq=int(self.Nsub)-1, relative_bandwidth=0.25)
-            _, allnus220, _, _, _, _ = qubic.compute_freq(220, Nfreq=int(self.Nsub)-1, relative_bandwidth=0.25)
+            _, allnus150, _, _, _, _ = compute_freq(150, Nfreq=int(self.Nsub)-1, relative_bandwidth=0.25)
+            _, allnus220, _, _, _, _ = compute_freq(220, Nfreq=int(self.Nsub)-1, relative_bandwidth=0.25)
         else:
-            _, _, allnus150, _, _, _ = qubic.compute_freq(150, Nfreq=int(self.Nsub), relative_bandwidth=0.25)
-            _, _, allnus220, _, _, _ = qubic.compute_freq(220, Nfreq=int(self.Nsub), relative_bandwidth=0.25)
+            _, _, allnus150, _, _, _ = compute_freq(150, Nfreq=int(self.Nsub), relative_bandwidth=0.25)
+            _, _, allnus220, _, _, _ = compute_freq(220, Nfreq=int(self.Nsub), relative_bandwidth=0.25)
         self.allnus = np.array(list(allnus150) + list(allnus220))
 
         self.Nsub *= 2
         
         #self.d['nf_sub'] = 2 * self.d['nf_sub']
         self.multiinstrument = instr.QubicMultibandInstrument(self.d)
-        self.sampling = qubic.get_pointing(self.d)
-        self.scene = qubic.QubicScene(self.d)
+        self.sampling = get_pointing(self.d)
+        self.scene = QubicScene(self.d)
 
         self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
         self.subacqs150 = self.subacqs[:int(self.Nsub/2)]

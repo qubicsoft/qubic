@@ -1,5 +1,3 @@
-from __future__ import division
-
 import numpy as np
 import scipy.interpolate as interp
 
@@ -8,7 +6,7 @@ import camb
 import camb.correlations as cc
 import pickle
 
-from qubic.utils import progress_bar
+from qubic.lib.Qutilities import progress_bar
 
 
 def get_camb_Dl(lmax=2500, H0=67.5, ombh2=0.022, omch2=0.122, mnu=0.06, omk=0, tau=0.06, As=2e-9, ns=0.965, r=0.):

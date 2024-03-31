@@ -6,9 +6,8 @@ Created on Tue Jan 29 09:44:35 2019
 @author: james, louise, JCH
 """
 
-from __future__ import division, print_function
 import numpy as np
-import qubic.fibtools as ft
+import qubic.lib.Calibration.Qfiber as ft
 from matplotlib.pyplot import *
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab

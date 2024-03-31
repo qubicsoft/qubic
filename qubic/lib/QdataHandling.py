@@ -1,29 +1,28 @@
-import qubic
-from qubic import selfcal_lib as scal
-from qubicpack.qubicfp import qubicfp
-import qubic.fibtools as ft
-import qubic.demodulation_lib as dl
-from pysimulators import FitsArray
-from qubic import progress_bar
+import os, glob, string, pprint
+import datetime as dt
+
 import numpy as np
 from matplotlib.pyplot import *
-import scipy.ndimage.filters as f
-import glob
-import string
-import scipy.signal as scsig
-from scipy import interpolate
-import datetime as dt
-from importlib import reload
-import scipy.misc
-import pprint
-from scipy.signal import chirp, find_peaks, peak_widths
-import qubic.sb_fitting as sbfit
+
 import healpy as hp
+
+from scipy.signal import medfilt, chirp, find_peaks, peak_widths
 from scipy.interpolate import interp1d
+import scipy.ndimage.filters as f
+
+from pysimulators import FitsArray
+
+from qubicpack.qubicfp import qubicfp
+
+from qubic.lib.Qsamplings import hor2equ
+from qubic.lib.Calibration import Qselfcal as scal
+import qubic.lib.Calibration.Qfiber as ft
+import qubic.lib.Calibration.Qdemodulation as dl
+from qubic.lib.Qutilities import progress_bar
+import qubic.lib.Fitting.QsynthesizedBeam as sbfit
 from qubic.io import write_map
-from alive_progress import alive_bar
-from scipy.signal import medfilt
-import os
+
+
 
 def hf_noise_estimate(tt, dd):
     sh = np.shape(dd)
@@ -309,7 +308,7 @@ class DirtyMaps:
         d, newazt, newelt, newt = cut_tod(d, self.azt, self.elt, self.tt, elmin=elmin, elmax=elmax)
         mymap = np.zeros(12*self.nside**2)
         mapcount = np.zeros(12*self.nside**2)
-        myra, mydec = qubic.hor2equ(newazt+120, newelt, time=newt, date_obs=st, longitude=longitude, latitude=latitude)
+        myra, mydec = hor2equ(newazt+120, newelt, time=newt, date_obs=st, longitude=longitude, latitude=latitude)
         ips=hp.ang2pix(self.nside, np.deg2rad(myra-180), np.deg2rad(mydec))
         unseen_val=hp.UNSEEN
         for i in range(len(d)):

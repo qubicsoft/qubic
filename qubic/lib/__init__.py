@@ -13,3 +13,5 @@ from .Qplotters import *
 from .Qsamplings import *
 from .Qscene import *
 from .Qutilities import *
+from .Qripples import *
+from .Qbeams import *

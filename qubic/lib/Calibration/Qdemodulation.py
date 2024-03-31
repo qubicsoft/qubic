@@ -1,5 +1,5 @@
-import qubic.fibtools as ft
-import qubic.lin_lib as ll
+import qubic.lib.Calibration.Qfiber as ft
+import qubic.lib.Calibration.Qlinearity as ll
 import qubic
 
 import numpy as np

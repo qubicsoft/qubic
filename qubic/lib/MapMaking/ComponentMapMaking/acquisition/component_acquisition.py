@@ -27,6 +27,7 @@ import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
 
+from qubic.lib.Instrument.Qacquisition import compute_freq
 from frequency_acquisition import compute_fwhm_to_convolve, arcmin2rad, give_cl_cmb, create_array, get_preconditioner, QubicPolyAcquisition, QubicAcquisition
 import instrument as instr
 # FG-Buster packages
@@ -216,7 +217,7 @@ class QubicIntegratedComponentsMapMaking(QubicPolyAcquisition):
         self.number_FP = 1
 
 
-        _, allnus, _, _, _, _ = qubic.compute_freq(self.d['filter_nu']/1e9, Nfreq=self.Nsub, relative_bandwidth=self.d['filter_relative_bandwidth'])
+        _, allnus, _, _, _, _ = compute_freq(self.d['filter_nu']/1e9, Nfreq=self.Nsub, relative_bandwidth=self.d['filter_relative_bandwidth'])
         
         self.multiinstrument = instr.QubicMultibandInstrument(self.d)
         self.nside = self.scene.nside
@@ -496,8 +497,8 @@ class QubicFullBandComponentsMapMakingParametric(QubicPolyAcquisition):
         self.nu_average = np.mean(np.array([self.nu_down, self.nu_up]))
         self.d['filter_nu'] = self.nu_average * 1e9
         
-        _, allnus150, _, _, _, _ = qubic.compute_freq(150, Nfreq=self.Nsub-1, relative_bandwidth=0.25)
-        _, allnus220, _, _, _, _ = qubic.compute_freq(220, Nfreq=self.Nsub-1, relative_bandwidth=0.25)
+        _, allnus150, _, _, _, _ = compute_freq(150, Nfreq=self.Nsub-1, relative_bandwidth=0.25)
+        _, allnus220, _, _, _, _ = compute_freq(220, Nfreq=self.Nsub-1, relative_bandwidth=0.25)
         self.allnus = np.array(list(allnus150) + list(allnus220))
         #print(self.nu_average, self.allnus)
 
@@ -754,8 +755,8 @@ class QubicFullBandComponentsMapMakingBlind(QubicPolyAcquisition):
         self.nu_average = np.mean(np.array([self.nu_down, self.nu_up]))
         self.d['filter_nu'] = self.nu_average * 1e9
         
-        _, allnus150, _, _, _, _ = qubic.compute_freq(150, Nfreq=self.Nsub-1, relative_bandwidth=0.25)
-        _, allnus220, _, _, _, _ = qubic.compute_freq(220, Nfreq=self.Nsub-1, relative_bandwidth=0.25)
+        _, allnus150, _, _, _, _ = compute_freq(150, Nfreq=self.Nsub-1, relative_bandwidth=0.25)
+        _, allnus220, _, _, _, _ = compute_freq(220, Nfreq=self.Nsub-1, relative_bandwidth=0.25)
         self.allnus = np.array(list(allnus150) + list(allnus220))
         #print(self.nu_average, self.allnus)
 

@@ -11,10 +11,9 @@
 # QUBIC stuff
 from qubic.data import PATH as data_dir
 from qubic.io import read_map
-from qubic.lib.Instrument.Qinstrument import QubicInstrument
 from qubic.lib.Qscene import QubicScene
 from qubic.lib.Qsamplings import create_random_pointings, get_pointing
-from qubic.lib.Instrument.Qinstrument import compute_freq
+from qubic.lib.Instrument.Qinstrument import compute_freq, QubicMultibandInstrument, QubicInstrument
 
 # General stuff
 import healpy as hp
@@ -29,7 +28,6 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
-import acquisition.instrument as instr
 
 import pysm3.units as u
 from importlib import reload
@@ -1124,7 +1122,7 @@ class QubicIntegrated(QubicPolyAcquisition):
 
         self.scene = QubicScene(self.d)
 
-        self.multiinstrument = instr.QubicMultibandInstrument(self.d)
+        self.multiinstrument = QubicMultibandInstrument(self.d)
 
         if self.d['nf_sub'] > 1:
             QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
@@ -1179,7 +1177,7 @@ class QubicIntegrated(QubicPolyAcquisition):
         d1['detector_fknee'] = fknee
         d1['detector_fslope'] = fslope
 
-        q = instr.QubicInstrument(d1, FRBW=q0.FRBW)
+        q = QubicInstrument(d1, FRBW=q0.FRBW)
         q.detector = q0.detector
         #s_ = self.sampling
         #nsamplings = self.multiinstrument[0].comm.allreduce(len(s_))
@@ -1375,7 +1373,7 @@ class QubicFullBand(QubicPolyAcquisition):
         self.Nsub *= 2
         
         #self.d['nf_sub'] = 2 * self.d['nf_sub']
-        self.multiinstrument = instr.QubicMultibandInstrument(self.d)
+        self.multiinstrument = QubicMultibandInstrument(self.d)
         self.sampling = get_pointing(self.d)
         self.scene = QubicScene(self.d)
 

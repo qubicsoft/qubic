@@ -19,13 +19,7 @@ from qubic.lib.Instrument.Qinstrument import compute_freq, QubicMultibandInstrum
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
-import pysm3
-import sys
-import os
-sys.path.append(os.path.dirname(os.getcwd()))
-import gc
-import time
-import warnings
+import sys,os,gc,time,pysm3,warnings
 warnings.filterwarnings("ignore")
 
 
@@ -33,8 +27,8 @@ import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
 # FG-Buster packages
-import fgb.component_model as c
-import fgb.mixing_matrix as mm
+import fgbuster.component_model as c
+import fgbuster.mixingmatrix as mm
 import pickle
 from scipy.optimize import minimize
 

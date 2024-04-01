@@ -22,7 +22,7 @@ from scipy.constants import c, h, k, sigma
 from scipy.integrate import quad
 
 from qubic import _flib as flib
-from qubic.lib.Calibration import Qcalibration as QubicCalibration
+from qubic.lib.Calibration.Qcalibration import QubicCalibration
 from qubic.lib.Qutilities import _compress_mask
 from qubic.lib.Qripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 from qubic.lib.Qbeams import (BeamGaussian, BeamFitted, MultiFreqBeam)

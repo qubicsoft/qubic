@@ -1,6 +1,6 @@
 import os, sys
 import string
-
+from qubic.dicts import PATH as dicts_dir
 
 def ask_for(key):
     if sys.version_info.major == 2:
@@ -16,8 +16,6 @@ def ask_for(key):
 
 
 class qubicDict(dict):
-    # assign the directory where to find dictionaries by default
-    dicts_dir = os.path.dirname(__file__) + '/dicts'
 
     def __init__(self, ask=False):
         """
@@ -54,7 +52,7 @@ class qubicDict(dict):
 
             if not os.path.isfile(filename):
                 # try to read from the package path
-                filename = self.dicts_dir + os.sep + basename
+                filename = dicts_dir + os.sep + basename
 
             if not os.path.isfile(filename):
                 print('Could not read dictionary.  File not found: %s' % basename)

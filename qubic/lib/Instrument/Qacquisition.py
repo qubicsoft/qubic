@@ -14,7 +14,7 @@ from qubic.lib.Instrument.Qinstrument import QubicInstrument, QubicMultibandInst
 from qubic.lib.Qsamplings import get_pointing
 from qubic.lib.Qscene import QubicScene
 import qubic.lib.Qcomponent_model as c
-import qubic.lib.Qmixing_matrix as mm
+from fgbuster.mixingmatrix import MixingMatrix
 
 from pysimulators import *
 from pyoperators import *
@@ -140,11 +140,11 @@ def get_mixing_operator_verying_beta(nc, nside, A):
                            DenseBlockDiagonalOperator(A, broadcast='rightward', shapein=(12*nside**2, nc))], new_axisin=0, new_axisout=2)
     return D
 def get_mixingmatrix(beta, nus, comp, active=False):
-    A = mm.MixingMatrix(*comp)
+    A = MixingMatrix(*comp)
     if active:
         i = A.components.index('COLine')
         comp[i] = c.COLine(nu=comp[i].nu, active=True)
-        A = mm.MixingMatrix(*comp)
+        A = MixingMatrix(*comp)
         A_ev = A.evaluator(nus)
         if beta.shape[0] == 0:
             A_ev = A_ev()
@@ -813,7 +813,7 @@ class QubicPlanckMultiBandAcquisition:
         self.allnus = self.qubic.allnus
 
     def sed_for_scaling(self, nus, comp, beta):
-        sed = mm.MixingMatrix(comp).evaluator(nus)(beta)
+        sed = MixingMatrix(comp).evaluator(nus)(beta)
         return sed
 
     def _loop(self, irec):

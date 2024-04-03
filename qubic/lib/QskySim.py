@@ -1,19 +1,16 @@
-from __future__ import division
-import os
+import os,string,pickle
 import healpy as hp
 import random as rd
-import string
 import pysm3 as pysm
 import pysm3.units as u
 from pysm3 import utils
 from pylab import *
 from scipy.optimize import curve_fit
-import pickle
 
-import qubic
-from qubic import camb_interface as qc
-from qubic import fibtools as ft
-from qubic.utils import progress_bar
+from qubic.lib.Instrument.Qinstrument import compute_freq
+from qubic.lib.Fitting import Qcamb as qc
+from qubic.lib.Calibration import Qfiber as ft
+from qubic.lib.Qutilities import progress_bar
 
 __all__ = ['sky', 'Qubic_sky']
 
@@ -138,8 +135,8 @@ class sky(object):
         Instrumental effects are not considered.
         Return a vector of shape (number_of_input_subfrequencies, npix, 3)
         """
-        _, nus_edge, nus_in, _, _, Nbbands_in = qubic.compute_freq(self.filter_nu, self.Nfin,
-                                                                   self.filter_relative_bandwidth)
+        _, nus_edge, nus_in, _, _, Nbbands_in = compute_freq(self.filter_nu, self.Nfin,
+                                                             self.filter_relative_bandwidth)
 
         sky = np.zeros((self.Nfin, self.npix, 3))
 
@@ -293,9 +290,9 @@ class Qubic_sky(sky):
         self.Nfout = int(d['nf_recon'])
         self.filter_relative_bandwidth = d['filter_relative_bandwidth']
         self.filter_nu = int(d['filter_nu'] / 1e9)
-        _, nus_edge_in, central_nus, deltas, _, _ = qubic.compute_freq(self.filter_nu,
-                                                                       self.Nfin,
-                                                                       self.filter_relative_bandwidth)
+        _, nus_edge_in, central_nus, deltas, _, _ = compute_freq(self.filter_nu,
+                                                                 self.Nfin,
+                                                                 self.filter_relative_bandwidth)
         self.qubic_central_nus = central_nus
         # THESE LINES HAVE TO BE CONFIRMED/IMPROVED in future since fwhm = lambda / (P Delta_x)
         # is an approximation for the resolution
@@ -409,16 +406,16 @@ class Qubic_sky(sky):
         """
 
         ### Input bands
-        Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(self.filter_nu,
-                                                                                self.Nfin,
-                                                                                self.filter_relative_bandwidth)
+        Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = compute_freq(self.filter_nu,
+                                                                          self.Nfin,
+                                                                          self.filter_relative_bandwidth)
         ### Output bands
         # Check Nfout is between 1 and 8.
         if self.Nfout < 1 or self.Nfout > 8:
             raise NameError("Nfout should be contained between 1 and 8 for FastSimulation.")
-        Nfreq_edges_out, nus_edge_out, nus_out, deltas_out, Delta_out, Nbbands_out = qubic.compute_freq(self.filter_nu,
-                                                                                                        self.Nfout,
-                                                                                                        self.filter_relative_bandwidth)
+        Nfreq_edges_out, nus_edge_out, nus_out, deltas_out, Delta_out, Nbbands_out = compute_freq(self.filter_nu,
+                                                                                                  self.Nfout,
+                                                                                                  self.filter_relative_bandwidth)
 
         # First get the convolved maps
         if noise_only is False:

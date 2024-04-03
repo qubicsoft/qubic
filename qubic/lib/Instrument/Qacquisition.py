@@ -2179,3 +2179,5 @@ class QubicFullBand(QubicPolyAcquisition):
         npho220 = self.subacqs220[0].get_noise(False, photon_noise220)# - ndet
         return ndet, npho150, npho220
     
+########################################################################################################################################
+### code from Mathias Regnier, originally in component_acquisition.py

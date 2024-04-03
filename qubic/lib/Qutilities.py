@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 from progressbar import ProgressBar, Bar, ETA, Percentage
 import numpy as np
 import signal

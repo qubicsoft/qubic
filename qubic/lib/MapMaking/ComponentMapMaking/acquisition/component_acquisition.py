@@ -8,7 +8,16 @@
 #########################################################################################################################
 
 # QUBIC stuff
-import qubic
+from qubic.lib.Instrument.Qinstrument import compute_freq
+from qubic.lib.Qsamplings import get_pointing
+from qubic.lib.Qscene import QubicScene
+from qubic.lib.Qacquisition import QubicAcquisition,\
+    compute_fwhm_to_convolve,\
+    arcmin2rad,\
+    give_cl_cmb,\
+    create_array,\
+    get_preconditioner,\
+    QubicPolyAcquisition
 
 # General stuff
 import healpy as hp
@@ -27,8 +36,7 @@ import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
 
-from qubic.lib.Instrument.Qinstrument import compute_freq
-from frequency_acquisition import compute_fwhm_to_convolve, arcmin2rad, give_cl_cmb, create_array, get_preconditioner, QubicPolyAcquisition, QubicAcquisition
+
 import instrument as instr
 # FG-Buster packages
 import component_model as c
@@ -205,8 +213,8 @@ class QubicIntegratedComponentsMapMaking(QubicPolyAcquisition):
 
 
         self.d = d
-        self.sampling = qubic.get_pointing(self.d)
-        self.scene = qubic.QubicScene(self.d)
+        self.sampling = get_pointing(self.d)
+        self.scene = QubicScene(self.d)
         
         #QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
         
@@ -231,7 +239,7 @@ class QubicIntegratedComponentsMapMaking(QubicPolyAcquisition):
 
         for a in self[1:]:
             a.comm = self[0].comm
-        #self.subacqs = [qubic.QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
+        #self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
 
         
         self.allfwhm = np.zeros(len(self.multiinstrument))
@@ -249,11 +257,11 @@ class QubicIntegratedComponentsMapMaking(QubicPolyAcquisition):
 
         self.d['filter_nu'] = nu
 
-        sampling = qubic.get_pointing(self.d)
-        scene = qubic.QubicScene(self.d)
+        sampling = get_pointing(self.d)
+        scene = QubicScene(self.d)
         instrument = instr.QubicInstrument(self.d)
-        fwhm = qubic.QubicAcquisition(instrument, sampling, scene, self.d).get_convolution_peak_operator().fwhm
-        H = qubic.QubicAcquisition(instrument, sampling, scene, self.d).get_operator()
+        fwhm = QubicAcquisition(instrument, sampling, scene, self.d).get_convolution_peak_operator().fwhm
+        H = QubicAcquisition(instrument, sampling, scene, self.d).get_operator()
         return H, fwhm
     def get_PySM_maps(self, config, r=0, Alens=1):
 
@@ -354,7 +362,7 @@ class QubicIntegratedComponentsMapMaking(QubicPolyAcquisition):
         d1['period'] = self.d['period']
 
         # s = create_random_pointings([0., 0.], nsamplings, 10., period=s_.period)
-        a = qubic.QubicAcquisition(qq, self.sampling, self.scene, d1)
+        a = QubicAcquisition(qq, self.sampling, self.scene, d1)
         return a
     def get_noise(self):
 
@@ -503,8 +511,8 @@ class QubicFullBandComponentsMapMakingParametric(QubicPolyAcquisition):
         #print(self.nu_average, self.allnus)
 
         self.multiinstrument = instr.QubicMultibandInstrument(self.d)
-        self.sampling = qubic.get_pointing(self.d)
-        self.scene = qubic.QubicScene(self.d)
+        self.sampling = get_pointing(self.d)
+        self.scene = QubicScene(self.d)
 
         self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
         self.subacqs150 = self.subacqs[:int(self.Nsub/2)]
@@ -537,10 +545,10 @@ class QubicFullBandComponentsMapMakingParametric(QubicPolyAcquisition):
         self.d['filter_nu'] = nu
 
         sampling = qubic.get_pointing(self.d)
-        scene = qubic.QubicScene(self.d)
+        scene = QubicScene(self.d)
         instrument = instr.QubicInstrument(self.d)
-        fwhm = qubic.QubicAcquisition(instrument, sampling, scene, self.d).get_convolution_peak_operator().fwhm
-        H = qubic.QubicAcquisition(instrument, sampling, scene, self.d).get_operator()
+        fwhm = QubicAcquisition(instrument, sampling, scene, self.d).get_convolution_peak_operator().fwhm
+        H = QubicAcquisition(instrument, sampling, scene, self.d).get_operator()
         return H, fwhm
 
     def _get_array_operators(self, beta, convolution=False, list_fwhm=None, co=None):
@@ -762,7 +770,7 @@ class QubicFullBandComponentsMapMakingBlind(QubicPolyAcquisition):
 
         self.multiinstrument = instr.QubicMultibandInstrument(self.d)
         self.sampling = qubic.get_pointing(self.d)
-        self.scene = qubic.QubicScene(self.d)
+        self.scene = QubicScene(self.d)
 
         self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
         self.subacqs150 = self.subacqs[:int(self.Nsub/2)]

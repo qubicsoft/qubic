@@ -1952,3 +1952,230 @@ class JointAcquisitionComponentsMapMaking:
         invNe = self.external.get_invntt_operator(fact=fact, mask=mask)
 
         return BlockDiagonalOperator([R(invNq(R.T)), invNe], axisout=0)
+
+
+########################################################################################################################################
+### code from Mathias Regnier, originally in frequency_acquisition.py
+
+def get_ultrawideband_config():
+    
+    nu_up = 247.5
+    nu_down = 131.25
+    nu_ave = np.mean(np.array([nu_up, nu_down]))
+    delta = nu_up - nu_ave
+    
+    return nu_ave, 2*delta/nu_ave
+
+def mychi2(beta, obj, Hqubic, data, solution, nsamples):
+
+    H_for_beta = obj.get_operator(beta, convolution=False, H_qubic=Hqubic)
+    fakedata = H_for_beta(solution)
+    fakedata_norm = obj.normalize(fakedata, nsamples)
+    print(beta)
+    return np.sum((fakedata_norm - data)**2)
+
+def fit_beta(tod, nsamples, obj, H_qubic, outputs):
+
+    tod_norm = obj.normalize(tod, nsamples)
+    r = minimize(mychi2, method='TNC', tol=1e-15, x0=np.array([1.]), args=(obj, H_qubic, tod_norm, outputs, nsamples))
+
+    return r.x
+
+class Sky:
+    
+    def __init__(self, sky_config, qubic, nu0=150):
+        
+        """
+        
+        This class allow to compute the sky at different frequency according to a given SED with astrophysical foregrounds.
+
+        """
+        self.qubic = qubic
+        self.sky_config = sky_config
+        self.nside = self.qubic.scene.nside
+        self.allnus = self.qubic.allnus
+        self.nu0 = nu0
+
+        self.is_cmb = False
+        self.is_dust = False
+        map_ref = []
+        self.comp = []
+        k = 0
+        for i in self.sky_config.keys():
+            if i == 'cmb':
+                self.is_cmb = True
+                self.cmb = self.get_cmb(self.sky_config[i])
+                self.i_cmb = k
+                self.comp += [c.CMB()]
+                map_ref += [self.cmb]
+            elif i == 'dust':
+                self.is_dust = True
+                self.dust = self.get_dust(self.nu0, self.sky_config[i])
+                map_ref += [self.dust]
+                self.comp += [c.Dust(nu0=self.nu0, temp=20)]
+                self.i_dust = k
+            k+=1
+        self.map_ref = np.array(map_ref)
+
+        self.A = mm.MixingMatrix(*self.comp).evaluator(self.allnus)
+
+    def get_SED(self, beta=None):
+
+        if beta == None:
+            sed = self.A()
+        else:
+            sed = self.A(beta)
+
+        return sed
+
+
+        
+    def scale_component(self, beta=None):
+
+        m_nu = np.zeros((len(self.allnus), 12*self.nside**2, 3))
+        sed = self.get_SED(beta)
+        
+        if self.is_cmb == True and self.is_dust == True:
+            sed = np.array([sed[:, 1]]).T
+
+        if self.is_dust:
+            for i in range(3):
+                m_nu[:, :, i] = sed @ np.array([self.map_ref[self.i_dust, :, i]])
+
+        if self.is_cmb:
+            for i in range(len(self.allnus)):
+                m_nu[i] += self.map_ref[self.i_cmb]
+
+        return m_nu
+    def get_cmb(self, seed):
+        mycls = give_cl_cmb()
+        np.random.seed(seed)
+        return hp.synfast(mycls, self.nside, verbose=False, new=True).T
+    def get_dust(self, nu0, model):
+        
+        sky=pysm3.Sky(nside=self.nside, preset_strings=[model])
+        myfg=np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0*u.GHz, None, u.uK_CMB))
+        
+        return myfg
+
+class QubicFullBand(QubicPolyAcquisition):
+
+
+    def __init__(self, d, Nsub, Nrec, relative_bandwidth=0.6138613861386139):
+
+        if Nrec%2 != 0 and Nrec!=1:
+            raise TypeError('You should put a number of reconstructed sub-bands divisible by 2')
+        self.relative_bandwidth = relative_bandwidth
+
+        if Nsub == 1:
+            raise TypeError('You should use Nsub > 1')
+        
+        self.d = d
+        self.Nsub = int(Nsub/2)
+        self.Nrec = Nrec
+        self.d['nf_sub'] = self.Nsub
+        self.d['nf_recon'] = self.Nrec
+        self.kind = 'Wide'
+        self.number_FP = 1
+        
+        self.nu_down = 131.25
+        self.nu_up = 247.5
+
+        
+
+        #self.nu_average = np.mean(np.array([self.nu_down, self.nu_up]))
+        #self.d['filter_nu'] = self.nu_average * 1e9
+        if Nsub != 1:
+            _, allnus150, _, _, _, _ = compute_freq(150, Nfreq=int(self.Nsub)-1, relative_bandwidth=0.25)
+            _, allnus220, _, _, _, _ = compute_freq(220, Nfreq=int(self.Nsub)-1, relative_bandwidth=0.25)
+        else:
+            _, _, allnus150, _, _, _ = compute_freq(150, Nfreq=int(self.Nsub), relative_bandwidth=0.25)
+            _, _, allnus220, _, _, _ = compute_freq(220, Nfreq=int(self.Nsub), relative_bandwidth=0.25)
+        self.allnus = np.array(list(allnus150) + list(allnus220))
+
+        self.Nsub *= 2
+        
+        #self.d['nf_sub'] = 2 * self.d['nf_sub']
+        self.multiinstrument = QubicMultibandInstrument(self.d)
+        self.sampling = get_pointing(self.d)
+        self.scene = QubicScene(self.d)
+
+        self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.d) for i in range(len(self.multiinstrument))]
+        self.subacqs150 = self.subacqs[:int(self.Nsub/2)]
+        self.subacqs220 = self.subacqs[int(self.Nsub/2):self.Nsub]
+        
+        ### For MPI distribution
+        if self.Nsub > 1:
+            QubicPolyAcquisition.__init__(self, self.multiinstrument, self.sampling, self.scene, self.d)
+
+        self.allfwhm = np.zeros(len(self.multiinstrument))
+        for i in range(len(self.multiinstrument)):
+            self.allfwhm[i] = self.subacqs[i].get_convolution_peak_operator().fwhm
+
+        self.nside = self.scene.nside
+        self.npix = 12*self.nside**2
+
+        invn = self.get_invntt_operator(True, True, True)
+        self.Ndets, self.Nsamples = invn.shapein
+
+    def _get_array_operators(self, convolution=False, myfwhm=None):
+
+
+        '''
+        
+        Compute all the Nsub sub-acquisition in one list. Each sub-acquisition contain the instrument specificities and describe the 
+        synthetic beam for each frequencies.
+
+        '''
+
+        operator = []
+        R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))
+        for inu, i in enumerate(self.subacqs):
+            if convolution:
+                if myfwhm is not None:
+                    C = HealpixConvolutionGaussianOperator(fwhm = myfwhm[inu])
+                else:
+                    C = HealpixConvolutionGaussianOperator(fwhm = self.allfwhm[inu])
+            else:
+                C = IdentityOperator()
+
+            P = i.get_operator() * C
+
+            operator.append(P)
+
+        self.Ndets, self.Nsamples = operator[0].shapeout
+
+        return operator
+    
+    def get_operator(self, convolution, myfwhm=None):
+
+        operator = self._get_array_operators(convolution=convolution, myfwhm=myfwhm)
+        array_operator = np.array(operator)
+        op_sum = []
+
+        f = int(self.Nsub/self.Nrec)
+
+        ### 150 GHz
+        for irec in range(self.Nrec):
+            imin = irec*f
+            imax = (irec+1)*f-1
+            op_sum += [array_operator[(self.allnus >= self.allnus[imin]) * (self.allnus <= self.allnus[imax])].sum(axis=0)]
+
+        return BlockRowOperator(op_sum, new_axisin=0)
+            
+        
+    def get_invntt_operator(self, det_noise, photon_noise150, photon_noise220):
+
+        invn150 = self.subacqs150[0].get_invntt_operator(det_noise=False, photon_noise=photon_noise150)
+        invn220 = self.subacqs220[0].get_invntt_operator(det_noise=det_noise, photon_noise=photon_noise220)
+
+        return (invn150 + invn220)/2   # factor 2 because it added twice the detector noise
+    
+    def get_noise(self, det_noise, photon_noise150, photon_noise220, seed=None):
+        
+        np.random.seed(seed)
+        ndet = self.subacqs150[0].get_noise(det_noise, False)
+        npho150 = self.subacqs150[0].get_noise(False, photon_noise150)# - ndet
+        npho220 = self.subacqs220[0].get_noise(False, photon_noise220)# - ndet
+        return ndet, npho150, npho220
+    

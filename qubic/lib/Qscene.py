@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function
 import numpy as np
 from pyoperators import asoperator, IdentityOperator, ReciprocalOperator
 from pysimulators.interfaces.healpy import SceneHealpixCMB

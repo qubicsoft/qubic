@@ -11,21 +11,20 @@ class FastNoise(AnalyticalForecast):
     '''
     Class to compute noise maps for the QUBIC instrument using the formula from analytical_forecst_lib.py
 
-    Arguments : - nus : array(float)
+    Arguments : - nus : array(float), frequency bands
                 - nside : float
                 - NEPdet : array(float), as same lenght than nus
                 - NEPpho : array(float), as same lenght than nus
-                - sky : str, 'CMB' for only cmb or 'CMB + Dust' for CMB & Dust on the sky
-                - correlation : Bool, corelation between frquency bands (not tested yet)
-                - fwhm : array(float), as same lenght than nus (only 0 suported now)
+                - mixing_matrix : array(float), define the mixing matrix between the different components. CMB : np.array([[1],[1]]) / CMB + Dust : np.array([[1, 1],[1, 2.92]])
+                - correlation : Bool, corelation between frquency bands (T0 be implemented)
+                - fwhm : array(float), as same lenght than nus (To be checked)
     '''
     
-    def __init__(self, nus, nside, NEPdet, NEPpho, sky = 'CMB + Dust', correlation = False, fwhm=np.array([0, 0]), Nyrs=3, Nh=400, fsky=0.0182, instr='DB'):
+    def __init__(self, nus, nside, NEPdet, NEPpho, mixing_matrix = np.array([[1, 1],[1, 2.92]]), correlation = False, fwhm=np.array([0, 0]), Nyrs=3, Nh=400, fsky=0.0182, instr='DB'):
         
         AnalyticalForecast.__init__(self, nus, NEPdet, NEPpho, fwhm=fwhm, Nyrs=Nyrs, Nh=Nh, fsky=fsky, nside=nside, instr=instr)
 
         self.nside = nside
-        self.correlation = correlation
         
         # We compute NET from NEP using analytical_forecast_lib.py
         self.NETs = np.zeros(len(self.nus))
@@ -35,15 +34,9 @@ class FastNoise(AnalyticalForecast):
         # We compute depths for frequency maps from NET using analytical_forecast_lib.py
         self.depths_FMM = self._get_effective_depths(self.NETs)
         
-        # We define the mixing matrix for both sky configurations
-        if sky == 'CMB + Dust':
-            self.A = np.array([[1, 1],
-                               [1, 2.92]])
-            self.ncomp = 2
-        if sky == 'CMB':
-            self.A = np.array([[1], 
-                               [1]])
-            self.ncomp = 1
+        # We define the mixing matrix
+        self.A = mixing_matrix
+        self.ncomp = mixing_matrix.shape[0]
         
     def get_noise_from_depths(self, depths, unit='uK_CMB'):
         '''
@@ -52,10 +45,19 @@ class FastNoise(AnalyticalForecast):
         return : - array(len(depths), nstokes, npix)
         '''
 
+        # Number of wanted maps
         n = np.shape(depths)[0]
+
+        # Number of sky pixels
         n_pix = hp.nside2npix(self.nside)
+
+        # Normal distribution
         res = np.random.normal(size=(n_pix, 3, n))
+
+        # We take into account the fact that I maps have 2 times more photon than Q and U
         res[:, 0, :] /= np.sqrt(2)
+
+        # Apply the noise level computed to the maps
         depths *= u.arcmin * u.uK_CMB
         depths = depths.to(getattr(u, unit) * u.arcmin,
             equivalencies=u.cmb_equivalencies(self.nus * u.GHz))
@@ -74,11 +76,16 @@ class FastNoise(AnalyticalForecast):
         Function to generate noise components maps
         '''
         
+        # Compute the noise power spectra
         bl = np.array([hp.gauss_beam(b, lmax=2*self.nside) for b in self.fwhm])
         nl = (bl / (self.depths_FMM)[:, np.newaxis])**2
+
+        # Noise mixing into component maps
         AtNA = np.einsum('fi, fl, fj -> lij', self.A, nl, self.A)
 
+        # Compute noise for the maps
         depths_CMM = np.zeros(self.ncomp)
         for i in range(self.ncomp):
             depths_CMM[i] = np.sqrt(np.linalg.pinv(AtNA))[0][i, i] * hp.nside2resol(self.nside, True)
+
         return self.get_noise_from_depths(depths_CMM)

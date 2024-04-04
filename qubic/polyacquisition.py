@@ -42,9 +42,10 @@ def compute_freq(band, Nfreq=None, relative_bandwidth=0.25):
         If not specified, then Nfreq = 15 if band == 150
         and Nfreq = 20 if band = 220
     """
-
-    if Nfreq is None:
+    if Nfreq is None and (band == 150 or band == 220):
         Nfreq = {150: 15, 220: 20}[band]
+    elif Nfreq is None:
+        Nfreq = 10
 
     nu_min = band * (1 - relative_bandwidth / 2)
     nu_max = band * (1 + relative_bandwidth / 2)

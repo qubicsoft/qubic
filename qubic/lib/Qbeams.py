@@ -1,6 +1,6 @@
 import numpy as np
 from pyoperators.utils import reshape_broadcast
-from pysimulators.beams import Beam
+from pysimulators.beams import Beam, BeamUniformHalfSpace
 import numexpr as ne
 import healpy as hp
 from scipy import interpolate

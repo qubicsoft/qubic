@@ -7,20 +7,6 @@ from PIL import Image
 _NLEVELS = 0
 _MAX_NLEVELS = 0
 
-def _norm2(x, comm):
-    x = x.ravel()
-    n = np.array(np.dot(x, x))
-    if comm is not None:
-        comm.Allreduce(MPI.IN_PLACE, n)
-    return n
-def _dot(x, y, comm):
-    d = np.array(np.dot(x.ravel(), y.ravel()))
-    
-    if comm is not None:
-        comm.Allreduce(MPI.IN_PLACE, d)
-    return d
-
-
 def join_toward_rank(comm, data, target_rank):
     #print('enter', target_rank)
     gathered_data = comm.gather(data, root=target_rank)

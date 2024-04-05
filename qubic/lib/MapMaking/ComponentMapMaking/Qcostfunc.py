@@ -1,4 +1,5 @@
 from pyoperators import *
+from pyoperators.iterative.cg import _dot
 
 import fgbuster.mixing_matrix as mm
 import fgbuster.component_model as c

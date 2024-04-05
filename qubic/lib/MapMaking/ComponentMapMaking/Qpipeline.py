@@ -1,38 +1,666 @@
+import os,sys,gc,pickle,yaml, emcee
 import numpy as np
-import yaml
-import qubic
-from qubic import QubicSkySim as qss
-import pickle
-import gc
-
-import fgb.mixing_matrix as mm
-import fgb.component_model as c
-
-from acquisition.systematics import *
-
-from simtools.mpi_tools import *
-from simtools.noise_timeline import *
-from simtools.foldertools import *
-from simtools.analysis import *
-
 import healpy as hp
 import matplotlib.pyplot as plt
 from functools import partial
-from pyoperators import MPI
-from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
-import os
-import sys
 from scipy.optimize import minimize, fmin, fmin_l_bfgs_b
-from solver.cg import (mypcg)
-from preset.preset import *
-from plots.plots import *
-from costfunc.chi2 import Chi2ConstantBlindJC, Chi2Parametric
-import emcee
 from schwimmbad import MPIPool
 from multiprocessing import Pool
+
+import fgbuster.mixing_matrix as mm
+import fgbuster.component_model as c
+
+from pyoperators import MPI
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+from qubic import QskySim as qss
+from qubic.Qacquisition import *
+from qubic.Qutilities import *
+from qubic.Qcostfunc import Chi2ConstantBlindJC, Chi2Parametric
+
+
+def grad(f,x): 
+    '''
+    CENTRAL FINITE DIFFERENCE CALCULATION
+    '''
+    h = 0.001#np.cbrt(np.finfo(float).eps)
+    d = len(x)
+    nabla = np.zeros(d)
+    for i in range(d): 
+        x_for = np.copy(x) 
+        x_back = np.copy(x)
+        x_for[i] += h 
+        x_back[i] -= h 
+        nabla[i] = (f(x_for) - f(x_back))/(2*h) 
+    return nabla 
+
+def line_search(f,x,p,nabla, maxiter=20):
+    '''
+    BACKTRACK LINE SEARCH WITH WOLFE CONDITIONS
+    '''
+    #print('p = ', p)
+    a = 1
+    print(a, p)
+    c1 = 1e-4 
+    c2 = 0.9 
+    fx = f(x)
+    x_new = x + a * p 
+    nabla_new = grad(f,x_new)
+    k=1
+    while f(x_new) >= fx + (c1*a*nabla.T@p) or nabla_new.T@p <= c2*nabla.T@p : 
+        if k > maxiter:
+            break
+        print(x_new, a)
+        a *= 0.5
+        x_new = x + a * p 
+        nabla_new = grad(f,x_new)
+        k+=1
+    return a
+
+
+class ConjugateGradientVaryingBeta:
     
+    def __init__(self, pip, x0, comm, solution, allbeta, patch_ids):
+        
+        self.pip = pip
+        self.sims = self.pip.sims
+        self.x = x0
+        self.comm = comm
+        self.solution = solution
+        self.allbeta = allbeta
+        self.patch_ids = patch_ids
+        self.rank = self.comm.Get_rank()
+        
+    def _gradient(self, beta, patch_id):
+        
+        beta_map = self.allbeta.copy()
+        beta_map[patch_id, 0] = beta.copy()
+        
+        H_i = self.sims.joint.get_operator(beta_map, gain=self.sims.g_iter, fwhm=self.sims.fwhm_recon, nu_co=self.sims.nu_co)
+
+        _d_sims = H_i(self.solution)
+
+        
+        _nabla = _d_sims.T @ self.sims.invN_beta(self.sims.TOD_obs - _d_sims)
+        
+        
+        return self.comm.allreduce(_nabla, op=MPI.SUM)
+    
+    def _backtracking(self, nabla, x, patch_id):
+        _inf = True
+        a = 1e-10
+        c1 = 1e-4
+        c2 = 0.99
+        fx = self.f(x)
+        x_new = x + a * nabla
+        nabla_new = np.array([self._gradient(x_new, patch_id)])
+        nabla = np.array([nabla])
+        k=0
+        while _inf:
+            if self.f(x_new) >= fx + (c1 * a * nabla.T @ -nabla):
+                break
+            elif nabla_new.T @ -nabla <= c2 * nabla.T @ nabla : 
+                break
+            else:
+                print(f'{a}, {x_new}, {self.f(x_new):.3e}, {fx + (c1 * a * nabla.T @ -nabla):.3e}, {nabla_new.T @ -nabla:.3e}, {c2 * nabla.T @ nabla:.3e}')
+                a *= 0.5
+                x_new = x + a * nabla
+                nabla_new = np.array([self._gradient(x_new, patch_id)])
+        return a
+    
+    def run(self, maxiter=20, tol=1e-8):
+        
+        _inf = True
+        k=0
+        nabla = np.zeros(len(self.patch_ids))
+        alpha = np.zeros(len(self.patch_ids))
+        
+        self.f = partial(self.pip.chi2.cost_function, solution=self.solution, allbeta=self.allbeta, patch_id=self.patch_ids)
+        while _inf:
+            k += 1
+            
+            for i in range(len(self.patch_ids)):
+                nabla[i] = self._gradient(self.x[i], self.patch_ids[i])
+                alpha[i] = self._backtracking(nabla[i], self.x[i], self.patch_ids[i])
+            #print(nabla)
+            #print(alpha)
+            
+            _r = self.x.copy()
+            self.x += nabla * alpha
+            _r -= self.x.copy()
+            
+            if self.rank == 0:
+                print(f'Iter = {k}    x = {self.x}    tol = {np.sum(abs(_r)):.3e}   alpha = {alpha}   d = {nabla}')
+            
+            if k+1 > maxiter:
+                _inf=False
+                return self.x
+            
+            if np.sum(abs(_r)) < tol:
+                _inf=False
+                return self.x
+        
+class ConjugateGradientConstantBeta:
+    
+    def __init__(self, pip, x0, comm, solution):
+        
+        self.pip = pip
+        self.sims = self.pip.sims
+        self.x = x0
+        self.comm = comm
+        self.solution = solution
+        self.rank = self.comm.Get_rank()
+    
+    
+    def _gradient(self, beta):
+        
+        H_i = self.sims.joint.get_operator(beta, gain=self.sims.g_iter, fwhm=self.sims.fwhm_recon, nu_co=self.sims.nu_co)
+
+        _d_sims = H_i(self.solution)
+
+        
+        _nabla = _d_sims.T @ self.sims.invN_beta(self.sims.TOD_obs - _d_sims)
+        
+        
+        return self.comm.allreduce(_nabla, op=MPI.SUM)
+    
+    def _backtracking(self, nabla, x):
+        a = 1e-9
+        c1 = 1e-4
+        c2 = 0.05
+        fx = self.f(x, solution=self.solution)
+        x_new = x + a * nabla
+        nabla_new = self._gradient(x_new)
+
+        while self.f(x_new, solution=self.solution) >= fx + (c1 * a * nabla.T * nabla) or nabla_new.T * nabla <= c2 * nabla.T * nabla : 
+            
+            a *= 0.5
+            x_new = x + a * nabla
+            nabla_new = self._gradient(x_new)
+        return a
+
+    def run(self, maxiter=20, tol=1e-8, tau=0.1):
+        
+        _inf = True
+        k=0
+        
+        self.f = partial(self.pip.chi2.cost_function)
+        while _inf:
+            k += 1
+                
+            nabla = self._gradient(self.x)
+            alphak = self._backtracking(nabla, self.x)
+                
+            _r = self.x.copy()
+            self.x += nabla * alphak
+            _r -= self.x.copy()
+            
+            if self.rank == 0:
+                print(f'Iter = {k}    x = {self.x}    tol = {np.sum(abs(_r)):.3e}   alpha = {alphak}   d = {nabla}')
+            
+            if k+1 > maxiter:
+                _inf=False
+                return self.x
+            
+            if abs(_r) < tol:
+                _inf=False
+                return self.x
+    
+    
+            
+    
+    def run_varying(self, patch_ids, maxiter=200, tol=1e-8, tau=0.1):
+    
+        _inf = True
+        k=0
+        while _inf:
+            
+            k += 1
+            nabla = np.zeros(len(patch_ids))
+            alphak = np.zeros(len(patch_ids))
+        
+            for i in range(len(patch_ids)):
+                beta_map = self.allbeta.copy()
+                beta_map[patch_ids[i], 0] = self.x[i]
+
+                nabla[i] = self._gradient_varying(beta_map)
+                alphak[i] = self._backtracking(nabla[i], np.array([self.x[i]]))
+            
+            
+            pk = nabla * alphak
+            _r = self.x.copy()
+            self.x += pk
+            _r -= self.x.copy()
+            
+            self.comm.Barrier()
+            
+            if self.comm.Get_rank() == 0:
+                print(f'Iter = {k}    x = {self.x}    tol = {np.sum(abs(_r)):.6e}   dk = {nabla}')
+            
+            
+            if k+1 > maxiter:
+                _inf=False
+                return self.x
+            
+            if np.sum(abs(_r)) < tol:
+                _inf=False
+                return self.x
+        
+
+class CG:
+    
+    '''
+    
+    Instance to perform conjugate gradient on cost function.
+    
+    '''
+    
+    def __init__(self, chi2, x0, eps, comm):
+        
+        '''
+        
+        Arguments :
+        -----------
+            - fun  :         Cost function to minimize
+            - eps  : float - Step size for integration
+            - x0   : array - Initial guess 
+            - comm : MPI communicator (used only to display messages, fun is already parallelized)
+        
+        '''
+        self.x = x0
+        self.chi2 = chi2
+        self.eps = eps
+        self.comm = comm
+        
+    def _gradient(self, x):
+        
+        fx_plus_eps = self.chi2(x+self.eps)
+        fx = self.chi2(x)
+        fx_plus_eps = self.comm.allreduce(fx_plus_eps, op=MPI.SUM)
+        fx = self.comm.allreduce(fx, op=MPI.SUM)
+        return (fx_plus_eps - fx) / self.eps
+    def __call__(self, maxiter=20, tol=1e-3, verbose=False):
+        
+        '''
+        
+        Callable method to run conjugate gradient.
+        
+        Arguments :
+        -----------
+            - maxiter : int   - Maximum number of iterations
+            - tol     : float - Tolerance
+            - verbose : bool  - Display message
+        
+        '''
+        
+        _inf = True
+        k=0
+
+        if verbose:
+            if self.comm.Get_rank() == 0:
+                print('Iter       x            Grad                Tol')
+        
+        while _inf:
+            k += 1
+            
+            _grad = self._gradient(self.x)
+            
+            _r = self.x[0]
+            self.x -= _grad * self.eps
+            _r -= self.x[0]
+            
+            if verbose:
+                if self.comm.Get_rank() == 0:
+                    print(f'{k}    {self.x[0]:.6e}    {_grad:.6e}     {abs(_r):.6e}')
+            
+            if k+1 > maxiter:
+                _inf=False
+                
+                return self.x
+            
+            if abs(_r) < tol:
+                _inf=False
+                return self.x
+
+
+
                
-               
+class Plots:
+
+    """
+    
+    Instance to produce plots on the convergence. 
+    
+    Arguments : 
+    ===========
+        - jobid : Int number for saving figures.
+        - dogif : Bool to produce GIF.
+    
+    """
+    
+    def __init__(self, sims, dogif=True):
+        
+        self.sims = sims
+        self.job_id = self.sims.job_id
+        self.dogif = dogif
+        self.params = self.sims.params
+    
+    def plot_beta_2d(self, allbeta, truth, figsize=(8, 6), ki=0):
+        
+        plt.figure(figsize=figsize)
+        
+        plt.plot(allbeta[:, 0], allbeta[:, 1], '-or')
+        plt.axvline(truth[0], ls='--', color='black')
+        plt.axhline(truth[1], ls='--', color='black')
+        plt.xlabel(r'$\beta_d$', fontsize=12)
+        plt.ylabel(r'$\beta_s$', fontsize=12)        
+        plt.savefig(f'jobs/{self.job_id}/beta_2d_iter{ki+1}.png')
+        if ki > 0:
+            os.remove(f'jobs/{self.job_id}/beta_2d_iter{ki}.png')
+        plt.close()    
+    def plot_sed(self, nus, A, figsize=(8, 6), truth=None, ki=0):
+        
+        if self.params['Plots']['conv_beta']:
+            
+            nf = truth.shape[0]
+            plt.figure(figsize=figsize)
+            plt.subplot(2, 1, 1)
+            allnus=np.linspace(120, 260, 100)
+            
+            for i in range(A[-1].shape[1]):
+                plt.errorbar(nus, truth[:, i], fmt='ob')
+                plt.errorbar(nus, A[-1][:, i], fmt='xr')
+                #plt.plot(allnus, self.sims.comps[i+1].eval(allnus, np.array([1.54]))[0], '-k')
+            
+            plt.xlim(120, 260)
+            #plt.ylim(1e-1, 5)
+            #plt.yscale('log')
+            
+            plt.subplot(2, 1, 2)
+            
+            for j in range(A[-1].shape[1]):
+                for i in range(nf):
+                    _res = abs(truth[i, j] - A[:, i, j])
+                    plt.plot(_res, '-r', alpha=0.5)
+            #plt.ylim(None, 1)
+            plt.xlim(0, self.sims.params['MapMaking']['pcg']['k'])
+            plt.yscale('log')
+            plt.savefig(f'jobs/{self.job_id}/A_iter{ki+1}.png')
+            
+            if ki > 0:
+                os.remove(f'jobs/{self.job_id}/A_iter{ki}.png')
+                
+            plt.close()
+            
+            #do_gif(f'figures_{self.job_id}/', ki+1, 'A_iter', output='Amm.gif')
+    def plot_beta_iteration(self, beta, figsize=(8, 6), truth=None, ki=0):
+
+        """
+        
+        Method to plot beta as function of iteration. beta can have shape (niter) of (niter, nbeta)
+        
+        """
+
+        if self.params['Plots']['conv_beta']:
+            niter = beta.shape[0]
+            alliter = np.arange(0, niter, 1)
+            
+            plt.figure(figsize=figsize)
+            plt.subplot(2, 1, 1)
+            if np.ndim(beta) == 1:
+                plt.plot(alliter[1:]-1, beta[1:])
+                if truth is not None:
+                    plt.axhline(truth, ls='--', color='red')
+            else:
+                for i in range(beta.shape[1]):
+                   
+                    plt.plot(alliter, beta[:, i], '-k', alpha=0.3)
+                    if truth is not None:
+                        plt.axhline(truth[i], ls='--', color='red')
+
+            plt.subplot(2, 1, 2)
+            
+            if np.ndim(beta) == 1:
+                plt.plot(alliter[1:]-1, abs(truth - beta[1:]))
+                #if truth is not None:
+                    #plt.axhline(truth, ls='--', color='red')
+            else:
+                for i in range(beta.shape[1]):
+                   
+                    plt.plot(alliter, abs(truth[i] - beta[:, i]), '-k', alpha=0.3)
+                    #if truth is not None:
+                    #    plt.axhline(truth[i], ls='--', color='red')
+            plt.yscale('log')
+            plt.savefig(f'jobs/{self.job_id}/beta_iter{ki+1}.png')
+
+            if ki > 0:
+                os.remove(f'jobs/{self.job_id}/beta_iter{ki}.png')
+
+            plt.close()
+    def _display_allcomponents(self, seenpix, figsize=(14, 10), ki=0):
+        
+        stk = ['I', 'Q', 'U']
+        if self.params['Plots']['maps']:
+            if self.params['MapMaking']['qubic']['convolution']:
+                C = HealpixConvolutionGaussianOperator(fwhm=self.sims.joint_out.qubic.allfwhm[-1])
+            else:
+                C = HealpixConvolutionGaussianOperator(fwhm=0)
+            plt.figure(figsize=figsize)
+            k=0
+            for istk in range(3):
+                for icomp in range(len(self.sims.comps_out)):
+                    
+                    if self.params['Foregrounds']['nside_fit'] == 0:
+                        
+                        if self.params['MapMaking']['qubic']['convolution'] or self.params['MapMaking']['qubic']['fake_convolution']:
+                            map_in = self.sims.components_conv_out[icomp, :, istk].copy()
+                            map_out = self.sims.components_iter[icomp, :, istk].copy()
+                        else:
+                            map_in = self.sims.components_conv_out[icomp, :, istk].copy()
+                            map_out = self.sims.components_iter[icomp, :, istk].copy()
+                            
+                        sig = np.std(self.sims.components_out[icomp, seenpix, istk])
+                        map_in[~seenpix] = hp.UNSEEN
+                        map_out[~seenpix] = hp.UNSEEN
+                        
+                    else:
+                        if self.params['MapMaking']['qubic']['convolution'] or self.params['MapMaking']['qubic']['fake_convolution']:
+                            map_in = self.sims.components_conv_out[icomp, :, istk].copy()
+                            map_out = self.sims.components_iter[istk, :, icomp].copy()
+                            sig = np.std(self.sims.components_conv_out[icomp, seenpix, istk])
+                        else:
+                            map_in = self.sims.components_out[istk, :, icomp].copy()
+                            map_out = self.sims.components_iter[istk, :, icomp].copy()
+                            sig = np.std(self.sims.components_out[istk, seenpix, icomp])
+                        map_in[~seenpix] = hp.UNSEEN
+                        map_out[~seenpix] = hp.UNSEEN
+                        
+                    r = map_in - map_out
+                    _reso = 15
+                    nsig = 3
+                    #r[~seenpix] = hp.UNSEEN
+                    hp.gnomview(map_out, rot=self.sims.center, reso=_reso, notext=True, title=f'{self.sims.comps_name_out[icomp]} - {stk[istk]} - Output',
+                        cmap='jet', sub=(3, len(self.sims.comps_out)*2, k+1), min=-nsig*sig, max=nsig*sig)
+                    k+=1
+                    hp.gnomview(r, rot=self.sims.center, reso=_reso, notext=True, title=f'{self.sims.comps_name_out[icomp]} - {stk[istk]} - Residual',
+                        cmap='jet', sub=(3, len(self.sims.comps_out)*2, k+1), min=-nsig*np.std(r[seenpix]), max=nsig*np.std(r[seenpix]))
+                    
+                    k+=1
+            
+            plt.tight_layout()
+            plt.savefig(f'jobs/{self.job_id}/allcomps/allcomps_iter{ki+1}.png')
+            
+            if self.sims.rank == 0:
+                if ki > 0:
+                    os.remove(f'jobs/{self.job_id}/allcomps/allcomps_iter{ki}.png')
+
+            plt.close()
+    def display_maps(self, seenpix, ngif=0, figsize=(14, 8), nsig=6, ki=0):
+        
+        """
+        
+        Method to display maps at given iteration.
+        
+        Arguments:
+        ----------
+            - seenpix : array containing the id of seen pixels.
+            - ngif    : Int number to create GIF with ngif PNG image.
+            - figsize : Tuple to control size of plots.
+            - nsig    : Int number to compute errorbars.
+        
+        """
+        
+        seenpix = self.sims.coverage/self.sims.coverage.max() > 0.2#self.sims.params['MapMaking']['planck']['thr']
+        
+        if self.params['Plots']['maps']:
+            stk = ['I', 'Q', 'U']
+            rms_i = np.zeros((1, 2))
+            
+            for istk, s in enumerate(stk):
+                plt.figure(figsize=figsize)
+
+                k=0
+                
+                for icomp in range(len(self.sims.comps_out)):
+                    
+                    if self.params['Foregrounds']['nside_fit'] == 0:
+                        if self.params['MapMaking']['qubic']['convolution'] or self.params['MapMaking']['qubic']['fake_convolution']:
+                            map_in = self.sims.components_conv_out[icomp, :, istk].copy()
+                            map_out = self.sims.components_iter[icomp, :, istk].copy()
+                        else:
+                            map_in = self.sims.components_out[icomp, :, istk].copy()
+                            map_out = self.sims.components_iter[icomp, :, istk].copy()
+                            
+                    else:
+                        if self.params['MapMaking']['qubic']['convolution'] or self.params['MapMaking']['qubic']['fake_convolution']:
+                            map_in = self.sims.components_conv_out[icomp, :, istk].copy()
+                            map_out = self.sims.components_iter[istk, :, icomp].copy()
+                        else:
+                            map_in = self.sims.components_out[istk, :, icomp].copy()
+                            map_out = self.sims.components_iter[istk, :, icomp].copy()
+                    
+                    sig = np.std(map_in[seenpix])
+                    map_in[~seenpix] = hp.UNSEEN
+                    map_out[~seenpix] = hp.UNSEEN
+                    r = map_in - map_out
+                    r[~seenpix] = hp.UNSEEN
+                    if icomp == 0:
+                        if istk > 0:
+                            rms_i[0, istk-1] = np.std(r[seenpix])
+                    
+                    _reso = 15
+                    nsig = 3
+                    hp.gnomview(map_in, rot=self.sims.center, reso=_reso, notext=True, title='',
+                        cmap='jet', sub=(len(self.sims.comps_out), 3, k+1), min=-nsig*sig, max=nsig*sig)
+                    hp.gnomview(map_out, rot=self.sims.center, reso=_reso, notext=True, title='',
+                        cmap='jet', sub=(len(self.sims.comps_out), 3, k+2), min=-nsig*sig, max=nsig*sig)
+                    #
+                    hp.gnomview(r, rot=self.sims.center, reso=_reso, notext=True, title=f"{np.std(r[seenpix]):.3e}",
+                        cmap='jet', sub=(len(self.sims.comps_out), 3, k+3), min=-nsig*sig, max=nsig*sig)
+                    
+                    
+                    
+                    #hp.mollview(map_in, notext=True, title='',
+                    #    cmap='jet', sub=(len(self.sims.comps), 3, k+1), min=-2*sig, max=2*sig)
+                    #hp.mollview(map_out, notext=True, title='',
+                    #    cmap='jet', sub=(len(self.sims.comps), 3, k+2), min=-2*sig, max=2*sig)
+                     
+                    #hp.mollview(r, notext=True, title=f"{np.std(r[seenpix]):.3e}",
+                    #    cmap='jet', sub=(len(self.sims.comps), 3, k+3))#, min=-1*sig, max=1*sig)
+
+                    k+=3
+                    
+                
+                #print(rms_i)
+                
+                plt.tight_layout()
+                plt.savefig(f'jobs/{self.job_id}/{s}/maps_iter{ki+1}.png')
+                
+                if self.sims.rank == 0:
+                    if ki > 0:
+                        os.remove(f'jobs/{self.job_id}/{s}/maps_iter{ki}.png')
+
+                plt.close()
+            self.sims.rms_plot = np.concatenate((self.sims.rms_plot, rms_i), axis=0)
+    def plot_gain_iteration(self, gain, alpha, figsize=(8, 6), ki=0):
+        
+        """
+        
+        Method to plot convergence of reconstructed gains.
+        
+        Arguments :
+        -----------
+            - gain    : Array containing gain number (1 per detectors). It has the shape (Niteration, Ndet, 2) for Two Bands design and (Niteration, Ndet) for Wide Band design
+            - alpha   : Transparency for curves.
+            - figsize : Tuple to control size of plots.
+            
+        """
+        
+        
+        if self.params['Plots']['conv_gain']:
+            
+            plt.figure(figsize=figsize)
+
+            
+            
+            niter = gain.shape[0]
+            ndet = gain.shape[1]
+            alliter = np.arange(1, niter+1, 1)
+
+            #plt.hist(gain[:, i, j])
+            if self.params['MapMaking']['qubic']['type'] == 'two':
+                color = ['red', 'blue']
+                for j in range(2):
+                    plt.hist(gain[-1, :, j], bins=20, color=color[j])
+            #        plt.plot(alliter-1, np.mean(gain, axis=1)[:, j], color[j], alpha=1)
+            #        for i in range(ndet):
+            #            plt.plot(alliter-1, gain[:, i, j], color[j], alpha=alpha)
+                        
+            #elif self.params['MapMaking']['qubic']['type'] == 'wide':
+            #    color = ['--g']
+            #    plt.plot(alliter-1, np.mean(gain, axis=1), color[0], alpha=1)
+            #    for i in range(ndet):
+            #        plt.plot(alliter-1, gain[:, i], color[0], alpha=alpha)
+                        
+            #plt.yscale('log')
+            #plt.ylabel(r'|$g_{reconstructed} - g_{input}$|', fontsize=12)
+            #plt.xlabel('Iterations', fontsize=12)
+            plt.xlim(-0.1, 0.1)
+            plt.ylim(0, 100)
+            plt.axvline(0, ls='--', color='black')
+            plt.savefig(f'jobs/{self.job_id}/gain_iter{ki+1}.png')
+
+            if self.sims.rank == 0:
+                if ki > 0:
+                    os.remove(f'jobs/{self.job_id}/gain_iter{ki}.png')
+
+            plt.close()
+    def plot_rms_iteration(self, rms, figsize=(8, 6), ki=0):
+        
+        if self.params['Plots']['conv_rms']:
+            plt.figure(figsize=figsize)
+            
+            plt.plot(rms[1:, 0], '-b', label='Q')
+            plt.plot(rms[1:, 1], '-r', label='U')
+            
+            #plt.ylim(1e-, None)
+            plt.yscale('log')
+            
+            plt.tight_layout()
+            plt.savefig(f'jobs/{self.job_id}/rms_iter{ki+1}.png')
+                
+            if self.sims.rank == 0:
+                if ki > 0:
+                    os.remove(f'jobs/{self.job_id}/rms_iter{ki}.png')
+
+            plt.close()
+            #rms = np.std(maps[:, seenpix, :], axis=1)     # Can be (Ncomps, Nstk) or (Nstk, Ncomps)
+            
+            #print(rms.shape)
+            #stop
+
+
+
 class Pipeline:
 
 

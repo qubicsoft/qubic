@@ -16,6 +16,9 @@ __all__ = ['sky', 'Qubic_sky']
 
 
 def cov2corr(mat):
+    """
+    Converts a Covariance Matrix into a Correlation Matrix
+    """
     sh = np.shape(mat)
     if sh[0] == 1:
         return mat

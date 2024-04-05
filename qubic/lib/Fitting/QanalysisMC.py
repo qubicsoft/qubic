@@ -4,6 +4,7 @@ import numpy as np
 from scipy import interpolate
 import matplotlib.pyplot as plt
 
+from qubic.lib.QskySim import cov2corr
 from qubic.lib.Instrument.Qinstrument import compute_freq
 from qubic.lib.Fitting import QreadMC as rmc
 
@@ -439,18 +440,6 @@ def distance_sup(matrix):
     n = np.shape(matrix)[0]
     d = np.max(np.sum(np.square(matrix), axis=1))
     return d / n
-
-
-def cov2corr(mat):
-    """
-    Converts a Covariance Matrix in a Correlation Matrix
-    """
-    newmat = np.empty_like(mat)
-    ll, cc = np.shape(mat)
-    for i in range(ll):
-        for j in range(cc):
-            newmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
-    return newmat
 
 
 def covariance_IQU_subbands(allmaps, stokesjoint=False):

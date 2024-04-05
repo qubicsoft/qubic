@@ -1,5 +1,6 @@
 import numpy as np
 from pyoperators.utils import reshape_broadcast
+from pysimulators.beams import Beam
 import numexpr as ne
 import healpy as hp
 from scipy import interpolate
@@ -37,37 +38,6 @@ def gauss_plus(x, a, s, z):
     x = x[..., None]
     out = (np.exp(-(x - z) ** 2 / 2 / s ** 2) + np.exp(-(x + z) ** 2 / 2 / s ** 2)) * a
     return out.sum(axis=-1)
-
-
-class Beam(object):
-    def __init__(self, solid_angle, nu=None):
-        """
-        Parameter
-        ---------
-        solid_angle : float
-            The beam solid angle [sr].
-
-        """
-        self.solid_angle = float(solid_angle)
-        if nu:
-            self.nu = nu
-
-    def __call__(self, theta_rad, phi_rad):
-        raise NotImplementedError()
-
-    def healpix(self, nside):
-        """
-        Return the beam as a Healpix map.
-
-        Parameter
-        ---------
-        nside : int
-             The Healpix map's nside.
-
-        """
-        npix = hp.nside2npix(nside)
-        theta, phi = hp.pix2ang(nside, np.arange(npix))
-        return self(theta, phi)
 
 
 class BeamGaussian(Beam):

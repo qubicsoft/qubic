@@ -150,16 +150,3 @@ class MultiFreqBeam(Beam):
 
         return reshape_broadcast(out, np.broadcast(theta, phi).shape)
 
-
-class BeamUniformHalfSpace(Beam):
-    """
-    Uniform beam in half-space.
-
-    """
-
-    def __init__(self):
-        Beam.__init__(self, 2 * np.pi)
-
-    def __call__(self, theta, phi):
-        out = 1.
-        return reshape_broadcast(out, np.broadcast(theta, phi).shape)

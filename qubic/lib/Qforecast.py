@@ -1,12 +1,9 @@
 '''
 renamed from analytical_forecast_lib.py
 '''
-from qubic.data import PATH as DataDir
 from qubic.lib.Instrument.Qinstrument import compute_freq
 import numpy as np
 import healpy as hp
-
-import qubic
 
 class NoiseEquivalentTemperature:
     

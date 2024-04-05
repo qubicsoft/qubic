@@ -8,24 +8,6 @@ import healpy as hp
 
 import qubic
 
-def give_cl_cmb(ell, r=0, Alens=1.):
-        
-    power_spectrum = hp.read_cl(DataDir+'/Cls_Planck2018_lensed_scalar.fits')[:,:4000]
-    if Alens != 1.:
-        power_spectrum[2] *= Alens
-    if r:
-        power_spectrum += r * hp.read_cl(DataDir+'/Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
-    return np.interp(ell, np.arange(1, 4001, 1), power_spectrum[2])
-
-def give_cl_cmb(ell, r=0, Alens=1.):
-        
-    power_spectrum = hp.read_cl(DataDir+'/Cls_Planck2018_lensed_scalar.fits')[:,:4000]
-    if Alens != 1.:
-        power_spectrum[2] *= Alens
-    if r:
-        power_spectrum += r * hp.read_cl(DataDir+'/Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
-    return np.interp(ell, np.arange(1, 4001, 1), power_spectrum[2])
-
 class NoiseEquivalentTemperature:
     
     def __init__(self, NEPs, band, relative_bandwidth=0.25):

@@ -13,7 +13,7 @@ from qubic.data import PATH as data_dir
 from qubic.lib.Instrument.Qinstrument import QubicInstrument, QubicMultibandInstrument, compute_freq
 from qubic.lib.Qsamplings import get_pointing
 from qubic.lib.Qscene import QubicScene
-import qubic.lib.Qcomponent_model as c
+from qubic.lib.Mapmaking.ComponentMapMaking import QcomponentModel as c
 from fgbuster.mixingmatrix import MixingMatrix
 
 from pysimulators import *

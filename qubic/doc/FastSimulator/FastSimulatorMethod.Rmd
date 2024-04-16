@@ -5,16 +5,20 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.16.1
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
 
 ```{python}
-# %matplotlib inline
+import os
+```
 
+```{python}
+# %matplotlib inline
+from matplotlib import pyplot as plt
 import healpy as hp
 import glob
 from scipy.optimize import curve_fit
@@ -23,7 +27,8 @@ from importlib import reload
 import time
 import scipy
 import matplotlib as mpl
-
+import numpy as np
+from numpy import exp
 
 # Specific qubic modules
 from qubicpack.utilities import Qubic_DataDir
@@ -40,8 +45,8 @@ from qubic import mcmc
 reload(qss)
 reload(ft)
 
-rc('figure', figsize=(16, 10))
-rc('font', size=15)
+plt.rc('figure', figsize=(16, 10))
+plt.rc('font', size=15)
 mpl.rcParams['image.cmap'] = 'jet'
 ```
 
@@ -80,6 +85,10 @@ Here it is only shown in the case of a single sub-band.
 We first need to read maps constructed using the full End-To-End QUBIC Simulation (Map-Making from TOD) and fit its noise profile (as a function of inverse coverage) with an appropriate function:
 
 ```{python}
+dirFast
+```
+
+```{python}
 reload(qss)
 #### This function reads the maps
 def read_files_mc(dirmap,file_rnd_string, verbose=False):
@@ -101,19 +110,60 @@ nptg = 200000
 file_rnd_string='H990hwzaGn'
 tol=1e-5
 
+#maps, convolved maps, coverage, dictionary, input_cell
 m, c, cov, d, icl, ftype = read_files_mc(dirFast, file_rnd_string, verbose=True)
+```
 
+```{python}
+plt.figure()
+stn = ['I','Q','U']
+for istokes in [0,1,2]:
+    hp.mollview(m[0,:,istokes], title=stn[istokes], sub = (1,3,istokes+1))
+
+plt.figure()
+for istokes in [0,1,2]:
+    hp.mollview(c[0,:,istokes], title=stn[istokes], sub = (2,3, istokes+1))
+
+plt.figure()
+for istokes in [0,1,2]:
+    hp.mollview(m[0,:,istokes]-c[0,:,istokes], title=stn[istokes], sub = (3,3, istokes+1))
+```
+
+## sta radi fit u get_noise_invcov_profile? u iducoj celiji je True a onda je posli false u Qubic law
+## jel norm radi normalizaciju na 1? zasto je u iducoj celiji sve pomnozeno sa yysim[0] ? kad je pomnozeno sa yysim onda se slaze sa norm = false a inace sa obicnim 
+## zasto je signoise 75? kad je 90 onda se odlicno slaze sa simuliranim, vidi se cak i na gnomview kartama
+## zasto je allstokes True pa nije
+
+## zasto se na kraju kreirana mapa uopce ne slaze? izgleda ka da ne ovisi puno o inv_cov funkciji nego o samom izboru signoise
+
+```{python}
+xx
+```
+
+```{python}
+effective_variance_invcov[1,:]
+```
+
+```{python}
+myY
+
+```
+
+```{python}
 nbins = 100   
 reload(qss)
+#It is a law for effective RMS as a function of inverse coverage and is 2D array
+#with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance
 xx, myY, effective_variance_invcov = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], 
                                                                   cov, 0.1, nbins=nbins, doplot=True, QUsep=True,
                                                                   fit=True, norm=True, allstokes=True,
                                                                  label='QUBIC MC Average Nptg={}  Tol={}'.format(nptg,tol))
-plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'--')
-plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[2,:]),'--')
-xlim(0.9,10.1)
-ylim(np.min(myY)/1.2, np.max(myY)*1.2)
-legend()
+plt.plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),'--', label='Qubic Law I', color = 'green')
+plt.plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[2,:]),'--', label='Qubic Law QU', color = 'red')
+
+plt.xlim(0.9,10.1)
+plt.ylim(np.min(myY)/1.2, np.max(myY)*1.2)
+plt.legend()
 ```
 
 We now use the fitted noise profile to generate I,Q,U noise maps with the same profile. Note that the level of the noise has to be adjusted manually through the variable signoise:
@@ -128,38 +178,44 @@ sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, d)
 
 ### Adjust this variable to match the noise profile
-signoise = 75
+signoise = 45
 
 qubicnoise = Qubic_sky.create_noise_maps(signoise, cov, effective_variance_invcov=effective_variance_invcov)
+```
 
+```{python}
 xx, yyfs, bla = qss.get_noise_invcov_profile(qubicnoise, cov, label='FastSim', 
                                              fit=False, allstokes=False, doplot=True, QUsep=True)
 xx, yysim, bla = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, doplot=True, QUsep=True,
-                                   label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False)
-plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*yysim[0],'--',label='Qubic Law I')
-plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[2,:])*yysim[0],'--',label='Qubic Law QU')
-xlim(0,12)
-ylim(0,2.5)
-legend()
+                                   label='QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False, norm = False)
+plt.plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:])*yysim[0],'--',label='Qubic Law I scaled', color = 'green')
+plt.plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[2,:])*yysim[0],'--',label='Qubic Law QU scaled', color = 'red')
 
-print(qubicnoise.shape)
-rc('figure', figsize=(16, 10))
+#xx, yysim, bla = qss.get_noise_invcov_profile(m[0,:,:]-c[0,:,:], cov, doplot=True, QUsep=True,
+ #                                  label='Normalized QUBIC MC Average IQU Nptg={}  Tol={}'.format(nptg,tol), fit=False, norm = True)
+#plt.plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[1,:]),':',label='Qubic Law I', color = 'green')
+#plt.plot(effective_variance_invcov[0,:], np.sqrt(effective_variance_invcov[2,:]),':',label='Qubic Law QU', color = 'red')
+
+
+plt.xlim(0,12)
+plt.ylim(0,2.5)
+plt.legend()
+
+plt.rc('figure', figsize=(16, 10))
 res = 15
-figure()
-st = ['I', 'Q', 'U']
+plt.figure()
 rng = [5, 5, 5]
 for s in range(3):
-    hp.gnomview(qubicnoise[:,s], rot=center, reso=res, sub=(3,2,2*s+1), title='FastSim '+st[s],
+    hp.gnomview(qubicnoise[:,s], rot=center, reso=res, sub=(3,2,2*s+1), title='FastSim '+stn[s],
                min=-rng[s], max=rng[s])
-    hp.gnomview(m[0,:,s]-c[0,:,s], rot=center, reso=res, sub=(3,2,2*s+2), title='NERSC 200000 '+st[s],
+    hp.gnomview(m[0,:,s]-c[0,:,s], rot=center, reso=res, sub=(3,2,2*s+2), title='NERSC 200000 '+stn[s],
                min=-rng[s], max=rng[s])
-tight_layout()
-
-
 ```
 
 # Noise spatial correlation
 If one flattens the noise in the maps by renormalizing by the above fitted noise profile, one can calculate the C(theta) of the new map and explore possible spatial correlations:
+
+## zasto se opet fita noise koji je vec napravljen? yy je isti yysim
 
 ```{python}
 ### Let's try to look at covariance between nearby pixels
@@ -173,23 +229,25 @@ xx, yy, fit_n200k = qss.get_noise_invcov_profile(diff, cov, nbins=nbins, QUsep=T
                                               label='NERSC 200000',fit=True)
 
 ######### Flattening maps
+#qubicnoise = Qubic_sky.create_noise_maps(40, cov, effective_variance_invcov=effective_variance_invcov)
+qubicnoise = Qubic_sky.create_noise_maps(86, cov, effective_variance_invcov=effective_variance_invcov)
 new_qubicnoise = qss.correct_maps_rms(qubicnoise, cov, fit_n200k)
 new_diff = qss.correct_maps_rms(diff, cov, fit_n200k)
 
 ######### Displaying new profiles
-subplot(1,2,1)
+plt.subplot(1,2,1)
 bla = qss.get_angular_profile(new_qubicnoise, label='Fastsim corrected',
                               allstokes=True,nbins=50,thmax=22, fontsize=10, doplot=True)
-ylim(0,1.2)
-xlim(0,22)
-title('FastSim')
+plt.ylim(0,1.2)
+plt.xlim(0,22)
+plt.title('FastSim')
 
-subplot(1,2,2)
+plt.subplot(1,2,2)
 bla = qss.get_angular_profile(new_diff, label='Nersc 200k corrected',
                               allstokes=True,nbins=50,thmax=22, fontsize=10, doplot=True)
-ylim(0,1.2)
-xlim(0,22)
-title('200k')
+plt.ylim(0,1.2)
+plt.xlim(0,22)
+plt.title('200k')
 
 ############ Calculating C(theta)
 ns = d['nside']
@@ -206,20 +264,20 @@ fct = lambda x, a, b, c: a * np.sin(x/b) * exp(-x/c)
 results_qn = curve_fit(fct, th[1:], (cth_qn[1:]/cth_qn[0]),maxfev=100000, ftol=1e-7, p0=[0,1,1])
 results_200k = curve_fit(fct, th[1:], (cth_200k[1:]/cth_200k[0]),maxfev=100000, ftol=1e-7, p0=[0,1,1])
 
-figure()
+plt.figure()
 thth = np.linspace(0,20,100)
-p=plot(th,(cth_qn/cth_qn[0]),'o', label='FastSim')
-plot(thth, fct(thth, *results_qn[0]), color=p[0].get_color(),
+p=plt.plot(th,(cth_qn/cth_qn[0]),'o', label='FastSim')
+plt.plot(thth, fct(thth, *results_qn[0]), color=p[0].get_color(),
      label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_qn[0]))
 
-p=plot(th,(cth_200k/cth_200k[0]),'o', label='200k')
-plot(thth, fct(thth, *results_200k[0]), color=p[0].get_color(),
+p=plt.plot(th,(cth_200k/cth_200k[0]),'o', label='200k')
+plt.plot(thth, fct(thth, *results_200k[0]), color=p[0].get_color(),
      label=r'$a\times\sin(\theta/b)\times\exp(\theta/c)$'+'\n a={0:4.2f} b={1:4.2f} c={2:4.2f}'.format(*results_200k[0]))
 
-legend()
-xlabel(r'$\theta$ [deg]')
-ylabel(r'$C(\theta)$ [Normalized]')
-ylim(-0.1,1)
+plt.legend()
+plt.xlabel(r'$\theta$ [deg]')
+plt.ylabel(r'$C(\theta)$ [Normalized]')
+plt.ylim(-0.1,1)
 
 ```
 

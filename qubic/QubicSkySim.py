@@ -720,9 +720,9 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
     seenpix = coverage > (covcut * np.max(coverage))
     covnorm = coverage / np.max(coverage)
 
-    xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 0], nbins=nbins, plot=False)
-    xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 1], nbins=nbins, plot=False)
-    xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 2], nbins=nbins, plot=False)
+    xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 0], nbins=nbins)
+    xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 1], nbins=nbins)
+    xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 2], nbins=nbins)
     avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3)
     avgQU = np.sqrt((dyQ ** 2 / 2 + dyU ** 2 / 2) / 2)
     if norm:
@@ -808,9 +808,9 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
     vecpix = hp.pix2vec(ns, np.arange(12 * ns ** 2))
     angs = np.degrees(np.arccos(np.dot(vec0, vecpix)))
     rng = np.array([0, thmax])
-    xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins, plot=False, rng=rng)
-    xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:, 1], nbins=nbins, plot=False, rng=rng)
-    xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:, 2], nbins=nbins, plot=False, rng=rng)
+    xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins)
+    xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:, 1], nbins=nbins)
+    xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:, 2], nbins=nbins)
     avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3)
     if doplot:
         plot(xx, avg, 'o', label=label)

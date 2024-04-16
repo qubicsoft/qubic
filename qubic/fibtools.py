@@ -330,76 +330,85 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 # ##############################################################################
 
 
-def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, log=False,
-                        median=False, cutbad=True, rebin_as_well=None, clip=None, mode=False):
-        """
-        """
-        ok = np.isfinite(xin) * np.isfinite(yin)
-        x = xin[ok]
-        y = yin[ok]
-        if rng is None:
-                mini = np.min(x)
-                maxi = np.max(x)
+def profile(xin, yin, rng=None, nbins=100, dispersion=True, log=False,
+            median=False, cutbad=True, rebin_as_well=None, clip=None, mode=False):
+    """
+    Calculate statistics for binned data points.
+
+    Parameters:
+    -----------
+    xin : array_like
+        Input data points for the x-axis.
+    yin : array_like
+        Input data points for the y-axis.
+    rng : tuple, optional
+        Range for the data.
+    nbins : int, optional
+        Number of bins.
+    dispersion : bool, optional
+        Whether to compute the dispersion.
+    log : bool, optional
+        Whether to use logarithmic spacing for bins.
+    median : bool, optional
+        Whether to compute median instead of mean.
+    cutbad : bool, optional
+        Whether to exclude bins with no valid data points.
+    rebin_as_well : array_like, optional
+        Additional data to rebin.
+    clip : float, optional
+        Value for sigma-clipping.
+    mode : bool, optional
+        Whether to compute mode.
+
+    Returns:
+    --------
+    xc : ndarray
+        Bin centers.
+    yval : ndarray
+        Mean/median values of y in each bin.
+    dx : ndarray
+        Standard deviation of x in each bin.
+    dy : ndarray
+        Standard deviation of y in each bin.
+    others : ndarray or None
+        Additional rebinned data if rebin_as_well is provided, otherwise None.
+    """
+
+    data = pd.DataFrame({'x': xin, 'y': yin})
+    data = data[np.isfinite(data['x']) & np.isfinite(data['y'])]
+
+    if rng is None:
+        mini = data['x'].min()
+        maxi = data['x'].max()
+    else:
+        mini, maxi = rng
+
+    # bin edges
+    if log:
+        xx = np.logspace(np.log10(mini), np.log10(maxi), nbins + 1)
+    else:
+        xx = np.linspace(mini, maxi, nbins + 1)
+
+    # bin centers
+    xc = (xx[:-1] + xx[1:]) / 2
+
+    grouped = data.groupby(pd.cut(data['x'], bins=xx))
+    yval = grouped['y'].mean() if not median else grouped['y'].median()
+    no_points_per_bin = grouped.size()
+    dy = grouped['y'].std() / np.sqrt(no_points_per_bin) if dispersion else grouped['y'].std()
+    dx = grouped['x'].std() / np.sqrt(no_points_per_bin) if dispersion else grouped['x'].std()
+
+    # Cut out bins with no data points 
+    if cutbad:
+        ok = (no_points_per_bin != 0) & (dy != 0)
+        if rebin_as_well is None:
+            return xc[ok], yval[ok], dx[ok], dy[ok], None
         else:
-                mini = rng[0]
-                maxi = rng[1]
-        if log is False:
-                xx = np.linspace(mini, maxi, nbins + 1)
-        else:
-                xx = np.logspace(np.log10(mini), np.log10(maxi), nbins + 1)
-        xmin = xx[0:nbins]
-        xmax = xx[1:]
-        yval = np.zeros(nbins)
-        xc = np.zeros(nbins)
-        dy = np.zeros(nbins)
-        dx = np.zeros(nbins)
-        nn = np.zeros(nbins)
-        if rebin_as_well is not None:
-                nother = len(rebin_as_well)
-                others = np.zeros((nbins, nother))
-        else:
-                others = None
-        for i in np.arange(nbins):
-                ok = (x > xmin[i]) & (x < xmax[i])
-                if ok.sum() > 0:
-                        newy = y[ok]
-                        if clip is not None:
-                                for k in np.arange(3):
-                                        newy, mini, maxi = scipy.stats.sigmaclip(newy, low=clip, high=clip)
-                        nn[i] = len(newy)
-                        if median:
-                                yval[i] = np.median(y[ok])
-                        elif mode:
-                                mm, ss = meancut(y[ok], 3)
-                                hh = np.histogram(y[ok], bins=int(np.min([len(y[ok]) / 30, 100])), range=[mm - 5 * ss, mm + 5 * ss])
-                                idmax = np.argmax(hh[0])
-                                yval[i] = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
-                        else:
-                                yval[i] = np.mean(y[ok])
-                        xc[i] = (xmax[i] + xmin[i]) / 2
-                        if rebin_as_well is not None:
-                                for o in range(nother):
-                                        others[i, o] = np.mean(rebin_as_well[o][ok])
-                        if dispersion:
-                                fact = 1
-                        else:
-                                fact = np.sqrt(len(y[ok]))
-                        dy[i] = np.std(y[ok]) / fact
-                        dx[i] = np.std(x[ok]) / fact
-        if plot:
-                if fmt is None:
-                        fmt = 'ro'
-                errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
-        ok = (nn != 0) & (dy != 0)
-        if cutbad:
-                if others is None:
-                        return xc[ok], yval[ok], dx[ok], dy[ok], others
-                else:
-                        return xc[ok], yval[ok], dx[ok], dy[ok], others[ok, :]
-        else:
-                yval[~ok] = 0
-                dy[~ok] = 0
-                return xc, yval, dx, dy, others
+            return xc[ok], yval[ok], dx[ok], dy[ok], rebin_as_well[ok, :]
+    else:
+        yval[no_points_per_bin == 0] = 0 # if there is no data points in the bin, set mean to 0 
+        dy[no_points_per_bin == 0] = 0
+        return xc, yval, dx, dy, rebin_as_well
 
 
 def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0, power=1):
@@ -867,7 +876,7 @@ def fold_data(time, dd, period, nbins, lowcut=None, highcut=None,
                 data = dd[THEPIX, :]
                 newdd = filter_data(time, data, lowcut=lowcut, highcut=highcut, notch=notch, rebin=rebin, verbose=verbose)
                 newdata[THEPIX,:] = newdd
-                t, yy, dx, dy, others = profile(tfold, newdd, nbins=nbins, dispersion=False, plot=False,
+                t, yy, dx, dy, others = profile(tfold, newdd, nbins=nbins, dispersion=False,
                                                 cutbad=False, median=median, mode=mode, clip=clip)
                 folded[THEPIX, :] = (yy - np.mean(yy)) / np.std(yy)
                 folded_nonorm[THEPIX, :] = (yy - np.mean(yy))

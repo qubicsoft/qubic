@@ -97,7 +97,7 @@ def noise_profile_fitting(residuals, coverage, nfsub, config, nbins, dirsave=Non
         if (sqn ** 2) != nfsub:
             sqn += 1
         plt.subplot(sqn, sqn, isub + 1)
-        xx, yyfs, fitcov = qss.get_noise_invcov_profile(residuals[isub, :, :],
+        xx, yyfs, _, _, fitcov, _, _, _ = qss.get_noise_invcov_profile(residuals[isub, :, :],
                                                         coverage,
                                                         QUsep=True,
                                                         nbins=nbins,

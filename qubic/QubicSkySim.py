@@ -714,75 +714,84 @@ def random_string(nchars):
     str = "".join(lst)
     return (str)
 
+def fit_nonlinear_ls(model, x, y, p0=None, bounds=None, maxfev=100000, ftol=1e-7):
+    """
+    Perform nonlinear least squares curve fitting.
+
+    Parameters:
+        model (callable): The model function to fit the data. 
+        x (array_like): The independent variable data.
+        y (array_like): The dependent variable data.
+        p0 (array_like, optional): Initial guess for the parameters.
+        bounds (array_like or sequence of (min, max) pairs, optional): Bounds on parameters for curve fitting.
+        maxfev (int, optional): Maximum number of function evaluations.
+        ftol (float, optional): Relative error desired in the sum of squares.
+
+    Returns:
+        tuple: A tuple containing the optimal parameters for the fit and the covariance matrix.
+    """
+    return curve_fit(model, x, y, p0=p0, bounds=bounds, maxfev=maxfev, ftol=ftol)
+
 
 def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, label='',
-                             norm=False, allstokes=False, fitlim=None, doplot=False, QUsep=True):
+                             norm=False, allstokes=False, fitlim=None, QUsep=True):
     seenpix = coverage > (covcut * np.max(coverage))
     covnorm = coverage / np.max(coverage)
 
-    xx, yyI, dx, dyI, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 0], nbins=nbins)
-    xx, yyQ, dx, dyQ, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 1], nbins=nbins)
-    xx, yyU, dx, dyU, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 2], nbins=nbins)
-    avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3)
-    avgQU = np.sqrt((dyQ ** 2 / 2 + dyU ** 2 / 2) / 2)
+    xx, I_mean, dx, I_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 0], nbins=nbins)
+    xx, Q_mean, dx, Q_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 1], nbins=nbins)
+    xx, U_mean, dx, U_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 2], nbins=nbins)
+    avg = np.sqrt((I_std ** 2 + Q_std ** 2 / 2 + U_std ** 2 / 2) / 3)
+    avgQU = np.sqrt((dyQ ** 2 / 2 + U_std ** 2 / 2) / 2)
     if norm:
         fact = xx[0] / avg[0]
     else:
         fact = 1.
-    myY = (avg / xx) * fact
-    myYI = (dyI / xx) * fact
-    myYQU = (avgQU / xx) * fact
+    rms_tot = (avg / xx) * fact
+    rms_I = (I_std / xx) * fact
+    rms_QU = (avgQU / xx) * fact
 
-    if doplot:
-        if QUsep is False:
-            p = plot(xx ** 2, myY, 'o', label=label + ' IQU')
-            if allstokes:
-                plot(xx ** 2, myYI, label=label + ' I', alpha=0.3)
-                plot(xx ** 2, myYQU, label=label + ' Average Q, U /sqrt(2)', alpha=0.3)
-        else:
-            pi = plot(xx ** 2, myYI, 'o', label=label + ' I')
-            pqu = plot(xx ** 2, myYQU, 'o', label=label + ' QU / sqrt(2)')
-
+    
     if fit:
-        ok = isfinite(myY)
+        ok = isfinite(rms_tot)
         if fitlim is not None:
             print('Clipping fit from {} to {}'.format(fitlim[0], fitlim[1]))
             ok = ok & (xx >= fitlim[0]) & (xx <= fitlim[1])
         if QUsep is False:
-            mymodel = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
-            myfit = curve_fit(mymodel, xx[ok] ** 2, myY[ok], p0=[np.min(myY[ok]), 0.4, 0, 2, 1.5], maxfev=100000,
-                              ftol=1e-7)
+            pred_model = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+bx+c*np.exp(-d*(1-e)))
+            p0 = [np.min(rms_tot[ok]), 0.4, 0, 2, 1.5] #pass initial guesses for the fitting model
+            fitted_params, _ = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_ratio_intensity[ok], p0=p0, maxfev=100000, ftol=1e-7)
         else:
-            mymodel = lambda x, a, b, c, d, e, f, g: (
-                    a + b * x + f * x ** 2 + g * x ** 3 + c * np.exp(-d * (x - e)))  # /(a+b+c*np.exp(-d*(1-e)))
-            myfitI = curve_fit(mymodel, xx[ok] ** 2, myYI[ok], p0=[np.min(myY[ok]), 0.4, 0, 2, 1.5, 0., 0.],
-                               maxfev=100000, ftol=1e-7)
-            myfitQU = curve_fit(mymodel, xx[ok] ** 2, myYQU[ok], p0=[np.min(myY[ok]), 0.4, 0, 2, 1.5, 0., 0.],
-                                maxfev=100000, ftol=1e-7)
+            pred_model = lambda x, a, b, c, d, e, f, g: (
+                    a + b * x + f * x ** 2 + g * x ** 3 + c * np.exp(-d * (x - e)))  # /(a+bx+fx^2+gx^3+c*np.exp(-d*(1-e)))
+            p0 = [np.min(rms_tot[ok]), 0.4, 0, 2, 1.5, 0., 0.] 
+            fitted_params_I, _ = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_ratio_intensity[ok], p0=p0, maxfev=100000, ftol=1e-7)
+            fitted_params_QU, _ = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_ratio_pol[ok], p0=p0, maxfev=100000, ftol=1e-7)
+            
         if doplot:
             if QUsep is False:
-                plot(xx ** 2, mymodel(xx ** 2, *myfit[0]), label=label + ' Fit', color=p[0].get_color())
+                plot(xx ** 2, pred_model(xx ** 2, *fitted_params[0]), label=label + ' Fit', color=p[0].get_color())
             else:
-                plot(xx ** 2, mymodel(xx ** 2, *myfitI[0]), label=label + ' Fit I', color=pi[0].get_color())
-                plot(xx ** 2, mymodel(xx ** 2, *myfitQU[0]), label=label + ' Fit QU / sqrt(2)',
+                plot(xx ** 2, pred_model(xx ** 2, *fitted_params_I[0]), label=label + ' Fit I', color=pi[0].get_color())
+                plot(xx ** 2, pred_model(xx ** 2, *fitted_params_QU[0]), label=label + ' Fit QU / sqrt(2)',
                      color=pqu[0].get_color())
 
-            # print(myfit[0])
+            # print(fitted_params[0])
         # Interpolation of the fit from invcov = 1 to 15
         invcov_samples = np.linspace(1, 15, 1000)
         if QUsep is False:
-            eff_v = mymodel(invcov_samples, *myfit[0]) ** 2
+            eff_v = pred_model(invcov_samples, *fitted_params[0]) ** 2
             # Avoid extrapolation problem for pixels before the first bin or after the last one.
-            eff_v[invcov_samples < xx[0] ** 2] = mymodel(xx[0] ** 2, *myfit[0]) ** 2
-            eff_v[invcov_samples > xx[-1] ** 2] = mymodel(xx[-1] ** 2, *myfit[0]) ** 2
+            eff_v[invcov_samples < xx[0] ** 2] = pred_model(xx[0] ** 2, *fitted_params[0]) ** 2
+            eff_v[invcov_samples > xx[-1] ** 2] = pred_model(xx[-1] ** 2, *fitted_params[0]) ** 2
 
             effective_variance_invcov = np.array([invcov_samples, eff_v])
         else:
-            eff_vI = mymodel(invcov_samples, *myfitI[0]) ** 2
-            eff_vQU = mymodel(invcov_samples, *myfitQU[0]) ** 2
+            eff_vI = pred_model(invcov_samples, *fitted_params_I[0]) ** 2
+            eff_vQU = pred_model(invcov_samples, *fitted_params_QU[0]) ** 2
             # Avoid extrapolation problem for pixels before the first bin or after the last one.
-            eff_vI[invcov_samples < xx[0] ** 2] = mymodel(xx[0] ** 2, *myfitI[0]) ** 2
-            eff_vQU[invcov_samples > xx[-1] ** 2] = mymodel(xx[-1] ** 2, *myfitQU[0]) ** 2
+            eff_vI[invcov_samples < xx[0] ** 2] = pred_model(xx[0] ** 2, *fitted_params_I[0]) ** 2
+            eff_vQU[invcov_samples > xx[-1] ** 2] = pred_model(xx[-1] ** 2, *fitted_params_QU[0]) ** 2
 
             effective_variance_invcov = np.array([invcov_samples, eff_vI, eff_vQU])
 
@@ -793,11 +802,11 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
         else:
             add_yl = ''
         ylabel('RMS Ratio w.r.t linear scaling' + add_yl)
-
+    
     if fit:
-        return xx, myY, effective_variance_invcov
+        return xx, rms_tot, rms_I, rms_QU, effective_variance_invcov, fitted_params, fitted_params_I, fitted_params_QU
     else:
-        return xx, myY, None
+        return xx, rms_tot, rms_I, rms_QU, None, None, None, None
 
 
 def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929, -58.75808063]),

@@ -7,7 +7,7 @@ import pysm3 as pysm
 import pysm3.units as u
 from pysm3 import utils
 from pylab import *
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 import pickle
 
 import qubic
@@ -714,6 +714,24 @@ def random_string(nchars):
     str = "".join(lst)
     return (str)
 
+def optimize_sigma_sec(maps, coverage, covcut=0.1, nbins=100, fit=True, label='',
+                       norm=False, allstokes=False, fitlim=None, QUsep=True):
+    def cost_function(sigma_sec):
+        _, _, _, _, effective_variance_invcov, _, _, _ = get_noise_invcov_profile(maps, coverage, covcut=covcut,
+                                                                                   nbins=nbins, fit=fit, label=label,
+                                                                                   norm=norm, allstokes=allstokes,
+                                                                                   fitlim=fitlim, QUsep=QUsep)
+        
+        noise_maps = create_noise_maps(sigma_sec, coverage, effective_variance_invcov=effective_variance_invcov)
+        difference = np.sum((maps - noise_maps) ** 2)
+        return difference
+
+    initial_guess = 1.0  # Adjust as needed
+    result = minimize(cost_function, initial_guess)
+    sigma_sec_optimized = result.x[0]
+    
+    return sigma_sec_optimized
+    
 def fit_nonlinear_ls(model, x, y, p0=None, bounds=None, maxfev=100000, ftol=1e-7):
     """
     Perform nonlinear least squares curve fitting.

@@ -869,7 +869,7 @@ def flatten_noise(maps, coverage, nbins=20, doplot=False, normalize_all=False, Q
     if doplot:
         figure()
     for isub in range(newsh[0]):
-        xx, yy, fitcov = get_noise_invcov_profile(maps[isub, :, :], coverage, nbins=nbins, norm=False,
+        xx, yy, _, _, fitcov, _, _, _ = get_noise_invcov_profile(maps[isub, :, :], coverage, nbins=nbins, norm=False,
                                                   label='sub-band: {}'.format(isub), fit=True,
                                                   doplot=doplot, allstokes=True, QUsep=QUsep)
         all_norm_noise.append(yy[0])

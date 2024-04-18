@@ -5,9 +5,9 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.16.1
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
@@ -21,7 +21,7 @@ sudo conda install -c conda-forge pysm3
 ```
 
 ```{python}
-import pysm3
+import pysm3 as pysm
 import pysm3.units as u
 import healpy as hp
 import numpy as np
@@ -453,5 +453,120 @@ for i in range(4):
         for s in range(d['nf_sub']):
             plot(llout,llout*(llout+1)*clsout[s][i,:]/2/np.pi, '-', alpha=0.3, label='Output Map {} Cl'.format(s))
     if i==0: legend(fontsize=10, loc='upper right')
+
+```
+
+```{python}
+h = 6.63*10**(-34)
+c = 3*10**8
+k = 1.38*10**(-23)
+
+def I(f,T):
+    return 2*h*f**3/(c**2*(exp(h*f/(k*T))-1))
+
+x=linspace(10,1000,100)
+y_cmb=I(x*10**9,3)
+y_dust=x**1.5*I(x*10**9,20)
+
+plt.figure()
+loglog(x,y_cmb)
+loglog(x,y_dust)
+```
+
+```{python}
+from qubic import analytical_forecast_lib as ana
+```
+
+```{python}
+class FastNoise(AnalyticalForecast):
+    '''
+    Class to compute noise maps for the QUBIC instrument using the formula from analytical_forecst_lib.py
+
+    Arguments : - nus : array(float), frequency bands
+                - nside : float
+                - NEPdet : array(float), as same lenght than nus
+                - NEPpho : array(float), as same lenght than nus
+                - mixing_matrix : array(float), define the mixing matrix between the different components. CMB : np.array([[1],[1]]) / CMB + Dust : np.array([[1, 1],[1, 2.92]])
+                - correlation : Bool, corelation between frquency bands (T0 be implemented)
+                - fwhm : array(float), as same lenght than nus (To be checked)
+    '''
+    
+    def __init__(self, nus, nside, NEPdet, NEPpho, mixing_matrix = np.array([[1, 1],[1, 2.92]]), correlation = False, fwhm=np.array([0, 0]), Nyrs=3, Nh=400, fsky=0.0182, instr='DB'):
+        
+        AnalyticalForecast.__init__(self, nus, NEPdet, NEPpho, fwhm=fwhm, Nyrs=Nyrs, Nh=Nh, fsky=fsky, nside=nside, instr=instr)
+
+        self.nside = nside
+        
+        # We compute NET from NEP using analytical_forecast_lib.py
+        self.NETs = np.zeros(len(self.nus))
+        for i in range(len(self.nus)):
+            self.NETs[i] = NoiseEquivalentTemperature(self.NEPs[i], self.nus[i]).NETs
+
+        # We compute depths for frequency maps from NET using analytical_forecast_lib.py
+        self.depths_FMM = self._get_effective_depths(self.NETs)
+        
+        # We define the mixing matrix
+        self.A = mixing_matrix
+        self.ncomp = mixing_matrix.shape[0]
+```
+
+```{python}
+class FastNoise(ana.AnalyticalForecast):
+    '''
+    Class to compute noise maps for the QUBIC instrument using the formula from analytical_forecst_lib.py
+
+    Arguments : - nus : array(float), frequency bands
+                - nside : float
+                - NEPdet : array(float), as same lenght than nus
+                - NEPpho : array(float), as same lenght than nus
+                - mixing_matrix : array(float), define the mixing matrix between the different components. CMB : np.array([[1],[1]]) / CMB + Dust : np.array([[1, 1],[1, 2.92]])
+                - correlation : Bool, corelation between frquency bands (T0 be implemented)
+                - fwhm : array(float), as same lenght than nus (To be checked)
+    '''
+    
+    def __init__(self, nus, nside, NEPdet, NEPpho, mixing_matrix = np.array([[1, 1],[1, 2.92]]), correlation = False, fwhm=np.array([0, 0]), Nyrs=3, Nh=400, fsky=0.0182, instr='DB'):
+        
+        AnalyticalForecast.__init__(self, nus, NEPdet, NEPpho, fwhm=fwhm, Nyrs=Nyrs, Nh=Nh, fsky=fsky, nside=nside, instr=instr)
+
+        self.nside = nside
+        
+        # We compute NET from NEP using analytical_forecast_lib.py
+        self.NETs = np.zeros(len(self.nus))
+        for i in range(len(self.nus)):
+            self.NETs[i] = NoiseEquivalentTemperature(self.NEPs[i], self.nus[i]).NETs
+
+        # We compute depths for frequency maps from NET using analytical_forecast_lib.py
+        self.depths_FMM = self._get_effective_depths(self.NETs)
+        
+        # We define the mixing matrix
+        self.A = mixing_matrix
+        self.ncomp = mixing_matrix.shape[0]
+```
+
+```{python}
+# QUBIC frequency bands in GHz
+nus = np.array([150, 220])
+
+nside = 256
+
+# NEP for detectors and photon noises for QUBIC
+NEP_det = [4.7e-17, 4.7e-17]
+NEP_pho = [3.1e-17, 1.17e-16]
+```
+
+```{python}
+# From NEPs, we compute NETs and from NETs, we compute depths using analytical_forecast_lib.py
+NEPs = np.zeros((len(nus), 2))
+for i in range(len(nus)):
+    NEPs[i, 0] = NEP_det[i] * 2     
+    NEPs[i, 1] = NEP_pho[i]
+NETs = np.zeros(len(nus))
+for i in range(len(nus)):
+    NETs[i] = ana.NoiseEquivalentTemperature(NEPs[i], nus[i]).NETs
+
+depths_FMM = ana.AnalyticalForecast(nus, NEP_det, NEP_pho)._get_effective_depths(NETs)
+```
+
+```{python}
 
 ```

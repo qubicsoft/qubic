@@ -7,15 +7,21 @@ import pysm3 as pysm
 import pysm3.units as u
 from pysm3 import utils
 from pylab import *
-from scipy.optimize import curve_fit, minimize
+from scipy.optimize import curve_fit, minimize_scalar
+from sklearn.linear_model import LinearRegression
 import pickle
 
 import qubic
 from qubic import camb_interface as qc
-from qubic import fibtools as ft
+#from qubic import fibtools as ft
 from qubic.utils import progress_bar
 
-__all__ = ['sky', 'Qubic_sky']
+
+import importlib.util
+module_path = "/home/lkardum/qubic/qubic/fibtools.py"
+spec = importlib.util.spec_from_file_location("ft", module_path)
+ft = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ft)
 
 
 def cov2corr(mat):
@@ -714,25 +720,53 @@ def random_string(nchars):
     str = "".join(lst)
     return (str)
 
-def optimize_sigma_sec(maps, coverage, covcut=0.1, nbins=100, fit=True, label='',
-                       norm=False, allstokes=False, fitlim=None, QUsep=True):
-    def cost_function(sigma_sec):
-        _, _, _, _, effective_variance_invcov, _, _, _ = get_noise_invcov_profile(maps, coverage, covcut=covcut,
-                                                                                   nbins=nbins, fit=fit, label=label,
-                                                                                   norm=norm, allstokes=allstokes,
-                                                                                   fitlim=fitlim, QUsep=QUsep)
+def optimize_sigma_sec(maps, coverage, sky_config = {'cmb': None}, d = None, covcut=0.1, nbins=100, fit=True, norm=False, allstokes=False, fitlim=None, QUsep=True):
+    """
+    Optimizes the sigma_sec parameter by minimizing the difference between linear regression lines fitted to the RMS values of the original maps and the simulated noise maps.
+
+    Parameters:
+        maps (array-like): The original maps.
+        coverage (array-like): Coverage map.
+        sky_config (dict, optional): Configuration for the sky. Defaults to {'cmb': None}.
+        d (float, optional): Dictionary for Qubic_sky. 
+        covcut (float, optional): Coverage cutoff. 
+        nbins (int, optional): Number of bins. 
+        fit (bool, optional): Whether to fit a function to the noise RMS profile. 
+        norm (bool, optional): Whether to normalize the profile. 
+        allstokes (bool, optional): Computing the profile for all Stokes parameters separately. 
+        QUsep (bool, optional): Whether to consider Q and U as separate parameters.
+
+    Returns:
+        float: Optimized sigma_sec parameter.
+    """
+
+    def cost_function(sigma_sec, maps = maps, sky_config = sky_config, d = d, coverage = coverage, covcut = covcut, nbins=nbins, fit=fit, norm=norm, allstokes=allstokes, fitlim=fitlim, QUsep=QUsep):
         
-        noise_maps = create_noise_maps(sigma_sec, coverage, effective_variance_invcov=effective_variance_invcov)
-        difference = np.sum((maps - noise_maps) ** 2)
+        xorig, yorig, _, _, effective_variance_invcov, _, _, _ = get_noise_invcov_profile(maps, coverage, covcut=covcut, nbins=nbins, fit=fit, norm=norm, allstokes=allstokes, fitlim=fitlim, QUsep=QUsep)
+
+        qub_sky = Qubic_sky(sky_config, d)
+        noise_maps = qub_sky.create_noise_maps(sigma_sec, coverage = coverage, effective_variance_invcov=effective_variance_invcov)
+        
+        xsim, ysim, _, _, effective_variance_invcov_simulated, _, _, _ = get_noise_invcov_profile(noise_maps, coverage, covcut=covcut, nbins=nbins, fit=fit, norm=norm, allstokes=allstokes, fitlim=fitlim, QUsep=QUsep)
+
+
+        model_orig = LinearRegression().fit(xorig.reshape(-1, 1), yorig)
+        model_sim = LinearRegression().fit(xsim.reshape(-1, 1), ysim)
+        
+        #minimize the difference between the rms in the original map and the simulated map from noise profile
+        #difference = np.sum(np.abs(yorig - ysim))
+
+        #or the difference between fitted linear functions
+        difference = np.sum(np.abs(model_orig.predict(xorig.reshape(-1, 1)) - model_sim.predict(xorig.reshape(-1, 1))))
         return difference
 
-    initial_guess = 1.0  # Adjust as needed
-    result = minimize(cost_function, initial_guess)
-    sigma_sec_optimized = result.x[0]
+    initial_guess = 80.0  
+    result = minimize_scalar(cost_function, initial_guess, bounds = (10, 99.9)) #the sigma_sec can attain values upto 100%
+    sigma_sec_optimized = result.x
     
     return sigma_sec_optimized
     
-def fit_nonlinear_ls(model, x, y, p0=None, bounds=None, maxfev=100000, ftol=1e-7):
+def fit_nonlinear_ls(model, x, y, p0=None, bounds=(-inf, inf), maxfev=100000, ftol=1e-7):
     """
     Perform nonlinear least squares curve fitting.
 
@@ -751,16 +785,42 @@ def fit_nonlinear_ls(model, x, y, p0=None, bounds=None, maxfev=100000, ftol=1e-7
     return curve_fit(model, x, y, p0=p0, bounds=bounds, maxfev=maxfev, ftol=ftol)
 
 
-def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, label='',
+def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True,
                              norm=False, allstokes=False, fitlim=None, QUsep=True):
+    """
+    Computes the noise inverse covariance profile from given maps and coverage.
+
+    Parameters:
+        maps (array-like): The maps.
+        coverage (array-like): Coverage map.
+        covcut (float, optional): Coverage cutoff. 
+        nbins (int, optional): Number of bins to pass for smoothing in fibtools.profile. 
+        fit (bool, optional): Whether to fit a function to the noise RMS profile.
+        norm (bool, optional): Whether to normalize the profile. 
+        allstokes (bool, optional): Computing the profile for all Stokes parameters separately. 
+        fitlim (tuple, optional): Limit for fitting. 
+        QUsep (bool, optional): Whether to consider Q and U as separate parameters. 
+
+    Returns:
+        tuple: A tuple containing:
+            - xx (array): Bins for the profile.
+            - rms_tot (array): Total RMS profile.
+            - rms_I (array): RMS profile for Stokes I.
+            - rms_QU (array): RMS profile for Stokes Q and U.
+            - effective_variance_invcov (array or None): Effective variance inverse profile.
+            - fitted_params (list or None): Fitted parameters for total RMS profile. Retrieve the fitted model by defining a polynomial with a lambda function. 
+            - fitted_params_I (list or None): Fitted parameters for Stokes I RMS profile.
+            - fitted_params_QU (list or None): Fitted parameters for Stokes Q and U RMS profile.
+    """
     seenpix = coverage > (covcut * np.max(coverage))
     covnorm = coverage / np.max(coverage)
 
     xx, I_mean, dx, I_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 0], nbins=nbins)
     xx, Q_mean, dx, Q_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 1], nbins=nbins)
     xx, U_mean, dx, U_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 2], nbins=nbins)
+    
     avg = np.sqrt((I_std ** 2 + Q_std ** 2 / 2 + U_std ** 2 / 2) / 3)
-    avgQU = np.sqrt((dyQ ** 2 / 2 + U_std ** 2 / 2) / 2)
+    avgQU = np.sqrt((Q_std ** 2 / 2 + U_std ** 2 / 2) / 2)
     if norm:
         fact = xx[0] / avg[0]
     else:
@@ -768,8 +828,8 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
     rms_tot = (avg / xx) * fact
     rms_I = (I_std / xx) * fact
     rms_QU = (avgQU / xx) * fact
-
     
+    fitted_params, fitted_params_I, fitted_params_QU = [], [], []
     if fit:
         ok = isfinite(rms_tot)
         if fitlim is not None:
@@ -778,23 +838,15 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
         if QUsep is False:
             pred_model = lambda x, a, b, c, d, e: (a + b * x + c * np.exp(-d * (x - e)))  # /(a+bx+c*np.exp(-d*(1-e)))
             p0 = [np.min(rms_tot[ok]), 0.4, 0, 2, 1.5] #pass initial guesses for the fitting model
-            fitted_params, _ = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_ratio_intensity[ok], p0=p0, maxfev=100000, ftol=1e-7)
+            fitted_params = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_I[ok], p0=p0, maxfev=100000, ftol=1e-7)
         else:
             pred_model = lambda x, a, b, c, d, e, f, g: (
                     a + b * x + f * x ** 2 + g * x ** 3 + c * np.exp(-d * (x - e)))  # /(a+bx+fx^2+gx^3+c*np.exp(-d*(1-e)))
             p0 = [np.min(rms_tot[ok]), 0.4, 0, 2, 1.5, 0., 0.] 
-            fitted_params_I, _ = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_ratio_intensity[ok], p0=p0, maxfev=100000, ftol=1e-7)
-            fitted_params_QU, _ = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_ratio_pol[ok], p0=p0, maxfev=100000, ftol=1e-7)
+            fitted_params_I = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_I[ok], p0=p0, maxfev=100000, ftol=1e-7)
+            fitted_params_QU = fit_nonlinear_ls(pred_model, xx[ok] ** 2, rms_QU[ok], p0=p0, maxfev=100000, ftol=1e-7)
             
-        if doplot:
-            if QUsep is False:
-                plot(xx ** 2, pred_model(xx ** 2, *fitted_params[0]), label=label + ' Fit', color=p[0].get_color())
-            else:
-                plot(xx ** 2, pred_model(xx ** 2, *fitted_params_I[0]), label=label + ' Fit I', color=pi[0].get_color())
-                plot(xx ** 2, pred_model(xx ** 2, *fitted_params_QU[0]), label=label + ' Fit QU / sqrt(2)',
-                     color=pqu[0].get_color())
-
-            # print(fitted_params[0])
+        
         # Interpolation of the fit from invcov = 1 to 15
         invcov_samples = np.linspace(1, 15, 1000)
         if QUsep is False:
@@ -812,14 +864,6 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
             eff_vQU[invcov_samples > xx[-1] ** 2] = pred_model(xx[-1] ** 2, *fitted_params_QU[0]) ** 2
 
             effective_variance_invcov = np.array([invcov_samples, eff_vI, eff_vQU])
-
-    if doplot:
-        xlabel('1./cov normed')
-        if norm:
-            add_yl = ' (Normalized to 1 at 1)'
-        else:
-            add_yl = ''
-        ylabel('RMS Ratio w.r.t linear scaling' + add_yl)
     
     if fit:
         return xx, rms_tot, rms_I, rms_QU, effective_variance_invcov, fitted_params, fitted_params_I, fitted_params_QU

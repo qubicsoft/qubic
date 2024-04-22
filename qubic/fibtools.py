@@ -3,6 +3,7 @@ import os,sys,math,iminuit
 from matplotlib.pyplot import *
 from pysimulators import FitsArray
 import matplotlib.mlab as mlab
+import pandas as pd
 
 
 import scipy.signal as scsig
@@ -330,8 +331,9 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 # ##############################################################################
 
 
-def profile(xin, yin, rng=None, nbins=100, dispersion=True, log=False,
+def profile(xin, yin, rng=None, nbins=10, fmt=None, dispersion=True, log=False,
             median=False, cutbad=True, rebin_as_well=None, clip=None, mode=False):
+        
     """
     Calculate statistics for binned data points.
 
@@ -370,45 +372,50 @@ def profile(xin, yin, rng=None, nbins=100, dispersion=True, log=False,
         Standard deviation of x in each bin.
     dy : ndarray
         Standard deviation of y in each bin.
-    others : ndarray or None
-        Additional rebinned data if rebin_as_well is provided, otherwise None.
     """
-
-    data = pd.DataFrame({'x': xin, 'y': yin})
-    data = data[np.isfinite(data['x']) & np.isfinite(data['y'])]
-
+   
+    ok = np.isfinite(xin) * np.isfinite(yin)
+    x = xin[ok]
+    y = yin[ok]
     if rng is None:
-        mini = data['x'].min()
-        maxi = data['x'].max()
+        rng = np.min(x), np.max(x)
+    
+    if log is False:
+        xx = np.linspace(rng[0], rng[1], nbins + 1)
     else:
-        mini, maxi = rng
+        xx = np.logspace(np.log10(rng[0]), np.log10(rng[1]), nbins + 1)
 
-    # bin edges
-    if log:
-        xx = np.logspace(np.log10(mini), np.log10(maxi), nbins + 1)
+    
+    df = pd.DataFrame({'x': x, 'y': y})
+    df['bin'] = pd.cut(df['x'], bins=xx, include_lowest=True)
+    
+    result = df.groupby('bin').agg({
+        'y': ['mean', 'median', 'std'],
+        'x': ['mean', 'std']
+    })
+    
+    xc = result.index.map(lambda x: (x.left + x.right) / 2)
+    yval = result['y']['mean']
+    dy = result['y']['std']
+    dx = result['x']['std']
+    
+    if rebin_as_well is not None:
+        nother = len(rebin_as_well)
+        others = np.zeros((nbins, nother))
+        for o in range(nother):
+            others[:, o] = df.groupby('bin')[rebin_as_well[o]].mean().values
     else:
-        xx = np.linspace(mini, maxi, nbins + 1)
-
-    # bin centers
-    xc = (xx[:-1] + xx[1:]) / 2
-
-    grouped = data.groupby(pd.cut(data['x'], bins=xx))
-    yval = grouped['y'].mean() if not median else grouped['y'].median()
-    no_points_per_bin = grouped.size()
-    dy = grouped['y'].std() / np.sqrt(no_points_per_bin) if dispersion else grouped['y'].std()
-    dx = grouped['x'].std() / np.sqrt(no_points_per_bin) if dispersion else grouped['x'].std()
-
-    # Cut out bins with no data points 
+        others = None
+    
     if cutbad:
-        ok = (no_points_per_bin != 0) & (dy != 0)
-        if rebin_as_well is None:
-            return xc[ok], yval[ok], dx[ok], dy[ok], None
+        ok = (dy != 0)
+        if others is None:
+            return xc[ok].categories.values, yval[ok].values, dx[ok].values, dy[ok].values, others
         else:
-            return xc[ok], yval[ok], dx[ok], dy[ok], rebin_as_well[ok, :]
+            return xc[ok].categories.values, yval[ok].values, dx[ok].values, dy[ok].values, others[ok, :]
     else:
-        yval[no_points_per_bin == 0] = 0 # if there is no data points in the bin, set mean to 0 
-        dy[no_points_per_bin == 0] = 0
-        return xc, yval, dx, dy, rebin_as_well
+        dy[dy == 0] = 0
+        return xc.categories.values, yval.values, dx.values, dy.values, others
 
 
 def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0, power=1):

@@ -480,10 +480,7 @@ class Qubic_sky(sky):
                 thnoiseQ[isub, :] = ideal_noise_Q
                 thnoiseU[isub, :] = ideal_noise_U
             else:
-                if isinstance(effective_variance_invcov, list):
-                    my_effective_variance_invcov = effective_variance_invcov[isub]
-                else:
-                    my_effective_variance_invcov = effective_variance_invcov
+                my_effective_variance_invcov = effective_variance_invcov[isub].copy()
                 sh = np.shape(my_effective_variance_invcov)
                 if sh[0] == 2:
                     ### We have the same correction for I, Q and U
@@ -613,7 +610,6 @@ class Qubic_sky(sky):
 class FastNoise(ana.AnalyticalForecast):
     '''
     Class to compute noise maps for the QUBIC instrument using the formula from analytical_forecst_lib.py.
-    Can be used to compute noise at any frequency.
 
     Arguments : - nus : array(float), frequency bands. For Qubic: np.array([150, 220])
                 - nside : float
@@ -692,7 +688,7 @@ class FastNoise(ana.AnalyticalForecast):
         # Noise mixing into component maps
         AtNA = np.einsum('fi, fl, fj -> lij', self.A, nl, self.A)
 
-        # Compute noise for the maps
+        # Compute noise for the maps
         depths_CMM = np.zeros(self.ncomp)
         for i in range(self.ncomp):
             depths_CMM[i] = np.sqrt(np.linalg.pinv(AtNA))[0][i, i] * hp.nside2resol(self.nside, True)

@@ -1,0 +1,348 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import qubic
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy
+import random
+import scipy.special as sci_spe
+from scipy.stats import qmc
+from time import time
+```
+
+```{python}
+h = 4869 # altitude of Qubic
+h_atm = 3000 # height of the atmosphere
+min_el_qubic = np.radians(30) # minimal elevation of Qubic
+c = scipy.constants.c # speed of light
+P = 20 # Number of pupils
+delta_h = 14e-3 # distance between horns
+
+z_atm = 40000 # (m), typical height that depends on the observation site, on the order of ~10⁴ m
+T_ground = 280 # (K), average ground temperature on the observation site
+
+# I need to find measurement of the coefficient to adjust its value
+k_H2O = 3e-27 # in m², around 200 GHz
+m_H2O = 2.987e-22 # in g
+molecular_absorption_coeff = k_H2O / m_H2O
+```
+
+## Mean water vapor density
+
+```{python}
+def water_vapor_density(z, rho_0=1, h0=1000):
+    '''
+    Water vapor density as a function of geopotential height h
+    rho_0: Reference mean density of water vapor in g/m³
+    h0: The half height for water vapor in m
+    '''
+    return rho_0 * np.exp(-np.log(2) * (z - 5190) / h0)
+
+water_vapor_0 = water_vapor_density(h, 1, 1000)
+```
+
+## Temperature
+
+```{python}
+# Temperature of the atmosphere as a function of geopotential height
+def atm_temp(z):
+    return T_ground * (1 - (z-h)/z_atm)
+```
+
+## Correlation function
+
+```{python}
+def correlation_function(r, r0=300):
+    '''
+    Correlation function of water vapor as a function of distance r (Kolmogorov model)
+    '''
+    return np.where(r==0, 1, 2**(2/3)/sci_spe.gamma(1/3)*(r/r0)**(1/3)*sci_spe.kv(1/3, r/r0))
+```
+
+## Points for quasi Monte Carlo integration
+
+```{python}
+dictname = 'pipeline_demo.dict'
+
+thisd = qubic.qubicdict.qubicDict()
+thisd.read_from_file(dictname)
+thisd['nside'] = 1024
+thisd['synthbeam_kmax'] = 3
+thisd['synthbeam_fraction'] = 0.95 # Peaks will be considered until the sum of their value is 95% the total value.
+```
+
+```{python}
+def qubic_beam(i, freq):
+    '''
+    Returns the coordinates and value of the peaks of the detector i at frequency freq
+    '''
+    thisd['filter_nu'] = freq
+    thisq = qubic.QubicInstrument(thisd)
+    s = qubic.QubicScene(thisd)
+    theta, phi, val = thisq._peak_angles(s, thisd['filter_nu'], 
+                                     np.reshape(thisq.detector.center[i,:], (1,3)), 
+                                     thisq.synthbeam, thisq.horn, thisq.primary_beam)
+    return theta[0], phi[0], val[0]
+```
+
+```{python}
+# Scales a sample to go from a 6D hypercube to two cones, one for each detector
+def scaling_function(arr, z_max, freq, r0):
+    zj = arr[5] * z_max
+    zi = arr[2] * 2*r0 + zj - r0
+    radius = c / ((P-1) * delta_h * freq) * np.sqrt(2 / np.log(2))
+
+    cylindrical = np.array([arr[0]*2*np.pi, radius*zi * np.sqrt(arr[1]), arr[2]*2*r0 + zj-r0, 
+                            arr[3]*2*np.pi, radius*zj * np.sqrt(arr[4]), arr[5]*z_max])
+
+    scaled_arr = cylindrical.copy()
+    scaled_arr[0] = cylindrical[1] * np.cos(cylindrical[0])
+    scaled_arr[1] = cylindrical[1] * np.sin(cylindrical[0])
+    scaled_arr[3] = cylindrical[4] * np.cos(cylindrical[3])
+    scaled_arr[4] = cylindrical[4] * np.sin(cylindrical[3])
+    return scaled_arr
+
+```
+
+```{python}
+# Function to generate integration points within variable-dependent bounds
+def monte_carlo_points(freq, n, r0=300, h=h, h_atm=h_atm, min_el_qubic=min_el_qubic):
+    '''
+    Returns a sample of points that are in the two beams (so in 6 dimensions). 
+    This is done using a Sobol' sequence to have a uniform distribution in the 6D space.
+    The number of points generated is roughly 2**n /2
+    '''
+
+    # Generates the points in 6D space
+    sampler = qmc.Sobol(d=6, scramble=False)
+    points = sampler.random_base2(m=n)
+
+    z_max = h_atm / np.sin(min_el_qubic)
+
+    # Scales the points aproximatly in the beams.
+    # We want the distance between zi and zj to be less than r0.
+    # For (xi, yi), we scale the points in a circle of radius growing with zi.
+    scaled_points = np.apply_along_axis(scaling_function, 1, points, z_max=z_max, freq=freq, r0=r0)
+
+    # Mask the points not in the beams
+    masked_points = scaled_points[np.where((scaled_points[:,2]>=0)*(scaled_points[:,2]<=z_max))]
+
+    return masked_points
+```
+
+```{python}
+def get_points_in_beams(i, j, points, freq): ####NEED TO REPLACE I, J BY PEAK_I AND PEAK_J TO NOT CALL QUBIC_BEAM
+    theta_i, phi_i, val_i = qubic_beam(i, freq)
+    theta_j, phi_j, val_j = qubic_beam(j, freq)
+
+    nb_peaks_i = len(theta_i)
+    nb_peaks_j = len(theta_j)
+    nb_points = len(points)
+    peaks_list_i = np.empty((nb_points,3))
+    peaks_list_j = np.empty((nb_points,3))
+
+    for k in range(nb_peaks_i):
+        c_the_i = np.cos(theta_i[k]); s_the_i = np.sin(theta_i[k])
+        c_phi_i = np.cos(phi_i[k]); s_phi_i = np.sin(phi_i[k])
+
+        L1 = [c_phi_i**2*(1-c_the_i)+c_the_i, c_phi_i*s_phi_i*(1-c_the_i), -s_phi_i*s_the_i, 0, 0, 0]
+        L2 = [c_phi_i*s_phi_i*(1-c_the_i), s_phi_i**2*(1-c_the_i)+c_the_i, c_phi_i*s_the_i, 0, 0, 0]
+        L3 = [s_phi_i*s_the_i, -c_phi_i*s_the_i, c_the_i, 0, 0, 0]
+        L4 = [0, 0, 0, 1, 0, 0]
+        L5 = [0, 0, 0, 0, 1, 0]
+        L6 = [0, 0, 0, 0, 0, 1]
+
+        R_k = np.array([L1, L2, L3, L4, L5, L6])
+
+        points[int(k * nb_points / nb_peaks_i) : int((k+1) * nb_points / nb_peaks_i), :] = points[int(k * nb_points / nb_peaks_i) : int((k+1) * nb_points / nb_peaks_i), :] @ R_k        
+        peaks_list_i[int(k * nb_points / nb_peaks_i) : int((k+1) * nb_points / nb_peaks_i)] = [[theta_i[k], phi_i[k], val_i[k]]] * (int((k+1) * nb_points / nb_peaks_i) - int(k * nb_points / nb_peaks_i))
+    
+    for k in range(nb_peaks_j):
+        c_the_j = np.cos(theta_j[k]); s_the_j = np.sin(theta_j[k])
+        c_phi_j = np.cos(phi_j[k]); s_phi_j = np.sin(phi_j[k])
+
+        L1 = [1, 0, 0, 0, 0, 0]
+        L2 = [0, 1, 0, 0, 0, 0]
+        L3 = [0, 0, 1, 0, 0, 0]
+        L4 = [0, 0, 0, c_phi_j**2*(1-c_the_j)+c_the_j, c_phi_j*s_phi_j*(1-c_the_j), -s_phi_j*s_the_j]
+        L5 = [0, 0, 0, c_phi_j*s_phi_j*(1-c_the_j), s_phi_j**2*(1-c_the_j)+c_the_j, c_phi_j*s_the_j]
+        L6 = [0, 0, 0, s_phi_j*s_the_j, -c_phi_j*s_the_j, c_the_j]
+
+        R_k = np.array([L1, L2, L3, L4, L5, L6])
+
+        points[int(k * nb_points / nb_peaks_j) : int((k+1) * nb_points / nb_peaks_j), :] = points[int(k * nb_points / nb_peaks_j) : int((k+1) * nb_points / nb_peaks_j), :] @ R_k
+        peaks_list_j[int(k * nb_points / nb_peaks_j) : int((k+1) * nb_points / nb_peaks_j)] = [[theta_j[k], phi_j[k], val_j[k]]] * (int((k+1) * nb_points / nb_peaks_j) - int(k * nb_points / nb_peaks_j))
+        
+    return np.concatenate((points, peaks_list_i, peaks_list_j), axis=1)
+
+```
+
+```{python}
+get_points_in_beams(0,231, monte_carlo_points(220e9, 10), 220e9)
+```
+
+```{python}
+# %timeit monte_carlo_points(220e9, 10)
+```
+
+```{python}
+points = monte_carlo_points(220e9, 10)
+# %timeit get_points_in_beams(0,231, points, 220e9)
+```
+
+```{python}
+# %timeit qubic_beam(0, 150e9)
+```
+
+```{python}
+scaled_points = get_points_in_beams(0,231, monte_carlo_points(220e9, 10), 220e9)
+
+fig = plt.figure(figsize = (10,8))
+ax = fig.add_subplot(111, projection='3d')
+
+scatter = ax.scatter(scaled_points[:, 0], scaled_points[:, 1], scaled_points[:, 2], label='beam of the first detector', c='tab:blue')
+scatter = ax.scatter(scaled_points[:, 3], scaled_points[:, 4], scaled_points[:, 5], label='beam of the second detector', c='tab:orange')
+
+# Set labels
+ax.set_xlabel('x (m)')
+ax.set_ylabel('y (m)')
+ax.set_zlabel('z (m)')
+ax.set_title('Points distribution on beams, z axis is aligned with the central detector')
+limit = np.max((np.max(np.abs(scaled_points[:, 0])), np.max(np.abs(scaled_points[:, 1])), 
+                np.max(np.abs(scaled_points[:, 3])), np.max(np.abs(scaled_points[:, 4]))))
+ax.set_xlim(-limit,limit)
+ax.set_ylim(-limit,limit)
+plt.legend()
+plt.show()
+
+
+plt.scatter(scaled_points[:, 2], scaled_points[:, 5], c='tab:green')
+plt.xlabel(r'$z_i$'+' (m)')
+plt.ylabel(r'$z_j$'+' (m)')
+plt.title('Points distribution in the '+r'$(z_i, z_j)$'+' plane. We have '+r'$\vert z_i-z_j\vert < r_0.$')
+plt.show()
+
+plt.figure(figsize = (17,10))
+
+plt.subplot(2,3,1)
+plt.scatter(scaled_points[:, 0], scaled_points[:, 2], c='tab:blue')
+plt.xlabel(r'$x_i$'+' (m)')
+plt.ylabel(r'$z_i$'+' (m)')
+plt.title('First beam in the '+r'$(x_i, z_i)$'+' plane')
+
+plt.subplot(2,3,2)
+plt.scatter(scaled_points[:, 1], scaled_points[:, 2], c='tab:blue')
+plt.xlabel(r'$y_i$'+' (m)')
+plt.ylabel(r'$z_i$'+' (m)')
+plt.title('First beam in the '+r'$(y_i, z_i)$'+' plane')
+
+plt.subplot(2,3,3)
+plt.scatter(scaled_points[:, 0], scaled_points[:, 1], c='tab:blue')
+plt.xlabel(r'$x_i$'+' (m)')
+plt.ylabel(r'$y_i$'+' (m)')
+plt.title('First beam in the '+r'$(x_i, y_i)$'+' plane')
+
+plt.subplot(2,3,4)
+plt.scatter(scaled_points[:, 3], scaled_points[:, 5], c='tab:orange')
+plt.xlabel(r'$x_j$'+' (m)')
+plt.ylabel(r'$z_j$'+' (m)')
+plt.title('Second beam in the '+r'$(x_j, z_j)$'+' plane')
+
+plt.subplot(2,3,5)
+plt.scatter(scaled_points[:, 4], scaled_points[:, 5], c='tab:orange')
+plt.xlabel(r'$y_j$'+' (m)')
+plt.ylabel(r'$z_j$'+' (m)')
+plt.title('Second beam in the '+r'$(y_j, z_j)$'+' plane')
+
+plt.subplot(2,3,6)
+plt.scatter(scaled_points[:, 3], scaled_points[:, 4], c='tab:orange')
+plt.xlabel(r'$x_j$'+' (m)')
+plt.ylabel(r'$y_j$'+' (m)')
+plt.title('Second beam in the '+r'$(x_j, y_j)$'+' plane')
+plt.show()
+
+```
+
+## Computation of the correlation between two detectors
+
+```{python}
+def xyz_to_NWZ(x, y, z, az, el):
+    '''
+    Transform the coordinates in the frame of the detector to the coordinates system (North, West, Zenith)
+    '''
+    N = x*np.sin(az) - y*np.sin(el)*np.cos(az) + z*np.cos(el)*np.cos(az)
+    W = x*np.cos(az) + y*np.sin(el)*np.sin(az) - z*np.cos(el)*np.sin(az)
+    Z = y*np.cos(el) + z*np.sin(el)
+    return N, W, Z
+```
+
+```{python}
+def qubic_beam_value(x, y, z, theta, phi, val, total_val, freq):
+    coef = np.pi * delta_h * freq / c
+    X = coef * (x/z - theta * np.sin(phi))
+    Y = coef * (y/z + theta * np.cos(phi))
+    return val * (np.sin(P * X) / X * np.sin(P * Y) / Y)**2 / (total_val * c * z / (delta_h * f))
+```
+
+```{python}
+def integrand_correlations_qubic(arr, ti, az_ti, el_ti, tj, az_tj, el_tj, W, phi_W, freq, r0=300):
+    '''
+    Integrand for the correlation function.
+    arr is the 6 dimensions coordinates of a pair of points.
+    r_i is the direction of detector i, and r_j of detector j
+    ti and tj are the moment of observation for detector i and j
+    az_ti and el_tj is the azimuth and the elevation of the central detector at time ti
+    W the norm of the speed of the wind
+    phi_W the azimuth of the wind
+    freq the frequence
+    '''
+    xi, yi, zi, xj, yj, zj, theta_i, phi_i, val_i, theta_j, phi_j, val_j = arr
+
+    # Geopotential height
+    height_i = h + zi*np.sin(el_ti) + yi*np.cos(el_ti)
+    height_j = h + zj*np.sin(el_tj) + yj*np.cos(el_tj)
+
+    # Distance between the two points in the sky taking into account the wind
+    Ni, Wi, Zi = xyz_to_NWZ(xi, yi, zi, az_ti, el_ti)
+    Nj, Wj, Zj = xyz_to_NWZ(xj, yj, zj, az_tj, el_tj)
+    N_wind, W_wind = np.cos(phi_W)*W*(tj-ti), -np.sin(phi_W)*W*(tj-ti) # Spatial shift due to the wind
+    r_ij = np.sqrt((Nj-Ni-N_wind)**2 + (Wj-Wi-W_wind)**2 + (Nj-Ni)**2) 
+    
+    return correlation_function(r_ij, r0=r0) * water_vapor_density(height_i) * water_vapor_density(height_j) * atm_temp(height_i) * atm_temp(height_j) * qubic_beam_value(xi, yi, zi, theta_i, phi_i, val_i, total_val_i, freq) * qubic_beam_value(xj, yj, zj, theta_j, phi_j, val_j, total_val_j, freq)
+
+```
+
+```{python}
+def atm_correlations_qubic(points, nb_peaks_i, nb_peaks_j, ti, az_ti, el_ti, tj, az_tj, el_tj, W, phi_W, freq, r0=300):
+    z_max = h_atm / np.sin(min_el_qubic)
+
+    # To compute the integral we need to weight by the surface at each height zi or zj 
+    # to take into account that the density of points changes with height
+    int = 0
+    for arr in points:
+        radius = c / ((P-1) * delta_h * freq) * np.sqrt(2 / np.log(2))
+        int += integrand_correlations_qubic(
+            arr, ti, az_ti, el_ti, tj, az_tj, el_tj, W, phi_W, freq, r0=r0) * radius**4 * (arr[2] * arr[5] * np.pi)**2
+    
+    # Surface in the (zi,zj) plane
+    Sz = z_max**2 - (z_max-r0)**2
+    
+    return np.shape(points)[0], molecular_absorption_coeff**2 * int / np.shape(points)[0] * Sz * nb_peaks_i * nb_peaks_j
+```
+
+```{python}
+
+```

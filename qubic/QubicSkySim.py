@@ -25,25 +25,42 @@ spec.loader.exec_module(ft)
 
 
 def cov2corr(mat):
-    sh = np.shape(mat)
-    if sh[0] == 1:
+    """
+    Converts a covariance matrix to a correlation matrix.
+
+    Parameters:
+        mat (ndarray): The covariance matrix to be converted to a correlation matrix.
+
+    Returns:
+        corr_mat (ndarray): The correlation matrix.
+    """
+    if np.shape(mat) == 1:
         return mat
-    outmat = np.zeros_like(mat)
-    for i in range(sh[0]):
-        for j in range(sh[1]):
-            outmat[i, j] = mat[i, j] / np.sqrt(mat[i, i] * mat[j, j])
-    return outmat
+        
+    std_dev = np.sqrt(np.diag(mat))
+    outer_prod = np.outer(std_dev, std_dev)
+    outer_prod[outer_prod == 0] = 1 #avoid division by zero
+    corr_mat = mat / outer_prod    
+    return corr_mat
 
 
 def corr2cov(mat, diagvals):
-    sh = np.shape(mat)
-    if sh[0] == 1:
+    """
+    Convert a correlation matrix to a covariance matrix.
+
+    Parameters:
+        mat (ndarray): The correlation matrix.
+        diagvals (array-like): Diagonal elements of the covariance matrix.
+
+    Returns:
+        cov_mat (ndarray): The covariance matrix.
+    """
+    if np.shape(mat) == 1:
         return mat
-    outmat = np.zeros_like(mat)
-    for i in range(sh[0]):
-        for j in range(sh[1]):
-            outmat[i, j] = mat[i, j] * np.sqrt(diagvals[i] * diagvals[j])
-    return outmat
+        
+    sqrt_diagvals = np.sqrt(diagvals)
+    cov_mat = mat * np.outer(sqrt_diagvals, sqrt_diagvals)
+    return cov_mat
 
 
 class sky(object):
@@ -532,15 +549,7 @@ class Qubic_sky(sky):
         """
         This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
         noise RMS map built according to the coverage specified as an attribute to the class
-        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
-        more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
-        with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
-        used through interpolation when generating the noise.
-        The clnoise option is used to apply a convolution to the noise to obtain spatially correlated noise. This cl should be 
-        calculated from the c(theta) of the noise that can be measured using the function ctheta_parts() below. The transformation
-        of this C9theta) into Cl has to be done using wrappers on camb function found in camb_interface.py of the QUBIC software:
-        the functions to back and forth from ctheta to cl are: cl_2_ctheta and ctheta_2_cell. The simulation of the noise itself
-        calls a function of camb_interface called simulate_correlated_map().
+        The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be used through interpolation when generating the noise. The clnoise option is used to apply a convolution to the noise to obtain spatially correlated noise. This cl should be calculated from the c(theta) of the noise that can be measured using the function ctheta_parts() below. The transformation of this C9theta) into Cl has to be done using wrappers on camb function found in camb_interface.py of the QUBIC software: the functions to back and forth from ctheta to cl are: cl_2_ctheta and ctheta_2_cell. The simulation of the noise itself calls a function of camb_interface called simulate_correlated_map().
         Parameters
         ----------
         sigma_sec
@@ -720,7 +729,7 @@ def random_string(nchars):
     str = "".join(lst)
     return (str)
 
-def optimize_sigma_sec(maps, coverage, sky_config = {'cmb': None}, d = None, covcut=0.1, nbins=100, fit=True, norm=False, allstokes=False, fitlim=None, QUsep=True):
+def optimize_sigma_sec(maps, coverage, sky_config = {'cmb': None}, d = None, covcut=0.1, nbins=100, fit=True, norm=False, allstokes=False, fitlim=None, QUsep=True, linreg = True):
     """
     Optimizes the sigma_sec parameter by minimizing the difference between linear regression lines fitted to the RMS values of the original maps and the simulated noise maps.
 
@@ -735,12 +744,13 @@ def optimize_sigma_sec(maps, coverage, sky_config = {'cmb': None}, d = None, cov
         norm (bool, optional): Whether to normalize the profile. 
         allstokes (bool, optional): Computing the profile for all Stokes parameters separately. 
         QUsep (bool, optional): Whether to consider Q and U as separate parameters.
-
+        linreg (bool, optional): Whether to use Linear Regression as the fitting procedure. 
+        
     Returns:
         float: Optimized sigma_sec parameter.
     """
 
-    def cost_function(sigma_sec, maps = maps, sky_config = sky_config, d = d, coverage = coverage, covcut = covcut, nbins=nbins, fit=fit, norm=norm, allstokes=allstokes, fitlim=fitlim, QUsep=QUsep):
+    def cost_function(sigma_sec, maps = maps, sky_config = sky_config, d = d, coverage = coverage, covcut = covcut, nbins=nbins, fit=fit, norm=norm, allstokes=allstokes, fitlim=fitlim, QUsep=QUsep, linreg=linreg):
         
         xorig, yorig, _, _, effective_variance_invcov, _, _, _ = get_noise_invcov_profile(maps, coverage, covcut=covcut, nbins=nbins, fit=fit, norm=norm, allstokes=allstokes, fitlim=fitlim, QUsep=QUsep)
 
@@ -749,15 +759,14 @@ def optimize_sigma_sec(maps, coverage, sky_config = {'cmb': None}, d = None, cov
         
         xsim, ysim, _, _, effective_variance_invcov_simulated, _, _, _ = get_noise_invcov_profile(noise_maps, coverage, covcut=covcut, nbins=nbins, fit=fit, norm=norm, allstokes=allstokes, fitlim=fitlim, QUsep=QUsep)
 
-
-        model_orig = LinearRegression().fit(xorig.reshape(-1, 1), yorig)
-        model_sim = LinearRegression().fit(xsim.reshape(-1, 1), ysim)
         
-        #minimize the difference between the rms in the original map and the simulated map from noise profile
-        #difference = np.sum(np.abs(yorig - ysim))
-
-        #or the difference between fitted linear functions
-        difference = np.sum(np.abs(model_orig.predict(xorig.reshape(-1, 1)) - model_sim.predict(xorig.reshape(-1, 1))))
+        if linreg:
+            model_orig = LinearRegression().fit(xorig.reshape(-1, 1), yorig)
+            model_sim = LinearRegression().fit(xsim.reshape(-1, 1), ysim)
+            difference = np.sum(np.abs(model_orig.predict(xorig.reshape(-1, 1)) - model_sim.predict(xorig.reshape(-1, 1))))
+        else:
+            difference = np.sum(np.abs(yorig - ysim))
+        
         return difference
 
     initial_guess = 80.0  
@@ -791,7 +800,7 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True,
     Computes the noise inverse covariance profile from given maps and coverage.
 
     Parameters:
-        maps (array-like): The maps.
+        maps (array-like): The maps (containing only noise).
         coverage (array-like): Coverage map.
         covcut (float, optional): Coverage cutoff. 
         nbins (int, optional): Number of bins to pass for smoothing in fibtools.profile. 
@@ -802,15 +811,14 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True,
         QUsep (bool, optional): Whether to consider Q and U as separate parameters. 
 
     Returns:
-        tuple: A tuple containing:
-            - xx (array): Bins for the profile.
-            - rms_tot (array): Total RMS profile.
-            - rms_I (array): RMS profile for Stokes I.
-            - rms_QU (array): RMS profile for Stokes Q and U.
-            - effective_variance_invcov (array or None): Effective variance inverse profile.
-            - fitted_params (list or None): Fitted parameters for total RMS profile. Retrieve the fitted model by defining a polynomial with a lambda function. 
-            - fitted_params_I (list or None): Fitted parameters for Stokes I RMS profile.
-            - fitted_params_QU (list or None): Fitted parameters for Stokes Q and U RMS profile.
+        xx (array): Bins for the profile.
+        rms_tot (array): Total RMS profile.
+        rms_I (array): RMS profile for Stokes I.
+        rms_QU (array): RMS profile for Stokes Q and U.
+        effective_variance_invcov (array or None): Effective variance inverse profile.
+        fitted_params (list or None): Fitted parameters for total RMS profile. Retrieve the fitted model by defining a polynomial with a lambda function. 
+        fitted_params_I (list or None): Fitted parameters for Stokes I RMS profile.
+        fitted_params_QU (list or None): Fitted parameters for Stokes Q and U RMS profile.
     """
     seenpix = coverage > (covcut * np.max(coverage))
     covnorm = coverage / np.max(coverage)
@@ -818,7 +826,6 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True,
     xx, I_mean, dx, I_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 0], nbins=nbins)
     xx, Q_mean, dx, Q_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 1], nbins=nbins)
     xx, U_mean, dx, U_std, _ = ft.profile(np.sqrt(1. / covnorm[seenpix]), maps[seenpix, 2], nbins=nbins)
-    
     avg = np.sqrt((I_std ** 2 + Q_std ** 2 / 2 + U_std ** 2 / 2) / 3)
     avgQU = np.sqrt((Q_std ** 2 / 2 + U_std ** 2 / 2) / 2)
     if norm:
@@ -871,40 +878,57 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True,
         return xx, rms_tot, rms_I, rms_QU, None, None, None, None
 
 
-def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929, -58.75808063]),
-                        allstokes=False, fontsize=None, doplot=False, separate=False):
-    vec0 = hp.ang2vec(center[0], center[1], lonlat=True)
+def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929, -58.75808063])):
+    """
+    Calculates the angular profile of the input maps.
+
+    Parameters:
+        maps (array-like): Array containing the maps. 
+        thmax (int, optional): Maximum angle in degrees for the angular profile (default is 25).
+        nbins (int, optional): Number of bins for the angular profile. This is the number of bins in which fibtools.profile will calculate the variance.
+        center (array, optional): Coordinates of the center for the angular profile calculation (default is np.array([316.44761929, -58.75808063])).
+
+    Returns:
+        xx (array): Angular distances in degrees.
+        avg (array): Average RMS across all components.
+        dyI (array): RMS for Stokes I.
+        dyQ (array): RMS for Stokes Q.
+        dyU (array): RMS for Stokes U.
+    """
+    vec0 = hp.ang2vec(center[0], center[1], lonlat=True) #unit vector pointing to center
     sh = np.shape(maps)
     ns = hp.npix2nside(sh[0])
-    vecpix = hp.pix2vec(ns, np.arange(12 * ns ** 2))
-    angs = np.degrees(np.arccos(np.dot(vec0, vecpix)))
+    vecpix = hp.pix2vec(ns, np.arange(12 * ns ** 2)) #pointing to all pixels
+    angs = np.degrees(np.arccos(np.dot(vec0, vecpix))) #calculate angular distance from center to each pixel (in degrees)
     rng = np.array([0, thmax])
     xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins)
     xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:, 1], nbins=nbins)
     xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:, 2], nbins=nbins)
-    avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3)
-    if doplot:
-        plot(xx, avg, 'o', label=label)
-        if allstokes:
-            plot(xx, dyI, label=label + ' I', alpha=0.3)
-            plot(xx, dyQ / np.sqrt(2), label=label + ' Q/sqrt(2)', alpha=0.3)
-            plot(xx, dyU / np.sqrt(2), label=label + ' U/sqrt(2)', alpha=0.3)
-        xlabel('Angle [deg.]')
-        ylabel('RMS')
-        legend(fontsize=fontsize)
-    if separate:
-        return xx, dyI, dyQ, dyU
-    else:
-        return xx, avg
+    avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3) #average rms 
+
+    return xx, avg, dyI, dyQ, dyU
+    
 
 
 def correct_maps_rms(maps, cov, effective_variance_invcov):
+    """
+    Corrects the root mean square (RMS) of input maps based on coverage and effective variance inverse coverage. The function calculates a correction factor based on the effective variance inverse coverage profile and the coverage. If the effective variance inverse coverage profile contains only one row, indicating that it's for intensity maps, it calculates a correction factor and applies it to all three map components. If the effective variance inverse coverage profile contains multiple rows, indicating that it's for polarization (QU) maps, it calculates separate correction factors for intensity and polarization components and applies. This depends on the properties when calling get_noise_invcov_profile.
+
+    Parameters:
+        maps (ndarray): Array containing the input maps. 
+        cov (ndarray): Coverage array indicating the coverage level for each pixel.
+        effective_variance_invcov (ndarray): Inverse coverage profile calculated with the method get_noise_invcov_profile.
+
+    Returns:
+        newmaps (ndarray): Array containing the corrected maps. Has the same shape as the input maps.
+     """
+    
     okpix = cov > 0
     newmaps = maps * 0
     sh = np.shape(effective_variance_invcov)
-    if sh[0] == 2:
+    if sh[0] == 2: #checking if the profile contains only I, or also Q and U
         correction = np.interp(np.max(cov) / cov[okpix], effective_variance_invcov[0, :],
-                               effective_variance_invcov[1, :])
+                               effective_variance_invcov[1, :]) #interpolating from effective_variance_invcov, it is calculated based on the same trend for points at np.max(cov) / cov[okpix]
         for s in range(3):
             newmaps[okpix, s] = maps[okpix, s] / np.sqrt(correction) * np.sqrt(cov[okpix] / np.max(cov))
     else:
@@ -932,8 +956,7 @@ def flatten_noise(maps, coverage, nbins=20, doplot=False, normalize_all=False, Q
         figure()
     for isub in range(newsh[0]):
         xx, yy, _, _, fitcov, _, _, _ = get_noise_invcov_profile(maps[isub, :, :], coverage, nbins=nbins, norm=False,
-                                                  label='sub-band: {}'.format(isub), fit=True,
-                                                  doplot=doplot, allstokes=True, QUsep=QUsep)
+                                                  fit=True, allstokes=True, QUsep=QUsep)
         all_norm_noise.append(yy[0])
         if doplot:
             legend(fontsize=10)

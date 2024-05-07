@@ -14,10 +14,12 @@ import qubic
 from qubic import camb_interface as qc
 from qubic import fibtools as ft
 from qubic.utils import progress_bar
+from qubic import analytical_forecast_lib as ana
 
 __all__ = ['sky', 'Qubic_sky']
 
 
+# Return the correlation matrix from the covariance matrix.
 def cov2corr(mat):
     sh = np.shape(mat)
     if sh[0] == 1:
@@ -63,7 +65,7 @@ class sky(object):
         self.dictionary = d
         self.Nfin = int(self.dictionary['nf_sub'])
         self.Nfout = int(self.dictionary['nf_recon'])
-        self.filter_nu = int(self.dictionary['filter_nu'] / 1e9)
+        self.filter_nu = int(self.dictionary['filter_nu'] / 1e9) # frequency of the detector, 150GHz or 220 GHz
         self.filter_relative_bandwidth = self.dictionary['filter_relative_bandwidth']
         self.instrument = instrument
         self.output_directory = out_dir
@@ -136,151 +138,28 @@ class sky(object):
         """
         Create as many skies as the number of input frequencies.
         Instrumental effects are not considered.
-        Return a vector of shape (number_of_input_subfrequencies, npix, 3)
+        Return a vector of shape (number_of_input_subfrequencies, npix, 3), 3 for I, Q and U.
         """
-        _, nus_edge, nus_in, _, _, Nbbands_in = qubic.compute_freq(self.filter_nu, self.Nfin,
-                                                                   self.filter_relative_bandwidth)
+        # qubic.compute_freq uniformely ditributes in logarithmic scale the sub-bands.
+        # nus_edge is the list of edges between sub-bands (see polyacquisition.py for more details).
+        _, nus_edge, _, _, _, _ = qubic.compute_freq(self.filter_nu, self.Nfin, self.filter_relative_bandwidth)
 
         sky = np.zeros((self.Nfin, self.npix, 3))
 
-        ##### This is the old code by JCH - It has been replaced by what Edgar Jaber has proposed
-        ##### see his presentation on Git: qubic/scripts/ComponentSeparation/InternshipJaber/teleconf_03122020.pdf
-        # for i in range(Nf):
-        #     # ###################### This is puzzling part here: ############################
-        #     # # See Issue on PySM Git: https://github.com/healpy/pysm/issues/49
-        #     # ###############################################################################
-        #     # # #### THIS IS WHAT WOULD MAKE SENSE BUT DOES NOT WORK ~ 5% on maps w.r.t. input
-        #     # # nfreqinteg = 5
-        #     # # nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
-        #     # # freqs = utils.check_freq_input(nus)
-        #     # # convert_to_uK_RJ = (np.ones(len(freqs), dtype=np.double) * u.uK_CMB).to_value(
-        #     # # u.uK_RJ, equivalencies=u.cmb_equivalencies(freqs))
-        #     # # #print('Convert_to_uK_RJ :',convert_to_uK_RJ)
-        #     # # weights = np.ones(nfreqinteg) * convert_to_uK_RJ
-        #     # ###############################################################################
-        #     # ###### Works OK but not clear why...
-        #     # ###############################################################################
-        #     # nfreqinteg = 5
-        #     # nus = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
-        #     # filter_uK_CMB = np.ones(len(nus), dtype=np.double)
-        #     # filter_uK_CMB_normalized = utils.normalize_weights(nus, filter_uK_CMB)
-        #     # weights = 1. / filter_uK_CMB_normalized
-        #     # ###############################################################################
-
-        #     # ### Integrate through band using filter shape defined in weights
-        #     # themaps_iqu = self.sky.get_emission(nus * u.GHz, weights=weights)
-        #     # sky[i, :, :] = np.array(themaps_iqu.to(u.uK_CMB, equivalencies=u.cmb_equivalencies(nus_in[i] * u.GHz))).T
-        #     # ratio = np.mean(self.input_cmb_maps[0,:]/sky[i,:,0])
-        #     # print('Ratio to initial: ',ratio)
-
-        # #### Here is the new code from Edgar Jaber
         for i in range(self.Nfin):
             nfreqinteg = 5
             freqs = np.linspace(nus_edge[i], nus_edge[i + 1], nfreqinteg)
             weights = np.ones(nfreqinteg)
             sky[i, :, :] = (
-                    self.sky.get_emission(freqs * u.GHz, weights) * utils.bandpass_unit_conversion(freqs * u.GHz,
-                                                                                                   weights,
-                                                                                                   u.uK_CMB)).T
+                    self.sky.get_emission(freqs * u.GHz, weights) * utils.bandpass_unit_conversion(freqs * u.GHz, weights, u.uK_CMB)).T
 
         return sky
 
-    # ### This is not supported yet....
-    # def read_sky_map(self):
-    #     """
-    #     Returns the maps saved in the `output_directory` containing the `output_prefix`.
-    #     """
-    #     map_list = [s for s in os.listdir(self.output_directory) if self.output_prefix in s]
-    #     map_list = [m for m in map_list if 'total' in m]
-    #     if len(map_list) > len(self.instrument.Frequencies):
-    #         map_list = np.array(
-    #             [[m for m in map_list if x in m] for x in self.instrument.Channel_Names]).ravel().tolist()
-    #     maps = np.zeros((len(map_list), hp.nside2npix(self.nside), 3))
-    #     for i, title in enumerate(map_list):
-    #         maps[i] = hp.read_map(title, field=(0, 1, 2)).T
-    #     return map_list, maps
+def random_string(nchars):
+    lst = [rd.choice(string.ascii_letters + string.digits) for n in range(nchars)]
+    str = "".join(lst)
+    return (str)
 
-    # def get_sky_map(self):
-    #     """
-    #     Returns the maps saved in the `output_directory` containing the `output_prefix`. If
-    #     there are no maps in the `ouput_directory` they will be created.
-    #     """
-    #     sky_map_list, sky_map = self.read_sky_map()
-    #     if len(sky_map_list) < len(self.instrument.Frequencies):
-    #         self.instrument.observe(self.sky)
-    #         sky_map_list, sky_map = self.read_sky_map()
-    #     return sky_map
-
-
-# ### This part has been commented as it is not yet compatible with PySM3
-# ### it was written by F. Incardona using PySM2
-# class Planck_sky(sky):
-#     """
-#     Define a sky object as seen by Planck.
-#     """
-
-#     def __init__(self, skyconfig, d, output_directory="./", output_prefix="planck_sky", band=143):
-#         self.band = band
-#         self.planck_central_nus = np.array([30, 44, 70, 100, 143, 217, 353, 545, 857])
-#         self.planck_relative_bandwidths = np.array([0.2, 0.2, 0.2, 0.33, 0.33, 0.33, 0.33, 0.33, 0.33])
-#         self.planck_beams = np.array([33, 24, 14, 9.2, 7.1, 5.5, 5, 5, 5])
-#         self.planck_Isensitivities_pixel = np.array([2, 2.7, 4.7, 2, 2.2, 4.8, 14.7, 147, 6700])
-#         self.planck_Psensitivities_pixel = np.array([2.8, 3.9, 6.7, np.NaN, 4.2, 9.8, 29.8, np.NaN, np.NaN])
-#         self.planck_channels = self.create_planck_bandwidth()
-#         self.planck_channels_names = ['33_GHz', '44_GHz', '70_GHz', '100_GHz', '143_GHz', '217_GHz', '353_GHz',
-#                                       '545_GHz', '857_GHz']
-
-#         if band is not None:
-#             idx = np.argwhere(self.planck_central_nus == band)[0][0]
-#             instrument = pysm.Instrument(
-#                 {'nside': d['nside'], 'frequencies': self.planck_central_nus[idx:idx + 1],  # GHz
-#                  'use_smoothing': True, 'beams': self.planck_beams[idx:idx + 1],  # arcmin
-#                  'add_noise': True,  # If True `sens_I` and `sens_Q` are required
-#                  'noise_seed': 0,  # Not used if `add_noise` is False
-#                  'sens_I': self.get_planck_sensitivity("I")[idx:idx + 1],  # Not used if `add_noise` is False
-#                  'sens_P': self.get_planck_sensitivity("P")[idx:idx + 1],  # Not used if `add_noise` is False
-#                  'use_bandpass': True,  # If True pass banpasses  with the key `channels`
-#                  'channel_names': self.planck_channels_names[idx:idx + 1],
-#                  'channels': self.planck_channels[idx:idx + 1], 'output_units': 'uK_RJ',
-#                  'output_directory': output_directory, 'output_prefix': output_prefix, 'pixel_indices': None})
-#         else:
-#             instrument = {'nside': d['nside'], 'frequencies': self.planck_central_nus,  # GHz
-#                                           'use_smoothing': True, 'beams': self.planck_beams,  # arcmin
-#                                           'add_noise': True,  # If True `sens_I` and `sens_Q` are required
-#                                           'noise_seed': 0,  # Not used if `add_noise` is False
-#                                           'sens_I': self.get_planck_sensitivity("I"),
-#                                           # Not used if `add_noise` is False
-#                                           'sens_P': self.get_planck_sensitivity("P"),
-#                                           # Not used if `add_noise` is False
-#                                           'use_bandpass': True,  # If True pass banpasses  with the key `channels`
-#                                           'channel_names': self.planck_channels_names, 'channels': self.planck_channels,
-#                                           'output_units': 'uK_RJ', 'output_directory': output_directory,
-#                                           'output_prefix': output_prefix, 'pixel_indices': None}
-
-#         sky.__init__(self, skyconfig, d, instrument, output_directory, output_prefix)
-
-#     def create_planck_bandwidth(self, length=100):
-#         """
-#         Returns a list of bandwidths and respectively weights correponding to the ideal Planck bandwidths.
-#         `planck_central_nus` must be an array containing the central frequency of the channel while the
-#         `planck_relative_bandwidth` parameter must be an array containig the relative bandwidths for 
-#         each Planck channel. `length` is the length of the output array; default is 100.
-#         """
-#         halfband = self.planck_relative_bandwidths * self.planck_central_nus / 2
-#         bandwidths = np.zeros((len(self.planck_relative_bandwidths), length))
-#         v = []
-#         for i, hb in enumerate(halfband):
-#             bandwidths[i] = np.linspace(self.planck_central_nus[i] - hb, self.planck_central_nus[i] + hb, num=length)
-#             v.append((bandwidths[i], np.ones_like(bandwidths[i])))
-#         return v
-
-#     def get_planck_sensitivity(self, kind):
-#         """
-#         Convert the sensitiviy per pixel to sensitivity per arcmin.
-#         """
-#         if kind == "I":
-#             return self.planck_Isensitivities_pixel * self.planck_beams ** 2
-#         return self.planck_Psensitivities_pixel * self.planck_beams ** 2
 
 
 class Qubic_sky(sky):
@@ -292,8 +171,11 @@ class Qubic_sky(sky):
         self.Nfin = int(d['nf_sub'])
         self.Nfout = int(d['nf_recon'])
         self.filter_relative_bandwidth = d['filter_relative_bandwidth']
-        self.filter_nu = int(d['filter_nu'] / 1e9)
-        _, nus_edge_in, central_nus, deltas, _, _ = qubic.compute_freq(self.filter_nu,
+        self.filter_nu = int(d['filter_nu'] / 1e9) # 150GHz or 220 GHz for QUBIC
+        # qubic.compute_freq uniformely ditributes in logarithmic scale the sub-bands.
+        # nus_edge_in is the list of edges between sub-bands,
+        # central_nus is the list of the center frequency of each sub-band (see polyacquisition.py for more details).
+        _, nus_edge_in, central_nus, _, _, _ = qubic.compute_freq(self.filter_nu,
                                                                        self.Nfin,
                                                                        self.filter_relative_bandwidth)
         self.qubic_central_nus = central_nus
@@ -325,7 +207,7 @@ class Qubic_sky(sky):
 
     def get_fullsky_convolved_maps(self, FWHMdeg=None, verbose=None):
         """
-        This returns full sky maps at each subfrequency convolved by the beam of  the  instrument at
+        This returns full sky maps at each subfrequency convolved by the beam of the instrument at
         each frequency or with another beam if FWHMdeg is provided.
         when FWHMdeg is 0, the maps are not convolved.
 
@@ -336,7 +218,8 @@ class Qubic_sky(sky):
 
         Returns
         -------
-
+        Vector of shape (number_of_input_subfrequencies, npix, 3), 3 for I, Q and U.
+        
         """
 
         # First get the full sky maps
@@ -348,7 +231,7 @@ class Qubic_sky(sky):
 
         return fullmaps
 
-    def smoothing(self, maps, FWHMdeg, Nf, central_nus, verbose=True):
+    def smoothing(self, maps, FWHMdeg, Nf, central_nus, verbose=False):
         """Convolve the maps to the FWHM at each sub-frequency or to a common beam if FWHMdeg is given."""
         fwhms = np.zeros(Nf)
         if FWHMdeg is not None:
@@ -361,18 +244,19 @@ class Qubic_sky(sky):
                                                       verbose=verbose).T
         return fwhms, maps
 
-    def get_partial_sky_maps_withnoise(self, coverage=None, version_FastSim='01', sigma_sec=None,
-                                       Nyears=4., FWHMdeg=None, seed=None,
-                                       noise_profile=True, spatial_noise=True, nunu_correlation=True,
+    
+    def get_partial_sky_maps_withnoise(self, coverage=None, version_FastSim='02', sigma_sec=None,
+                                       Nyears=3., FWHMdeg=None, seed=None,
+                                       noise_profile=True, spatial_noise=False, nunu_correlation=True,
                                        noise_only=False, integrate_into_band=True,
                                        verbose=False, noise_covcut=0.1):
         """
         This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
         and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
-        The default integration time is 4 years but can be modified with optional variable Nyears
+        The default integration time is 3 years but can be modified with optional variable Nyears
         Note that the maps are convolved with the instrument beam by default, or with FWHMdeg (can be an array)
         if provided.
-        If seed is provided, it will be used for the noise realization. If not it will be a new realization at
+        If seed is provided, it will be used for the noise realization. If not, it will be a new realization at
         each call.
         The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
         more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
@@ -385,15 +269,17 @@ class Qubic_sky(sky):
             Coverage map of the sky.
             By default, we load a coverage centered on the galactic center with 10000 pointings.
         version_FastSim: str
-            Version of the FastSimulator files: 01, 02, 03... For now, only 01 exists.
+            Version of the FastSimulator files: 01, 02, 03... For now, only 01 and 02 exists.
         sigma_sec: float
         Nyears: float
-            Integration time for observation to scale the noise, by default it is 4.
+            Integration time for observation to scale the noise, by default it is 3. Should be 4 for the FastSimulator version 01.
         FWHMdeg:
         seed:
-        noise_profile:
+        noise_profile: bool
+            If True, a modification law is applied to the coverage in order to obtain more realistic noise profile.
+            It is a law for effective RMS as a function of inverse coverage
         spatial_noise: bool
-            If True, spatial noise correlations are added. True by default.
+            If True, spatial noise correlations are added. False by default. Only exist for version of FastSimulator 01.
         nunu_correlation: bool
             If True, correlations between frequency sub-bands are added. True by default.
         noise_only: bool
@@ -408,7 +294,11 @@ class Qubic_sky(sky):
 
         """
 
-        ### Input bands
+        ### Check version_FastSim is 01 or 02
+        if version_FastSim != '02' and version_FastSim != '01':
+            raise NameError("Only version_FastSim 01 and 02 exist")
+
+        ### Input bands. qubic.compute_freq uniformely ditributes in logarithmic scale the sub-bands (see polyacquisition.py for more details).
         Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(self.filter_nu,
                                                                                 self.Nfin,
                                                                                 self.filter_relative_bandwidth)
@@ -416,6 +306,8 @@ class Qubic_sky(sky):
         # Check Nfout is between 1 and 8.
         if self.Nfout < 1 or self.Nfout > 8:
             raise NameError("Nfout should be contained between 1 and 8 for FastSimulation.")
+        if self.dictionary['config'] == 'TD' and self.Nfout > 5:
+            raise NameError("Nfout should be contained between 1 and 5 for configuration TD.")
         Nfreq_edges_out, nus_edge_out, nus_out, deltas_out, Delta_out, Nbbands_out = qubic.compute_freq(self.filter_nu,
                                                                                                         self.Nfout,
                                                                                                         self.filter_relative_bandwidth)
@@ -449,8 +341,6 @@ class Qubic_sky(sky):
         ##############################################################################################################
         #### Directory for fast simulations
         dir_fast = os.path.join(os.path.dirname(__file__), 'data', f'FastSimulator_version{version_FastSim}')
-        #### Integration time assumed in FastSim files
-        fastsimfile_effective_duration = 2.
 
         with open(dir_fast + os.sep + 'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
                                                                           str(self.filter_nu),
@@ -458,22 +348,26 @@ class Qubic_sky(sky):
                   "rb") as file:
             DataFastSim = pickle.load(file)
             print(file)
+        
         # Read Coverage map
         if coverage is None:
             DataFastSimCoverage = pickle.load(open(dir_fast + os.sep + 'DataFastSimulator_{}{}_coverage.pkl'.format(
                                                        self.dictionary['config'],
                                                        str(self.filter_nu)), "rb"))
             coverage = DataFastSimCoverage['coverage']
+
         # Read noise normalization
         if sigma_sec is None:
-            #### Beware ! Initial End-To-End simulations that produced the first FastSimulator were done with
-            #### Effective_duration = 4 years and this is the meaning of signoise
-            #### New files were done with 2 years and as result the signoise needs to be multiplied by sqrt(effective_duration/4)
-            sigma_sec = DataFastSim['signoise'] * np.sqrt(fastsimfile_effective_duration / 4.)
-
-        # # Read Nyears
-        # if Nyears is None:
-        #     Nyears = DataFastSim['years']
+            if version_FastSim == '01':
+                #### Integration time assumed in FastSim files
+                fastsimfile_effective_duration = 2.
+                #### Beware ! Initial End-To-End simulations that produced the first FastSimulator were done with
+                #### Effective_duration = 4 years and this is the meaning of signoise
+                #### New files were done with 2 years and as result the signoise needs to be multiplied by sqrt(effective_duration/4)
+                sigma_sec = DataFastSim['signoise'] * np.sqrt(fastsimfile_effective_duration / 4.)
+            else:
+                # Integration time of 3 years, this is the meaning of signoise
+                sigma_sec = DataFastSim['signoise']
 
         # Read Noise Profile
         if noise_profile is True:
@@ -481,9 +375,14 @@ class Qubic_sky(sky):
         else:
             effective_variance_invcov = None
 
-        # Read Spatial noise correlation
-        if spatial_noise is True:
-            clnoise = DataFastSim['clnoise']
+        # Read Spatial noise correlation if version of FastSimulator is 01
+        if version_FastSim == '01':
+            if spatial_noise is True:
+                clnoise = DataFastSim['clnoise']
+            else:
+                clnoise = None
+        elif spatial_noise is True:
+            raise NameError("No spatial correlation for FastSimulator version 02")
         else:
             clnoise = None
 
@@ -495,8 +394,8 @@ class Qubic_sky(sky):
             sub_bands_cov = [covI, covQ, covU]
         else:
             sub_bands_cov = None
+        
         ##############################################################################################################
-
         # Now pure noise maps
         if verbose:
             print('Making noise realizations')
@@ -518,7 +417,7 @@ class Qubic_sky(sky):
             return maps + noisemaps, maps, noisemaps, coverage
 
     def create_noise_maps(self, sigma_sec, coverage, covcut=0.1, nsub=1,
-                          Nyears=4, verbose=False, seed=None,
+                          Nyears=3, verbose=False, seed=None,
                           effective_variance_invcov=None,
                           clnoise=None,
                           sub_bands_cov=None):
@@ -530,11 +429,12 @@ class Qubic_sky(sky):
         more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
         with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
         used through interpolation when generating the noise.
-        The clnoise option is used to apply a convolution to the noise to obtain spatially correlated noise. This cl should be 
-        calculated from the c(theta) of the noise that can be measured using the function ctheta_parts() below. The transformation
-        of this C9theta) into Cl has to be done using wrappers on camb function found in camb_interface.py of the QUBIC software:
-        the functions to back and forth from ctheta to cl are: cl_2_ctheta and ctheta_2_cell. The simulation of the noise itself
-        calls a function of camb_interface called simulate_correlated_map().
+        The clnoise option only exists for FatSimulator version 01. The clnoise option is used to apply a convolution to the noise 
+        to obtain spatially correlated noise. This cl should be calculated from the c(theta) of the noise that can be measured using 
+        the function ctheta_parts() below. The transformation, of this C(theta) into Cl has to be done using wrappers on camb 
+        function found in camb_interface.py of the QUBIC software: the functions to back and forth from ctheta to cl are: cl_2_ctheta 
+        and ctheta_2_cell. The simulation of the noise itself calls a function of camb_interface called simulate_correlated_map().
+        The sub_bands_cov option is the covariance of I, Q and U to have correlations between frequency.
         Parameters
         ----------
         sigma_sec
@@ -580,10 +480,7 @@ class Qubic_sky(sky):
                 thnoiseQ[isub, :] = ideal_noise_Q
                 thnoiseU[isub, :] = ideal_noise_U
             else:
-                if isinstance(effective_variance_invcov, list):
-                    my_effective_variance_invcov = effective_variance_invcov[isub]
-                else:
-                    my_effective_variance_invcov = effective_variance_invcov
+                my_effective_variance_invcov = effective_variance_invcov[isub].copy()
                 sh = np.shape(my_effective_variance_invcov)
                 if sh[0] == 2:
                     ### We have the same correction for I, Q and U
@@ -609,7 +506,7 @@ class Qubic_sky(sky):
         ### Simulate variance 1 maps for each sub-band independently
         for isub in range(nsub):
             if clnoise is None:
-                ### With no sspatial correlation
+                ### With no spatial correlation
                 if verbose:
                     if isub == 0:
                         print('Simulating noise maps with no spatial correlation')
@@ -638,7 +535,7 @@ class Qubic_sky(sky):
                 if verbose:
                     print('Simulating noise maps sub-bands covariance')
                 ### We get the eigenvalues and eigenvectors of the sub-band covariance matrix divided by its 0,0 element
-                ### The reason for this si that the overall  noise is given by the input parameter sigma_sec which we do not
+                ### The reason for this is that the overall noise is given by the input parameter sigma_sec which we do not
                 ### want to override
 
                 wI, vI = np.linalg.eig(sub_bands_cov[0] / sub_bands_cov[0][0, 0])
@@ -666,7 +563,7 @@ class Qubic_sky(sky):
         else:
             return noise_maps
 
-    def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=4, verbose=False):
+    def theoretical_noise_maps(self, sigma_sec, coverage, Nyears=3, verbose=False):
         """
         This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)
 
@@ -709,14 +606,118 @@ class Qubic_sky(sky):
         return Sigpix
 
 
-def random_string(nchars):
-    lst = [rd.choice(string.ascii_letters + string.digits) for n in range(nchars)]
-    str = "".join(lst)
-    return (str)
+
+class FastNoise(ana.AnalyticalForecast):
+    '''
+    Class to compute noise maps for the QUBIC instrument using the formula from analytical_forecst_lib.py.
+
+    Arguments : - nus : array(float), frequency bands. For Qubic: np.array([150, 220])
+                - nside : float
+                - NEPdet : array(float), as same lenght than nus. Noise Equivalent Power for detectors.
+                - NEPpho : array(float), as same lenght than nus. Noise Equivalent Power for photons.
+                - mixing_matrix : array(float), define the mixing matrix between the different components. 
+                    CMB : np.array([[1],[1]]) / CMB + Dust : np.array([[1, 1],[1, 2.92]])
+                - correlation : Bool, corelation between frquency bands (To be implemented)
+                - fwhm : array(float), as same lenght than nus (To be checked)
+    '''
+    
+    def __init__(self, nus, nside, NEPdet, NEPpho, mixing_matrix = np.array([[1, 1],[1, 2.92]]), correlation = False, fwhm=np.array([0, 0]), Nyrs=3, Nh=400, fsky=0.0182, instr='DB'):
+        
+        # Check that NEPdet and NEPpho have the same length as nus.
+        if len(nus) != len(NEPdet) or len(nus) != len(NEPpho):
+            raise NameError("NEPdet and NEPpho should have the same length as nus")
+
+        ana.AnalyticalForecast.__init__(self, nus, NEPdet, NEPpho, fwhm=fwhm, Nyrs=Nyrs, Nh=Nh, fsky=fsky, nside=nside, instr=instr)
+
+        self.nside = nside
+        
+        # We compute NET from NEP using analytical_forecast_lib.py
+        self.NETs = np.zeros(len(self.nus))
+        for i in range(len(self.nus)):
+            self.NETs[i] = ana.NoiseEquivalentTemperature(self.NEPs[i], self.nus[i]).NETs
+
+        # We compute depths for frequency maps from NET using analytical_forecast_lib.py
+        self.depths_FMM = self._get_effective_depths(self.NETs)
+        
+        # We define the mixing matrix
+        self.A = mixing_matrix
+        self.ncomp = mixing_matrix.shape[0]
+        
+    def get_noise_from_depths(self, depths, unit='uK_CMB'):
+        '''
+        Function to generate sky maps from depths values
+
+        return : - array(len(depths), nstokes, npix)
+        '''
+
+        # Number of wanted maps
+        n = np.shape(depths)[0]
+
+        # Number of sky pixels
+        n_pix = hp.nside2npix(self.nside)
+
+        # Normal distribution
+        res = np.random.normal(size=(n_pix, 3, n))
+
+        # We take into account the fact that I maps have 2 times more photon than Q and U
+        res[:, 0, :] /= np.sqrt(2)
+
+        # Apply the noise level computed to the maps
+        depths *= u.arcmin * u.uK_CMB
+        depths = depths.to(getattr(u, unit) * u.arcmin,
+            equivalencies=u.cmb_equivalencies(self.nus * u.GHz))
+        res *= depths.value / hp.nside2resol(self.nside, True) # depths / pixel size in radian
+        return res.T   
+    
+    def get_noise_realisation_FMM(self, unit='uK_CMB'):
+        '''
+        Function to generate noise frequency maps
+        '''
+    
+        return self.get_noise_from_depths(self.depths_FMM)
+    
+    def get_noise_realisation_CMM(self, unit='uK_CMB'):
+        '''
+        Function to generate noise components maps
+        '''
+        
+        # Compute the noise power spectra
+        bl = np.array([hp.gauss_beam(b, lmax=2*self.nside) for b in self.fwhm])
+        nl = (bl / (self.depths_FMM)[:, np.newaxis])**2
+
+        # Noise mixing into component maps
+        AtNA = np.einsum('fi, fl, fj -> lij', self.A, nl, self.A)
+
+        # Compute noise for the maps
+        depths_CMM = np.zeros(self.ncomp)
+        for i in range(self.ncomp):
+            depths_CMM[i] = np.sqrt(np.linalg.pinv(AtNA))[0][i, i] * hp.nside2resol(self.nside, True)
+
+        return self.get_noise_from_depths(depths_CMM)
+
 
 
 def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, label='',
                              norm=False, allstokes=False, fitlim=None, doplot=False, QUsep=True):
+    '''
+    maps: input maps
+    nbins: int. Number of bins for the profile.
+    fit: bool. Whether to perform fitting.
+    norm: bool. Whether to normalize the data. Normalized to 1 at 1.
+    allstockes: bool. If True, process all Stokes parameters.
+    fitlim: Limits for fitting.
+    doplot: bool. Whether to plot the result. Plots the RMS ratio w.r.t. linear scaling for average IQU or for I and QU (depending on QUsep). 
+        If fit is True, it also plots the fitted models.
+    QUsep: bool. If True, consider Q and U separately from I.
+
+    The fitting model is:  a+bx+ce^(-d(x-e))+fx^2+gx^3.
+
+    Returns xx, myY, effective_variance_invcov
+    xx: xx**2 is the inverse coverage
+    myY: RMS ratio w.r.t linear scaling for averaged IQU.
+    effective_variance_invcov:  fitted models for I and QU (if QUsep is True)
+    '''
+
     seenpix = coverage > (covcut * np.max(coverage))
     covnorm = coverage / np.max(coverage)
 
@@ -802,6 +803,21 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
 
 def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316.44761929, -58.75808063]),
                         allstokes=False, fontsize=None, doplot=False, separate=False):
+    '''
+    maps: input maps
+    thmax: int. Maximum angle (in degrees) for the angular profile.
+    nbins: int. Number of bins for the profile.
+    center: Center point for computing angular distances.
+    allstockes: bool. If True, plot individual Stokes parameters.
+    doplot: bool. If True, plot the results.
+    separate: bool. If True, return separate RMS values for I, Q, and U.
+
+    If doplot is True, plots the RMS of the average IQU (and of I, Q and U if allstockes is True) as a function of the angular distance.
+
+    Returns angular distance, RMS I, RMS Q, RMS U if separate is True.
+    Returns angular distance, RMS IQU otherwise.
+    '''
+
     vec0 = hp.ang2vec(center[0], center[1], lonlat=True)
     sh = np.shape(maps)
     ns = hp.npix2nside(sh[0])
@@ -828,15 +844,22 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
 
 
 def correct_maps_rms(maps, cov, effective_variance_invcov):
+    '''
+    Maps are corrected by a multiplying factor: sqrt(coverage/max(coverage))/sqrt(effective_variance_invcov).
+    Returns corrected maps without angular dependance of the noise.
+    '''
+
     okpix = cov > 0
     newmaps = maps * 0
     sh = np.shape(effective_variance_invcov)
     if sh[0] == 2:
+        # Correction for I, Q, and U combined
         correction = np.interp(np.max(cov) / cov[okpix], effective_variance_invcov[0, :],
                                effective_variance_invcov[1, :])
         for s in range(3):
             newmaps[okpix, s] = maps[okpix, s] / np.sqrt(correction) * np.sqrt(cov[okpix] / np.max(cov))
     else:
+        # Correction for separate I and QU
         correctionI = np.interp(np.max(cov) / cov[okpix], effective_variance_invcov[0, :],
                                 effective_variance_invcov[1, :])
         correctionQU = np.interp(np.max(cov) / cov[okpix], effective_variance_invcov[0, :],
@@ -849,6 +872,14 @@ def correct_maps_rms(maps, cov, effective_variance_invcov):
 
 
 def flatten_noise(maps, coverage, nbins=20, doplot=False, normalize_all=False, QUsep=True):
+    '''
+    Combines get_noise_invcov_profile and correct_maps_rms.
+
+    normalize_all: bool. If True, normalizes all sub-bands independently.
+
+    Returns corrected maps, list of effective_variance_invcov, list of normalized noise level.
+    '''
+
     sh = np.shape(maps)
     if len(sh) == 2:
         maps = np.reshape(maps, (1, sh[0], sh[1]))
@@ -879,6 +910,21 @@ def flatten_noise(maps, coverage, nbins=20, doplot=False, normalize_all=False, Q
 
 
 def map_corr_neighbtheta(themap_in, ipok_in, thetamin, thetamax, nbins, degrade=None, verbose=True):
+    '''
+    themap_in: The input map.
+    ipok_in: List of pixels to consider.
+    thetamin: Minimum angular distance in degrees.
+    thetamax: Maximum angular distance in degrees.
+    nbins: int. Number of bins for angular distances.
+    degrade: Parameter for map degradation (optional). If provided, it degrades the input map to the 
+        specified resolution and updates the list of pixels accordingly.
+
+    Returns mythetas, corrfct, errs.
+    mythetas: list of angular distances.
+    corrfct: correlation function calculated for each angular distance bin, C(theta).
+    errs: corresponding errors.
+    '''
+
     if degrade is None:
         themap = themap_in.copy()
         ipok = ipok_in.copy()
@@ -932,6 +978,12 @@ def get_angles(ip0, ips, ns):
 
 def ctheta_parts(themap, ipok, thetamin, thetamax, nbinstot, nsplit=4, degrade_init=None,
                  verbose=True):
+    '''
+    ctheta_parts does the same computation as map_corr_neighbtheta, but more efficiently by splitting the computation into multiple parts.
+
+    nsplit: int. Number of parts to split the computation into.
+    '''
+
     allthetalims = np.linspace(thetamin, thetamax, nbinstot + 1)
     thmin = allthetalims[:-1]
     thmax = allthetalims[1:]
@@ -973,7 +1025,7 @@ def get_cov_nunu(maps, coverage, nbins=20, QUsep=True, return_flat_maps=False):
     # it returns the three covariance matrices as well as the fitted function of coverage that was used to
     # flatten the noise RMS in the maps before covariance calculation (this is for subsequent possible use)
     # NB: because this is done with  maps that are flattened, the RMS is put to 1 for I (and should be sqrt(2) for Q and U
-    # so this covariance absorbes the  overall maps variances
+    # so this covariance absorbs the overall maps variances
 
     ### First normalize by coverage
     new_sub_maps, all_fitcov, all_norm_noise = flatten_noise(maps, coverage, nbins=nbins, doplot=False, QUsep=QUsep)

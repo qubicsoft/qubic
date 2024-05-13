@@ -34,10 +34,159 @@ delta_h = 14e-3 # distance between horns
 z_atm = 40000 # (m), typical height that depends on the observation site, on the order of ~10⁴ m
 T_ground = 280 # (K), average ground temperature on the observation site
 
-# I need to find measurement of the coefficient to adjust its value
-k_H2O = 3e-27 # in m², around 200 GHz
-m_H2O = 2.987e-22 # in g
-molecular_absorption_coeff = k_H2O / m_H2O
+n_air = 1.423e25 # (m^-3), density of air
+m_H2O = 2.992e-23 # (g) mass of H2O molecule
+```
+
+```{python}
+dictname = 'pipeline_demo.dict'
+
+thisd = qubic.qubicdict.qubicDict()
+thisd.read_from_file(dictname)
+thisd['nside'] = 1024
+thisd['synthbeam_kmax'] = 3
+thisd['synthbeam_fraction'] = 0.95 # Peaks will be considered until the sum of their value is 95% the total value.
+```
+
+## Molecular absorption coefficient
+
+```{python}
+frequencies = []
+_550hPa_280K_1mm = []
+
+with open('absorption coefficient/h2o_lines_550hPa_280K_1mm.out', 'r') as file:
+    for line in file:
+        parts = line.split() # Split the line into two parts based on whitespace
+        frequencies.append(float(parts[0]))
+        _550hPa_280K_1mm.append(float(parts[1]))
+
+name_dict = {} 
+name_dict['_500hPa_280K_1mm'] = []
+name_dict['_600hPa_280K_1mm'] = []
+name_dict['_550hPa_260K_1mm'] = []
+name_dict['_550hPa_300K_1mm'] = []
+
+for name, list in name_dict.items():
+    with open('absorption coefficient/h2o_lines'+name+'.out', 'r') as file:
+        for line in file:
+            parts = line.split() # Split the line into two parts based on whitespace
+            list.append(float(parts[1]))
+
+name_dict['_550hPa_280K_1mm'] = _550hPa_280K_1mm
+
+for name, list in name_dict.items():
+    name_dict[name] = np.array(list)*(1e-4)
+```
+
+```{python}
+y_max = 2.5e-27
+
+plt.figure(figsize=(12,12))
+
+plt.subplot(2,1,1)
+plt.plot(frequencies, name_dict['_500hPa_280K_1mm'], label='P = 500 hPa')
+plt.plot(frequencies, name_dict['_550hPa_280K_1mm'], label='P = 550 hPa')
+plt.plot(frequencies, name_dict['_600hPa_280K_1mm'], label='P = 600 hPa')
+
+plt.ylim(0, y_max)
+plt.vlines(131, 0, y_max, 'black', 'dashed', label='frequency range of qubic')
+plt.vlines(169, 0, y_max, 'black', 'dashed')
+plt.vlines(192.5, 0, y_max, 'black', 'dashed')
+plt.vlines(247.5, 0, y_max, 'black', 'dashed')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel(r'Molecular absorption coefficient $k_{lines}$ [$m^2$]')
+plt.title('Line-by-line absorption. T = 280 K')
+plt.legend()
+
+
+plt.subplot(2,1,2)
+plt.plot(frequencies, name_dict['_550hPa_260K_1mm'], label='T = 260 K')
+plt.plot(frequencies, name_dict['_550hPa_280K_1mm'], label='T = 280 K')
+plt.plot(frequencies, name_dict['_550hPa_300K_1mm'], label='T = 300 K')
+
+plt.ylim(0, y_max)
+plt.vlines(131, 0, y_max, 'black', 'dashed', label='frequency range of qubic')
+plt.vlines(169, 0, y_max, 'black', 'dashed')
+plt.vlines(192.5, 0, y_max, 'black', 'dashed')
+plt.vlines(247.5, 0, y_max, 'black', 'dashed')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel(r'Molecular absorption coefficient $k_{lines}$ [$m^2$]')
+plt.title('Line-by-line absorption. P = 550 hPa')
+plt.legend()
+
+plt.show()
+```
+
+```{python}
+h2o_self = []
+h2o_air = []
+
+with open('absorption coefficient/h2o_self_continuum.out', 'r') as file:
+    for line in file:
+        parts = line.split() # Split the line into two parts based on whitespace
+        h2o_self.append(float(parts[1]))
+
+with open('absorption coefficient/h2o_air_continuum.out', 'r') as file:
+    for line in file:
+        parts = line.split() # Split the line into two parts based on whitespace
+        h2o_air.append(float(parts[1]))
+```
+
+```{python}
+plt.plot(frequencies, np.array(h2o_self)*(1e-10*3.34*1e22), label=r'$n_{H_2O}k_{self}$')
+plt.plot(frequencies, np.array(h2o_air)*(1e-10*n_air), label=r'$n_{air}k_{air}$')
+
+plt.ylim(0)
+plt.xlabel('Frequency [GHz]')
+plt.ylabel(r'Molecular absorption coefficient [$m^2$]')
+plt.title('Self-induced and air-induced continuum absorption. \n' 
+          r'$n_{H_2O} = 3.34 \cdot{} 10^{22} m^{-3}\, (\rho_{H_2O} = 1 g.m^{-3}),\, n_{air} = 1.423\cdot{}10^{25} m^{-3}$')
+plt.legend()
+plt.show()
+```
+
+```{python}
+plt.figure(figsize=(12,6))
+
+plt.plot(frequencies, name_dict['_550hPa_280K_1mm']+np.array(h2o_air)*(1e-10*n_air))
+
+plt.ylim(0, y_max)
+plt.vlines(131, 0, y_max, 'black', 'dashed', label='frequency range of qubic')
+plt.vlines(169, 0, y_max, 'black', 'dashed')
+plt.vlines(192.5, 0, y_max, 'black', 'dashed')
+plt.vlines(247.5, 0, y_max, 'black', 'dashed')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel(r'Molecular absorption coefficient $k_{H_2O}$ [$m^2$]')
+plt.title('Line-by-line and air-induced absorption. \n P = 550 hPa, T = 280 K, $n_{air} = 1.423\cdot{}10^{25} m^{-3}$')
+plt.show()
+```
+
+```{python}
+absorption_coeff_mass = (name_dict['_550hPa_280K_1mm'] + np.array(h2o_air)*(1e-10*n_air)) / m_H2O
+```
+
+```{python}
+def absorption_coeff_integrated(band, Nfreq, relative_bandwidth):
+    freq_max = np.max(frequencies)
+    freq_min = np.min(frequencies)
+    freq_step = (freq_max - freq_min) / (len(frequencies) - 1)
+    
+    _, nus_edge, _, _, _, Nbbands = qubic.compute_freq(band, Nfreq, relative_bandwidth)
+
+    nus_edge_index = (nus_edge - freq_min) / freq_step
+    absorption_coeff = []
+    
+    for i in range(Nbbands):
+        index_inf = int(nus_edge_index[i])
+        index_sup = int(nus_edge_index[i+1])
+        absorption_coeff.append(np.sum(absorption_coeff_mass[index_inf:index_sup]) * 
+                                (frequencies[index_sup] - frequencies[index_inf])*1e9 / (index_sup - index_inf))
+        
+    return absorption_coeff
+```
+
+```{python}
+absorption_coeff_integrated(150, 10, thisd['filter_relative_bandwidth'])
 ```
 
 ## Mean water vapor density
@@ -86,19 +235,30 @@ plt.show()
 
 ```{python}
 def correlation_function(r, r0=300):
+    '''
+    Polynomial approximation of Kolmogorov's correlation. Computation is much faster.
+    '''
     return np.where(r>4*r0, 0, np.polyval(fit_parameters, r/r0))
 ```
 
 ## Points for quasi Monte Carlo integration
 
 ```{python}
-dictname = 'pipeline_demo.dict'
-
-thisd = qubic.qubicdict.qubicDict()
-thisd.read_from_file(dictname)
-thisd['nside'] = 1024
-thisd['synthbeam_kmax'] = 3
-thisd['synthbeam_fraction'] = 0.95 # Peaks will be considered until the sum of their value is 95% the total value.
+def get_detector_integration_operator(self):
+    """
+    Integrate flux density in detector solid angles and take into account
+    the secondary beam transmission.
+    """
+    position = self.detector.center
+    area = self.detector.area
+    secondary_beam = self.secondary_beam
+    theta = np.arctan2(
+        np.sqrt(np.sum(position[..., :2] ** 2, axis=-1)), position[..., 2])
+    phi = np.arctan2(position[..., 1], position[..., 0])
+    sr_det = -area / position[..., 2] ** 2 * np.cos(theta) ** 3
+    sr_beam = secondary_beam.solid_angle
+    sec = secondary_beam(theta, phi)
+    return sr_det / sr_beam * sec
 ```
 
 ```{python}
@@ -109,10 +269,11 @@ def qubic_beam(i, freq):
     thisd['filter_nu'] = freq
     thisq = qubic.QubicInstrument(thisd)
     s = qubic.QubicScene(thisd)
+    integration = get_detector_integration_operator(thisq)[i]
     theta, phi, val = thisq._peak_angles(s, thisd['filter_nu'], 
                                      np.reshape(thisq.detector.center[i,:], (1,3)), 
                                      thisq.synthbeam, thisq.horn, thisq.primary_beam)
-    return np.array([theta[0], phi[0], val[0]/np.sum(val[0])])
+    return np.array([theta[0], phi[0], val[0]/np.sum(val[0])*integration])
 ```
 
 ```{python}
@@ -141,6 +302,10 @@ def scaling_function(arr, z_max, freq, r0):
 
     return scaled_arr
 
+```
+
+```{python}
+# %timeit monte_carlo_points(150e9, 15, r0=300)
 ```
 
 ```{python}
@@ -214,8 +379,8 @@ ax.set_ylim(-limit,limit)
 plt.legend()
 plt.show()
 
-'''
-plt.scatter(scaled_points[:, 2], scaled_points[:, 5], c='tab:green')
+
+plt.scatter(points_i[0, :, 2], points_j[0, :, 2], c='tab:green')
 plt.xlabel(r'$z_i$'+' (m)')
 plt.ylabel(r'$z_j$'+' (m)')
 plt.title('Points distribution in the '+r'$(z_i, z_j)$'+' plane. We have '+r'$\vert z_i-z_j\vert < r_0.$')
@@ -224,42 +389,42 @@ plt.show()
 plt.figure(figsize = (17,10))
 
 plt.subplot(2,3,1)
-plt.scatter(scaled_points[:, 0], scaled_points[:, 2], c='tab:blue')
+plt.scatter(points_i[..., 0], points_i[..., 2], c='tab:blue')
 plt.xlabel(r'$x_i$'+' (m)')
 plt.ylabel(r'$z_i$'+' (m)')
 plt.title('First beam in the '+r'$(x_i, z_i)$'+' plane')
 
 plt.subplot(2,3,2)
-plt.scatter(scaled_points[:, 1], scaled_points[:, 2], c='tab:blue')
+plt.scatter(points_i[..., 1], points_i[..., 2], c='tab:blue')
 plt.xlabel(r'$y_i$'+' (m)')
 plt.ylabel(r'$z_i$'+' (m)')
 plt.title('First beam in the '+r'$(y_i, z_i)$'+' plane')
 
 plt.subplot(2,3,3)
-plt.scatter(scaled_points[:, 0], scaled_points[:, 1], c='tab:blue')
+plt.scatter(points_i[..., 0], points_i[..., 1], c='tab:blue')
 plt.xlabel(r'$x_i$'+' (m)')
 plt.ylabel(r'$y_i$'+' (m)')
 plt.title('First beam in the '+r'$(x_i, y_i)$'+' plane')
 
 plt.subplot(2,3,4)
-plt.scatter(scaled_points[:, 3], scaled_points[:, 5], c='tab:orange')
+plt.scatter(points_j[..., 0], points_j[..., 2], c='tab:orange')
 plt.xlabel(r'$x_j$'+' (m)')
 plt.ylabel(r'$z_j$'+' (m)')
 plt.title('Second beam in the '+r'$(x_j, z_j)$'+' plane')
 
 plt.subplot(2,3,5)
-plt.scatter(scaled_points[:, 4], scaled_points[:, 5], c='tab:orange')
+plt.scatter(points_j[..., 1], points_j[..., 2], c='tab:orange')
 plt.xlabel(r'$y_j$'+' (m)')
 plt.ylabel(r'$z_j$'+' (m)')
 plt.title('Second beam in the '+r'$(y_j, z_j)$'+' plane')
 
 plt.subplot(2,3,6)
-plt.scatter(scaled_points[:, 3], scaled_points[:, 4], c='tab:orange')
+plt.scatter(points_j[..., 0], points_j[..., 1], c='tab:orange')
 plt.xlabel(r'$x_j$'+' (m)')
 plt.ylabel(r'$y_j$'+' (m)')
 plt.title('Second beam in the '+r'$(x_j, y_j)$'+' plane')
 plt.show()
-'''
+
 ```
 
 ## Computation of the correlation between two detectors
@@ -354,7 +519,7 @@ def integrand_correlations_qubic(coords_i, coords_j, beam_i, beam_j, ti, az_ti, 
     N_wind, W_wind = np.cos(phi_W)*W*(tj-ti), -np.sin(phi_W)*W*(tj-ti) # Spatial shift due to the wind
     
     r_ij = np.sqrt((Nj[None, ...]-Ni[:, None, ...]-N_wind)**2 + (Wj[None, ...]-Wi[:, None, ...]-W_wind)**2 + (Nj[None, ...]-Ni[:, None, ...])**2)
-
+    
     return correlation_function(r_ij, r0=r0) * beam_i[:, None, ...] * beam_j[None, ...]
     
 ```
@@ -431,10 +596,11 @@ det_list = np.arange(231, 248, 1)
 for det in det_list:
     list_peaks_j = qubic_beam(det, freq)
     corr.append(atm_correlations_qubic(points, list_peaks_i, list_peaks_j, 0, 0, np.radians(45), 0, 0, np.radians(45), 0, 0, 150e9))
-plt.plot(det_list, corr)
-plt.xlabel('Detectors\' number, going from the center to the edge, following a line')
+plt.figure(figsize = (8,6))
+plt.plot(det_list, corr/corr[0])
+plt.xlabel('Detectors\' numbers, going from the center to the edge, following a line')
 plt.ylabel('Correlation with the the detector at the center '+r'$[K^2]$')
-plt.ylim(0, np.max(corr)*1.1)
+plt.ylim(0, np.max(corr/corr[0])*1.1)
 plt.show()
 ```
 
@@ -447,10 +613,12 @@ det_list = [231, 215, 199, 183, 167, 151, 135, 119, 104, 90, 76, 63]
 for det in det_list:
     list_peaks_j = qubic_beam(det, freq)
     corr.append(atm_correlations_qubic(points, list_peaks_i, list_peaks_j, 0, 0, np.radians(45), 0, 0, np.radians(45), 0, 0, 150e9))
-plt.plot(det_list, corr)
-plt.xlabel('Detectors\' number, going from the center to the edge, following a diagonal')
+plt.figure(figsize = (8,6))
+plt.plot(det_list, corr/corr[0])
+plt.xlabel('Detectors\' numbers, going from the center to the edge, following a diagonal')
 plt.ylabel('Correlation with the the detector at the center '+r'$[K^2]$')
-plt.ylim(0, np.max(corr)*1.1)
+plt.gca().invert_xaxis()
+plt.ylim(0, np.max(corr/corr[0])*1.1)
 plt.show()
 ```
 
@@ -462,17 +630,18 @@ To confirm this hypothesis, we can redo the calculation of the first graph with 
 ```{python}
 corr=[]
 freq = 220e9
-r0 = 15
+r0 = 10
 points = monte_carlo_points(freq, 9, r0=r0)
 list_peaks_i = qubic_beam(231, freq)
 det_list = np.arange(231, 248, 1)
 for det in det_list:
     list_peaks_j = qubic_beam(det, freq)
     corr.append(atm_correlations_qubic(points, list_peaks_i, list_peaks_j, 0, 0, np.radians(45), 0, 0, np.radians(45), 0, 0, 150e9, r0=r0))
-plt.plot(det_list, corr)
-plt.xlabel('Detectors\' number, going from the center to the edge, following a line')
+plt.figure(figsize = (8,6))
+plt.plot(det_list, corr/corr[0])
+plt.xlabel('Detectors\' numbers, going from the center to the edge, following a line')
 plt.ylabel('Correlation with the the detector at the center '+r'$[K^2]$')
-plt.ylim(0, np.max(corr)*1.1)
+plt.ylim(0, np.max(corr/corr[0])*1.1)
 plt.show()
 ```
 
@@ -504,6 +673,7 @@ r0_list = [10, 70, 300, 1000]
 
 for r0 in r0_list:
     points = monte_carlo_points(freq, 9, r0=r0)
+    
     corr = []
     for t in range(len(time_list)):
         time = time_list[t]
@@ -558,6 +728,79 @@ for phi_Wind in phi_W_list:
 plt.xlabel('Time (s)')
 plt.ylabel('Correlations '+r'$(K^2)$')
 plt.title('Varying wind azimuth '+r'$\phi_W.\. r0 = 300 m,\, ss = 5°s^{-1},\, \Delta az = 40°,\, W = 10 m.s^{-1}$')
+plt.legend()
+plt.show()
+```
+
+```{python}
+
+```
+
+Vectorization of the scanning, but is apparently slower, I don't understand why.
+
+```{python}
+def integrand_correlations_qubic_scanning(coords_i, coords_j, beam_i, beam_j, ti, az_ti, el_ti, tj, az_tj, el_tj, W, phi_W, freq, r0=300):
+
+    xi = coords_i[...,0]; yi = coords_i[...,1]; zi = coords_i[...,2]
+    xj = coords_j[...,0]; yj = coords_j[...,1]; zj = coords_j[...,2]
+
+    # Distance between the two points in the sky taking into account the wind
+    Ni, Wi, Zi = xyz_to_NWZ(xi[None,...], yi[None,...], zi[None,...], az_ti[:, None, None], el_ti)
+    Nj, Wj, Zj = xyz_to_NWZ(xj[None,...], yj[None,...], zj[None,...], az_tj[:, None, None], el_tj)
+    N_wind, W_wind = np.cos(phi_W)*W*(tj-ti), -np.sin(phi_W)*W*(tj-ti) # Spatial shift due to the wind
+    
+    r_ij = np.sqrt((Nj[:, None, ...]-Ni[:, :, None, ...]-N_wind[:, None, None, None])**2 + 
+                   (Wj[:, None, ...]-Wi[:, :, None, ...]-W_wind[:, None, None, None])**2 + 
+                   (Nj[:, None, ...]-Ni[:, :, None, ...])**2)
+
+    return correlation_function(r_ij, r0=r0) * beam_i[None, :, None, ...] * beam_j[None, None, ...]
+```
+
+```{python}
+def atm_correlations_qubic_scanning(points, list_peaks_i, list_peaks_j, ti, az_ti, el_ti, tj, az_tj, el_tj, W, phi_W, freq, r0=300):
+    
+    rot_points_i = rotated_points(points[0], list_peaks_i)
+    rot_points_j = rotated_points(points[1], list_peaks_j)
+
+    beam_i = integrand_one_beam(rot_points_i, list_peaks_i, el_ti, freq)
+    beam_j = integrand_one_beam(rot_points_j, list_peaks_j, el_tj, freq)
+
+    int = np.sum(integrand_correlations_qubic_scanning(rot_points_i, rot_points_j, beam_i, beam_j,
+                                ti, az_ti, el_ti, tj, az_tj, el_tj, W, phi_W, freq, r0=r0), axis=(1,2,3))
+
+    # Surface in the (zi,zj) plane
+    z_max = h_atm / np.sin(min_el_qubic)
+    Sz = z_max**2 - (z_max-r0)**2
+    
+
+    return molecular_absorption_coeff**2 * int / np.shape(points)[1] * Sz
+```
+
+```{python}
+N = 201
+time_list_i = np.array([0]*N)
+time_list_j = np.linspace(0, 40, N)
+azimuth_list_j = delta_az / 2 * np.sin(2*np.pi * f_scan * time_list_j)
+azimuth_list_i = np.array([azimuth_list_j[0]]*N)
+
+plt.plot(time_list_j, azimuth_list_j)
+plt.xlabel('Time (s)')
+plt.ylabel('Azimuthal direction')
+plt.show()
+```
+
+```{python}
+r0_list = [10, 70, 300, 1000]
+
+for r0 in r0_list:
+    points = monte_carlo_points(freq, 9, r0=r0)
+    corr = atm_correlations_qubic_scanning(points, list_peaks, list_peaks, ti=time_list_i, az_ti=azimuth_list_i, el_ti=np.radians(45), 
+                               tj=time_list_j, az_tj=azimuth_list_j, el_tj=np.radians(45), W=W, phi_W=phi_W, freq=freq, r0=r0)
+    plt.plot(time_list, corr/corr[0], label='r0 = '+str(r0)+' m')
+
+plt.xlabel('Time (s)')
+plt.ylabel('Correlations '+r'$(K^2)$')
+plt.title('Varying r0. '+r'$ss = 5°s^{-1},\, \Delta az = 40°,\, W = 0 m.s^{-1},\, \phi_W = 0°$')
 plt.legend()
 plt.show()
 ```

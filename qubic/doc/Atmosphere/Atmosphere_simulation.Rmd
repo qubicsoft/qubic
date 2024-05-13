@@ -577,8 +577,18 @@ Only a few tens of ms are needed to do this computation:
 Lets plot the simulated points on the two beams
 
 ```{python}
+l=[]
 scaled_points, scaled_points_tilt, masked_points = integration_points(
-    h, h+3000, (0,0,1), (0,np.sin(np.radians(2)),np.cos(np.radians(2))), np.radians(90), 120e9, 8)
+    h, h+6000, (0,0,1), (0,0,1), np.radians(90), 120e9, 12)
+for k in range(0, 6000, 50):
+    l.append(len(masked_points[np.where((masked_points[:,5]>k)*(masked_points[:,5]<=k+100), True, False)]))
+plt.plot(np.arange(0, 6000, 50), l)
+plt.ylim(0)
+```
+
+```{python}
+scaled_points, scaled_points_tilt, masked_points = integration_points(
+    h, h+3000, (0,0,1), (0,np.sin(np.radians(2)),np.cos(np.radians(2))), np.radians(30), 150e9, 10, r0=2000)
 
 fig = plt.figure(figsize = (10,8))
 ax = fig.add_subplot(111, projection='3d')
@@ -1155,10 +1165,80 @@ np.shape(rho[:, :, -1])
 ```
 
 ```{python}
+# Function to generate integration points within variable-dependent bounds
+def monte_carlo_points(freq, n, r0=300, h=h, h_atm=h_atm, min_el_qubic=min_el_qubic):
+    '''
+    Returns a sample of points that are in the two beams (so in 6 dimensions). 
+    This is done using a Sobol' sequence to have a uniform distribution in the 6D space.
+    The number of points generated is roughly 2**n /2
+    '''
 
+    # Generates the points in 6D space
+    sampler = qmc.Sobol(d=6, scramble=False)
+    points = sampler.random_base2(m=n)
+
+    z_max = h_atm / np.sin(min_el_qubic)
+
+    # Scales the points aproximatly in the beams.
+    # We want the distance between zi and zj to be less than r0.
+    # For (xi, yi), we scale the points in a circle of radius growing with zi.
+    scaled_points = np.apply_along_axis(scaling_function, 1, points, z_max=z_max, freq=freq, r0=r0)
+
+    # Mask the points not in the beams
+    masked_points = scaled_points[np.where((scaled_points[:,2]>=0)*(scaled_points[:,2]<=z_max))]
+
+    return masked_points
 ```
 
 ```{python}
+def get_points_in_beams(i, j, points, freq):
+    theta_i, phi_i, val_i = qubic_beam(i, freq)
+    theta_j, phi_j, val_j = qubic_beam(j, freq)
+    val_i /= np.sum(val_i)
+    val_j /= np.sum(val_j)
+
+    nb_peaks_i = len(theta_i)
+    nb_peaks_j = len(theta_j)
+    nb_points = len(points)
+    peaks_list_i = np.empty((nb_points,3))
+    peaks_list_j = np.empty((nb_points,3))
+
+    for k in range(nb_peaks_i):
+        c_the_i = np.cos(theta_i[k]); s_the_i = np.sin(theta_i[k])
+        c_phi_i = np.cos(phi_i[k]); s_phi_i = np.sin(phi_i[k])
+
+        L1 = [c_phi_i**2*(1-c_the_i)+c_the_i, c_phi_i*s_phi_i*(1-c_the_i), -s_phi_i*s_the_i, 0, 0, 0]
+        L2 = [c_phi_i*s_phi_i*(1-c_the_i), s_phi_i**2*(1-c_the_i)+c_the_i, c_phi_i*s_the_i, 0, 0, 0]
+        L3 = [s_phi_i*s_the_i, -c_phi_i*s_the_i, c_the_i, 0, 0, 0]
+        L4 = [0, 0, 0, 1, 0, 0]
+        L5 = [0, 0, 0, 0, 1, 0]
+        L6 = [0, 0, 0, 0, 0, 1]
+
+        R_k = np.array([L1, L2, L3, L4, L5, L6])
+
+        points[int(k * nb_points / nb_peaks_i) : int((k+1) * nb_points / nb_peaks_i), :] = points[int(k * nb_points / nb_peaks_i) : int((k+1) * nb_points / nb_peaks_i), :] @ R_k        
+        peaks_list_i[int(k * nb_points / nb_peaks_i) : int((k+1) * nb_points / nb_peaks_i)] = [[theta_i[k], phi_i[k], val_i[k]]] * (int((k+1) * nb_points / nb_peaks_i) - int(k * nb_points / nb_peaks_i))
+    
+    for k in range(nb_peaks_j):
+        c_the_j = np.cos(theta_j[k]); s_the_j = np.sin(theta_j[k])
+        c_phi_j = np.cos(phi_j[k]); s_phi_j = np.sin(phi_j[k])
+
+        L1 = [1, 0, 0, 0, 0, 0]
+        L2 = [0, 1, 0, 0, 0, 0]
+        L3 = [0, 0, 1, 0, 0, 0]
+        L4 = [0, 0, 0, c_phi_j**2*(1-c_the_j)+c_the_j, c_phi_j*s_phi_j*(1-c_the_j), -s_phi_j*s_the_j]
+        L5 = [0, 0, 0, c_phi_j*s_phi_j*(1-c_the_j), s_phi_j**2*(1-c_the_j)+c_the_j, c_phi_j*s_the_j]
+        L6 = [0, 0, 0, s_phi_j*s_the_j, -c_phi_j*s_the_j, c_the_j]
+
+        R_k = np.array([L1, L2, L3, L4, L5, L6])
+
+        points[k::nb_peaks_j, :] = points[k::nb_peaks_j, :] @ R_k
+        peaks_list_j[k::nb_peaks_j, :] = [[theta_j[k], phi_j[k], val_j[k]]] * int(np.ceil((nb_points-k) / nb_peaks_j))
+        
+        #points[int(k * nb_points / nb_peaks_j) : int((k+1) * nb_points / nb_peaks_j), :] = points[int(k * nb_points / nb_peaks_j) : int((k+1) * nb_points / nb_peaks_j), :] @ R_k
+        #peaks_list_j[int(k * nb_points / nb_peaks_j) : int((k+1) * nb_points / nb_peaks_j)] = [[theta_j[k], phi_j[k], val_j[k]]] * (int((k+1) * nb_points / nb_peaks_j) - int(k * nb_points / nb_peaks_j))
+        
+    return np.concatenate((points, peaks_list_i, peaks_list_j), axis=1), nb_peaks_i, nb_peaks_j
 
 ```
 
@@ -1179,6 +1259,7 @@ $$B_g(z,r)=\frac{2}{\pi w(z)^2}\exp \left(-2\frac{r^2}{w(z)^2}\right)$$
 $$T_{atm}=T_0\left(1-\frac{h}{h_{atm}}\right)$$
 $$\langle \rho(h)\rangle = \rho_0 \exp\left(-\log(2) \frac{h-5190}{h_0}\right)$$
 $$C_{ij}=\alpha_b(\nu)^2\iiint \iiint D(r_{ij}) \langle\rho(h_i)\rangle \langle\rho(h_j)\rangle T_{atm}(h_i) T_{atm}(h_j) B_{n, i}(\vec{r}_i, x_i, y_i, z_i, \nu) B_{n, j}(\vec{r}_j, x_j, y_j, z_j, \nu) dx_i dy_i dz_i dx_j dy_j dz_j$$
+$$\chi^2 = (\overrightarrow{TOD} - H \overrightarrow{Sky})$$
 
 ```{python}
 

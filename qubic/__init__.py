@@ -24,6 +24,7 @@ from .plotters import *
 from .lin_lib import *
 from .AnalysisMC import *
 from .ReadMC import *
+from .analytical_forecast_lib import *
 from . import qubicdict 
 
 

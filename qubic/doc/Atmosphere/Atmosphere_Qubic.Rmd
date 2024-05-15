@@ -28,7 +28,7 @@ h = 4869 # altitude of Qubic
 h_atm = 3000 # height of the atmosphere
 min_el_qubic = np.radians(30) # minimal elevation of Qubic
 c = scipy.constants.c # speed of light
-P = 20 # Number of pupils
+P = 20 # Number of horns along one axis
 delta_h = 14e-3 # distance between horns
 
 z_atm = 40000 # (m), typical height that depends on the observation site, on the order of ~10⁴ m
@@ -44,17 +44,53 @@ dictname = 'pipeline_demo.dict'
 thisd = qubic.qubicdict.qubicDict()
 thisd.read_from_file(dictname)
 thisd['nside'] = 1024
-thisd['synthbeam_kmax'] = 3
-thisd['synthbeam_fraction'] = 0.95 # Peaks will be considered until the sum of their value is 95% the total value.
+thisd['synthbeam_kmax'] = 3 # We select peaks from the (2 * kmax + 1)**2 = 49 peaks centered on the primary peak
+thisd['synthbeam_fraction'] = 0.95 # Peaks will be considered until the sum of their value is 95% the total value
 ```
 
 ## Molecular absorption coefficient
+To get this information, we use the am atmospheric model developped by Paine (Paine, S. 2018, The am atmospheric model).
+The absorption coefficient has two origins: the line-by-line absorption which reprensents the spectral lines, and a continuum absorption coming from collisions between molecules, either $H_2O-H_2O$ collisions (self-induced continuum), or collisions between $H_2O$ and the air (air_induced).
+
+So the coefficient $\alpha_b(\nu)$ [$m^2g^{-1}$] is defined by:
+$$\alpha_b(\nu) = \frac{1}{m_{H_2O}} \left(k_{lines}(\nu) + n_{H_2O}k_{self}(\nu) + n_{air}k_{air}(\nu)\right)$$
+with $m_{H_2O}= 2.992\times 10^{-23} g$ the mass of a $H_2O$ molecule, $k_{lines}$ [$m^2$] the line-by-line absorption coefficient, $k_{self}$ and $k_{air}$ [$m^5$] the self- and air-induced continua, $n_{H_2O}$ and $n_{air}$ [$m^{-3}$] the densities of water vapor and air.
+
+Spectras for the line-by-line absorption-coefficient were produced using .amc files that looks like that:
+
+f 130 GHz  250 GHz  0.005 GHz\
+output f  k
+
+layer\
+P 500 hPa\
+T 280 K\
+column h2o_lines 1 mm_pwv
+
+And for the continuum absorption:
+
+f 130 GHz  250 GHz  0.005 GHz\
+output f  k
+
+layer\
+P 550 hPa\
+T 280 K\
+h 3000 m\
+column h2o_self_continuum 1 mm_pwv
+
+Then we only need to execute a command line like: am file_name.amc > file_name.out
+
+The file 'file_name.out' is created and contains two colomns, one for the frequency, and one for the absorption coefficient. Be careful, results are in cm and not in m.
+
+See the am documentation for more details: https://zenodo.org/records/8161272
+
+
+Let's first consider the line-by-line absorption coefficient and its dependance on temperature and pressure.
 
 ```{python}
 frequencies = []
 _550hPa_280K_1mm = []
 
-with open('absorption coefficient/h2o_lines_550hPa_280K_1mm.out', 'r') as file:
+with open('absorption_coefficient/h2o_lines_550hPa_280K_1mm.out', 'r') as file:
     for line in file:
         parts = line.split() # Split the line into two parts based on whitespace
         frequencies.append(float(parts[0]))
@@ -67,7 +103,7 @@ name_dict['_550hPa_260K_1mm'] = []
 name_dict['_550hPa_300K_1mm'] = []
 
 for name, list in name_dict.items():
-    with open('absorption coefficient/h2o_lines'+name+'.out', 'r') as file:
+    with open('absorption_coefficient/h2o_lines'+name+'.out', 'r') as file:
         for line in file:
             parts = line.split() # Split the line into two parts based on whitespace
             list.append(float(parts[1]))
@@ -117,16 +153,18 @@ plt.legend()
 plt.show()
 ```
 
+Now, lets consider the self- and air-induces continua. The self-induce absorption coefficient is much lower than the air-induced absorption coefficient, so we will ignore it for the rest of the notebook. Note that the self-induced continuum depends on $n_{H_2O}$ (or equivalently $\rho_{H_2O}$), so it would be harder to take it into account as we are interested in spatail variations of the water vapor density.
+
 ```{python}
 h2o_self = []
 h2o_air = []
 
-with open('absorption coefficient/h2o_self_continuum.out', 'r') as file:
+with open('absorption_coefficient/h2o_self_continuum.out', 'r') as file:
     for line in file:
         parts = line.split() # Split the line into two parts based on whitespace
         h2o_self.append(float(parts[1]))
 
-with open('absorption coefficient/h2o_air_continuum.out', 'r') as file:
+with open('absorption_coefficient/h2o_air_continuum.out', 'r') as file:
     for line in file:
         parts = line.split() # Split the line into two parts based on whitespace
         h2o_air.append(float(parts[1]))
@@ -145,28 +183,38 @@ plt.legend()
 plt.show()
 ```
 
-```{python}
-plt.figure(figsize=(12,6))
-
-plt.plot(frequencies, name_dict['_550hPa_280K_1mm']+np.array(h2o_air)*(1e-10*n_air))
-
-plt.ylim(0, y_max)
-plt.vlines(131, 0, y_max, 'black', 'dashed', label='frequency range of qubic')
-plt.vlines(169, 0, y_max, 'black', 'dashed')
-plt.vlines(192.5, 0, y_max, 'black', 'dashed')
-plt.vlines(247.5, 0, y_max, 'black', 'dashed')
-plt.xlabel('Frequency [GHz]')
-plt.ylabel(r'Molecular absorption coefficient $k_{H_2O}$ [$m^2$]')
-plt.title('Line-by-line and air-induced absorption. \n P = 550 hPa, T = 280 K, $n_{air} = 1.423\cdot{}10^{25} m^{-3}$')
-plt.show()
-```
+We can now plot the parameter $\alpha_b(\nu)$ [$m^2g^{-1}$].
 
 ```{python}
 absorption_coeff_mass = (name_dict['_550hPa_280K_1mm'] + np.array(h2o_air)*(1e-10*n_air)) / m_H2O
 ```
 
 ```{python}
+plt.figure(figsize=(12,6))
+
+plt.plot(frequencies, absorption_coeff_mass)
+
+y_max = 1e-4
+plt.ylim(0, y_max)
+plt.vlines(131, 0, y_max, 'black', 'dashed', label='frequency range of qubic')
+plt.vlines(169, 0, y_max, 'black', 'dashed')
+plt.vlines(192.5, 0, y_max, 'black', 'dashed')
+plt.vlines(247.5, 0, y_max, 'black', 'dashed')
+plt.xlabel('Frequency [GHz]')
+plt.ylabel(r'$\alpha_b$ [$m^2g^{-1}$]')
+plt.title('Line-by-line and air-induced absorption. \n P = 550 hPa, T = 280 K, $n_{air} = 1.423\cdot{}10^{25} m^{-3}$')
+plt.show()
+```
+
+Let's define a function that computes the integral over each frequency sub-band of the parameter $\alpha_b(\nu)$.
+
+```{python}
 def absorption_coeff_integrated(band, Nfreq, relative_bandwidth):
+    '''
+    Returns the integral of the coefficient alpha_b over each freqency sub-band.
+    Band is 150 or 220 (GHz).
+    The result is a list of length Nfreq.
+    '''
     freq_max = np.max(frequencies)
     freq_min = np.min(frequencies)
     freq_step = (freq_max - freq_min) / (len(frequencies) - 1)
@@ -192,13 +240,13 @@ absorption_coeff_integrated(150, 10, thisd['filter_relative_bandwidth'])
 ## Mean water vapor density
 
 ```{python}
-def water_vapor_density(z, rho_0=1, h0=1000):
+def water_vapor_density(height, rho_0=1, h0=1000):
     '''
-    Water vapor density as a function of geopotential height h
+    Water vapor density as a function of geopotential height in m
     rho_0: Reference mean density of water vapor in g/m³
     h0: The half height for water vapor in m
     '''
-    return rho_0 * np.exp(-np.log(2) * (z - 5190) / h0)
+    return rho_0 * np.exp(-np.log(2) * (height - 5190) / h0)
 
 water_vapor_0 = water_vapor_density(h, 1, 1000)
 ```
@@ -206,9 +254,12 @@ water_vapor_0 = water_vapor_density(h, 1, 1000)
 ## Temperature
 
 ```{python}
-# Temperature of the atmosphere as a function of geopotential height
-def atm_temp(z):
-    return T_ground * (1 - (z-h)/z_atm)
+def atm_temp(height):
+    '''
+    Temperature of the atmosphere as a function of geopotential height in m
+    Returns temperature in Kelvin
+    '''
+    return T_ground * (1 - (height-h)/z_atm)
 ```
 
 ## Correlation function
@@ -237,11 +288,13 @@ plt.show()
 def correlation_function(r, r0=300):
     '''
     Polynomial approximation of Kolmogorov's correlation. Computation is much faster.
+    For distances greater than the fit, the value is set to 0 to avoid the divergence of the polynomial fit.
     '''
     return np.where(r>4*r0, 0, np.polyval(fit_parameters, r/r0))
 ```
 
 ## Points for quasi Monte Carlo integration
+We will here generate a sample of Quasi-Monte Carlo points that will be used for the computation.
 
 ```{python}
 def get_detector_integration_operator(self):
@@ -279,6 +332,10 @@ def qubic_beam(i, freq):
 ```{python}
 # Scales a sample to go from a 6D hypercube to two cones, one for each detector
 def scaling_function(arr, z_max, freq, r0):
+    '''
+    arr is a 6D hypercube. Here we shape it into two cones, one for each detector. 
+    Each cone is representing only one peak, we will need to rotates thoses cones afterwards.
+    '''
     zi = arr[:,2]*r0-r0/2 + arr[:,5]*z_max
     zj = -(arr[:,2]*r0-r0/2) + arr[:,5]*z_max
 
@@ -305,16 +362,12 @@ def scaling_function(arr, z_max, freq, r0):
 ```
 
 ```{python}
-# %timeit monte_carlo_points(150e9, 15, r0=300)
-```
-
-```{python}
 # Function to generate integration points within variable-dependent bounds
 def monte_carlo_points(freq, n, r0=300, h=h, h_atm=h_atm, min_el_qubic=min_el_qubic):
     '''
     Returns a sample of points that are in the two beams (so in 6 dimensions). 
     This is done using a Sobol' sequence to have a uniform distribution in the 6D space.
-    The number of points generated is roughly 2**n /2
+    The number of points generated is 2**n
     '''
 
     # Generates the points in 6D space
@@ -329,6 +382,10 @@ def monte_carlo_points(freq, n, r0=300, h=h, h_atm=h_atm, min_el_qubic=min_el_qu
     scaled_points = scaling_function(points, z_max, freq, r0)
 
     return np.split(scaled_points, 2, axis=1)
+```
+
+```{python}
+# %timeit monte_carlo_points(150e9, 15, r0=300)
 ```
 
 ```{python}
@@ -539,7 +596,13 @@ def atm_correlations_qubic(points, list_peaks_i, list_peaks_j, ti, az_ti, el_ti,
     # Surface in the (zi,zj) plane
     z_max = h_atm / np.sin(min_el_qubic)
     Sz = z_max**2 - (z_max-r0)**2
-    
+
+    if freq==150e9:
+        molecular_absorption_coeff = absorption_coeff_integrated(150, 1, thisd['filter_relative_bandwidth'])[0]
+    elif freq==220e9:
+        molecular_absorption_coeff = absorption_coeff_integrated(220, 1, thisd['filter_relative_bandwidth'])[0]
+    else:
+        raise Exception('freq should be 150e9 or 220e9')
 
     return molecular_absorption_coeff**2 * int / np.shape(points)[1] * Sz
     

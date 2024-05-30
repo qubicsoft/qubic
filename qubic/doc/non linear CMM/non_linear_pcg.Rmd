@@ -1,0 +1,388 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import qubic
+import scipy
+from pyoperators import *
+from time import time
+import healpy as hp
+
+from non_linear_pcg import non_linear_pcg
+
+rc('figure',figsize=(10,8))
+rc('font',size=13)
+```
+
+<!-- #region -->
+# Read me
+A non-linear PCG is not as straightforward as a linear PCG. It can be very badly used so be aware of how it works.
+
+**Conjugation method**
+
+Many methods can be used to conjugate the iterative search directions of the non-linear PCG. Here, five possiblities are implemented: 'polak-ribiere', 'fletcher-reeves', 'hestenes-stiefel', 'dai-yuan', 'hybrid' (hybrid version of hestenes-stiefel and dai-yuan).
+The fastest one will depend on the problem you are trying to solve. You should test them to make the best choice. The most widly used is polak-ribiere.
+For more details, see: Hager, W. W., & Zhang, H. (2006). A survey of nonlinear conjugate gradient methods. Pacific journal of Optimization, 2(1), 35-58. https://people.clas.ufl.edu/hager/files/cg_survey.pdf
+
+Other possibilities could be easily implemented.
+
+
+**Line search**
+
+In a PCG, at each iteration, one needs to find:
+$$\alpha = argmin f(x+\alpha d)$$
+with x the current estimation of the solution, and d the current search direction. It is the size of the step we will do in the direction d.
+
+For the linear PCG, we have an analytic solution to this small problem. This is generally not the case for a non-linear gradient. We perform a secant method. We take a first guess for alpha, which we call sigma_0. Then we iterate and form a quadratic which has the same derivative as f at the points alpha and the previous alpha. We find the minimum of this quadratic, update x and iterate.
+
+If you have an analytical formula for this small problem, you should change the code and remove this secant method. This will improve the speed of the computation.
+
+The initial guess sigma_0 is very important and has to be chosen by hand. If it is chosen poorly, the PCG will not converge or very slowly.
+
+There is also a tolerance parameter for this line search, 'tol_linesearch'. You can play with it. If it is too big, the PCG won't converge. If it's too small, the algorithm will be unnecessarily slower. There is a maximum iteration parameter 'maxiter_linesearch'. By default, it is set to 10. If it is not enough, it is probably because you have a poor initial guess sigma_0, or that your tolerance is too low.
+
+
+**Initial guess for x**
+
+As the gradient is not linear, the function f could have many local minima. The algorithm will converge to the nearest local minimum, it can even converge to a local maximum! So you should define with great care the initial guess for x. It is the parameter 'x0'.
+
+
+**Preconditioning**
+
+Preconditioning is implemented. M should approximate the inverse of the Hessian matrix of f. Make sure that it is not computationaly too expensive to apply M on a vector.
+
+
+**More details**
+
+The algorithm implemented is the B5 from: Shewchuk, J. R. (1994). An introduction to the conjugate gradient method without the agonizing pain. http://www.cs.cmu.edu/~quake-papers/painless-conjugate-gradient.pdf
+We highly recommend to read to very well written article.
+<!-- #endregion -->
+
+# Linear problem
+First we will check that the non-linear PCG is giving the same result as the linear PCG for a linear gradient.
+
+```{python}
+nside = 16
+ndetectors = 1
+npointings = 1000
+```
+
+```{python}
+######## Technological Demonstrator Configuration #######
+#dictname = 'RealisticScanning-BmodesNoDustNoSystPaper0_2020.dict'
+dictname = 'pipeline_demo.dict'
+#dictname = 'global_source_oneDet.dict'
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictname)
+d['hwp_stepsize'] = 3
+d['npointings'] = npointings
+d['nside'] = nside
+d['synthbeam_kmax'] = 3
+d['synthbeam_fraction'] = 0.95
+d['random_pointing'] = True
+d['repeat_pointing'] = False
+#d['dtheta'] = 15
+q = qubic.QubicInstrument(d)
+s = qubic.QubicScene(d)
+samp = qubic.get_pointing(d)
+```
+
+Creating a map, the operator H, and generating the TOD.
+
+```{python}
+acq = qubic.QubicAcquisition(q, samp, s, d)
+H_op = acq[:ndetectors].get_operator()
+```
+
+```{python}
+# We create a mask for Qubic's patch. Please don't look too much at this horrible code.
+def circular_mask(nside, center, radius):
+    lon = center[0]
+    lat = center[1]
+    vec = hp.ang2vec(lon, lat, lonlat=True)
+    disc = hp.query_disc(nside, vec, radius=np.deg2rad(radius))
+    m = np.zeros(hp.nside2npix(nside))
+    m[disc] = 1
+    return np.array(m, dtype=bool)
+
+mask = circular_mask(nside, qubic.equ2gal(0, -57), d['dtheta'])
+
+Mask = np.zeros((H_op.shape[1], np.count_nonzero(mask), 3))
+a = 0
+for i in range(len(mask)):
+    if mask[i]:
+        Mask[i*3:(i+1)*3,a] = np.identity(3)
+        a += 1
+Mask = np.reshape(Mask, (H_op.shape[1], np.count_nonzero(mask)*3))
+
+PatchMask = ReshapeOperator(H_op.shape[1], H_op.shapein) * asoperator(Mask, flags='linear,real') * ReshapeOperator(
+    (np.count_nonzero(mask), 3), np.count_nonzero(mask)*3)
+
+H = H_op * PatchMask
+```
+
+```{python}
+map = np.ones((np.count_nonzero(mask), 3))
+
+tod = H(map)
+
+invN = acq[:ndetectors].get_invntt_operator()
+
+A = CompositionOperator((H.T, invN, H), flags='linear,real,symmetric,square')
+b = H.T * invN * tod
+```
+
+```{python}
+print(f'map: {map.shape}')
+print(f'H: {H.shape}')
+print(f'TOD: {tod.shape}')
+print(f'A: {A.shape}')
+print(f'b: {b.shape}')
+```
+
+```{python}
+def _dot(x, y, comm):
+    d = np.array(np.dot(x.ravel(), y.ravel()))
+    if comm is not None:
+        comm.Allreduce(MPI.IN_PLACE, d)
+    return d
+
+def grad_chi2(x, out):
+    out[...] = A(x) - b
+
+grad_f = Operator(grad_chi2, shapein=A.shapein, shapeout=A.shapeout, dtype='float64')
+```
+
+Computing the PCG
+
+```{python}
+Max_iterations = [0,1,2,3,4,5,7,9,11,13,15,18,21,24,27,30,33,36,39,42,45,48,51]
+
+residues_cg = []
+residues_PR_cg = []
+residues_FR_cg = []
+residues_HS_cg = []
+residues_DY_cg = []
+residues_hybrid_cg = []
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_cg = pcg(A, b, tol=1e-50, maxiter=val, M=None)['x']
+    residues_cg.append(np.linalg.norm(b-A(x_cg))/np.linalg.norm(b))
+print(f'time for linear CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_PR_cg = non_linear_pcg(grad_f, conjugate_method='polak-ribiere', tol=1e-50, sigma_0=10, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_PR_cg.append(np.linalg.norm(b-A(x_PR_cg))/np.linalg.norm(b))
+print(f'time for PR CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_FR_cg = non_linear_pcg(grad_f, conjugate_method='fletcher-reeves', tol=1e-50, sigma_0=10, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_FR_cg.append(np.linalg.norm(b-A(x_FR_cg))/np.linalg.norm(b))
+print(f'time for FR CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_HS_cg = non_linear_pcg(grad_f, conjugate_method='hestenes-stiefel', tol=1e-50, sigma_0=10, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_HS_cg.append(np.linalg.norm(b-A(x_HS_cg))/np.linalg.norm(b))
+print(f'time for HS CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_DY_cg = non_linear_pcg(grad_f, conjugate_method='dai-yuan', tol=1e-50, sigma_0=10, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_DY_cg.append(np.linalg.norm(b-A(x_DY_cg))/np.linalg.norm(b))
+print(f'time for DY CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_hybrid_cg = non_linear_pcg(grad_f, conjugate_method='hybrid', tol=1e-50, sigma_0=10, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_hybrid_cg.append(np.linalg.norm(b-A(x_hybrid_cg))/np.linalg.norm(b))
+print(f'time for hybrid CG: {time()-start}')
+```
+
+```{python}
+plt.plot(Max_iterations, residues_cg, label='linear CG')
+plt.plot(Max_iterations, residues_PR_cg, label='Polak-Ribière CG')
+plt.plot(Max_iterations, residues_FR_cg, label='Fletcher-Reeves CG')
+plt.plot(Max_iterations, residues_HS_cg, label='Hestenes-Stiefel CG')
+plt.plot(Max_iterations, residues_DY_cg, label='Dai-Yuan CG')
+plt.plot(Max_iterations, residues_hybrid_cg, label='hybrid CG')
+plt.yscale('log')
+plt.grid(axis='y', linestyle='dotted')
+plt.xlabel('Number of iterations')
+plt.ylabel(r'Relative residue $\frac{||b-Ax||}{||b||}$')
+plt.title(f'Solving $Ax=b$, A has size {A.shape}')
+plt.legend()
+plt.show()
+```
+
+It works exactly as the linear PCG! Each iteration takes a bit more time because the algorithm is not as efficient as for the specific linear case.
+
+
+# Non-linear gradient
+Let's test the non-linear PCG with a very simple non-linear gradient. We set the tolerance to $10^{-16}$ to avoid problems when the residue becomes smaller than the computer precision.
+
+```{python}
+N = 100
+betas = 1+np.random.random(N)
+dust_power = 0.5**betas
+
+def grad_chi2_spectral_indexes(x, out):
+    power = 0.5**x
+    out[...] = 2*log(0.5)*(power - dust_power) * power
+
+grad_beta = Operator(grad_chi2_spectral_indexes, shapein=N, shapeout=N, dtype='float64')
+```
+
+```{python}
+Max_iterations = [0,1,2,3,4,5,7,9,11,13,15,18,21,24,27,30,33,36,39]
+
+sigma=1
+
+residues_PR_cg = []
+residues_FR_cg = []
+residues_HS_cg = []
+residues_DY_cg = []
+residues_hybrid_cg = []
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_PR_cg = non_linear_pcg(grad_beta, conjugate_method='polak-ribiere', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_PR_cg.append(np.linalg.norm(grad_beta(x_PR_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for PR CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_FR_cg = non_linear_pcg(grad_beta, conjugate_method='fletcher-reeves', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_FR_cg.append(np.linalg.norm(grad_beta(x_FR_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for FR CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_HS_cg = non_linear_pcg(grad_beta, conjugate_method='hestenes-stiefel', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-6, maxiter=val)['x']
+    residues_HS_cg.append(np.linalg.norm(grad_beta(x_HS_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for HS CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_DY_cg = non_linear_pcg(grad_beta, conjugate_method='dai-yuan', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_DY_cg.append(np.linalg.norm(grad_beta(x_DY_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for DY CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_hybrid_cg = non_linear_pcg(grad_beta, conjugate_method='hybrid', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_hybrid_cg.append(np.linalg.norm(grad_beta(x_hybrid_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for hybrid CG: {time()-start}')
+
+```
+
+```{python}
+plt.plot(Max_iterations, residues_PR_cg, label='Polak-Ribière CG')
+plt.plot(Max_iterations, residues_FR_cg, label='Fletcher-Reeves CG')
+plt.plot(Max_iterations, residues_HS_cg, label='Hestenes-Stiefel CG')
+plt.plot(Max_iterations, residues_DY_cg, label='Dai-Yuan CG')
+plt.plot(Max_iterations, residues_hybrid_cg, label='hybrid CG')
+plt.yscale('log')
+plt.grid(axis='y', linestyle='dotted')
+plt.xlabel('Number of iterations')
+plt.ylabel(r'Relative residue $\frac{||\nabla \chi^2(\vec{\beta})||}{||\nabla \chi^2(\vec{0})||}$')
+plt.title(r'$\chi^2$ minimization using non-linear PCG')
+plt.legend()
+plt.show()
+```
+
+This works great, but let's put sigma_0 = 100 instead of 1:
+
+```{python}
+Max_iterations = [0,1,2,3,4,5,7,9,11,13,15,18,21,24,27,30,33,36,39]
+
+sigma=100
+
+residues_PR_cg = []
+residues_FR_cg = []
+residues_HS_cg = []
+residues_DY_cg = []
+residues_hybrid_cg = []
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_PR_cg = non_linear_pcg(grad_beta, conjugate_method='polak-ribiere', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_PR_cg.append(np.linalg.norm(grad_beta(x_PR_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for PR CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_FR_cg = non_linear_pcg(grad_beta, conjugate_method='fletcher-reeves', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_FR_cg.append(np.linalg.norm(grad_beta(x_FR_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for FR CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_HS_cg = non_linear_pcg(grad_beta, conjugate_method='hestenes-stiefel', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-6, maxiter=val)['x']
+    residues_HS_cg.append(np.linalg.norm(grad_beta(x_HS_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for HS CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_DY_cg = non_linear_pcg(grad_beta, conjugate_method='dai-yuan', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_DY_cg.append(np.linalg.norm(grad_beta(x_DY_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for DY CG: {time()-start}')
+
+start = time()
+for i, val in enumerate(Max_iterations):
+    x_hybrid_cg = non_linear_pcg(grad_beta, conjugate_method='hybrid', tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=val)['x']
+    residues_hybrid_cg.append(np.linalg.norm(grad_beta(x_hybrid_cg))/np.linalg.norm(grad_beta(np.zeros(N))))
+print(f'time for hybrid CG: {time()-start}')
+
+```
+
+```{python}
+plt.plot(Max_iterations, residues_PR_cg, label='Polak-Ribière CG')
+plt.plot(Max_iterations, residues_FR_cg, label='Fletcher-Reeves CG')
+plt.plot(Max_iterations, residues_HS_cg, label='Hestenes-Stiefel CG')
+plt.plot(Max_iterations, residues_DY_cg, label='Dai-Yuan CG')
+plt.plot(Max_iterations, residues_hybrid_cg, label='hybrid CG')
+plt.yscale('log')
+plt.grid(axis='y', linestyle='dotted')
+plt.xlabel('Number of iterations')
+plt.ylabel(r'Relative residue $\frac{||\nabla \chi^2(\vec{\beta})||}{||\nabla \chi^2(\vec{0})||}$')
+plt.title(r'$\chi^2$ minimization using non-linear PCG')
+plt.legend()
+plt.show()
+```
+
+The PCG converges in one step! This is because our function is very simple. It is equivalent to the linear case where the matrix A has only one eigenvalue. CG converges in just one step.
+But this shows the importance of well choosing the parameter sigma_0.
+
+```{python}
+plt.plot(Max_iterations, residues_PR_cg, label='Polak-Ribière CG')
+plt.plot(Max_iterations, residues_FR_cg, label='Fletcher-Reeves CG')
+plt.plot(Max_iterations, residues_HS_cg, label='Hestenes-Stiefel CG')
+plt.plot(Max_iterations, residues_DY_cg, label='Dai-Yuan CG')
+plt.plot(Max_iterations, residues_hybrid_cg, label='hybrid CG')
+plt.yscale('log')
+plt.grid(axis='y', linestyle='dotted')
+plt.xlabel('Number of iterations')
+plt.ylabel(r'Relative residue $\frac{||\nabla \chi^2(\vec{\beta})||}{||\nabla \chi^2(\vec{0})||}$')
+plt.title(r'$\chi^2$ minimization using non-linear PCG')
+plt.legend()
+plt.show()
+```
+
+```{python}
+
+```

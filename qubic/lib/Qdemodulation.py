@@ -10,6 +10,7 @@ import scipy.signal as scsig
 from scipy import interpolate
 import datetime as dt
 import sys
+import iminuit
 
 
 class interp_template:
@@ -28,6 +29,31 @@ class interp_template:
 		off = pars[1]
 		dx = pars[2]
 		return np.interp(x, self.xx - dx, self.yy, period=self.period) * amp + off
+		
+class MyChi2(object):
+    """
+    Class defining the minimizer and the data
+    """
+    def __init__(self, xin, yin, covarin, functname, extra_args=None, invcovar=None, diag=False):
+    	self.x = xin
+    	self.y = yin
+    	self.covar = covarin
+    	if invcovar is None:
+    		self.invcov = np.linalg.inv(covarin)
+    	else:
+    		self.invcov = invcovar
+    	self.functname = functname
+    	self.extra_args = extra_args
+    	self.diag = diag
+
+    def __call__(self, *pars, extra_args=None):
+        val = self.functname(self.x, pars, extra_args=self.extra_args)
+        if self.diag == False:
+            chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
+        else:
+            chi2 = np.sum((self.y-val)**2 / np.diag(self.covar))
+        return chi2
+
 
 
 class Demodulation:
@@ -71,7 +97,7 @@ class Demodulation:
 			ndet = sh[0]
 		estimate = np.zeros(ndet)
 		for i in range(ndet):
-			spectrum_f, freq_f = ft.power_spectrum(tt, dd[i, :], rebin=True)
+			spectrum_f, freq_f = ft.power_spectrum(tt, dd[i, :], rebin=True)   #fibtools
 			mean_level = np.mean(spectrum_f[np.abs(freq_f) > (np.max(freq_f) / 2)])
 			samplefreq = 1. / (tt[1] - tt[0])
 			estimate[i] = (np.sqrt(mean_level * samplefreq / 2))
@@ -112,7 +138,7 @@ class Demodulation:
 			ok = (period_index == allperiods[i])
 			tper[i] = np.mean(time[ok])
 			if nTES == 1:
-				mm, ss = ft.meancut(data[ok], 3)
+				mm, ss = ft.meancut(data[ok], 3)    #fibtools
 				ampdata[0, i] = ss
 				err_ampdata[0, i] = 1
 			else:
@@ -134,10 +160,75 @@ class Demodulation:
 			return tper, ampdata, err_ampdata, newothers
 
 
+	#new minuit function valid on 2.25.2 version, extracted from fibtools and modified it
+	def do_minuit(self, x, y, covarin, guess, functname, fixpars=None, chi2=None, rangepars=None, nohesse=False, force_chi2_ndf=False, verbose=True, minos=True, extra_args=None, print_level=0, force_diag=False, nsplit=1, ncallmax=10000, precision=None):
+
+		covar = covarin.copy()
+		if np.size(np.shape(covarin)) == 1:
+			if force_diag:
+				covar = covarin.copy()
+			else:
+				err = covarin
+				covar = np.zeros((np.size(err), np.size(err)))
+				covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
+		# instantiate minimizer
+
+		chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
+
+		ndim = np.size(guess)
+		parnames = []
+		for i in range(ndim):
+			parnames.append('c' + str(i))
+
+		theguess = dict(zip(parnames, guess))
+		theargs = theguess
+
+		if verbose: print('Fitting with Minuit')
+
+		if isinstance(chi2, MyChi2):
+			m = iminuit.Minuit(chi2, name=parnames, **theargs)
+			m.migrad(ncall=ncallmax*nsplit)
+
+		parfit = []
+		for i in parnames: parfit.append(m.values[i])
+
+		errfit = []
+		for i in parnames: errfit.append(m.errors[i])
+
+		parnamesfit = parnames
+		ndimfit = len(parnamesfit)
+		covariance = np.array(m.covariance)
+		print('covariance', covariance)
+
+		if isinstance(chi2, MyChi2):
+			chisq = chi2(*parfit)
+
+		ndf = np.size(x) - ndim
+		if force_chi2_ndf:
+			if ndf > 0:
+				correct = chisq / ndf
+				if verbose:
+					print('correcting errorbars to have chi2/ndf=1 - correction = {}'.format(chisq))
+			else:
+				correct=1.
+		else:
+			correct = 1.
+			
+		print('correct', correct)
+		if verbose:
+			print(np.array(parfit))
+			print(np.array(errfit) * np.sqrt(correct))
+			print('Chi2=', chisq)
+			print('ndf=', ndf)
+
+		return m, np.array(parfit), np.array(errfit) * np.sqrt(correct)#, covariance * correct, chi2(*parfit), ndf, chi2 
+
+
+
 	def fitperiod(self, x, y, fct):
 
 		guess = np.array([np.std(y), np.mean(y), 0.])
-		res = ft.do_minuit(x, y, y * 0 + 1, guess, functname=fct, verbose=False, nohesse=True,
+		res = self.do_minuit(x, y, y * 0 + 1, guess, functname=fct, verbose=False, nohesse=True,
 					   force_chi2_ndf=True)
 		return res
 
@@ -280,7 +371,7 @@ class Demodulation:
 				src_data = None
 			else:
 				new_src_tod = ft.filter_data(src_data_in[0], src_data_in[1], lowcut, highcut,
-										 notch=notch, rebin=True, verbose=verbose)
+										 notch=notch, rebin=True, verbose=verbose)    #fibtools
 				src_data = [src_data_in[0], new_src_tod]
 
 			# Now we have the "input" data, we can start demodulation

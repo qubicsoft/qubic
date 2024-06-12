@@ -27,6 +27,9 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         disp=False,
         callback=None,
         reuse_initial_state=False,
+        residues=[], #################################################################################
+        npixel_patch=1,
+        nbeta_patch=1,
     ):
         """
         Parameters
@@ -140,6 +143,9 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         self.d = empty(grad_f.shapeout, dtype)
         self.r = empty(grad_f.shapeout, dtype)
         self.s = empty(grad_f.shapeout, dtype)
+        self.residues = residues #################################################################################
+        self.npixel_patch = npixel_patch
+        self.nbeta_patch = nbeta_patch
 
     def initialize(self):
         IterativeAlgorithm.initialize(self)
@@ -152,6 +158,15 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         self.error = np.sqrt(self.delta_new / self.delta_0)
 
     def iteration(self):
+        gradient = self.grad_f(self.x) ###########################################################################
+        self.residues.append([np.linalg.norm(gradient), np.linalg.norm(gradient[:self.npixel_patch]), 
+                             np.linalg.norm(gradient[self.npixel_patch:2*self.npixel_patch]), 
+                             np.linalg.norm(gradient[2*self.npixel_patch:3*self.npixel_patch]), 
+                             np.linalg.norm(gradient[3*self.npixel_patch:4*self.npixel_patch]), 
+                             np.linalg.norm(gradient[4*self.npixel_patch:5*self.npixel_patch]), 
+                             np.linalg.norm(gradient[5*self.npixel_patch:6*self.npixel_patch]), 
+                             np.linalg.norm(gradient[6*self.npixel_patch:])])
+        
         j = 0
         self.delta_d = self.dot(self.d, self.d)
         self.alpha = -self.sigma_0
@@ -213,6 +228,9 @@ def non_linear_pcg(
     disp=False,
     callback=None,
     reuse_initial_state=False,
+    residues=[], #################################################################################
+    npixel_patch=1,
+    nbeta_patch=1,
 ):
     """
     output = pcg(A, b, [x0, tol, maxiter, M, disp, callback,
@@ -295,6 +313,9 @@ def non_linear_pcg(
         M=M,
         callback=callback,
         reuse_initial_state=reuse_initial_state,
+        residues=residues, #################################################################################
+        npixel_patch=npixel_patch,
+        nbeta_patch=nbeta_patch,
     )
     try:
         output = algo.run()

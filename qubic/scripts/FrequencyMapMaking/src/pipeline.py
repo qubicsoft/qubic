@@ -6,7 +6,6 @@ import time
 from model.models import *
 from plots.plotter import *
 import qubic.Qacquisition as acq
-from model.planck_timeline import *
 from qubic.Qnoise import *
 from model.externaldata import *
 from tools.foldertools import *
@@ -103,7 +102,7 @@ class PipelineFrequencyMapMaking:
         ### Angular resolutions
         self._get_convolution()
         
-        self.external_timeline = ExternalData2Timeline(self.skyconfig, 
+        self.external_timeline = ExternalDataMM(self.skyconfig, 
                                                        self.joint.qubic.allnus, 
                                                        self.params['QUBIC']['nrec'], 
                                                        nside=self.params['SKY']['nside'], 

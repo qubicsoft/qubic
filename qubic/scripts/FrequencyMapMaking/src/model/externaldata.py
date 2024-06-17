@@ -11,9 +11,6 @@ import sys
 import os
 from qubic import PATH
 
-
-sys.path.append(os.getcwd())
-
 class PipelineExternalData:
 
     def __init__(self, file, noise_only=False):

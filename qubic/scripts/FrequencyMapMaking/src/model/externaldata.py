@@ -9,9 +9,10 @@ import healpy as hp
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 import sys
 import os
+from qubic import PATH
+
 
 sys.path.append(os.getcwd())
-CMB_FILE = os.getcwd() + '/data/'
 
 class PipelineExternalData:
 
@@ -228,11 +229,11 @@ class ExternalDataMM:
         
     def give_cl_cmb(self, r=0, Alens=1.):
         
-        power_spectrum = hp.read_cl(CMB_FILE+'Cls_Planck2018_lensed_scalar.fits')[:,:4000]
+        power_spectrum = hp.read_cl(PATH+'Cls_Planck2018_lensed_scalar.fits')[:,:4000]
         if Alens != 1.:
             power_spectrum[2] *= Alens
         if r:
-            power_spectrum += r * hp.read_cl(CMB_FILE+'Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
+            power_spectrum += r * hp.read_cl(PATH+'Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
         return power_spectrum
     
     def get_cmb(self, r=0, Alens=1, seed=None):

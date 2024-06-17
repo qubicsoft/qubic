@@ -1,0 +1,56 @@
+data:
+  #/sps/qubic/Users/TomLaclavere/Pipeline/E2E_nrec2       ls -l | wc -l
+  path : '/pbs/home/m/mregnier/sps1/Pipeline/E2E_nrec6/cmbdust_convolved_DB/'
+  foldername : 'spectrum'
+  filename : 'baseline_cmb_DB_nrec6'
+  n_real : -1 #475 #475
+
+nbins: 15
+
+simu: 
+  nrec : 6
+  convo : True
+  noise : True
+  cmb : True
+  dust : True
+  sync : False
+  corr_dust_sync : False
+
+MCMC:
+  nwalkers : 50
+  mcmc_steps : 100
+  discard : 50
+  stretch_move_factor : 0.7
+  snooker_move_gamma : 1.7
+  thin : 15
+
+diagonal_qubic: False
+diagonal_planck: False
+
+sample_variance : True
+
+NUS:
+  qubic: True
+  
+  # Planck
+  30GHz: False
+  44GHz: False
+  70GHz: False
+  100GHz: True
+  143GHz: True
+  217GHz: True
+  353GHz: True
+
+SKY_PARAMETERS:
+  r : [True, -0.01, 0.02, -1, 1] 
+  Alens : [1, 1, 0.2, 0, 10]
+  nu0_d : [353, 0, 10, 0, 1000]
+  Ad : [True, 3.5, 1, 0, 10]
+  alphad : [True, -2.3, 0.5, -3, 0]
+  betad : [1.54, 1.5, 0.2, 0, 10000]
+  deltad : [1, 0, 1, 0, 1000]
+  nu0_s : [23, 0, 1, 0, 1000]
+  As : [0, 0, 0.1, -100000, 10000]
+  alphas : [0, 1, 0.1, -100000, 10000]
+  betas : [-3, -3, 0.1, -10, 0]
+  eps : [0, 0, 0.01, -1, 1]

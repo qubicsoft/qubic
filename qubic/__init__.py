@@ -5,6 +5,11 @@ from . import data
 from . import io
 from .acquisition import *
 from .beams import *
+from .Qacquisition import *
+from .Qinstrument import *
+from .Qcomponent_model import *
+from .Qmixing_matrix import *
+from .Qnoise import *
 from .calibration import *
 from .cl import *
 from .instrument import *

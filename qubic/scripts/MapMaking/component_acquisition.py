@@ -34,10 +34,10 @@ from pysm3 import utils
 
 from frequency_acquisition import compute_fwhm_to_convolve, arcmin2rad, give_cl_cmb, create_array, get_preconditioner, QubicPolyAcquisition, QubicAcquisition
 import wide_instrument as instr
-import instrument as binstr
+import Qinstrument as binstr
 # FG-Buster packages
-import component_model as c
-import mixing_matrix as mm
+import Qcomponent_model as c
+import Qmixing_matrix as mm
 import pickle
 import ComponentsMapMakingTools as CMMTools
 # PyOperators stuff

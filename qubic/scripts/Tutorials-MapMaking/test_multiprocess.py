@@ -19,8 +19,8 @@ from importlib import reload
 from pysm3 import utils
 import Acquisition as Acq
 # FG-Buster packages
-import component_model as c
-import mixing_matrix as mm
+import Qcomponent_model as c
+import Qmixing_matrix as mm
 import pickle
 from scipy.optimize import minimize
 import ComponentsMapMakingTools as CMMTools

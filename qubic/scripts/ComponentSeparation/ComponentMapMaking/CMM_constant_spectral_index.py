@@ -15,7 +15,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 
 # FG-Buster packages
-import component_model as c
+import Qcomponent_model as c
 import mixing_matrix as mm
 
 # General packages

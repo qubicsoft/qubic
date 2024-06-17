@@ -27,14 +27,14 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
-import instrument as instr
+import Qinstrument as instr
 
 import pysm3.units as u
 from importlib import reload
 from pysm3 import utils
 # FG-Buster packages
-import component_model as c
-import mixing_matrix as mm
+import Qcomponent_model as c
+import Qmixing_matrix as mm
 import pickle
 from scipy.optimize import minimize
 

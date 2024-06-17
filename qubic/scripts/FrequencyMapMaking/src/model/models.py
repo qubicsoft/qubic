@@ -1,6 +1,6 @@
 import numpy as np
 import healpy as hp
-import qubic.Qmixingmatrix as mm
+import qubic.Qmixing_matrix as mm
 import qubic.Qcomponent_model as c
 import matplotlib.pyplot as plt
 

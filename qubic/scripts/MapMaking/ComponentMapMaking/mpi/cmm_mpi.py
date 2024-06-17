@@ -13,7 +13,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 
 # FG-Buster packages
-import component_model as c
+import Qcomponent_model as c
 
 # General packages
 import numpy as np

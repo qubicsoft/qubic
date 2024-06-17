@@ -3,7 +3,7 @@ from pyoperators import *
 from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 import component_model as c
-import mixing_matrix as mm
+import Qmixing_matrix as mm
 import healpy as hp
 import numpy as np
 import time

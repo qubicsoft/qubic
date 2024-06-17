@@ -30,6 +30,7 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         residues=[], #################################################################################
         npixel_patch=1,
         nbeta_patch=1,
+        verbose=True,
     ):
         """
         Parameters
@@ -144,6 +145,7 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         self.residues = residues #################################################################################
         self.npixel_patch = npixel_patch
         self.nbeta_patch = nbeta_patch
+        self.verbose = verbose
 
     def initialize(self):
         IterativeAlgorithm.initialize(self)
@@ -155,6 +157,8 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         self.delta_new = self.dot(self.r, self.d)
         self.delta_0 = self.delta_new
         self.error = np.sqrt(self.delta_new / self.delta_0)
+        if self.verbose:
+            self.iteration_number=1
 
     def iteration(self):
         gradient = self.grad_f(self.x) ###########################################################################
@@ -209,6 +213,11 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
             self.beta = np.max((np.min((self.delta_new - self.delta_mid, self.delta_new)) / (self.delta_dr - self.dot(self.d, self.r)), 0))
         self.d *= self.beta
         self.d += self.s
+
+        if self.verbose:
+            if self.iteration_number % 20 == 0:
+                print(f'Step {self.iteration_number}')
+            self.iteration_number += 1
     
     @staticmethod
     def callback(self):
@@ -231,6 +240,7 @@ def non_linear_pcg(
     residues=[], #################################################################################
     npixel_patch=1,
     nbeta_patch=1,
+    verbose=True,
 ):
     """
     output = pcg(A, b, [x0, tol, maxiter, M, disp, callback,
@@ -316,6 +326,7 @@ def non_linear_pcg(
         residues=residues, #################################################################################
         npixel_patch=npixel_patch,
         nbeta_patch=nbeta_patch,
+        verbose=verbose
     )
     try:
         output = algo.run()

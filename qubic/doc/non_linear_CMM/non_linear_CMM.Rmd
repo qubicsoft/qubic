@@ -53,13 +53,20 @@ Parameters
 ```{python}
 nside = 16
 ndetectors = 1
-npointings = 2000
+npointings = 8000
 nside_beta = 16
 nf_sub = 4
 
 npixel = 12*nside**2
 nbeta = 12*nside_beta**2
-print(f'Approximate number of reconstructed parameters: {(6*npixel+nbeta)*1.5/100}')
+```
+
+```{python}
+1-(1-1/(6*npixel_patch+nbeta_patch))**npointings
+```
+
+```{python}
+6*npixel_patch+nbeta_patch
 ```
 
 ```{python}
@@ -83,10 +90,6 @@ dict['repeat_pointing'] = False
 ```{python}
 Q = QubicFullBandSystematic(dict, Nsub=nf_sub, Nrec=2)
 H_list = Q.H
-```
-
-```{python}
-H_list[0].dtype
 ```
 
 ```{python}
@@ -133,6 +136,8 @@ def sky_to_patch(c, out):
     out[...] = c[patch_mask]
 
 Sky_to_Patch = Operator(sky_to_patch, shapein=6*npixel+nbeta, shapeout=6*npixel_patch+nbeta_patch, dtype='float64')
+
+print(6*npixel_patch+nbeta_patch)
 ```
 
 The modified black-body-spectrum of the dust. We have:
@@ -320,7 +325,7 @@ HessianInverseDiagonal = Operator(hessian_inverse_diagonal, shapein=6*npixel_pat
 ```
 
 ```{python}
-max_iteration = 100
+max_iteration = 10
 x0 = np.zeros(6*npixel_patch+nbeta_patch)
 #x0[3*npixel:6*npixel] = skydust.ravel()
 
@@ -328,7 +333,7 @@ x0[:npixel_patch] = Sky_to_Patch(true_c)[:npixel_patch].copy()
 x0[npixel_patch:3*npixel_patch] = np.zeros(2*npixel_patch)
 x0[3*npixel_patch:4*npixel_patch] = Sky_to_Patch(true_c)[3*npixel_patch:4*npixel_patch].copy()
 x0[4*npixel_patch:6*npixel_patch] = 0*Sky_to_Patch(true_c)[4*npixel_patch:6*npixel_patch]*(1+np.random.normal(scale=1.0, size=2*npixel_patch))
-x0[6*npixel_patch:] = np.ones(nbeta_patch)*1.54
+x0[6*npixel_patch:] = np.ones(nbeta_patch)*1.53
 
 
 sigma=1e-3
@@ -458,6 +463,27 @@ plt.show()
 ```
 
 Note that we have more than 3 orders of magnitude of variation on the diagonal. Let's plot the product of this diagonal with the preconditioner we created that should approximate the inverse of this diagonal.
+
+```{python}
+sky = pysm3.Sky(nside=nside, preset_strings=['c1', 'd1'], output_unit='uK_CMB')
+
+map = sky.get_emission(150e9 * u.Hz).T
+```
+
+```{python}
+vector = np.ones(H_list[0].shapein)
+#vector = map.copy()
+approx_hth = np.empty((nf_sub,) + H_list[0].shapein) # has shape (nf_sub, npixel, 3)
+for index in range(nf_sub):
+    approx_hth[index] = H_list[index].T * H_list[index] * vector
+    plt.plot((H_list[index].T * H_list[index] * vector)[seenpix_qubic,0])
+```
+
+```{python}
+plt.plot(np.sum(approx_hth, axis=0)[:,0][seenpix_qubic])
+plt.plot(np.diag(hessian)[:npixel_patch]*5)
+plt.yscale('log')
+```
 
 ```{python}
 plt.plot(np.diag(hessian)*HessianInverseDiagonal(Sky_to_Patch(true_c)))

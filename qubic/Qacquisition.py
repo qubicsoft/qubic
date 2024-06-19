@@ -1276,7 +1276,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
                 imax = (irec+1)*f-1
                 op_sum += [h[(self.allnus >= self.allnus[imin]) * (self.allnus <= self.allnus[imax])].sum(axis=0)]
             
-            if self.kind == 'wide':
+            if self.kind == 'UWB':
                 return BlockRowOperator(op_sum, new_axisin=0)
             else:
                 if self.Nrec > 2:
@@ -1291,7 +1291,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         
         ### Components Map-Making
         else:
-            if self.kind == 'wide':
+            if self.kind == 'UWB':
                 if gain is None:
                     G = DiagonalOperator(np.ones(self.ndets), broadcast='rightward', shapein=(self.ndets, self.nsamples))
                 else:

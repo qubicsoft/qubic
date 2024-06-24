@@ -12,15 +12,16 @@ from non_linear_pcg_preconditioned import non_linear_pcg
 
 
 class NonLinearCMM:
-    def __init__(self, nside, nside_beta, npointings, nf_sub, planck_frequencies, noise_qubic, noise_planck):
+    def __init__(self, nside, nside_beta, npointings, nf_sub, planck_frequencies, noise_qubic, noise_planck, planck_coverage_level):
         '''
-        nside: (int) nside of the pixels in the sky from the module healpy.
-        nside_beta: (int) Same but for the spectral indices of the dust.
+        nside: (int, power of 2) nside of the pixels in the sky from the module healpy.
+        nside_beta: (int, power of 2) Same but for the spectral indices of the dust.
         npointings: (int) Number of random pointings for the acquisition matrix.
         nf_sub: (int) Number of frequencies considered in the full band.
         planck_frequencies: (array) Planck frequencies in Hz.
-        noise_qubic: (float) level of normal noise in Qubic's TOD
-        noise_planck: (float) level of normal noise in Planck's TOD
+        noise_qubic: (float) Level of normal noise in Qubic's TOD.
+        noise_planck: (float) Level of normal noise in Planck's TOD.
+        planck_coverage_level: (float, between 0 and 1) Relative coverage under which Planck's maps are added to help convergence.
         '''
         self.nside = nside
         self.nside_beta = nside_beta
@@ -29,14 +30,15 @@ class NonLinearCMM:
         self.planck_frequencies = planck_frequencies
         self.noise_qubic = noise_qubic
         self.noise_planck = noise_planck
+        self.planck_coverage_level = planck_coverage_level
 
-        self.npixel = 12*self.nside**2
-        self.nbeta = 12*self.nside_beta**2
+        self.npixel = 12*self.nside**2 # Number of pixels in the sky
+        self.nbeta = 12*self.nside_beta**2 # Number of spectral indices in the sky
 
         _, allnus150, _, _, _, _ = qubic.compute_freq(150, Nfreq=int(self.nf_sub/2)-1, relative_bandwidth=0.25)
         _, allnus220, _, _, _, _ = qubic.compute_freq(220, Nfreq=int(self.nf_sub/2)-1, relative_bandwidth=0.25)
-        self.frequencies = np.concatenate((allnus150, allnus220)) * 1e9
-        self.nu0 = self.frequencies[-1]
+        self.frequencies = np.concatenate((allnus150, allnus220)) * 1e9 # Frequencies of Qubic in Hz
+        self.nu0 = self.frequencies[-1] # Reference frequency
 
         #Ultra Wide Band configuration.
         nu_up = 247.5
@@ -63,32 +65,26 @@ class NonLinearCMM:
 
         self.Q = QubicFullBandSystematic(self.dict, Nsub=self.nf_sub, Nrec=2, kind='wide')
 
-        self.H_list = self.Q.H # List of acquisition matrix at the different wavelengths.
+        self.H_list = self.Q.H # List of the acquisition matrices of Qubic at the different wavelengths.
         
         self.seenpix_qubic = self.H_list[0].T(np.ones(self.H_list[0].shapeout)) != 0.0
         for i in range(len(self.frequencies)):
             np.logical_or(self.seenpix_qubic, self.H_list[i].T(np.ones(self.H_list[0].shapeout)) != 0.0, out = self.seenpix_qubic)
-        self.seenpix_qubic = self.seenpix_qubic[:, 0]
+        self.seenpix_qubic = self.seenpix_qubic[:, 0] # Boolean mask of the pixels of Qubic's patch
         
-        self.seenpix_qubic_beta = hp.ud_grade(self.seenpix_qubic, self.nside_beta)
+        self.seenpix_qubic_beta = hp.ud_grade(self.seenpix_qubic, self.nside_beta) # Boolean mask of the spectral indices of Qubic's patch
 
-        self.npixel_patch = np.count_nonzero(self.seenpix_qubic)
-        self.nbeta_patch = np.count_nonzero(self.seenpix_qubic_beta)
+        self.npixel_patch = np.count_nonzero(self.seenpix_qubic) # Number of pixels in Qubic's patch
+        self.nbeta_patch = np.count_nonzero(self.seenpix_qubic_beta) # Number of spectral indices in Qubic's patch
 
-        rank = 1 - (1 - 1/(6*self.npixel_patch+self.nbeta_patch) * 992/5)**self.npointings
+        # Estimation of the rank of the acquistion matrix
+        rank = 1 - (1 - 1/(6*self.npixel_patch+self.nbeta_patch) * 992/5)**self.npointings 
         print(f'You are trying to reconstruct {6*self.npixel_patch+self.nbeta_patch} parameters.')
         print(f'The analytically estimated rank of the acquisition matrix is {rank*100} %.')
-        if rank < 0.99:
-            print('The ranks is too low! Increase the number of pointings.')
+        if rank < 0.999:
+            print('The rank is too low! Increase the number of pointings.')
         else:
             print('Make sure you have enough random pointings.')
-
-
-    def get_acquisition_matrix(self):
-        '''
-        List of acquisition matrix at the different wavelengths.
-        '''
-        return self.Q.H
 
     
     def get_real_sky(self):
@@ -107,7 +103,7 @@ class NonLinearCMM:
     def patch_operators(self):
         '''
         Operator Patch_to_Sky takes a vector (components maps + spectral indices map) on the patch and put it on the full sky 
-        with Planck data on the pixels that are not observed by Qubic. The operator Sky_to_Patch does the opposite.
+        with zeros on the pixels that are not observed by Qubic. The operator Sky_to_Patch does the opposite.
         '''
         patch_mask = np.concatenate((np.tile(self.seenpix_qubic, 6), self.seenpix_qubic_beta))
 
@@ -128,9 +124,9 @@ class NonLinearCMM:
     
     def modified_black_body(self, freq, beta):
         '''
-        The modified black-body-spectrum of the dust. We have: h/(kT) = 2.4 x 10^(-12) Hz^(-1) with T = 20 K.
+        The modified black-body-spectrum of the dust. We have: h/(kT) = 2.4 x 10^(-12) Hz^(-1) at T = 20 K.
         '''
-        return (np.exp(freq * 2.4e-12) - 1) / (np.exp(self.nu0 * 2.4e-12) - 1) * (freq/self.nu0)**beta
+        return (np.exp(freq * 2.4e-12) - 1) / (np.exp(self.nu0 * 2.4e-12) - 1) * (freq / self.nu0)**beta
 
     
     def get_mixing_operators(self):
@@ -139,15 +135,15 @@ class NonLinearCMM:
         A_nu(c)[i,:] = (CMB I_i + f(beta_i)dust I_i,  CMB Q_i + f(beta_i)dust Q_i,  CMB U_i + f(beta_i)dust U_i),
         with f the modified blackbody spectrum, and beta_i the value of the spectral index at pixel i 
         (each beta is used for multiple pixels).
-        Returns the list of the mixing operators at the different wavelengths.
+        Returns the list of the mixing operators at the different wavelengths, for Qubic and Planck.
         '''
         def function_A(c, freq, out):
             power_beta = self.modified_black_body(freq, c[6*self.npixel:])
             up_grade_power_beta = hp.ud_grade(power_beta, self.nside)
         
-            out[:,0] = c[:self.npixel] + up_grade_power_beta * c[3*self.npixel:4*self.npixel]
-            out[:,1] = c[self.npixel:2*self.npixel] + up_grade_power_beta * c[4*self.npixel:5*self.npixel]
-            out[:,2] = c[2*self.npixel:3*self.npixel] + up_grade_power_beta * c[5*self.npixel:6*self.npixel]
+            out[:,0] = c[:self.npixel] + up_grade_power_beta * c[3*self.npixel:4*self.npixel] # I
+            out[:,1] = c[self.npixel:2*self.npixel] + up_grade_power_beta * c[4*self.npixel:5*self.npixel] # Q
+            out[:,2] = c[2*self.npixel:3*self.npixel] + up_grade_power_beta * c[5*self.npixel:6*self.npixel] # U
         
         A_qubic_list = []
         for freq in self.frequencies:
@@ -169,30 +165,31 @@ class NonLinearCMM:
         '''
         # Define the inner operator class
         class Transposed_Jacobian(Operator):
-            def __init__(self1, c, freq, **keywords):
+            def __init__(self1, c, freq):
                 self1.c = c
                 self1.freq = freq
-                super().__init__(shapein=(self.npixel,3), shapeout=6*self.npixel+self.nbeta, dtype='float64', **keywords)
+                super().__init__(shapein=(self.npixel,3), shapeout=6*self.npixel+self.nbeta, dtype='float64')
             
             def direct(self1, input_vector, output):
-                
                 power_beta = self.modified_black_body(self1.freq, self1.c[6*self.npixel:])
-                derive_power_beta = power_beta * np.log(self1.freq/self.frequencies[-1])
-                
-                output[:self.npixel] = input_vector[:,0]
-                output[self.npixel:2*self.npixel] = input_vector[:,1]
-                output[2*self.npixel:3*self.npixel] = input_vector[:,2]
-        
+                derive_power_beta = power_beta * np.log(self1.freq/self.nu0)
                 up_grade_power_beta = hp.ud_grade(power_beta, self.nside)
-                output[3*self.npixel:4*self.npixel] = up_grade_power_beta * input_vector[:,0]
-                output[4*self.npixel:5*self.npixel] = up_grade_power_beta * input_vector[:,1]
-                output[5*self.npixel:6*self.npixel] = up_grade_power_beta * input_vector[:,2]
-            
-                product = self1.c[3*self.npixel:4*self.npixel]*input_vector[:,0] 
-                product += self1.c[4*self.npixel:5*self.npixel]*input_vector[:,1] 
-                product += self1.c[5*self.npixel:6*self.npixel]*input_vector[:,2]
+
+                # CMB
+                output[:self.npixel] = input_vector[:,0] # I
+                output[self.npixel:2*self.npixel] = input_vector[:,1] # Q
+                output[2*self.npixel:3*self.npixel] = input_vector[:,2] # U
+
+                # Dust
+                output[3*self.npixel:4*self.npixel] = up_grade_power_beta * input_vector[:,0] # I
+                output[4*self.npixel:5*self.npixel] = up_grade_power_beta * input_vector[:,1] # Q
+                output[5*self.npixel:6*self.npixel] = up_grade_power_beta * input_vector[:,2] # U
+
+                # Spectral indices
+                product = self1.c[3*self.npixel:4*self.npixel] * input_vector[:,0] 
+                product += self1.c[4*self.npixel:5*self.npixel] * input_vector[:,1] 
+                product += self1.c[5*self.npixel:6*self.npixel] * input_vector[:,2]
                 product = hp.ud_grade(product, self.nside_beta) * (self.npixel // self.nbeta)
-                
                 output[6*self.npixel:] = derive_power_beta * product
         
         # Define the outer operator class
@@ -215,36 +212,44 @@ class NonLinearCMM:
         tod_qubic = self.H_list[0](A_qubic_list[0](true_c))
         for i in range(1, len(self.frequencies)):
             tod_qubic += self.H_list[i](A_qubic_list[i](true_c))
-        tod_qubic += np.random.normal(0, self.noise_qubic, tod_qubic.shape)
+        tod_qubic += np.random.normal(0, self.noise_qubic, tod_qubic.shape) # Add noise #################################################
 
         tod_planck = np.empty((len(self.planck_frequencies), self.npixel, 3))
         for i in range(len(self.planck_frequencies)):
             tod_planck[i] = A_planck_list[i](true_c)
         tod_planck = tod_planck.ravel()
-        tod_planck += np.random.normal(0, self.noise_planck, tod_planck.shape)
+        tod_planck += np.random.normal(0, self.noise_planck, tod_planck.shape) # Add noise #################################################
             
         return tod_qubic, tod_planck
 
     
     def get_noise_inverse_covariance(self):
+        '''
+        Operators for the inverse covariances matrices of Qubic and Planck.
+        The shapein of invN_qubic is (ndetectors, npointings).
+        The shapein of invN_planck is (len(planck_frequencies) * npixel * 3).
+        Both operators are symmetric.
+        A mask operator is also applied to invN_planck, so that Planck's maps are only 
+        added where the coverage is under planck_coverage_level.
+        '''
         invN_qubic = self.Q.get_invntt_operator()
         
         Planck = OtherDataParametric([int(freq/1e9) for freq in self.planck_frequencies], self.nside, [])
         invN_planck = Planck.get_invntt_operator()
         coverage = self.H_list[0].T(np.ones(self.H_list[0].shapeout))
-        mask = np.tile(coverage.ravel(), len(self.planck_frequencies)) / np.max(coverage) < 0.2
-        invN_planck = invN_planck * DiagonalOperator(mask)
+        mask = np.tile(coverage.ravel(), len(self.planck_frequencies)) / np.max(coverage) < self.planck_coverage_level
+        invN_planck = invN_planck * DiagonalOperator(mask) # Planck's maps are only added where the coverage is under planck_coverage_level
         
         return invN_qubic, invN_planck
 
     
     def get_grad_chi_squared_operator(self, A_qubic_list, A_planck_list, Patch_to_Sky, Sky_to_Patch, tod_qubic, tod_planck, invN_qubic, invN_planck, generate_transposed_jacobian, true_c):
         '''
-        The gradient of $\chi^2$ operator. We have:
-        $$\nabla\chi^2(\tilde{c}) = \sum (J_{A_\nu}(\tilde{c}))^TH^T N^{-1} \sum H{A_\nu}(\tilde{c}) - \sum (J_{A_\nu}(\tilde{c}))^TH^T N^{-1}d$$
+        The gradient of the chi^2 operator. It is the sum of the of the gradient of the chi^2 of Qubic and of Planck. 
+        For Qubic, the gradient is written as follow:
+        \nabla \chi^2(\tilde{c}) = \sum (J_{A_\nu}(\tilde{c}))^T H^T N^{-1} \sum H{A_\nu}(\tilde{c}) - \sum (J_{A_\nu}(\tilde{c}))^T H^T N^{-1} d
         '''
         def grad_operator(c, out):
-            #'''
             # Qubic
             sum_H_qubic = self.H_list[0](A_qubic_list[0](Patch_to_Sky(c)))
             for i in range(1, len(self.frequencies)):
@@ -260,22 +265,20 @@ class NonLinearCMM:
                 generate_transposed_jacobian.direct(Patch_to_Sky(c), self.frequencies[i], output_operator)
                 transposed_jacobian = output_operator.item()
                 gradient += transposed_jacobian(self.H_list[i].T(sum_H_qubic))
-            #'''
-            #output_operator = np.empty((), dtype=object) #########################################################
-            #gradient = np.zeros(6*self.npixel+self.nbeta) ########################################################
+                
             # Planck
             sum_H_planck = np.empty((len(self.planck_frequencies), self.npixel, 3))
             for i in range(len(self.planck_frequencies)):
                 sum_H_planck[i, ...] = A_planck_list[i](Patch_to_Sky(c))
             sum_H_planck = sum_H_planck.ravel() - tod_planck
-            sum_H_planck = invN_planck(sum_H_planck) *1 ########################################################
+            sum_H_planck = invN_planck(sum_H_planck)
             sum_H_planck = sum_H_planck.reshape((len(self.planck_frequencies), self.npixel, 3))
 
             for i in range(len(self.planck_frequencies)):
                 generate_transposed_jacobian.direct(Patch_to_Sky(c), self.planck_frequencies[i], output_operator)
                 transposed_jacobian = output_operator.item()
-                gradient += transposed_jacobian(sum_H_planck[i]) #/ len(self.planck_frequencies)
-            #'''
+                gradient += transposed_jacobian(sum_H_planck[i])
+
             out[...] = Sky_to_Patch(gradient)
 
         Grad_chi_squared = Operator(grad_operator, shapein=6*self.npixel_patch+self.nbeta_patch, 
@@ -284,12 +287,101 @@ class NonLinearCMM:
         return Grad_chi_squared
 
 
-    def get_coverage(self):
+    def get_preconditioner(self, Patch_to_Sky, invN_qubic, invN_planck):
         '''
+        We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 
+        This is used as a preconditioner for the non-linear PCG. It is very important as the 
+        components maps and the spectral indices have a very different behaviour in the PCG. 
+        This preconditioner helps making those different parameters more like one another.
+        '''
+        # Approximation of H.T N^{-1} H for Qubic
+        vector = np.ones(self.H_list[0].shapein)
+        self.approx_HTNH = np.empty((len(self.H_list), self.npixel_patch)) # has shape (nf_sub, npixel_patch)
+        for index in range(len(self.H_list)):
+            self.approx_HTNH[index] = (self.H_list[index].T * invN_qubic * self.H_list[index] * vector)[self.seenpix_qubic, 0] / 100 ############## ######################################################## Renormalization factor with Planck
+        
+        def diagonal_qubic(c):
+            # Preconditioner for Qubic
+            dust_spectrum_squared = np.zeros((len(self.frequencies), self.npixel_patch))
+            derive_dust_spectrum_squared = np.zeros((len(self.frequencies), self.npixel_patch))
+            for index, freq in enumerate(self.frequencies):
+                dust_spectrum = hp.ud_grade(self.modified_black_body(freq, Patch_to_Sky(c)[6*self.npixel:]), self.nside)[self.seenpix_qubic]
+                dust_spectrum_squared[index,:] = dust_spectrum**2
+                derive_dust_spectrum_squared[index,:] = (dust_spectrum * np.log(freq/self.nu0))**2
+
+            precon = np.empty(6*self.npixel_patch+self.nbeta_patch)
+            
+            # CMB
+            precon[:3*self.npixel_patch] = np.tile(np.sum(self.approx_HTNH, axis=0), 3)
+        
+            # Dust
+            precon[3*self.npixel_patch:6*self.npixel_patch] = np.tile(np.sum(self.approx_HTNH * dust_spectrum_squared, axis=0), 3)
+        
+            # Spectral indices
+            factor1 = c[3*self.npixel_patch:4*self.npixel_patch]**2 # shape (npixel_patch)
+            factor1 += c[4*self.npixel_patch:5*self.npixel_patch]**2
+            factor1 += c[5*self.npixel_patch:6*self.npixel_patch]**2
+            factor1 = factor1 * self.approx_HTNH # shape (frequencies, npixel_patch)
+            factor1 *= derive_dust_spectrum_squared
+            factor1 = np.sum(factor1, axis=0) # shape (npixel_patch)
+            
+            downgrader = np.zeros(self.npixel)
+            downgrader[self.seenpix_qubic] = factor1
+            downgrader = hp.ud_grade(downgrader, self.nside_beta)*(self.npixel//self.nbeta)
+            precon[6*self.npixel_patch:] = downgrader[self.seenpix_qubic_beta]
+
+            return precon
+
+        # Approximation of invN_planck, has shape (len(planck_frequencies), 3, npixel_patch)
+        self.approx_invN_planck = invN_planck(np.ones(invN_planck.shapein)).reshape(
+            (len(self.planck_frequencies), self.npixel, 3)).transpose((0,2,1))[:, :, self.seenpix_qubic]
+
+        def diagonal_planck(c):
+            # Preconditioner for Planck
+            dust_spectrum_squared = np.zeros((len(self.planck_frequencies), self.npixel_patch))
+            derive_dust_spectrum_squared = np.zeros((len(self.planck_frequencies), self.npixel_patch))
+            for index, freq in enumerate(self.planck_frequencies):
+                dust_spectrum = hp.ud_grade(self.modified_black_body(freq, Patch_to_Sky(c)[6*self.npixel:]), self.nside)[self.seenpix_qubic]
+                dust_spectrum_squared[index,:] = dust_spectrum**2
+                derive_dust_spectrum_squared[index,:] = (dust_spectrum * np.log(freq/self.nu0))**2
+            
+            precon = np.empty(6*self.npixel_patch+self.nbeta_patch)
+            
+            # CMB
+            precon[:3*self.npixel_patch] = np.sum(self.approx_invN_planck, axis=0).ravel()
+        
+            # Dust
+            precon[3*self.npixel_patch:6*self.npixel_patch] = np.sum(self.approx_invN_planck * dust_spectrum_squared[:, None, :], axis=0).ravel()
+        
+            # Spectral indices
+            factor1 = c[3*self.npixel_patch:4*self.npixel_patch]**2 * self.approx_invN_planck[:, 0, :] # shape (planck_frequencies, npixel_patch)
+            factor1 += c[4*self.npixel_patch:5*self.npixel_patch]**2 * self.approx_invN_planck[:, 1, :]
+            factor1 += c[5*self.npixel_patch:6*self.npixel_patch]**2 * self.approx_invN_planck[:, 2, :]
+            factor1 *= derive_dust_spectrum_squared
+            factor1 = np.sum(factor1, axis=0) # shape (npixel_patch)
+
+            downgrader = np.zeros(self.npixel)
+            downgrader[self.seenpix_qubic] = factor1
+            downgrader = hp.ud_grade(downgrader, self.nside_beta)*(self.npixel//self.nbeta)
+            precon[6*self.npixel_patch:] = downgrader[self.seenpix_qubic_beta]
+        
+            return precon
+
+        def hessian_inverse_diagonal(c, out):
+            # The gradient of the chi^2 is the sum of the one of Qubic and of Planck.
+            # Therefore the preconditioner is the inverse of the sum of the preconditioner of Qubic and Planck
+            out[...] = 1 / (diagonal_qubic(c) + diagonal_planck(c))
+
+        return Operator(hessian_inverse_diagonal, shapein=6*self.npixel_patch+self.nbeta_patch, shapeout=6*self.npixel_patch+self.nbeta_patch, dtype='float64')
+
+
+    '''
+    def get_coverage(self):
+        
         Computation of the coverage at each frequency and for I, Q and U. The coverage of pixel i is the sum over 
         the column i of the operator H of the squares of the elements:
         Cov[\nu, i] = \sum_{\text{det}\times\text{samplings}} (H_\nu [\text{det}\times\text{samplings}, i])^2
-        '''
+        
         Cov = np.empty((len(self.frequencies), 3*self.npixel_patch))
         mixed_map_mask = np.tile(self.seenpix_qubic, 3)
         
@@ -308,12 +400,12 @@ class NonLinearCMM:
 
 
     def get_preconditioner(self, Patch_to_Sky, invN_qubic, invN_planck, Cov):
-        '''
+        
         We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 
         This is used as a preconditioner for the non-linear PCG. It is very important as the 
         components maps and the spectral indices have a very different behaviour in the PCG. 
         This preconditioner helps making those different parameters more like one another.
-        '''
+        
         def diagonal_qubic(c):
             dust_spectrum_squared = np.zeros((len(self.frequencies), self.npixel_patch))
             derive_dust_spectrum_squared = np.zeros((len(self.frequencies), self.npixel_patch))
@@ -322,13 +414,13 @@ class NonLinearCMM:
                 dust_spectrum_squared[index,:] = dust_spectrum**2
                 derive_dust_spectrum_squared[index,:] = (dust_spectrum * np.log(freq/self.nu0))**2
 
-            '''
+            #
             vector = np.ones(self.H_list[0].shapein)
             approx_hth = np.empty((len(self.H_list), 3*self.npixel_patch)) # has shape (nf_sub, npixel_patch)
             for index in range(len(self.H_list)):
                 approx_hth[index] = np.tile((self.H_list[index].T * invN_qubic * self.H_list[index] * vector)[self.seenpix_qubic, 0], 3) #* np.mean(invN_qubic(np.ones(invN_qubic.shapein)))
             approx_hth[:, self.npixel_patch:] /= 2
-            '''
+            #
             approx_hth = Cov * np.mean(invN_qubic(np.ones(invN_qubic.shapein)))
 
             precon = np.empty(6*self.npixel_patch+self.nbeta_patch)
@@ -388,7 +480,7 @@ class NonLinearCMM:
         def hessian_inverse_diagonal(c, out):
             out[...] = 1 / (diagonal_qubic(c) + diagonal_planck(c))
 
-        '''
+        #
         def preconditioner(c, out):
             dust_spectrum_squared = np.zeros((len(self.frequencies), self.npixel_patch))
             derive_dust_spectrum_squared = np.zeros((len(self.frequencies), self.npixel_patch))
@@ -421,9 +513,9 @@ class NonLinearCMM:
 
         def identity(c, out):
             out[...] = np.ones(c.shape)
-        '''
+        #
         return Operator(hessian_inverse_diagonal, shapein=6*self.npixel_patch+self.nbeta_patch, shapeout=6*self.npixel_patch+self.nbeta_patch, dtype='float64')
-
+    '''
 
     def get_initial_guess(self, Sky_to_Patch, true_c):
         '''
@@ -432,11 +524,11 @@ class NonLinearCMM:
         set at 1.53, the mean of the spectral indices on the Qubic's patch.
         '''
         x0 = np.empty(6*self.npixel_patch+self.nbeta_patch)
-        x0[:self.npixel_patch] = Sky_to_Patch(true_c)[:self.npixel_patch].copy()
-        x0[self.npixel_patch:3*self.npixel_patch] = np.zeros(2*self.npixel_patch)
-        x0[3*self.npixel_patch:4*self.npixel_patch] = Sky_to_Patch(true_c)[3*self.npixel_patch:4*self.npixel_patch].copy()
-        x0[4*self.npixel_patch:6*self.npixel_patch] = np.zeros(2*self.npixel_patch)
-        x0[6*self.npixel_patch:] = np.ones(self.nbeta_patch)*1.53
+        x0[:self.npixel_patch] = Sky_to_Patch(true_c)[:self.npixel_patch].copy() # CMB I
+        x0[self.npixel_patch:3*self.npixel_patch] = np.zeros(2*self.npixel_patch) # CMB Q, U
+        x0[3*self.npixel_patch:4*self.npixel_patch] = Sky_to_Patch(true_c)[3*self.npixel_patch:4*self.npixel_patch].copy() # Dust I
+        x0[4*self.npixel_patch:6*self.npixel_patch] = np.zeros(2*self.npixel_patch) # Dust Q, U
+        x0[6*self.npixel_patch:] = np.ones(self.nbeta_patch)*1.53 # Spectral indicies
 
         return x0
 
@@ -517,8 +609,7 @@ class NonLinearCMM:
         self.tod_qubic, self.tod_planck = self.get_tod(self.A_qubic_list, self.A_planck_list, self.true_c)
         self.invN_qubic, self.invN_planck = self.get_noise_inverse_covariance()
         self.Grad_chi_squared = self.get_grad_chi_squared_operator(self.A_qubic_list, self.A_planck_list, self.Patch_to_Sky, self.Sky_to_Patch, self.tod_qubic, self.tod_planck, self.invN_qubic, self.invN_planck, self.generate_transposed_jacobian, self.true_c)
-        self.Coverage = self.get_coverage()
-        self.HessianInverseDiagonal = self.get_preconditioner(self.Patch_to_Sky, self.invN_qubic, self.invN_planck, self.Coverage)
+        self.HessianInverseDiagonal = self.get_preconditioner(self.Patch_to_Sky, self.invN_qubic, self.invN_planck)
 
         # Check that the gradient is zero at the solution point
         if verbose:
@@ -670,7 +761,7 @@ class NonLinearCMM:
             for index, freq in enumerate(self.frequencies):
                 dust_spectrum = hp.ud_grade(self.modified_black_body(freq, sky_c[6*self.npixel:]), self.nside)[self.seenpix_qubic]
                 dust_spectrum_squared[index,:] = dust_spectrum**2
-                derive_dust_spectrum_squared[index,:] = (dust_spectrum * np.log(freq/self.frequencies[-1]))**2
+                derive_dust_spectrum_squared[index,:] = (dust_spectrum * np.log(freq/self.nu0))**2
         
             # CMB
             out[:3*self.npixel_patch] = 1/np.sum(Cov, axis=0)

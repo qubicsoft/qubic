@@ -196,7 +196,7 @@ class NonLinearCMM:
         '''
         tod = H_list[0](A_list[0](true_c))
         for i in range(1, len(self.frequencies)):
-            tod = tod + (H_list[i](A_list[i](true_c)))
+            tod += H_list[i](A_list[i](true_c))
             
         return tod
 

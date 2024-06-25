@@ -13,14 +13,10 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import *
 from pyoperators import *
 
-sys.path.append('/pbs/home/m/mregnier/sps1/Pipeline')
-
-
 #### QUBIC packages
-import qubic.scripts.FrequencyMapMaking.src.fgb.Qcomponent_model as c
-import qubic.scripts.FrequencyMapMaking.src.fgb.Qmixingmatrix as mm
+import qubic.Qcomponent_model as c
+import qubic.Qmixing_matrix as mm
 from pyoperators import *
-import qubic
 
 comm = MPI.COMM_WORLD
 def _Dl2Cl(ell, Dl):
@@ -51,9 +47,9 @@ class data:
         ### Read datasets
         self.power_spectra_sky, self.power_spectra_noise, self.simu_parameters, self.coverage, self.nus, self.ell = self.import_power_spectra(self.path_spectra)
         self._f = self.ell * (self.ell + 1) / (2 * np.pi)
-        self.fsub = self.simu_parameters['QUBIC']['fsub']
+        self.nsub = self.simu_parameters['QUBIC']['nsub']
         self.nrec = self.simu_parameters['QUBIC']['nrec']
-        self.nsub = self.fsub * self.nrec
+        self.fsub = int(self.nsub * self.nrec)
 
         self.nreal = len(self.power_spectra_sky)
         if comm.Get_rank() == 0:
@@ -207,7 +203,7 @@ class CMB:
         Function to compute the CMB power spectrum from the Planck data
         '''
 
-        CMB_CL_FILE = op.join('/sps/qubic/Users/TomLaclavere/mypackages/Cls_Planck2018_%s.fits')
+        CMB_CL_FILE = op.join('~/qubic/qubic/data/Cls_Planck2018_%s.fits')
         power_spectrum = hp.read_cl(CMB_CL_FILE%'lensed_scalar')[:,:4000]
         
         if Alens != 1.:

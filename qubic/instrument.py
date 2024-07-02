@@ -1,7 +1,7 @@
 # coding: utf-8
 from __future__ import division, print_function
 
-import cpuinfo
+import cpu-info
 import healpy as hp
 import numexpr as ne
 import numpy as np

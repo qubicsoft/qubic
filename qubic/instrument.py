@@ -1358,7 +1358,7 @@ class QubicInstrument(Instrument):
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
         e_nf = direction[:, None, :, :]
-        # if (nside > 8192) or (cpuinfo.get_cpu_info().get('brand_raw')=='VirtualApple @ 2.50GHz'):
+        # if (nside > 8192) or (cpu-info.get_cpu_info().get('brand_raw')=='VirtualApple @ 2.50GHz'):
         if (nside > 8192):
             dtype_index = np.dtype(np.int64)
         else:

@@ -135,6 +135,7 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
 
         self.M = M
 
+        self.maxiter = maxiter
         self.tol = tol
         self.sigma_0 = sigma_0
         self.maxiter_linesearch = maxiter_linesearch
@@ -159,6 +160,7 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         self.error = np.sqrt(self.delta_new / self.delta_0)
         if self.verbose:
             self.iteration_number=1
+            self.initial_time = time.time()
 
     def iteration(self):
         gradient = self.grad_f(self.x) ###########################################################################
@@ -215,8 +217,27 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         self.d += self.s
 
         if self.verbose:
-            if self.iteration_number % 20 == 0:
-                print(f'Step {self.iteration_number}')
+            current_time = int(time.time() - self.initial_time)
+            hour = current_time//3600
+            min = (current_time%3600) // 60
+            sec = current_time%60
+            if hour:
+                str_time = f'{hour}h {min}m {sec}s'
+            elif min:
+                str_time = f'{min}m {sec}s'
+            else:
+                str_time = f'{sec}s'
+            remaining_time = int(current_time * (self.maxiter/self.iteration_number - 1))
+            hour = remaining_time//3600
+            min = (remaining_time%3600) // 60
+            sec = remaining_time%60
+            if hour:
+                str_remain_time = f'{hour}h {min}m {sec}s'            
+            elif min:
+                str_remain_time = f'{min}m {sec}s'
+            else:
+                str_remain_time = f'{sec}s'
+            print(f'Step {self.iteration_number}, Time: '+str_time+', Remaining time: '+str_remain_time)
             self.iteration_number += 1
     
     @staticmethod

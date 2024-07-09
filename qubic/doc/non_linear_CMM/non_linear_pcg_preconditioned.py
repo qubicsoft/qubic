@@ -216,8 +216,9 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         self.d *= self.beta
         self.d += self.s
 
-        if self.verbose:
-            current_time = int(time.time() - self.initial_time)
+        if self.verbose: # Timer
+            current_time_float = time.time() - self.initial_time
+            current_time = int(current_time_float)
             hour = current_time//3600
             min = (current_time%3600) // 60
             sec = current_time%60
@@ -227,7 +228,7 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
                 str_time = f'{min}m {sec}s'
             else:
                 str_time = f'{sec}s'
-            remaining_time = int(current_time * (self.maxiter/self.iteration_number - 1))
+            remaining_time = int(current_time_float * (self.maxiter/self.iteration_number - 1))
             hour = remaining_time//3600
             min = (remaining_time%3600) // 60
             sec = remaining_time%60

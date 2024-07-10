@@ -5,6 +5,8 @@ from pyoperators import *
 import healpy as hp
 import pysm3
 import pysm3.units as u
+from scipy import constants
+from astropy.cosmology import Planck15
 
 from Qacquisition import QubicFullBandSystematic, OtherDataParametric
 
@@ -55,8 +57,10 @@ class NonLinearAcquisition:
         _, frequencies150, _, _, _, _ = qubic.compute_freq(150, Nfreq=int(self.Nsub/2)-1, relative_bandwidth=0.25)
         _, frequencies220, _, _, _, _ = qubic.compute_freq(220, Nfreq=int(self.Nsub/2)-1, relative_bandwidth=0.25)
         self.frequencies_qubic = np.concatenate((frequencies150, frequencies220)) * 1e9 # Frequencies of Qubic in Hz
-        self.nu0_dust = 353e9 # Reference frequency for the dust
-        self.nu0_synchrotron = 150e9 # Reference frequency for the synchrotron #####################################################################
+        self.nu0 = 150e9 # Reference frequency
+        self.h_over_k = constants.h / constants.k
+        self.Tcmb = Planck15.Tcmb(0).value
+        self.Tdust = 20 # K
 
         
         # Testing that variables or well defined
@@ -140,19 +144,28 @@ class NonLinearAcquisition:
         else:
             print('Make sure you have enough random pointings.')
 
+    
+    def conversion_to_K_CMB(self, freq):
+        '''
+        Conversion factor from Kelvin to K_CMB.
+        '''
+        return (np.exp(self.h_over_k * freq / self.Tcmb) - 1)**2 / (np.exp(self.h_over_k * freq / self.Tcmb) * 
+                                                                    (self.h_over_k * freq / self.Tcmb)**2)
+    
 
     def modified_black_body_dust(self, freq, beta):
         '''
-        The modified black-body spectrum of the dust. We have: h/(kT) = 2.4 x 10^(-12) Hz^(-1) at T = 20 K.
+        The modified black-body spectrum of the dust in units K_CMB.
         '''
-        return (np.exp(freq * 2.4e-12) - 1) / (np.exp(self.nu0_dust * 2.4e-12) - 1) * (freq / self.nu0_dust)**beta
+        mbb = (np.exp(self.h_over_k * self.nu0 / self.Tdust) - 1) / (np.exp(self.h_over_k * freq / self.Tdust) - 1) * (freq / self.nu0)**(1 + beta)
+        return mbb * self.conversion_to_K_CMB(freq) / self.conversion_to_K_CMB(self.nu0)
 
 
     def power_law_synchrotron(self, freq, beta):
         '''
-        The power law spectrum of the synchrotron.
+        The power law spectrum of the synchrotron in units K_CMB.
         '''
-        return (freq / self.nu0_synchrotron)**beta
+        return (freq / self.nu0)**beta * self.conversion_to_K_CMB(freq) / self.conversion_to_K_CMB(self.nu0)
     
     
     def get_real_sky(self):
@@ -163,13 +176,13 @@ class NonLinearAcquisition:
 
         # CMB
         sky_cmb = pysm3.Sky(nside=self.nside, preset_strings=['c1'], output_unit='uK_CMB')
-        sky_cmb = np.array(sky_cmb.get_emission(self.nu0_dust * u.Hz))
+        sky_cmb = np.array(sky_cmb.get_emission(self.nu0 * u.Hz))
         real_sky['cmb'] = sky_cmb.T.copy() # shape (npixel, 3)
 
         # Dust
         if self.dust_level:
             sky_dust = pysm3.Sky(nside=self.nside, preset_strings=[self.dust_model], output_unit='uK_CMB')
-            sky_dust = np.array(sky_dust.get_emission(self.nu0_dust * u.Hz))
+            sky_dust = np.array(sky_dust.get_emission(self.nu0 * u.Hz))
             sky_dust_beta = pysm3.Sky(nside=max(self.nside_beta, 1), preset_strings=[self.dust_model], output_unit='uK_CMB')
             beta_dust = np.array(sky_dust_beta.components[0].mbb_index)
             real_sky['dust'] = sky_dust.T * self.dust_level # shape (npixel, 3)
@@ -178,7 +191,7 @@ class NonLinearAcquisition:
         # Synchrotron
         if self.synchrotron_level:
             sky_synchrotron = pysm3.Sky(nside=self.nside, preset_strings=[self.synchrotron_model], output_unit='uK_CMB')
-            sky_synchrotron = np.array(sky_synchrotron.get_emission(self.nu0_synchrotron * u.Hz))
+            sky_synchrotron = np.array(sky_synchrotron.get_emission(self.nu0 * u.Hz))
             sky_synchrotron_beta = pysm3.Sky(nside=max(self.nside_beta, 1), preset_strings=[self.synchrotron_model], output_unit='uK_CMB')
             beta_synchrotron = np.array(sky_synchrotron_beta.components[0].pl_index)
             real_sky['synchrotron'] = sky_synchrotron.T * self.synchrotron_level # shape (npixel, 3)
@@ -387,7 +400,7 @@ class NonLinearAcquisition:
                 if self.dust_reconstruction:
                     mbb_beta = self.modified_black_body_dust(self_jacob.freq, self_jacob.split_map['beta_dust']) # shape nbeta_patch
                     up_grade_mbb_beta = self.beta_to_pixel(mbb_beta) # shape npixel_patch
-                    derive_mbb_beta = mbb_beta * np.log(self_jacob.freq/self.nu0_dust) # shape nbeta_patch
+                    derive_mbb_beta = mbb_beta * np.log(self_jacob.freq/self.nu0) # shape nbeta_patch
 
                     split_output['dust'] = up_grade_mbb_beta[:, None] * input_map[self.seenpix_qubic, :] # shape (npixel_patch, 3)
                     split_output['beta_dust'] = self.pixel_to_beta(
@@ -398,7 +411,7 @@ class NonLinearAcquisition:
                 if self.synchrotron_reconstruction:
                     pl_beta = self.power_law_synchrotron(self_jacob.freq, self_jacob.split_map['beta_synchrotron']) # shape nbeta_patch
                     up_grade_pl_beta = self.beta_to_pixel(pl_beta) # shape npixel_patch
-                    derive_pl_beta = pl_beta * np.log(self_jacob.freq/self.nu0_synchrotron) # shape nbeta_patch
+                    derive_pl_beta = pl_beta * np.log(self_jacob.freq/self.nu0) # shape nbeta_patch
 
                     split_output['synchrotron'] = up_grade_pl_beta[:, None] * input_map[self.seenpix_qubic, :] # shape (npixel_patch, 3)
                     split_output['beta_synchrotron'] = self.pixel_to_beta(
@@ -467,7 +480,7 @@ class NonLinearAcquisition:
                 for index, freq in enumerate(self.frequencies_qubic):
                     dust_mbb = self.beta_to_pixel(self.modified_black_body_dust(freq, split_map['beta_dust']))
                     dust_mbb_squared[index, :] = dust_mbb**2
-                    derive_dust_mbb_squared[index, :] = (dust_mbb * np.log(freq/self.nu0_dust))**2
+                    derive_dust_mbb_squared[index, :] = (dust_mbb * np.log(freq/self.nu0))**2
                
                 split_preconditioner['dust'] = np.repeat(np.sum(self.approx_HTNH * dust_mbb_squared, axis=0)
                                                          [:, None], 3, axis=1) # shape (npixel_patch, 3)
@@ -481,7 +494,7 @@ class NonLinearAcquisition:
                 for index, freq in enumerate(self.frequencies_qubic):
                     synchrotron_pl = self.beta_to_pixel(self.power_law_synchrotron(freq, split_map['beta_synchrotron']))
                     synchrotron_pl_squared[index, :] = synchrotron_pl**2
-                    derive_synchrotron_pl_squared[index, :] = (synchrotron_pl * np.log(freq/self.nu0_synchrotron))**2
+                    derive_synchrotron_pl_squared[index, :] = (synchrotron_pl * np.log(freq/self.nu0))**2
                
                 split_preconditioner['synchrotron'] = np.repeat(np.sum(self.approx_HTNH * synchrotron_pl_squared, axis=0)
                                                                 [:, None], 3, axis=1) # shape (npixel_patch, 3)
@@ -509,7 +522,7 @@ class NonLinearAcquisition:
                 for index, freq in enumerate(self.frequencies_planck):
                     dust_mbb = self.beta_to_pixel(self.modified_black_body_dust(freq, split_map['beta_dust']))
                     dust_mbb_squared[index, :] = dust_mbb**2
-                    derive_dust_mbb_squared[index, :] = (dust_mbb * np.log(freq/self.nu0_dust))**2
+                    derive_dust_mbb_squared[index, :] = (dust_mbb * np.log(freq/self.nu0))**2
                
                 split_preconditioner['dust'] = np.sum(self.approx_invN_planck * dust_mbb_squared[..., None], axis=0) # shape (npixel_patch, 3)
                 split_preconditioner['beta_dust'] = self.pixel_to_beta(
@@ -523,7 +536,7 @@ class NonLinearAcquisition:
                 for index, freq in enumerate(self.frequencies_planck):
                     synchrotron_pl = self.beta_to_pixel(self.power_law_synchrotron(freq, split_map['beta_synchrotron']))
                     synchrotron_pl_squared[index, :] = synchrotron_pl**2
-                    derive_synchrotron_pl_squared[index, :] = (synchrotron_pl * np.log(freq/self.nu0_synchrotron))**2
+                    derive_synchrotron_pl_squared[index, :] = (synchrotron_pl * np.log(freq/self.nu0))**2
                
                 split_preconditioner['synchrotron'] = np.sum(self.approx_invN_planck * 
                                                              synchrotron_pl_squared[..., None], axis=0) # shape (npixel_patch, 3)

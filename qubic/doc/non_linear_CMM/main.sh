@@ -13,4 +13,4 @@
 #SBATCH --output=mulitple_jobs_%j.log
 
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
-python pipeline_non_linear.py $1 $2 $3 $4 $5
+python pipeline_non_linear.py $1 $2 $3 $4 $5 $6

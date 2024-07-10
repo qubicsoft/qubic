@@ -300,12 +300,12 @@ class NonLinearPipeline:
             noise_str = '_with_noise_'
 
         folder = 'results/'
-        folder += 'nside_'+str(self.nside)+'_beta_'+str(self.nside_beta)+'_npointings_'+str(self.npointings)+'_Nsub_'+str(self.Nsub)
+        folder += f'nside_{self.nside}_beta_{self.nside_beta}_npointings_{self.npointings}_Nsub_{self.Nsub}'
         if self.acquisition.dust_level:
-            folder += '_dust_lvl_'+str('self.acquisition.dust_level')+'_'+str('self.acquisition.dust_model')
+            folder += f'_dust_lvl_{self.acquisition.dust_level}_{self.acquisition.dust_model}'
         if self.acquisition.synchrotron_level:
-            folder += '_synchrotron_lvl_'+str('self.acquisition.synchrotron_level')+'_'+str('self.acquisition.synchrotron_model')
-        folder += noise_str+'_max_iteration_'+str(self.max_iteration)+'/'
+            folder += f'_synchrotron_lvl_{self.acquisition.synchrotron_level}_{self.acquisition.synchrotron_model}'
+        folder += f'noise_qubic_{self.acquisition.noise_qubic}_planck_{self.acquisition.noise_planck}_max_iteration_{self.max_iteration}/'
 
         os.makedirs(folder, exist_ok=True)
         
@@ -340,10 +340,10 @@ parameters_dict = {
     #'spectrum_modelization': #parametric or blind
     'synchrotron_reconstruction': True, #bool
     'frequencies_planck': [100e9, 143e9, 217e9, 353e9],
-    'noise_qubic': 0,
+    'noise_qubic': nt(sys.argv[5]),
     'noise_planck': 0,
     'planck_coverage_level': 0.2,
-    'max_iteration': int(sys.argv[5]),
+    'max_iteration': int(sys.argv[6]),
     'pcg_tolerance': 1e-16,
     'sigma0': 1e-3,
     'initial_guess': None,

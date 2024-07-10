@@ -325,12 +325,31 @@ class NonLinearPipeline:
 
         with open(folder+'results.pkl', 'wb') as handle:
             pickle.dump(self.result_dictionnary, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        
-        #return self.residues, self.reconstructed_maps
 
 
-#self = NonLinearCMM(nside=16, nside_beta=8, npointings=100, Nsub=4, frequencies_planck=[100e9, 143e9, 217e9, 353e9],
-#                    noise_qubic=0, noise_planck=0, planck_coverage_level=0.2)
-#self.map_making(max_iteration=10, pcg_tolerance=1e-16, sigma0=1e-3)
+parameters_dict = {
+    'nside': int(sys.argv[1]),
+    'nside_beta': int(sys.argv[2]),
+    'npointings': int(sys.argv[3]),
+    'Nsub': int(sys.argv[4]),
+    'dust_level': 1, #>0
+    'dust_model': 'd1', #d0, d1 or d6
+    'dust_reconstruction': True, #bool
+    'synchrotron_level': 40, #>0
+    'synchrotron_model': 's1', #s0 or s1
+    #'spectrum_modelization': #parametric or blind
+    'synchrotron_reconstruction': True, #bool
+    'frequencies_planck': [100e9, 143e9, 217e9, 353e9],
+    'noise_qubic': 0,
+    'noise_planck': 0,
+    'planck_coverage_level': 0.2,
+    'max_iteration': int(sys.argv[5]),
+    'pcg_tolerance': 1e-16,
+    'sigma0': 1e-3,
+    'initial_guess': None,
+    'verbose': True
+}
+
+NonLinearPipeline(parameters_dict).map_making()
 
 

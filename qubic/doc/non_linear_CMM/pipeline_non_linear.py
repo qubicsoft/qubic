@@ -5,6 +5,7 @@ from pyoperators import *
 import healpy as hp
 import pickle
 import os
+import sys
 
 from acquisition_non_linear import NonLinearAcquisition
 from non_linear_pcg_preconditioned import non_linear_pcg

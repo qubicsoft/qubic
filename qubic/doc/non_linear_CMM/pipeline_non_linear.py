@@ -341,7 +341,7 @@ parameters_dict = {
     #'spectrum_modelization': #parametric or blind
     'synchrotron_reconstruction': True, #bool
     'frequencies_planck': [100e9, 143e9, 217e9, 353e9],
-    'noise_qubic': int(sys.argv[5]),
+    'noise_qubic': float(sys.argv[5]),
     'noise_planck': 0,
     'planck_coverage_level': 0.2,
     'max_iteration': int(sys.argv[6]),

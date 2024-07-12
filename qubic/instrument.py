@@ -1379,7 +1379,7 @@ class QubicInstrument(Instrument):
         ntimes = rotation.data.shape[0]
         nside = scene.nside
 
-               isfreq=int(np.floor(nu/1000000000))
+        isfreq=int(np.floor(nu/1000000000))
         frq=len(str(freqs[0]))
         
         if (frq <= 4):

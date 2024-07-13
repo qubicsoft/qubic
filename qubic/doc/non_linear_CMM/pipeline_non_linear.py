@@ -6,6 +6,7 @@ import healpy as hp
 import pickle
 import os
 import sys
+from time import time
 
 from acquisition_non_linear import NonLinearAcquisition
 from non_linear_pcg_preconditioned import non_linear_pcg
@@ -13,6 +14,7 @@ from non_linear_pcg_preconditioned import non_linear_pcg
 
 class NonLinearPipeline:
     def __init__(self, parameters_dict):
+        self.starting_time = time()
         self.parameters_dict = parameters_dict
         self.max_iteration = self.parameters_dict['max_iteration']
         self.pcg_tolerance = self.parameters_dict['pcg_tolerance']
@@ -173,21 +175,26 @@ class NonLinearPipeline:
         beta_vector = np.tile(np.nan, self.nbeta)
         
         Nrow = 3 * (1 + self.ncomponent) + self.ncomponent
-        plt.figure(figsize=(12, 3.5 * Nrow))
+        plt.figure(figsize=(12, 3.1 * Nrow))
+
+        unit = r'$\mu K_\text{CMB}$'
         
         # CMB
         name_list = ['CMB I', 'CMB Q', 'CMB U']
         for i, name in enumerate(name_list):
             sky_vector[self.seenpix_qubic] = self.real_sky['cmb'][self.seenpix_qubic, i].copy()
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            amplitude = np.max(np.abs(sky_vector[self.seenpix_qubic]))
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', unit=unit, 
+                        min=-amplitude, max=amplitude)
             sky_vector[self.seenpix_qubic] = initial_guess_split['cmb'][:, i].copy()
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', unit=unit, 
+                        min=-amplitude, max=amplitude)
             sky_vector[self.seenpix_qubic] = split_map['cmb'][:, i].copy()
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', unit=unit, 
+                        min=-amplitude, max=amplitude)
             difference = self.real_sky['cmb'][:, i] - sky_vector
-            sig = np.std(difference[self.seenpix_qubic])
             hp.gnomview(difference, sub=(Nrow,4,4*i+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                        min=-3*sig, max=3*sig, cmap='jet')
+                        cmap='jet', unit=unit, min=-amplitude, max=amplitude)
         index = 3
 
         # dust
@@ -195,25 +202,34 @@ class NonLinearPipeline:
             name_list = ['dust I', 'dust Q', 'dust U']
             for i, name in enumerate(name_list):
                 sky_vector[self.seenpix_qubic] = self.real_sky['dust'][self.seenpix_qubic, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                amplitude = np.max(np.abs(sky_vector[self.seenpix_qubic]))
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                            unit=unit, min=-amplitude, max=amplitude)
                 sky_vector[self.seenpix_qubic] = initial_guess_split['dust'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                            unit=unit, min=-amplitude, max=amplitude)
                 sky_vector[self.seenpix_qubic] = split_map['dust'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                            unit=unit, min=-amplitude, max=amplitude)
                 difference = self.real_sky['dust'][:, i] - sky_vector
-                sig = np.std(difference[self.seenpix_qubic])
                 hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                            min=-3*sig, max=3*sig, cmap='jet')
+                            cmap='jet', unit=unit, min=-amplitude, max=amplitude)
             beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_dust'][self.seenpix_qubic_beta].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            min = np.min(beta_vector[self.seenpix_qubic])
+            max = np.max(beta_vector[self.seenpix_qubic])
+            amplitude = np.max(np.abs((min, max)))
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                        min=min, max=max)
             beta_vector[self.seenpix_qubic_beta] = initial_guess_split['beta_dust'].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+2), title=r'Initial $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+2), title=r'Initial $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                        min=min, max=max)
             beta_vector[self.seenpix_qubic_beta] = split_map['beta_dust'].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+3), title=r'Reconstructed $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+3), title=r'Reconstructed $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                        min=min, max=max)
             difference = self.real_sky['beta_dust'] - beta_vector
             sig = np.std(difference[self.seenpix_qubic_beta])
             hp.gnomview(difference, sub=(Nrow,4,4*(3+index)+4), title=r'Difference $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, 
-                        min=-3*sig, max=3*sig, cmap='jet')
+                        cmap='jet', min=-amplitude, max=amplitude)
             index += 4
 
         # synchrotron
@@ -221,25 +237,35 @@ class NonLinearPipeline:
             name_list = ['synchrotron I', 'synchrotron Q', 'synchrotron U']
             for i, name in enumerate(name_list):
                 sky_vector[self.seenpix_qubic] = self.real_sky['synchrotron'][self.seenpix_qubic, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                amplitude = np.max(np.abs(sky_vector[self.seenpix_qubic]))
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                            unit=unit, min=-amplitude, max=amplitude)
                 sky_vector[self.seenpix_qubic] = initial_guess_split['synchrotron'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                            unit=unit, min=-amplitude, max=amplitude)
                 sky_vector[self.seenpix_qubic] = split_map['synchrotron'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                            unit=unit, min=-amplitude, max=amplitude)
                 difference = self.real_sky['synchrotron'][:, i] - sky_vector
                 sig = np.std(difference[self.seenpix_qubic])
                 hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                            min=-3*sig, max=3*sig, cmap='jet')
+                            cmap='jet', unit=unit, min=-amplitude, max=amplitude)
             beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_synchrotron'][self.seenpix_qubic_beta].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            min = np.min(beta_vector[self.seenpix_qubic])
+            max = np.max(beta_vector[self.seenpix_qubic])
+            amplitude = np.max(np.abs((min, max)))
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                       min=min, max=max)
             beta_vector[self.seenpix_qubic_beta] = initial_guess_split['beta_synchrotron'].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+2), title=r'Initial $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+2), title=r'Initial $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                       min=min, max=max)
             beta_vector[self.seenpix_qubic_beta] = split_map['beta_synchrotron'].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+3), title=r'Reconstructed $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+3), title=r'Reconstructed $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
+                       min=min, max=max)
             difference = self.real_sky['beta_synchrotron'] - beta_vector
             sig = np.std(difference[self.seenpix_qubic_beta])
             hp.gnomview(difference, sub=(Nrow,4,4*(3+index)+4), title=r'Difference $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, 
-                        min=-3*sig, max=3*sig, cmap='jet')
+                        cmap='jet', min=-amplitude, max=amplitude)
 
         plt.savefig(folder+'reconstructed_maps.pdf')
         plt.close()
@@ -327,6 +353,104 @@ class NonLinearPipeline:
         with open(folder+'results.pkl', 'wb') as handle:
             pickle.dump(self.result_dictionnary, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        total_time = time() - self.starting_time
+        hour = total_time//3600
+        min = (total_time%3600) // 60
+        sec = total_time%60
+        if hour:
+            str_time = f'{hour}h {min}m {sec}s'
+        elif min:
+            str_time = f'{min}m {sec}s'
+        else:
+            str_time = f'{sec}s'
+        print('Total time of execution is: '+str_time)
+
+
+    '''
+    def plot_reconstructed_maps(self, folder, reconstructed_maps, initial_guess):
+        initial_guess_split = self.component_splitter(initial_guess)
+        split_map = self.component_splitter(reconstructed_maps)
+
+        sky_vector = np.tile(np.nan, self.npixel)
+        beta_vector = np.tile(np.nan, self.nbeta)
+        
+        Nrow = 3 * (1 + self.ncomponent) + self.ncomponent
+        plt.figure(figsize=(12, 3.5 * Nrow))
+        
+        # CMB
+        name_list = ['CMB I', 'CMB Q', 'CMB U']
+        for i, name in enumerate(name_list):
+            sky_vector[self.seenpix_qubic] = self.real_sky['cmb'][self.seenpix_qubic, i].copy()
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            sky_vector[self.seenpix_qubic] = initial_guess_split['cmb'][:, i].copy()
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            sky_vector[self.seenpix_qubic] = split_map['cmb'][:, i].copy()
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            difference = self.real_sky['cmb'][:, i] - sky_vector
+            sig = np.std(difference[self.seenpix_qubic])
+            hp.gnomview(difference, sub=(Nrow,4,4*i+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
+                        min=-3*sig, max=3*sig, cmap='jet')
+        index = 3
+
+        # dust
+        if self.dust_reconstruction:
+            name_list = ['dust I', 'dust Q', 'dust U']
+            for i, name in enumerate(name_list):
+                sky_vector[self.seenpix_qubic] = self.real_sky['dust'][self.seenpix_qubic, i].copy()
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                sky_vector[self.seenpix_qubic] = initial_guess_split['dust'][:, i].copy()
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                sky_vector[self.seenpix_qubic] = split_map['dust'][:, i].copy()
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                difference = self.real_sky['dust'][:, i] - sky_vector
+                sig = np.std(difference[self.seenpix_qubic])
+                hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
+                            min=-3*sig, max=3*sig, cmap='jet')
+            beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_dust'][self.seenpix_qubic_beta].copy()
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            beta_vector[self.seenpix_qubic_beta] = initial_guess_split['beta_dust'].copy()
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+2), title=r'Initial $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            beta_vector[self.seenpix_qubic_beta] = split_map['beta_dust'].copy()
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+3), title=r'Reconstructed $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            difference = self.real_sky['beta_dust'] - beta_vector
+            sig = np.std(difference[self.seenpix_qubic_beta])
+            hp.gnomview(difference, sub=(Nrow,4,4*(3+index)+4), title=r'Difference $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, 
+                        min=-3*sig, max=3*sig, cmap='jet')
+            index += 4
+
+        # synchrotron
+        if self.synchrotron_reconstruction:
+            name_list = ['synchrotron I', 'synchrotron Q', 'synchrotron U']
+            for i, name in enumerate(name_list):
+                sky_vector[self.seenpix_qubic] = self.real_sky['synchrotron'][self.seenpix_qubic, i].copy()
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                sky_vector[self.seenpix_qubic] = initial_guess_split['synchrotron'][:, i].copy()
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                sky_vector[self.seenpix_qubic] = split_map['synchrotron'][:, i].copy()
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+                difference = self.real_sky['synchrotron'][:, i] - sky_vector
+                sig = np.std(difference[self.seenpix_qubic])
+                hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
+                            min=-3*sig, max=3*sig, cmap='jet')
+            beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_synchrotron'][self.seenpix_qubic_beta].copy()
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            beta_vector[self.seenpix_qubic_beta] = initial_guess_split['beta_synchrotron'].copy()
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+2), title=r'Initial $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            beta_vector[self.seenpix_qubic_beta] = split_map['beta_synchrotron'].copy()
+            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+3), title=r'Reconstructed $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
+            difference = self.real_sky['beta_synchrotron'] - beta_vector
+            sig = np.std(difference[self.seenpix_qubic_beta])
+            hp.gnomview(difference, sub=(Nrow,4,4*(3+index)+4), title=r'Difference $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, 
+                        min=-3*sig, max=3*sig, cmap='jet')
+
+        plt.savefig(folder+'reconstructed_maps.pdf')
+        plt.close()
+    '''
+
+
+
+
+
 
 parameters_dict = {
     'nside': int(sys.argv[1]),
@@ -334,7 +458,7 @@ parameters_dict = {
     'npointings': int(sys.argv[3]),
     'Nsub': int(sys.argv[4]),
     'dust_level': 1, #>0
-    'dust_model': 'd1', #d0, d1 or d6
+    'dust_model': 'd1', #d0 or d1
     'dust_reconstruction': True, #bool
     'synchrotron_level': 40, #>0
     'synchrotron_model': 's1', #s0 or s1

@@ -215,8 +215,8 @@ class NonLinearPipeline:
                 hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
                             cmap='jet', unit=unit, min=-amplitude, max=amplitude)
             beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_dust'][self.seenpix_qubic_beta].copy()
-            min = np.min(beta_vector[self.seenpix_qubic])
-            max = np.max(beta_vector[self.seenpix_qubic])
+            min = np.min(beta_vector[self.seenpix_qubic_beta])
+            max = np.max(beta_vector[self.seenpix_qubic_beta])
             amplitude = np.max(np.abs((min, max)))
             hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
                         min=min, max=max)
@@ -251,8 +251,8 @@ class NonLinearPipeline:
                 hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
                             cmap='jet', unit=unit, min=-amplitude, max=amplitude)
             beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_synchrotron'][self.seenpix_qubic_beta].copy()
-            min = np.min(beta_vector[self.seenpix_qubic])
-            max = np.max(beta_vector[self.seenpix_qubic])
+            min = np.min(beta_vector[self.seenpix_qubic_beta])
+            max = np.max(beta_vector[self.seenpix_qubic_beta])
             amplitude = np.max(np.abs((min, max)))
             hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
                        min=min, max=max)

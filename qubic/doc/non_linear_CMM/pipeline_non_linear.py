@@ -176,25 +176,23 @@ class NonLinearPipeline:
         
         Nrow = 3 * (1 + self.ncomponent) + self.ncomponent
         plt.figure(figsize=(12, 3.1 * Nrow))
-
-        unit = r'$\mu K_\text{CMB}$'
         
         # CMB
         name_list = ['CMB I', 'CMB Q', 'CMB U']
         for i, name in enumerate(name_list):
             sky_vector[self.seenpix_qubic] = self.real_sky['cmb'][self.seenpix_qubic, i].copy()
             amplitude = np.max(np.abs(sky_vector[self.seenpix_qubic]))
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', unit=unit, 
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
                         min=-amplitude, max=amplitude)
             sky_vector[self.seenpix_qubic] = initial_guess_split['cmb'][:, i].copy()
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', unit=unit, 
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
                         min=-amplitude, max=amplitude)
             sky_vector[self.seenpix_qubic] = split_map['cmb'][:, i].copy()
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', unit=unit, 
+            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
                         min=-amplitude, max=amplitude)
             difference = self.real_sky['cmb'][:, i] - sky_vector
             hp.gnomview(difference, sub=(Nrow,4,4*i+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                        cmap='jet', unit=unit, min=-amplitude, max=amplitude)
+                        cmap='jet', min=-amplitude, max=amplitude)
         index = 3
 
         # dust
@@ -204,16 +202,16 @@ class NonLinearPipeline:
                 sky_vector[self.seenpix_qubic] = self.real_sky['dust'][self.seenpix_qubic, i].copy()
                 amplitude = np.max(np.abs(sky_vector[self.seenpix_qubic]))
                 hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
-                            unit=unit, min=-amplitude, max=amplitude)
+                            min=-amplitude, max=amplitude)
                 sky_vector[self.seenpix_qubic] = initial_guess_split['dust'][:, i].copy()
                 hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
-                            unit=unit, min=-amplitude, max=amplitude)
+                            min=-amplitude, max=amplitude)
                 sky_vector[self.seenpix_qubic] = split_map['dust'][:, i].copy()
                 hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
-                            unit=unit, min=-amplitude, max=amplitude)
+                            min=-amplitude, max=amplitude)
                 difference = self.real_sky['dust'][:, i] - sky_vector
                 hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                            cmap='jet', unit=unit, min=-amplitude, max=amplitude)
+                            cmap='jet', min=-amplitude, max=amplitude)
             beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_dust'][self.seenpix_qubic_beta].copy()
             min = np.min(beta_vector[self.seenpix_qubic_beta])
             max = np.max(beta_vector[self.seenpix_qubic_beta])
@@ -239,17 +237,17 @@ class NonLinearPipeline:
                 sky_vector[self.seenpix_qubic] = self.real_sky['synchrotron'][self.seenpix_qubic, i].copy()
                 amplitude = np.max(np.abs(sky_vector[self.seenpix_qubic]))
                 hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
-                            unit=unit, min=-amplitude, max=amplitude)
+                            min=-amplitude, max=amplitude)
                 sky_vector[self.seenpix_qubic] = initial_guess_split['synchrotron'][:, i].copy()
                 hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
-                            unit=unit, min=-amplitude, max=amplitude)
+                            min=-amplitude, max=amplitude)
                 sky_vector[self.seenpix_qubic] = split_map['synchrotron'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet', 
-                            unit=unit, min=-amplitude, max=amplitude)
+                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet',
+                            min=-amplitude, max=amplitude)
                 difference = self.real_sky['synchrotron'][:, i] - sky_vector
                 sig = np.std(difference[self.seenpix_qubic])
                 hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                            cmap='jet', unit=unit, min=-amplitude, max=amplitude)
+                            cmap='jet', min=-amplitude, max=amplitude)
             beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_synchrotron'][self.seenpix_qubic_beta].copy()
             min = np.min(beta_vector[self.seenpix_qubic_beta])
             max = np.max(beta_vector[self.seenpix_qubic_beta])
@@ -354,9 +352,9 @@ class NonLinearPipeline:
             pickle.dump(self.result_dictionnary, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         total_time = time() - self.starting_time
-        hour = total_time//3600
-        min = (total_time%3600) // 60
-        sec = total_time%60
+        hour = int(total_time//3600)
+        min = int((total_time%3600) // 60)
+        sec = int(total_time%60)
         if hour:
             str_time = f'{hour}h {min}m {sec}s'
         elif min:

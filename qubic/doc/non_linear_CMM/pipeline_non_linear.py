@@ -175,7 +175,7 @@ class NonLinearPipeline:
         beta_vector = np.tile(np.nan, self.nbeta)
         
         Nrow = 3 * (1 + self.ncomponent) + self.ncomponent
-        plt.figure(figsize=(12, 3.1 * Nrow))
+        plt.figure(figsize=(12, 3.8 * Nrow))
         
         # CMB
         name_list = ['CMB I', 'CMB Q', 'CMB U']
@@ -330,7 +330,7 @@ class NonLinearPipeline:
             folder += f'_dust_lvl_{self.acquisition.dust_level}_{self.acquisition.dust_model}'
         if self.acquisition.synchrotron_level:
             folder += f'_synchrotron_lvl_{self.acquisition.synchrotron_level}_{self.acquisition.synchrotron_model}'
-        folder += f'noise_qubic_{self.acquisition.noise_qubic}_planck_{self.acquisition.noise_planck}_max_iteration_{self.max_iteration}/'
+        folder += f'_noise_qubic_{self.acquisition.noise_qubic}_planck_{self.acquisition.noise_planck}_max_iteration_{self.max_iteration}/'
 
         os.makedirs(folder, exist_ok=True)
         
@@ -464,7 +464,7 @@ parameters_dict = {
     'synchrotron_reconstruction': True, #bool
     'frequencies_planck': [100e9, 143e9, 217e9, 353e9],
     'noise_qubic': float(sys.argv[5]),
-    'noise_planck': 0,
+    'noise_planck': 0.1,
     'planck_coverage_level': 0.2,
     'max_iteration': int(sys.argv[6]),
     'pcg_tolerance': 1e-16,

@@ -61,7 +61,7 @@ class NonLinearPipeline:
         self.tod_qubic, self.tod_planck = self.acquisition.get_tod(self.real_sky)
         if self.verbose:
             print('Generating the mixing operators and their transposed Jacobian')
-        self.Mixing_matrices_qubic, self.Mixing_matrices_planck = self.acquisition.get_mixing_operators()
+        self.Mixing_operators_qubic, self.Mixing_operators_planck = self.acquisition.get_mixing_operators()
         self.Generate_Transposed_Jacobian = self.acquisition.get_jacobien_mixing_operators()
         if self.verbose:
             print('Generating the inverse covariance matrix of Qubic and Planck')
@@ -80,15 +80,15 @@ class NonLinearPipeline:
         def grad_operator(component_map, out):
             # Qubic
             # HAc
-            sum_H_qubic = self.H_list[0](self.Mixing_matrices_qubic[0](component_map))
+            sum_H_qubic = self.H_list[0](self.Mixing_operators_qubic[0](component_map))
             for i in range(1, len(self.frequencies_qubic)):
-                sum_H_qubic += self.H_list[i](self.Mixing_matrices_qubic[i](component_map))
+                sum_H_qubic += self.H_list[i](self.Mixing_operators_qubic[i](component_map))
             # HAc - d
             sum_H_qubic -= self.tod_qubic
             # N^-1 (HAc - d)
             sum_H_qubic = self.invN_qubic(sum_H_qubic)
 
-            # J_A H^T N^-1 (HAc - d)
+            # J_A^T H^T N^-1 (HAc - d)
             output_operator = np.empty((), dtype=object)
             self.Generate_Transposed_Jacobian.direct(component_map, self.frequencies_qubic[0], output_operator)
             Transposed_Jacobian = output_operator.item()
@@ -102,14 +102,14 @@ class NonLinearPipeline:
             # Ac
             sum_H_planck = np.empty((len(self.frequencies_planck), self.npixel, 3))
             for i in range(len(self.frequencies_planck)):
-                sum_H_planck[i, ...] = self.Mixing_matrices_planck[i](component_map)
+                sum_H_planck[i, ...] = self.Mixing_operators_planck[i](component_map)
             # Ac - d
             sum_H_planck = sum_H_planck.ravel() - self.tod_planck
             # N^-1 (Ac - d)
             sum_H_planck = self.invN_planck(sum_H_planck)
             sum_H_planck = sum_H_planck.reshape((len(self.frequencies_planck), self.npixel, 3))
 
-            # J_A N^-1 (Ac - d)
+            # J_A^T N^-1 (Ac - d)
             for i in range(len(self.frequencies_planck)):
                 self.Generate_Transposed_Jacobian.direct(component_map, self.frequencies_planck[i], output_operator)
                 Transposed_Jacobian = output_operator.item()
@@ -347,6 +347,8 @@ class NonLinearPipeline:
         self.result_dictionnary['real_sky'] = self.real_sky
         self.result_dictionnary['initial_guess'] = self.initial_guess
         self.result_dictionnary['pcg_time'] = self.pcg_time
+        self.result_dictionnary['seenpix_qubic'] = self.seenpix_qubic
+        self.result_dictionnary['seenpix_qubic_beta'] = self.seenpix_qubic_beta
 
         with open(folder+'results.pkl', 'wb') as handle:
             pickle.dump(self.result_dictionnary, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -464,7 +466,7 @@ parameters_dict = {
     'synchrotron_reconstruction': True, #bool
     'frequencies_planck': [100e9, 143e9, 217e9, 353e9],
     'noise_qubic': float(sys.argv[5]),
-    'noise_planck': 0.1,
+    'noise_planck': 0,
     'planck_coverage_level': 0.2,
     'max_iteration': int(sys.argv[6]),
     'pcg_tolerance': 1e-16,

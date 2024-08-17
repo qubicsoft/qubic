@@ -19,7 +19,7 @@ class NonLinearAcquisition:
         npointings: (int) Number of random pointings for the acquisition matrix.
         Nsub: (int) Number of frequencies considered in the full band.
         dust_level: (float) Level of the dust. Multiplies the input map of the dust by this factor.
-        dust_model: (str) Model of the dust: d0, d1 or d6.
+        dust_model: (str) Model of the dust: d0, d1.
         dust_reconstruction: (bool) If we reconstruct the dust.
         synchrotron_level: (float) Level of the synchrotron. Multiplies the input map of the synchrotron by this factor.
         synchrotron_model: (str) Model of the synchrotron: s0 or s1.
@@ -120,7 +120,7 @@ class NonLinearAcquisition:
         self.H_list = self.Q.H # List of the acquisition matrices of Qubic at the different wavelengths.
 
         # Determines all the pixels that are seen (even poorly) by Qubic
-        self.seenpix_qubic = self.H_list[0].T(np.ones(self.H_list[0].shapeout)) != 0.0
+        self.seenpix_qubic = self.H_list[0].T(np.ones(self.H_list[0].shapeout)) != 0.0 # boolean array
         for i in range(len(self.frequencies_qubic)):
             np.logical_or(self.seenpix_qubic, self.H_list[i].T(np.ones(self.H_list[0].shapeout)) != 0.0, out = self.seenpix_qubic)
         self.seenpix_qubic = self.seenpix_qubic[:, 0] # Boolean mask of the pixels of Qubic's patch
@@ -365,17 +365,17 @@ class NonLinearAcquisition:
                 up_grade_pl_beta = self.beta_to_pixel(pl_beta) # shape npixel_patch
                 out[self.seenpix_qubic, :] += up_grade_pl_beta[:, None] * split_map['synchrotron'] # shape (npixel_patch, 3)
         
-        Mixing_matrices_qubic = []
+        Mixing_operators_qubic = []
         for freq in self.frequencies_qubic:
-            Mixing_matrices_qubic.append(Operator(lambda component_map, out, freq=freq : mixing_function(component_map, freq, out), 
+            Mixing_operators_qubic.append(Operator(lambda component_map, out, freq=freq : mixing_function(component_map, freq, out), 
                                    shapein=self.component_map_size, shapeout=(self.npixel, 3), dtype='float64'))
 
-        Mixing_matrices_planck = []
+        Mixing_operators_planck = []
         for freq in self.frequencies_planck:
-            Mixing_matrices_planck.append(Operator(lambda component_map, out, freq=freq : mixing_function(component_map, freq, out), 
+            Mixing_operators_planck.append(Operator(lambda component_map, out, freq=freq : mixing_function(component_map, freq, out), 
                                    shapein=self.component_map_size, shapeout=(self.npixel, 3), dtype='float64'))
         
-        return Mixing_matrices_qubic, Mixing_matrices_planck
+        return Mixing_operators_qubic, Mixing_operators_planck
     
 
     def get_jacobien_mixing_operators(self):
@@ -450,7 +450,7 @@ class NonLinearAcquisition:
         
         return invN_qubic, invN_planck
 
-
+    
     def get_preconditioner(self, invN_qubic, invN_planck):
         '''
         We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 
@@ -458,6 +458,124 @@ class NonLinearAcquisition:
         components maps and the spectral indices have a very different behaviour in the PCG. 
         This preconditioner helps making those different parameters more like one another.
         '''
+        # Approximation of H.T N^{-1} H for Qubic
+        vector = np.ones(self.H_list[0].shapein)
+        self.approx_HTNH = np.empty((len(self.H_list), len(self.H_list), self.npixel_patch)) # shape (Nsub, Nsub, npixel_patch)
+        for index2 in range(len(self.H_list)):
+            tod_index2 = invN_qubic * self.H_list[index2] * vector
+            for index1 in range(len(self.H_list)):
+                self.approx_HTNH[index1, index2] = (self.H_list[index1].T * tod_index2)[self.seenpix_qubic, 0]
+            # The factor 50 is a renormalization factor to help the preconditioner of Qubic and of Planck being in the same range.
+            # It is purely empirical and could maybe be improved.
+        
+        def diagonal_qubic(split_map):
+            # Preconditioner for Qubic
+            split_preconditioner = {}
+
+            # CMB
+            split_preconditioner['cmb'] = np.repeat(np.sum(self.approx_HTNH, axis=(0,1))[:, None], 3, axis=1) # shape (npixel_patch, 3)
+
+            # dust
+            if self.dust_reconstruction:
+                dust_mbb = np.zeros((len(self.frequencies_qubic), self.npixel_patch)) # shape (Nsub, npixel_patch)
+                derive_dust_mbb = np.zeros((len(self.frequencies_qubic), self.npixel_patch)) # shape (Nsub, npixel_patch)
+                for index, freq in enumerate(self.frequencies_qubic):
+                    dust_mbb_index = self.beta_to_pixel(self.modified_black_body_dust(freq, split_map['beta_dust']))
+                    dust_mbb[index, :] = dust_mbb_index.copy()
+                    derive_dust_mbb[index, :] = dust_mbb_index * np.log(freq/self.nu0)
+               
+                split_preconditioner['dust'] = np.repeat(np.sum(self.approx_HTNH * dust_mbb[None, :, :] * dust_mbb[:, None, :], axis=(0,1))
+                                                         [:, None], 3, axis=1) # shape (npixel_patch, 3) (sum over all the pairs of frequencies)
+                split_preconditioner['beta_dust'] = self.pixel_to_beta(
+                    np.sum(np.sum(split_map['dust']**2, axis=1) * self.approx_HTNH * derive_dust_mbb[None, :, :] * 
+                           derive_dust_mbb[:, None, :], axis=(0,1))) # shape (nbeta_patch)
+
+            # synchrotron
+            if self.synchrotron_reconstruction:
+                synchrotron_pl = np.zeros((len(self.frequencies_qubic), self.npixel_patch)) # shape (Nsub, npixel_patch)
+                derive_synchrotron_pl = np.zeros((len(self.frequencies_qubic), self.npixel_patch)) # shape (Nsub, npixel_patch)
+                for index, freq in enumerate(self.frequencies_qubic):
+                    synchrotron_pl_index = self.beta_to_pixel(self.power_law_synchrotron(freq, split_map['beta_synchrotron']))
+                    synchrotron_pl[index, :] = synchrotron_pl_index.copy()
+                    derive_synchrotron_pl[index, :] = synchrotron_pl_index * np.log(freq/self.nu0)
+               
+                split_preconditioner['synchrotron'] = np.repeat(np.sum(self.approx_HTNH * synchrotron_pl[None, :, :] * 
+                                                                       synchrotron_pl[:, None, :], axis=(0,1))
+                                                                [:, None], 3, axis=1) # shape (npixel_patch, 3) 
+                                                                                      #(sum over all the pairs of frequencies)
+                split_preconditioner['beta_synchrotron'] = self.pixel_to_beta(
+                    np.sum(np.sum(split_map['synchrotron']**2, 
+                                  axis=1) * self.approx_HTNH * derive_synchrotron_pl[None, :, :] * 
+                           derive_synchrotron_pl[:, None, :], axis=(0,1))) # shape nbeta_patch
+
+            return self.component_combiner(split_preconditioner)
+
+        # Approximation of invN_planck, has shape (len(frequencies_planck), npixel_patch, 3)
+        self.approx_invN_planck = invN_planck(np.ones(invN_planck.shapein)).reshape(
+            (len(self.frequencies_planck), self.npixel, 3))[:, self.seenpix_qubic, :]
+
+        def diagonal_planck(split_map):
+            # Preconditioner for Planck
+            split_preconditioner = {}
+
+            # CMB
+            split_preconditioner['cmb'] = np.sum(self.approx_invN_planck, axis=0) # shape (npixel_patch, 3)
+
+            # dust
+            if self.dust_reconstruction:
+                dust_mbb_squared = np.zeros((len(self.frequencies_planck), self.npixel_patch)) # shape (Nsub, npixel_patch)
+                derive_dust_mbb_squared = np.zeros((len(self.frequencies_planck), self.npixel_patch)) # shape (Nsub, npixel_patch)
+                for index, freq in enumerate(self.frequencies_planck):
+                    dust_mbb = self.beta_to_pixel(self.modified_black_body_dust(freq, split_map['beta_dust']))
+                    dust_mbb_squared[index, :] = dust_mbb**2
+                    derive_dust_mbb_squared[index, :] = (dust_mbb * np.log(freq/self.nu0))**2
+               
+                split_preconditioner['dust'] = np.sum(self.approx_invN_planck * dust_mbb_squared[..., None], axis=0) # shape (npixel_patch, 3)
+                split_preconditioner['beta_dust'] = self.pixel_to_beta(
+                    np.sum(np.sum(split_map['dust']**2 * self.approx_invN_planck, 
+                                  axis=2) * derive_dust_mbb_squared, axis=0)) # shape nbeta_patch
+
+            # synchrotron
+            if self.synchrotron_reconstruction:
+                synchrotron_pl_squared = np.zeros((len(self.frequencies_planck), self.npixel_patch)) # shape (Nsub, npixel_patch)
+                derive_synchrotron_pl_squared = np.zeros((len(self.frequencies_planck), self.npixel_patch)) # shape (Nsub, npixel_patch)
+                for index, freq in enumerate(self.frequencies_planck):
+                    synchrotron_pl = self.beta_to_pixel(self.power_law_synchrotron(freq, split_map['beta_synchrotron']))
+                    synchrotron_pl_squared[index, :] = synchrotron_pl**2
+                    derive_synchrotron_pl_squared[index, :] = (synchrotron_pl * np.log(freq/self.nu0))**2
+               
+                split_preconditioner['synchrotron'] = np.sum(self.approx_invN_planck * 
+                                                             synchrotron_pl_squared[..., None], axis=0) # shape (npixel_patch, 3)
+                split_preconditioner['beta_synchrotron'] = self.pixel_to_beta(
+                    np.sum(np.sum(split_map['synchrotron']**2 * self.approx_invN_planck, 
+                                  axis=2) * derive_synchrotron_pl_squared, axis=0)) # shape nbeta_patch
+
+            return self.component_combiner(split_preconditioner)
+
+        def hessian_inverse_diagonal(component_map, out):
+            # The gradient of the chi^2 is the sum of the one of Qubic and of Planck.
+            # Therefore the preconditioner is the inverse of the sum of the preconditioner of Qubic and Planck
+            split_map = self.component_splitter(component_map)
+            out[...] = 1 / (diagonal_qubic(split_map) + diagonal_planck(split_map))
+
+        return Operator(hessian_inverse_diagonal, shapein=self.component_map_size, shapeout=self.component_map_size, dtype='float64')
+
+
+
+
+
+
+
+    
+    
+    '''
+    def get_preconditioner(self, invN_qubic, invN_planck):
+        
+        We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 
+        This is used as a preconditioner for the non-linear PCG. It is very important as the 
+        components maps and the spectral indices have a very different behaviour in the PCG. 
+        This preconditioner helps making those different parameters more like one another.
+        
         # Approximation of H.T N^{-1} H for Qubic
         vector = np.ones(self.H_list[0].shapein)
         self.approx_HTNH = np.empty((len(self.H_list), self.npixel_patch)) # shape (Nsub, npixel_patch)
@@ -553,6 +671,6 @@ class NonLinearAcquisition:
             out[...] = 1 / (diagonal_qubic(split_map) + diagonal_planck(split_map))
 
         return Operator(hessian_inverse_diagonal, shapein=self.component_map_size, shapeout=self.component_map_size, dtype='float64')
-
+    '''
 
     

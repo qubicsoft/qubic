@@ -450,14 +450,14 @@ class NonLinearAcquisition:
         
         return invN_qubic, invN_planck
 
-    
+    '''
     def get_preconditioner(self, invN_qubic, invN_planck):
-        '''
-        We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 
-        This is used as a preconditioner for the non-linear PCG. It is very important as the 
-        components maps and the spectral indices have a very different behaviour in the PCG. 
-        This preconditioner helps making those different parameters more like one another.
-        '''
+        
+        #We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 
+        #This is used as a preconditioner for the non-linear PCG. It is very important as the 
+        #components maps and the spectral indices have a very different behaviour in the PCG. 
+        #This preconditioner helps making those different parameters more like one another.
+        
         # Approximation of H.T N^{-1} H for Qubic
         vector = np.ones(self.H_list[0].shapein)
         self.approx_HTNH = np.empty((len(self.H_list), len(self.H_list), self.npixel_patch)) # shape (Nsub, Nsub, npixel_patch)
@@ -559,22 +559,19 @@ class NonLinearAcquisition:
             out[...] = 1 / (diagonal_qubic(split_map) + diagonal_planck(split_map))
 
         return Operator(hessian_inverse_diagonal, shapein=self.component_map_size, shapeout=self.component_map_size, dtype='float64')
-
-
-
-
-
-
-
-    
-    
     '''
+
+
+
+
+    
+    
     def get_preconditioner(self, invN_qubic, invN_planck):
         
-        We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 
-        This is used as a preconditioner for the non-linear PCG. It is very important as the 
-        components maps and the spectral indices have a very different behaviour in the PCG. 
-        This preconditioner helps making those different parameters more like one another.
+        #We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 
+        #This is used as a preconditioner for the non-linear PCG. It is very important as the 
+        #components maps and the spectral indices have a very different behaviour in the PCG. 
+        #This preconditioner helps making those different parameters more like one another.
         
         # Approximation of H.T N^{-1} H for Qubic
         vector = np.ones(self.H_list[0].shapein)
@@ -671,6 +668,6 @@ class NonLinearAcquisition:
             out[...] = 1 / (diagonal_qubic(split_map) + diagonal_planck(split_map))
 
         return Operator(hessian_inverse_diagonal, shapein=self.component_map_size, shapeout=self.component_map_size, dtype='float64')
-    '''
+    
 
     

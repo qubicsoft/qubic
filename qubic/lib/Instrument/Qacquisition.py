@@ -1590,7 +1590,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
                 
                 #myco=np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0*u.GHz, None, u.uK_CMB))
                 # 10 is for reproduce the PsYM template
-                m = hp.ud_grade(hp.read_map(path_to_data+'CO_line.fits') * 10, self.scene.nside)
+                m = hp.ud_grade(hp.read_map(data_dir+'CO_line.fits') * 10, self.scene.nside)
                 #print(self.nside)   
                 mP = polarized_I(m, self.scene.nside)
                 #print(mP.shape)

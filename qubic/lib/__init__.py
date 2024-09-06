@@ -6,7 +6,6 @@ from .Qcoaddition import *
 from .QdataHandling import *
 from .Qdictionary import *
 from .Qforecast import *
-from .Qmixing_matrix import *
 from .Qnoise import *
 from .Qplotters import *
 from .Qsamplings import *

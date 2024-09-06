@@ -3,7 +3,6 @@ from . import Fitting
 from . import Instrument
 from . import MapMaking
 from .Qcoaddition import *
-from .Qcomponent_model import *
 from .QdataHandling import *
 from .Qdictionary import *
 from .Qforecast import *

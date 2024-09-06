@@ -2,6 +2,9 @@
 code inspired by FGBuster
 written by Mathias Regnier
 '''
+
+from fgbuster.component_model import AnalyticComponent
+
 class ModifiedBlackBodyDeco(AnalyticComponent):
     """ Modified Black body
 

@@ -12,57 +12,86 @@ jupyter:
     name: python3
 ---
 
+# Eigenvalue distribution of the Preconditioned Hessian matrix
+
 ```{python}
-from non_linear_CMM_with_Planck import *
+from pipeline_non_linear import NonLinearPipeline
+```
+
+## Parameters
+
+```{python}
+parameters_dict = {
+    'nside': 8,
+    'nside_beta': 4,
+    'npointings': 500,
+    'Nsub': 4,
+    'dust_level': 1, #>0
+    'dust_model': 'd1', #d0, d1 or d6
+    'dust_reconstruction': True, #bool
+    'synchrotron_level': 0, #>0
+    'synchrotron_model': 's1', #s0 or s1
+    'synchrotron_reconstruction': False, #bool
+    'frequencies_planck': [100e9, 143e9, 217e9, 353e9],
+    'noise_qubic': 0, #0.01,
+    'noise_planck': 0, #0.01,
+    'planck_coverage_level': 0.2,
+    'max_iteration': 5,
+    'pcg_tolerance': 1e-16,
+    'sigma0': 1e-3,
+    'initial_guess': None,
+    'verbose': True
+}
+```
+
+## Initialization and definition of the gradient
+
+```{python}
+self = NonLinearPipeline(parameters_dict)
 ```
 
 ```{python}
-self = NonLinearCMM(nside=16, nside_beta=8, npointings=200, nf_sub=4, planck_frequencies=[100e9, 143e9, 217e9, 353e9], 
-                    noise_qubic=0, noise_planck=0)
+grad_chi2 = self.get_grad_chi_squared_operator()
 ```
 
 ```{python}
-residues, x = self.map_making(max_iteration=100, tol=1e-16, sigma0=1e-3)
+real_sky_patch = {}
+real_sky_patch['cmb'] = self.real_sky['cmb'][self.seenpix_qubic, :].copy()
+real_sky_patch['dust'] = self.real_sky['dust'][self.seenpix_qubic, :].copy()
+real_sky_patch['beta_dust'] = self.real_sky['beta_dust'][self.seenpix_qubic_beta].copy()
+real_comp = self.component_combiner(real_sky_patch) # minimum point of the chi^2
 ```
 
+## Computation of the Hessian matrix at the minimum point
+
 ```{python}
-epsilon = 1e-10
-hessian = np.empty((6*self.npixel_patch+self.nbeta_patch, 6*self.npixel_patch+self.nbeta_patch))
-ei = np.zeros(6*self.npixel_patch+self.nbeta_patch)
-for i in range(6*self.npixel_patch+self.nbeta_patch):
-    if i%50 == 0:
+nparameters = 6*self.npixel_patch + self.nbeta_patch
+sol = grad_chi2(real_comp)
+e = np.zeros(nparameters)
+epsilon = 1e-5
+hessian = np.empty((nparameters, nparameters))
+for i in range(nparameters):
+    if i % 20 == 0:
         print(i)
-    ei[i]=epsilon
-    hessian[i,:] = self.Grad_chi_squared(self.Sky_to_Patch(self.true_c)+ei)/epsilon
-    ei[i]=0
+    e[i] = epsilon
+    hessian[i, :] = (grad_chi2(real_comp + e) - sol) / epsilon
+    e[i] = 0
 ```
 
+## Plot of the Hessian matrix
+
 ```{python}
-plt.matshow(hessian, cmap='bwr')# vmin=-1e-38, vmax=1e-38)
-plt.colorbar()
-plt.title(r'Hessian matrix of the $\chi^2$ in log scale')
-plt.show()
+plt.matshow(hessian, norm='log')
 ```
 
-```{python}
-fig, ax = plt.subplots(2, 2, figsize=(15, 10))
-ax[0,0].plot(np.diag(hessian))
-ax[0,0].set_title(r'Diagonal of the Hessian matrix of the $\chi^2$')
-ax[0,0].set_yscale('log')
+## Computation of  the eigenvalues of the Hessian matrix and the preconditioned one
 
-ax[0,1].plot(1/self.HessianInverseDiagonal(self.Sky_to_Patch(self.true_c)))
-ax[0,1].set_title(r'Inverse diagonal of preconditioner')
-ax[0,1].set_yscale('log')
-
-ax[1,0].plot(np.diag(hessian) * self.HessianInverseDiagonal(self.Sky_to_Patch(self.true_c)))
-ax[1,0].set_title(r'Diagonal of preconditioned matrix')
-#ax[1,0].set_yscale('log')
-plt.show()
-```
+We symmetrize the matrices before the computation to help for numerical stability.
 
 ```{python}
-eigenvalues, eigenvectors = np.linalg.eigh(hessian)
-eigenvalues_preconditioned, _ = np.linalg.eig(np.diag(self.HessianInverseDiagonal(self.Sky_to_Patch(self.true_c))) @ hessian)
+eigenvalues, eigenvectors = np.linalg.eigh((hessian.T+hessian)/2)
+eigenvalues_preconditioned, _ = np.linalg.eigh(np.diag(np.sqrt(self.HessianInverseDiagonal(real_comp))) @ ((hessian.T+hessian)/2) @ np.diag(np.sqrt(self.HessianInverseDiagonal(real_comp))))
+
 ```
 
 ```{python}
@@ -70,150 +99,38 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
 ax1.plot(eigenvalues[::-1])
 ax1.set_yscale('log')
 ax1.set_title('Eigenvalues of the Hessian matrix')
+ax1.set_xlabel('Eigenvalues numerotation')
+ax1.set_ylabel('Eigenvalues')
 ax2.plot(np.sort(eigenvalues_preconditioned)[::-1])
 ax2.set_yscale('log')
 ax2.set_title('Eigenvalues of the preconditioned Hessian matrix')
+ax2.set_xlabel('Eigenvalues numerotation')
+ax2.set_ylabel('Eigenvalues')
 plt.show()
+#plt.savefig('eigenvalues.pdf')
+#plt.close()
 ```
 
-```{python}
-Patch_to_Sky, invN_qubic, invN_planck = self.Patch_to_Sky, self.invN_qubic, self.invN_planck
-```
+## Plot of the diagonal of the Hessian matrix and the approximated diagonal for preconditioning
 
 ```{python}
-        def diagonal_qubic(c):
-            dust_spectrum_squared = np.zeros((len(self.frequencies), self.npixel_patch))
-            derive_dust_spectrum_squared = np.zeros((len(self.frequencies), self.npixel_patch))
-            for index, freq in enumerate(self.frequencies):
-                dust_spectrum = hp.ud_grade(self.modified_black_body(freq, Patch_to_Sky(c)[6*self.npixel:]), self.nside)[self.seenpix_qubic]
-                dust_spectrum_squared[index,:] = dust_spectrum**2
-                derive_dust_spectrum_squared[index,:] = (dust_spectrum * np.log(freq/self.nu0))**2
-
-            vector = np.ones(self.H_list[0].shapein)
-            approx_hth = np.empty((len(self.H_list), self.npixel_patch)) # has shape (nf_sub, npixel_patch)
-            for index in range(len(self.H_list)):
-                approx_hth[index] = (self.H_list[index].T * self.H_list[index] * vector)[self.seenpix_qubic, 0] * np.mean(invN_qubic(np.ones(invN_qubic.shapein)))
-
-            precon = np.empty(6*self.npixel_patch+self.nbeta_patch)
-            # CMB
-            precon[:3*self.npixel_patch] = np.tile(np.sum(approx_hth, axis=0), 3)
-        
-            # Dust
-            precon[3*self.npixel_patch:6*self.npixel_patch] = np.tile(np.sum(approx_hth * dust_spectrum_squared, axis=0), 3)
-        
-            # Spectral indices
-            factor1 = c[3*self.npixel_patch:4*self.npixel_patch]**2
-            factor1 += c[4*self.npixel_patch:5*self.npixel_patch]**2
-            factor1 += c[5*self.npixel_patch:6*self.npixel_patch]**2
-            factor1 = factor1 * approx_hth # has shape (frequencies, npixel_patch)
-            factor1 *= derive_dust_spectrum_squared
-            factor1 = np.sum(factor1, axis=0) # shape (npixel_patch)
-            
-            downgrader = np.zeros(self.npixel)
-            downgrader[self.seenpix_qubic] = factor1
-            downgrader = hp.ud_grade(downgrader, self.nside_beta)*(self.npixel//self.nbeta)
-            precon[6*self.npixel_patch:] = downgrader[self.seenpix_qubic_beta]
-
-            return precon
-
-        def diagonal_planck(c):
-            dust_spectrum_squared = np.zeros((len(self.planck_frequencies), self.npixel_patch))
-            derive_dust_spectrum_squared = np.zeros((len(self.planck_frequencies), self.npixel_patch))
-            for index, freq in enumerate(self.planck_frequencies):
-                dust_spectrum = hp.ud_grade(self.modified_black_body(freq, Patch_to_Sky(c)[6*self.npixel:]), self.nside)[self.seenpix_qubic]
-                dust_spectrum_squared[index,:] = dust_spectrum**2
-                derive_dust_spectrum_squared[index,:] = (dust_spectrum * np.log(freq/self.nu0))**2
-        
-            diag = np.ones((len(self.planck_frequencies), 3, self.npixel_patch)) * np.mean(invN_planck(np.ones(invN_planck.shapein)).reshape(len(self.planck_frequencies), self.npixel*3), axis=1)[:,None,None] / 3
-            #invN_planck(np.ones(invN_planck.shapein)).reshape((len(planck_frequencies),npixel,3)).transpose((0,2,1))
-            
-            precon = np.empty(6*self.npixel_patch+self.nbeta_patch)
-            # CMB
-            precon[:3*self.npixel_patch] = np.sum(diag, axis=0).ravel()
-        
-            # Dust
-            precon[3*self.npixel_patch:6*self.npixel_patch] = np.sum(diag * dust_spectrum_squared[:, None, :], axis=0).ravel()
-        
-            # Spectral indices
-            factor1 = c[3*self.npixel_patch:4*self.npixel_patch]**2 * diag[:, 0, :] # shape (planck_frequencies, npixel)
-            factor1 += c[4*self.npixel_patch:5*self.npixel_patch]**2 * diag[:, 1, :]
-            factor1 += c[5*self.npixel_patch:6*self.npixel_patch]**2 * diag[:, 2, :]
-            factor1 = factor1 * derive_dust_spectrum_squared
-            factor1 = np.sum(factor1, axis=0) # shape (npixel)
-
-            downgrader = np.zeros(self.npixel)
-            downgrader[self.seenpix_qubic] = factor1
-            downgrader = hp.ud_grade(downgrader, self.nside_beta)*(self.npixel//self.nbeta)
-            precon[6*self.npixel_patch:] = downgrader[self.seenpix_qubic_beta]
-        
-            return precon
-```
-
-```{python}
-plt.figure(figsize=(15, 10))
-#plt.plot(diagonal_qubic(self.Sky_to_Patch(self.true_c))/3)
-#plt.plot(diagonal_planck(self.Sky_to_Patch(self.true_c))*3)
-plt.plot(np.diag(hessian)[6*self.npixel_patch:])
-plt.plot((diagonal_qubic(self.Sky_to_Patch(self.true_c))/3 + diagonal_planck(self.Sky_to_Patch(self.true_c))*3)[6*self.npixel_patch:])
+plt.plot(np.diag(hessian))
+plt.plot(1/self.HessianInverseDiagonal(real_comp))
 plt.yscale('log')
 ```
 
-```{python}
-np.linalg.eig(np.array([[1, 3], [6, 8]]))
-```
+## Plot of the ratio of both
 
 ```{python}
-plt.plot((self.H_list[0].T * self.H_list[0](np.ones(self.H_list[0].shapein)))[self.seenpix_qubic, :].T.ravel())
+plt.plot(np.diag(hessian) * self.HessianInverseDiagonal(real_comp))
 plt.yscale('log')
 ```
 
-```{python}
-'''
-Computation of the coverage at each frequency and for I, Q and U. The coverage of pixel i is the sum over 
-the column i of the operator H of the squares of the elements:
-Cov[\nu, i] = \sum_{\text{det}\times\text{samplings}} (H_\nu [\text{det}\times\text{samplings}, i])^2
-'''
-Cov = np.empty((len(self.frequencies), 3*self.npixel_patch))
-mixed_map_mask = np.tile(self.seenpix_qubic, 3)
-
-for i in range(3*self.npixel_patch):
-    if i%50 == 0:
-        print(i)
-    patch_vector = np.zeros((self.npixel_patch,3))
-    patch_vector[i%self.npixel_patch, i//self.npixel_patch] = 1
-    basis_vector = np.zeros((self.npixel,3))
-    basis_vector[self.seenpix_qubic, :] = patch_vector
-    for freq_index in range(len(self.frequencies)):
-        vector_i = self.H_list[freq_index](basis_vector)
-        vector_i = vector_i.ravel()
-        Cov[freq_index, i] = np.dot(vector_i, vector_i)
-    patch_vector[i%self.npixel_patch, i//self.npixel_patch] = 0
-```
+## Computation of the condition number of the Hessian matrix before and after preconditioning
 
 ```{python}
-theta, phi = hp.pix2ang(nside=self.nside, ipix=range(self.npixel), lonlat=True)
-```
-
-```{python}
-hp.mollview(radial_function(np.degrees(hp.rotator.angdist(qubic.equ2gal(0, -57), (theta, phi), lonlat=True))))
-```
-
-```{python}
-def radial_function(r):
-    return r**2
-```
-
-```{python}
-coverage = np.tile(np.nan, self.npixel)
-coverage[self.seenpix_qubic] = self.H_list[0].T(np.ones(self.H_list[0].shapeout))[self.seenpix_qubic, 0]
-```
-
-```{python}
-hp.gnomview(coverage / np.max(coverage[self.seenpix_qubic]) < 0.2, rot=qubic.equ2gal(0, -57),reso=20)
-```
-
-```{python}
-coverage / np.max(coverage[self.seenpix_qubic])
+print(np.max(eigenvalues)/np.min(eigenvalues))
+print(np.max(eigenvalues_preconditioned)/np.min(eigenvalues_preconditioned))
 ```
 
 ```{python}

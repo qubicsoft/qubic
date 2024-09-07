@@ -153,7 +153,7 @@ class NonLinearPipeline:
         Plots the evolution of the relative residues.
         '''
         plt.figure(figsize=(12, 8))
-        plt.plot(residues[:,0])
+        plt.plot(residues)
         plt.yscale('log')
         plt.grid(axis='y', linestyle='dotted')
         plt.xlabel('Number of iterations')
@@ -310,13 +310,11 @@ class NonLinearPipeline:
         self.residues = []
         pcg = non_linear_pcg(self.Grad_chi_squared, M=self.HessianInverseDiagonal, conjugate_method='polak-ribiere', 
                              x0=self.initial_guess, tol=self.pcg_tolerance, sigma_0=self.sigma0, tol_linesearch=1e-3, maxiter=self.max_iteration, 
-                             residues=self.residues, npixel_patch=self.npixel_patch, nbeta_patch=self.nbeta_patch)
+                             residues=self.residues)
         self.reconstructed_maps = pcg['x']
         self.residues = np.array(self.residues)
         self.residues /= np.linalg.norm(self.Grad_chi_squared(self.initial_guess))
         self.pcg_time = pcg['time']
-        if self.verbose:
-            print(f'Time taken for PCG: {self.pcg_time} sec')
 
         
         if self.acquisition.noise_qubic == 0.0 and self.acquisition.noise_planck == 0.0:
@@ -337,7 +335,6 @@ class NonLinearPipeline:
         if self.verbose:
             print('Plotting the residues and the maps.')
         self.plot_residues(folder, self.residues)
-        print('The scale of the difference maps is set to ± 3 sigma.')
         self.plot_reconstructed_maps(folder, self.reconstructed_maps, self.initial_guess)
 
         # Save the results in a dictionnary
@@ -366,87 +363,6 @@ class NonLinearPipeline:
         print('Total time of execution is: '+str_time)
 
 
-    '''
-    def plot_reconstructed_maps(self, folder, reconstructed_maps, initial_guess):
-        initial_guess_split = self.component_splitter(initial_guess)
-        split_map = self.component_splitter(reconstructed_maps)
-
-        sky_vector = np.tile(np.nan, self.npixel)
-        beta_vector = np.tile(np.nan, self.nbeta)
-        
-        Nrow = 3 * (1 + self.ncomponent) + self.ncomponent
-        plt.figure(figsize=(12, 3.5 * Nrow))
-        
-        # CMB
-        name_list = ['CMB I', 'CMB Q', 'CMB U']
-        for i, name in enumerate(name_list):
-            sky_vector[self.seenpix_qubic] = self.real_sky['cmb'][self.seenpix_qubic, i].copy()
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            sky_vector[self.seenpix_qubic] = initial_guess_split['cmb'][:, i].copy()
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            sky_vector[self.seenpix_qubic] = split_map['cmb'][:, i].copy()
-            hp.gnomview(sky_vector, sub=(Nrow,4,4*i+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            difference = self.real_sky['cmb'][:, i] - sky_vector
-            sig = np.std(difference[self.seenpix_qubic])
-            hp.gnomview(difference, sub=(Nrow,4,4*i+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                        min=-3*sig, max=3*sig, cmap='jet')
-        index = 3
-
-        # dust
-        if self.dust_reconstruction:
-            name_list = ['dust I', 'dust Q', 'dust U']
-            for i, name in enumerate(name_list):
-                sky_vector[self.seenpix_qubic] = self.real_sky['dust'][self.seenpix_qubic, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-                sky_vector[self.seenpix_qubic] = initial_guess_split['dust'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-                sky_vector[self.seenpix_qubic] = split_map['dust'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-                difference = self.real_sky['dust'][:, i] - sky_vector
-                sig = np.std(difference[self.seenpix_qubic])
-                hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                            min=-3*sig, max=3*sig, cmap='jet')
-            beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_dust'][self.seenpix_qubic_beta].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            beta_vector[self.seenpix_qubic_beta] = initial_guess_split['beta_dust'].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+2), title=r'Initial $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            beta_vector[self.seenpix_qubic_beta] = split_map['beta_dust'].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+3), title=r'Reconstructed $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            difference = self.real_sky['beta_dust'] - beta_vector
-            sig = np.std(difference[self.seenpix_qubic_beta])
-            hp.gnomview(difference, sub=(Nrow,4,4*(3+index)+4), title=r'Difference $\beta_d$', rot=qubic.equ2gal(0, -57), reso=23, 
-                        min=-3*sig, max=3*sig, cmap='jet')
-            index += 4
-
-        # synchrotron
-        if self.synchrotron_reconstruction:
-            name_list = ['synchrotron I', 'synchrotron Q', 'synchrotron U']
-            for i, name in enumerate(name_list):
-                sky_vector[self.seenpix_qubic] = self.real_sky['synchrotron'][self.seenpix_qubic, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+1), title='Input '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-                sky_vector[self.seenpix_qubic] = initial_guess_split['synchrotron'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+2), title='Initial '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-                sky_vector[self.seenpix_qubic] = split_map['synchrotron'][:, i].copy()
-                hp.gnomview(sky_vector, sub=(Nrow,4,4*(i+index)+3), title='Reconstructed '+name, rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-                difference = self.real_sky['synchrotron'][:, i] - sky_vector
-                sig = np.std(difference[self.seenpix_qubic])
-                hp.gnomview(difference, sub=(Nrow,4,4*(i+index)+4), title='Difference '+name, rot=qubic.equ2gal(0, -57), reso=23, 
-                            min=-3*sig, max=3*sig, cmap='jet')
-            beta_vector[self.seenpix_qubic_beta] = self.real_sky['beta_synchrotron'][self.seenpix_qubic_beta].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+1), title=r'Input $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            beta_vector[self.seenpix_qubic_beta] = initial_guess_split['beta_synchrotron'].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+2), title=r'Initial $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            beta_vector[self.seenpix_qubic_beta] = split_map['beta_synchrotron'].copy()
-            hp.gnomview(beta_vector, sub=(Nrow,4,4*(3+index)+3), title=r'Reconstructed $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, cmap='jet')
-            difference = self.real_sky['beta_synchrotron'] - beta_vector
-            sig = np.std(difference[self.seenpix_qubic_beta])
-            hp.gnomview(difference, sub=(Nrow,4,4*(3+index)+4), title=r'Difference $\beta_s$', rot=qubic.equ2gal(0, -57), reso=23, 
-                        min=-3*sig, max=3*sig, cmap='jet')
-
-        plt.savefig(folder+'reconstructed_maps.pdf')
-        plt.close()
-    '''
-
 
 
 
@@ -462,7 +378,6 @@ parameters_dict = {
     'dust_reconstruction': True, #bool
     'synchrotron_level': 40, #>0
     'synchrotron_model': 's1', #s0 or s1
-    #'spectrum_modelization': #parametric or blind
     'synchrotron_reconstruction': True, #bool
     'frequencies_planck': [100e9, 143e9, 217e9, 353e9],
     'noise_qubic': float(sys.argv[5]),

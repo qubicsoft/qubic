@@ -27,9 +27,7 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         disp=False,
         callback=None,
         reuse_initial_state=False,
-        residues=[], #################################################################################
-        npixel_patch=1,
-        nbeta_patch=1,
+        residues=[],
         verbose=True,
     ):
         """
@@ -62,10 +60,10 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         tol_linesearch : float
             Tolerance to achieve for the size of the step made at each iteration.
         M : {Non-linear operator}, optional
-            Preconditioner for the PCG. It should approximate the inverse of the hessian
-            matrix of f. M(x) should be easy to cumpute. Effective preconditioning 
-            improves the rate of convergence, which implies that fewer iterations 
-            are needed to reach a given error tolerance.
+            Diagonal preconditioner for the PCG. M(x) should approximate the inverse 
+            of the diagonal of the hessian matrix of f. M(x) should be easy to cumpute. 
+            Effective preconditioning improves the rate of convergence, which implies 
+            that fewer iterations are needed to reach a given error tolerance.
         disp : boolean
             Set to True to display convergence message
         callback : function, optional
@@ -143,9 +141,7 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
         self.d = empty(grad_f.shapeout, dtype)
         self.r = empty(grad_f.shapeout, dtype)
         self.s = empty(grad_f.shapeout, dtype)
-        self.residues = residues #################################################################################
-        self.npixel_patch = npixel_patch
-        self.nbeta_patch = nbeta_patch
+        self.residues = residues
         self.verbose = verbose
 
     def initialize(self):
@@ -163,14 +159,7 @@ class NonLinearPCGAlgorithm(IterativeAlgorithm):
             self.initial_time = time.time()
 
     def iteration(self):
-        gradient = self.grad_f(self.x) ###########################################################################
-        self.residues.append([np.linalg.norm(gradient), np.linalg.norm(gradient[:self.npixel_patch]), 
-                             np.linalg.norm(gradient[self.npixel_patch:2*self.npixel_patch]), 
-                             np.linalg.norm(gradient[2*self.npixel_patch:3*self.npixel_patch]), 
-                             np.linalg.norm(gradient[3*self.npixel_patch:4*self.npixel_patch]), 
-                             np.linalg.norm(gradient[4*self.npixel_patch:5*self.npixel_patch]), 
-                             np.linalg.norm(gradient[5*self.npixel_patch:6*self.npixel_patch]), 
-                             np.linalg.norm(gradient[6*self.npixel_patch:])])
+        self.residues.append(np.linalg.norm(self.r))
         
         j = 0
         self.delta_d = self.dot(self.d, self.d)
@@ -259,9 +248,7 @@ def non_linear_pcg(
     disp=False,
     callback=None,
     reuse_initial_state=False,
-    residues=[], #################################################################################
-    npixel_patch=1,
-    nbeta_patch=1,
+    residues=[],
     verbose=True,
 ):
     """
@@ -345,9 +332,7 @@ def non_linear_pcg(
         disp=disp,
         callback=callback,
         reuse_initial_state=reuse_initial_state,
-        residues=residues, #################################################################################
-        npixel_patch=npixel_patch,
-        nbeta_patch=nbeta_patch,
+        residues=residues,
         verbose=verbose
     )
     try:

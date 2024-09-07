@@ -450,6 +450,9 @@ class NonLinearAcquisition:
         
         return invN_qubic, invN_planck
 
+
+    # This should be the 'good' defintion of the preconditioner. In the approximation of H^T N^{-1} H, we sum over all the pairs of 
+    # frequencies. But for reasons that I don't fully understand, this preconditioner performs worse than the other one.
     '''
     def get_preconditioner(self, invN_qubic, invN_planck):
         
@@ -465,8 +468,6 @@ class NonLinearAcquisition:
             tod_index2 = invN_qubic * self.H_list[index2] * vector
             for index1 in range(len(self.H_list)):
                 self.approx_HTNH[index1, index2] = (self.H_list[index1].T * tod_index2)[self.seenpix_qubic, 0]
-            # The factor 50 is a renormalization factor to help the preconditioner of Qubic and of Planck being in the same range.
-            # It is purely empirical and could maybe be improved.
         
         def diagonal_qubic(split_map):
             # Preconditioner for Qubic
@@ -565,7 +566,8 @@ class NonLinearAcquisition:
 
 
     
-    
+    # This preconditioner contains an error. In the approximation of H.T N^{-1} H for Qubic we sum over the frequencies instead of 
+    # the pair of frequencies. But this performs better. Improvingthe preconditioner is a very important research topic.
     def get_preconditioner(self, invN_qubic, invN_planck):
         
         #We compute an approximation of the inverse of the diagonal of the hessian matrix of chi^2. 

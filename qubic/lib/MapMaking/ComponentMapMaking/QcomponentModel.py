@@ -5,7 +5,7 @@ written by Mathias Regnier
 
 from fgbuster.component_model import AnalyticComponent
 
-class ModifiedBlackBodyDeco(AnalyticComponent):
+class ModifiedBlackBodyDecorrelated(AnalyticComponent):
     """ Modified Black body
 
     Parameters
@@ -21,13 +21,14 @@ class ModifiedBlackBodyDeco(AnalyticComponent):
     """
     _REF_BETA = 1.54
     _REF_TEMP = 20.
-    _REF_W = 0
 
-    def __init__(self, nu0, temp=None, beta_d=None, w=None, units='K_CMB'):
+    def __init__(self, nu0, lcorr, beta_d=None, temp=20, units='K_CMB'):
         # Prepare the analytic expression
         # Note: beta_d (not beta) avoids collision with sympy beta functions
         #TODO: Use expm1 and get Sympy processing it as a symbol
-        analytic_expr = ('w + (exp(nu0 / temp * h_over_k) -1) / (exp(nu / temp * h_over_k) - 1) * (nu / nu0)**(1 + beta_d)')
+        analytic_expr = ('(exp(nu0 / temp * h_over_k) -1)'
+                         '/ (exp(nu / temp * h_over_k) - 1)'
+                         '* (nu / nu0)**(1 + beta_d)')
         if 'K_CMB' in units:
             analytic_expr += ' * ' + K_RJ2K_CMB_NU0
         elif 'K_RJ' in units:
@@ -39,13 +40,13 @@ class ModifiedBlackBodyDeco(AnalyticComponent):
         # - Fixed parameters -> into kwargs
         # - Free parameters -> renamed according to the param_* convention
         kwargs = {
-            'nu0': nu0, 'beta_d': beta_d, 'temp': temp, 'w': w, 'h_over_k': H_OVER_K
+            'nu0': nu0, 'beta_d': beta_d, 'temp': temp, 'h_over_k': H_OVER_K
         }
 
-        super(ModifiedBlackBodyDeco, self).__init__(analytic_expr, **kwargs)
+        super(ModifiedBlackBody, self).__init__(analytic_expr, **kwargs)
 
         self._set_default_of_free_symbols(
-            beta_d=self._REF_BETA, temp=self._REF_TEMP, w=self._REF_W)
+            beta_d=self._REF_BETA, temp=self._REF_TEMP)
 
 class COLine(AnalyticComponent):
     """ Cosmic microwave background

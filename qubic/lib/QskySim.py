@@ -452,17 +452,21 @@ class Qubic_sky(sky):
         #### Integration time assumed in FastSim files
         fastsimfile_effective_duration = 2.
 
-        with open(dir_fast + os.sep + 'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                                                   str(self.filter_nu),
-                                                                                   self.Nfout),
-                  "rb") as file:
+        fast_pkl = os.path.join(dir_fast,'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
+                                                                                      str(self.filter_nu),
+                                                                                      self.Nfout)
+                                )
+        with open(fast_pkl,"rb") as file:
+            print('reading pickle file: %s' % fast_pkl)
             DataFastSim = pickle.load(file)
-            print(file)
-        # Read Coverage map
+            
+        # Read Coverage map        
         if coverage is None:
-            DataFastSimCoverage = pickle.load(open(dir_fast + os.sep + 'DataFastSimulator_{}{}_coverage.pkl'.format(
-                                                       self.dictionary['config'],
-                                                       str(self.filter_nu)), "rb"))
+            coverage_pkl = os.path.join(dir_fast,'DataFastSimulator_{}{}_coverage.pkl'.format(self.dictionary['config'],str(self.filter_nu)))
+            print('reading coverage file: %s' % coverage_pkl)
+            h = open(coverage_pkl,'rb')
+            DataFastSimCoverage = pickle.load(h)
+            h.close()
             coverage = DataFastSimCoverage['coverage']
         # Read noise normalization
         if sigma_sec is None:

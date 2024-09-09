@@ -5,40 +5,31 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.4.0
+      jupytext_version: 1.16.4
   kernelspec:
-    display_name: Python 3
+    display_name: reorganized qubicsoft
     language: python
-    name: python3
+    name: qubic_reorg
 ---
 
 ```{python}
 # %matplotlib inline
 
 import healpy as hp
-import glob
-from scipy.optimize import curve_fit
-import pickle
-from importlib import reload
-import time
-import scipy
+import os,sys,glob,time,pickle
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 # Specific qubic modules
-from qubicpack.utilities import Qubic_DataDir
 from pysimulators import FitsArray
-import pysm3
-import qubic
-from qubic import QubicSkySim as qss
-from qubic import fibtools as ft
-from qubic import camb_interface as qc
-from qubic import SpectroImLib as si
-from qubic import NamasterLib as nam
-from qubic import mcmc
+from qubic.lib import QskySim as qss
+from qubic.lib.Qdictionary import qubicDict
+from qubic.lib.Qsamplings import equ2gal
+from qubic.data import PATH as data_dir
+print(data_dir)
 
-rc('figure', figsize=(16, 10))
-rc('font', size=15)
+plt.rcParams['figure.figsize'] =(16, 10)
+plt.rcParams['font.size'] =15
 plt.rcParams['image.cmap'] = 'jet'
 ```
 
@@ -60,11 +51,11 @@ config = 'FI220'
 
 ### Read some stuff
 # Read dictionary chosen
-d = qubic.qubicdict.qubicDict()
+d = qubicDict()
 d.read_from_file('pipeline_demo.dict')
 
 d['nside'] = 256
-center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+center = equ2gal(d['RA_center'], d['DEC_center'])
 
 # Frequency wide band, 150 or 220 GHz
 d['filter_nu'] = int(config[-3:]) * 1e9
@@ -90,7 +81,6 @@ When simulating with Spatial noise correlations, the RMS of the noise maps that 
 In this case the code returns the number of sub-bands from the input dictionary (here 1). The maps are centered on the Galactic Center. Provide your own coverage map centered elsewhere (optional argument) for another target...
 
 ```{python}
-reload(qss)
 #### One can easily change the number of sub-bands by updating the dictionary
 nbands = 3
 d['nf_recon'] = nbands
@@ -112,19 +102,19 @@ hp.gnomview(coverage, reso=25, title='Coverage Map', sub=(2,2,2))
 
 ### Maps per sub-bands
 stn = ['I', 'Q', 'U']
-figure()
+plt.figure()
 for i in range(d['nf_recon']):
     for s in range(3):
         hp.gnomview(maps_noiseless[i,:,s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
                     title='Noiseless '+stn[s]+' Sub {}'.format(i))
         
-figure()
+plt.figure()
 for i in range(d['nf_recon']):
     for s in range(3):
         hp.gnomview(maps_qubic[i,:,s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
                     title='QUBIC Fast Sim '+stn[s]+' Sub {}'.format(i))        
         
-figure()
+plt.figure()
 for i in range(d['nf_recon']):
     for s in range(3):
         hp.gnomview(maps_noise[i,:,s], reso=25, sub=(d['nf_recon'],3,3*i+s+1), 
@@ -135,8 +125,6 @@ for i in range(d['nf_recon']):
 Because in the above mode, most of the CPU time is spent on convolving the input sky to the relevant resolutions, once one has made one sky realization, it is faster to make many noise only realizations that can be added to the input CMB afterwards:
 
 ```{python}
-reload(qss)
-
 newd = d.copy()
 newd['nf_recon'] = 3
 
@@ -177,9 +165,12 @@ Qubic_sky = qss.Qubic_sky(sky_config, newd)
 ### Let's read the input noise properties from the file that is used in the fast simulator 
 ### (these are fitted to end-to=-end simulations)
 version_FastSim = '01'
-rep = os.path.join('..', '..', 'data', f'FastSimulator_version{version_FastSim}')
+rep = os.path.join(data_dir, f'FastSimulator_version{version_FastSim}')
 
-with open(rep + os.sep + f'DataFastSimulator_{config}_nfsub_{nbands}.pkl', "rb") as file:
+pklfile = rep + os.sep + f'DataFastSimulator_{config}_nfsub_{nbands}.pkl'
+print('reading pickle file: %s' % pklfile)
+
+with open(pklfile, "rb") as file:
     DataFastSim = pickle.load(file)
 
 print(DataFastSim.keys())
@@ -191,8 +182,6 @@ print(DataFastSim['alpha'])
 This one cannot be checked if the keyword 'spatial_noise' is True in the call, we therefore make a new realization with this keyword set to False. Finally, in order to be comparable to the input simulations, one needs to 
 
 ```{python}
-reload(qss)
-
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True,
                                                                     spatial_noise=False,
                                                                     sigma_sec=100)
@@ -224,8 +213,6 @@ for isub in range(newd['nf_recon']):
 For this we can use the above simulation
 
 ```{python}
-reload(qss)
-
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
                                                                     spatial_noise=False)
 
@@ -257,15 +244,11 @@ for s in range(3):
 One needs to turn spatial_noise to True obviously...
 
 ```{python}
-reload(qss)
-
 new_maps_noise, coverage = Qubic_sky.get_partial_sky_maps_withnoise(noise_only=True, 
                                                                     spatial_noise=True)
 ```
 
 ```{python}
-reload(qss)
-
 ### Get the C(theta)
 allcthI = []
 allcthQ = []
@@ -275,31 +258,29 @@ for i in range(newd['nf_recon']):
     corrected_qubicnoise = qss.correct_maps_rms(new_maps_noise[i,:,:], 
                                                 coverage, 
                                                 DataFastSim['effective_variance_invcov'][i])
-    th, thecthI, _ = qss.ctheta_parts(corrected_qubicnoise[:, 0], pixgood, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+    th, thecthI, _ = qss.ctheta_parts(corrected_qubicnoise[:, 0], pixgood, 0, 20, 20, nsplit=5, degrade_init=128)
     allcthI.append(thecthI)
-    th, thecthQ, _ = qss.ctheta_parts(corrected_qubicnoise[:, 1], pixgood, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+    th, thecthQ, _ = qss.ctheta_parts(corrected_qubicnoise[:, 1], pixgood, 0, 20, 20, nsplit=5, degrade_init=128)
     allcthQ.append(thecthQ)
-    th, thecthU, _ = qss.ctheta_parts(corrected_qubicnoise[:, 2], pixgood, 0, 20, 20, nsplit=5, degrade_init=128, verbose=False)
+    th, thecthU, _ = qss.ctheta_parts(corrected_qubicnoise[:, 2], pixgood, 0, 20, 20, nsplit=5, degrade_init=128)
     allcthU.append(thecthU)
     print(i)
 ```
 
 ```{python}
 for i in range(newd['nf_recon']):
-    plot(th, allcthI[i]/allcthI[i][0], 'o', label=f'Fast-Simulation I Sub {i+1}')
-    plot(th, allcthQ[i]/allcthQ[i][0], 'o', label=f'Fast-Simulation Q Sub {i+1}')
-    plot(th, allcthU[i]/allcthU[i][0], 'o', label=f'Fast-Simulation U Sub {i+1}')
+    plt.plot(th, allcthI[i]/allcthI[i][0], 'o', label=f'Fast-Simulation I Sub {i+1}')
+    plt.plot(th, allcthQ[i]/allcthQ[i][0], 'o', label=f'Fast-Simulation Q Sub {i+1}')
+    plt.plot(th, allcthU[i]/allcthU[i][0], 'o', label=f'Fast-Simulation U Sub {i+1}')
     
-legend()
-xlabel(r'$\theta$ [deg]')
-ylabel(r'$C(\theta$)')
+plt.legend()
+plt.xlabel(r'$\theta$ [deg]')
+plt.ylabel(r'$C(\theta$)')
 ```
 
 ### 4) RMS profile
 
 ```{python}
-reload(qss)
-
 seed = None
 sky_config = {'cmb': seed}
 Qubic_sky = qss.Qubic_sky(sky_config, newd)

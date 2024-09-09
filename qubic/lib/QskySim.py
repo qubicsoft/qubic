@@ -101,7 +101,7 @@ class sky(object):
                         # set the seed if needed
                         if 'seed' in keys:
                             np.random.seed(keyword['seed'])
-                        mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
+                        mymaps = hp.synfast(mycls.T, self.nside, new=True)
                         self.input_cmb_maps = mymaps
                         self.input_cmb_spectra = totDL
                     else:
@@ -116,7 +116,7 @@ class sky(object):
                         np.random.seed(keyword)
                     ell, totDL, unlensedCL = qc.get_camb_Dl(lmax=self.lmax)
                     mycls = qc.Dl2Cl_without_monopole(ell, totDL)
-                    mymaps = hp.synfast(mycls.T, self.nside, verbose=False, new=True)
+                    mymaps = hp.synfast(mycls.T, self.nside, new=True)
                     self.input_cmb_maps = mymaps
                     self.input_cmb_spectra = totDL
 
@@ -357,8 +357,7 @@ class Qubic_sky(sky):
             fwhms = self.dictionary['synthbeam_peak150_fwhm'] * 150. / central_nus * self.fi2td
         for i in range(Nf):
             if fwhms[i] != 0:
-                maps[i, :, :] = hp.sphtfunc.smoothing(maps[i, :, :].T, fwhm=np.deg2rad(fwhms[i]),
-                                                      verbose=verbose).T
+                maps[i, :, :] = hp.sphtfunc.smoothing(maps[i, :, :].T, fwhm=np.deg2rad(fwhms[i])).T
         return fwhms, maps
 
     def get_partial_sky_maps_withnoise(self, coverage=None, version_FastSim='01', sigma_sec=None,

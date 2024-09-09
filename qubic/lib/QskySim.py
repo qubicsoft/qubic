@@ -11,6 +11,7 @@ from qubic.lib.Instrument.Qinstrument import compute_freq
 from qubic.lib.Fitting import Qcamb as qc
 from qubic.lib.Calibration import Qfiber as ft
 from qubic.lib.Qutilities import progress_bar
+from qubic.data import PATH as data_dir
 
 __all__ = ['sky', 'Qubic_sky']
 
@@ -447,13 +448,13 @@ class Qubic_sky(sky):
         # Restore data for FastSimulation ############################################################################
         ##############################################################################################################
         #### Directory for fast simulations
-        dir_fast = os.path.join(os.path.dirname(__file__), 'data', f'FastSimulator_version{version_FastSim}')
+        dir_fast = os.path.join(data_dir,f'FastSimulator_version{version_FastSim}')
         #### Integration time assumed in FastSim files
         fastsimfile_effective_duration = 2.
 
         with open(dir_fast + os.sep + 'DataFastSimulator_{}{}_nfsub_{}.pkl'.format(self.dictionary['config'],
-                                                                          str(self.filter_nu),
-                                                                          self.Nfout),
+                                                                                   str(self.filter_nu),
+                                                                                   self.Nfout),
                   "rb") as file:
             DataFastSim = pickle.load(file)
             print(file)

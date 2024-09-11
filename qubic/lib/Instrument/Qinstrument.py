@@ -139,7 +139,7 @@ class QubicInstrument(Instrument):
         else:
             self.FRBW = filter_relative_bandwidth
         if self.debug:
-            print('FRBW = ', self.FRBW, 'dnu = ', filter_relative_bandwidth)
+            print('filter_nu = ',filter_nu,'FRBW = ', self.FRBW, 'dnu = ', filter_relative_bandwidth)
 
         ## Choose the relevant Optics calibration file
         self.nu1 = 150e9

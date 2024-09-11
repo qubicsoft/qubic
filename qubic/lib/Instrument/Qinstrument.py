@@ -1305,7 +1305,8 @@ class QubicMultibandInstrument:
 
         ### Monochromatic
         if d['nf_sub'] == 1 and d['type_instrument'] != 'wide' :
-            Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = compute_freq(d['filter_nu'],
+            band = d['filter_nu']/1e9
+            Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = compute_freq(band,
                                                                         d['nf_sub'],
                                                                         d['filter_relative_bandwidth'])
             

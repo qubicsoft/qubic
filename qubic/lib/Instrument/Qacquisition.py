@@ -2260,6 +2260,7 @@ class QubicWideBand:
         self.Nsub = self.qubic150.Nsub*2
         self.Nrec = self.qubic150.Nrec*2
         self.type = 'WideBand'
+        self.kind = 'WideBand'
         self.final_fwhm = np.array([])
         self.final_fwhm = np.append(self.final_fwhm, self.qubic150.final_fwhm)
         self.final_fwhm = np.append(self.final_fwhm, self.qubic220.final_fwhm)

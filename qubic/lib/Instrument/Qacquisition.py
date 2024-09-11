@@ -2196,7 +2196,7 @@ class QubicTwoBands:
         self.final_fwhm = np.append(self.final_fwhm, self.qubic150.final_fwhm)
         self.final_fwhm = np.append(self.final_fwhm, self.qubic220.final_fwhm)
         self.qubic150.d['photon_noise'] = self.qubic220.d['photon_noise']
-        self.Nsamples = self.qubic150.Nsamples
+        #self.Nsamples = self.qubic150.Nsamples
         self.Ndets = 2*992
 
         self.nueff = np.array([])
@@ -2264,7 +2264,7 @@ class QubicWideBand:
         self.final_fwhm = np.append(self.final_fwhm, self.qubic220.final_fwhm)
         self.qubic150.d['photon_noise'] = self.qubic220.d['photon_noise']
         self.photon_noise = self.qubic150.d['photon_noise']
-        self.Nsamples = self.qubic150.Nsamples
+        #self.Nsamples = self.qubic150.Nsamples
         self.Ndets = 992
 
         self.nueff = np.array([])

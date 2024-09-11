@@ -2180,4 +2180,167 @@ class QubicFullBand(QubicPolyAcquisition):
         return ndet, npho150, npho220
     
 ########################################################################################################################################
-### code from Mathias Regnier, originally in component_acquisition.py
+### code from Mathias Regnier, from frequency_acquisition
+class QubicTwoBands:
+
+    def __init__(self, qubic150, qubic220):
+
+        self.qubic150 = qubic150
+        self.qubic220 = qubic220
+        self.scene = self.qubic150.scene
+        self.qubic150.d['noiseless'] = self.qubic220.d['noiseless']
+        self.Nsub = self.qubic150.Nsub*2
+        self.Nrec = self.qubic150.Nrec*2
+        self.type = 'TwoBands'
+        self.final_fwhm = np.array([])
+        self.final_fwhm = np.append(self.final_fwhm, self.qubic150.final_fwhm)
+        self.final_fwhm = np.append(self.final_fwhm, self.qubic220.final_fwhm)
+        self.qubic150.d['photon_noise'] = self.qubic220.d['photon_noise']
+        self.Nsamples = self.qubic150.Nsamples
+        self.Ndets = 2*992
+
+        self.nueff = np.array([])
+
+        for i in range(len(self.qubic150.nus_edge)-1):
+            self.nueff = np.append(self.nueff, np.mean(self.qubic150.nus_edge[i:i+2]))
+
+        for i in range(len(self.qubic220.nus_edge)-1):
+            self.nueff = np.append(self.nueff, np.mean(self.qubic220.nus_edge[i:i+2]))
+
+
+
+        self.nus_edge = np.array([])
+        self.nus_edge = np.append(self.nus_edge, self.qubic150.nus_edge)
+        self.nus_edge = np.append(self.nus_edge, self.qubic220.nus_edge)
+        self.Nf = self.qubic150.d['nf_recon']
+
+    def get_operator(self, convolution):
+
+        self.H150 = self.qubic150.get_operator(convolution=convolution)
+        self.H220 = self.qubic220.get_operator(convolution=convolution)
+        ndets, nsamples = self.H150.shapeout
+
+        ope = [self.H150, self.H220]
+
+        if self.qubic150.d['nf_recon'] == 1:
+            hh = BlockDiagonalOperator(ope, new_axisout=0)
+            R = ReshapeOperator(hh.shapeout, (hh.shapeout[0]*hh.shapeout[1], hh.shapeout[2]))
+            #H = BlockDiagonalOperator(ope, axisin=0)
+            #R = ReshapeOperator((2*self.d['nf_recon'], 12*self.d['nside']**2, 3), H.shapein)
+            return R * hh
+        else:
+            return BlockDiagonalOperator(ope, axisin=0)
+
+    def get_coverage(self):
+        return self.qubic150.get_coverage()
+
+    def get_noise(self):
+
+        self.n150 = self.qubic150.get_noise()
+        self.n220 = self.qubic220.get_noise()
+
+        return np.r_[self.n150, self.n220]
+
+    def get_invntt_operator(self):
+
+        self.invn150 = self.qubic150.get_invntt_operator()
+        self.invn220 = self.qubic220.get_invntt_operator()
+
+        return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
+
+class QubicWideBand:
+
+    def __init__(self, qubic150, qubic220):
+
+        self.qubic150 = qubic150
+        self.qubic220 = qubic220
+        self.scene = self.qubic150.scene
+        self.qubic150.d['noiseless'] = self.qubic220.d['noiseless']
+        self.Nsub = self.qubic150.Nsub*2
+        self.Nrec = self.qubic150.Nrec*2
+        self.type = 'WideBand'
+        self.final_fwhm = np.array([])
+        self.final_fwhm = np.append(self.final_fwhm, self.qubic150.final_fwhm)
+        self.final_fwhm = np.append(self.final_fwhm, self.qubic220.final_fwhm)
+        self.qubic150.d['photon_noise'] = self.qubic220.d['photon_noise']
+        self.photon_noise = self.qubic150.d['photon_noise']
+        self.Nsamples = self.qubic150.Nsamples
+        self.Ndets = 992
+
+        self.nueff = np.array([])
+
+        for i in range(len(self.qubic150.nus_edge)-1):
+            self.nueff = np.append(self.nueff, np.mean(self.qubic150.nus_edge[i:i+2]))
+
+        for i in range(len(self.qubic220.nus_edge)-1):
+            self.nueff = np.append(self.nueff, np.mean(self.qubic220.nus_edge[i:i+2]))
+
+
+
+        self.nus_edge = np.array([])
+        self.nus_edge = np.append(self.nus_edge, self.qubic150.nus_edge)
+        self.nus_edge = np.append(self.nus_edge, self.qubic220.nus_edge)
+        self.Nf = self.qubic150.d['nf_recon']
+
+
+        print('****************************')
+        print('Noise : {}'.format(not self.qubic150.d['noiseless']))
+        print('  Detector noise : {}'.format(not self.qubic150.d['noiseless']))
+        print('  Photon noise   : {}'.format(self.photon_noise))
+        print('****************************')
+
+
+    def get_operator(self, convolution=False):
+
+        self.H150 = self.qubic150.get_operator(convolution=convolution)
+        self.H220 = self.qubic220.get_operator(convolution=convolution)
+
+        operator = []
+
+        if self.qubic150.Nsub != 1:
+            for i in range(2):
+                for j in range(self.qubic150.Nrec):
+                    if i == 0:
+                        operator.append(self.H150.operands[j])
+                    else:
+                        operator.append(self.H220.operands[j])
+
+            return BlockRowOperator(operator, new_axisin=0)
+        else:
+            operator = [self.H150, self.H220]
+
+            return BlockRowOperator(operator, new_axisin=0)
+
+    def get_noise(self):
+        detector_noise = self.qubic150.multiinstrument[0].get_noise_detector(self.qubic150.sampling)
+        #print(self.qubic150.sampling.period, self.qubic150.d['effective_duration'])
+        nsamplings = self.qubic150.sampling.comm.allreduce(len(self.qubic150.sampling))
+        fact = np.sqrt(nsamplings * self.qubic150.sampling.period / (self.qubic150.d['effective_duration'] * 31557600))
+
+        if self.photon_noise:
+            photon_noise150 = self.qubic150.multiinstrument[0].get_noise_photon(self.qubic150.sampling, self.qubic150.scene)
+            photon_noise220 = self.qubic150.multiinstrument[0].get_noise_photon(self.qubic150.sampling, self.qubic150.scene)
+            photon_noise = photon_noise150 + photon_noise220
+
+            return fact * (detector_noise + photon_noise)
+        else:
+            return fact * detector_noise
+
+    def get_invntt_operator(self):
+
+        sigma = self.qubic150.multiinstrument[0].detector.nep / np.sqrt(2 * self.qubic150.sampling.period)
+        sigma_photon150 = self.qubic150.multiinstrument[0]._get_noise_photon_nep(self.qubic150.scene) / np.sqrt(2 * self.qubic150.sampling.period)
+        sigma_photon220 = self.qubic220.multiinstrument[0]._get_noise_photon_nep(self.qubic220.scene) / np.sqrt(2 * self.qubic220.sampling.period)
+
+        sig = np.sqrt(sigma**2 + sigma_photon150**2 + sigma_photon220**2)
+
+        f = (len(self.qubic150.sampling) * self.qubic150.sampling.period / (self.qubic150.d['effective_duration'] * 31557600))
+        out =  DiagonalOperator(1 / sig ** 2, broadcast='rightward',
+                                   shapein=(len(self.qubic150.multiinstrument[0]), len(self.qubic150.sampling))) / f
+
+
+        return out#self.qubic150.get_invntt_operator() + self.qubic220.get_invntt_operator()
+
+    def get_coverage(self):
+        return self.qubic150.get_coverage()
+

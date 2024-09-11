@@ -1,12 +1,11 @@
 ---
 jupyter:
   jupytext:
-    formats: ipynb,Rmd
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.14.4
+      jupytext_version: 1.16.4
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -118,7 +117,7 @@ def get_dictionary(nsub, nside, pointing, band):
     d['effective_duration'] = 3
     d['npointings'] = pointing
     d['filter_nu'] = int(band*1e9)
-    d['photon_noise'] = True
+    d['photon_noise'] = False
     d['noiseless'] = False
     d['config'] = 'FI'
     d['MultiBand'] = True
@@ -127,7 +126,7 @@ def get_dictionary(nsub, nside, pointing, band):
 ```
 
 ```{python}
-nsub = 1
+nsub = 3
 nside = 256
 pointing = 1000
 band = 150
@@ -152,28 +151,21 @@ planck143 = Acq.PlanckAcquisition(143, qu.scene)
 planck217 = Acq.PlanckAcquisition(217, qu.scene)
 
 qupl = Acq.QubicPlanckMultiBandAcquisition(qu, [planck143, planck217])
-cov = qubic150.get_coverage()
-seenpix1 = cov/cov.max() > 0.
-seenpix2 = cov/cov.max() > 0.
-#mask = np.array(seenpix)
+
 #Hw = qu.get_operator(convolution=False)
 #print(Hw.shapein, Hw.shapeout)
 ```
 
 ```{python}
-mask = np.array(seenpix2, dtype=float)
-mask += 1
-mask[seenpix1] *= 1e20
+#H = qu.get_operator(convolution=False)
 ```
 
 ```{python}
-#invN.operands[2].operands[1]
+#H.operands[1].operands[1]#.operands[1]
 ```
 
 ```{python}
 invN = qupl.get_invntt_operator()
-#invN.operands[0].operands[1] /= 1e0
-#invN.operands[2].operands[1] /= 1e0
 ```
 
 ```{python}
@@ -181,52 +173,16 @@ Hw_pl = qupl.get_operator()
 ```
 
 ```{python}
+print(Hw_pl.shapein, Hw_pl.shapeout)
+```
+
+```{python}
 cmb = qu.qubic150.get_PySM_maps({'cmb':42}, nus=qu.nueff)
-cmb_qu = cmb.copy()
-#cmb_qu[:, ~seenpix2] = 0
-cmb_pl = cmb.copy()
-#cmb_pl[:, seenpix1] = 0
 ```
 
 ```{python}
-
-```
-
-```{python}
-Hpl = ReshapeOperator((786432,3), 2359296)
-tod_pl = Hpl(cmb_pl[0])
-n = qupl.get_noise()
-n_pl = n[991008:991008 + 2359296]
-n_pl = Hpl.T(n_pl)
-n_pl[seenpix1] = 0
-n_pl = Hpl(n_pl)
-```
-
-```{python}
-tod = np.array([])
-tod = np.append(tod, tod_qubic[:991008])# + n[:991008])
-for i in range(Nrec):
-    tod = np.append(tod, tod_pl+n_pl)
-
-tod = np.append(tod, tod_qubic[991008 + 2359296:2*991008 + 2359296])# + n[991008 + Nrec * 3*12*nside**2:2*991008 + (Nrec) * 3*12*nside**2])
-
-for i in range(Nrec):
-    tod = np.append(tod, tod_pl+n_pl)
-```
-
-```{python}
-
-
-#tod = Hw_pl(cmb) + n
-
-
 A = Hw_pl.T * invN * Hw_pl
-b = Hw_pl.T * invN * tod
-```
-
-```{python}
-plt.plot(n)
-plt.plot(tod, alpha=0.3)
+b = Hw_pl.T * invN * (Hw_pl(cmb)+qupl.get_noise())
 ```
 
 ```{python}
@@ -234,50 +190,37 @@ plt.plot(tod, alpha=0.3)
 ```
 
 ```{python}
-solution = pcg(A, b, x0=None, maxiter=50, tol=1e-40, disp=True)
+
 ```
 
 ```{python}
-pixok = cov/cov.max() > 0.1
-res = 25
-r = 1
-istk = 1
 
+```
+
+```{python}
+solution = pcg(A, b, x0=None, maxiter=100, tol=1e-6, disp=True)
+```
+
+```{python}
 plt.figure(figsize=(15, 5))
 
-hp.gnomview(cmb[0, :, istk], cmap='jet', rot=center, reso=res, sub=(1, 3, 1), min=-8, max=8)
-#solution['x'][0, ~pixok, istk] = hp.UNSEEN
-hp.gnomview(solution['x'][0, :, istk], cmap='jet', rot=center, reso=res, sub=(1, 3, 2), min=-8, max=8)
+res = 15
+r = 8
+istk = 1
 
-residual = cmb[0, :, istk]-solution['x'][0, :, istk]
-#residual[~pixok] = hp.UNSEEN
-hp.gnomview(residual, cmap='jet', rot=center, reso=res, sub=(1, 3, 3), min=-r, max=r)
+hp.gnomview(cmb[0, :, istk], cmap='jet', rot=center, reso=res, sub=(1, 3, 1), min=-8, max=8)
+hp.gnomview(solution['x'][0, :, istk], cmap='jet', rot=center, reso=res, sub=(1, 3, 2), min=-8, max=8)
+hp.gnomview(cmb[0, :, istk]-solution['x'][0, :, istk], cmap='jet', rot=center, reso=res, sub=(1, 3, 3), min=-r, max=r)
 
 plt.show()
 
 plt.figure(figsize=(15, 5))
 
 hp.gnomview(cmb[1, :, istk], cmap='jet', rot=center, reso=res, sub=(1, 3, 1), min=-8, max=8)
-#solution['x'][1, ~pixok, istk] = hp.UNSEEN
 hp.gnomview(solution['x'][1, :, istk], cmap='jet', rot=center, reso=res, sub=(1, 3, 2), min=-8, max=8)
-
-residual = cmb[1, :, istk]-solution['x'][1, :, istk]
-#residual[~pixok] = hp.UNSEEN
-hp.gnomview(residual, cmap='jet', rot=center, reso=res, sub=(1, 3, 3), min=-r, max=r)
+hp.gnomview(cmb[1, :, istk]-solution['x'][1, :, istk], cmap='jet', rot=center, reso=res, sub=(1, 3, 3), min=-r, max=r)
 
 plt.show()
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
 ```
 
 ```{python}

@@ -1,7 +1,7 @@
 '''
 renamed from analytical_forecast_lib.py
 '''
-from qubic.lib.Instrument.Qinstrument import compute_freq
+from .InstrumentModel.Qinstrument import compute_freq
 import numpy as np
 import healpy as hp
 

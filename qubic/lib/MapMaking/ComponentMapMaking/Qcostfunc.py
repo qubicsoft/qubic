@@ -1,13 +1,17 @@
 from pyoperators import *
 from pyoperators.iterative.cg import _dot
 
-import fgbuster.mixing_matrix as mm
-import fgbuster.component_model as c
+import fgbuster.mixingmatrix as mm
+from . import Qcomponent_model as c
+#import fgbuster.component_model as c
 
-from qubic.Qacquisition import *
-from qubic.Qnoise import *
+from ...InstrumentModel.Qacquisition import *
+from ...InstrumentModel.Qnoise import *
+from ...Qutilities import *
 
-from qubic.Qutilities import *
+#from qubic.Qacquisition import *
+#from qubic.Qnoise import *
+#from qubic.Qutilities import *
 
 
 class PresetSims:

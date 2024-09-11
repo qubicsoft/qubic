@@ -11,11 +11,18 @@ from scipy import interpolate
 import os
 
 ### Specific modules 
-from qubic.lib.Qdictionary import qubicDict
-from qubic.lib.Qutilities import progress_bar
-from qubic.lib.Instrument.Qinstrument import QubicInstrument
-from qubic.lib.Calibration import Qselfcal as scal
-from qubic.lib.Calibration import Qfiber as ft
+
+from .Qdictionary import qubicDict
+from .Qutilities import progress_bar
+from .InstrumentModel.Qinstrument import QubicInstrument
+from .Calibration import Qselfcal as scal
+from .Calibration import Qfiber as ft
+
+#from qubic.lib.Qdictionary import qubicDict
+#from qubic.lib.Qutilities import progress_bar
+#from qubic.lib.InstrumentModel.Qinstrument import QubicInstrument
+#from qubic.lib.Calibration import Qselfcal as scal
+#from qubic.lib.Calibration import Qfiber as ft
 
 __all__ = ['MySplineFitting',
            'Pip1Tes',
@@ -255,9 +262,9 @@ class Pip1Tes:
 	    	# scan +
 			ok = self.scantype == n
 			if method == 'meancut':
-			    myoffsetp, _ = ft.meancut(self.tod[ok], 3)
+				myoffsetp, _ = ft.meancut(self.tod[ok], 3)
 			elif method == 'median':
-			    myoffsetp = np.median(self.tod[ok])
+				myoffsetp = np.median(self.tod[ok])
 			elif method == 'mode':
 				myoffsetp = get_mode(self.tod[ok])
 			else:
@@ -275,9 +282,9 @@ class Pip1Tes:
 	    	# scan -
 			ok = self.scantype == (-n)
 			if method == 'meancut':
-			    myoffsetn, _ = ft.meancut(self.tod[ok], 3)
+				myoffsetn, _ = ft.meancut(self.tod[ok], 3)
 			elif method == 'median':
-			    myoffsetn = np.median(self.tod[ok])
+				myoffsetn = np.median(self.tod[ok])
 			elif method == 'mode':
 				myoffsetn = get_mode(self.tod[ok])
 			else:

@@ -1,12 +1,12 @@
 # general imports
+import sys,os,pickle,warnings
+warnings.filterwarnings("ignore")
+
 import healpy as hp
 import numpy as np
 import pysm3
 import pysm3.units as u
 from pysm3 import utils
-import pickle
-import warnings
-warnings.filterwarnings("ignore")
 
 # Qubic imports
 from qubic.data import PATH as data_dir
@@ -23,8 +23,8 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 def polarized_I(m, nside, polarization_fraction=0.01):
     
-    polangle = hp.ud_grade(hp.read_map(data_dir+'psimap_dust90_512.fits'), nside)
-    depolmap = hp.ud_grade(hp.read_map(data_dir+'gmap_dust90_512.fits'), nside)
+    polangle = hp.ud_grade(hp.read_map(os.path.join(data_dir,'psimap_dust90_512.fits')), nside)
+    depolmap = hp.ud_grade(hp.read_map(os.path.join(data_dir,'gmap_dust90_512.fits')), nside)
     cospolangle = np.cos(2.0 * polangle)
     sinpolangle = np.sin(2.0 * polangle)
     #print(depolmap.shape)
@@ -36,7 +36,7 @@ def create_array(name, nus, nside):
         shape=(2, 12*nside**2, 3)
     else:
         shape=len(nus)
-    pkl_file = open(data_dir+'AllDataSet_Components_MapMaking.pkl', 'rb')
+    pkl_file = open(os.path.join(data_dir,'AllDataSet_Components_MapMaking.pkl'), 'rb')
     dataset = pickle.load(pkl_file)
 
     myarray=np.zeros(shape)
@@ -56,11 +56,11 @@ def get_preconditioner(cov):
 def arcmin2rad(arcmin):
     return arcmin * 0.000290888
 def give_cl_cmb(r=0, Alens=1.):
-    power_spectrum = hp.read_cl(data_dir+'Cls_Planck2018_lensed_scalar.fits')[:,:4000]
+    power_spectrum = hp.read_cl(os.path.join(data_dir,'Cls_Planck2018_lensed_scalar.fits'))[:,:4000]
     if Alens != 1.:
         power_spectrum[2] *= Alens
     if r:
-        power_spectrum += r * hp.read_cl(data_dir+'Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
+        power_spectrum += r * hp.read_cl(os.path.join(data_dir,'Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits'))[:,:4000]
     return power_spectrum
 def rad2arcmin(rad):
     return rad / 0.000290888
@@ -1590,7 +1590,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
                 
                 #myco=np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0*u.GHz, None, u.uK_CMB))
                 # 10 is for reproduce the PsYM template
-                m = hp.ud_grade(hp.read_map(data_dir+'CO_line.fits') * 10, self.scene.nside)
+                m = hp.ud_grade(hp.read_map(os.path.join(data_dir,'CO_line.fits')) * 10, self.scene.nside)
                 #print(self.nside)   
                 mP = polarized_I(m, self.scene.nside)
                 #print(mP.shape)
@@ -1614,7 +1614,7 @@ class OtherDataParametric:
             raise TypeError('The integration of external data should be greater than 1')
         
         self.nintegr = nintegr
-        pkl_file = open(data_dir+'AllDataSet_Components_MapMaking.pkl', 'rb')
+        pkl_file = open(os.path.join(data_dir,'AllDataSet_Components_MapMaking.pkl'), 'rb')
         dataset = pickle.load(pkl_file)
         self.dataset = dataset
 

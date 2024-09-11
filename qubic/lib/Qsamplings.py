@@ -1,6 +1,4 @@
 # coding: utf-8
-from __future__ import division, print_function
-
 import numpy as np
 from astropy.time import Time, TimeDelta
 from numpy.random import random_sample as randomu
@@ -250,7 +248,7 @@ def create_repeat_pointings(center, npointings, dtheta, nhwp_angles, date_obs=No
     """
 
     r = np.random.RandomState(seed)
-    nrandom = np.int(npointings / nhwp_angles)  # number of real random pointings
+    nrandom = int(npointings / nhwp_angles)  # number of real random pointings
     print('You asked {0} pointings with repeat strategy so I will provide {1} pointings '
           'repeated {2} times.'.format(npointings, nrandom, nhwp_angles))
 

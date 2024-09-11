@@ -314,46 +314,46 @@ class PresetAcquisition:
         ):
             fwhm_rec = np.min(self.preset_qubic.joint_in.qubic.allfwhm)
         elif (
-            self.preset_qubic.params_qubic["convolution_in"]
-            and not self.preset_qubic.params_qubic["convolution_out"]
-        ):
-            fwhm_rec = np.mean(self.preset_qubic.joint_in.qubic.allfwhm)
-        elif (
             not self.preset_qubic.params_qubic["convolution_in"]
             and not self.preset_qubic.params_qubic["convolution_out"]
         ):
+            fwhm_rec = np.mean(self.preset_qubic.joint_in.qubic.allfwhm) * 0
+        elif (
+            self.preset_qubic.params_qubic["convolution_in"]
+            and not self.preset_qubic.params_qubic["convolution_out"]
+        ):
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
-            self.fwhm_reconstructed = np.zeros(len(self.preset_fg.components_model_out))
-            for comp in range(len(self.preset_fg.components_model_out)):
-                if self.preset_fg.components_name_out[comp] == "CMB":
-                    self.fwhm_reconstructed[comp] = np.sum(
-                        scalar_acquisition_operators * self.fwhm_tod
+            fwhm_rec = np.zeros(len(self.preset_comp.components_model_out))
+            for comp in range(len(self.preset_comp.components_model_out)):
+                if self.preset_comp.components_name_out[comp] == "CMB":
+                    fwhm_rec[comp] = np.sum(
+                        scalar_acquisition_operators * fwhm_tod
                     ) / (np.sum(scalar_acquisition_operators))
-                if self.preset_fg.components_name_out[comp] == "Dust":
+                if self.preset_comp.components_name_out[comp] == "Dust":
                     f_dust = c.ModifiedBlackBody(
-                        nu0=self.preset_fg.params_foregrounds["Dust"]["nu0_d"],
-                        beta_d=self.preset_fg.params_foregrounds["Dust"]["beta_d_init"][
+                        nu0=self.preset_comp.params_foregrounds["Dust"]["nu0_d"],
+                        beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][
                             0
                         ],
                     )
-                    self.fwhm_reconstructed[comp] = np.sum(
+                    fwhm_rec[comp] = np.sum(
                         scalar_acquisition_operators
                         * f_dust.eval(self.preset_qubic.joint_out.qubic.allnus)
-                        * self.fwhm_tod
+                        * fwhm_tod
                     ) / (
                         np.sum(
                             scalar_acquisition_operators
                             * f_dust.eval(self.preset_qubic.joint_out.qubic.allnus)
                         )
                     )
-                if self.preset_fg.components_name_out[comp] == "Synchrotron":
+                if self.preset_comp.components_name_out[comp] == "Synchrotron":
                     f_sync = c.PowerLaw(
-                        nu0=self.preset_fg.params_foregrounds["Synchrotron"]["nu0_s"],
-                        beta_pl=self.preset_fg.params_foregrounds["Synchrotron"][
+                        nu0=self.preset_comp.params_foregrounds["Synchrotron"]["nu0_s"],
+                        beta_pl=self.preset_comp.params_foregrounds["Synchrotron"][
                             "beta_s_init"
                         ][0],
                     )
-                    self.fwhm_reconstructed[comp] = np.sum(
+                    fwhm_rec[comp] = np.sum(
                         scalar_acquisition_operators
                         * f_sync.eval(self.preset_qubic.joint_out.qubic.allnus)
                         * self.fwhm_tod
@@ -368,7 +368,7 @@ class PresetAcquisition:
             not self.preset_qubic.params_qubic["convolution_in"]
             and not self.preset_qubic.params_qubic["convolution_out"]
         ):
-            self.fwhm_reconstructed = np.zeros(len(self.preset_fg.components_model_out))
+            fwhm_rec = np.zeros(len(self.preset_comp.components_model_out))
 
         # Print the FWHM values
         self.preset_tools._print_message(f"FWHM for TOD making : {fwhm_tod}")

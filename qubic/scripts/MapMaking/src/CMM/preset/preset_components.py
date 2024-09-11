@@ -7,7 +7,7 @@ import pysm3.units as u
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysm3 import utils
 
-PATH = os.getcwd() + "/data/"
+from qubic.data import PATH
 
 
 class PresetComponents:

@@ -3,6 +3,7 @@ import numpy as np
 import qubic
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from qubic.lib.Fitting import Qnamaster as nam
+from qubic.lib.Qsamplings import equ2gal
 
 
 class PresetSky:
@@ -51,7 +52,7 @@ class PresetSky:
 
         ### Center of the QUBIC patch
         self.preset_tools._print_message("    => Getting center of the QUBIC patch")
-        self.center = qubic.equ2gal(
+        self.center = equ2gal(
             self.params_sky["RA_center"], self.params_sky["DEC_center"]
         )
 

@@ -7,8 +7,6 @@ import numpy as np
 import pysm3
 import qubic
 
-path_to_data = os.getcwd() + "/data/"
-
 import pickle
 import warnings
 
@@ -59,7 +57,7 @@ def create_array(name, nus, nside):
         shape = (2, 12 * nside**2, 3)
     else:
         shape = len(nus)
-    pkl_file = open(path_to_data + "AllDataSet_Components_MapMaking.pkl", "rb")
+    pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
     dataset = pickle.load(pkl_file)
 
     myarray = np.zeros(shape)
@@ -2264,7 +2262,7 @@ class OtherDataParametric:
         #    raise TypeError('The integration of external data should be greater than 1')
 
         self.nintegr = nintegr
-        pkl_file = open(path_to_data + "AllDataSet_Components_MapMaking.pkl", "rb")
+        pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
         dataset = pickle.load(pkl_file)
         self.dataset = dataset
 

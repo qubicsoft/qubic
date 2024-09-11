@@ -3,7 +3,7 @@ import qubic
 
 import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
 from qubic.lib.InstrumentModel.Qacquisition import JointAcquisitionComponentsMapMaking
-
+from qubic.lib.Qdictionary import qubicDict
 
 class PresetQubic:
     """Preset QUBIC.
@@ -145,7 +145,7 @@ class PresetQubic:
 
         ### Get the default dictionary
         dictfilename = "dicts/pipeline_demo.dict"
-        d = qubic.qubicdict.qubicDict()
+        d = qubicDict()
         d.read_from_file(dictfilename)
 
         ### Update the default dictionary with the constructed parameters

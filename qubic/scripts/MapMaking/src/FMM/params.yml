@@ -17,10 +17,10 @@ QUBIC:
     ### This section control the parameters related to QUBIC
 
     instrument: 'DB'                        # Instrumental design (DB or UWB)
-    npointings: 100                        # Number of time samples
-    nsub_in: 6                             # Number of sub-acquisitions
-    nsub_out: 6
-    nrec: 2                                # Number of reconstructed frequency maps
+    npointings: 3000                        # Number of time samples
+    nsub_in: 12                             # Number of sub-acquisitions
+    nsub_out: 12
+    nrec: 4                                # Number of reconstructed frequency maps
     convolution_in: False                   # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
@@ -37,7 +37,7 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 64                              # Nside of components
+    nside: 256                              # Nside of components
     coverage_cut: 0.2                      # Define a cut where the coverage is too low
     RA_center: 0                   
     DEC_center: -57

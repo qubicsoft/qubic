@@ -43,6 +43,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         input=None,
         fwhm=0,
         iter_init=0,
+        is_planck=False,
     ):
         """
         Parameters
@@ -98,6 +99,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         self.fwhm_plot = fwhm_plot
         self.input = input
         self.fwhm = fwhm_plot
+        self.is_planck = is_planck
 
         if self.gif is not None:
             if not os.path.isdir(self.gif):
@@ -180,33 +182,36 @@ class PCGAlgorithm(IterativeAlgorithm):
         self.A(self.d, self.q)
         alpha = self.delta / self.dot(self.d, self.q)
         self.x += alpha * self.d
-        _r = self.x - self.input[:, self.seenpix, :]
+        
+        map_i = self.x.copy()
+        if self.is_planck:
+            map_i = np.ones(self.input.shape) * hp.UNSEEN
+            map_i[:, self.seenpix, :] = self.x.copy()
+            
+        _r = map_i[:, self.seenpix, :] - self.input[:, self.seenpix, :]
         self.rms = np.std(_r, axis=1)
+        
         if self.gif is not None:
             if self.comm.Get_rank() == 0:
 
-                mymap = np.zeros(self.input.shape)
                 nsig = 2
                 min, max = -nsig * np.std(
                     self.input[0, self.seenpix], axis=0
                 ), nsig * np.std(self.input[0, self.seenpix], axis=0)
 
-                mymap[:, self.seenpix, :] = self.x.copy()
-                mymap[:, ~self.seenpix_plot, :] = hp.UNSEEN
-
                 _plot_reconstructed_maps(
-                    mymap,
+                    map_i,
                     self.input,
+                    self.seenpix,
                     self.gif + f"iter_{self.niterations+self.iter_init}.png",
                     self.center,
                     reso=self.reso,
-                    figsize=(12, 2.7*mymap.shape[0]),
+                    figsize=(12, 2.7*map_i.shape[0]),
                     min=min,
                     max=max,
                     fwhm=self.fwhm,
                     iter=self.niterations,
                 )
-
         self.r -= alpha * self.q
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)
         self.convergence = np.append(self.convergence, self.error)
@@ -250,6 +255,7 @@ def pcg(
     input=None,
     fwhm=0,
     iter_init=0,
+    is_planck=False,
 ):
     """
     output = pcg(A, b, [x0, tol, maxiter, M, disp, callback,
@@ -319,6 +325,7 @@ def pcg(
         input=input,
         fwhm=fwhm,
         iter_init=iter_init,
+        is_planck=is_planck,
     )
     try:
         output = algo.run()

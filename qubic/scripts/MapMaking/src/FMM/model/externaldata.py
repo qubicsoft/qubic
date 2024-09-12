@@ -12,7 +12,7 @@ from qubic.data import PATH as data_dir
 
 
 # from mapmaking.systematics import give_cl_cmb, arcmin2rad
-from qubic.lib.InstrumentModel.Qacquisition import *
+from qubic.lib.Instrument.Qacquisition import *
 
 from .models import *
 

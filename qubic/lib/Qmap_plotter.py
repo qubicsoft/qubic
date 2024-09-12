@@ -9,6 +9,7 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 def _plot_reconstructed_maps(
     maps,
     m_in,
+    seenpix,
     name_file,
     center,
     reso=15,
@@ -27,8 +28,6 @@ def _plot_reconstructed_maps(
     plt.figure(figsize=figsize)
 
     _shape = maps.shape
-    index = np.where(maps[0, :, 0] != hp.UNSEEN)[0]
-    index_not_seen = np.where(maps[0, :, 0] == hp.UNSEEN)[0]
     C = HealpixConvolutionGaussianOperator(
         fwhm=fwhm, lmax=2 * hp.npix2nside(m_in.shape[1])
     )
@@ -38,8 +37,8 @@ def _plot_reconstructed_maps(
     for inu in range(_shape[0]):
         _m = C(maps[inu])
         _r = C(res[inu])
-        _m[index_not_seen, :] = hp.UNSEEN
-        _r[index_not_seen, :] = hp.UNSEEN
+        _m[~seenpix, :] = hp.UNSEEN
+        _r[~seenpix, :] = hp.UNSEEN
         for istk in range(_shape[-1]):
 
             hp.gnomview(

@@ -1,6 +1,6 @@
 from .Calibration import *
 from .Fitting import *
-from .InstrumentModel import *
+from .Instrument import *
 from .MapMaking import *
 from .Qcoaddition import *
 from .QdataHandling import *

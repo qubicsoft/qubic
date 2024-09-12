@@ -5,8 +5,8 @@ import fgbuster.mixingmatrix as mm
 from . import Qcomponent_model as c
 #import fgbuster.component_model as c
 
-from ...InstrumentModel.Qacquisition import *
-from ...InstrumentModel.Qnoise import *
+from ...Instrument.Qacquisition import *
+from ...Instrument.Qnoise import *
 from ...Qutilities import *
 
 #from qubic.Qacquisition import *

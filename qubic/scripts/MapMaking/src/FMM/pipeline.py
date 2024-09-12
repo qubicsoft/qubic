@@ -16,12 +16,12 @@ from qubic.lib.Qfoldertools import *
 from qubic.lib.Qmap_plotter import *
 from qubic.lib.Instrument.Qnoise import *
 from qubic.lib.Qspectra import *
-
+from qubic.lib.Qmpi_tools import get_random_value, _barrier
 from .model.externaldata import *
 from .model.models import *
 from .model.planck_timeline import *
 
-
+'''
 def save_pkl(name, d):
     """
     Function that create a file called "name" to save the dictionary "d" using Pickle package
@@ -35,7 +35,7 @@ def save_pkl(name, d):
     """
     with open(name, "wb") as handle:
         pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
+'''
 
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
 
@@ -170,7 +170,7 @@ class PipelineFrequencyMapMaking:
         
         
         ### Noises
-        seed_noise_planck = self.get_random_value()
+        seed_noise_planck = get_random_value()
 
         self.noise143 = (
             self.planck_acquisition143.get_noise(seed_noise_planck)
@@ -229,27 +229,6 @@ class PipelineFrequencyMapMaking:
             dict_comps += [Synchrotron(nu0=150, beta_pl=-3)]
 
         return dict_comps
-
-    def get_random_value(self):
-        """Random value
-
-        Method to build a random seed.
-
-        Returns
-        -------
-        seed: int
-            Random seed.
-
-        """
-
-        np.random.seed(None)
-        if self.rank == 0:
-            seed = np.random.randint(10000000)
-        else:
-            seed = None
-
-        seed = self.comm.bcast(seed, root=0)
-        return seed
 
     def get_H(self):
         """Acquisition operator
@@ -705,16 +684,6 @@ class PipelineFrequencyMapMaking:
 
         return TOD
 
-    def _barrier(self):
-        """
-        Method to introduce comm._Barrier() function if MPI communicator is detected.
-
-        """
-        if self.comm is None:
-            pass
-        else:
-            self.comm.Barrier()
-
     def _print_message(self, message):
         """
         Method to print message only on rank 0 if MPI communicator is detected. It display simple message if not.
@@ -849,7 +818,7 @@ class PipelineFrequencyMapMaking:
         if self.params["PCG"]["gif"]:
             do_gif(gif_folder, "iter_", output="animation.gif")
 
-        self._barrier()
+        _barrier()
 
         if self.params["QUBIC"]["nrec"] == 1:
             solution_qubic_planck["x"]["x"] = np.array(
@@ -886,7 +855,7 @@ class PipelineFrequencyMapMaking:
         self.TOD = self.get_tod()
 
         ### Wait for all processes
-        self._barrier()
+        _barrier()
 
         #maps_in = self.m_nu_in.copy()
         #if self.params["QUBIC"]["convolution_in"]:
@@ -906,7 +875,7 @@ class PipelineFrequencyMapMaking:
         self.s_hat = self.pcg(self.TOD, x0=starting_point, seenpix=self.seenpix)
 
         ### Wait for all processes
-        self._barrier()
+        _barrier()
 
         ### n = m_signalnoisy - m_signal
         self.s_hat_noise = self.s_hat - self.m_nu_in
@@ -945,14 +914,7 @@ class PipelineFrequencyMapMaking:
                 filename=self.plot_folder + f"/all_maps.png",
                 figsize=(10, 5),
             )
-            # self.plots.plot_FMM(self.m_nu_in, self.s_hat, self.center, self.seenpix, self.nus_Q, job_id=self.job_id, istk=0, nsig=3, name='signal')
-            # self.plots.plot_FMM(self.m_nu_in, self.s_hat, self.center, self.seenpix, self.nus_Q, job_id=self.job_id, istk=1, nsig=3, name='signal')
-            # self.plots.plot_FMM(self.m_nu_in, self.s_hat, self.center, self.seenpix, self.nus_Q, job_id=self.job_id, istk=2, nsig=3, name='signal')
-
-            # self.plots.plot_FMM(self.m_nu_in*0, self.s_hat_noise, self.center, self.seenpix, self.nus_Q, job_id=self.job_id, istk=0, nsig=3, name='noise')
-            # self.plots.plot_FMM(self.m_nu_in*0, self.s_hat_noise, self.center, self.seenpix, self.nus_Q, job_id=self.job_id, istk=1, nsig=3, name='noise')
-            # self.plots.plot_FMM(self.m_nu_in*0, self.s_hat_noise, self.center, self.seenpix, self.nus_Q, job_id=self.job_id, istk=2, nsig=3, name='noise')
-
+            
             mapmaking_time = time.time() - self.mapmaking_time_0
             if self.comm is None:
                 print(f"Map-making done in {mapmaking_time:.3f} s")
@@ -976,7 +938,9 @@ class PipelineFrequencyMapMaking:
             }
 
             self._save_data(self.file, dict_solution)
-        self._barrier()
+        
+        ### Wait for all processors
+        _barrier()
 
 
 class PipelineEnd2End:

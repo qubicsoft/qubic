@@ -1,0 +1,513 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import qubic
+import scipy
+from pyoperators import *
+from time import time
+import healpy as hp
+import pysm3
+import pysm3.units as u
+
+from non_linear_pcg_preconditioned import non_linear_pcg
+
+rc('figure',figsize=(10,8))
+rc('font',size=13)
+```
+
+```{python}
+from Qacquisition import QubicFullBandSystematic
+```
+
+```{python}
+def _get_ultrawideband_config():
+    """
+    
+    Method to simply define Ultra Wide Band configuration.
+    
+    """
+    nu_up = 247.5
+    nu_down = 131.25
+    nu_ave = np.mean(np.array([nu_up, nu_down]))
+    delta = nu_up - nu_ave
+    
+    return nu_ave, 2*delta/nu_ave
+
+nu_ave, delta_nu_over_nu = _get_ultrawideband_config()
+```
+
+Parameters
+
+```{python}
+nside = 16
+ndetectors = 1
+npointings = 8000
+nside_beta = 16
+nf_sub = 4
+
+npixel = 12*nside**2
+nbeta = 12*nside_beta**2
+```
+
+```{python}
+1-(1-1/(6*npixel_patch+nbeta_patch))**npointings
+```
+
+```{python}
+6*npixel_patch+nbeta_patch
+```
+
+```{python}
+dictname = 'pipeline_demo.dict'
+dict = qubic.qubicdict.qubicDict()
+dict.read_from_file(dictname)
+dict['hwp_stepsize'] = 3
+dict['npointings'] = npointings
+dict['nside'] = nside
+dict['filter_nu'] = nu_ave*1e9
+dict['filter_relative_bandwidth'] = delta_nu_over_nu
+dict['nf_sub'] = nf_sub
+dict['synthbeam_kmax'] = 3
+dict['type_instrument'] = 'wide'
+dict['synthbeam_fraction'] = 0.95
+dict['random_pointing'] = True
+dict['MultiBand'] = True
+dict['repeat_pointing'] = False
+```
+
+```{python}
+Q = QubicFullBandSystematic(dict, Nsub=nf_sub, Nrec=2)
+H_list = Q.H
+```
+
+```{python}
+_, allnus150, _, _, _, _ = qubic.compute_freq(150, Nfreq=int(nf_sub/2)-1, relative_bandwidth=0.25)
+_, allnus220, _, _, _, _ = qubic.compute_freq(220, Nfreq=int(nf_sub/2)-1, relative_bandwidth=0.25)
+frequencies = np.concatenate((allnus150, allnus220)) * 1e9
+print(frequencies)
+```
+
+Real sky through Planck data
+
+```{python}
+skycmb = pysm3.Sky(nside=nside, preset_strings=['c1'], output_unit='uK_CMB')
+skydust = pysm3.Sky(nside=nside, preset_strings=['d1'], output_unit='uK_CMB')
+skycmb = np.array(skycmb.get_emission(frequencies[-1] * u.Hz))
+skydust = np.array(skydust.get_emission(frequencies[-1] * u.Hz))
+skydust_beta = pysm3.Sky(nside=nside_beta, preset_strings=['d1'], output_unit='uK_CMB')
+true_beta = np.array(skydust_beta.components[0].mbb_index)
+true_c = np.concatenate((skycmb[0,:], skycmb[1,:], skycmb[2,:], skydust[0,:], skydust[1,:], skydust[2,:], true_beta))
+```
+
+Operator Patch_to_Sky that takes a components maps + spectral indices map on the patch and put it on the full sky with Planck data on the pixels that are not observed by Qubic.
+The operator Sky_to_Patch does the opposite.
+
+```{python}
+coverage = Q.subacqs[0][0].get_coverage()
+seenpix_qubic = coverage/coverage.max() > 0.1
+seenpix_qubic_beta = hp.ud_grade(seenpix_qubic, nside_beta)
+
+npixel_patch = np.count_nonzero(seenpix_qubic)
+nbeta_patch = np.count_nonzero(seenpix_qubic_beta)
+
+patch_mask = np.concatenate((seenpix_qubic,seenpix_qubic,seenpix_qubic,
+                       seenpix_qubic,seenpix_qubic,seenpix_qubic,seenpix_qubic_beta))
+
+def patch_to_sky(c, out):
+    sky = true_c.copy()
+    sky[patch_mask] = c
+    out[...] = sky
+
+Patch_to_Sky = Operator(patch_to_sky, shapein=6*npixel_patch+nbeta_patch, shapeout=6*npixel+nbeta, dtype='float64')
+
+def sky_to_patch(c, out):
+    out[...] = c[patch_mask]
+
+Sky_to_Patch = Operator(sky_to_patch, shapein=6*npixel+nbeta, shapeout=6*npixel_patch+nbeta_patch, dtype='float64')
+
+print(6*npixel_patch+nbeta_patch)
+```
+
+The modified black-body-spectrum of the dust. We have:
+$$\frac{h}{kT} = 2.4\times 10^{-12} \text{ Hz}^{-1}$$
+with $T = 20 K$.
+
+```{python}
+def modified_black_body(freq, beta):
+    nu0 = frequencies[-1]
+    return (np.exp(freq * 2.4e-12) - 1) / (np.exp(nu0 * 2.4e-12) - 1) * (freq/nu0)**beta
+```
+
+The mixing operator $A_\nu$: giving a vector of shape (6*npixel+nbeta), it returns the mixed sky of shape (npixel, 3).
+$$A_\nu (c) [i,:] = \left(CMB\_I_i + f(\beta_i)dust\_I_i,\; CMB\_Q_i + f(\beta_i)dust\_Q_i,\; CMB\_U_i + f(\beta_i)dust\_U_i\right)$$
+with $f$ the modified black body spectrum, and $\beta_i$ the value of the spectral index at pixel i (each $\beta$ is used for multiple pixels).
+
+```{python}
+def function_A(c, freq, out):
+    power_beta = modified_black_body(freq, c[6*npixel:])
+    up_grade_power_beta = hp.ud_grade(power_beta, nside)
+
+    out[:,0] = c[:npixel] + up_grade_power_beta * c[3*npixel:4*npixel]
+    out[:,1] = c[npixel:2*npixel] + up_grade_power_beta * c[4*npixel:5*npixel]
+    out[:,2] = c[2*npixel:3*npixel] + up_grade_power_beta * c[5*npixel:6*npixel]
+
+A_list = []
+for freq in frequencies:
+    A_list.append(Operator(lambda c, out, freq=freq : function_A(c, freq, out), 
+            shapein=6*npixel+nbeta, shapeout=(npixel, 3), dtype='float64'))
+
+```
+
+```{python}
+# Define the inner operator class
+class Transposed_Jacobian(Operator):
+    def __init__(self, c, freq, **keywords):
+        self.c = c
+        self.freq = freq
+        super().__init__(shapein=(npixel,3), shapeout=6*npixel+nbeta, dtype='float64', **keywords)
+    
+    def direct(self, input_vector, output):
+        
+        power_beta = modified_black_body(self.freq, self.c[6*npixel:])
+        derive_power_beta = power_beta * np.log(self.freq/frequencies[-1])
+        
+        output[:npixel] = input_vector[:,0]
+        output[npixel:2*npixel] = input_vector[:,1]
+        output[2*npixel:3*npixel] = input_vector[:,2]
+
+        up_grade_power_beta = hp.ud_grade(power_beta, nside)
+        output[3*npixel:4*npixel] = up_grade_power_beta * input_vector[:,0]
+        output[4*npixel:5*npixel] = up_grade_power_beta * input_vector[:,1]
+        output[5*npixel:6*npixel] = up_grade_power_beta * input_vector[:,2]
+    
+        product = self.c[3*npixel:4*npixel]*input_vector[:,0] + self.c[4*npixel:5*npixel]*input_vector[:,1] + self.c[5*npixel:6*npixel]*input_vector[:,2]
+        product = hp.ud_grade(product, nside_beta) * (npixel // nbeta)
+        
+        output[6*npixel:] = derive_power_beta * product
+
+# Define the outer operator class
+class Generate_Transposed_Jacobian(Operator):
+    def direct(self, c, freq, output):
+        # Create the generated operator
+        transposed_jacobian = Transposed_Jacobian(c, freq)
+        # Store the generated operator in the output
+        output[...] = transposed_jacobian
+
+# Initialize the outer operator
+generate_transposed_jacobian = Generate_Transposed_Jacobian()
+
+```
+
+Creating the TOD
+
+```{python}
+d = H_list[0](A_list[0](true_c))
+for i in range(1, len(frequencies)):
+    d = d + (H_list[i](A_list[i](true_c)))
+```
+
+## Need to create the operator N
+
+
+The gradient of $\chi^2$ operator. We have:
+$$\nabla\chi^2(\tilde{c}) = \sum (J_{A_\nu}(\tilde{c}))^TH^TN^{-1} \sum H{A_\nu}(\tilde{c}) - \sum (J_{A_\nu}(\tilde{c}))^TH^TN^{-1}d$$
+
+```{python}
+def grad_operator(c, out):
+    W = H_list[0](A_list[0](Patch_to_Sky(c)))
+    for i in range(1, len(frequencies)):
+        W = W + (H_list[i](A_list[i](Patch_to_Sky(c))))
+    W = W-d ###### invN(W-d)
+
+    output_operator = np.empty((), dtype=object)
+    generate_transposed_jacobian.direct(Patch_to_Sky(c), frequencies[0], output_operator)
+    transposed_jacobian = output_operator.item()
+    X = transposed_jacobian(H_list[0].T(W))
+    for i in range(1, len(frequencies)):
+        generate_transposed_jacobian.direct(Patch_to_Sky(c), frequencies[i], output_operator)
+        transposed_jacobian = output_operator.item()
+        X = X + transposed_jacobian(H_list[i].T(W))
+    
+    out[...] = Sky_to_Patch(X)
+
+grad_chi_squared = Operator(grad_operator, shapein=6*npixel_patch+nbeta_patch, 
+                            shapeout=6*npixel_patch+nbeta_patch, dtype='float64')
+
+# Check that the gradient is zero at the solution point
+print((grad_chi_squared(Sky_to_Patch(true_c))==0).all())
+```
+
+Computation of the coverage at each frequency and for I, Q and U. The coverage of pixel i is the sum over the column i of the operator H of the squares of the elements:
+$$Cov[\nu, i] = \sum_{\text{det}\times\text{samplings}} (H_\nu [\text{det}\times\text{samplings}, i])^2$$
+
+```{python}
+Cov = np.empty((len(frequencies), 3*npixel_patch))
+mixed_map_mask = np.concatenate([seenpix_qubic,seenpix_qubic,seenpix_qubic])
+
+for i in range(3*npixel_patch):
+    patch_vector = np.zeros((npixel_patch,3))
+    patch_vector[i%npixel_patch, i//npixel_patch] = 1
+    basis_vector = np.zeros((npixel,3))
+    basis_vector[seenpix_qubic, :] = patch_vector
+    for freq_index in range(len(frequencies)):
+        vector_i = H_list[freq_index](basis_vector)
+        vector_i = vector_i.ravel()
+        Cov[freq_index, i] = np.dot(vector_i, vector_i)
+    patch_vector[i%npixel_patch, i//npixel_patch] = 0
+```
+
+We compute an approximation of the inverse of the diagonal of the hessian matrix of $\chi^2$. This is used as a preconditioner for the non-linear PCG. It is very important as the components maps and the spectral indices have a very different behaviour in the PCG. This preconditioner helps making those different parameters more like one another.
+
+For that, we suppose that the diagonal of $H^TN^{-1}H$ is approximatly the coverage, this means neglecting the effect of $N^{-1}$.
+
+```{python}
+def hessian_inverse_diagonal(c, out):
+    sky_c = Patch_to_Sky(c)
+    dust_spectrum_squared = np.zeros((len(frequencies),npixel_patch))
+    derive_dust_spectrum_squared = np.zeros((len(frequencies),npixel_patch))
+    second_derivative_dust_spectrum = np.zeros((len(frequencies),npixel_patch))
+    for index, freq in enumerate(frequencies):
+        dust_spectrum = hp.ud_grade(modified_black_body(freq, sky_c[6*npixel:]), nside)[seenpix_qubic]
+        dust_spectrum_squared[index,:] = dust_spectrum**2
+        derive_dust_spectrum_squared[index,:] = (dust_spectrum * np.log(freq/frequencies[-1]))**2
+        second_derivative_dust_spectrum[index,:] = dust_spectrum * np.log(freq/frequencies[-1])**2
+
+    # CMB
+    out[:3*npixel_patch] = 1/np.sum(Cov, axis=0)
+
+    # Dust
+    out[3*npixel_patch:6*npixel_patch] = 1/np.sum(np.concatenate((dust_spectrum_squared,
+                                                                dust_spectrum_squared,dust_spectrum_squared),1)*Cov, axis=0)
+
+    # Spectral indices
+    # factor 1 has shape (frequencies, npixel_patch)
+    factor1 = c[3*npixel_patch:4*npixel_patch]**2 * Cov[:,:npixel_patch]
+    factor1 += c[4*npixel_patch:5*npixel_patch]**2 * Cov[:,npixel_patch:2*npixel_patch]
+    factor1 += c[5*npixel_patch:6*npixel_patch]**2 * Cov[:,2*npixel_patch:3*npixel_patch]
+    factor1 *= derive_dust_spectrum_squared
+    factor1 = np.sum(factor1, axis=0) # shape (npixel_patch)
+    '''
+    # factor 2 has shape (frequencies, npixel_patch)
+    factor2 = c[3*npixel_patch:4*npixel_patch] * (c[:npixel_patch] + dust_spectrum * c[3*npixel_patch:4*npixel_patch]) * Cov[:,:npixel_patch]
+    factor2 += c[4*npixel_patch:5*npixel_patch] * (c[npixel_patch:2*npixel_patch] + dust_spectrum * c[4*npixel_patch:5*npixel_patch]) * Cov[:,npixel_patch:2*npixel_patch]
+    factor2 += c[5*npixel_patch:6*npixel_patch] * (c[2*npixel_patch:3*npixel_patch] + dust_spectrum * c[5*npixel_patch:6*npixel_patch]) * Cov[:,2*npixel_patch:3*npixel_patch]
+    tempory = np.sum(factor2*second_derivative_dust_spectrum,axis=0)
+    print(tempory)
+    d_on_sky = np.array([H_list[i].T(d) for i in range(len(frequencies))]) # shape (frequencies, npixel_patch, 3)
+    factor2 -= c[3*npixel_patch:4*npixel_patch] * d_on_sky[:,:,0][:,seenpix_qubic]
+    factor2 -= c[4*npixel_patch:5*npixel_patch] * d_on_sky[:,:,1][:,seenpix_qubic]
+    factor2 -= c[5*npixel_patch:6*npixel_patch] * d_on_sky[:,:,2][:,seenpix_qubic]
+    print(np.sum(factor2*second_derivative_dust_spectrum,axis=0)-tempory)
+
+    factor2 *= second_derivative_dust_spectrum
+    factor2 = np.sum(factor2, axis=0) # shape (npixel_patch)
+    '''
+    
+    downgrader = np.zeros(npixel)
+    downgrader[seenpix_qubic] = factor1
+    downgrader = hp.ud_grade(downgrader, nside_beta)*(npixel//nbeta)
+    out[6*npixel_patch:] = 1/downgrader[seenpix_qubic_beta]
+
+HessianInverseDiagonal = Operator(hessian_inverse_diagonal, shapein=6*npixel_patch+nbeta_patch, shapeout=6*npixel_patch+nbeta_patch, dtype='float64')
+
+```
+
+```{python}
+max_iteration = 10
+x0 = np.zeros(6*npixel_patch+nbeta_patch)
+#x0[3*npixel:6*npixel] = skydust.ravel()
+
+x0[:npixel_patch] = Sky_to_Patch(true_c)[:npixel_patch].copy()
+x0[npixel_patch:3*npixel_patch] = np.zeros(2*npixel_patch)
+x0[3*npixel_patch:4*npixel_patch] = Sky_to_Patch(true_c)[3*npixel_patch:4*npixel_patch].copy()
+x0[4*npixel_patch:6*npixel_patch] = 0*Sky_to_Patch(true_c)[4*npixel_patch:6*npixel_patch]*(1+np.random.normal(scale=1.0, size=2*npixel_patch))
+x0[6*npixel_patch:] = np.ones(nbeta_patch)*1.53
+
+
+sigma=1e-3
+
+residues_PR_cg = []
+
+start = time()
+pcg = non_linear_pcg(grad_chi_squared, M=HessianInverseDiagonal, conjugate_method='polak-ribiere', x0=x0, tol=1e-16, sigma_0=sigma, tol_linesearch=1e-3, maxiter=max_iteration, residues=residues_PR_cg, npixel_patch=npixel_patch, nbeta_patch=nbeta_patch)
+x_PR_cg = pcg['x']
+residues_PR_cg = np.array(residues_PR_cg)
+residues_PR_cg /= np.linalg.norm(grad_chi_squared(x0))
+print(f'time for PR CG: {time()-start}')
+
+```
+
+```{python}
+plt.plot(residues_PR_cg[:,0], label='Polak-Ribière CG')
+'''
+plt.plot(residues_PR_cg[:,1])
+plt.plot(residues_PR_cg[:,2])
+plt.plot(residues_PR_cg[:,3])
+plt.plot(residues_PR_cg[:,4])
+plt.plot(residues_PR_cg[:,5])
+plt.plot(residues_PR_cg[:,6])
+'''
+plt.yscale('log')
+plt.grid(axis='y', linestyle='dotted')
+plt.xlabel('Number of iterations')
+plt.ylabel(r'Relative residue $\frac{||\nabla \chi^2(c_{\beta})||}{||\nabla \chi^2(\vec{0})||}$')
+plt.title('Simultaneous reconstruction of components maps and spectral indices using a non-linear PCG')
+plt.legend()
+plt.show()
+```
+
+```{python}
+x = Patch_to_Sky(x_PR_cg)
+x0sky = Patch_to_Sky(x0)
+name_list = ['CMB I','CMB Q','CMB U','dust I','dust Q','dust U',r'$\beta$']
+
+plt.figure(figsize=(12, 25))
+for i in range(6):
+    hp.gnomview(true_c[i*npixel:(i+1)*npixel], sub=(7,4,4*i+1), title='True '+name_list[i], rot=qubic.equ2gal(0, -57),reso=18, cmap='jet')
+    hp.gnomview(x0sky[i*npixel:(i+1)*npixel], sub=(7,4,4*i+2), title='Initial '+name_list[i], rot=qubic.equ2gal(0, -57),reso=18, cmap='jet')
+    hp.gnomview(x[i*npixel:(i+1)*npixel], sub=(7,4,4*i+3), title='Reconstructed '+name_list[i], rot=qubic.equ2gal(0, -57),reso=18, cmap='jet')
+    r = true_c[i*npixel:(i+1)*npixel] - x[i*npixel:(i+1)*npixel]
+    sig = np.std(r[seenpix_qubic])
+    hp.gnomview(r, sub=(7,4,4*i+4), title='Difference '+name_list[i], rot=qubic.equ2gal(0, -57),reso=18, min=-2*sig, max=2*sig, cmap='jet')
+hp.gnomview(true_c[6*npixel:], sub=(7,4,4*6+1), title='True '+name_list[6], rot=qubic.equ2gal(0, -57),reso=18, cmap='jet')
+hp.gnomview(x0sky[6*npixel:], sub=(7,4,4*6+2), title='Initial '+name_list[6], rot=qubic.equ2gal(0, -57),reso=18, cmap='jet')
+hp.gnomview(x[6*npixel:], sub=(7,4,4*6+3), title='Reconstructed '+name_list[6], rot=qubic.equ2gal(0, -57),reso=18, cmap='jet')
+r = true_c[6*npixel:] - x[6*npixel:]
+sig = np.std(r[seenpix_qubic_beta])
+hp.gnomview(r, sub=(7,4,4*6+4), title='Difference '+name_list[6], rot=qubic.equ2gal(0, -57),reso=18, min=-2*sig, max=2*sig, cmap='jet')
+plt.show()
+
+```
+
+# Verification that the Jacobian of A is correctly defined
+This is computationnaly heavy. You can test it with nside = nside_beta = 4.
+
+```{python}
+# Generate a random vector
+c = np.random.random(6*npixel+nbeta)
+
+# Compute the Jacobian of A through the infinitesimal growth rate
+epsilon = 1e-10
+c_epsilon = c.copy()
+Jacob = np.empty((3*npixel, 6*npixel+nbeta))
+for i in range(6*npixel+nbeta):
+    c_epsilon[i] += epsilon
+    Jacob[:,i] = ((A_list[0](c_epsilon) - A_list[0](c)) / epsilon).ravel()
+    c_epsilon[i] = c[i]
+
+# Compute the transposed of the Jacobian through the operator, defined thanks to the analytical computation of the Jacobian of A
+output_operator = np.empty((), dtype=object)
+generate_transposed_jacobian.direct(c, frequencies[0], output_operator)
+transposed_jacobian = output_operator.item()
+
+J_transposed = np.empty((6*npixel+nbeta, 3*npixel))
+for i in range(3*npixel):
+    ei = np.zeros(3*npixel)
+    ei[i] = 1
+    J_transposed[:,i] = transposed_jacobian(ei.reshape((npixel,3)))
+```
+
+```{python}
+# Plot the results
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+ax1.scatter(range((6*npixel+nbeta)*3*npixel), J_transposed.ravel(), marker='+')
+ax1.set_title('Analytical definition of the Jacobian of A')
+ax2.scatter(range((6*npixel+nbeta)*3*npixel), J_transposed.ravel()-Jacob.T.ravel(), marker='+')
+ax2.set_title('Difference between the analytical definition and\n the numerical calculation of the Jacobian of A')
+ax1.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+ax2.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+plt.show()
+```
+
+# Verification of the preconditioner (diagonal of the Hessian matrix)
+Computation of the Hessian matrix of the $\chi^2$ at the minimal point of the $\chi^2$.
+
+```{python}
+epsilon = 1e-5
+hessian = np.empty((6*npixel_patch+nbeta_patch, 6*npixel_patch+nbeta_patch))
+ei = np.zeros(6*npixel_patch+nbeta_patch)
+for i in range(6*npixel_patch+nbeta_patch):
+    ei[i-1]=0
+    ei[i]=epsilon
+    hessian[i,:] = grad_chi_squared(Sky_to_Patch(true_c)+ei)/epsilon
+```
+
+```{python}
+plt.matshow(hessian, vmin=-1e-38, vmax=1e-38, cmap='bwr')
+plt.colorbar()
+plt.title(r'Hessian matrix of the $\chi^2$ in log scale')
+plt.show()
+```
+
+We can clearly identify the zones corresponding to the CMB I, Q, U, the dust I, Q, U and the spectral indices parameters of the dust.
+
+Let's plot the diagonal of this matrix.
+
+```{python}
+plt.plot(np.diag(hessian))
+plt.title(r'Diagonal of the Hessian matrix of the $\chi^2$')
+plt.yscale('log')
+plt.show()
+```
+
+Note that we have more than 3 orders of magnitude of variation on the diagonal. Let's plot the product of this diagonal with the preconditioner we created that should approximate the inverse of this diagonal.
+
+```{python}
+sky = pysm3.Sky(nside=nside, preset_strings=['c1', 'd1'], output_unit='uK_CMB')
+
+map = sky.get_emission(150e9 * u.Hz).T
+```
+
+```{python}
+vector = np.ones(H_list[0].shapein)
+#vector = map.copy()
+approx_hth = np.empty((nf_sub,) + H_list[0].shapein) # has shape (nf_sub, npixel, 3)
+for index in range(nf_sub):
+    approx_hth[index] = H_list[index].T * H_list[index] * vector
+    plt.plot((H_list[index].T * H_list[index] * vector)[seenpix_qubic,0])
+```
+
+```{python}
+plt.plot(np.sum(approx_hth, axis=0)[:,0][seenpix_qubic])
+plt.plot(np.diag(hessian)[:npixel_patch]*5)
+plt.yscale('log')
+```
+
+```{python}
+plt.plot(np.diag(hessian)*HessianInverseDiagonal(Sky_to_Patch(true_c)))
+plt.title(r'Product of the diagonal of the Hessian matrix of the $\chi^2$ with the preconditioner')
+plt.show()
+```
+
+Let's compare the eigenvalues distribution with and without preconditioner.
+
+```{python}
+eigenvalues, _ = np.linalg.eigh(hessian)
+eigenvalues_preconditioned, _ = np.linalg.eigh(np.diag(HessianInverseDiagonal(Sky_to_Patch(true_c)))*hessian)
+```
+
+```{python}
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+ax1.plot(eigenvalues[::-1])
+ax1.set_yscale('log')
+ax1.set_title('Eigenvalues of the Hessian matrix')
+ax2.plot(eigenvalues_preconditioned[::-1])
+ax2.set_title('Eigenvalues of the preconditioned Hessian matrix')
+plt.show()
+```
+
+```{python}
+
+```

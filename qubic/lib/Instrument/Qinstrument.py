@@ -40,10 +40,19 @@ class Filter(object):
 
 class Optics(object):
     pass
+
+
 class SyntheticBeam(object):
     pass
+
+
+class Noise(object):
+    pass
+
 def funct(x, p, n):
     return x ** p / (np.exp(x) - 1) ** n
+
+
 class QubicInstrument(Instrument):
     """
     The QubicInstrument class. It represents the instrument setup.
@@ -229,7 +238,7 @@ class QubicInstrument(Instrument):
             PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl,
                                      nu=nu)
         self.primary_beam = PrimBeam
-        if secondary is 'gaussian':
+        if secondary == 'gaussian':
             SecBeam = BeamGaussian(
                 np.radians(self.calibration.get('primbeam')), nu=nu,
                 backward=True)

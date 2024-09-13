@@ -13,36 +13,42 @@ def join_toward_rank(comm, data, target_rank):
     else:
         return
 
-def _barrier(comm):
-    """
-    Method to introduce comm._Barrier() function if MPI communicator is detected.
+class MpiTools:
+    
+    def __init__(self, comm):
+        
+        self.comm = comm
 
-    """
-    if comm is None:
-        pass
-    else:
-        comm.Barrier()
-            
-def get_random_value(comm, init_seed=None):
-        """Random value
-
-        Method to build a random seed.
-
-        Returns
-        -------
-        seed: int
-            Random seed.
+    def _barrier(self):
+        """
+        Method to introduce comm._Barrier() function if MPI communicator is detected.
 
         """
-
-        np.random.seed(init_seed)
-        if comm.Get_rank() == 0:
-            seed = np.random.randint(10000000)
+        if self.comm is None:
+            pass
         else:
-            seed = None
+            self.comm.Barrier()
+            
+    def get_random_value(self, init_seed=None):
+            """Random value
 
-        seed = comm.bcast(seed, root=0)
-        return seed
+            Method to build a random seed.
+
+            Returns
+            -------
+            seed: int
+                Random seed.
+
+            """
+
+            np.random.seed(init_seed)
+            if self.comm.Get_rank() == 0:
+                seed = np.random.randint(10000000)
+            else:
+                seed = None
+
+            seed = self.comm.bcast(seed, root=0)
+            return seed
     
 def join_data(comm, data):
 

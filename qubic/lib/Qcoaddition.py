@@ -14,7 +14,7 @@ import os
 
 from .Qdictionary import qubicDict
 from .Qutilities import progress_bar
-from .Instrument.Qinstrument import QubicInstrument
+from .InstrumentModel.Qinstrument import QubicInstrument
 from .Calibration import Qselfcal as scal
 from .Calibration import Qfiber as ft
 

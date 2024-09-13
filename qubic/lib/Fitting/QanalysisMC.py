@@ -5,7 +5,7 @@ from scipy import interpolate
 import matplotlib.pyplot as plt
 
 from ..QskySim import cov2corr
-from ..Instrument.Qinstrument import compute_freq
+from ..InstrumentModel.Qinstrument import compute_freq
 from ..Fitting import QreadMC as rmc
 #from qubic.lib.QskySim import cov2corr
 #from qubic.lib.Instrument.Qinstrument import compute_freq

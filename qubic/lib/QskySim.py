@@ -7,7 +7,7 @@ from pysm3 import utils
 from pylab import *
 from scipy.optimize import curve_fit
 
-from .Instrument.Qinstrument import compute_freq
+from .InstrumentModel.Qinstrument import compute_freq
 from .Qutilities import progress_bar
 from .Calibration import Qfiber as ft
 from .Fitting import Qcamb as qc

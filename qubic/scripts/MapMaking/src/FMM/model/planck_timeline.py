@@ -15,7 +15,7 @@ import pysm3.units as u
 from pysm3 import utils
 from qubic.data import PATH as data_dir
 
-class ExternalData2Timeline:
+class InputMaps:
 
     def __init__(self, sky, nus, nrec, nside=256, corrected_bandpass=True):
 

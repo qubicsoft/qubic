@@ -108,6 +108,7 @@ class QubicInstrument(Instrument):
             'gaussian', 'fitted_beam' or 'multi_freq'
 
         """
+        self.d = d
         self.debug = d['debug']  # if True allows debuging prints
         filter_nu = d['filter_nu']
         filter_relative_bandwidth = d['filter_relative_bandwidth']

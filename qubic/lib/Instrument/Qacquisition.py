@@ -10,7 +10,7 @@ from pysm3 import utils
 
 # Qubic imports
 from qubic.data import PATH as data_dir
-from qubic.lib.Instrument.Qinstrument import QubicInstrument, QubicMultibandInstrument, compute_freq
+from qubic.lib.Instrument.Qinstrument import QubicInstrument, QubicMultibandInstrument
 from qubic.lib.Qsamplings import get_pointing
 from qubic.lib.Qscene import QubicScene
 from qubic.lib.MapMaking.ComponentMapMaking import QcomponentModel as c
@@ -19,6 +19,40 @@ from fgbuster.mixingmatrix import MixingMatrix
 from pysimulators import *
 from pyoperators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+
+def compute_freq(band, Nfreq=None, relative_bandwidth=0.25):
+    """
+    Prepare frequency bands parameters
+    band -- int,
+        QUBIC frequency band, in GHz.
+        Typical values: 150, 220
+    relative_bandwidth -- float, optional
+        Ratio of the difference between the edges of the
+        frequency band over the average frequency of the band:
+        2 * (nu_max - nu_min) / (nu_max + nu_min)
+        Typical value: 0.25
+    Nfreq -- int, optional
+        Number of frequencies within the wide band.
+        If not specified, then Nfreq = 15 if band == 150
+        and Nfreq = 20 if band = 220
+    """
+
+    if Nfreq is None:
+        Nfreq = {150: 15, 220: 20}[band]
+
+    nu_min = band * (1 - relative_bandwidth / 2)
+    nu_max = band * (1 + relative_bandwidth / 2)
+
+    Nfreq_edges = Nfreq + 1
+    base = (nu_max / nu_min) ** (1. / Nfreq)
+
+    nus_edge = nu_min * np.logspace(0, Nfreq, Nfreq_edges, endpoint=True, base=base)
+    nus = np.array([(nus_edge[i] + nus_edge[i - 1]) / 2 for i in range(1, Nfreq_edges)])
+    deltas = np.array([(nus_edge[i] - nus_edge[i - 1]) for i in range(1, Nfreq_edges)])
+    Delta = nu_max - nu_min
+    Nbbands = len(nus)
+    return Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands
 
 
 def polarized_I(m, nside, polarization_fraction=0.01):

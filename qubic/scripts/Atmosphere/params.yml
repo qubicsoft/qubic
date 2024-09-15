@@ -1,0 +1,19 @@
+# Physical parameters
+
+correlation lenght: 300           # Atmospheric correlation maximum lenght in m
+rho_0: 1                          # Reference water vapor density in g/m³
+h_h2o: 2770                       # Water vapor half-height in m
+h_atm: 40000                      # Typical height that depends on the observation site, in m
+temp_ground: 280                  # Average ground temperature on the observation site, in K
+pwv: 5                            # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, 
+sigma_pwv: 0.5                    # Variance of PWV in mm^-1
+
+# Simulation parameters
+
+n_grid: 200                       # Number of squares in the grid
+h_qubic: 4869                     # QUBIC altitude in m
+size_atm: 5000                    # Lenght of the atm in m
+
+# Qubic parameters
+
+beam_fwhm: 0.001                  # in rad

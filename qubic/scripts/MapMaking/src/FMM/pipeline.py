@@ -167,7 +167,6 @@ class PipelineFrequencyMapMaking:
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
         
-        
         ### Noises
         seed_noise_planck = self.mpi.get_random_value()
 

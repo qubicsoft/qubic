@@ -71,6 +71,8 @@ def write_level1(fpobject,todarray,flagarray):
     tbhdu = fits.BinTableHDU.from_columns(cols)
     hdulist.append(tbhdu)
 
+    # HDU with dark TES "temperature" detectors
+    
     # make another HDU with the housekeeping data
     # 300mK stage Temperature
     # 1K stage Temperature

@@ -13,9 +13,12 @@ class Atmsophere:
         self.qubic_dict = qubic.lib.Qdictionary.qubicDict()
         self.qubic_dict['filter_relative_bandwidth'] = 0.25
         
+        self.temperature = self.temperature_atm()
+        self.mean_water_vapor_density = self.mean_water_vapor_density()
+        
         self.frequencies, self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff = self.atm_absorption_coeff()
         
-        self.absorption_spectrum = self.absorption_spectrum()
+        self.absorption_spectrum = self.integrated_absorption_spectrum()
         
     def atm_absorption_coeff(self):
         r"""Absorption spectrum.
@@ -46,23 +49,24 @@ class Atmsophere:
         h 3000 m\
         column h2o_self_continuum 1 mm_pwv
 
-        Then we only need to execute a command line like: am file_name.amc > file_name.out
+        Then we only need to execute a command line like: am file_name.amc > file_name.out .
 
         The file 'file_name.out' is created and contains two colomns, one for the frequency, and one for the absorption coefficient. 
         Be careful, am results are in cm and not in m.
 
-        See the am documentation for more details: https://zenodo.org/records/8161272
+        See the am documentation for more details: https://zenodo.org/records/8161272 .
 
         Returns
         -------
         frequencies : array_like
-            Frequencies at which the absorption spectrum is computed
+            Frequencies at which the absorption spectrum is computed.
         mol_absorption_coeff : array_like
-            Molecular absorption lines spectrum, from water and dioxygene, in :math:`m^{2}`
+            Molecular absorption lines spectrum, from water and dioxygene, in :math:`m^{2}`.
         self_absorption_coeff : array_like
-            Self-induced collisions continuum, from water, in :math:`m^{5}`
+            Self-induced collisions continuum, from water, in :math:`m^{5}`.
         air_absorption_coeff : array_like
-            Air_induced collisions continuun, from water, in :math:`m^{5}`
+            Air_induced collisions continuun, from water, in :math:`m^{5}`.
+            
         """
         
         frequencies = []
@@ -89,25 +93,47 @@ class Atmsophere:
                 
         return frequencies, np.array(mol_absorption_coeff), np.array(self_absorption_coeff), np.array(air_absorption_coeff)
     
-    def get_gas_properties(self):
+    def get_gas_properties(self, params_file = True):
+        r"""Gas properties.
+        
+        Method to compute the properties of the water vapor and the air in the atmosphere.
+        It can use parameters given in params.yml or be baised on the CoolProp package to compute the water vapor density.
+
+        Parameters
+        ----------
+        params_file : bool, optional
+            If True, will use the reference water vapor density given in params_file by self.params['rho_0'] (in :math:`g/m^{3}`) to compute the density in :math:`m^{-3}`.
+            Else, will use the temperature and pression value to compute it. By default True.
+
+        Returns
+        -------
+        water_mass : float
+            The weight of a :math:`H_2O` molecule in :math:`g`.
+        water_vapor_density : float
+            The density of water vapor given the atmospheric temperature and pressure in :math:`m^{-3}`.
+        air_vapor_density : float
+            The density of air vapor given the atmospheric temperature and pressure in :math:`m^{-3}`.
+            
+        """        
         
         # Import physical constants
-        temp_atm = self.params['temp']                                                              # in K
+        temp_atm = self.temperature                                                             # in K
         pressure_atm = self.params['pressure_atm'] * 100                                            # in Pa
-        
-        # Water properties
-        water_molar_mass = CP.PropsSI('MOLARMASS', 'Water')                                         # in g/mol
-        water_mass = water_molar_mass / c.Avogadro * 10**3                                          # in g
-        water_vapor_density = self.params['rho_0'] / water_mass                                     # in m-3
-        # water_vapor_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Water")     # in kg/m-3
-        # water_vapor_density = c.Avogadro * water_vapor_mass_density / water_molar_mass / 1000     # in m-3
         
         # Air properties
         air_molar_mass = CP.PropsSI('MOLARMASS', 'Air')                                             # in g/mol
         air_mass = air_molar_mass / c.Avogadro * 10**3                                              # in g
         air_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Air")                 # in kg/m-3
         air_density = air_mass_density * 1000 / air_mass                                            # in m-3
-        # air_density = c.Avogadro * air_mass_density / air_molar_mass / 1000                       # in m-3
+        
+        # Water properties
+        water_molar_mass = CP.PropsSI('MOLARMASS', 'Water')                                         # in g/mol
+        water_mass = water_molar_mass / c.Avogadro * 10**3                                          # in g
+        if params_file:
+            water_vapor_density = self.mean_water_vapor_density / water_mass                                 # in m-3
+        else:
+            water_vapor_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Water")   # in kg/m-3
+            water_vapor_density = c.Avogadro * water_vapor_mass_density / water_molar_mass / 1000   # in m-3
 
         return water_mass, water_vapor_density, air_density
         
@@ -123,7 +149,8 @@ class Atmsophere:
         Returns
         -------
         absorption_spectrum : array_like
-            Atmosphere absorption coefficient, in :math:`m^{2} / g`
+            Atmosphere absorption coefficient, in :math:`m^{2} / g`.
+            
         """        
 
         # Import gas properties
@@ -151,3 +178,48 @@ class Atmsophere:
                                     (self.frequencies[index_sup] - self.frequencies[index_inf])*1e9 / (index_sup - index_inf))
             
         return integrated_absorption_spectrum, nus
+    
+    def mean_water_vapor_density(self, altitude):
+        r"""Mean water vapor density.
+        
+        Compute the mean water vapor density depending on the altitude, using reference water vapor density and water vapor half_height, given in params.yml.
+        The corresponding equation to compute the mean water vapor density, taken from equation (1) in Morris 2021, is :
+        
+        .. math::
+            \langle \rho(h) \rangle = \rho_0 e^{\left( -log(2).(h - 5190) / h_0 \right)} .
+
+        Parameters
+        ----------
+        altitude : array_like
+            Array containing altitudes at which we want to compute the mean water vapor density.
+
+        Returns
+        -------
+        mean_water_vapor_density : array_like
+            Mean water vapor density in :math:`g/m{3}`.
+            
+        """  
+        
+        return self.params['rho_0'] * np.exp(-np.log(2) * (altitude - 5190) / self.params['h_h2o'])
+    
+    def temperature_atm(self, altitude):
+        """Temperature.
+        
+        Compute the temperature of the atmosphere depending on the altitude, using the average ground temperature and a typical height that depend on the observation site.
+        The corresponding equation to compute the temperature, taken from equation (13) in Morris 2021, is :
+        
+        .. math::
+            T_{atm}(h) = T_{atm}(0) e^{h / h_T} .
+
+        Parameters
+        ----------
+        altitude : array_like
+            Array containing altitudes at which we want to compute the temperature.
+
+        Returns
+        -------
+        temperature : array_like
+            Temperature in K.
+        """
+        
+        return self.params['temp_ground'] * np.exp(- altitude / self.params['h_temp'])

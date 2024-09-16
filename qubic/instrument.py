@@ -1249,10 +1249,10 @@ class QubicInstrument(Instrument):
 
         """
         return QubicInstrument._get_detector_integration_operator(
-            self.detector.center, self.detector.area, self.secondary_beam)
+            self.detector.center, self.detector.area, self.secondary_beam,self.use_file)
 
     @staticmethod
-    def _get_detector_integration_operator(position, area, secondary_beam):
+    def _get_detector_integration_operator(position, area, secondary_beam,use_file):
         """
         Integrate flux density in detector solid angles and take into account
         the secondary beam transmission.
@@ -1264,7 +1264,13 @@ class QubicInstrument(Instrument):
         sr_det = -area / position[..., 2] ** 2 * np.cos(theta) ** 3
         sr_beam = secondary_beam.solid_angle
         sec = secondary_beam(theta, phi)
-        return DiagonalOperator(sr_det / sr_beam * sec, broadcast='rightward')
+        if use_file:
+           print("Secondary Beam not Applied")
+           return DiagonalOperator(sr_det / sr_beam, broadcast='rightward')
+        else:
+           print("Secondary Beam Applied")
+           sec = secondary_beam(theta, phi)
+           return DiagonalOperator(sr_det / sr_beam * sec, broadcast='rightward')
 
     def get_detector_response_operator(self, sampling, tau=None):
         """

@@ -1,6 +1,7 @@
 import numpy as np
 
 import scipy.constants as c
+from scipy.integrate import quad
 import CoolProp.CoolProp as CP
 
 import qubic
@@ -13,12 +14,20 @@ class Atmsophere:
         self.qubic_dict = qubic.lib.Qdictionary.qubicDict()
         self.qubic_dict['filter_relative_bandwidth'] = 0.25
         
-        self.temperature = self.temperature_atm()
-        self.mean_water_vapor_density = self.mean_water_vapor_density()
+        if self.params['h_grid'] == 1:
+            # 2d model
+            self.altitude = self.params['altitude_atm_2d']
+        else:
+            # 3d model not yet implemented
+            self.altitude = None
+            
+        self.temperature = self.temperature_atm(self.altitude)
+        self.mean_water_vapor_density = self.mean_water_vapor_density(self.altitude)
         
         self.frequencies, self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff = self.atm_absorption_coeff()
         
-        self.absorption_spectrum = self.integrated_absorption_spectrum()
+        self.abs_spectrum = self.absorption_spectrum()
+        self.integrated_abs_spectrum = self.integrated_absorption_spectrum()
         
     def atm_absorption_coeff(self):
         r"""Absorption spectrum.
@@ -75,7 +84,7 @@ class Atmsophere:
         air_absorption_coeff = []
         
         pressure = self.params['pressure_atm']
-        temp = self.params['temp']
+        temp = self.params['temp_ground']
         pwv = self.params['pwv']
         
         with open(f'absorption_coefficient/h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out', 'r') as file:
@@ -148,7 +157,7 @@ class Atmsophere:
 
         Returns
         -------
-        absorption_spectrum : array_like
+        abs_spectrum : array_like
             Atmosphere absorption coefficient, in :math:`m^{2} / g`.
             
         """        
@@ -157,9 +166,9 @@ class Atmsophere:
         water_mass, water_vapor_density, air_density = self.get_gas_properties()
                 
         # Compute coeff
-        absorption_spectrum = (self.mol_absorption_coeff + water_vapor_density * self.self_absorption_coeff + air_density * self.air_absorption_coeff) / water_mass 
+        abs_spectrum = (self.mol_absorption_coeff + water_vapor_density * self.self_absorption_coeff + air_density * self.air_absorption_coeff) / water_mass 
 
-        return absorption_spectrum
+        return abs_spectrum
     
     def integrated_absorption_spectrum(self, band = 150):
         
@@ -170,14 +179,14 @@ class Atmsophere:
         _, nus_edges, nus, _, _, N_bands = qubic.lib.Qinstrument.compute_freq(band=band, Nfreq=self.params['nsub_in'], relative_bandwidth=self.qubic_dict['filter_relative_bandwidth'])
         nus_edge_index = (nus_edges - freq_min) / freq_step
         
-        integrated_absorption_spectrum = []
+        integrated_abs_spectrum = []
         for i in range(N_bands):
             index_inf = int(nus_edge_index[i])
             index_sup = int(nus_edge_index[i+1])
-            integrated_absorption_spectrum.append(np.sum(self.absorption_spectrum[index_inf:index_sup]) * 
+            integrated_abs_spectrum.append(np.sum(self.abs_spectrum[index_inf:index_sup]) * 
                                     (self.frequencies[index_sup] - self.frequencies[index_inf])*1e9 / (index_sup - index_inf))
             
-        return integrated_absorption_spectrum, nus
+        return integrated_abs_spectrum, nus
     
     def mean_water_vapor_density(self, altitude):
         r"""Mean water vapor density.
@@ -223,3 +232,45 @@ class Atmsophere:
         """
         
         return self.params['temp_ground'] * np.exp(- altitude / self.params['h_temp'])
+    
+    def get_fourier_grid_2d(self):
+        
+        # Generate spatial frequency in Fourier space
+        k_distrib_y = np.fft.fftfreq(self.params['n_grid'], d=2*self.params['size_atm']/self.params['n_grid']) * 2*np.pi
+        k_distrib_x = np.fft.fftfreq(self.params['n_grid'], d=2*self.params['size_atm']/self.params['n_grid']) * 2*np.pi
+        
+        # Build 2d grid
+        kx, ky = np.meshgrid(k_distrib_x, k_distrib_y)
+        k_norm = np.sqrt(kx**2 + ky**2)
+        
+        return kx, ky, k_norm
+    
+    def kolmogorov_spectrum_2d(self, k):
+        
+        return (self.params['correlation_length']**(-2) + np.abs(k)**2)**(-8/6)
+    
+    def normalized_kolmogorov_spectrum_2d(self, k):
+        
+        res, _ = quad(self.kolmogorov_spectrum_2d, np.min(k), np.max(k))
+        
+        return self.kolmogorov_spectrum_2d(k) / res
+    
+    def generate_spatial_fluctuations_2d(self):
+        #! At some point, we will need to normalize these fluctuations using real data. We can maybe use :math:`\sigma_{PWV}` that can be estimated with figure 4 in Morris 2021.
+        
+        # Compute the power spectrum
+        k = self.get_fourier_grid_2d()[2]
+        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum_2d(k)
+        
+        # Generate spatial fluctuations through random phases in Fourier space
+        phi = np.random.uniform(0, 2*np.pi, size=(self.params['n_grid'], self.params['n_grid']))
+        delta_rho_k = np.sqrt(kolmogorov_spectrum) * np.exp(1j * phi)
+
+        # Apply inverse Fourier transform to obtain spatial fluctuations
+        delta_rho = np.fft.ifft2(delta_rho_k).real
+        
+        return delta_rho        
+        
+    def get_water_vapor_density_map(self):
+        
+        return None

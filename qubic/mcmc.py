@@ -1,6 +1,6 @@
 import emcee
 from scipy.optimize import curve_fit
-from scipy.integrate import cumtrapz
+from scipy.integrate import cumulative_trapezoid as cumtrapz
 from pylab import *
 from qubic import fibtools as ft
 

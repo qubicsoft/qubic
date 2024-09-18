@@ -1,6 +1,8 @@
 import numpy as np
 import scipy.constants as c
+import healpy as hp
 from scipy.integrate import quad
+
 
 from CoolProp import CoolProp as CP
 from astropy.cosmology import Planck18
@@ -23,14 +25,19 @@ class Atmsophere:
         else:
             # 3d model not yet implemented
             self.altitude = None
+        
+        self.x_list = np.linspace(-self.params['size_tam'], self.params['size_tam'], self.params['n_grid'])
+        self.y_list = np.linspace(-self.params['size_tam'], self.params['size_tam'], self.params['n_grid'])
             
         self.temperature = self.get_temperature_atm(self.altitude)
         self.mean_water_vapor_density = self.get_mean_water_vapor_density(self.altitude)
         
-        self.frequencies, self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff = self.atm_absorption_coeff()
+        self.integration_frequencies, self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff = self.atm_absorption_coeff()
                 
         self.abs_spectrum = self.absorption_spectrum()
-        self.integrated_abs_spectrum, _ = self.integrated_absorption_spectrum()
+        self.integrated_abs_spectrum, self.frequencies = self.integrated_absorption_spectrum()
+        
+        self.maps = self.get_maps()
         
     def get_qubic_dict(self, key="in"):
         """QUBIC dictionary.
@@ -209,8 +216,8 @@ class Atmsophere:
         return abs_spectrum
     
     def integrated_absorption_spectrum(self, band=150):
-        freq_min, freq_max = self.frequencies[0], self.frequencies[-1]
-        freq_step = (freq_max - freq_min) / (len(self.frequencies) - 1)
+        freq_min, freq_max = self.integration_frequencies[0], self.integration_frequencies[-1]
+        freq_step = (freq_max - freq_min) / (len(self.integration_frequencies) - 1)
 
         _, nus_edges, nus, _, _, N_bands = compute_freq(band=band, Nfreq=self.params['nsub_in'], relative_bandwidth=self.qubic_dict['filter_relative_bandwidth'])
         nus_edge_index = (nus_edges - freq_min) / freq_step
@@ -219,7 +226,7 @@ class Atmsophere:
         for i in range(N_bands):
             index_inf, index_sup = int(nus_edge_index[i]), int(nus_edge_index[i+1])
             integrated_abs_spectrum[i] = np.trapz(self.abs_spectrum[index_inf:index_sup], 
-                                                  x=self.frequencies[index_inf:index_sup])
+                                                  x=self.integration_frequencies[index_inf:index_sup])
         
         return integrated_abs_spectrum, nus
     
@@ -346,12 +353,41 @@ class Atmsophere:
             
         return beam  """ 
         
-    def microkelvin_cmb(self):
-        
-        return 1e6 * Planck18.Tcmb0.value
-        
-    def water_vapor_density_to_detector_temperature(self):
-        
+    def get_maps(self):
+                
         water_vapor_density_maps = self.get_water_vapor_density_2d_map()
         
-        return (1/self.microkelvin_cmb() ) * self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.temperature * water_vapor_density_maps
+        # Compute the associated temperature maps from the wapor density maps
+        temp_maps = self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.temperature * water_vapor_density_maps
+        
+        # Convert them into micro Kelvin CMB
+        temp_maps -= Planck18.Tcmb0.value
+        temp_maps *= 1e6
+        
+        return temp_maps
+    
+    def horizontal_plane_to_azel(self, x, y, z):
+        
+        rho = np.sqrt(x**2 + y**2 + z**2)
+        el = np.pi/2 - np.arccos(z/rho)
+        az = np.arctan2(y, x)
+        return az, el
+    
+    def get_maps_healpix(self):
+
+        atm_maps = self.get_maps()
+        
+        # Build an empty Healpy map according to the number 
+        n_pixels = hp.nside2npix(self.params['nside'])
+        healpy_map = np.zeros((len(self.frequencies), n_pixels))
+        print(healpy_map.shape)
+        
+        # Fill the healpy maps with atm_maps
+        for i in range(atm_maps.shape[0]):
+            print(atm_maps[i].shape)
+            healpy_map[0, :len(atm_maps[i].flatten())] = atm_maps[i].flatten()
+        
+        # Convert the maps into Healpy map
+        
+
+        return healpy_map

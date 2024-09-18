@@ -2,7 +2,7 @@
 
 correlation_length: 300           # Atmospheric correlation maximum lenght in m
 altitude_atm_2d: 1000                # Altitude of the atmosphere above QUBIC for 2D model in m
-rho_0: 1                          # Reference water vapor density in g/m³
+rho_0: 20     #!valeur volontairement exagérée pour 2d                     # Reference water vapor density in g/m³
 h_h2o: 2770                       # Water vapor half-height in m
 h_temp: 40000                     # Typical height that depends on the observation site, in m
 temp_ground: 280                  # Average ground temperature on the observation site, in K
@@ -23,7 +23,7 @@ h_qubic: 4869                     # QUBIC altitude in m
 size_atm: 5000                    # Lenght of the atm in m
 nsub_in: 5                       # Number of sub-acquisitions used to integrate over the atm spectrum
 2d: True                          # Determine if you want to simulate a 2d atm
-
+nside: 512
 # Qubic parameters
 
 beam_fwhm: 0.001                  # in rad

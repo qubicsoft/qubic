@@ -1265,10 +1265,8 @@ class QubicInstrument(Instrument):
         sr_beam = secondary_beam.solid_angle
         sec = secondary_beam(theta, phi)
         if use_file:
-           print("Secondary Beam not Applied")
            return DiagonalOperator(sr_det / sr_beam, broadcast='rightward')
-        else:
-           print("Secondary Beam Applied")
+	else:
            sec = secondary_beam(theta, phi)
            return DiagonalOperator(sr_det / sr_beam * sec, broadcast='rightward')
 

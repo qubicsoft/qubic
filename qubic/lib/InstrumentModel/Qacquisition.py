@@ -1820,7 +1820,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, sampling=None):
+    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None):
 
         ### Define class arguments
         self.dict = dictionary

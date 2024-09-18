@@ -6,7 +6,7 @@ from pyoperators.memory import ones
 from pyoperators.utils import ndarraywrap
 from pyoperators.utils.mpi import as_mpi
 from pysimulators.interfaces.healpy import HealpixLaplacianOperator
-from qubic.Qutilities import progress_bar
+from qubic.lib.Qutilities import progress_bar
 import healpy as hp
 import numpy as np
 

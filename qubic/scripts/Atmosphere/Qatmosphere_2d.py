@@ -1,18 +1,21 @@
 import numpy as np
-
 import scipy.constants as c
 from scipy.integrate import quad
-import CoolProp.CoolProp as CP
+
+from CoolProp import CoolProp as CP
+from astropy.cosmology import Planck18
 
 import qubic
+from qubic.lib.Qdictionary import qubicDict
+from qubic.lib.Qscene import QubicScene
+from qubic.lib.InstrumentModel.Qinstrument import QubicInstrument, compute_freq
 
 class Atmsophere:
     
     def __init__(self, params):
         
         self.params = params
-        self.qubic_dict = qubic.lib.Qdictionary.qubicDict()
-        self.qubic_dict['filter_relative_bandwidth'] = 0.25
+        self.qubic_dict = self.get_qubic_dict()
         
         if self.params['h_grid'] == 1:
             # 2d model
@@ -21,13 +24,48 @@ class Atmsophere:
             # 3d model not yet implemented
             self.altitude = None
             
-        self.temperature = self.temperature_atm(self.altitude)
-        self.mean_water_vapor_density = self.mean_water_vapor_density(self.altitude)
+        self.temperature = self.get_temperature_atm(self.altitude)
+        self.mean_water_vapor_density = self.get_mean_water_vapor_density(self.altitude)
         
         self.frequencies, self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff = self.atm_absorption_coeff()
-        
+                
         self.abs_spectrum = self.absorption_spectrum()
-        self.integrated_abs_spectrum = self.integrated_absorption_spectrum()
+        self.integrated_abs_spectrum, _ = self.integrated_absorption_spectrum()
+        
+    def get_qubic_dict(self, key="in"):
+        """QUBIC dictionary.
+
+        Method to modify the qubic dictionary.
+
+        Parameters
+        ----------
+        key : str, optional
+            Can be "in" or "out".
+            It is used to build respectively the instances to generate the TODs or to reconstruct the sky maps,
+            by default "in".
+
+        Returns
+        -------
+        dict_qubic: dict
+            Modified QUBIC dictionary.
+
+        """
+
+        args = {
+            "nf_sub": self.params[f"nsub_{key}"],
+            "filter_relative_bandwidth": 0.25,
+        }
+
+        ### Get the default dictionary
+        dictfilename = "dicts/pipeline_demo.dict"
+        dict_qubic = qubicDict()
+        dict_qubic.read_from_file(dictfilename)
+
+        for i in args.keys():
+
+            dict_qubic[str(i)] = args[i]
+
+        return dict_qubic
         
     def atm_absorption_coeff(self):
         r"""Absorption spectrum.
@@ -170,25 +208,22 @@ class Atmsophere:
 
         return abs_spectrum
     
-    def integrated_absorption_spectrum(self, band = 150):
-        
-        freq_max = np.max(self.frequencies)
-        freq_min = np.min(self.frequencies)
+    def integrated_absorption_spectrum(self, band=150):
+        freq_min, freq_max = self.frequencies[0], self.frequencies[-1]
         freq_step = (freq_max - freq_min) / (len(self.frequencies) - 1)
 
-        _, nus_edges, nus, _, _, N_bands = qubic.lib.Qinstrument.compute_freq(band=band, Nfreq=self.params['nsub_in'], relative_bandwidth=self.qubic_dict['filter_relative_bandwidth'])
+        _, nus_edges, nus, _, _, N_bands = compute_freq(band=band, Nfreq=self.params['nsub_in'], relative_bandwidth=self.qubic_dict['filter_relative_bandwidth'])
         nus_edge_index = (nus_edges - freq_min) / freq_step
-        
-        integrated_abs_spectrum = []
+
+        integrated_abs_spectrum = np.zeros(N_bands)
         for i in range(N_bands):
-            index_inf = int(nus_edge_index[i])
-            index_sup = int(nus_edge_index[i+1])
-            integrated_abs_spectrum.append(np.sum(self.abs_spectrum[index_inf:index_sup]) * 
-                                    (self.frequencies[index_sup] - self.frequencies[index_inf])*1e9 / (index_sup - index_inf))
-            
+            index_inf, index_sup = int(nus_edge_index[i]), int(nus_edge_index[i+1])
+            integrated_abs_spectrum[i] = np.trapz(self.abs_spectrum[index_inf:index_sup], 
+                                                  x=self.frequencies[index_inf:index_sup])
+        
         return integrated_abs_spectrum, nus
     
-    def mean_water_vapor_density(self, altitude):
+    def get_mean_water_vapor_density(self, altitude):
         r"""Mean water vapor density.
         
         Compute the mean water vapor density depending on the altitude, using reference water vapor density and water vapor half_height, given in params.yml.
@@ -211,7 +246,7 @@ class Atmsophere:
         
         return self.params['rho_0'] * np.exp(-np.log(2) * (altitude - 5190) / self.params['h_h2o'])
     
-    def temperature_atm(self, altitude):
+    def get_temperature_atm(self, altitude):
         """Temperature.
         
         Compute the temperature of the atmosphere depending on the altitude, using the average ground temperature and a typical height that depend on the observation site.
@@ -271,6 +306,52 @@ class Atmsophere:
         
         return delta_rho        
         
-    def get_water_vapor_density_map(self):
+    def get_water_vapor_density_2d_map(self):
+        #! maybe it's better to normalize the fluctuations here
         
-        return None
+        return self.get_mean_water_vapor_density(self.params['altitude_atm_2d']) + self.generate_spatial_fluctuations_2d()
+    
+    """    def get_detector_integration_operator(self, instrument):
+        
+        Integrate flux density in detector solid angles and take into account
+        the secondary beam transmission.
+        
+        position = instrument.detector.center
+        area = instrument.detector.area
+        secondary_beam = instrument.secondary_beam
+        theta = np.arctan2(
+            np.sqrt(np.sum(position[..., :2] ** 2, axis=-1)), position[..., 2])
+        phi = np.arctan2(position[..., 1], position[..., 0])
+        sr_det = -area / position[..., 2] ** 2 * np.cos(theta) ** 3
+        sr_beam = secondary_beam.solid_angle
+        sec = secondary_beam(theta, phi)
+        return sr_det / sr_beam * sec
+    
+    def qubic_beams(self, idet):
+        
+        instrument = QubicInstrument(self.qubic_dict)
+        qubic_scene = QubicScene(self.qubic_dict)
+        
+        detector_integration = self.get_detector_integration_operator(instrument)
+        
+        beam = []
+        for ifreq in self.frequencies:
+            theta, phi, val = instrument._peak_angles(qubic_scene, 
+                                                     ifreq, 
+                                                     np.reshape(instrument.detector.center[idet, :], (1.3)),
+                                                     instrument.synthbeam,
+                                                     instrument.horn,
+                                                     instrument.primary_beam)
+            beam.append(np.array([theta[0], phi[0], val[0]/np.sum(val[0])*detector_integration]))
+            
+        return beam  """ 
+        
+    def microkelvin_cmb(self):
+        
+        return 1e6 * Planck18.Tcmb0.value
+        
+    def water_vapor_density_to_detector_temperature(self):
+        
+        water_vapor_density_maps = self.get_water_vapor_density_2d_map()
+        
+        return (1/self.microkelvin_cmb() ) * self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.temperature * water_vapor_density_maps

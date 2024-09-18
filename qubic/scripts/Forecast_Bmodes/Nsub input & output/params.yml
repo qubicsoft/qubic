@@ -37,7 +37,7 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 512                              # Nside of components
+    nside: 1024                              # Nside of components
     coverage_cut: 0.15                      # Define a cut where the coverage is too low
     RA_center: 0                   
     DEC_center: -57

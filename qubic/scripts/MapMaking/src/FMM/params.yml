@@ -17,9 +17,9 @@ QUBIC:
     ### This section control the parameters related to QUBIC
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
-    npointings: 30                        # Number of time samples
-    nsub_in: 6                             # Number of sub-acquisitions
-    nsub_out: 6
+    npointings: 1000                        # Number of time samples
+    nsub_in: 20                             # Number of sub-acquisitions
+    nsub_out: 20
     nrec: 2                                # Number of reconstructed frequency maps
     convolution_in: True                   # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
@@ -37,7 +37,7 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 512                              # Nside of components
+    nside: 256                              # Nside of components
     coverage_cut: 0.15                      # Define a cut where the coverage is too low
     RA_center: 0                   
     DEC_center: -57
@@ -46,7 +46,7 @@ PLANCK:
 
     ### This section define which external data are we using
 
-    external_data: False                        
+    external_data: True                        
     weight_planck: 0                            # Weight of Planck data within the QUBIC patch
     level_noise_planck: 0                       # Noise level for Planck data
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
@@ -60,7 +60,7 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 2                                   # Number of PCG iterations
+    n_iter_pcg: 50                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: True
     gif: True

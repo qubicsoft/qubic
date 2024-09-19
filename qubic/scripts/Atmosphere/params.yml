@@ -20,10 +20,10 @@ sigma_pwv: 0.5                    # Variance of PWV in mm^-1
 n_grid: 200                       # Number of squares in the grid
 h_grid: 1                         # Number of sqares for the altitude, i for 2d model
 h_qubic: 4869                     # QUBIC altitude in m
-size_atm: 5000                    # Lenght of the atm in m
+size_atm: 2000                    # Lenght of the atm in m
 nsub_in: 5                       # Number of sub-acquisitions used to integrate over the atm spectrum
 2d: True                          # Determine if you want to simulate a 2d atm
-nside: 512
-# Qubic parameters
+nside: 128
 
+# Qubic parameters
 beam_fwhm: 0.001                  # in rad

@@ -3,7 +3,6 @@ import scipy.constants as c
 import healpy as hp
 from scipy.integrate import quad
 
-
 from CoolProp import CoolProp as CP
 from astropy.cosmology import Planck18
 
@@ -12,36 +11,54 @@ from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qscene import QubicScene
 from qubic.lib.InstrumentModel.Qinstrument import QubicInstrument, compute_freq
 
+from pyoperators import *
+from pysimulators import (
+    CartesianEquatorial2GalacticOperator,
+    CartesianEquatorial2HorizontalOperator,
+    CartesianHorizontal2EquatorialOperator,
+    CartesianGalactic2EquatorialOperator,
+    SamplingHorizontal,
+    SphericalEquatorial2GalacticOperator,
+    SphericalGalactic2EquatorialOperator,
+    SphericalEquatorial2HorizontalOperator,
+    SphericalHorizontal2EquatorialOperator)
+from pysimulators.interfaces.healpy import Cartesian2HealpixOperator, Spherical2HealpixOperator
+
 class Atmsophere:
     
     def __init__(self, params):
         
-        # Import parameters files
+        ### Import parameters files
         self.params = params
         self.qubic_dict = self.get_qubic_dict()
         
-        # Build atmsopheric coordinates
+        ### Build atmsopheric coordinates
+        # Cartesian coordinates
         if self.params['h_grid'] == 1:
             # 2d model
-            self.altitude = self.params['altitude_atm_2d']
+            self.altitude = (self.params['h_qubic'] + self.params['altitude_atm_2d']) * np.ones(self.params['h_grid'])
         else:
             # 3d model not yet implemented
-            self.altitude = None
+            self.altitude = np.linspace(self.params['h_qubic'], self.params['altitude_atm_2d'], self.params['h_grid'])
         self.x_list = np.linspace(-self.params['size_atm'], self.params['size_atm'], self.params['n_grid'])
         self.y_list = np.linspace(-self.params['size_atm'], self.params['size_atm'], self.params['n_grid'])
+        # Azimuth / Elevation coordinates
+        x, y = np.meshgrid(self.x_list, self.y_list)
+        z = np.ones(x.shape) * self.params['altitude_atm_2d']
+        self.r, self.el, self.az = self.horizontal_plane_to_azel(x, y, z)
             
-        # Compute temperature and water vapor density
+        ### Compute temperature and water vapor density
         self.temperature = self.get_temperature_atm(self.altitude)
         self.mean_water_vapor_density = self.get_mean_water_vapor_density(self.altitude)
         
-        # Compute absorption coefficients
+        ### Compute absorption coefficients
         self.integration_frequencies, self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff = self.atm_absorption_coeff()
                 
-        # Compute absorption spectrum
+        ### Compute absorption spectrum
         self.abs_spectrum = self.absorption_spectrum()
         self.integrated_abs_spectrum, self.frequencies = self.integrated_absorption_spectrum()
         
-        # Build maps
+        ### Build maps
         self.maps = self.get_maps()
         
     def get_qubic_dict(self, key="in"):
@@ -475,29 +492,43 @@ class Atmsophere:
             
         """        
         
-        rho = np.sqrt(x**2 + y**2 + z**2)
-        el = np.pi/2 - np.arccos(z/rho)
+        r = np.sqrt(x**2 + y**2 + z**2)
+        el = np.pi/2 - np.arccos(z/r)
         az = np.arctan2(y, x)
         
-        return az, el
+        return r, az, el
     
-    def get_maps_healpix(self):
+    def get_healpy_atm_maps_2d(self):
+        """Healpy 2d atmosphere maps.
+        
+        Function to project the 2d atmosphere maps in cartesian coordinates, and then project them in spherical coordinates using healpy.
 
-        atm_maps = self.get_maps()
+        Returns
+        -------
+        hp_maps_2d : array_like
+            2d healpy maps of the atmosphere.
+            
+        """        
         
-        # Build an empty Healpy map according to the number 
-        n_pixels = hp.nside2npix(self.params['nside'])
-        healpy_map = np.zeros((len(self.frequencies), n_pixels))
-        print(healpy_map.shape)
+        ### Build list of azimuth and elevation coordinates for each point of the atmosphere
+        az_list, el_list = [], []
+        for ind_x in range(len(self.x_list)):
+            for ind_y in range(len(self.y_list)):
+                _, az, el = self.horizontal_plane_to_azel(self.x_list[ind_x], self.y_list[ind_y], self.altitude[0])
+                az_list.append(az)
+                el_list.append(el) 
+        azel_coordinates = np.asarray([az_list, el_list]).T
         
-        # Fill the healpy maps with atm_maps
-        for i in range(atm_maps.shape[0]):
-            print(atm_maps[i].shape)
-            healpy_map[0, :len(atm_maps[i].flatten())] = atm_maps[i].flatten()
+        ### Build rotation operator
+        rotation_above_qubic = Cartesian2SphericalOperator('azimuth,elevation')(Rotation3dOperator("ZY'", self.qubic_dict['latitude'], self.qubic_dict['longitude'], degrees=True)(Spherical2CartesianOperator('azimuth,elevation')))
         
-        # Convert the maps into Healpy map
+        ### Build healpy projection operator
+        rotation_azel2hp = Spherical2HealpixOperator(self.params['nside'], 'azimuth,elevation')
         
+        ### Fill the healpy maps with the temperature maps using the operators
+        hp_maps_index = rotation_azel2hp(rotation_above_qubic(azel_coordinates)).astype(int)
+        hp_maps_2d = np.zeros((len(self.frequencies), hp.nside2npix(self.params['nside'])))
+        for ifreq in range(len(self.frequencies)):
+            hp_maps_2d[ifreq, hp_maps_index] = self.get_maps()[ifreq].flatten()
         
-
-        return healpy_map
-    
+        return hp_maps_2d

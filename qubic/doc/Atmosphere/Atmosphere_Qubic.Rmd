@@ -5,15 +5,18 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.16.1
+      jupytext_version: 1.16.4
   kernelspec:
-    display_name: Python 3 (ipykernel)
+    display_name: reorganized qubicsoft
     language: python
-    name: python3
+    name: qubic_reorg
 ---
 
 ```{python}
-import qubic
+from qubic.lib.Qdictionary import qubicDict
+from qubic.lib.Instrument.Qinstrument import QubicInstrument, compute_freq
+from qubic.lib.Qscene import QubicScene
+from qubic.data import PATH as data_dir
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
@@ -41,7 +44,7 @@ m_H2O = 2.992e-23 # (g) mass of H2O molecule
 ```{python}
 dictname = 'pipeline_demo.dict'
 
-thisd = qubic.qubicdict.qubicDict()
+thisd = qubicDict()
 thisd.read_from_file(dictname)
 thisd['nside'] = 1024
 thisd['synthbeam_kmax'] = 3 # We select peaks from the (2 * kmax + 1)**2 = 49 peaks centered on the primary peak
@@ -90,11 +93,14 @@ Let's first consider the line-by-line absorption coefficient and its dependance 
 frequencies = []
 _550hPa_280K_1mm = []
 
-with open('absorption_coefficient/h2o_lines_550hPa_280K_1mm.out', 'r') as file:
+coeffs_dir = os.path.join(data_dir,'Atmosphere')
+with open(os.path.join(coeffs_dir,'h2o_lines_550hPa_280K_1mm.out'), 'r') as file:
     for line in file:
         parts = line.split() # Split the line into two parts based on whitespace
         frequencies.append(float(parts[0]))
         _550hPa_280K_1mm.append(float(parts[1]))
+        
+frequencies = np.array(frequencies)        
 
 name_dict = {} 
 name_dict['_500hPa_280K_1mm'] = []
@@ -103,7 +109,8 @@ name_dict['_550hPa_260K_1mm'] = []
 name_dict['_550hPa_300K_1mm'] = []
 
 for name, list in name_dict.items():
-    with open('absorption_coefficient/h2o_lines'+name+'.out', 'r') as file:
+    filename = os.path.join(coeffs_dir,'h2o_lines'+name+'.out')
+    with open(filename, 'r') as file:
         for line in file:
             parts = line.split() # Split the line into two parts based on whitespace
             list.append(float(parts[1]))
@@ -159,15 +166,17 @@ Now, lets consider the self- and air-induces continua. The self-induce absorptio
 h2o_self = []
 h2o_air = []
 
-with open('absorption_coefficient/h2o_self_continuum.out', 'r') as file:
+with open(os.path.join(coeffs_dir,'h2o_self_continuum.out'), 'r') as file:
     for line in file:
         parts = line.split() # Split the line into two parts based on whitespace
         h2o_self.append(float(parts[1]))
 
-with open('absorption_coefficient/h2o_air_continuum.out', 'r') as file:
+with open(os.path.join(coeffs_dir,'h2o_air_continuum.out'), 'r') as file:
     for line in file:
         parts = line.split() # Split the line into two parts based on whitespace
         h2o_air.append(float(parts[1]))
+h2o_self = np.array(h2o_self)
+h2o_air = np.array(h2o_air)
 ```
 
 ```{python}
@@ -187,6 +196,8 @@ We can now plot the parameter $\alpha_b(\nu)$ [$m^2g^{-1}$].
 
 ```{python}
 absorption_coeff_mass = (name_dict['_550hPa_280K_1mm'] + np.array(h2o_air)*(1e-10*n_air)) / m_H2O
+print(absorption_coeff_mass.shape)
+print(frequencies.shape)
 ```
 
 ```{python}
@@ -219,10 +230,16 @@ def absorption_coeff_integrated(band, Nfreq, relative_bandwidth):
     freq_min = np.min(frequencies)
     freq_step = (freq_max - freq_min) / (len(frequencies) - 1)
     
-    _, nus_edge, _, _, _, Nbbands = qubic.compute_freq(band, Nfreq, relative_bandwidth)
+    _, nus_edge, _, _, _, Nbbands = compute_freq(band, Nfreq, relative_bandwidth)
 
     nus_edge_index = (nus_edge - freq_min) / freq_step
     absorption_coeff = []
+    if Nbbands==1:
+        absorption_coeff.append(np.sum(absorption_coeff_mass) * 
+                                (frequencies[-1] - frequencies[0])*1e9 / len(frequencies)
+                               )
+        return np.array(absorption_coeff)
+        
     
     for i in range(Nbbands):
         index_inf = int(nus_edge_index[i])
@@ -230,7 +247,7 @@ def absorption_coeff_integrated(band, Nfreq, relative_bandwidth):
         absorption_coeff.append(np.sum(absorption_coeff_mass[index_inf:index_sup]) * 
                                 (frequencies[index_sup] - frequencies[index_inf])*1e9 / (index_sup - index_inf))
         
-    return absorption_coeff
+    return np.array(absorption_coeff)
 ```
 
 ```{python}
@@ -320,8 +337,8 @@ def qubic_beam(i, freq):
     Returns the coordinates and value of the peaks of the detector i at frequency freq
     '''
     thisd['filter_nu'] = freq
-    thisq = qubic.QubicInstrument(thisd)
-    s = qubic.QubicScene(thisd)
+    thisq = QubicInstrument(thisd)
+    s = QubicScene(thisd)
     integration = get_detector_integration_operator(thisq)[i]
     theta, phi, val = thisq._peak_angles(s, thisd['filter_nu'], 
                                      np.reshape(thisq.detector.center[i,:], (1,3)), 
@@ -835,6 +852,12 @@ def atm_correlations_qubic_scanning(points, list_peaks_i, list_peaks_j, ti, az_t
     z_max = h_atm / np.sin(min_el_qubic)
     Sz = z_max**2 - (z_max-r0)**2
     
+    if freq==150e9:
+        molecular_absorption_coeff = absorption_coeff_integrated(150, 1, thisd['filter_relative_bandwidth'])[0]
+    elif freq==220e9:
+        molecular_absorption_coeff = absorption_coeff_integrated(220, 1, thisd['filter_relative_bandwidth'])[0]
+    else:
+        raise Exception('freq should be 150e9 or 220e9')
 
     return molecular_absorption_coeff**2 * int / np.shape(points)[1] * Sz
 ```

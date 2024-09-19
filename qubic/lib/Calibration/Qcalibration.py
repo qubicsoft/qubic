@@ -47,7 +47,7 @@ class QubicCalibration(object):
         self.nu = int(d['filter_nu']/1e9)
         for key in ['detarray','hornarray','optics','primbeam','synthbeam']:
             calfile = d[key].replace('_CC','_%s' % d['config']).replace('_FFF','_%03i' % self.nu)
-            calfile_fullpath = find_file(os.path.join(self.path,calfile))
+            calfile_fullpath = find_file(os.path.join(self.path,calfile), verbosity=0)
             cmd = "self.%s = '%s'" % (key,calfile_fullpath)
             exec(cmd)
 

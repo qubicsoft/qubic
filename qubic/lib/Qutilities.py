@@ -178,7 +178,7 @@ def do_gif(input_folder, N, filename, output='animation.gif'):
     #output_gif_path = f"figures/{stk}/animation.gif"
     image_list[0].save(output_gif_path, save_all=True, append_images=image_list[1:], duration=100, loop=0)
 
-def find_file(filename):
+def find_file(filename,verbosity=1):
     '''
     find the full path to the file given the filename
     It could be a dictionary, or a data, or calibration file.
@@ -214,6 +214,7 @@ def find_file(filename):
             return filename_fullpath
 
     # if we get this far, then we haven't found the file
-    print('ERROR!  File not found: %s' % basename)
-    print('        I looked in the following directories:\n    %s' % '     \n'.join(dir_list))
+    if verbosity>0:
+        print('ERROR!  File not found: %s' % basename)
+        print('        I looked in the following directories:\n    %s' % '     \n'.join(dir_list))
     return None

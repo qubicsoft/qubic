@@ -16,27 +16,32 @@ class Atmsophere:
     
     def __init__(self, params):
         
+        # Import parameters files
         self.params = params
         self.qubic_dict = self.get_qubic_dict()
         
+        # Build atmsopheric coordinates
         if self.params['h_grid'] == 1:
             # 2d model
             self.altitude = self.params['altitude_atm_2d']
         else:
             # 3d model not yet implemented
             self.altitude = None
-        
-        self.x_list = np.linspace(-self.params['size_tam'], self.params['size_tam'], self.params['n_grid'])
-        self.y_list = np.linspace(-self.params['size_tam'], self.params['size_tam'], self.params['n_grid'])
+        self.x_list = np.linspace(-self.params['size_atm'], self.params['size_atm'], self.params['n_grid'])
+        self.y_list = np.linspace(-self.params['size_atm'], self.params['size_atm'], self.params['n_grid'])
             
+        # Compute temperature and water vapor density
         self.temperature = self.get_temperature_atm(self.altitude)
         self.mean_water_vapor_density = self.get_mean_water_vapor_density(self.altitude)
         
+        # Compute absorption coefficients
         self.integration_frequencies, self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff = self.atm_absorption_coeff()
                 
+        # Compute absorption spectrum
         self.abs_spectrum = self.absorption_spectrum()
         self.integrated_abs_spectrum, self.frequencies = self.integrated_absorption_spectrum()
         
+        # Build maps
         self.maps = self.get_maps()
         
     def get_qubic_dict(self, key="in"):
@@ -68,8 +73,8 @@ class Atmsophere:
         dict_qubic = qubicDict()
         dict_qubic.read_from_file(dictfilename)
 
+        ### Modify the dictionary
         for i in args.keys():
-
             dict_qubic[str(i)] = args[i]
 
         return dict_qubic
@@ -128,19 +133,23 @@ class Atmsophere:
         self_absorption_coeff = []
         air_absorption_coeff = []
         
+        ### Initialize atmosppheric properties
         pressure = self.params['pressure_atm']
         temp = self.params['temp_ground']
         pwv = self.params['pwv']
         
+        ### Import absorption coefficients from molecular absorption lines
         with open(f'absorption_coefficient/h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out', 'r') as file:
             for line in file:
                 frequencies.append(float(line.split()[0]))
                 mol_absorption_coeff.append(float(line.split()[1]) * (1e-2)**2)
                 
+        ### Import absorption coefficients from self-induced collisions continuum
         with open(f'/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/h2o_self_continuum.out', 'r') as file:
             for line in file:
                 self_absorption_coeff.append(float(line.split()[1]) * (1e-2)**5)
                 
+        ### Import absorption coefficients from air-induced collisions continuum
         with open(f'/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/h2o_air_continuum.out', 'r') as file:
             for line in file:
                 air_absorption_coeff.append(float(line.split()[1]) * (1e-2)**5)
@@ -170,24 +179,26 @@ class Atmsophere:
             
         """        
         
-        # Import physical constants
-        temp_atm = self.temperature                                                             # in K
-        pressure_atm = self.params['pressure_atm'] * 100                                            # in Pa
+        ### Import physical constants
+        temp_atm = self.temperature  # in K
+        pressure_atm = self.params['pressure_atm'] * 100  # in Pa
+
+        ### Air properties
+        air_molar_mass = CP.PropsSI('MOLARMASS', 'Air')  # in g/mol
+        air_mass = air_molar_mass / c.Avogadro * 1e3  # in g
+        air_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Air")  # in kg/m-3
+        air_density = air_mass_density * 1e3 / air_mass  # in m-3
+
+        ### Water properties
+        water_molar_mass = CP.PropsSI('MOLARMASS', 'Water')  # in g/mol
+        water_mass = water_molar_mass / c.Avogadro * 1e3  # in g
         
-        # Air properties
-        air_molar_mass = CP.PropsSI('MOLARMASS', 'Air')                                             # in g/mol
-        air_mass = air_molar_mass / c.Avogadro * 10**3                                              # in g
-        air_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Air")                 # in kg/m-3
-        air_density = air_mass_density * 1000 / air_mass                                            # in m-3
-        
-        # Water properties
-        water_molar_mass = CP.PropsSI('MOLARMASS', 'Water')                                         # in g/mol
-        water_mass = water_molar_mass / c.Avogadro * 10**3                                          # in g
+        # Compute water vapor density
         if params_file:
-            water_vapor_density = self.mean_water_vapor_density / water_mass                                 # in m-3
+            water_vapor_density = self.mean_water_vapor_density / water_mass  # in m-3
         else:
-            water_vapor_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Water")   # in kg/m-3
-            water_vapor_density = c.Avogadro * water_vapor_mass_density / water_molar_mass / 1000   # in m-3
+            water_vapor_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Water")  # in kg/m-3
+            water_vapor_density = c.Avogadro * water_vapor_mass_density / water_molar_mass * 1e-3  # in m-3
 
         return water_mass, water_vapor_density, air_density
         
@@ -216,12 +227,33 @@ class Atmsophere:
         return abs_spectrum
     
     def integrated_absorption_spectrum(self, band=150):
+        """Integrated absorption spectrum.
+        
+        Compute the integrated absorption spectrum in a given frequency band, according to the parameters in the params.yml file.
+
+        Parameters
+        ----------
+        band : int, optional
+            QUBIC frequency band. Can be either 150 or 220, by default 150
+
+        Returns
+        -------
+        integrated_abs_spectrum : array_like
+            The integrated absorption spectrum in the given frequency band, in :math:`m^{2} / g`.
+        nus : array_like
+            The frequencies at which the absorption spectrum is computed, in :math:`GHz`.
+            
+        """        
+        
+        ### Evaluate the frequency band edges
         freq_min, freq_max = self.integration_frequencies[0], self.integration_frequencies[-1]
         freq_step = (freq_max - freq_min) / (len(self.integration_frequencies) - 1)
 
+        ### Compute the frequency sub-bands within the QUBIC band and their associated indexes
         _, nus_edges, nus, _, _, N_bands = compute_freq(band=band, Nfreq=self.params['nsub_in'], relative_bandwidth=self.qubic_dict['filter_relative_bandwidth'])
         nus_edge_index = (nus_edges - freq_min) / freq_step
 
+        ### Integrate the absorption spectrum over the frequency sub-bands using the trapezoidal method
         integrated_abs_spectrum = np.zeros(N_bands)
         for i in range(N_bands):
             index_inf, index_sup = int(nus_edge_index[i]), int(nus_edge_index[i+1])
@@ -271,106 +303,182 @@ class Atmsophere:
         -------
         temperature : array_like
             Temperature in K.
+            
         """
         
         return self.params['temp_ground'] * np.exp(- altitude / self.params['h_temp'])
     
     def get_fourier_grid_2d(self):
+        """Fourier 2d grid.
         
-        # Generate spatial frequency in Fourier space
+        Generate a 2d grid of spatial frequencies in Fourier space according to the parameters in the params.yml file.
+
+        Returns
+        -------
+        kx : array_like
+            2d array containing the spatial x frequencies in Fourier space, (n_grid, n_grid).
+        ky : array_like
+            2d array containing the spatial y frequencies in Fourier space, (n_grid, n_grid).
+        k_norm : array_like
+            2d array containing the norm of the spatial frequencies in Fourier space, (n_grid, n_grid).
+            
+        """        
+        
+        ### Generate spatial frequency in Fourier space
         k_distrib_y = np.fft.fftfreq(self.params['n_grid'], d=2*self.params['size_atm']/self.params['n_grid']) * 2*np.pi
         k_distrib_x = np.fft.fftfreq(self.params['n_grid'], d=2*self.params['size_atm']/self.params['n_grid']) * 2*np.pi
         
-        # Build 2d grid
+        ### Build 2d grid and compute the norm of the spatial frequencies
         kx, ky = np.meshgrid(k_distrib_x, k_distrib_y)
         k_norm = np.sqrt(kx**2 + ky**2)
         
         return kx, ky, k_norm
     
     def kolmogorov_spectrum_2d(self, k):
+        r"""Kolmogorov 2d spectrum.
+        
+        Compute the Kolmogorov 2d spectrum, which simulate the power spectrum of the spatial fluctuations of the water vapor density, following the equation :
+        
+        .. math::
+            P(\textbf{k}) = (r_0^{-2} + \lvert \textbf{k} \rvert ^{2})^{-8/6} .
+        
+
+        Parameters
+        ----------
+        k : array_like
+            Array containing the spatial frequencies at which we want to compute the Kolmogorov 2d spectrum.
+
+        Returns
+        -------
+        kolmogorov_spectrum_2d : array_like
+            Kolmogorov 2d spectrum.
+        """        
         
         return (self.params['correlation_length']**(-2) + np.abs(k)**2)**(-8/6)
     
     def normalized_kolmogorov_spectrum_2d(self, k):
+        r"""Normalized Kolmogorov 2d spectrum.
         
+        Compute the normalized Kolmogorov 2d spectrum, to ensure :
+        
+        .. math::
+            \int_\textbf{k} P(\textbf{k}) d\textbf{k} = 1 .
+
+        Parameters
+        ----------
+        k : array_like
+            Array containing the spatial frequencies at which we want to compute the normalized Kolmogorov 2d spectrum.
+
+        Returns
+        -------
+        normalized_kolmogorov_spectrum_2d : array_like
+            Normalized Kolmogorov 2d spectrum.
+            
+        """        
+        
+        ### Compute the normalization constant
         res, _ = quad(self.kolmogorov_spectrum_2d, np.min(k), np.max(k))
         
         return self.kolmogorov_spectrum_2d(k) / res
     
     def generate_spatial_fluctuations_2d(self):
+        """Spatial 2d fluctuations.
+        
+        Produce the spatial fluctuations of the water vapor density, by generating random phases in Fourier space, and then computing the inverse Fourier transform.
+
+        Returns
+        -------
+        delta_rho_x : array_like
+            Variation of the water vapor density.
+            
+        """        
         #! At some point, we will need to normalize these fluctuations using real data. We can maybe use :math:`\sigma_{PWV}` that can be estimated with figure 4 in Morris 2021.
         
-        # Compute the power spectrum
-        k = self.get_fourier_grid_2d()[2]
+        ### Compute the spatial frequencies & power spectrum.
+        _, _, k = self.get_fourier_grid_2d()
         kolmogorov_spectrum = self.normalized_kolmogorov_spectrum_2d(k)
         
-        # Generate spatial fluctuations through random phases in Fourier space
+        ### Generate spatial fluctuations through random phases in Fourier space
         phi = np.random.uniform(0, 2*np.pi, size=(self.params['n_grid'], self.params['n_grid']))
         delta_rho_k = np.sqrt(kolmogorov_spectrum) * np.exp(1j * phi)
 
-        # Apply inverse Fourier transform to obtain spatial fluctuations
-        delta_rho = np.fft.ifft2(delta_rho_k).real
+        ### Apply inverse Fourier transform to obtain spatial fluctuations in real space
+        delta_rho = np.fft.irfft2(delta_rho_k, s=(self.params['n_grid'], self.params['n_grid']))
         
         return delta_rho        
-        
     def get_water_vapor_density_2d_map(self):
+        """Water vapor density 2d map.
+        
+        Get the water vapor density 2d map with simulated fluctuations.
+
+        Returns
+        -------
+        atm_maps_2d : array_like
+            Water vapor density 2d map.
+            
+        """        
         #! maybe it's better to normalize the fluctuations here
         
         return self.get_mean_water_vapor_density(self.params['altitude_atm_2d']) + self.generate_spatial_fluctuations_2d()
-    
-    """    def get_detector_integration_operator(self, instrument):
-        
-        Integrate flux density in detector solid angles and take into account
-        the secondary beam transmission.
-        
-        position = instrument.detector.center
-        area = instrument.detector.area
-        secondary_beam = instrument.secondary_beam
-        theta = np.arctan2(
-            np.sqrt(np.sum(position[..., :2] ** 2, axis=-1)), position[..., 2])
-        phi = np.arctan2(position[..., 1], position[..., 0])
-        sr_det = -area / position[..., 2] ** 2 * np.cos(theta) ** 3
-        sr_beam = secondary_beam.solid_angle
-        sec = secondary_beam(theta, phi)
-        return sr_det / sr_beam * sec
-    
-    def qubic_beams(self, idet):
-        
-        instrument = QubicInstrument(self.qubic_dict)
-        qubic_scene = QubicScene(self.qubic_dict)
-        
-        detector_integration = self.get_detector_integration_operator(instrument)
-        
-        beam = []
-        for ifreq in self.frequencies:
-            theta, phi, val = instrument._peak_angles(qubic_scene, 
-                                                     ifreq, 
-                                                     np.reshape(instrument.detector.center[idet, :], (1.3)),
-                                                     instrument.synthbeam,
-                                                     instrument.horn,
-                                                     instrument.primary_beam)
-            beam.append(np.array([theta[0], phi[0], val[0]/np.sum(val[0])*detector_integration]))
-            
-        return beam  """ 
         
     def get_maps(self):
-                
+        r"""Atmosphere maps.
+        
+        Get the atmosphere maps in temperature, by using the equation 12 from Morris 2021, that compute the induced temperature in the detector due to the water vapor density :
+        
+        .. math::
+            dT( \teextbf{r}, \nu) = \alpha_b(\nu) \rho(\textbf{r}) T_{atm}(\textbf{r}) dV .
+            
+        And then, convert it in micro Kelvin CMB.
+
+        Returns
+        -------
+        temp_maps : array_like
+            Temperature maps in micro Kelvin CMB.
+            
+        """
+        #! Does it have sense to compare this temperature with the one from CMB ? We talk about the CMB temperature because it follows a blackbody spectrum, but it is not the case for the atmosphere...
+        #! We just have compute the corresponding measured temperature according to physical parameters.
+        
+        ### Get the water vapor density maps
         water_vapor_density_maps = self.get_water_vapor_density_2d_map()
         
-        # Compute the associated temperature maps from the wapor density maps
+        ### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021
         temp_maps = self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.temperature * water_vapor_density_maps
         
-        # Convert them into micro Kelvin CMB
+        ### Convert them into micro Kelvin CMB
         temp_maps -= Planck18.Tcmb0.value
         temp_maps *= 1e6
         
         return temp_maps
     
     def horizontal_plane_to_azel(self, x, y, z):
+        """Horizontal plane to azimuth and elevation.
+        
+        Convert the coordinates in the horizontal plane to azimuth and elevation.
+
+        Parameters
+        ----------
+        x : array_like
+            x coordinate.
+        y : array_like
+            y coordinate.
+        z : array_like
+            z coordinate.
+
+        Returns
+        -------
+        az : array_like
+            Azimuth coordinate.
+        el : array_like
+            Elevation coordinate.
+            
+        """        
         
         rho = np.sqrt(x**2 + y**2 + z**2)
         el = np.pi/2 - np.arccos(z/rho)
         az = np.arctan2(y, x)
+        
         return az, el
     
     def get_maps_healpix(self):
@@ -389,5 +497,7 @@ class Atmsophere:
         
         # Convert the maps into Healpy map
         
+        
 
         return healpy_map
+    

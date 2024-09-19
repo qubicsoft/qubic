@@ -69,9 +69,6 @@ class PipelineFrequencyMapMaking:
         self.file = file
         self.plot_folder = "FMM/" + self.params["path_out"] + "png/"
 
-        self.externaldata = PlanckMaps(self.params["SKY"]["nside"], r=self.params['CMB']['r'], Alens=self.params['CMB']['Alens'])
-        self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(skyconfig=self.skyconfig, fwhm=self.params["QUBIC"]["convolution_in"])
-
         ### Create folders
         create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "maps/")
         create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "png/")
@@ -107,6 +104,8 @@ class PipelineFrequencyMapMaking:
             H=H,
         )
 
+        self.externaldata = PlanckMaps(self.skyconfig, self.joint_tod.qubic.allnus, self.params["QUBIC"]["nrec"], nside=self.params["SKY"]["nside"])
+        self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(fwhm=self.params["QUBIC"]["convolution_in"])
         self.planck_acquisition143 = PlanckAcquisition(143, self.joint.qubic.scene)
         self.planck_acquisition217 = PlanckAcquisition(217, self.joint.qubic.scene)
         self.nus_Q = self.get_averaged_nus()

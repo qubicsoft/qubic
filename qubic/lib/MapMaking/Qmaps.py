@@ -42,7 +42,6 @@ class Maps:
         for i in range(self.nrec):
             m_mean[i] = np.mean(m_nu[i * f : (i + 1) * f], axis=0)
         return m_mean
-    
     def _get_cmb(self, r, Alens, seed):
 
         cmbmodel = CMBModel(None)
@@ -51,7 +50,6 @@ class Maps:
         np.random.seed(seed)
         cmb = hp.synfast(mycls, self.nside, verbose=False, new=True).T
         return cmb
-
     def average_map(self, r, Alens, central_nu, bw, nb=100):
 
         mysky = np.zeros((12*self.nside**2, 3))
@@ -94,63 +92,29 @@ class Maps:
 
         return m_nu
 
-class PlanckMaps:
+class PlanckMaps(Maps):
 
-    def __init__(self, nside, r=0, Alens=1):
+    def __init__(self, skyconfig, nus, nrec, nside=256, r=0, Alens=1):#nside, r=0, Alens=1):
 
         #self.params = params
 
+        Maps.__init__(self, skyconfig, nus, nrec, nside=nside)
         self.experiments = {'Planck': {'frequency': [30, 44, 70, 100, 143, 217, 353],
                                 'depth_i': [150., 162., 210., 77.4, 33., 46.8, 154],
                                 'depth_p': [210., 240., 300., 118, 70.2, 105., 439],
                                 'fwhm': [32.29, 27.94, 13.08, 9.66, 7.22, 4.90, 4.92],
                                 'bw': [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]}
                     }
-
-        #self.external_nus = self._read_external_nus()
-        # print('external nus : ', self.external_nus)
+        self.skyconfig = skyconfig
         self.r = r 
         self.Alens = Alens
         self.nside = nside
-        #self.file = file
 
-    
-    '''
-    def _get_sky_config(self):
+    #def read_pkl(self, name):
 
-        sky = {}
-
-        if self.params["CMB"]["cmb"]:
-            if self.params["CMB"]["seed"] == 0:
-                seed = np.random.randint(10000000)
-            else:
-                seed = self.params["CMB"]["seed"]
-            sky["cmb"] = seed
-
-        for j in self.params["Foregrounds"]:
-            # print(j, self.params['Foregrounds'][j])
-            if j == "Dust":
-                if self.params["Foregrounds"][j]:
-                    sky["dust"] = "d0"
-            elif j == "Synchrotron":
-                if self.params["Foregrounds"][j]:
-                    sky["synchrotron"] = "s0"
-
-        return sky
-    '''
-    def read_pkl(self, name):
-
-        with open(name, "rb") as f:
-            data = pickle.load(f)
-        return data
-    def _get_cmb(self, r, Alens, seed):
-
-        cmbmodel = CMBModel(None)
-        mycls = cmbmodel.give_cl_cmb(r, Alens)
-
-        np.random.seed(seed)
-        cmb = hp.synfast(mycls, self.nside, verbose=False, new=True).T
-        return cmb
+        #with open(name, "rb") as f:
+        #    data = pickle.load(f)
+        #return data
     def _get_ave_map(self, r, Alens, skyconfig, central_nu, bw, nb=100):
 
         is_cmb = False
@@ -203,7 +167,7 @@ class PlanckMaps:
             * sigma
         )
         return out
-    def run(self, skyconfig, fwhm=False, number_of_band_integration=100):
+    def run(self, fwhm=False, number_of_band_integration=100):
         """
 
         Method that create global variables such as :
@@ -221,13 +185,13 @@ class PlanckMaps:
             
             bandwidth = self.experiments['Planck']['bw'][inu]
             maps[inu] = self._get_ave_map(self.r, self.Alens, 
-                skyconfig,
+                self.skyconfig,
                 nu,
                 nu * bandwidth,
                 nb=number_of_band_integration
             )
 
-            maps[inu] *= 0
+            #maps[inu] *= 0
             
             n = self._get_noise(nu)
             maps[inu] += n
@@ -245,10 +209,13 @@ class PlanckMaps:
         
         return maps, maps_noise
 
-class InputMaps:
+class InputMaps(Maps):
 
     def __init__(self, sky, nus, nrec, nside=256, corrected_bandpass=True):
 
+        
+        Maps.__init__(self, sky, nus, nrec, nside=nside, corrected_bandpass=corrected_bandpass)
+        
         self.nus = nus
         self.nside = nside
         self.nrec = nrec
@@ -258,7 +225,7 @@ class InputMaps:
 
         for i in sky.keys():
             if i == "cmb":
-                cmb = self.get_cmb(r=0, Alens=1, seed=self.sky["cmb"])
+                cmb = self._get_cmb(r=0, Alens=1, seed=self.sky["cmb"])
                 self.m_nu += cmb.copy()
             elif i == "dust":
                 self.sky_fg = self._separe_cmb_fg()
@@ -271,28 +238,6 @@ class InputMaps:
 
         self.maps = self.average_within_band(self.m_nu)
 
-    def give_cl_cmb(self, r=0, Alens=1.0):
-
-        power_spectrum = hp.read_cl(data_dir+ "Cls_Planck2018_lensed_scalar.fits")[
-            :, :4000
-        ]
-        if Alens != 1.0:
-            power_spectrum[2] *= Alens
-        if r:
-            power_spectrum += (
-                r
-                * hp.read_cl(
-                    data_dir+ "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
-                )[:, :4000]
-            )
-        return power_spectrum
-
-    def get_cmb(self, r=0, Alens=1, seed=None):
-
-        mycls = self.give_cl_cmb(r, Alens)
-        np.random.seed(seed)
-        return hp.synfast(mycls, self.nside, verbose=False, new=True).T
-
     def _get_fg_1nu(self, nu):
         return (
             np.array(
@@ -301,7 +246,6 @@ class InputMaps:
             )
             / 1.5
         )
-
     def _get_fg_allnu(self):
 
         m = np.zeros((len(self.nus), 12 * self.nside**2, 3))
@@ -310,7 +254,6 @@ class InputMaps:
             m[inu] = self._get_fg_1nu(nu)
 
         return m
-
     def _separe_cmb_fg(self):
 
         self.list_fg = []
@@ -323,27 +266,3 @@ class InputMaps:
                 self.list_fg += [self.sky[i]]
 
         return new_s
-
-    def average_within_band(self, m_nu):
-
-        m_mean = np.zeros((self.nrec, 12 * self.nside**2, 3))
-        f = int(self.nsub / self.nrec)
-        for i in range(self.nrec):
-            # print(f'Doing average between {np.min(self.nus[i*f:(i+1)*f])} and {np.max(self.nus[i*f:(i+1)*f])} GHz')
-            m_mean[i] = np.mean(m_nu[i * f : (i + 1) * f], axis=0)
-        return m_mean
-
-    def _corrected_maps(self, m_nu, m_nu_fg):
-
-        f = int(self.nsub / self.nrec)
-
-        mean_fg = self.average_within_band(m_nu_fg)
-
-        k = 0
-        for i in range(self.nrec):
-            delta = m_nu_fg[i * f : (i + 1) * f] - mean_fg[i]
-            for j in range(f):
-                m_nu[k] -= delta[j]
-                k += 1
-
-        return m_nu

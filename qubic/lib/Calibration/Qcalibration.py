@@ -1,15 +1,14 @@
 # coding: utf-8
 from astropy.io import fits
-import sys
-import glob
+import sys,os,glob,re
 from configparser import ConfigParser
 from os.path import join
+
 from pysimulators import Layout, LayoutGrid
-from qubic.calfiles import PATH
 from qubic.lib.Qhorns import HornLayout
+from qubic.lib.Qutilities import find_file
+
 import numpy as np
-import os
-import re
 
 __all__ = ['QubicCalibration']
 
@@ -21,7 +20,7 @@ class QubicCalibration(object):
     relatively to the working directory and if not found, in the calibration
     path.
     """
-    def __init__(self, d, path=PATH):
+    def __init__(self, d, path=None):
         """
         Parameters
         ----------
@@ -39,13 +38,20 @@ class QubicCalibration(object):
         synthbeam : str, optional
             The synthetic beam parameter calibration file name.
         """
+        if path is None:
+            path = '.'
+            
         self.path = os.path.abspath(path)
-        self.detarray = os.path.abspath(join(self.path, d['detarray']))
-        self.hornarray = os.path.abspath(join(self.path, d['hornarray']))
-        self.optics = os.path.abspath(join(self.path, d['optics'])) 
-        self.primbeam = os.path.abspath(join(self.path, d['primbeam']))
-        self.synthbeam = os.path.abspath(join(self.path, d['synthbeam']))
+
+        # replace the wildcard with the configuration:  either TD or FI
         self.nu = int(d['filter_nu']/1e9)
+        for key in ['detarray','hornarray','optics','primbeam','synthbeam']:
+            calfile = d[key].replace('_CC','_%s' % d['config']).replace('_FFF','_%03i' % self.nu)
+            calfile_fullpath = find_file(os.path.join(self.path,calfile))
+            cmd = "self.%s = '%s'" % (key,calfile_fullpath)
+            exec(cmd)
+
+        
 
     def __str__(self):
         state = [('path', self.path),

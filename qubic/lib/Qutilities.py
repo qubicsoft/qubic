@@ -2,6 +2,9 @@ import signal, traceback, os, string
 from progressbar import ProgressBar, Bar, ETA, Percentage
 import numpy as np
 from PIL import Image
+from qubic.data import PATH as data_dir
+from qubic.calfiles import PATH as cal_dir
+from qubic.dicts import PATH as dicts_dir
 
 
 _NLEVELS = 0
@@ -174,3 +177,43 @@ def do_gif(input_folder, N, filename, output='animation.gif'):
     output_gif_path = os.path.join(input_folder, output)
     #output_gif_path = f"figures/{stk}/animation.gif"
     image_list[0].save(output_gif_path, save_all=True, append_images=image_list[1:], duration=100, loop=0)
+
+def find_file(filename):
+    '''
+    find the full path to the file given the filename
+    It could be a dictionary, or a data, or calibration file.
+
+    We look first of all for the name, as given, which could be an absolute path
+    We then look in the current working directory
+
+    We also look in directories that have been defined in BASH environment variables
+
+    Finally, we look in the package directory for dictionary, or data (including calfiles)
+
+    we return the path name of the file that was found
+    Otherwise we print a "not found" error, and return None
+    '''
+
+    if os.path.isfile(filename):
+        return filename
+
+    basename = os.path.basename(filename)
+    dir_list = ['.']
+
+    if 'QUBIC_DICT' in os.environ.keys():
+        dir_list.append(os.environ['QUBIC_DICT'])
+
+    if 'QUBIC_DATADIR' in os.environ.keys():
+        dir_list.append(os.environ['QUBIC_DATADIR'])
+        
+    dir_list += [dicts_dir,cal_dir,data_dir]
+    
+    for D in dir_list:
+        filename_fullpath = os.path.join(D,basename)
+        if os.path.isfile(filename_fullpath):
+            return filename_fullpath
+
+    # if we get this far, then we haven't found the file
+    print('ERROR!  File not found: %s' % basename)
+    print('        I looked in the following directories:\n    %s' % '     \n'.join(dir_list))
+    return None

@@ -2,15 +2,7 @@ import healpy as hp
 import numpy as np
 
 from ...data import PATH as data_dir
-#from qubic.data import PATH as data_dir
-#import .ComponentMapMaking.Qcomponent_model as c
-#import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
 import fgbuster.mixingmatrix as mm
-
-# def separate_dictionaries(input_dict):
-#    cmb_dict = input_dict.get('CMB', {})
-#    foregrounds_dict = input_dict.get('Foregrounds', {})
-#    return cmb_dict, foregrounds_dict
 
 
 class CMBModel:

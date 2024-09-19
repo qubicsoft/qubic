@@ -28,6 +28,7 @@ from pyoperators import (
     PackOperator,
     ReshapeOperator,
     rule_manager,
+    IntegrationTrapezeOperator
 )
 
 # PyOperators stuff
@@ -1875,20 +1876,23 @@ class QubicMultiAcquisitions:
         ]
 
         ### CO line emission
-        # if nu_co is not None:
-        #    dmono = self.dict.copy()
-        #    dmono['filter_nu'] = nu_co * 1e9
+        if nu_co is not None:
+            dmono = self.dict.copy()
+            dmono['filter_nu'] = nu_co * 1e9
 
-        #    w = IntegrationTrapezeOperator(allnus_edges_220)
-        #    deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
+            w = IntegrationTrapezeOperator(allnus_edges_220)
+            deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
 
-        #    dmono['filter_relative_bandwidth'] = deltas_trap / nu_co
-        #    print(nu_co, deltas_trap, deltas_trap / nu_co)
-        #    #stop
-        #    instrument_co = QubicInstrument(dmono, FRBW=0.25)#dmono['filter_relative_bandwidth'])
-        #    self.multiinstrument.subinstruments += [instrument_co]
-        #    self.subacqs += [QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)]
+            dmono['filter_relative_bandwidth'] = 0.05#deltas_trap / nu_co
+            print(nu_co, deltas_trap, deltas_trap / nu_co)
 
+            instrument_co = QubicInstrument(dmono, FRBW=0.25)#dmono['filter_relative_bandwidth'])
+            self.multiinstrument.subinstruments += [instrument_co]
+            self.subacqs += [QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)]
+            
+            self.allnus = np.append(self.allnus, nu_co)
+        #print(self.allnus)
+        #stop
         ### Angular resolution
         self.allfwhm = np.zeros(len(self.multiinstrument))
         for i in range(len(self.multiinstrument)):

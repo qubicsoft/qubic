@@ -1,10 +1,39 @@
 import os
 import pickle
-
+import yaml
 import imageio
 import numpy as np
 
+def yaml_to_txt(yaml_file, txt_file):
+    """
+    Convert a YAML file to a TXT file.
+    """
+    try:
+        with open(yaml_file, 'r') as yf:
+            yaml_data = yaml.safe_load(yf)
+        
+        with open(txt_file, 'w') as tf:
+            yaml.dump(yaml_data, tf, default_flow_style=False)
+        
+        print(f"Successfully converted {yaml_file} to {txt_file}")
+    except Exception as e:
+        print(f"Error converting YAML to TXT: {str(e)}")
 
+def txt_to_yaml(txt_file, yaml_file):
+    """
+    Convert a TXT file (containing YAML content) to a YAML file.
+    """
+    try:
+        with open(txt_file, 'r') as tf:
+            yaml_data = yaml.safe_load(tf)
+        
+        with open(yaml_file, 'w') as yf:
+            yaml.dump(yaml_data, yf, default_flow_style=False)
+        
+        print(f"Successfully converted {txt_file} to {yaml_file}")
+    except Exception as e:
+        print(f"Error converting TXT to YAML: {str(e)}")
+        
 def save_data(name, d):
     """
 

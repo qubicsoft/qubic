@@ -1,6 +1,8 @@
 import sys
-from pyoperators import *
-from FMM.pipeline import PipelineEnd2End
+from pyoperators import MPI
+import os
+from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineEnd2End
+
 from CMM.pipeline import Pipeline
 
 
@@ -8,6 +10,9 @@ from CMM.pipeline import Pipeline
 comm = MPI.COMM_WORLD
 
 simu = 'FMM'
+
+path = os.path.dirname(os.path.realpath(__file__))
+paramters_file = path + '/test_params.txt'
 
 if __name__ == "__main__":
 
@@ -19,7 +24,7 @@ if __name__ == "__main__":
             file = None
 
         ### Initialization
-        pipeline = PipelineEnd2End(comm)
+        pipeline = PipelineEnd2End(comm, parameters_path=paramters_file)
         
         ### Execution
         pipeline.main(specific_file=file)

@@ -16,7 +16,7 @@ from matplotlib.gridspec import *
 from pyoperators import *
 from schwimmbad import MPIPool
 
-from lib.Qspectra_component import CMB, Foreground
+from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import CMB, Foreground
 
 # sys.path.append('/pbs/home/t/tlaclave/sps/Pipeline')
 
@@ -32,12 +32,6 @@ def _Dl2Cl(ell, Dl):
 
 
 def _Cl2BK(ell, Cl):
-    # Convert power spectrum (Cl) to B-mode power spetrum in units of μK^2
-    # Input:
-    #   ell: multipole moments
-    #   Cl: power spectrum
-    # Output:
-    #   B-mode power spectrum in μK^2
     return 100 * ell * Cl / (2 * np.pi)
 
 

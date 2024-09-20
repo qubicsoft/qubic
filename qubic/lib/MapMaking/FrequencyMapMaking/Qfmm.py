@@ -14,13 +14,13 @@ from ...Qsamplings import equ2gal
 from ...Qdictionary import qubicDict
 from ...InstrumentModel.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
 from ...InstrumentModel.Qnoise import QubicDualBandNoise, QubicWideBandNoise
-from ...Qcg import pcg
+from ..Qcg import pcg
 from ..ComponentMapMaking.Qcomponent_model import CMB, Dust, Synchrotron
-from ...Qfoldertools import create_folder_if_not_exists, do_gif, yaml_to_txt, txt_to_yaml
-from ...Qmap_plotter import PlotsFMM
+from ...Qfoldertools import create_folder_if_not_exists, do_gif
+from ..Qmap_plotter import PlotsFMM
 from ...Qspectra import Spectra
 from ...Qmpi_tools import MpiTools
-from ...MapMaking.Qmaps import PlanckMaps, InputMaps
+from ..Qmaps import PlanckMaps, InputMaps
 
 __all__ = ["PipelineFrequencyMapMaking", 
            "PipelineEnd2End"]
@@ -330,6 +330,7 @@ class PipelineFrequencyMapMaking:
             "DEC_center": self.params["SKY"]["DEC_center"],
             "filter_nu": 150 * 1e9,
             "noiseless": False,
+            "beam_shape": 'gaussian',
             "comm": self.comm,
             "dtheta": self.params["QUBIC"]["dtheta"],
             "nprocs_sampling": 1,

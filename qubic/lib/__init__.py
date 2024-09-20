@@ -13,10 +13,8 @@ from .Qscene import *
 from .Qutilities import *
 from .Qripples import *
 from .Qbeams import *
-from .Qcg import *
+from .MapMaking.Qcg import *
 from .Qfit import *
 from .Qfoldertools import *
-from .Qmap_plotter import *
 from .Qmpi_tools import *
 from .Qspectra import *
-from .Qspectra_component import *

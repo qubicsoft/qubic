@@ -4,10 +4,16 @@ import yaml
 import imageio
 import numpy as np
 
-def yaml_to_txt(yaml_file, txt_file):
+def yaml_to_txt(yaml_file, txt_file, comm=None):
     """
     Convert a YAML file to a TXT file.
     """
+
+    splitted_path = os.path.split(txt_file)
+    
+    ### Create the path if doesn't exist
+    create_folder_if_not_exists(comm=comm, folder_name=splitted_path[0])
+    
     try:
         with open(yaml_file, 'r') as yf:
             yaml_data = yaml.safe_load(yf)
@@ -18,21 +24,6 @@ def yaml_to_txt(yaml_file, txt_file):
         print(f"Successfully converted {yaml_file} to {txt_file}")
     except Exception as e:
         print(f"Error converting YAML to TXT: {str(e)}")
-
-def txt_to_yaml(txt_file, yaml_file):
-    """
-    Convert a TXT file (containing YAML content) to a YAML file.
-    """
-    try:
-        with open(txt_file, 'r') as tf:
-            yaml_data = yaml.safe_load(tf)
-        
-        with open(yaml_file, 'w') as yf:
-            yaml.dump(yaml_data, yf, default_flow_style=False)
-        
-        print(f"Successfully converted {txt_file} to {yaml_file}")
-    except Exception as e:
-        print(f"Error converting TXT to YAML: {str(e)}")
         
 def save_data(name, d):
     """

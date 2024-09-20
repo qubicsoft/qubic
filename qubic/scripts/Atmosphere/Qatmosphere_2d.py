@@ -82,6 +82,8 @@ class Atmsophere:
 
         args = {
             "nf_sub": self.params[f"nsub_{key}"],
+            "nf_rec": self.params[f"nrec"],
+            "nside": self.params["nside"],
             "filter_relative_bandwidth": 0.25,
         }
 
@@ -193,7 +195,13 @@ class Atmsophere:
             The density of water vapor given the atmospheric temperature and pressure in :math:`m^{-3}`.
         air_vapor_density : float
             The density of air vapor given the atmospheric temperature and pressure in :math:`m^{-3}`.
-            
+            rho_2d = np.zeros((Nx, Ny))
+
+mean_delta = np.mean(delta_rho)
+var_delta = np.var(delta_rho)
+
+rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqrt(var_delta)
+        
         """        
         
         ### Import physical constants
@@ -436,7 +444,25 @@ class Atmsophere:
         """        
         #! maybe it's better to normalize the fluctuations here
         
-        return self.get_mean_water_vapor_density(self.params['altitude_atm_2d']) + self.generate_spatial_fluctuations_2d()
+        ### Import water vapor density map and fluctuations
+        rho = self.get_mean_water_vapor_density(self.params['altitude_atm_2d'])
+        delta_rho = self.generate_spatial_fluctuations_2d()
+        
+        ### Normalize fluctuations
+        sigma_rho = self.params['sigma_pwv'] / self.params['pwv']
+        
+        ### Take into account the cutoff of high wavenumbers
+        sigma_simulated = sigma_rho * np.sqrt(quad(lambda k : self.kolmogorov_spectrum_2d(k) * k**2, np.min(self.get_fourier_grid_2d()[0]), np.max(self.get_fourier_grid_2d()[0]))[0] 
+                                       / quad(lambda k : self.kolmogorov_spectrum_2d(k) * k**2, -self.params['correlation_length'], self.params['correlation_length'])[0])
+
+        rho_normalized = np.zeros((self.params['n_grid'], self.params['n_grid']))
+
+        mean_delta = np.mean(delta_rho)
+        var_delta = np.var(delta_rho)
+
+        rho_normalized += rho + sigma_simulated * (delta_rho - mean_delta) / np.sqrt(var_delta)     
+        
+        return rho_normalized
         
     def get_maps(self):
         r"""Atmosphere maps.
@@ -520,7 +546,7 @@ class Atmsophere:
         azel_coordinates = np.asarray([az_list, el_list]).T
         
         ### Build rotation operator
-        rotation_above_qubic = Cartesian2SphericalOperator('azimuth,elevation')(Rotation3dOperator("ZY'", self.qubic_dict['latitude'], self.qubic_dict['longitude'], degrees=True)(Spherical2CartesianOperator('azimuth,elevation')))
+        rotation_above_qubic = Cartesian2SphericalOperator('azimuth,elevation')(Rotation3dOperator("ZY'", - self.qubic_dict['latitude'], self.qubic_dict['longitude'])(Spherical2CartesianOperator('azimuth,elevation')))
         
         ### Build healpy projection operator
         rotation_azel2hp = Spherical2HealpixOperator(self.params['nside'], 'azimuth,elevation')

@@ -2,9 +2,9 @@
 
 correlation_length: 300           # Atmospheric correlation maximum lenght in m
 altitude_atm_2d: 1000                # Altitude of the atmosphere above QUBIC for 2D model in m
-rho_0: 20     #!valeur volontairement exagérée pour 2d                     # Reference water vapor density in g/m³
-h_h2o: 2770                       # Water vapor half-height in m
-h_temp: 40000                     # Typical height that depends on the observation site, in m
+rho_0: 1.75                          # Reference water vapor density in g/m³
+h_h2o: 835                       # Water vapor half-height in m
+h_temp: 35000                     # Typical height that depends on the observation site, in m
 temp_ground: 280                  # Average ground temperature on the observation site, in K
 
 #! Not sure to use that now
@@ -12,18 +12,20 @@ temp_ground: 280                  # Average ground temperature on the observati
 
 pressure_atm: 550                 # Atmopsheric pressure in hPa
 #! rho_0 should be computed using pwv in a more advanced version
-pwv: 1                             # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, 
+pwv: 1                             # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, mm
 sigma_pwv: 0.5                    # Variance of PWV in mm^-1
 
 # Simulation parameters
 
-n_grid: 200                       # Number of squares in the grid
+n_grid: 500                       # Number of squares in the grid
 h_grid: 1                         # Number of sqares for the altitude, i for 2d model
 h_qubic: 4869                     # QUBIC altitude in m
-size_atm: 2000                    # Lenght of the atm in m
-nsub_in: 5                       # Number of sub-acquisitions used to integrate over the atm spectrum
+size_atm: 5000                    # Lenght of the atm in m
+nsub_in: 4                       # Number of sub-acquisitions used to integrate over the atm spectrum
+nrec: 4
 2d: True                          # Determine if you want to simulate a 2d atm
 nside: 128
+npointing: 1000
 
 # Qubic parameters
 beam_fwhm: 0.001                  # in rad

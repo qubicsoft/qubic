@@ -228,7 +228,7 @@ class PipelineFrequencyMapMaking:
         if self.params['PLANCK']['external_data']:
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
             self.H_out = self.joint.get_operator(
-                fwhm=self.fwhm_out, seenpix=self.seenpix_qubic
+                fwhm=self.fwhm_out, seenpix=self.seenpix
             )  # , external_data=self.params['PLANCK']['external_data'])
         else:
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
@@ -718,14 +718,14 @@ class PipelineFrequencyMapMaking:
 
             conditioner[conditioner == np.inf] = 1
             if self.params['PLANCK']['external_data']:
-                M = DiagonalOperator(conditioner[:, self.seenpix_qubic, :])
+                M = DiagonalOperator(conditioner[:, self.seenpix, :])
             else:
                 M = DiagonalOperator(conditioner)
         else:
             M = None
         return M
 
-    def pcg(self, d, x0, seenpix):
+    def call_pcg(self, d, x0, seenpix):
         r"""Preconditioned Conjugate Gradiant algorithm.
 
         Solve the map-making equation iteratively : :math:`(H^T . N^{-1} . H) . x = H^T . N^{-1} . d`.
@@ -785,7 +785,7 @@ class PipelineFrequencyMapMaking:
             maxiter=self.params["PCG"]["n_iter_pcg"],
             gif_folder=gif_folder,
             job_id=self.job_id,
-            seenpix=self.seenpix_qubic,
+            seenpix=self.seenpix,
             seenpix_plot=self.seenpix,
             center=self.center,
             reso=self.params["PCG"]["resolution_plot"],
@@ -805,7 +805,6 @@ class PipelineFrequencyMapMaking:
             )
         
         solution = np.ones(self.m_nu_in.shape) * hp.UNSEEN
-        print(solution_qubic_planck["x"]["x"].shape, solution.shape)
         if self.params['PLANCK']['external_data']:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
         else:
@@ -838,12 +837,12 @@ class PipelineFrequencyMapMaking:
         self.mpi._barrier()
 
         if self.params['PLANCK']['external_data']:
-            starting_point = np.zeros(self.m_nu_in[:, self.seenpix_qubic, :].shape)
+            starting_point = np.zeros(self.m_nu_in[:, self.seenpix, :].shape)
         else:
             starting_point = np.zeros(self.m_nu_in.shape)
             
         ### Solve map-making equation
-        self.s_hat = self.pcg(self.TOD, x0=starting_point, seenpix=self.seenpix_qubic)
+        self.s_hat = self.call_pcg(self.TOD, x0=starting_point, seenpix=self.seenpix)
 
         ### Wait for all processes
         self.mpi._barrier()
@@ -852,8 +851,8 @@ class PipelineFrequencyMapMaking:
         self.s_hat_noise = self.s_hat - self.m_nu_in
 
         ### Ensure that non seen pixels is 0 for spectrum computation
-        self.s_hat[:, ~self.seenpix_qubic, :] = 0
-        self.s_hat_noise[:, ~self.seenpix_qubic, :] = 0
+        self.s_hat[:, ~self.seenpix, :] = 0
+        self.s_hat_noise[:, ~self.seenpix, :] = 0
 
         ### Plots and saving
         if self.rank == 0:
@@ -875,7 +874,7 @@ class PipelineFrequencyMapMaking:
                     list(self.nus_Q) + list(self.externaldata.experiments['Planck']['frequency'])
                 )
                 self.fwhm_rec = np.array(list(self.fwhm_rec) + list(fwhm_ext))
-
+            print(self.s_hat.shape)
             self.plots.plot_frequency_maps(
                 self.m_nu_in[: len(self.nus_Q)],
                 self.s_hat[: len(self.nus_Q)],
@@ -969,7 +968,7 @@ class PipelineEnd2End:
                 ### Signal
                 DlBB_maps = self.spectrum.run(maps=self.spectrum.maps)
 
-                ### noise
+                ### Noise
                 DlBB_noise = self.spectrum.run(
                     maps=self.spectrum.dictionary["maps_noise"]
                 )
@@ -982,4 +981,4 @@ class PipelineEnd2End:
                     "parameters": self.params,
                 }
 
-                self._save_data(self.file_spectrum, dict_solution)
+                self.mapmaking._save_data(self.file_spectrum, dict_solution)

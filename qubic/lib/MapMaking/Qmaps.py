@@ -12,10 +12,10 @@ from qubic.data import PATH as data_dir
 
 
 # from mapmaking.systematics import give_cl_cmb, arcmin2rad
-from qubic.lib.InstrumentModel.Qacquisition import *
-
-from .Qcmbmodel import CMBModel
-
+from ..InstrumentModel.Qacquisition import arcmin2rad
+#from qubic.lib.InstrumentModel.Qacquisition import *
+#from .Qcmbmodel import CMBModel
+from ..Qspectra_component import CMBModel
 
 class Maps:
     
@@ -44,7 +44,7 @@ class Maps:
         return m_mean
     def _get_cmb(self, r, Alens, seed):
 
-        cmbmodel = CMBModel(None)
+        cmbmodel = CMBModel(None) 
         mycls = cmbmodel.give_cl_cmb(r, Alens)
 
         np.random.seed(seed)
@@ -110,11 +110,6 @@ class PlanckMaps(Maps):
         self.Alens = Alens
         self.nside = nside
 
-    #def read_pkl(self, name):
-
-        #with open(name, "rb") as f:
-        #    data = pickle.load(f)
-        #return data
     def _get_ave_map(self, r, Alens, skyconfig, central_nu, bw, nb=100):
 
         is_cmb = False

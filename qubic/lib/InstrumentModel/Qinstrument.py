@@ -6,6 +6,10 @@ import copy
 import healpy as hp
 import numexpr as ne
 import numpy as np
+
+from scipy.constants import c, h, k, sigma
+from scipy.integrate import quad
+
 from pyoperators import (
     Cartesian2SphericalOperator,
     DenseBlockDiagonalOperator,
@@ -33,16 +37,6 @@ from pysimulators.interfaces.healpy import (
 )
 from pysimulators.sparse import FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix
 from qubic import _flib as flib
-
-
-
-#from qubic.beams import BeamFitted, BeamGaussian, MultiFreqBeam
-#from qubic.calibration import QubicCalibration
-#from qubic.polyacquisition import compute_freq
-#from qubic.ripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
-#from qubic.utils import _compress_mask
-from scipy.constants import c, h, k, sigma
-from scipy.integrate import quad
 
 from ..Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
 from ..Calibration.Qcalibration import QubicCalibration

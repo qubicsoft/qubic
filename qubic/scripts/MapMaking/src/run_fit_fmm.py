@@ -8,7 +8,7 @@ from schwimmbad import MPIPool
 
 from lib.Qfit import FitEllSpace
 from lib.Qfoldertools import MergeAllFiles
-from lib.Qspectra_component import SkySpectra
+from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import SkySpectra
 
 comm = MPI.COMM_WORLD
 

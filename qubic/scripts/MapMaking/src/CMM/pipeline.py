@@ -15,9 +15,9 @@ import fgbuster.mixingmatrix as mm
 
 ### Local packages
 from qubic.lib.InstrumentModel.Qacquisition import *
-from qubic.lib.Qcg import pcg
+from qubic.lib.MapMaking.Qcg import pcg
 from qubic.lib.Qfoldertools import *
-from qubic.lib.Qmap_plotter import *
+from qubic.lib.MapMaking.Qmap_plotter import *
 
 # from simtools.mpi_tools import *
 from qubic.lib.InstrumentModel.Qnoise import *
@@ -88,72 +88,6 @@ class Pipeline:
         )
         self._rms_noise_qubic_patch_per_ite[:] = np.nan
 
-    def fisher(self, ell, Nl):
-        """Fisher Method.
-
-        Fisher to compute an estimation of sigma(r) for a given noise power spectrum.
-
-        Parameters
-        ----------
-        ell : array_like
-            Array containing the multipole values.
-        Nl : array_like
-            Array containing the noise power spectrum values.
-
-        Returns
-        -------
-        sigma: float
-            Estimated value of sigma(r).
-
-        """
-
-        Dl = np.interp(
-            ell, np.arange(1, 4001, 1), self.preset.comp.give_cl_cmb(r=1, Alens=0)[2]
-        )
-        sigma = np.sum(
-            (ell + 0.5)
-            * self.preset.sky.namaster.fsky
-            * self.preset.tools.params["SPECTRUM"]["dl"]
-            * (Dl / (Nl)) ** 2
-        )
-
-        return sigma ** (-1 / 2)
-
-    def fisher_compute_sigma_r(self):
-        """Fisher estimation.
-
-        Computes and prints the value of sigma(r) using the Fisher matrix.
-
-        """
-
-        # Apply Gaussian beam convolution
-        C = HealpixConvolutionGaussianOperator(
-            fwhm=self.preset.acquisition.fwhm_rec
-        )
-        map_to_namaster = C(
-            self.preset.comp.components_iter[0] - self.preset.comp.components_out[0]
-        )
-
-        # Set unobserved pixels to zero
-        map_to_namaster[~self.preset.sky.seenpix, :] = 0
-
-        # Compute power spectra using NaMaster
-        leff, cls, _ = self.preset.sky.namaster.get_spectra(
-            map_to_namaster.T,
-            beam_correction=np.rad2deg(self.preset.acquisition.fwhm_rec),
-            pixwin_correction=False,
-            verbose=False,
-        )
-
-        # Compute BB power spectrum and convert to delta ell
-        dl_BB = cls[:, 2] / self.preset.sky.cl2dl
-
-        # Compute sigma(r) using Fisher matrix
-        sigma_r = self.fisher(leff, dl_BB)
-
-        # Print the value of sigma(r)
-        self.preset.tools._print_message(f"sigma(r) = {sigma_r:.6f}")
-
     def call_pcg(self, max_iterations, seenpix):
         """Precontioned Conjugate Gradiant algorithm.
 
@@ -176,11 +110,13 @@ class Pipeline:
 
         ### Update the precondtionner M
         self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(
+            
+        
             A_qubic=self.preset.acquisition.Amm_iter[
-                : self.preset.qubic.params_qubic["nsub_out"]
+                :6#: self.preset.qubic.params_qubic["nsub_out"]
             ],
             A_ext=self.preset.mixingmatrix.Amm_in[
-                self.preset.qubic.params_qubic["nsub_out"] :
+                6:#self.preset.qubic.params_qubic["nsub_out"] :
             ],
             precond=self.preset.qubic.params_qubic["preconditioner"],
         )
@@ -217,6 +153,7 @@ class Pipeline:
             fwhm_plot=self.preset.tools.params["PCG"]["fwhm_plot"],
             input=self.preset.comp.components_out,
             iter_init=self._steps * num_iter,
+            is_planck=True,
         )["x"]["x"]
 
         ### Update components
@@ -257,7 +194,7 @@ class Pipeline:
             Boolean array that define the pixels observed by QUBIC.
 
         """
-
+        
         H_i = self.preset.qubic.joint_out.get_operator(
             A=self.preset.acquisition.Amm_iter,
             gain=self.preset.gain.gain_iter,

@@ -56,9 +56,9 @@ QUBIC:
     convolution_out: False                 # Angular resolution in the reconstruction
     preconditioner: True
     NOISE:                          
-        ndet: 0                            # Level of detector noise
-        npho150: 0                         # Level of photon noise at 150 GHz
-        npho220: 0                         # Level of photon noise at 220 GHz
+        ndet: 1                            # Level of detector noise
+        npho150: 1                         # Level of photon noise at 150 GHz
+        npho220: 1                         # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17              # NEP of detector noise
         duration_150: 3                    # Effective duration at 150 GHz
         duration_220: 3                    # Effective duration at 220 GHz
@@ -74,7 +74,7 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 128                              # Nside of components
+    nside: 64                              # Nside of components
     RA_center: 0                   
     DEC_center: -57
 
@@ -99,16 +99,16 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 10 
-    n_iter_pcg: 10                                     # Number of PCG iterations
+    n_init_iter_pcg: 2000 
+    n_iter_pcg: 2000                                     # Number of PCG iterations
     tol_pcg: 1.0e-20                                # Tolerance for PCG
-    n_iter_loop: 1000                                  # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+    n_iter_loop: 1                                  # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
     ites_to_converge: 1                            # should be less than k
-    tol_rms: 1.0e-10
+    tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True         # Fixing pixels outside QUBIC patch
     fixI: False                             # Fix the intensity during the map-making
     reso_plot: 12
-    fwhm_plot: 0.005
+    fwhm_plot: 0
     do_gif: True
 
 INITIAL:
@@ -119,13 +119,13 @@ INITIAL:
     sig_map_noise: 0            # Standard deviation of noise in first guess maps
     qubic_patch_I_cmb: 0        # Multiplicative factor of initial CMB within the QUBIC patch
     qubic_patch_I_dust: 0       # Multiplicative factor of initial Dust within the QUBIC patch
-    qubic_patch_I_sync: 1       # Multiplicative factor of initial Sync within the QUBIC patch
-    qubic_patch_I_co: 1         # Multiplicative factor of initial CO within the QUBIC patch
+    qubic_patch_I_sync: 0       # Multiplicative factor of initial Sync within the QUBIC patch
+    qubic_patch_I_co: 0         # Multiplicative factor of initial CO within the QUBIC patch
 
     qubic_patch_P_cmb: 0        # Multiplicative factor of initial CMB within the QUBIC patch
     qubic_patch_P_dust: 0       # Multiplicative factor of initial Dust within the QUBIC patch
-    qubic_patch_P_sync: 1       # Multiplicative factor of initial Sync within the QUBIC patch
-    qubic_patch_P_co: 1         # Multiplicative factor of initial CO within the QUBIC patch
+    qubic_patch_P_sync: 0       # Multiplicative factor of initial Sync within the QUBIC patch
+    qubic_patch_P_co: 0         # Multiplicative factor of initial CO within the QUBIC patch
 
 SPECTRUM:
     lmin: 3

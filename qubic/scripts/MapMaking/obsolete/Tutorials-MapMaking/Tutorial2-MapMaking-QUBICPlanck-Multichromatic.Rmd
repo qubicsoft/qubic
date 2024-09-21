@@ -1,0 +1,303 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Map-Making using Planck Acquisition
+
+In this notebook, we describe how to make the map-making process using Planck acquisition to correct edge effects. We will merge QUBIC and Planck acquisition to benefit of both instrument, QUBIC for the Q and U sensitivity and Planck for the large coverage and sensitivity on I.
+
+```{python}
+from __future__ import division
+from pyoperators import pcg
+from pysimulators import profile
+
+import sys
+sys.path.append('/Users/mregnier/Desktop/PhD Regnier/mypackages')
+
+# QUBIC packages
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+from qubic.data import PATH
+from qubic.io import read_map
+from qubic import QubicSkySim as qss
+import Acquisition as Acq
+
+# Display packages
+import healpy as hp
+import matplotlib.pyplot as plt
+
+# FG-Buster packages
+import component_model as c
+import mixing_matrix as mm
+
+# General packages
+import numpy as np
+import pysm3
+import warnings
+from qubic import QubicSkySim as qss
+import pysm3.units as u
+from importlib import reload
+from pysm3 import utils
+
+# PyOperators packages
+from pyoperators import (
+    BlockColumnOperator, BlockDiagonalOperator, BlockRowOperator,
+    CompositionOperator, DiagonalOperator, I, IdentityOperator,
+    MPIDistributionIdentityOperator, MPI, proxy_group, ReshapeOperator,
+    rule_manager, pcg, Operator)
+
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+warnings.filterwarnings("ignore")
+# %matplotlib inline
+
+# # %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+```
+
+# QUBIC dictionary
+
+We first import the QUBIC dictionary to define general stuff like pixelization, seen region on the sky, etc... 
+
+```{python}
+def initial_guess_pcg(map, n, Nrec, npix):
+
+    initial_guess = np.zeros((Nrec, npix, 3))
+    for i in range(Nrec):
+        initial_guess[i] = map + n
+    
+    return initial_guess
+def integration(nu_min, nu_max, Nintegr, sky_config, d):
+    print(f'Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps')
+    obj = Acq.QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
+    if Nintegr == 1:
+        allnus = np.array([np.mean([nu_min, nu_max])])
+    else:
+        allnus = np.linspace(nu_min, nu_max, Nintegr)
+    m = obj.get_PySM_maps(sky_config, nus=allnus)
+    #print(m.shape)
+    
+    return np.array([np.mean(m, axis=0)])
+```
+
+```{python}
+print('\n******* Dictionary *******\n')
+
+dictfilename = 'dicts/pipeline_demo.dict'
+
+d = qubic.qubicdict.qubicDict()
+d.read_from_file(dictfilename)
+
+Nrec = 2
+fact = 2
+Nsub = int(Nrec * fact)
+Nbfreq, nus_edge, nus, deltas, Delta, Nbbands = qubic.compute_freq(220, Nfreq=Nsub)
+band = 217
+sky_config = {'dust':'d0'}
+
+nside = 256
+pointings = 3000
+ite = 1
+noisy = 1
+convolution = False
+convolution_to_max=False
+correction = False
+
+d['nf_recon'] = Nrec
+d['nf_sub'] = Nrec
+d['nside'] = 256
+npix=12*d['nside']**2
+d['RA_center'] = 0
+d['DEC_center'] = -57
+center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+d['effective_duration'] = 300000000
+d['npointings'] = pointings
+d['filter_nu'] = 220e9
+d['config'] = 'FI'
+d['MultiBand'] = True
+```
+
+```{python}
+
+```
+
+```{python}
+qubic_acquisition = Acq.QubicIntegrated(d, Nsub=Nsub, Nrec=Nsub)
+m_tod = qubic_acquisition.get_PySM_maps(sky_config, nus=qubic_acquisition.allnus)  # To make TOD
+
+m_planck = integration(band-35, band+35, 20, sky_config, d)
+```
+
+```{python}
+qubic_acquisition = Acq.QubicIntegrated(d, Nsub=Nsub, Nrec=Nrec)
+planck_acquisition = Acq.PlanckAcquisition(band, qubic_acquisition.scene)
+qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
+```
+
+```{python}
+cov = qubic_acquisition.get_coverage()
+pixok = cov > 0
+seenpix = cov/cov.max() > 0.
+```
+
+```{python}
+tod = qubicplanck_acquisition.get_observation(m_tod, np.array([m_planck[0]]*Nrec), convolution, noisy=noisy, verbose=True)
+```
+
+```{python}
+mask = np.array(seenpix, dtype=int)
+mask[np.where(seenpix == False)[0]] = 1e10
+```
+
+```{python}
+qubic_acquisition = Acq.QubicIntegrated(d, Nsub=Nsub, Nrec=Nrec)
+planck_acquisition = Acq.PlanckAcquisition(band, qubic_acquisition.scene)
+qubicplanck_acquisition = Acq.QubicPlanckMultiBandAcquisition(qubic_acquisition, planck_acquisition)
+Hrecon = qubicplanck_acquisition.get_operator(convolution=convolution_to_max, convolve_to_max=convolution_to_max)
+
+if correction:
+    beam_correction = list(qubic_acquisition.final_fwhm)
+else:
+    beam_correction = None
+```
+
+```{python}
+invntt = qubicplanck_acquisition.get_invntt_operator(mask=mask, beam_correction=beam_correction)
+
+A = Hrecon.T * invntt * Hrecon
+b = Hrecon.T * invntt * tod
+
+print('\n********** PCG **********\n')
+
+M = Acq.get_preconditioner(np.ones(12*d['nside']**2))
+
+tol=1e-10
+```
+
+```{python}
+def initial_guess(map, nrec, fwhm = None, noisy = False):
+    
+    if fwhm is None:
+        fwhm = [0]*nrec
+    
+    map_ini = np.zeros((nrec, map.shape[1], map.shape[2]))
+    
+    for i in range(nrec):
+        C = HealpixConvolutionGaussianOperator(fwhm = fwhm[i])
+        map_ini[i] = C(map[0])
+        
+    if nrec == 1:
+        map_ini = map[0]
+    
+    return map_ini
+
+map_planck_ini = initial_guess(m_planck+np.array([planck_acquisition.get_noise()*0.0000001]), Nrec, fwhm = qubic_acquisition.final_fwhm)
+
+solution_qubic_planck = pcg(A, b, x0=map_planck_ini, M=None, tol=tol, disp=True, maxiter=100)
+```
+
+```{python}
+covnorm = cov/cov.max()
+ii = covnorm > 0.1
+
+new_res = np.zeros((Nrec, 12*nside**2, 3))
+print(new_res.shape)
+for i in range(Nrec):
+    
+    new_res[i, :] = np.mean(m_tod[i*fact:(i+1)*fact], axis=0)
+    new_res[i, ~ii] = m_planck[0, ~ii].copy()
+```
+
+```{python}
+
+```
+
+```{python}
+plt.figure(figsize=(10, 8))
+res=15
+istk=1
+
+for i in range(Nrec):
+    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
+    #inputs = np.mean(m_tod[i*fact:(i+1)*fact], axis=0)
+    #inputs = m_planck[0]
+    inputs = new_res[i]
+    hp.gnomview(C(inputs[:, istk]), rot=center, reso=res, cmap='jet', min=-6, max=6, sub=(3, Nrec, i+1), 
+                                        title=f'Input QUBIC - {qubic_acquisition.allnus[i]:.2f} GHz')
+
+
+for i in range(Nrec):
+    hp.gnomview(solution_qubic_planck['x'][i, :, istk], rot=center, reso=res, cmap='jet', min=-6, max=6, sub=(3, Nrec, Nrec+i+1), title=r'Output - $\nu$'+f'{i+1}')
+
+
+    
+for i in range(Nrec):
+    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
+    #inputs = np.mean(m_tod[i*fact:(i+1)*fact], axis=0)
+    #inputs = m_planck[0]
+    inputs = new_res[i]
+    r = C(inputs[:, istk]) - solution_qubic_planck['x'][i, :, istk]
+    hp.gnomview(r, rot=center, reso=res, cmap='jet', min=-1, max=1, sub=(3, Nrec, (2*Nrec)+i+1), 
+                                        title=r'Residuals - $\nu$'+f'{i+1}')
+plt.show()
+```
+
+```{python}
+allcov = np.linspace(0.001, 1, 20)
+allcov
+```
+
+```{python}
+r = np.zeros((Nrec, 12*nside**2))
+for i in range(Nrec):
+    C = HealpixConvolutionGaussianOperator(fwhm=qubic_acquisition.final_fwhm[i])
+    r[i] = C(new_res[i])[:, istk] - solution_qubic_planck['x'][i, :, istk]
+
+plt.figure(figsize=(10, 14))
+
+for i in range(Nrec):
+    plt.subplot(Nrec, 1, i+1)
+    
+    
+    for j, jj in enumerate(allcov):
+        if jj != 1:
+            #print(allcov[j], allcov[j+1])
+            index = np.where((covnorm > allcov[j]) & (covnorm < allcov[j+1]))[0]
+            #print(index)
+            #print(np.mean(r[i][index]), np.std(r[i][index]))
+            plt.plot(covnorm[index], r[i][index], ',')
+            plt.errorbar(np.mean([allcov[j], allcov[j+1]]), np.mean(r[i][index]), yerr=np.std(r[i][index]), fmt='or', capsize=3)
+            plt.axhline(0, color='black')
+    #plt.plot(covnorm, r[4], ',')
+    #plt.xscale('log')
+    plt.xlim(0.001, 1)
+    plt.ylim(-1, 1)
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

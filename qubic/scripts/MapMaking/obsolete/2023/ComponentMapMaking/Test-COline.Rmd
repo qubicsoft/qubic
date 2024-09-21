@@ -1,0 +1,65 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+import healpy as hp
+import os
+path = os.getcwd()
+
+path_mm = os.path.dirname(path)
+import sys
+sys.path.append(path_mm)
+import qubic
+center = qubic.equ2gal(100, -157)
+```
+
+```{python}
+co = hp.read_map(path_mm+'/CO_line.fits') * 10
+print(co)
+
+hp.gnomview(co, min=0, max=100, rot=center, reso=15)
+```
+
+```{python}
+def polarized(m, nside, polarization_fraction=0.001):
+    
+    polangle = hp.ud_grade(hp.read_map(path_mm+'/psimap_dust90_512.fits'), nside)
+    depolmap = hp.ud_grade(hp.read_map(path_mm+'/gmap_dust90_512.fits'), nside)
+    cospolangle = np.cos(2.0 * polangle)
+    sinpolangle = np.sin(2.0 * polangle)
+
+    P_map = polarization_fraction * depolmap * m
+    return P_map * np.array([cospolangle, sinpolangle])
+```
+
+```{python}
+co_p = polarized(co, nside=256, polarization_fraction=0.01)
+
+hp.gnomview(co_p[0], min=0, max=10, rot=center, reso=15)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

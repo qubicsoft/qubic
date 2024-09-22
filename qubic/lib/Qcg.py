@@ -11,7 +11,7 @@ from pyoperators.utils.mpi import MPI
 
 from .Qfoldertools import *
 from .Qmap_plotter import _plot_reconstructed_maps
-
+ 
 __all__ = ["pcg"]
 
 
@@ -187,7 +187,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         if self.is_planck:
             map_i = np.ones(self.input.shape) * hp.UNSEEN
             map_i[:, self.seenpix, :] = self.x.copy()
-            
+        
         _r = map_i[:, self.seenpix, :] - self.input[:, self.seenpix, :]
         self.rms = np.std(_r, axis=1)
         

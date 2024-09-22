@@ -82,9 +82,31 @@ class Atmsophere:
 
         args = {
             "nf_sub": self.params[f"nsub_{key}"],
-            "nf_rec": self.params[f"nrec"],
-            "nside": self.params["nside"],
+            "nf_recon": self.params[f"nrec"],
             "filter_relative_bandwidth": 0.25,
+            "npointings": self.params["npointings"],
+            "nside": self.params["nside"],
+            "MultiBand": True,
+            "period": 1,
+            "RA_center": 0,
+            "DEC_center": -57,
+            "filter_nu": 150 * 1e9,
+            "noiseless": True,
+            "dtheta": 15,
+            "nprocs_sampling": 1,
+            "photon_noise": False,
+            "nhwp_angles": 3,
+            #'effective_duration':3,
+            "effective_duration150": 3,
+            "effective_duration220": 3,
+            "filter_relative_bandwidth": 0.25,
+            "type_instrument": "two",
+            "TemperatureAtmosphere150": None,
+            "TemperatureAtmosphere220": None,
+            "EmissivityAtmosphere150": None,
+            "EmissivityAtmosphere220": None,
+            "detector_nep": 4.7e-17,
+            "synthbeam_kmax": 1,
         }
 
         ### Get the default dictionary
@@ -179,12 +201,12 @@ class Atmsophere:
         r"""Gas properties.
         
         Method to compute the properties of the water vapor and the air in the atmosphere.
-        It can use parameters given in params.yml or be baised on the CoolProp package to compute the water vapor density.
+        It can use parameters given in self.params.yml or be baised on the CoolProp package to compute the water vapor density.
 
         Parameters
         ----------
-        params_file : bool, optional
-            If True, will use the reference water vapor density given in params_file by self.params['rho_0'] (in :math:`g/m^{3}`) to compute the density in :math:`m^{-3}`.
+        self.params_file : bool, optional
+            If True, will use the reference water vapor density given in self.params_file by self.params['rho_0'] (in :math:`g/m^{3}`) to compute the density in :math:`m^{-3}`.
             Else, will use the temperature and pression value to compute it. By default True.
 
         Returns
@@ -254,7 +276,7 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
     def integrated_absorption_spectrum(self, band=150):
         """Integrated absorption spectrum.
         
-        Compute the integrated absorption spectrum in a given frequency band, according to the parameters in the params.yml file.
+        Compute the integrated absorption spectrum in a given frequency band, according to the parameters in the self.params.yml file.
 
         Parameters
         ----------
@@ -290,7 +312,7 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
     def get_mean_water_vapor_density(self, altitude):
         r"""Mean water vapor density.
         
-        Compute the mean water vapor density depending on the altitude, using reference water vapor density and water vapor half_height, given in params.yml.
+        Compute the mean water vapor density depending on the altitude, using reference water vapor density and water vapor half_height, given in self.params.yml.
         The corresponding equation to compute the mean water vapor density, taken from equation (1) in Morris 2021, is :
         
         .. math::
@@ -336,7 +358,7 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
     def get_fourier_grid_2d(self):
         """Fourier 2d grid.
         
-        Generate a 2d grid of spatial frequencies in Fourier space according to the parameters in the params.yml file.
+        Generate a 2d grid of spatial frequencies in Fourier space according to the parameters in the self.params.yml file.
 
         Returns
         -------
@@ -445,10 +467,10 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         #! maybe it's better to normalize the fluctuations here
         
         ### Import water vapor density map and fluctuations
-        rho = self.get_mean_water_vapor_density(self.params['altitude_atm_2d'])
+        rho = self.get_mean_water_vapor_density(self.altitude)
         delta_rho = self.generate_spatial_fluctuations_2d()
         
-        ### Normalize fluctuations
+        # ### Normalize fluctuations
         sigma_rho = self.params['sigma_pwv'] / self.params['pwv']
         
         ### Take into account the cutoff of high wavenumbers
@@ -461,7 +483,8 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         var_delta = np.var(delta_rho)
 
         rho_normalized += rho + sigma_simulated * (delta_rho - mean_delta) / np.sqrt(var_delta)     
-        
+        print(rho)
+        print(delta_rho)
         return rho_normalized
         
     def get_maps(self):

@@ -1,0 +1,53 @@
+CMB:
+  Alens: 1
+  cmb: true
+  r: 0
+  seed: 1
+Foregrounds:
+  Dust: true
+  Synchrotron: false
+PCG:
+  fwhm_plot: 0
+  gif: true
+  n_iter_pcg: 100
+  preconditioner: true
+  resolution_plot: 15
+  tol_pcg: 1.0e-12
+PLANCK:
+  bandwidth_planck: 0.2
+  external_data: true
+  level_noise_planck: 1
+  nsub_planck: 100
+  weight_planck: 0
+Pipeline:
+  mapmaking: true
+  spectrum: false
+QUBIC:
+  NOISE:
+    detector_nep: 4.7e-17
+    ndet: 1
+    npho150: 1
+    npho220: 1
+  SYNTHBEAM:
+    synthbeam_kmax: 1
+  bandpass_correction: true
+  convolution_in: false
+  convolution_out: false
+  dtheta: 15
+  instrument: DB
+  npointings: 400
+  nrec: 5
+  nsub_in: 6
+  nsub_out: 6
+SKY:
+  DEC_center: -57
+  RA_center: 0
+  coverage_cut: 0.1
+  nside: 256
+Spectrum:
+  aposize: 10
+  dl: 10
+  lmax: 120
+  lmin: 20
+datafilename: MC
+path_out: test_to_remove/

@@ -36,7 +36,7 @@ QUBIC:
   dtheta: 15
   instrument: DB
   npointings: 400
-  nrec: 5
+  nrec: 2
   nsub_in: 6
   nsub_out: 6
 SKY:

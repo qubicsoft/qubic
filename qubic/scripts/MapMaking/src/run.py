@@ -9,10 +9,10 @@ from qubic.lib.MapMaking.ComponentMapMaking.Qcmm import Pipeline
 ### Common MPI arguments
 comm = MPI.COMM_WORLD
 
-simu = 'CMM'
+simu = 'FMM'
 
 path = os.path.dirname(os.path.realpath(__file__))
-paramters_file = path + '/FMM/configuration_files/test_params.txt'
+paramters_file = path + '/FMM/configuration_files/params.txt'
 
 if __name__ == "__main__":
 

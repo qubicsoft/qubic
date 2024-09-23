@@ -24,6 +24,13 @@ from pysimulators import (
     SphericalHorizontal2EquatorialOperator)
 from pysimulators.interfaces.healpy import Cartesian2HealpixOperator, Spherical2HealpixOperator
 
+#TODO : Adjust rho_0 with PWV
+#TODO : Verify conversion into µK_CMB
+#TODO : Adjust pressure with density
+#TODO : Verify frequency dependence of the atmosphere
+#TODO : Verify if the atmosphere is in the same frame as the qubic
+#TODO : Add the possibility to have a 3d atmosphere
+
 class Atmsophere:
     
     def __init__(self, params):

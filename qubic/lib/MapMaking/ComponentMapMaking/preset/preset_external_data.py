@@ -25,7 +25,7 @@ class PresetExternal:
         self.params_external = preset_tools.params["PLANCK"]
 
         ### External frequencies
-        preset_tools._print_message("    => Computing Planck frequency bands")
+        preset_tools.mpi._print_message("    => Computing Planck frequency bands")
         self.external_nus = self.get_external_nus()
 
     def get_external_nus(self):

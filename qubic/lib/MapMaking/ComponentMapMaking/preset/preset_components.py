@@ -66,12 +66,12 @@ class PresetComponents:
         #self.seed = seed
 
         ### Skyconfig
-        self.preset_tools._print_message("    => Creating sky configuration")
+        self.preset_tools.mpi._print_message("    => Creating sky configuration")
         self.skyconfig_in = self.get_sky_config(key="in")
         self.skyconfig_out = self.get_sky_config(key="out")
 
         ### Define model for reconstruction
-        self.preset_tools._print_message("    => Creating model")
+        self.preset_tools.mpi._print_message("    => Creating model")
         self.components_model_in, self.components_name_in = (
             self.preset_qubic.get_components_fgb(key="in")
         )
@@ -80,7 +80,7 @@ class PresetComponents:
         )
 
         ### Compute true components
-        self.preset_tools._print_message("    => Creating components")
+        self.preset_tools.mpi._print_message("    => Creating components")
         self.components_in, self.components_convolved_in, _ = self.get_components(
             self.skyconfig_in
         )

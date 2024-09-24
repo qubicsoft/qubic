@@ -50,7 +50,7 @@ class Pipeline:
 
     """
 
-    def __init__(self, comm):
+    def __init__(self, comm, parameters_file):
         """
         Initialize Pipeline instance.
 
@@ -60,15 +60,8 @@ class Pipeline:
         mpitools = MpiTools(comm)
         seed_noise = mpitools.get_random_value(init_seed=None)
         
-        #if seed_noise == -1:
-        #    if comm.Get_rank() == 0:
-        #        seed_noise = np.random.randint(100000000)
-        #    else:
-        #        seed_noise = None
-        #seed_noise = comm.bcast(seed_noise, root=0)
-
         ### Initialization
-        self.preset = PresetInitialisation(comm, seed_noise).initialize()
+        self.preset = PresetInitialisation(comm, seed_noise).initialize(parameters_file)
         self.plots = PlotsCMM(self.preset, dogif=True)
         if (
             self.preset.comp.params_foregrounds["Dust"]["type"] == "blind"

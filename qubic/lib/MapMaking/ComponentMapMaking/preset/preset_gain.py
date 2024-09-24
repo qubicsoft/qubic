@@ -26,7 +26,7 @@ class PresetGain:
         self.preset_tools = preset_tools
 
         ### Get input detectors gain
-        self.preset_tools._print_message("    => Getting detectors gain")
+        self.preset_tools.mpi._print_message("    => Getting detectors gain")
         self.get_input_gain()
 
     def get_input_gain(self):

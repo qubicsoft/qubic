@@ -39,7 +39,7 @@ class PresetQubic:
         self.size = self.comm.Get_size()
 
         ### QUBIC dictionary
-        self.preset_tools._print_message("    => Reading QUBIC dictionary")
+        self.preset_tools.mpi._print_message("    => Reading QUBIC dictionary")
         self.dict = self.get_dict()
 
         ### Define model for reconstruction
@@ -52,7 +52,7 @@ class PresetQubic:
             nu_co = None
 
         ### Joint acquisition for QUBIC operator
-        self.preset_tools._print_message("    => Building QUBIC operator")
+        self.preset_tools.mpi._print_message("    => Building QUBIC operator")
         self.joint_in = JointAcquisitionComponentsMapMaking(
             self.dict,
             self.params_qubic["instrument"],

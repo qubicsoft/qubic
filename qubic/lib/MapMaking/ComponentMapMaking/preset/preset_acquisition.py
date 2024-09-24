@@ -110,7 +110,7 @@ class PresetAcquisition:
         self.rms_plot = np.zeros((1, 2))
 
         ### Inverse noise-covariance matrix
-        self.preset_tools._print_message(
+        self.preset_tools.mpi._print_message(
             "    => Building inverse noise covariance matrix"
         )
         self.invN = self.preset_qubic.joint_out.get_invntt_operator(
@@ -131,15 +131,15 @@ class PresetAcquisition:
         #)
 
         ### Get convolution
-        self.preset_tools._print_message("    => Getting convolution")
+        self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec = self.get_convolution()
 
         ### Get observed data
-        self.preset_tools._print_message("    => Getting observational data")
+        self.preset_tools.mpi._print_message("    => Getting observational data")
         self.get_tod()
 
         ### Compute initial guess for PCG
-        self.preset_tools._print_message("    => Initializing starting point")
+        self.preset_tools.mpi._print_message("    => Initializing starting point")
         self.get_x0()
 
     def get_approx_hth(self):
@@ -373,9 +373,9 @@ class PresetAcquisition:
             fwhm_rec = np.zeros(len(self.preset_comp.components_model_out))
 
         # Print the FWHM values
-        self.preset_tools._print_message(f"FWHM for TOD making : {fwhm_tod}")
-        self.preset_tools._print_message(f"FWHM for reconstruction : {fwhm_mapmaking}")
-        self.preset_tools._print_message(f"Reconstructed FWHM : {fwhm_rec}")
+        self.preset_tools.mpi._print_message(f"FWHM for TOD making : {fwhm_tod}")
+        self.preset_tools.mpi._print_message(f"FWHM for reconstruction : {fwhm_mapmaking}")
+        self.preset_tools.mpi._print_message(f"Reconstructed FWHM : {fwhm_rec}")
 
         return fwhm_tod, fwhm_mapmaking, fwhm_rec
 

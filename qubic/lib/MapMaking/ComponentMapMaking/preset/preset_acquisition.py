@@ -3,7 +3,7 @@ from pyoperators import DiagonalOperator
 
 from ....InstrumentModel.Qacquisition import *
 from ....InstrumentModel.Qnoise import *
-from .. import Qcomponent_model as c
+from fgbuster import component_model as c
 
 #from qubic.lib.InstrumentModel.Qacquisition import *
 #from qubic.lib.InstrumentModel.Qnoise import *

@@ -7,7 +7,7 @@ import healpy as hp
 import yaml
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
-from pyoperators import DiagonalOperator
+from pyoperators import DiagonalOperator, ReshapeOperator
 
 ### Lib directory
 from ...Qsamplings import equ2gal
@@ -114,11 +114,6 @@ class PipelineFrequencyMapMaking:
         self.coverage = self.joint.qubic.subacqs[0].get_coverage()
         self.seenpix = self.coverage / self.coverage.max() > self.params["SKY"]["coverage_cut"]
         self.seenpix_qubic = self.coverage / self.coverage.max() > 0
-        #self.fsky = self.seenpix.astype(float).sum() / self.seenpix.size
-        #self.coverage_cut = self.coverage.copy()
-        #self.coverage_cut[~self.seenpix] = 1
-
-        #self.seenpix_for_plot = covnorm > 0
         self.mask = np.ones(12 * self.params["SKY"]["nside"] ** 2)
         self.mask[self.seenpix] = self.params["PLANCK"]["weight_planck"]
 

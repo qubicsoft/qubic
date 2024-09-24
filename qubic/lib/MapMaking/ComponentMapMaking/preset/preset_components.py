@@ -49,7 +49,7 @@ class PresetComponents:
 
     """
 
-    def __init__(self, preset_tools, preset_qubic, seed):
+    def __init__(self, preset_tools, preset_qubic):
         """
         Initialize.
 
@@ -63,7 +63,7 @@ class PresetComponents:
         self.params_foregrounds = self.preset_tools.params["Foregrounds"]
 
         ### Define seed for CMB generation and noise
-        self.seed = seed
+        #self.seed = seed
 
         ### Skyconfig
         self.preset_tools._print_message("    => Creating sky configuration")
@@ -118,7 +118,7 @@ class PresetComponents:
 
         sky = {}
         if self.params_cmb["cmb"]:
-            sky["CMB"] = self.seed
+            sky["CMB"] = self.preset_tools.params['CMB']['seed']
 
         if self.preset_tools.params["Foregrounds"]["Dust"][f"Dust_{key}"]:
             sky["Dust"] = self.preset_tools.params["Foregrounds"]["Dust"]["model_d"]

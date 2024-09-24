@@ -18,8 +18,8 @@ QUBIC:
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
     npointings: 1000                        # Number of time samples
-    nsub_in: 10                             # Number of sub-acquisitions
-    nsub_out: 10
+    nsub_in: 6                             # Number of sub-acquisitions
+    nsub_out: 6
     nrec: 2                                # Number of reconstructed frequency maps
     convolution_in: False                   # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
@@ -29,6 +29,7 @@ QUBIC:
         npho150: 1                          # Level of photon noise at 150 GHz
         npho220: 1                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise
+        seed: -1
     SYNTHBEAM:
         synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     dtheta: 15                             # Angle for coverage

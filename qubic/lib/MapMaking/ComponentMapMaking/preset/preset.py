@@ -24,7 +24,7 @@ class PresetInitialisation:
 
     """
 
-    def __init__(self, comm, seed, seed_noise):
+    def __init__(self, comm, seed_noise):
         """
         Initialize the class with MPI communication.
 
@@ -32,7 +32,6 @@ class PresetInitialisation:
 
         ### MPI common arguments
         self.comm = comm
-        self.seed = seed
         self.seed_noise = seed_noise
 
         self.tools = None
@@ -88,7 +87,7 @@ class PresetInitialisation:
         self.qubic = PresetQubic(self.tools, self.external)
 
         self.tools._print_message("========= Components =========")
-        self.comp = PresetComponents(self.tools, self.qubic, self.seed)
+        self.comp = PresetComponents(self.tools, self.qubic)
 
         self.tools._print_message("========= Sky =========")
         self.sky = PresetSky(self.tools, self.qubic)

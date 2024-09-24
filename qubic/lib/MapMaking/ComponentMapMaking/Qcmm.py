@@ -18,6 +18,7 @@ from ...InstrumentModel.Qacquisition import *
 from ...MapMaking.Qcg import pcg
 from ...Qfoldertools import *
 from ...MapMaking.Qmap_plotter import *
+from ...Qmpi_tools import MpiTools
 
 # from simtools.mpi_tools import *
 from ...InstrumentModel.Qnoise import *
@@ -49,22 +50,25 @@ class Pipeline:
 
     """
 
-    def __init__(self, comm, seed, seed_noise=None):
+    def __init__(self, comm):
         """
         Initialize Pipeline instance.
 
         """
 
         ### Creating noise seed
-        if seed_noise == -1:
-            if comm.Get_rank() == 0:
-                seed_noise = np.random.randint(100000000)
-            else:
-                seed_noise = None
-        seed_noise = comm.bcast(seed_noise, root=0)
+        mpitools = MpiTools(comm)
+        seed_noise = mpitools.get_random_value(init_seed=None)
+        
+        #if seed_noise == -1:
+        #    if comm.Get_rank() == 0:
+        #        seed_noise = np.random.randint(100000000)
+        #    else:
+        #        seed_noise = None
+        #seed_noise = comm.bcast(seed_noise, root=0)
 
         ### Initialization
-        self.preset = PresetInitialisation(comm, seed, seed_noise).initialize()
+        self.preset = PresetInitialisation(comm, seed_noise).initialize()
         self.plots = PlotsCMM(self.preset, dogif=True)
         if (
             self.preset.comp.params_foregrounds["Dust"]["type"] == "blind"

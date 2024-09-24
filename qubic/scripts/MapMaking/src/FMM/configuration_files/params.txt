@@ -1,15 +1,15 @@
 CMB:
   Alens: 1
-  cmb: true
+  cmb: false
   r: 0
   seed: 1
 Foregrounds:
-  Dust: true
+  Dust: false
   Synchrotron: false
 PCG:
   fwhm_plot: 0
   gif: true
-  n_iter_pcg: 100
+  n_iter_pcg: 30
   preconditioner: true
   resolution_plot: 15
   tol_pcg: 1.0e-12
@@ -28,6 +28,7 @@ QUBIC:
     ndet: 1
     npho150: 1
     npho220: 1
+    seed: -1
   SYNTHBEAM:
     synthbeam_kmax: 1
   bandpass_correction: true
@@ -35,15 +36,15 @@ QUBIC:
   convolution_out: false
   dtheta: 15
   instrument: DB
-  npointings: 400
+  npointings: 1000
   nrec: 2
   nsub_in: 6
   nsub_out: 6
 SKY:
   DEC_center: -57
   RA_center: 0
-  coverage_cut: 0.1
-  nside: 256
+  coverage_cut: 0.15
+  nside: 128
 Spectrum:
   aposize: 10
   dl: 10

@@ -108,13 +108,19 @@ class MergeAllFiles:
 
         return d[key]
 
-    def _reads_all_files(self, key):
+    def _reads_all_files(self, key, verbose=False):
 
         arr = np.zeros(
             (self.number_of_realizations,) + self._reads_one_file(0, key).shape
         )
-
+        
+        list_not_readed_files = []
         for ireal in range(self.number_of_realizations):
-            arr[ireal] = self._reads_one_file(ireal, key)
+            print(f'========= Reading realization {ireal} =========')
+            try:
+                arr[ireal] = self._reads_one_file(ireal, key)
+            except:
+                list_not_readed_files += [ireal]
 
+        arr = np.delete(arr, list_not_readed_files, axis=0)
         return arr

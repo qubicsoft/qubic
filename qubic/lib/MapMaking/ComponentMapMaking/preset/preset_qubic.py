@@ -1,4 +1,5 @@
-from .. import Qcomponent_model as c
+from fgbuster import component_model as c
+from .. import Qcomponent_model as model_co
 from ....InstrumentModel.Qacquisition import JointAcquisitionComponentsMapMaking
 from ....Qdictionary import qubicDict
 
@@ -194,7 +195,7 @@ class PresetQubic:
                 #    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
                 #    active=False,
                 #)
-                c.Monochromatic(
+                model_co.Monochromatic(
                     nu0=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
                 )
             ]

@@ -14,6 +14,7 @@ pressure_atm: 550                 # Atmopsheric pressure in hPa
 #! rho_0 should be computed using pwv in a more advanced version
 pwv: 1                             # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, mm
 sigma_pwv: 20.5                    # Variance of PWV in mm^-1
+sigma_rho: 0.01                    # Variance of water vapor density in g/m³
 
 # Simulation parameters
 
@@ -25,7 +26,10 @@ nsub_in: 4                       # Number of sub-acquisitions used to integrate
 nrec: 4
 2d: True                          # Determine if you want to simulate a 2d atm
 nside: 128
-npointings: 1000
+n_theta: 10000
+normalization: 1
+flat: False
 
 # Qubic parameters
 beam_fwhm: 0.001                  # in rad
+npointings: 1000

@@ -1,7 +1,9 @@
 import numpy as np
 import scipy.constants as c
 import healpy as hp
+import scipy.special as sp
 from scipy.integrate import quad
+import camb.correlations as cc
 
 from CoolProp import CoolProp as CP
 from astropy.cosmology import Planck18
@@ -38,6 +40,8 @@ class Atmsophere:
         ### Import parameters files
         self.params = params
         self.qubic_dict = self.get_qubic_dict()
+        
+        self.lmax = 3*self.params['nside']-1
         
         ### Build atmsopheric coordinates
         # Cartesian coordinates
@@ -435,7 +439,7 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         
         return self.kolmogorov_spectrum_2d(k) / res
     
-    def generate_spatial_fluctuations_2d(self):
+    def generate_spatial_fluctuations_fourier(self):
         """Spatial 2d fluctuations.
         
         Produce the spatial fluctuations of the water vapor density, by generating random phases in Fourier space, and then computing the inverse Fourier transform.
@@ -459,7 +463,122 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         ### Apply inverse Fourier transform to obtain spatial fluctuations in real space
         delta_rho = np.fft.irfft2(delta_rho_k, s=(self.params['n_grid'], self.params['n_grid']))
         
-        return delta_rho        
+        return delta_rho  
+    
+    def kolmogorov_correlation_function(self, r, r0):
+        """Kolmogorov correlation function.
+        
+        Compute the Kolmogorov correlation function, which simulate the correlation of the spatial fluctuations of the water vapor density, following the equation :
+
+        .. math::
+            D(r) = \frac{2^{2/3}}{\Gamma(1/3)} \left(\frac{r}{r_0}\right)^{1/3} K_{1/3} \left(\frac{r}{r_0}\right) .
+            
+        We impose that the correlation function is 1 at r = 0.
+
+        Parameters
+        ----------
+        r : array_like or float
+            distance between two points, in meters.
+        r0 : array_like or float
+            Maximum correlation length, in meters.
+
+        Returns
+        -------
+        D : array_like
+            Correlation function.
+            
+        """   
+             
+        return np.where(r==0, 1, 2**(2/3)/sp.gamma(1/3)*(r/r0)**(1/3)*sp.kv(1/3, r/r0))    
+    
+    def angular_correlation(self, theta, h_atm, r0):
+        """Angular Kolmogorov correlation function.
+        
+        We compute the angular Kolmogorov correlation function, switching the distance between two points to the angle between them on the surface of the sphere
+        , using the relation :
+        
+        .. math::
+            r = 2h_{atm} \sin \left(\frac{\theta}{2}\right) ,
+            
+        where :math:`h_{atm}` is the distance between the atmosphere and our instrument and :math:`\theta` is the angle between the two points.
+        
+
+        Parameters
+        ----------
+        theta : array_like or float
+            Angle between two points, in degrees.
+        h_atm : array_like or float
+            Distance between the atmosphere and our instrument, in meters.
+
+        Returns
+        -------
+        C : array_like or float
+            Angular Kolmogorov correlation function.
+            
+        """        
+        
+        r = 2*h_atm*np.sin(np.radians(theta)/2)
+        
+        return self.kolmogorov_correlation_function(r, r0)
+    
+    def cl_from_angular_correlation_int(self, l):
+        def integrand(cos_theta):
+            theta = np.degrees(np.arccos(cos_theta))
+            legendre = sp.legendre(l)(cos_theta)
+            return self.angular_correlation(theta, self.params['altitude_atm_2d'], self.params['correlation_length']) * legendre
+        res, _ = quad(integrand, -1, 1)
+        
+        return 2 * np.pi * res
+    
+    def ctheta_2_dell(self, theta_deg, ctheta, lmax, normalization=1):
+        ### this is how camb recommends to prepare the x = cos(theta) values for integration
+        ### These x values do not contain x=1 so we have. to do this case separately
+        x, w = np.polynomial.legendre.leggauss(lmax+1)
+        xdeg = np.degrees(np.arccos(x))
+
+        ### We first replace theta=0 by 0 and do that case separately
+        myctheta = ctheta.copy()
+        myctheta[0] = 0
+        ### And now we fill the array that should include polarization (we put zeros there)
+        ### with the values of our imput c(theta) interpolated at the x locations
+        allctheta = np.zeros((len(x), 4))
+        allctheta[:,0] = np.interp(xdeg, theta_deg, myctheta)
+
+        ### Here we call the camb function that does the transform to Cl
+        dlth = cc.corr2cl(allctheta, x,  w, lmax)
+        ell = np.arange(lmax+1)
+
+        ### the special case x=1 corresponds to theta=0 and add 2pi times c(theta=0) to the Cell
+        return ell, dlth[:,0]+ctheta[0]*normalization
+    
+    def ctheta_2_cell(self, theta_deg, ctheta, lmax, normalization=1):
+        
+        ### Compute multipole moments and Dl angular power spectrum
+        ell, dlth = self.ctheta_2_dell(theta_deg, ctheta, lmax, normalization=normalization)
+        
+        ### Convert from Dl to Cl
+        dl2cl_factor = 2*np.pi / (ell * (ell+1))
+        clth = dlth * dl2cl_factor
+        
+        ### Correct for the special case l=0, as the convertion factor is not valid
+        clth[0] = self.cl_from_angular_correlation_int(0)
+        
+        return ell, clth
+    
+    def generate_spatial_fluctuation_sphercial_harmonics(self):
+            
+        ### Compute angular correlation function
+        theta = np.linspace(0, 180, self.params['n_grid'])
+        ctheta = self.angular_correlation(theta, self.params['altitude_atm_2d'], self.params['correlation_length'])
+        
+        ### Compute spherical harmonics from angular correlation function
+        _, clth = self.ctheta_2_cell(theta, ctheta, self.lmax, normalization=self.params['normalization'])
+        
+        ### Build fluctuations map
+        delta_rho = hp.synfast(clth, nside=self.params['nside'], lmax=self.lmax)
+        
+        return delta_rho
+        
     def get_water_vapor_density_2d_map(self):
         """Water vapor density 2d map.
         
@@ -471,28 +590,18 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
             Water vapor density 2d map.
             
         """        
-        #! maybe it's better to normalize the fluctuations here
         
         ### Import water vapor density map and fluctuations
         rho = self.get_mean_water_vapor_density(self.altitude)
-        delta_rho = self.generate_spatial_fluctuations_2d()
-        
-        # ### Normalize fluctuations
-        sigma_rho = self.params['sigma_pwv'] / self.params['pwv']
-        
-        ### Take into account the cutoff of high wavenumbers
-        sigma_simulated = sigma_rho * np.sqrt(quad(lambda k : self.kolmogorov_spectrum_2d(k) * k**2, np.min(self.get_fourier_grid_2d()[0]), np.max(self.get_fourier_grid_2d()[0]))[0] 
-                                       / quad(lambda k : self.kolmogorov_spectrum_2d(k) * k**2, -self.params['correlation_length'], self.params['correlation_length'])[0])
+        if self.params['flat']:
+            delta_rho = self.generate_spatial_fluctuations_fourier()
+        else:
+            delta_rho = self.generate_spatial_fluctuation_sphercial_harmonics()
+            
+        ### Normalize fluctuations
+        normalized_delta_rho = delta_rho * np.sqrt(self.params['sigma_rho'] / np.var(delta_rho))  
 
-        rho_normalized = np.zeros((self.params['n_grid'], self.params['n_grid']))
-
-        mean_delta = np.mean(delta_rho)
-        var_delta = np.var(delta_rho)
-
-        rho_normalized += rho + sigma_simulated * (delta_rho - mean_delta) / np.sqrt(var_delta)     
-        print(rho)
-        print(delta_rho)
-        return rho_normalized
+        return rho + normalized_delta_rho
         
     def get_maps(self):
         r"""Atmosphere maps.
@@ -515,9 +624,11 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         
         ### Get the water vapor density maps
         water_vapor_density_maps = self.get_water_vapor_density_2d_map()
+        print(np.shape(water_vapor_density_maps))
         
         ### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021
-        temp_maps = self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.temperature * water_vapor_density_maps
+        temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.temperature * water_vapor_density_maps
+        print(np.shape(temp_maps))
         
         ### Convert them into micro Kelvin CMB
         temp_maps -= Planck18.Tcmb0.value

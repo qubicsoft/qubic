@@ -46,7 +46,7 @@ PLANCK:
 
     ### This section define which external data are we using
 
-    external_data: True                        
+    external_data: False                        
     weight_planck: 0                            # Weight of Planck data within the QUBIC patch
     level_noise_planck: 0                       # Noise level for Planck data
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
@@ -60,7 +60,7 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 50                                   # Number of PCG iterations
+    n_iter_pcg: 2                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: True
     gif: True

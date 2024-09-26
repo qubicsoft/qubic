@@ -33,7 +33,7 @@ from pysimulators.interfaces.healpy import Cartesian2HealpixOperator, Spherical2
 #TODO : Verify if the atmosphere is in the same frame as the qubic
 #TODO : Add the possibility to have a 3d atmosphere
 
-class Atmsophere:
+class Atmosphere:
     
     def __init__(self, params):
         
@@ -41,36 +41,33 @@ class Atmsophere:
         self.params = params
         self.qubic_dict = self.get_qubic_dict()
         
-        self.lmax = 3*self.params['nside']-1
-        
         ### Build atmsopheric coordinates
         # Cartesian coordinates
         if self.params['h_grid'] == 1:
             # 2d model
             self.altitude = (self.params['h_qubic'] + self.params['altitude_atm_2d']) * np.ones(self.params['h_grid'])
         else:
-            # 3d model not yet implemented
+            # 3d model, not yet implemented
             self.altitude = np.linspace(self.params['h_qubic'], self.params['altitude_atm_2d'], self.params['h_grid'])
-        self.x_list = np.linspace(-self.params['size_atm'], self.params['size_atm'], self.params['n_grid'])
-        self.y_list = np.linspace(-self.params['size_atm'], self.params['size_atm'], self.params['n_grid'])
-        # Azimuth / Elevation coordinates
-        x, y = np.meshgrid(self.x_list, self.y_list)
-        z = np.ones(x.shape) * self.params['altitude_atm_2d']
-        self.r, self.el, self.az = self.horizontal_plane_to_azel(x, y, z)
+        # Importe atmosphere coordinates for the flat atmosphere case
+        if self.params['flat']:
+            self.x_list = np.linspace(-self.params['size_atm'], self.params['size_atm'], self.params['n_grid'])
+            self.y_list = np.linspace(-self.params['size_atm'], self.params['size_atm'], self.params['n_grid'])
+            # Azimuth / Elevation coordinates
+            x, y = np.meshgrid(self.x_list, self.y_list)
+            z = np.ones(x.shape) * self.params['altitude_atm_2d']
+            self.r, self.el, self.az = self.horizontal_plane_to_azel(x, y, z)
             
-        ### Compute temperature and water vapor density
+        ### Compute atmosphere temperature and mean water vapor density
         self.temperature = self.get_temperature_atm(self.altitude)
         self.mean_water_vapor_density = self.get_mean_water_vapor_density(self.altitude)
         
         ### Compute absorption coefficients
-        self.integration_frequencies, self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff = self.atm_absorption_coeff()
+        self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff, self.integration_frequencies = self.atm_absorption_coeff()
                 
         ### Compute absorption spectrum
         self.abs_spectrum = self.absorption_spectrum()
         self.integrated_abs_spectrum, self.frequencies = self.integrated_absorption_spectrum()
-        
-        ### Build maps
-        self.maps = self.get_maps()
         
     def get_qubic_dict(self, key="in"):
         """QUBIC dictionary.
@@ -137,33 +134,7 @@ class Atmsophere:
         Method to build the absorption spectrum of the atmopshere using files computed using the am atmospheric model (Paine, 2018).
         The absorption coefficient has two origins: the line-by-line absorption which reprensents the spectral lines, 
         and a continuum absorption coming from collisions between molecules, 
-        either :math:`H_2O-H_2O` collisions (self-induced continuum), or collisions between :math`H_2O` and the air (air_induced).
-
-        Spectras for the line-by-line absorption-coefficient were produced using .amc files that looks like that:
-
-        f 130 GHz  250 GHz  0.005 GHz\
-        output f  k
-
-        layer\
-        P 500 hPa\
-        T 280 K\
-        column h2o_lines 1 mm_pwv
-
-        And for the continuum absorption:
-
-        f 130 GHz  250 GHz  0.005 GHz\
-        output f  k
-
-        layer\
-        P 550 hPa\
-        T 280 K\
-        h 3000 m\
-        column h2o_self_continuum 1 mm_pwv
-
-        Then we only need to execute a command line like: am file_name.amc > file_name.out .
-
-        The file 'file_name.out' is created and contains two colomns, one for the frequency, and one for the absorption coefficient. 
-        Be careful, am results are in cm and not in m.
+        either :math:`H_2O-H_2O` collisions (self-induced continuum), or collisions between :math:`H_2O` and the air (air_induced).
 
         See the am documentation for more details: https://zenodo.org/records/8161272 .
 
@@ -179,6 +150,32 @@ class Atmsophere:
             Air_induced collisions continuun, from water, in :math:`m^{5}`.
             
         """
+        
+        # Spectras for the line-by-line absorption-coefficient were produced using .amc files that looks like that:
+
+        # f 130 GHz  250 GHz  0.005 GHz
+        # output f  k
+
+        # layer
+        # P 500 hPa
+        # T 280 K
+        # column h2o_lines 1 mm_pwv
+
+        # And for the continuum absorption:
+
+        # f 130 GHz  250 GHz  0.005 GHz
+        # output f  k
+
+        # layer
+        # P 550 hPa
+        # T 280 K
+        # h 3000 m
+        # column h2o_self_continuum 1 mm_pwv
+
+        # Then we only need to execute a command line like: am file_name.amc > file_name.out .
+
+        # The file 'file_name.out' is created and contains two colomns, one for the frequency, and one for the absorption coefficient. 
+        # Be careful, am results are in cm and not in m.
         
         frequencies = []
         mol_absorption_coeff = []
@@ -206,7 +203,7 @@ class Atmsophere:
             for line in file:
                 air_absorption_coeff.append(float(line.split()[1]) * (1e-2)**5)
                 
-        return frequencies, np.array(mol_absorption_coeff), np.array(self_absorption_coeff), np.array(air_absorption_coeff)
+        return np.array(mol_absorption_coeff), np.array(self_absorption_coeff), np.array(air_absorption_coeff), frequencies
     
     def get_gas_properties(self, params_file = True):
         r"""Gas properties.
@@ -228,12 +225,6 @@ class Atmsophere:
             The density of water vapor given the atmospheric temperature and pressure in :math:`m^{-3}`.
         air_vapor_density : float
             The density of air vapor given the atmospheric temperature and pressure in :math:`m^{-3}`.
-            rho_2d = np.zeros((Nx, Ny))
-
-mean_delta = np.mean(delta_rho)
-var_delta = np.var(delta_rho)
-
-rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqrt(var_delta)
         
         """        
         
@@ -251,7 +242,7 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         water_molar_mass = CP.PropsSI('MOLARMASS', 'Water')  # in g/mol
         water_mass = water_molar_mass / c.Avogadro * 1e3  # in g
         
-        # Compute water vapor density
+        ### Compute water vapor density
         if params_file:
             water_vapor_density = self.mean_water_vapor_density / water_mass  # in m-3
         else:
@@ -260,12 +251,14 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
 
         return water_mass, water_vapor_density, air_density
         
-    
     def absorption_spectrum(self):
         r"""Absorption coefficient.
         
         The coefficient :math:`\alpha_b(\nu)` [:math:`m^2g^{-1}`] is defined by:
-        :math:`\alpha_b(\nu) = \frac{1}{m_{H_2O}} \left(k_{lines}(\nu) + n_{H_2O}k_{self}(\nu) + n_{air}k_{air}(\nu)\right)`
+        
+        .. math::
+            `\alpha_b(\nu) = \frac{1}{m_{H_2O}} \left(k_{lines}(\nu) + n_{H_2O}k_{self}(\nu) + n_{air}k_{air}(\nu)\right)`
+            
         with :math:`m_{H_2O}= 2.992\times 10^{-23} g` the mass of a :math:`H_2O` molecule, math:`k_{lines}` [:math`m^2`] the line-by-line absorption coefficient, 
         :math`k_{self}` and :math`k_{air}` [:math:`m^5`] the self- and air-induced continua, :math:`n_{H_2O}` and :math:`n_{air}` [:maht:`m^{-3}`] the densities of water vapor and air.
 
@@ -284,7 +277,7 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
 
         return abs_spectrum
     
-    def integrated_absorption_spectrum(self, band=150):
+    def get_integrated_absorption_spectrum(self, band):
         """Integrated absorption spectrum.
         
         Compute the integrated absorption spectrum in a given frequency band, according to the parameters in the self.params.yml file.
@@ -308,7 +301,7 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         freq_step = (freq_max - freq_min) / (len(self.integration_frequencies) - 1)
 
         ### Compute the frequency sub-bands within the QUBIC band and their associated indexes
-        _, nus_edges, nus, _, _, N_bands = compute_freq(band=band, Nfreq=self.params['nsub_in'], relative_bandwidth=self.qubic_dict['filter_relative_bandwidth'])
+        _, nus_edges, nus, _, _, N_bands = compute_freq(band=band, Nfreq=int(self.params['nsub_in']/2), relative_bandwidth=self.qubic_dict['filter_relative_bandwidth'])
         nus_edge_index = (nus_edges - freq_min) / freq_step
 
         ### Integrate the absorption spectrum over the frequency sub-bands using the trapezoidal method
@@ -319,6 +312,25 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
                                                   x=self.integration_frequencies[index_inf:index_sup])
         
         return integrated_abs_spectrum, nus
+    
+    def integrated_absorption_spectrum(self):
+        """Integrated absorption spectrum.
+        
+        Integrated absorption spectrum in the QUBIC frequency bands: 150 and 220 GHz.
+
+        Returns
+        -------
+        integrated_abs_spectrum : array_like
+            The integrated absorption spectrum in the given frequency band, in :math:`m^{2} / g`.
+        nus : array_like
+            The frequencies at which the absorption spectrum is computed, in :math:`GHz`.
+            
+        """        
+        
+        int_abs_spectrum_150, nus_150 = self.get_integrated_absorption_spectrum(band=150)
+        int_abs_spectrum_220, nus_220 = self.get_integrated_absorption_spectrum(band=220)
+        
+        return np.append(int_abs_spectrum_150, int_abs_spectrum_220), np.append(nus_150, nus_220)
     
     def get_mean_water_vapor_density(self, altitude):
         r"""Mean water vapor density.
@@ -366,6 +378,20 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         
         return self.params['temp_ground'] * np.exp(- altitude / self.params['h_temp'])
     
+class Atmosphere_Maps(Atmosphere):
+    
+    def __init__(self, params):
+        
+        ### Import parameters and the class describing the atmosphere
+        self.params = params
+        Atmosphere.__init__(self, params)
+        
+        ### Compute the maximum multipole according to the resolution of the map
+        self.lmax = 3*self.params['nside']-1
+        
+        ### Build the temperature maps of the atmosphere
+        self.atm_temp_maps = self.get_temp_maps()
+        
     def get_fourier_grid_2d(self):
         """Fourier 2d grid.
         
@@ -492,10 +518,10 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
         return np.where(r==0, 1, 2**(2/3)/sp.gamma(1/3)*(r/r0)**(1/3)*sp.kv(1/3, r/r0))    
     
     def angular_correlation(self, theta, h_atm, r0):
-        """Angular Kolmogorov correlation function.
+        r"""Angular Kolmogorov correlation function.
         
-        We compute the angular Kolmogorov correlation function, switching the distance between two points to the angle between them on the surface of the sphere
-        , using the relation :
+        We compute the angular Kolmogorov correlation function, switching the distance between two points to the angle between them on the surface of the sphere, 
+        using the relation :
         
         .. math::
             r = 2h_{atm} \sin \left(\frac{\theta}{2}\right) ,
@@ -553,6 +579,8 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
     
     def ctheta_2_cell(self, theta_deg, ctheta, lmax, normalization=1):
         
+        #! Warning : the Cl computed using CAMB are different from the ones computed using 'cl_from_angular_correlation_int' at large l
+        
         ### Compute multipole moments and Dl angular power spectrum
         ell, dlth = self.ctheta_2_dell(theta_deg, ctheta, lmax, normalization=normalization)
         
@@ -603,13 +631,13 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
 
         return rho + normalized_delta_rho
         
-    def get_maps(self):
+    def get_temp_maps(self):
         r"""Atmosphere maps.
         
         Get the atmosphere maps in temperature, by using the equation 12 from Morris 2021, that compute the induced temperature in the detector due to the water vapor density :
         
         .. math::
-            dT( \teextbf{r}, \nu) = \alpha_b(\nu) \rho(\textbf{r}) T_{atm}(\textbf{r}) dV .
+            dT( \textbf{r}, \nu) = \alpha_b(\nu) \rho(\textbf{r}) T_{atm}(\textbf{r}) dV .
             
         And then, convert it in micro Kelvin CMB.
 
@@ -619,16 +647,13 @@ rho_2d += mean_water_vapor + sigma_simulated * (delta_rho - mean_delta) / np.sqr
             Temperature maps in micro Kelvin CMB.
             
         """
-        #! Does it have sense to compare this temperature with the one from CMB ? We talk about the CMB temperature because it follows a blackbody spectrum, but it is not the case for the atmosphere...
-        #! We just have compute the corresponding measured temperature according to physical parameters.
         
         ### Get the water vapor density maps
         water_vapor_density_maps = self.get_water_vapor_density_2d_map()
-        print(np.shape(water_vapor_density_maps))
         
         ### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021
+        ###! I assume that the multiplication by the beam profile is done when applying the acquisition operator.
         temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.temperature * water_vapor_density_maps
-        print(np.shape(temp_maps))
         
         ### Convert them into micro Kelvin CMB
         temp_maps -= Planck18.Tcmb0.value

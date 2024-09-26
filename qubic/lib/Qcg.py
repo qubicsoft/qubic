@@ -174,7 +174,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)
         if self.error < self.tol:
             raise StopIteration("Solver reached maximum tolerance.")
-        self.M(self.r, self.d)
+        self.M(self.r, self.d) 
         self.delta = self.dot(self.r, self.d)
 
     def iteration(self):
@@ -187,7 +187,8 @@ class PCGAlgorithm(IterativeAlgorithm):
         if self.is_planck:
             map_i = np.ones(self.input.shape) * hp.UNSEEN
             map_i[:, self.seenpix, :] = self.x.copy()
-        
+            
+        print(map_i.shape), print(self.input.shape)
         _r = map_i[:, self.seenpix, :] - self.input[:, self.seenpix, :]
         self.rms = np.std(_r, axis=1)
         

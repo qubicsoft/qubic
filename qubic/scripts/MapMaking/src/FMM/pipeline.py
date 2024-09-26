@@ -158,6 +158,8 @@ class PipelineFrequencyMapMaking:
         
         ### Define reconstructed and TOD operator
         self.get_H()
+        print('H_tod', self.H_in.shapein, self.H_in.shapeout)
+        print('H_rec', self.H_out.shapein, self.H_out.shapeout)
 
         ### Inverse noise covariance matrix
         if self.params['PLANCK']['external_data']:
@@ -166,6 +168,7 @@ class PipelineFrequencyMapMaking:
             self.invN = self.joint.qubic.get_invntt_operator()
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
+        print('invN', self.invN.shapein, self.invN.shapeout)
         
         ### Noises
         seed_noise_planck = self.mpi.get_random_value()
@@ -851,6 +854,7 @@ class PipelineFrequencyMapMaking:
 
         ### Get simulated data
         self.TOD = self.get_tod()
+        print('TOD', self.TOD.shape)
 
         ### Wait for all processes
         self.mpi._barrier()

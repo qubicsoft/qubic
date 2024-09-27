@@ -127,6 +127,52 @@ class Atmosphere:
             dict_qubic[str(i)] = args[i]
 
         return dict_qubic
+    
+    def get_mean_water_vapor_density(self, altitude):
+        r"""Mean water vapor density.
+        
+        Compute the mean water vapor density depending on the altitude, using reference water vapor density and water vapor half_height, given in self.params.yml.
+        The corresponding equation to compute the mean water vapor density, taken from equation (1) in Morris 2021, is :
+        
+        .. math::
+            \langle \rho(h) \rangle = \rho_0 e^{\left( -log(2).(h - 5190) / h_0 \right)} .
+
+        Parameters
+        ----------
+        altitude : array_like
+            Array containing altitudes at which we want to compute the mean water vapor density.
+
+        Returns
+        -------
+        mean_water_vapor_density : array_like
+            Mean water vapor density in :math:`g/m{3}`.
+            
+        """  
+        
+        return self.params['rho_0'] * np.exp(-np.log(2) * (altitude - 5190) / self.params['h_h2o'])
+    
+    def get_temperature_atm(self, altitude):
+        """Temperature.
+        
+        Compute the temperature of the atmosphere depending on the altitude, using the average ground temperature and a typical height that depend on the observation site.
+        The corresponding equation to compute the temperature, taken from equation (13) in Morris 2021, is :
+        
+        .. math::
+            T_{atm}(h) = T_{atm}(0) e^{h / h_T} .
+
+        Parameters
+        ----------
+        altitude : array_like
+            Array containing altitudes at which we want to compute the temperature.
+
+        Returns
+        -------
+        temperature : array_like
+            Temperature in K.
+            
+        """
+        
+        return self.params['temp_ground'] * np.exp(- altitude / self.params['h_temp'])
         
     def atm_absorption_coeff(self):
         r"""Absorption spectrum.
@@ -194,22 +240,43 @@ class Atmosphere:
                 mol_absorption_coeff.append(float(line.split()[1]) * (1e-2)**2)
                 
         ### Import absorption coefficients from self-induced collisions continuum
-        with open(f'/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/h2o_self_continuum.out', 'r') as file:
+        with open(f'absorption_coefficient/h2o_self_continuum.out', 'r') as file:
             for line in file:
                 self_absorption_coeff.append(float(line.split()[1]) * (1e-2)**5)
                 
         ### Import absorption coefficients from air-induced collisions continuum
-        with open(f'/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/h2o_air_continuum.out', 'r') as file:
+        with open(f'absorption_coefficient/h2o_air_continuum.out', 'r') as file:
             for line in file:
                 air_absorption_coeff.append(float(line.split()[1]) * (1e-2)**5)
                 
         return np.array(mol_absorption_coeff), np.array(self_absorption_coeff), np.array(air_absorption_coeff), frequencies
     
     def get_gas_properties(self, params_file = True):
-        r"""Gas properties.
+        rf"""Gas properties.
         
-        Method to compute the properties of the water vapor and the air in the atmosphere.
+        Method to compute the properties of the water vapor and the air in the atmosphere. It uses the CoolProp package (https://github.com/CoolProp/CoolProp) to compute the molar mass of air and water.
         It can use parameters given in self.params.yml or be baised on the CoolProp package to compute the water vapor density.
+        
+        The pressure as to be defined in the params.yml file. The temperature is computed using the function 'get_temp_atm'.
+        
+        The molar mass of air is given by the CoolProp package: {CP.PropsSI('MOLARMASS', 'Air')} kg/mol.
+        The molar mass of water is given by the CoolProp package: {CP.PropsSI('MOLARMASS', 'Water')} kg/mol.
+        
+        From molar mass, the mass is given by :
+        
+        .. math::
+            m = M / N_A ,
+        where :math:`m` is the mass, :math:`M` is the molar mass and :math:`N_A` is the Avogadro constant, given by scipy.constants .
+        
+        The mass density of air is computed using CoolProp package, from the  pressure and the temperature of the atmosphere.
+        Then, the density of air is computed with :
+        
+        .. math::
+            n = \rho / m ,
+        where :math:`n` is the density, :math:`\rho` is the mass density and :math:`m` is the mass.
+
+        For the water vapor density, you can follow the same steps by putting the argument params_file = False, 
+        or compute it using the mass density computed using 'get_mean_water_vapor_density' and the parameters given in self.params_file.
 
         Parameters
         ----------
@@ -233,13 +300,13 @@ class Atmosphere:
         pressure_atm = self.params['pressure_atm'] * 100  # in Pa
 
         ### Air properties
-        air_molar_mass = CP.PropsSI('MOLARMASS', 'Air')  # in g/mol
+        air_molar_mass = CP.PropsSI('MOLARMASS', 'Air')  # in kg/mol
         air_mass = air_molar_mass / c.Avogadro * 1e3  # in g
         air_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Air")  # in kg/m-3
         air_density = air_mass_density * 1e3 / air_mass  # in m-3
 
         ### Water properties
-        water_molar_mass = CP.PropsSI('MOLARMASS', 'Water')  # in g/mol
+        water_molar_mass = CP.PropsSI('MOLARMASS', 'Water')  # in kg/mol
         water_mass = water_molar_mass / c.Avogadro * 1e3  # in g
         
         ### Compute water vapor density
@@ -251,16 +318,16 @@ class Atmosphere:
 
         return water_mass, water_vapor_density, air_density
         
-    def absorption_spectrum(self):
+    def absorption_spectrum(self, gas_properties, absorption_coeff):
         r"""Absorption coefficient.
         
-        The coefficient :math:`\alpha_b(\nu)` [:math:`m^2g^{-1}`] is defined by:
+        The coefficient :math:`\alpha_b(\nu)` (:math:`m^2g^{-1}`) is defined by:
         
         .. math::
-            `\alpha_b(\nu) = \frac{1}{m_{H_2O}} \left(k_{lines}(\nu) + n_{H_2O}k_{self}(\nu) + n_{air}k_{air}(\nu)\right)`
+            `\alpha_b(\nu) = \frac{1}{m_{H_2O}} \left(k_{lines}(\nu) + n_{H_2O}k_{self}(\nu) + n_{air}k_{air}(\nu)\right)` ,
             
         with :math:`m_{H_2O}= 2.992\times 10^{-23} g` the mass of a :math:`H_2O` molecule, math:`k_{lines}` [:math`m^2`] the line-by-line absorption coefficient, 
-        :math`k_{self}` and :math`k_{air}` [:math:`m^5`] the self- and air-induced continua, :math:`n_{H_2O}` and :math:`n_{air}` [:maht:`m^{-3}`] the densities of water vapor and air.
+        :math`k_{self}` and :math`k_{air}` (:math:`m^5`) the self- and air-induced continua, :math:`n_{H_2O}` and :math:`n_{air}` (:maht:`m^{-3}`) the densities of water vapor and air.
 
         Returns
         -------
@@ -269,10 +336,10 @@ class Atmosphere:
             
         """        
 
-        # Import gas properties
+        ### Import gas properties
         water_mass, water_vapor_density, air_density = self.get_gas_properties()
                 
-        # Compute coeff
+        ### Compute coeff
         abs_spectrum = (self.mol_absorption_coeff + water_vapor_density * self.self_absorption_coeff + air_density * self.air_absorption_coeff) / water_mass 
 
         return abs_spectrum
@@ -285,31 +352,41 @@ class Atmosphere:
         Parameters
         ----------
         band : int, optional
-            QUBIC frequency band. Can be either 150 or 220, by default 150
+            QUBIC frequency band. Can be either 150 or 220.
 
         Returns
         -------
-        integrated_abs_spectrum : array_like
-            The integrated absorption spectrum in the given frequency band, in :math:`m^{2} / g`.
-        nus : array_like
-            The frequencies at which the absorption spectrum is computed, in :math:`GHz`.
+        integrated_abs_spectrum : numpy.ndarray
+            The integrated absorption spectrum in the given frequency band, in m^2/g.
+        nus : numpy.ndarray
+            The frequencies at which the absorption spectrum is computed, in GHz.
             
-        """        
+        """
         
+        ### Verify the given band
+        if band not in [150, 220]:
+            raise ValueError("Band must be either 150 or 220 GHz.")
+
         ### Evaluate the frequency band edges
         freq_min, freq_max = self.integration_frequencies[0], self.integration_frequencies[-1]
         freq_step = (freq_max - freq_min) / (len(self.integration_frequencies) - 1)
 
         ### Compute the frequency sub-bands within the QUBIC band and their associated indexes
-        _, nus_edges, nus, _, _, N_bands = compute_freq(band=band, Nfreq=int(self.params['nsub_in']/2), relative_bandwidth=self.qubic_dict['filter_relative_bandwidth'])
-        nus_edge_index = (nus_edges - freq_min) / freq_step
+        _, nus_edges, nus, _, _, N_bands = compute_freq(
+            band=band, 
+            Nfreq=int(self.params['nsub_in']/2), 
+            relative_bandwidth=self.qubic_dict['filter_relative_bandwidth']
+        )
+        nus_edge_index = np.round((nus_edges - freq_min) / freq_step).astype(int)
 
         ### Integrate the absorption spectrum over the frequency sub-bands using the trapezoidal method
-        integrated_abs_spectrum = np.zeros(N_bands)
-        for i in range(N_bands):
-            index_inf, index_sup = int(nus_edge_index[i]), int(nus_edge_index[i+1])
-            integrated_abs_spectrum[i] = np.trapz(self.abs_spectrum[index_inf:index_sup], 
-                                                  x=self.integration_frequencies[index_inf:index_sup])
+        integrated_abs_spectrum = np.array([
+            np.trapz(
+                self.abs_spectrum[nus_edge_index[i]:nus_edge_index[i+1]], 
+                x=self.integration_frequencies[nus_edge_index[i]:nus_edge_index[i+1]]
+            )
+            for i in range(N_bands)
+        ])
         
         return integrated_abs_spectrum, nus
     
@@ -327,56 +404,11 @@ class Atmosphere:
             
         """        
         
+        ### Get the integrated absorption spectrum in the two QUBIC bands : 150 and 220 GHz
         int_abs_spectrum_150, nus_150 = self.get_integrated_absorption_spectrum(band=150)
         int_abs_spectrum_220, nus_220 = self.get_integrated_absorption_spectrum(band=220)
         
         return np.append(int_abs_spectrum_150, int_abs_spectrum_220), np.append(nus_150, nus_220)
-    
-    def get_mean_water_vapor_density(self, altitude):
-        r"""Mean water vapor density.
-        
-        Compute the mean water vapor density depending on the altitude, using reference water vapor density and water vapor half_height, given in self.params.yml.
-        The corresponding equation to compute the mean water vapor density, taken from equation (1) in Morris 2021, is :
-        
-        .. math::
-            \langle \rho(h) \rangle = \rho_0 e^{\left( -log(2).(h - 5190) / h_0 \right)} .
-
-        Parameters
-        ----------
-        altitude : array_like
-            Array containing altitudes at which we want to compute the mean water vapor density.
-
-        Returns
-        -------
-        mean_water_vapor_density : array_like
-            Mean water vapor density in :math:`g/m{3}`.
-            
-        """  
-        
-        return self.params['rho_0'] * np.exp(-np.log(2) * (altitude - 5190) / self.params['h_h2o'])
-    
-    def get_temperature_atm(self, altitude):
-        """Temperature.
-        
-        Compute the temperature of the atmosphere depending on the altitude, using the average ground temperature and a typical height that depend on the observation site.
-        The corresponding equation to compute the temperature, taken from equation (13) in Morris 2021, is :
-        
-        .. math::
-            T_{atm}(h) = T_{atm}(0) e^{h / h_T} .
-
-        Parameters
-        ----------
-        altitude : array_like
-            Array containing altitudes at which we want to compute the temperature.
-
-        Returns
-        -------
-        temperature : array_like
-            Temperature in K.
-            
-        """
-        
-        return self.params['temp_ground'] * np.exp(- altitude / self.params['h_temp'])
     
 class Atmosphere_Maps(Atmosphere):
     
@@ -492,9 +524,10 @@ class Atmosphere_Maps(Atmosphere):
         return delta_rho  
     
     def kolmogorov_correlation_function(self, r, r0):
-        """Kolmogorov correlation function.
+        r"""Kolmogorov correlation function.
         
-        Compute the Kolmogorov correlation function, which simulate the correlation of the spatial fluctuations of the water vapor density, following the equation :
+        Compute the Kolmogorov correlation function by applying the inverse Fourier transform to the Kolmogorov 2d spectrum.
+        This correlation function can be written as:
 
         .. math::
             D(r) = \frac{2^{2/3}}{\Gamma(1/3)} \left(\frac{r}{r_0}\right)^{1/3} K_{1/3} \left(\frac{r}{r_0}\right) .
@@ -504,7 +537,7 @@ class Atmosphere_Maps(Atmosphere):
         Parameters
         ----------
         r : array_like or float
-            distance between two points, in meters.
+            Distance between two points, in meters.
         r0 : array_like or float
             Maximum correlation length, in meters.
 
@@ -543,38 +576,103 @@ class Atmosphere_Maps(Atmosphere):
             
         """        
         
+        ### Compute the distance between two points separeted by the angle theta on the surface of the sphere
         r = 2*h_atm*np.sin(np.radians(theta)/2)
         
         return self.kolmogorov_correlation_function(r, r0)
     
     def cl_from_angular_correlation_int(self, l):
+        r"""Angular power spectrum from angular correlation function.
+        
+        Compute the angular power spectrum from the angular correlation function, using the formula:
+
+        .. math::
+            C_{\ell} = 2 \pi \int_{-1}^{1} C(\theta) P_{\ell(\cos \theta) d \cos \theta ,
+
+        where :math:`C(\theta)` is the angular correlation function and :math:`P_l(\cos \theta)` is the Legendre polynomial of order :math:`l`.
+        
+        WARNING: This function is not very efficient, as it computes the Legendre polynomial of order l for each value of cos(theta). It takes a long time to compute for high values of l.
+        It is just used for testing purposes and to compute the case \ell = 0 which is not possible in 'ctheta_2_dell'.
+
+        Parameters
+        ----------
+        l : int
+            Angular multipole order.
+
+        Returns
+        -------
+        C_l : float
+            Angular power spectrum of order l.
+            
+        """         
+        
+        #! It should be possible to speed the computation by using the function np.polynomial.legendre.leggauss
+        
+        ###Compute the integrand for the integral
         def integrand(cos_theta):
+            # Compute theta from cos(theta)
             theta = np.degrees(np.arccos(cos_theta))
+            
+            # Compute the legendre polynomial of order l
             legendre = sp.legendre(l)(cos_theta)
+            
+            # Return the product of the angular correlation function and the legendre polynomial
             return self.angular_correlation(theta, self.params['altitude_atm_2d'], self.params['correlation_length']) * legendre
+        
+        ### Integrate over cos(theta)
         res, _ = quad(integrand, -1, 1)
         
         return 2 * np.pi * res
     
     def ctheta_2_dell(self, theta_deg, ctheta, lmax, normalization=1):
-        ### this is how camb recommends to prepare the x = cos(theta) values for integration
-        ### These x values do not contain x=1 so we have. to do this case separately
-        x, w = np.polynomial.legendre.leggauss(lmax+1)
-        xdeg = np.degrees(np.arccos(x))
+        r"""Angular power spectrum from angular correlation function.
+        
+        Compute the angular power spectrum from the angular correlation function, using the formula:
+        
+        .. math::
+            C_{\ell} = 2 \pi \int_{-1}^{1} C(\theta) P_{\ell(\cos \theta) d \cos \theta ,
+        where :math:`C(\theta)` is the angular correlation function and :math:`P_l(\cos \theta)` is the Legendre polynomial of order :math:`l`.
+        
+        This computation is done using the CAMB library, which is much faster than the 'cl_from_angular_correlation_int' function.
 
-        ### We first replace theta=0 by 0 and do that case separately
+        Parameters
+        ----------
+        theta_deg : _type_
+            _description_
+        ctheta : _type_
+            _description_
+        lmax : _type_
+            _description_
+        normalization : int, optional
+            _description_, by default 1
+
+        Returns
+        -------
+        _type_
+            _description_
+            
+        """         
+        
+        ### Compute the Legendre polynomials up to lmax+1, and the theta values
+        ### These cos_theta do not contain cos(theta)=1 so we have to do this case separately
+        cos_theta, legendre = np.polynomial.legendre.leggauss(lmax+1)
+        xdeg = np.degrees(np.arccos(cos_theta))
+
+        ### Replace C(theta=0) by 0
         myctheta = ctheta.copy()
         myctheta[0] = 0
-        ### And now we fill the array that should include polarization (we put zeros there)
-        ### with the values of our imput c(theta) interpolated at the x locations
-        allctheta = np.zeros((len(x), 4))
+        
+        ### Fill the array that should include polarization (we put zeros there) with the values of our imput c(theta) interpolated at the cos_theta locations
+        allctheta = np.zeros((len(cos_theta), 4))
         allctheta[:,0] = np.interp(xdeg, theta_deg, myctheta)
 
-        ### Here we call the camb function that does the transform to Cl
-        dlth = cc.corr2cl(allctheta, x,  w, lmax)
+        ### Call the camb function that does the transform from C(theta) to Dl
+        dlth = cc.corr2cl(allctheta, cos_theta,  legendre, lmax)
+        
+        ### Compute the multipole moments
         ell = np.arange(lmax+1)
 
-        ### the special case x=1 corresponds to theta=0 and add 2pi times c(theta=0) to the Cell
+        ### the special case cos(theta)=1 corresponds to theta=0 and add 2pi times c(theta=0) to the Dl
         return ell, dlth[:,0]+ctheta[0]*normalization
     
     def ctheta_2_cell(self, theta_deg, ctheta, lmax, normalization=1):

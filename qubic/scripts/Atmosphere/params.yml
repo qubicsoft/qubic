@@ -22,7 +22,7 @@ n_grid: 500                       # Number of squares in the grid
 h_grid: 1                         # Number of sqares for the altitude, i for 2d model
 h_qubic: 4869                     # QUBIC altitude in m
 size_atm: 500                    # Lenght of the atm in m
-nsub_in: 20                       # Number of sub-acquisitions used to integrate over the atm spectrum
+nsub_in: 10                       # Number of sub-acquisitions used to integrate over the atm spectrum
 nrec: 2
 2d: True                          # Determine if you want to simulate a 2d atm
 nside: 64
@@ -32,4 +32,4 @@ flat: False
 
 # Qubic parameters
 beam_fwhm: 0.001                  # in rad
-npointings: 3000
+npointings: 1000

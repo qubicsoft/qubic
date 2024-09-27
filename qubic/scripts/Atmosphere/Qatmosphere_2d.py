@@ -59,8 +59,8 @@ class Atmosphere:
             self.r, self.el, self.az = self.horizontal_plane_to_azel(x, y, z)
             
         ### Compute atmosphere temperature and mean water vapor density
-        self.temperature = self.get_temperature_atm(self.altitude)
-        self.mean_water_vapor_density = self.get_mean_water_vapor_density(self.altitude)
+        self.temperature = self.get_temperature_atm(self.altitude, self.params['temp_ground'], self.params['h_temp'])
+        self.mean_water_vapor_density = self.get_mean_water_vapor_density(self.altitude, self.params['rho_0'], self.params['h_h2o'])
         
         ### Compute absorption coefficients
         self.mol_absorption_coeff, self.self_absorption_coeff, self.air_absorption_coeff, self.integration_frequencies = self.atm_absorption_coeff()
@@ -128,7 +128,7 @@ class Atmosphere:
 
         return dict_qubic
     
-    def get_mean_water_vapor_density(self, altitude):
+    def get_mean_water_vapor_density(self, altitude, rho_0, h_h2o):
         r"""Mean water vapor density.
         
         Compute the mean water vapor density depending on the altitude, using reference water vapor density and water vapor half_height, given in self.params.yml.
@@ -149,9 +149,9 @@ class Atmosphere:
             
         """  
         
-        return self.params['rho_0'] * np.exp(-np.log(2) * (altitude - 5190) / self.params['h_h2o'])
+        return rho_0 * np.exp(-np.log(2) * (altitude - 5190) / h_h2o)
     
-    def get_temperature_atm(self, altitude):
+    def get_temperature_atm(self, altitude, temp_ground, h_T):
         """Temperature.
         
         Compute the temperature of the atmosphere depending on the altitude, using the average ground temperature and a typical height that depend on the observation site.
@@ -164,6 +164,10 @@ class Atmosphere:
         ----------
         altitude : array_like
             Array containing altitudes at which we want to compute the temperature.
+        temp_ground : float
+            Average ground temperature in K.
+        h_T : float
+            Typical height in m.
 
         Returns
         -------
@@ -172,7 +176,7 @@ class Atmosphere:
             
         """
         
-        return self.params['temp_ground'] * np.exp(- altitude / self.params['h_temp'])
+        return temp_ground * np.exp(- altitude / h_T)
         
     def atm_absorption_coeff(self):
         r"""Absorption spectrum.
@@ -182,7 +186,7 @@ class Atmosphere:
         and a continuum absorption coming from collisions between molecules, 
         either :math:`H_2O-H_2O` collisions (self-induced continuum), or collisions between :math:`H_2O` and the air (air_induced).
 
-        See the am documentation for more details: https://zenodo.org/records/8161272 .
+        See the am documentation for more details: https://lweb.cfa.harvard.edu/~spaine/am/ .
 
         Returns
         -------
@@ -252,15 +256,15 @@ class Atmosphere:
         return np.array(mol_absorption_coeff), np.array(self_absorption_coeff), np.array(air_absorption_coeff), frequencies
     
     def get_gas_properties(self, params_file = True):
-        rf"""Gas properties.
+        r"""Gas properties.
         
         Method to compute the properties of the water vapor and the air in the atmosphere. It uses the CoolProp package (https://github.com/CoolProp/CoolProp) to compute the molar mass of air and water.
         It can use parameters given in self.params.yml or be baised on the CoolProp package to compute the water vapor density.
         
         The pressure as to be defined in the params.yml file. The temperature is computed using the function 'get_temp_atm'.
         
-        The molar mass of air is given by the CoolProp package: {CP.PropsSI('MOLARMASS', 'Air')} kg/mol.
-        The molar mass of water is given by the CoolProp package: {CP.PropsSI('MOLARMASS', 'Water')} kg/mol.
+        The molar mass of air is given by the CoolProp package: CP.PropsSI('MOLARMASS', 'Air') kg/mol.
+        The molar mass of water is given by the CoolProp package: CP.PropsSI('MOLARMASS', 'Water') kg/mol.
         
         From molar mass, the mass is given by :
         
@@ -318,16 +322,16 @@ class Atmosphere:
 
         return water_mass, water_vapor_density, air_density
         
-    def absorption_spectrum(self, gas_properties, absorption_coeff):
+    def absorption_spectrum(self):
         r"""Absorption coefficient.
         
-        The coefficient :math:`\alpha_b(\nu)` (:math:`m^2g^{-1}`) is defined by:
+        The coefficient :math:`\alpha_b(\nu)` (:math:`m^2/g`) is defined by:
         
         .. math::
-            `\alpha_b(\nu) = \frac{1}{m_{H_2O}} \left(k_{lines}(\nu) + n_{H_2O}k_{self}(\nu) + n_{air}k_{air}(\nu)\right)` ,
+            \alpha_b(\nu) = \frac{1}{m_{H_2O}} \left(k_{lines}(\nu) + n_{H_2O}k_{self}(\nu) + n_{air}k_{air}(\nu)\right) ,
             
-        with :math:`m_{H_2O}= 2.992\times 10^{-23} g` the mass of a :math:`H_2O` molecule, math:`k_{lines}` [:math`m^2`] the line-by-line absorption coefficient, 
-        :math`k_{self}` and :math`k_{air}` (:math:`m^5`) the self- and air-induced continua, :math:`n_{H_2O}` and :math:`n_{air}` (:maht:`m^{-3}`) the densities of water vapor and air.
+        with :math:`m_{H_2O}= 2.992\times 10^{-23} g` the mass of a :math:`H_2O` molecule, :math:`k_{lines}` (:math:`m^2`) the line-by-line absorption coefficient, 
+        :math`k_{self}` and :math`k_{air}` (:math:`m^5`) the self- and air-induced continua, :math:`n_{H_2O}` and :math:`n_{air}` (:math:`m^{-3}`) the densities of water vapor and air.
 
         Returns
         -------
@@ -424,11 +428,18 @@ class Atmosphere_Maps(Atmosphere):
         ### Build the temperature maps of the atmosphere
         self.atm_temp_maps = self.get_temp_maps()
         
-    def get_fourier_grid_2d(self):
+    def get_fourier_grid_2d(self, n_grid, size_atm):
         """Fourier 2d grid.
         
         Generate a 2d grid of spatial frequencies in Fourier space according to the parameters in the self.params.yml file.
 
+        Parameters
+        ----------
+        n_grid : int
+            Number of grid points in the 2d grid.
+        size_atm : float
+            Size of the atmosphere in m.
+        
         Returns
         -------
         kx : array_like
@@ -441,8 +452,8 @@ class Atmosphere_Maps(Atmosphere):
         """        
         
         ### Generate spatial frequency in Fourier space
-        k_distrib_y = np.fft.fftfreq(self.params['n_grid'], d=2*self.params['size_atm']/self.params['n_grid']) * 2*np.pi
-        k_distrib_x = np.fft.fftfreq(self.params['n_grid'], d=2*self.params['size_atm']/self.params['n_grid']) * 2*np.pi
+        k_distrib_y = np.fft.fftfreq(n_grid, d=2*size_atm/n_grid) * 2*np.pi
+        k_distrib_x = np.fft.fftfreq(n_grid, d=2*size_atm/n_grid) * 2*np.pi
         
         ### Build 2d grid and compute the norm of the spatial frequencies
         kx, ky = np.meshgrid(k_distrib_x, k_distrib_y)
@@ -450,7 +461,7 @@ class Atmosphere_Maps(Atmosphere):
         
         return kx, ky, k_norm
     
-    def kolmogorov_spectrum_2d(self, k):
+    def kolmogorov_spectrum_2d(self, k, r0):
         r"""Kolmogorov 2d spectrum.
         
         Compute the Kolmogorov 2d spectrum, which simulate the power spectrum of the spatial fluctuations of the water vapor density, following the equation :
@@ -463,6 +474,8 @@ class Atmosphere_Maps(Atmosphere):
         ----------
         k : array_like
             Array containing the spatial frequencies at which we want to compute the Kolmogorov 2d spectrum.
+        r0 : float
+            Maximum spatial coherence length of the water vapor density, in m.
 
         Returns
         -------
@@ -470,9 +483,9 @@ class Atmosphere_Maps(Atmosphere):
             Kolmogorov 2d spectrum.
         """        
         
-        return (self.params['correlation_length']**(-2) + np.abs(k)**2)**(-8/6)
+        return (r0**(-2) + np.abs(k)**2)**(-8/6)
     
-    def normalized_kolmogorov_spectrum_2d(self, k):
+    def normalized_kolmogorov_spectrum_2d(self, k, r0):
         r"""Normalized Kolmogorov 2d spectrum.
         
         Compute the normalized Kolmogorov 2d spectrum, to ensure :
@@ -484,6 +497,8 @@ class Atmosphere_Maps(Atmosphere):
         ----------
         k : array_like
             Array containing the spatial frequencies at which we want to compute the normalized Kolmogorov 2d spectrum.
+        r0 : float
+            Maximum spatial coherence length of the water vapor density, in m.
 
         Returns
         -------
@@ -493,14 +508,23 @@ class Atmosphere_Maps(Atmosphere):
         """        
         
         ### Compute the normalization constant
-        res, _ = quad(self.kolmogorov_spectrum_2d, np.min(k), np.max(k))
+        res, _ = quad(self.kolmogorov_spectrum_2d, np.min(k), np.max(k), args=(r0))
         
-        return self.kolmogorov_spectrum_2d(k) / res
+        return self.kolmogorov_spectrum_2d(k, r0) / res
     
-    def generate_spatial_fluctuations_fourier(self):
+    def generate_spatial_fluctuations_fourier(self, n_grid, size_atm, r0):
         """Spatial 2d fluctuations.
         
         Produce the spatial fluctuations of the water vapor density, by generating random phases in Fourier space, and then computing the inverse Fourier transform.
+
+        Parameters
+        ----------
+        n_grid : int
+            Number of grid points in the 2d grid.
+        size_atm : float
+            Size of the atmosphere in m.
+        r0 : float
+            Maximum spatial coherence length of the water vapor density, in m
 
         Returns
         -------
@@ -511,8 +535,8 @@ class Atmosphere_Maps(Atmosphere):
         #! At some point, we will need to normalize these fluctuations using real data. We can maybe use :math:`\sigma_{PWV}` that can be estimated with figure 4 in Morris 2021.
         
         ### Compute the spatial frequencies & power spectrum.
-        _, _, k = self.get_fourier_grid_2d()
-        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum_2d(k)
+        _, _, k = self.get_fourier_grid_2d(n_grid, size_atm)
+        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum_2d(k, r0)
         
         ### Generate spatial fluctuations through random phases in Fourier space
         phi = np.random.uniform(0, 2*np.pi, size=(self.params['n_grid'], self.params['n_grid']))
@@ -568,6 +592,8 @@ class Atmosphere_Maps(Atmosphere):
             Angle between two points, in degrees.
         h_atm : array_like or float
             Distance between the atmosphere and our instrument, in meters.
+        r0 : float
+            Maximum correlation length, in meters.
 
         Returns
         -------
@@ -637,19 +663,19 @@ class Atmosphere_Maps(Atmosphere):
 
         Parameters
         ----------
-        theta_deg : _type_
-            _description_
-        ctheta : _type_
-            _description_
-        lmax : _type_
-            _description_
+        theta_deg : array_like
+            Angles between two points on the surface of the sphere, in degrees.
+        ctheta : array_like
+            Angular correlation function.
+        lmax : int
+            Maximum angular multipole order.
         normalization : int, optional
-            _description_, by default 1
+            Normalization parameter, by default 1
 
         Returns
         -------
-        _type_
-            _description_
+        dell : array_like
+            Angular power spectrum.
             
         """         
         
@@ -676,6 +702,27 @@ class Atmosphere_Maps(Atmosphere):
         return ell, dlth[:,0]+ctheta[0]*normalization
     
     def ctheta_2_cell(self, theta_deg, ctheta, lmax, normalization=1):
+        r"""Angular power spectrum from angular correlation function.
+        
+        Compute the angular power spectrum from the angular correlation function, using the function 'ctheta_2_dell',
+        and convert the result to :math:`C_{\ell}`.
+
+        Parameters
+        ----------
+        theta_deg : array_like
+            Angles between two points on the surface of the sphere, in degrees.
+        ctheta : array_like
+            Angular correlation function.
+        lmax : int
+            Maximum angular multipole order.
+        normalization : int, optional
+            Normalization parameter, by default 1
+
+        Returns
+        -------
+        cell : array_like
+            Angular power spectrum.
+        """        
         
         #! Warning : the Cl computed using CAMB are different from the ones computed using 'cl_from_angular_correlation_int' at large l
         
@@ -687,14 +734,23 @@ class Atmosphere_Maps(Atmosphere):
         clth = dlth * dl2cl_factor
         
         ### Correct for the special case l=0, as the convertion factor is not valid
-        clth[0] = self.cl_from_angular_correlation_int(0)
+        clth[0] = self.cl_from_angular_correlation_int(0, self.params['altitude_atm_2d'], self.params['correlation_length'])
         
         return ell, clth
     
     def generate_spatial_fluctuation_sphercial_harmonics(self):
+        """Spatial fluctuation map from angular correlation function.
+        
+        Compute the spatial fluctuation HEALPix map from the angular correlation function, using the function 'ctheta_2_cell'.
+
+        Returns
+        -------
+        delta : array_like
+            Spatial fluctuation map, generated accorging HEALPix formalism.
+        """        
             
         ### Compute angular correlation function
-        theta = np.linspace(0, 180, self.params['n_grid'])
+        theta = np.linspace(0, 180, self.params['n_theta'])
         ctheta = self.angular_correlation(theta, self.params['altitude_atm_2d'], self.params['correlation_length'])
         
         ### Compute spherical harmonics from angular correlation function
@@ -705,31 +761,38 @@ class Atmosphere_Maps(Atmosphere):
         
         return delta_rho
         
-    def get_water_vapor_density_2d_map(self):
+    def get_water_vapor_density_2d_map(self, mean_rho, angular=True):
         """Water vapor density 2d map.
         
         Get the water vapor density 2d map with simulated fluctuations.
+        The spatial fluctuations are generated using either the correlation function or the angular correlation function.
+
+        Parameters
+        ----------
+        mean_rho : array_like
+            Mean water vapor density.
+        angular : bool, optional
+            If True, use the angular correlation function. If False, use the correlation function., by default True
 
         Returns
         -------
         atm_maps_2d : array_like
             Water vapor density 2d map.
             
-        """        
+        """             
         
-        ### Import water vapor density map and fluctuations
-        rho = self.get_mean_water_vapor_density(self.altitude)
-        if self.params['flat']:
-            delta_rho = self.generate_spatial_fluctuations_fourier()
-        else:
+        ### Build water vapor density fluctuations
+        if angular:
             delta_rho = self.generate_spatial_fluctuation_sphercial_harmonics()
+        else:
+            delta_rho = self.generate_spatial_fluctuations_fourier(self.params['n_grid'], self.params['size_atm'], self.params['correlation_length'])
             
         ### Normalize fluctuations
         normalized_delta_rho = delta_rho * np.sqrt(self.params['sigma_rho'] / np.var(delta_rho))  
 
-        return rho + normalized_delta_rho
+        return mean_rho + normalized_delta_rho
         
-    def get_temp_maps(self):
+    def get_temp_maps(self, maps):
         r"""Atmosphere maps.
         
         Get the atmosphere maps in temperature, by using the equation 12 from Morris 2021, that compute the induced temperature in the detector due to the water vapor density :
@@ -738,6 +801,11 @@ class Atmosphere_Maps(Atmosphere):
             dT( \textbf{r}, \nu) = \alpha_b(\nu) \rho(\textbf{r}) T_{atm}(\textbf{r}) dV .
             
         And then, convert it in micro Kelvin CMB.
+        
+        Parameters
+        ----------
+        maps : array_like
+            Water vapor density 2d map.
 
         Returns
         -------
@@ -746,12 +814,9 @@ class Atmosphere_Maps(Atmosphere):
             
         """
         
-        ### Get the water vapor density maps
-        water_vapor_density_maps = self.get_water_vapor_density_2d_map()
-        
         ### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021
         ###! I assume that the multiplication by the beam profile is done when applying the acquisition operator.
-        temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.temperature * water_vapor_density_maps
+        temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.temperature * maps
         
         ### Convert them into micro Kelvin CMB
         temp_maps -= Planck18.Tcmb0.value

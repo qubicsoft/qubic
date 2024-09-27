@@ -9,7 +9,7 @@ Foregrounds:
 PCG:
   fwhm_plot: 0
   gif: true
-  n_iter_pcg: 30
+  n_iter_pcg: 3
   preconditioner: true
   resolution_plot: 15
   tol_pcg: 1.0e-12
@@ -21,7 +21,7 @@ PLANCK:
   weight_planck: 0
 Pipeline:
   mapmaking: true
-  spectrum: false
+  spectrum: true
 QUBIC:
   NOISE:
     detector_nep: 4.7e-17

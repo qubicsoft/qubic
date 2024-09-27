@@ -1,10 +1,6 @@
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
-from multiprocess import Pool
 from pyoperators import MPI
-from schwimmbad import MPIPool
 
 from lib.Qfit import FitEllSpace
 from lib.Qfoldertools import MergeAllFiles

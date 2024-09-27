@@ -26,7 +26,6 @@ from ...InstrumentModel.Qnoise import *
 from .Qcostfunc import (
     Chi2Blind,
     Chi2DualBand,
-    Chi2Parametric,
     Chi2Parametric_alt,
     Chi2UltraWideBand,
 )

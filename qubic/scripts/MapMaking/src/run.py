@@ -8,7 +8,7 @@ from qubic.lib.MapMaking.ComponentMapMaking.Qcmm import Pipeline
 ### Common MPI arguments
 comm = MPI.COMM_WORLD
 
-simu = 'CMM'
+simu = 'FMM'
 
 parameters_file = str(sys.argv[1])
 

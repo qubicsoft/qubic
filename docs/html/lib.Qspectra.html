@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Qspectra module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.Qutilities module" href="lib.Qutilities.html" />
+    <link rel="prev" title="lib.QskySim module" href="lib.QskySim.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="lib.html#subpackages">Subpackages</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#submodules">Submodules</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="lib.Qbeams.html">lib.Qbeams module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html">lib.Qcoaddition module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html">lib.QdataHandling module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html">lib.Qdictionary module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfit.html">lib.Qfit module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfoldertools.html">lib.Qfoldertools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qforecast.html">lib.Qforecast module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qhorns.html">lib.Qhorns module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qmpi_tools.html">lib.Qmpi_tools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qplotters.html">lib.Qplotters module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qripples.html">lib.Qripples module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html">lib.Qsamplings module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qscene.html">lib.Qscene module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html">lib.QskySim module</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">lib.Qspectra module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qspectra.Spectra"><code class="docutils literal notranslate"><span class="pre">Spectra</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qspectra.Spectrumold"><code class="docutils literal notranslate"><span class="pre">Spectrumold</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qutilities.html">lib.Qutilities module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+      <li class="breadcrumb-item active">lib.Qspectra module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.Qspectra.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.Qspectra">
+<span id="lib-qspectra-module"></span><h1>lib.Qspectra module<a class="headerlink" href="#module-lib.Qspectra" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectra">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.Qspectra.</span></span><span class="sig-name descname"><span class="pre">Spectra</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectra"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectra" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>open_file</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>run</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectra.open_file">
+<span class="sig-name descname"><span class="pre">open_file</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectra.open_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectra.open_file" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectra.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">maps</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectra.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectra.run" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.Qspectra.</span></span><span class="sig-name descname"><span class="pre">Spectrumold</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class to compute the different spectra for our realisations</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Qspectra.Spectrumold.compute_array_power_spectra" title="lib.Qspectra.Spectrumold.compute_array_power_spectra"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_array_power_spectra</span></code></a>(maps)</p></td>
+<td><p>Function to fill an array with all the power spectra computed</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.Qspectra.Spectrumold.compute_auto_spectrum" title="lib.Qspectra.Spectrumold.compute_auto_spectrum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_auto_spectrum</span></code></a>(map, fwhm)</p></td>
+<td><p>Function to compute the auto-spectrum of a given map</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Qspectra.Spectrumold.compute_cross_spectrum" title="lib.Qspectra.Spectrumold.compute_cross_spectrum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_cross_spectrum</span></code></a>(map1, fwhm1, map2, fwhm2)</p></td>
+<td><p>Function to compute cross-spectrum, taking into account the different resolution of each sub-bands</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.Qspectra.Spectrumold.compute_power_spectra" title="lib.Qspectra.Spectrumold.compute_power_spectra"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_power_spectra</span></code></a>()</p></td>
+<td><p>Function to compute the power spectra array for the sky and for the noise realisations</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Qspectra.Spectrumold.get_dict" title="lib.Qspectra.Spectrumold.get_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dict</span></code></a>()</p></td>
+<td><p>Method to modify the qubic dictionary.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.Qspectra.Spectrumold.get_ultrawideband_config" title="lib.Qspectra.Spectrumold.get_ultrawideband_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_ultrawideband_config</span></code></a>()</p></td>
+<td><p>Method that pre-compute UWB configuration.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Qspectra.Spectrumold.save_data" title="lib.Qspectra.Spectrumold.save_data"><code class="xref py py-obj docutils literal notranslate"><span class="pre">save_data</span></code></a>(name, d)</p></td>
+<td><p>Method to save data using pickle convention.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>run</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold.compute_array_power_spectra">
+<span class="sig-name descname"><span class="pre">compute_array_power_spectra</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">maps</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold.compute_array_power_spectra"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold.compute_array_power_spectra" title="Link to this definition"></a></dt>
+<dd><p>Function to fill an array with all the power spectra computed</p>
+<dl class="simple">
+<dt>Argument :</dt><dd><ul class="simple">
+<li><p>maps (array [nreal, nrec/ncomp, npix, nstokes]) : all your realisation maps</p></li>
+</ul>
+</dd>
+<dt>Return :</dt><dd><ul class="simple">
+<li><dl class="simple">
+<dt>power_spectra_array (array [nrec/ncomp, nrec/ncomp])<span class="classifier">element [i, i] is the auto-spectrum for the reconstructed sub-bands i</span></dt><dd><p>element [i, j] is the cross-spectrum between the reconstructed sub-band i &amp; j</p>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold.compute_auto_spectrum">
+<span class="sig-name descname"><span class="pre">compute_auto_spectrum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold.compute_auto_spectrum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold.compute_auto_spectrum" title="Link to this definition"></a></dt>
+<dd><p>Function to compute the auto-spectrum of a given map</p>
+<dl class="simple">
+<dt>Argument :</dt><dd><ul class="simple">
+<li><p>map(array) [nrec/ncomp, npix, nstokes] : map to compute the auto-spectrum</p></li>
+<li><p>allfwhm(float) : in radian</p></li>
+</ul>
+</dd>
+<dt>Return :</dt><dd><ul class="simple">
+<li><p>(list) [len(ell)] : BB auto-spectrum</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold.compute_cross_spectrum">
+<span class="sig-name descname"><span class="pre">compute_cross_spectrum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">map1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">map2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold.compute_cross_spectrum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold.compute_cross_spectrum" title="Link to this definition"></a></dt>
+<dd><p>Function to compute cross-spectrum, taking into account the different resolution of each sub-bands</p>
+<dl class="simple">
+<dt>Arguments :</dt><dd><ul class="simple">
+<li><p>map1 &amp; map2 (array [nrec/ncomp, npix, nstokes]) : the two maps needed to compute the cross spectrum</p></li>
+<li><p>fwhm1 &amp; fwhm2 (float) : the respective fwhm for map1 &amp; map2 in radian</p></li>
+</ul>
+</dd>
+<dt>Return :</dt><dd><ul class="simple">
+<li><p>(list) [len(ell)] : BB cross-spectrum</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold.compute_power_spectra">
+<span class="sig-name descname"><span class="pre">compute_power_spectra</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold.compute_power_spectra"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold.compute_power_spectra" title="Link to this definition"></a></dt>
+<dd><p>Function to compute the power spectra array for the sky and for the noise realisations</p>
+<dl class="simple">
+<dt>Return :</dt><dd><ul class="simple">
+<li><p>sky power spectra array (array [nrec/ncomp, nrec/ncomp])</p></li>
+<li><p>noise power spectra array (array [nrec/ncomp, nrec/ncomp])</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold.get_dict">
+<span class="sig-name descname"><span class="pre">get_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold.get_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold.get_dict" title="Link to this definition"></a></dt>
+<dd><p>Method to modify the qubic dictionary.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold.get_ultrawideband_config">
+<span class="sig-name descname"><span class="pre">get_ultrawideband_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold.get_ultrawideband_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold.get_ultrawideband_config" title="Link to this definition"></a></dt>
+<dd><p>Method that pre-compute UWB configuration.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold.run" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qspectra.Spectrumold.save_data">
+<span class="sig-name descname"><span class="pre">save_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qspectra.html#Spectrumold.save_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qspectra.Spectrumold.save_data" title="Link to this definition"></a></dt>
+<dd><p>Method to save data using pickle convention.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.QskySim.html" class="btn btn-neutral float-left" title="lib.QskySim module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.Qutilities.html" class="btn btn-neutral float-right" title="lib.Qutilities module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

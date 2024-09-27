@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.MapMaking.FrequencyMapMaking.Qfmm module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component module" href="lib.MapMaking.FrequencyMapMaking.Qspectra_component.html" />
+    <link rel="prev" title="lib.MapMaking.FrequencyMapMaking package" href="lib.MapMaking.FrequencyMapMaking.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.html">lib.Calibration package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.html">lib.Fitting package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.html">lib.InstrumentModel package</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="lib.MapMaking.html">lib.MapMaking package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="lib.MapMaking.html#subpackages">Subpackages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.html">lib.obsolete package</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.html#submodules">Submodules</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+          <li class="breadcrumb-item"><a href="lib.MapMaking.html">lib.MapMaking package</a></li>
+          <li class="breadcrumb-item"><a href="lib.MapMaking.FrequencyMapMaking.html">lib.MapMaking.FrequencyMapMaking package</a></li>
+      <li class="breadcrumb-item active">lib.MapMaking.FrequencyMapMaking.Qfmm module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.MapMaking.FrequencyMapMaking.Qfmm.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.MapMaking.FrequencyMapMaking.Qfmm">
+<span id="lib-mapmaking-frequencymapmaking-qfmm-module"></span><h1>lib.MapMaking.FrequencyMapMaking.Qfmm module<a class="headerlink" href="#module-lib.MapMaking.FrequencyMapMaking.Qfmm" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineEnd2End">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.MapMaking.FrequencyMapMaking.Qfmm.</span></span><span class="sig-name descname"><span class="pre">PipelineEnd2End</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters_path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineEnd2End"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineEnd2End" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>FMM Pipeline.</p>
+<p>Wrapper for End-2-End pipeline. It added class one after the others by running method.run().</p>
+<p class="rubric">Methods</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>main</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineEnd2End.main">
+<span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">specific_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineEnd2End.main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineEnd2End.main" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.MapMaking.FrequencyMapMaking.Qfmm.</span></span><span class="sig-name descname"><span class="pre">PipelineFrequencyMapMaking</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters_dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Instance to reconstruct frequency maps using QUBIC abilities.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>comm</strong></dt><dd><p>MPI communicator</p>
+</dd>
+<dt><strong>file</strong><span class="classifier">str</span></dt><dd><p>used to create the forlder for data saving</p>
+</dd>
+<dt><strong>params</strong><span class="classifier">dict</span></dt><dd><p>dictionary containing all the simulation parameters</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.call_pcg" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.call_pcg"><code class="xref py py-obj docutils literal notranslate"><span class="pre">call_pcg</span></code></a>(d, x0, seenpix)</p></td>
+<td><p>Preconditioned Conjugate Gradiant algorithm.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_H" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_H"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_H</span></code></a>()</p></td>
+<td><p>Acquisition operator</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_averaged_nus" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_averaged_nus"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_averaged_nus</span></code></a>()</p></td>
+<td><p>Average frequency</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_components_fgb" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_components_fgb"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_components_fgb</span></code></a>()</p></td>
+<td><p>Components FGbuster</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_convolution" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_convolution"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_convolution</span></code></a>()</p></td>
+<td><p>QUBIC resolutions.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_dict" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dict</span></code></a>([key])</p></td>
+<td><p>QUBIC dictionary.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_input_map" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_input_map"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_input_map</span></code></a>(m_nu)</p></td>
+<td><p>Input maps.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_preconditioner" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_preconditioner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_preconditioner</span></code></a>()</p></td>
+<td><p>PCG Preconditioner.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_sky_config" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_sky_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_sky_config</span></code></a>()</p></td>
+<td><p>Sky configuration.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_tod" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_tod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_tod</span></code></a>()</p></td>
+<td><p>Simulated TOD.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.run" title="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.run"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run</span></code></a>()</p></td>
+<td><p>Run the FMM Pipeline.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.call_pcg">
+<span class="sig-name descname"><span class="pre">call_pcg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenpix</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.call_pcg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.call_pcg" title="Link to this definition"></a></dt>
+<dd><p>Preconditioned Conjugate Gradiant algorithm.</p>
+<p>Solve the map-making equation iteratively : <span class="math notranslate nohighlight">\((H^T . N^{-1} . H) . x = H^T . N^{-1} . d\)</span>.</p>
+<p>The PCG used for the minimization is intrinsequely parallelized (e.g see PyOperators).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>d</strong> (<em>array_like</em>) – Array containing the TODs generated previously <span class="math notranslate nohighlight">\((N_{rec}, 12 \times N^{2}_{side}, N_{stk})\)</span>.</p></li>
+<li><p><strong>x0</strong> (<em>array_like</em>) – Starting point of the PCG algorithm <span class="math notranslate nohighlight">\((N_{rec}, 12 \times N^{2}_{side}, N_{stk})\)</span>.</p></li>
+<li><p><strong>seenpix</strong> (<em>array_like</em>) – Boolean array to define the pixels seen by QUBIC <span class="math notranslate nohighlight">\((N_{rec}, 12 \times N^{2}_{side}, N_{stk})\)</span>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>solution</strong> – Reconstructed maps <span class="math notranslate nohighlight">\((N_{rec}, 12 \times N^{2}_{side}, N_{stk})\)</span>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_H">
+<span class="sig-name descname"><span class="pre">get_H</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_H"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_H" title="Link to this definition"></a></dt>
+<dd><p>Acquisition operator</p>
+<p>Method to compute QUBIC acquisition operators.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_averaged_nus">
+<span class="sig-name descname"><span class="pre">get_averaged_nus</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_averaged_nus"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_averaged_nus" title="Link to this definition"></a></dt>
+<dd><p>Average frequency</p>
+<p>Method to average QUBIC frequencies according to the number of reconstructed frequency maps.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>nus_ave</strong> – array containing the averaged QUBIC frequencies.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_components_fgb">
+<span class="sig-name descname"><span class="pre">get_components_fgb</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_components_fgb"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_components_fgb" title="Link to this definition"></a></dt>
+<dd><p>Components FGbuster</p>
+<p>Method to build a dictionary containing all the wanted components to generate sky maps.
+Based on FGBuster.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dict_comps</strong> – Dictionary containing the component instances.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_convolution">
+<span class="sig-name descname"><span class="pre">get_convolution</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_convolution"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_convolution" title="Link to this definition"></a></dt>
+<dd><p>QUBIC resolutions.</p>
+<p>Method to define expected QUBIC angular resolutions (radians) as function of frequencies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>fwhm_in</strong> (<em>array_like</em>) – Intrinsic resolutions, used to build the simulated TOD.</p></li>
+<li><p><strong>fwhm_out</strong> (<em>array_like</em>) – Output resolutions. If we don’t apply convolutions during reconstruction, array of zeros.</p></li>
+<li><p><strong>fwhm_rec</strong> (<em>array_like</em>) – Reconstructed resolutions. Egal the output resolutions if we apply convolutions during reconstructions, evaluate through analytic formula otherwise.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_dict">
+<span class="sig-name descname"><span class="pre">get_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'in'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_dict" title="Link to this definition"></a></dt>
+<dd><p>QUBIC dictionary.</p>
+<p>Method to modify the qubic dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>key</strong> (<em>str</em><em>, </em><em>optional</em>) – Can be “in” or “out”.
+It is used to build respectively the instances to generate the TODs or to reconstruct the sky maps,
+by default “in”.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>dict_qubic</strong> – Modified QUBIC dictionary.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_input_map">
+<span class="sig-name descname"><span class="pre">get_input_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m_nu</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_input_map"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_input_map" title="Link to this definition"></a></dt>
+<dd><p>Input maps.</p>
+<p>Function to get the input maps from PySM3.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>maps_in</strong> – Input maps <span class="math notranslate nohighlight">\((N_{rec}, 12 \times N^{2}_{side}, N_{stk})\)</span>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_preconditioner">
+<span class="sig-name descname"><span class="pre">get_preconditioner</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_preconditioner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_preconditioner" title="Link to this definition"></a></dt>
+<dd><p>PCG Preconditioner.</p>
+<p>Computed using the formula: To be added.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>M</strong> – Preconditioner for PCG algorithm.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>DiagonalOperator</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_sky_config">
+<span class="sig-name descname"><span class="pre">get_sky_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_sky_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_sky_config" title="Link to this definition"></a></dt>
+<dd><p>Sky configuration.</p>
+<p>Method that read ‘params.yml’ file and create dictionary containing sky emission model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dict_sky</strong> – Sky config dictionary.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Note that the key denote the emission and the value denote the sky model using PySM convention.
+For CMB, seed denote the realization.</p>
+<p class="rubric">Example</p>
+<p>d = {‘cmb’:seed, ‘dust’:’d0’, ‘synchrotron’:’s0’}</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_tod">
+<span class="sig-name descname"><span class="pre">get_tod</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.get_tod"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.get_tod" title="Link to this definition"></a></dt>
+<dd><p>Simulated TOD.</p>
+<p>Method that compute observed TODs with <span class="math notranslate nohighlight">\(\vec{TOD} = H \cdot \vec{s} + \vec{n}\)</span>, with H the QUBIC operator, <span class="math notranslate nohighlight">\(\vec{s}\)</span> the sky signal and <span class="math notranslate nohighlight">\(\vec{n}\)</span> the instrumental noise`.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>TOD</strong> – Simulated TOD <span class="math notranslate nohighlight">\((N_{rec}, 12 \times N^{2}_{side}, N_{stk})\)</span>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/FrequencyMapMaking/Qfmm.html#PipelineFrequencyMapMaking.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qfmm.PipelineFrequencyMapMaking.run" title="Link to this definition"></a></dt>
+<dd><p>Run the FMM Pipeline.</p>
+<p>Method to run the whole pipeline from TOD generation from sky reconstruction by reading <cite>params.yml</cite> file.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.MapMaking.FrequencyMapMaking.html" class="btn btn-neutral float-left" title="lib.MapMaking.FrequencyMapMaking package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.MapMaking.FrequencyMapMaking.Qspectra_component.html" class="btn btn-neutral float-right" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

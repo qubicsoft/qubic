@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib package &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.Calibration package" href="lib.Calibration.html" />
+    <link rel="prev" title="qubicsoft documentation" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">lib package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.html">lib.Calibration package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.html">lib.Fitting package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.html">lib.InstrumentModel package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.html">lib.MapMaking package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.html">lib.obsolete package</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#submodules">Submodules</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qbeams.html">lib.Qbeams module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html">lib.Qcoaddition module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html">lib.QdataHandling module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html">lib.Qdictionary module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfit.html">lib.Qfit module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfoldertools.html">lib.Qfoldertools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qforecast.html">lib.Qforecast module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qhorns.html">lib.Qhorns module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qmpi_tools.html">lib.Qmpi_tools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qplotters.html">lib.Qplotters module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qripples.html">lib.Qripples module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html">lib.Qsamplings module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qscene.html">lib.Qscene module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html">lib.QskySim module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html">lib.Qspectra module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qutilities.html">lib.Qutilities module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">lib package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib">
+<span id="lib-package"></span><h1>lib package<a class="headerlink" href="#module-lib" title="Link to this heading"></a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Link to this heading"></a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="lib.Calibration.html">lib.Calibration package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Calibration.html#submodules">Submodules</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.Qcalibration.html">lib.Calibration.Qcalibration module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qcalibration.html#lib.Calibration.Qcalibration.QubicCalibration"><code class="docutils literal notranslate"><span class="pre">QubicCalibration</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.Qdemodulation.html">lib.Calibration.Qdemodulation module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qdemodulation.html#lib.Calibration.Qdemodulation.Demodulation"><code class="docutils literal notranslate"><span class="pre">Demodulation</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qdemodulation.html#lib.Calibration.Qdemodulation.interp_template"><code class="docutils literal notranslate"><span class="pre">interp_template</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.Qfiber.html">lib.Calibration.Qfiber module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.Chi2Implement"><code class="docutils literal notranslate"><span class="pre">Chi2Implement</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.Chi2Minimizer"><code class="docutils literal notranslate"><span class="pre">Chi2Minimizer</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.MyChi2"><code class="docutils literal notranslate"><span class="pre">MyChi2</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.MyChi2_nocov"><code class="docutils literal notranslate"><span class="pre">MyChi2_nocov</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.butter_bandpass"><code class="docutils literal notranslate"><span class="pre">butter_bandpass()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.butter_bandpass_filter"><code class="docutils literal notranslate"><span class="pre">butter_bandpass_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.calibrate"><code class="docutils literal notranslate"><span class="pre">calibrate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.do_minuit"><code class="docutils literal notranslate"><span class="pre">do_minuit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.exponential_filter1d"><code class="docutils literal notranslate"><span class="pre">exponential_filter1d()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.filter_data"><code class="docutils literal notranslate"><span class="pre">filter_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.fit_all"><code class="docutils literal notranslate"><span class="pre">fit_all()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.fit_average"><code class="docutils literal notranslate"><span class="pre">fit_average()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.fold_data"><code class="docutils literal notranslate"><span class="pre">fold_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.image_asics"><code class="docutils literal notranslate"><span class="pre">image_asics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.isfloat"><code class="docutils literal notranslate"><span class="pre">isfloat()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.meancut"><code class="docutils literal notranslate"><span class="pre">meancut()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.notch_array"><code class="docutils literal notranslate"><span class="pre">notch_array()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.notch_filter"><code class="docutils literal notranslate"><span class="pre">notch_filter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.power_spectrum"><code class="docutils literal notranslate"><span class="pre">power_spectrum()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.printnow"><code class="docutils literal notranslate"><span class="pre">printnow()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.profile"><code class="docutils literal notranslate"><span class="pre">profile()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.qgrid"><code class="docutils literal notranslate"><span class="pre">qgrid()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.qs2array"><code class="docutils literal notranslate"><span class="pre">qs2array()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.read_hkintern"><code class="docutils literal notranslate"><span class="pre">read_hkintern()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.run_asic"><code class="docutils literal notranslate"><span class="pre">run_asic()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.simsig"><code class="docutils literal notranslate"><span class="pre">simsig()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.simsig_asym"><code class="docutils literal notranslate"><span class="pre">simsig_asym()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.simsig_fringes"><code class="docutils literal notranslate"><span class="pre">simsig_fringes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.simsig_nonorm"><code class="docutils literal notranslate"><span class="pre">simsig_nonorm()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.statstr"><code class="docutils literal notranslate"><span class="pre">statstr()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.thepolynomial"><code class="docutils literal notranslate"><span class="pre">thepolynomial()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.vec_interp"><code class="docutils literal notranslate"><span class="pre">vec_interp()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qfiber.html#lib.Calibration.Qfiber.weighted_mean"><code class="docutils literal notranslate"><span class="pre">weighted_mean()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.Qlinearity.html">lib.Calibration.Qlinearity module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qlinearity.html#lib.Calibration.Qlinearity.logistic"><code class="docutils literal notranslate"><span class="pre">logistic()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qlinearity.html#lib.Calibration.Qlinearity.shift_src"><code class="docutils literal notranslate"><span class="pre">shift_src()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qlinearity.html#lib.Calibration.Qlinearity.sim_generator_power"><code class="docutils literal notranslate"><span class="pre">sim_generator_power()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qlinearity.html#lib.Calibration.Qlinearity.sine"><code class="docutils literal notranslate"><span class="pre">sine()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qlinearity.html#lib.Calibration.Qlinearity.sinesat"><code class="docutils literal notranslate"><span class="pre">sinesat()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qlinearity.html#lib.Calibration.Qlinearity.source_cal"><code class="docutils literal notranslate"><span class="pre">source_cal()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.Qselfcal.html">lib.Calibration.Qselfcal module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qselfcal.html#lib.Calibration.Qselfcal.Model_Fringes_Maynooth"><code class="docutils literal notranslate"><span class="pre">Model_Fringes_Maynooth</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.Qselfcal.html#lib.Calibration.Qselfcal.Model_Fringes_QubicSoft"><code class="docutils literal notranslate"><span class="pre">Model_Fringes_QubicSoft</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.QtesEvaluation.html">lib.Calibration.QtesEvaluation module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.check_goodbad"><code class="docutils literal notranslate"><span class="pre">check_goodbad()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.get_header_values"><code class="docutils literal notranslate"><span class="pre">get_header_values()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.list_goodbad"><code class="docutils literal notranslate"><span class="pre">list_goodbad()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.read_goodbad"><code class="docutils literal notranslate"><span class="pre">read_goodbad()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.write_goodbad"><code class="docutils literal notranslate"><span class="pre">write_goodbad()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Fitting.html">lib.Fitting package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Fitting.html#submodules">Submodules</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.QanalysisMC.html">lib.Fitting.QanalysisMC module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.Cp2Cp_prime"><code class="docutils literal notranslate"><span class="pre">Cp2Cp_prime()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.Cp2Cp_prime_viaCorr"><code class="docutils literal notranslate"><span class="pre">Cp2Cp_prime_viaCorr()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.average_pix_sig2"><code class="docutils literal notranslate"><span class="pre">average_pix_sig2()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.covariance_IQU_subbands"><code class="docutils literal notranslate"><span class="pre">covariance_IQU_subbands()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.distance_square"><code class="docutils literal notranslate"><span class="pre">distance_square()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.distance_sup"><code class="docutils literal notranslate"><span class="pre">distance_sup()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_Cp"><code class="docutils literal notranslate"><span class="pre">get_Cp()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_corrections"><code class="docutils literal notranslate"><span class="pre">get_corrections()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_covcorr1pix"><code class="docutils literal notranslate"><span class="pre">get_covcorr1pix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_covcorr_between_pix"><code class="docutils literal notranslate"><span class="pre">get_covcorr_between_pix()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_covcorr_patch"><code class="docutils literal notranslate"><span class="pre">get_covcorr_patch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_mean_cov"><code class="docutils literal notranslate"><span class="pre">get_mean_cov()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_residuals"><code class="docutils literal notranslate"><span class="pre">get_residuals()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_rms_covar"><code class="docutils literal notranslate"><span class="pre">get_rms_covar()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_rms_covarmean"><code class="docutils literal notranslate"><span class="pre">get_rms_covarmean()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_weighted_correlation_average"><code class="docutils literal notranslate"><span class="pre">get_weighted_correlation_average()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.make_weighted_av"><code class="docutils literal notranslate"><span class="pre">make_weighted_av()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.plot_hist"><code class="docutils literal notranslate"><span class="pre">plot_hist()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.rms_method"><code class="docutils literal notranslate"><span class="pre">rms_method()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.std_profile"><code class="docutils literal notranslate"><span class="pre">std_profile()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.Qcamb.html">lib.Fitting.Qcamb module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.Dl2Cl_without_monopole"><code class="docutils literal notranslate"><span class="pre">Dl2Cl_without_monopole()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.bin_camblib"><code class="docutils literal notranslate"><span class="pre">bin_camblib()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.cell_2_ctheta"><code class="docutils literal notranslate"><span class="pre">cell_2_ctheta()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.ctheta_2_cell"><code class="docutils literal notranslate"><span class="pre">ctheta_2_cell()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.get_Dl_fromlib"><code class="docutils literal notranslate"><span class="pre">get_Dl_fromlib()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.get_camb_Dl"><code class="docutils literal notranslate"><span class="pre">get_camb_Dl()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.rcamblib"><code class="docutils literal notranslate"><span class="pre">rcamblib()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.read_camblib"><code class="docutils literal notranslate"><span class="pre">read_camblib()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qcamb.html#lib.Fitting.Qcamb.simulate_correlated_map"><code class="docutils literal notranslate"><span class="pre">simulate_correlated_map()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.Qmcmc.html">lib.Fitting.Qmcmc module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qmcmc.html#lib.Fitting.Qmcmc.LogLikelihood"><code class="docutils literal notranslate"><span class="pre">LogLikelihood</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.Qnamaster.html">lib.Fitting.Qnamaster module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.Qnamaster.html#lib.Fitting.Qnamaster.Namaster"><code class="docutils literal notranslate"><span class="pre">Namaster</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.QreadMC.html">lib.Fitting.QreadMC module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QreadMC.html#lib.Fitting.QreadMC.get_maps"><code class="docutils literal notranslate"><span class="pre">get_maps()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QreadMC.html#lib.Fitting.QreadMC.get_maps_many_files"><code class="docutils literal notranslate"><span class="pre">get_maps_many_files()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QreadMC.html#lib.Fitting.QreadMC.get_patch"><code class="docutils literal notranslate"><span class="pre">get_patch()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QreadMC.html#lib.Fitting.QreadMC.get_patch_many_files"><code class="docutils literal notranslate"><span class="pre">get_patch_many_files()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QreadMC.html#lib.Fitting.QreadMC.get_seenmap"><code class="docutils literal notranslate"><span class="pre">get_seenmap()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QreadMC.html#lib.Fitting.QreadMC.make_zones"><code class="docutils literal notranslate"><span class="pre">make_zones()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QreadMC.html#lib.Fitting.QreadMC.pix2ang"><code class="docutils literal notranslate"><span class="pre">pix2ang()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QreadMC.html#lib.Fitting.QreadMC.save_simu_fits"><code class="docutils literal notranslate"><span class="pre">save_simu_fits()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html">lib.Fitting.QsynthesizedBeam module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.SbModelIndepPeaks"><code class="docutils literal notranslate"><span class="pre">SbModelIndepPeaks</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.SbModelIndepPeaksAmpFWHM"><code class="docutils literal notranslate"><span class="pre">SbModelIndepPeaksAmpFWHM</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.SimpleSbModel"><code class="docutils literal notranslate"><span class="pre">SimpleSbModel</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.ang_dist"><code class="docutils literal notranslate"><span class="pre">ang_dist()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.beeps"><code class="docutils literal notranslate"><span class="pre">beeps()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.fit_sb"><code class="docutils literal notranslate"><span class="pre">fit_sb()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.get_flatmap"><code class="docutils literal notranslate"><span class="pre">get_flatmap()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.get_hpmap"><code class="docutils literal notranslate"><span class="pre">get_hpmap()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.get_lines"><code class="docutils literal notranslate"><span class="pre">get_lines()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.rotate_q2m"><code class="docutils literal notranslate"><span class="pre">rotate_q2m()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.rotmatX"><code class="docutils literal notranslate"><span class="pre">rotmatX()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.rotmatY"><code class="docutils literal notranslate"><span class="pre">rotmatY()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.rotmatZ"><code class="docutils literal notranslate"><span class="pre">rotmatZ()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.show_flatmap"><code class="docutils literal notranslate"><span class="pre">show_flatmap()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.show_flatmaps_list"><code class="docutils literal notranslate"><span class="pre">show_flatmaps_list()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.show_lines"><code class="docutils literal notranslate"><span class="pre">show_lines()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.thph2uv"><code class="docutils literal notranslate"><span class="pre">thph2uv()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.Fitting.QsynthesizedBeam.html#lib.Fitting.QsynthesizedBeam.uv2thph"><code class="docutils literal notranslate"><span class="pre">uv2thph()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.InstrumentModel.html">lib.InstrumentModel package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.InstrumentModel.html#submodules">Submodules</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html">lib.InstrumentModel.Qacquisition module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.JointAcquisitionComponentsMapMaking"><code class="docutils literal notranslate"><span class="pre">JointAcquisitionComponentsMapMaking</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.JointAcquisitionFrequencyMapMaking"><code class="docutils literal notranslate"><span class="pre">JointAcquisitionFrequencyMapMaking</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.OtherDataParametric"><code class="docutils literal notranslate"><span class="pre">OtherDataParametric</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.PlanckAcquisition"><code class="docutils literal notranslate"><span class="pre">PlanckAcquisition</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.QubicAcquisition"><code class="docutils literal notranslate"><span class="pre">QubicAcquisition</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.QubicDualBand"><code class="docutils literal notranslate"><span class="pre">QubicDualBand</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic"><code class="docutils literal notranslate"><span class="pre">QubicFullBandSystematic</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.QubicIntegrated"><code class="docutils literal notranslate"><span class="pre">QubicIntegrated</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.QubicMultiAcquisitions"><code class="docutils literal notranslate"><span class="pre">QubicMultiAcquisitions</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition"><code class="docutils literal notranslate"><span class="pre">QubicPolyAcquisition</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.QubicUltraWideBand"><code class="docutils literal notranslate"><span class="pre">QubicUltraWideBand</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.arcmin2rad"><code class="docutils literal notranslate"><span class="pre">arcmin2rad()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qacquisition.html#lib.InstrumentModel.Qacquisition.create_array"><code class="docutils literal notranslate"><span class="pre">create_array()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.Qinstrument.html">lib.InstrumentModel.Qinstrument module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qinstrument.html#lib.InstrumentModel.Qinstrument.QubicInstrument"><code class="docutils literal notranslate"><span class="pre">QubicInstrument</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qinstrument.html#lib.InstrumentModel.Qinstrument.QubicMultibandInstrument"><code class="docutils literal notranslate"><span class="pre">QubicMultibandInstrument</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.Qnoise.html">lib.InstrumentModel.Qnoise module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qnoise.html#lib.InstrumentModel.Qnoise.QubicDualBandNoise"><code class="docutils literal notranslate"><span class="pre">QubicDualBandNoise</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qnoise.html#lib.InstrumentModel.Qnoise.QubicNoise"><code class="docutils literal notranslate"><span class="pre">QubicNoise</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.InstrumentModel.Qnoise.html#lib.InstrumentModel.Qnoise.QubicWideBandNoise"><code class="docutils literal notranslate"><span class="pre">QubicWideBandNoise</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.MapMaking.html">lib.MapMaking package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.MapMaking.html#subpackages">Subpackages</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.ComponentMapMaking.html">lib.MapMaking.ComponentMapMaking package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.ComponentMapMaking.html#subpackages">Subpackages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.ComponentMapMaking.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.FrequencyMapMaking.html">lib.MapMaking.FrequencyMapMaking package</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.FrequencyMapMaking.html#submodules">Submodules</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.MapMaking.html#submodules">Submodules</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.Qcg.html">lib.MapMaking.Qcg module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.Qcg.html#lib.MapMaking.Qcg.pcg"><code class="docutils literal notranslate"><span class="pre">pcg()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.Qmap_plotter.html">lib.MapMaking.Qmap_plotter module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.Plots"><code class="docutils literal notranslate"><span class="pre">Plots</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsCMM"><code class="docutils literal notranslate"><span class="pre">PlotsCMM</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsFMM"><code class="docutils literal notranslate"><span class="pre">PlotsFMM</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.Qmaps.html">lib.MapMaking.Qmaps module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.InputMaps"><code class="docutils literal notranslate"><span class="pre">InputMaps</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.Maps"><code class="docutils literal notranslate"><span class="pre">Maps</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.PlanckMaps"><code class="docutils literal notranslate"><span class="pre">PlanckMaps</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.obsolete.html">lib.obsolete package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.obsolete.html#submodules">Submodules</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.SpectroImLib.html">lib.obsolete.SpectroImLib module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.SpectroImLib_PySM2.html">lib.obsolete.SpectroImLib_PySM2 module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.cl.html">lib.obsolete.cl module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.compact_sources_sed.html">lib.obsolete.compact_sources_sed module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.demodulation_lib.html">lib.obsolete.demodulation_lib module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.fringes_lib.html">lib.obsolete.fringes_lib module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.insert_point_sources_in_sky.html">lib.obsolete.insert_point_sources_in_sky module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.jchinstrument.html">lib.obsolete.jchinstrument module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.mjwinstrument.html">lib.obsolete.mjwinstrument module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.multiacquisition.html">lib.obsolete.multiacquisition module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.polyacquisition.html">lib.obsolete.polyacquisition module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.warnings.html">lib.obsolete.warnings module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.xpol.html">lib.obsolete.xpol module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading"></a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qbeams.html">lib.Qbeams module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qbeams.html#lib.Qbeams.BeamFitted"><code class="docutils literal notranslate"><span class="pre">BeamFitted</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qbeams.html#lib.Qbeams.BeamGaussian"><code class="docutils literal notranslate"><span class="pre">BeamGaussian</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qbeams.html#lib.Qbeams.MultiFreqBeam"><code class="docutils literal notranslate"><span class="pre">MultiFreqBeam</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qcoaddition.html">lib.Qcoaddition module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.FocalPlane"><code class="docutils literal notranslate"><span class="pre">FocalPlane</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.FocalPlane.create_subplots"><code class="docutils literal notranslate"><span class="pre">FocalPlane.create_subplots()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.FocalPlane.create_subplots_healpix"><code class="docutils literal notranslate"><span class="pre">FocalPlane.create_subplots_healpix()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.MySplineFitting"><code class="docutils literal notranslate"><span class="pre">MySplineFitting</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.MySplineFitting.get_spline_tofit"><code class="docutils literal notranslate"><span class="pre">MySplineFitting.get_spline_tofit()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.MySplineFitting.with_alpha"><code class="docutils literal notranslate"><span class="pre">MySplineFitting.with_alpha()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes"><code class="docutils literal notranslate"><span class="pre">Pip1Tes</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.decorel_azel"><code class="docutils literal notranslate"><span class="pre">Pip1Tes.decorel_azel()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.get_chunks"><code class="docutils literal notranslate"><span class="pre">Pip1Tes.get_chunks()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.healpix_map_"><code class="docutils literal notranslate"><span class="pre">Pip1Tes.healpix_map_()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.identify_scans"><code class="docutils literal notranslate"><span class="pre">Pip1Tes.identify_scans()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.linear_rescale_chunks"><code class="docutils literal notranslate"><span class="pre">Pip1Tes.linear_rescale_chunks()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.run"><code class="docutils literal notranslate"><span class="pre">Pip1Tes.run()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.PipAllTes"><code class="docutils literal notranslate"><span class="pre">PipAllTes</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html#lib.Qcoaddition.PipAllTes.run"><code class="docutils literal notranslate"><span class="pre">PipAllTes.run()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.QdataHandling.html">lib.QdataHandling module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis.demodulation"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis.demodulation()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis.filter_data"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis.filter_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis.fullanalysis"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis.fullanalysis()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis.make_flat_map"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis.make_flat_map()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis.make_healpix_map"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis.make_healpix_map()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis.remove_noise"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis.remove_noise()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis.save_azel_mymap"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis.save_azel_mymap()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.BeamMapsAnalysis.save_azel_mymap_hp"><code class="docutils literal notranslate"><span class="pre">BeamMapsAnalysis.save_azel_mymap_hp()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.DirtyMaps"><code class="docutils literal notranslate"><span class="pre">DirtyMaps</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.DirtyMaps.filter_data"><code class="docutils literal notranslate"><span class="pre">DirtyMaps.filter_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.DirtyMaps.make_flat_map"><code class="docutils literal notranslate"><span class="pre">DirtyMaps.make_flat_map()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.DirtyMaps.make_healpix_map"><code class="docutils literal notranslate"><span class="pre">DirtyMaps.make_healpix_map()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.DirtyMaps.make_healpix_map_radec"><code class="docutils literal notranslate"><span class="pre">DirtyMaps.make_healpix_map_radec()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.DirtyMaps.remove_noise"><code class="docutils literal notranslate"><span class="pre">DirtyMaps.remove_noise()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.cut_tod"><code class="docutils literal notranslate"><span class="pre">cut_tod()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.display_healpix_map"><code class="docutils literal notranslate"><span class="pre">display_healpix_map()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.get_mode"><code class="docutils literal notranslate"><span class="pre">get_mode()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.hf_noise_estimate"><code class="docutils literal notranslate"><span class="pre">hf_noise_estimate()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.identify_scans"><code class="docutils literal notranslate"><span class="pre">identify_scans()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.QdataHandling.html#lib.QdataHandling.plot_data_on_FP"><code class="docutils literal notranslate"><span class="pre">plot_data_on_FP()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qdictionary.html">lib.Qdictionary module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qdictionary.html#lib.Qdictionary.ask_for"><code class="docutils literal notranslate"><span class="pre">ask_for()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qdictionary.html#lib.Qdictionary.qubicDict"><code class="docutils literal notranslate"><span class="pre">qubicDict</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html#lib.Qdictionary.qubicDict.cmp"><code class="docutils literal notranslate"><span class="pre">qubicDict.cmp()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html#lib.Qdictionary.qubicDict.readFromFile"><code class="docutils literal notranslate"><span class="pre">qubicDict.readFromFile()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html#lib.Qdictionary.qubicDict.read_from_file"><code class="docutils literal notranslate"><span class="pre">qubicDict.read_from_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html#lib.Qdictionary.qubicDict.writeToFile"><code class="docutils literal notranslate"><span class="pre">qubicDict.writeToFile()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html#lib.Qdictionary.qubicDict.write_to_file"><code class="docutils literal notranslate"><span class="pre">qubicDict.write_to_file()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qfit.html">lib.Qfit module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qfit.html#lib.Qfit.FitEllSpace"><code class="docutils literal notranslate"><span class="pre">FitEllSpace</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfit.html#lib.Qfit.FitEllSpace.log_prior"><code class="docutils literal notranslate"><span class="pre">FitEllSpace.log_prior()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfit.html#lib.Qfit.FitEllSpace.loglikelihood"><code class="docutils literal notranslate"><span class="pre">FitEllSpace.loglikelihood()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfit.html#lib.Qfit.FitEllSpace.run"><code class="docutils literal notranslate"><span class="pre">FitEllSpace.run()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qfoldertools.html">lib.Qfoldertools module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qfoldertools.html#lib.Qfoldertools.MergeAllFiles"><code class="docutils literal notranslate"><span class="pre">MergeAllFiles</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qfoldertools.html#lib.Qfoldertools.create_folder_if_not_exists"><code class="docutils literal notranslate"><span class="pre">create_folder_if_not_exists()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qfoldertools.html#lib.Qfoldertools.do_gif"><code class="docutils literal notranslate"><span class="pre">do_gif()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qfoldertools.html#lib.Qfoldertools.open_data"><code class="docutils literal notranslate"><span class="pre">open_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qfoldertools.html#lib.Qfoldertools.save_data"><code class="docutils literal notranslate"><span class="pre">save_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qfoldertools.html#lib.Qfoldertools.yaml_to_txt"><code class="docutils literal notranslate"><span class="pre">yaml_to_txt()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qforecast.html">lib.Qforecast module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qforecast.html#lib.Qforecast.AnalyticalForecast"><code class="docutils literal notranslate"><span class="pre">AnalyticalForecast</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qforecast.html#lib.Qforecast.AnalyticalForecast.main"><code class="docutils literal notranslate"><span class="pre">AnalyticalForecast.main()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qforecast.html#lib.Qforecast.NoiseEquivalentTemperature"><code class="docutils literal notranslate"><span class="pre">NoiseEquivalentTemperature</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qhorns.html">lib.Qhorns module</a></li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qmpi_tools.html">lib.Qmpi_tools module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qmpi_tools.html#lib.Qmpi_tools.MpiTools"><code class="docutils literal notranslate"><span class="pre">MpiTools</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qmpi_tools.html#lib.Qmpi_tools.MpiTools.get_random_value"><code class="docutils literal notranslate"><span class="pre">MpiTools.get_random_value()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qmpi_tools.html#lib.Qmpi_tools.join_data"><code class="docutils literal notranslate"><span class="pre">join_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qmpi_tools.html#lib.Qmpi_tools.join_toward_rank"><code class="docutils literal notranslate"><span class="pre">join_toward_rank()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qmpi_tools.html#lib.Qmpi_tools.split_data"><code class="docutils literal notranslate"><span class="pre">split_data()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qplotters.html">lib.Qplotters module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qplotters.html#lib.Qplotters.Allplots"><code class="docutils literal notranslate"><span class="pre">Allplots()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qplotters.html#lib.Qplotters.FiltFreqResp"><code class="docutils literal notranslate"><span class="pre">FiltFreqResp()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qplotters.html#lib.Qplotters.FoldedFiltTES"><code class="docutils literal notranslate"><span class="pre">FoldedFiltTES()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qplotters.html#lib.Qplotters.FoldedTESFreeFit"><code class="docutils literal notranslate"><span class="pre">FoldedTESFreeFit()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qplotters.html#lib.Qplotters.FreqResp"><code class="docutils literal notranslate"><span class="pre">FreqResp()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qplotters.html#lib.Qplotters.TESvsThermo"><code class="docutils literal notranslate"><span class="pre">TESvsThermo()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qplotters.html#lib.Qplotters.TimeSigPlot"><code class="docutils literal notranslate"><span class="pre">TimeSigPlot()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qripples.html">lib.Qripples module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qripples.html#lib.Qripples.BeamGaussianRippled"><code class="docutils literal notranslate"><span class="pre">BeamGaussianRippled</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qripples.html#lib.Qripples.ConvolutionRippledGaussianOperator"><code class="docutils literal notranslate"><span class="pre">ConvolutionRippledGaussianOperator</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qripples.html#lib.Qripples.ConvolutionRippledGaussianOperator.direct"><code class="docutils literal notranslate"><span class="pre">ConvolutionRippledGaussianOperator.direct()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qsamplings.html">lib.Qsamplings module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling"><code class="docutils literal notranslate"><span class="pre">QubicSampling</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.azimuth"><code class="docutils literal notranslate"><span class="pre">QubicSampling.azimuth</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.elevation"><code class="docutils literal notranslate"><span class="pre">QubicSampling.elevation</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.pitch"><code class="docutils literal notranslate"><span class="pre">QubicSampling.pitch</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.angle_hwp"><code class="docutils literal notranslate"><span class="pre">QubicSampling.angle_hwp</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.time"><code class="docutils literal notranslate"><span class="pre">QubicSampling.time</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.date_obs"><code class="docutils literal notranslate"><span class="pre">QubicSampling.date_obs</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.period"><code class="docutils literal notranslate"><span class="pre">QubicSampling.period</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.latitude"><code class="docutils literal notranslate"><span class="pre">QubicSampling.latitude</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.longitude"><code class="docutils literal notranslate"><span class="pre">QubicSampling.longitude</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.DEFAULT_DATE_OBS"><code class="docutils literal notranslate"><span class="pre">QubicSampling.DEFAULT_DATE_OBS</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.DEFAULT_LATITUDE"><code class="docutils literal notranslate"><span class="pre">QubicSampling.DEFAULT_LATITUDE</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.DEFAULT_LONGITUDE"><code class="docutils literal notranslate"><span class="pre">QubicSampling.DEFAULT_LONGITUDE</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.DEFAULT_PERIOD"><code class="docutils literal notranslate"><span class="pre">QubicSampling.DEFAULT_PERIOD</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.cartesian_galactic2instrument"><code class="docutils literal notranslate"><span class="pre">QubicSampling.cartesian_galactic2instrument</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.cartesian_horizontal2instrument"><code class="docutils literal notranslate"><span class="pre">QubicSampling.cartesian_horizontal2instrument</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.cartesian_instrument2galactic"><code class="docutils literal notranslate"><span class="pre">QubicSampling.cartesian_instrument2galactic</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.cartesian_instrument2horizontal"><code class="docutils literal notranslate"><span class="pre">QubicSampling.cartesian_instrument2horizontal</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.QubicSampling.healpix"><code class="docutils literal notranslate"><span class="pre">QubicSampling.healpix()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.create_random_pointings"><code class="docutils literal notranslate"><span class="pre">create_random_pointings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.create_repeat_pointings"><code class="docutils literal notranslate"><span class="pre">create_repeat_pointings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.create_sweeping_pointings"><code class="docutils literal notranslate"><span class="pre">create_sweeping_pointings()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.equ2gal"><code class="docutils literal notranslate"><span class="pre">equ2gal()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.equ2hor"><code class="docutils literal notranslate"><span class="pre">equ2hor()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.gal2equ"><code class="docutils literal notranslate"><span class="pre">gal2equ()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.gal2hor"><code class="docutils literal notranslate"><span class="pre">gal2hor()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.get_pointing"><code class="docutils literal notranslate"><span class="pre">get_pointing()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.hor2equ"><code class="docutils literal notranslate"><span class="pre">hor2equ()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qsamplings.html#lib.Qsamplings.hor2gal"><code class="docutils literal notranslate"><span class="pre">hor2gal()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qscene.html">lib.Qscene module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qscene.html#lib.Qscene.QubicScene"><code class="docutils literal notranslate"><span class="pre">QubicScene</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.QskySim.html">lib.QskySim module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.QskySim.html#lib.QskySim.Qubic_sky"><code class="docutils literal notranslate"><span class="pre">Qubic_sky</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html#lib.QskySim.Qubic_sky.create_noise_maps"><code class="docutils literal notranslate"><span class="pre">Qubic_sky.create_noise_maps()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html#lib.QskySim.Qubic_sky.get_fullsky_convolved_maps"><code class="docutils literal notranslate"><span class="pre">Qubic_sky.get_fullsky_convolved_maps()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html#lib.QskySim.Qubic_sky.get_partial_sky_maps_withnoise"><code class="docutils literal notranslate"><span class="pre">Qubic_sky.get_partial_sky_maps_withnoise()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html#lib.QskySim.Qubic_sky.smoothing"><code class="docutils literal notranslate"><span class="pre">Qubic_sky.smoothing()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html#lib.QskySim.Qubic_sky.theoretical_noise_maps"><code class="docutils literal notranslate"><span class="pre">Qubic_sky.theoretical_noise_maps()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.QskySim.html#lib.QskySim.sky"><code class="docutils literal notranslate"><span class="pre">sky</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html#lib.QskySim.sky.get_simple_sky_map"><code class="docutils literal notranslate"><span class="pre">sky.get_simple_sky_map()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qspectra.html">lib.Qspectra module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectra"><code class="docutils literal notranslate"><span class="pre">Spectra</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectra.open_file"><code class="docutils literal notranslate"><span class="pre">Spectra.open_file()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectra.run"><code class="docutils literal notranslate"><span class="pre">Spectra.run()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold"><code class="docutils literal notranslate"><span class="pre">Spectrumold</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold.compute_array_power_spectra"><code class="docutils literal notranslate"><span class="pre">Spectrumold.compute_array_power_spectra()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold.compute_auto_spectrum"><code class="docutils literal notranslate"><span class="pre">Spectrumold.compute_auto_spectrum()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold.compute_cross_spectrum"><code class="docutils literal notranslate"><span class="pre">Spectrumold.compute_cross_spectrum()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold.compute_power_spectra"><code class="docutils literal notranslate"><span class="pre">Spectrumold.compute_power_spectra()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold.get_dict"><code class="docutils literal notranslate"><span class="pre">Spectrumold.get_dict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold.get_ultrawideband_config"><code class="docutils literal notranslate"><span class="pre">Spectrumold.get_ultrawideband_config()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold.run"><code class="docutils literal notranslate"><span class="pre">Spectrumold.run()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html#lib.Qspectra.Spectrumold.save_data"><code class="docutils literal notranslate"><span class="pre">Spectrumold.save_data()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="lib.Qutilities.html">lib.Qutilities module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qutilities.html#lib.Qutilities.join_data"><code class="docutils literal notranslate"><span class="pre">join_data()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qutilities.html#lib.Qutilities.join_toward_rank"><code class="docutils literal notranslate"><span class="pre">join_toward_rank()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qutilities.html#lib.Qutilities.progress_bar"><code class="docutils literal notranslate"><span class="pre">progress_bar()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="lib.Qutilities.html#lib.Qutilities.split_data"><code class="docutils literal notranslate"><span class="pre">split_data()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="qubicsoft documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.Calibration.html" class="btn btn-neutral float-right" title="lib.Calibration package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

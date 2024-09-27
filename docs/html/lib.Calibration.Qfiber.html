@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Calibration.Qfiber module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.Calibration.Qlinearity module" href="lib.Calibration.Qlinearity.html" />
+    <link rel="prev" title="lib.Calibration.Qdemodulation module" href="lib.Calibration.Qdemodulation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="lib.Calibration.html">lib.Calibration package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="lib.Calibration.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.html">lib.Fitting package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.html">lib.InstrumentModel package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.html">lib.MapMaking package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.html">lib.obsolete package</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.html#submodules">Submodules</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+          <li class="breadcrumb-item"><a href="lib.Calibration.html">lib.Calibration package</a></li>
+      <li class="breadcrumb-item active">lib.Calibration.Qfiber module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.Calibration.Qfiber.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.Calibration.Qfiber">
+<span id="lib-calibration-qfiber-module"></span><h1>lib.Calibration.Qfiber module<a class="headerlink" href="#module-lib.Calibration.Qfiber" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.Chi2Implement">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">Chi2Implement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">functname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covarin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#Chi2Implement"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.Chi2Implement" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#lib.Calibration.Qfiber.Chi2Minimizer" title="lib.Calibration.Qfiber.Chi2Minimizer"><code class="xref py py-class docutils literal notranslate"><span class="pre">Chi2Minimizer</span></code></a></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">__call__</span></code>(*pars[, extra_args])</p></td>
+<td><p>Call self as a function.</p></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.Chi2Minimizer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">Chi2Minimizer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">functname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covarin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invcovar</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#Chi2Minimizer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.Chi2Minimizer" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Parent classes with the model to minimize</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">__call__</span></code>(*pars[, extra_args])</p></td>
+<td><p>Call self as a function.</p></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.MyChi2">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">MyChi2</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covarin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">functname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invcovar</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">diag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#MyChi2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.MyChi2" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class defining the minimizer and the data</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">__call__</span></code>(*pars[, extra_args])</p></td>
+<td><p>Call self as a function.</p></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.MyChi2_nocov">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">MyChi2_nocov</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invcovarin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">functname</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#MyChi2_nocov"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.MyChi2_nocov" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class defining the minimizer and the data</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">__call__</span></code>(*pars)</p></td>
+<td><p>Call self as a function.</p></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.butter_bandpass">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">butter_bandpass</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lowcut</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">highcut</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#butter_bandpass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.butter_bandpass" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lowcut</strong> (<em>scalar</em>)</p></li>
+<li><p><strong>highcut</strong> (<em>scalar</em>)</p></li>
+<li><p><strong>fs</strong></p></li>
+<li><p><strong>order</strong> (<em>int</em>) – order of the filter</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>b, a</strong> – Numerator (b) and denominator (a) polynomials of the IIR filter.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(ndarray, ndarray)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.butter_bandpass_filter">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">butter_bandpass_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lowcut</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">highcut</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#butter_bandpass_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.butter_bandpass_filter" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>array like</em>)</p></li>
+<li><p><strong>lowcut</strong></p></li>
+<li><p><strong>highcut</strong></p></li>
+<li><p><strong>fs</strong></p></li>
+<li><p><strong>order</strong></p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>y</strong> – The output of the digital filter.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.calibrate">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">calibrate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fib</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pow_maynooth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allparams</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allerr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allok</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutparam</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cuterr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bootstrap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#calibrate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.calibrate" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fib</strong></p></li>
+<li><p><strong>pow_maynooth</strong></p></li>
+<li><p><strong>allparams</strong></p></li>
+<li><p><strong>allerr</strong></p></li>
+<li><p><strong>allok</strong></p></li>
+<li><p><strong>cutparam</strong></p></li>
+<li><p><strong>cuterr</strong></p></li>
+<li><p><strong>bootstrap</strong></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.do_minuit">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">do_minuit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covarin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">guess</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">functname=&lt;function</span> <span class="pre">thepolynomial&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fixpars=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chi2=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rangepars=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nohesse=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_chi2_ndf=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">minos=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_args=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_level=0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_diag=False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsplit=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ncallmax=10000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">precision=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#do_minuit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.do_minuit" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.exponential_filter1d">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">exponential_filter1d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">axis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'reflect'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">truncate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">power</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#exponential_filter1d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.exponential_filter1d" title="Link to this definition"></a></dt>
+<dd><p>One-dimensional Exponential filter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input</strong></p></li>
+<li><p><strong>sigma</strong> (<em>scalar</em>) – Tau of exponential kernel</p></li>
+<li><p><strong>axis</strong> (<em>int</em><em>, </em><em>optional</em>) – The axis of input along which to calculate.
+Default is -1.</p></li>
+<li><p><strong>output</strong> (<em>array</em><em> or </em><em>dtype</em><em>, </em><em>optional</em>) – The array in which to place the output, or the dtype of the returned array.
+By default an array of the same dtype as input will be created.</p></li>
+<li><p><strong>mode</strong> (<em>{‘reflect’</em><em>, </em><em>‘constant’</em><em>, </em><em>‘nearest’</em><em>, </em><em>‘mirror’</em><em>, </em><em>‘wrap’}</em><em>, </em><em>optional</em>) – The mode parameter determines how the input array is extended beyond its boundaries.
+Default is ‘reflect’.</p></li>
+<li><p><strong>cval</strong> (<em>scalar</em><em>, </em><em>optional</em>) – Value to fill past edges of input if mode is ‘constant’. Default is 0.0.</p></li>
+<li><p><strong>truncate</strong> (<em>float</em>) – Truncate the filter at this many standard deviations.
+Default is 4.0.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.filter_data">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">filter_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lowcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">highcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rebin</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">notch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#filter_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.filter_data" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.fit_all">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">fit_all</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">t,</span> <span class="pre">folded,</span> <span class="pre">av,</span> <span class="pre">initpars=None,</span> <span class="pre">fixpars=[0,</span> <span class="pre">0,</span> <span class="pre">0,</span> <span class="pre">0],</span> <span class="pre">stop_each=False,</span> <span class="pre">functname=&lt;function</span> <span class="pre">simsig&gt;,</span> <span class="pre">rangepars=None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#fit_all"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.fit_all" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>t</strong></p></li>
+<li><p><strong>folded</strong></p></li>
+<li><p><strong>av</strong></p></li>
+<li><p><strong>initpars</strong></p></li>
+<li><p><strong>fixpars</strong></p></li>
+<li><p><strong>stop_each</strong></p></li>
+<li><p><strong>functname</strong></p></li>
+<li><p><strong>rangepars</strong></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.fit_average">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">fit_average</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">t,</span> <span class="pre">folded,</span> <span class="pre">fff,</span> <span class="pre">dc,</span> <span class="pre">fib,</span> <span class="pre">Vtes,</span> <span class="pre">initpars=None,</span> <span class="pre">fixpars=[0,</span> <span class="pre">0,</span> <span class="pre">0,</span> <span class="pre">0],</span> <span class="pre">doplot=True,</span> <span class="pre">functname=&lt;function</span> <span class="pre">simsig&gt;,</span> <span class="pre">clear=True,</span> <span class="pre">name='fib'</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#fit_average"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.fit_average" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>t</strong></p></li>
+<li><p><strong>folded</strong></p></li>
+<li><p><strong>fff</strong> (<em>float</em>) – Modulation frequency of the external source.</p></li>
+<li><p><strong>dc</strong> (<em>float</em>) – Duty cycle of the modulation.</p></li>
+<li><p><strong>fib</strong></p></li>
+<li><p><strong>Vtes</strong></p></li>
+<li><p><strong>initpars</strong></p></li>
+<li><p><strong>fixpars</strong></p></li>
+<li><p><strong>doplot</strong> (<em>bool</em>) – If true make the plot.</p></li>
+<li><p><strong>functname</strong></p></li>
+<li><p><strong>clear</strong> (<em>bool</em>) – If true, clear the window before plotting.</p></li>
+<li><p><strong>name</strong></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.fold_data">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">fold_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dd</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nbins</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lowcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">highcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">notch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rebin</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">median</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_noise_harmonics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">silent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#fold_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.fold_data" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>time</strong> (<em>array</em>)</p></li>
+<li><p><strong>dd</strong> (<em>array</em>) – Data signal.</p></li>
+<li><p><strong>period</strong> (<em>float</em>) – Data will be folded on this period.</p></li>
+<li><p><strong>lowcut</strong> (<em>If highcut is given but no</em>) – Low cut for the filter.</p></li>
+<li><p><strong>highcut</strong> (<em>If lowcut is given but no</em>) – High cut for the filter.</p></li>
+<li><p><strong>given</strong> (<em>If none</em><em> of </em><em>them is</em>)</p></li>
+<li><p><strong>applied.</strong> (<em>no cut frequency filter is</em>)</p></li>
+<li><p><strong>highcut</strong></p></li>
+<li><p><strong>applied.</strong></p></li>
+<li><p><strong>lowcut</strong></p></li>
+<li><p><strong>applied.</strong></p></li>
+<li><p><strong>given</strong></p></li>
+<li><p><strong>applied.</strong></p></li>
+<li><p><strong>used.</strong> (<em>In any case notch filter can still be</em>)</p></li>
+<li><p><strong>nbins</strong></p></li>
+<li><p><strong>notch</strong></p></li>
+<li><p><strong>return_error</strong></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.image_asics">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">image_asics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">all1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#image_asics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.image_asics" title="Link to this definition"></a></dt>
+<dd><p>Return an image of detectors on the focal plane.
+Each asic has 124 TES and 4 thermometers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data1</strong></p></li>
+<li><p><strong>data2</strong></p></li>
+<li><p><strong>all1</strong> (<em>array</em>) – signal from 2 asics (256 detectors)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.isfloat">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">isfloat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">s</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#isfloat"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.isfloat" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.meancut">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">meancut</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsig</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">med</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#meancut"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.meancut" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>array like</em>)</p></li>
+<li><p><strong>nsig</strong> (<em>float</em>) – Lower and upper bound factor of sigma clipping.</p></li>
+<li><p><strong>med</strong> (<em>bool</em>) – If True, perform the median and not the mean.</p></li>
+<li><p><strong>disp</strong> (<em>bool</em>) – If True, return the dispersion (STD),
+if False, return the error on the mean (STD/sqrt(N))</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>The mean/median and the dispersion/error.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.notch_array">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">notch_array</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">freqs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bw</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#notch_array"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.notch_array" title="Link to this definition"></a></dt>
+<dd><p>Returns array to be used with notch_filter</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>freqs</strong> (<em>list</em>) – Frequencies to filter</p></li>
+<li><p><strong>bw</strong> (<em>scalar</em>) – The filter bandwidth</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.notch_filter">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">notch_filter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bw</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#notch_filter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.notch_filter" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong></p></li>
+<li><p><strong>f0</strong></p></li>
+<li><p><strong>bw</strong></p></li>
+<li><p><strong>fs</strong></p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>y</strong> – Output of the notch filter</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.power_spectrum">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">power_spectrum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rebin</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#power_spectrum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.power_spectrum" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.printnow">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">printnow</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">truc</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#printnow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.printnow" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.profile">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nbins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dispersion</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">median</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutbad</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rebin_as_well</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.profile" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.qgrid">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">qgrid</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#qgrid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.qgrid" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.qs2array">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">qs2array</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FREQ_SAMPLING</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timerange</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">asic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#qs2array"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.qs2array" title="Link to this definition"></a></dt>
+<dd><p>Loads qubic instance to create ‘dd’ which is TOD for each TES
+Also normalises raw data
+Also returns ‘time’ which is linear time array
+Can also specify a timerange</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> (<em>directory containing the QubicStudio dataset</em>)</p></li>
+<li><p><strong>FREQ_SAMPLING</strong> (<em>this argument is kept for backwards compatibility</em>) – frequency sampling is given by the qubicpack qubicfp object</p></li>
+<li><p><strong>timerange</strong> (<em>array</em>) – Time range, low and high boundaries</p></li>
+<li><p><strong>Returns</strong> (<em>time array</em><em>, </em><em>data array</em><em>, </em><em>qubicfp object</em>)</p></li>
+<li><p><strong>-------</strong></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.read_hkintern">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">read_hkintern</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">basedir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thefieldname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#read_hkintern"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.read_hkintern" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>basedir</strong> (<em>str</em>) – directory of the file</p></li>
+<li><p><strong>thefieldname</strong> (<em>str</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>newdate</strong> (<em>array</em>) – New time array of te measurement</p></li>
+<li><p><strong>hk</strong> (<em>array</em>) – Angle position given by the encoder (number of encoder steps).</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.run_asic">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">run_asic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fpobj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">idnum</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Vtes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fff</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">asic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reselect_ok</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lowcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">highcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nbins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nointeractive</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doplot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">notch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lastpassallfree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fib'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">okfile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initpars</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timerange</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">removesat</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_each</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rangepars</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#run_asic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.run_asic" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fpobj</strong> (<em>a qubicpack.qubicfp object</em>)</p></li>
+<li><p><strong>idnum</strong> (<em>fibre number</em>)</p></li>
+<li><p><strong>Vtes</strong> (<em>bias voltage</em><em> (</em><em>this is normally accessible in the qubicfp object</em><em>, </em><em>but maybe not for old data</em><em>)</em>)</p></li>
+<li><p><strong>fff</strong> (<em>float</em>) – Modulation frequency of the external source</p></li>
+<li><p><strong>dc</strong> (<em>float</em>) – Duty cycle of the modulation</p></li>
+<li><p><strong>asic</strong> (<em>the asic number</em><em> (</em><em>1</em><em> or </em><em>2</em><em>)</em>)</p></li>
+<li><p><strong>reselect_ok</strong> (<em>bool</em>) – If true, you will select the good TES one by one, if False, you will use the file created before.</p></li>
+<li><p><strong>lowcut</strong></p></li>
+<li><p><strong>highcut</strong></p></li>
+<li><p><strong>nbins</strong></p></li>
+<li><p><strong>nointeractive</strong></p></li>
+<li><p><strong>doplot</strong></p></li>
+<li><p><strong>notch</strong></p></li>
+<li><p><strong>lastpassallfree</strong></p></li>
+<li><p><strong>name</strong></p></li>
+<li><p><strong>okfile</strong></p></li>
+<li><p><strong>initpars</strong></p></li>
+<li><p><strong>timerange</strong></p></li>
+<li><p><strong>removesat</strong></p></li>
+<li><p><strong>stop_each</strong></p></li>
+<li><p><strong>rangepars</strong></p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.simsig">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">simsig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#simsig"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.simsig" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>list</em>)</p></li>
+<li><p><strong>pars</strong> (<em>list</em>) – List with 4 parameters: cycle, ctime, initial time, amplitude</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>A simulated signal.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.simsig_asym">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">simsig_asym</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#simsig_asym"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.simsig_asym" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.simsig_fringes">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">simsig_fringes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stable_time</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#simsig_fringes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.simsig_fringes" title="Link to this definition"></a></dt>
+<dd><p>Simulate a TOD signal obtained during the fringe measurement.
+This function was done to make a fit.
+:type time: 
+:param time: Time sampling.
+:type time: array
+:type stable_time: 
+:param stable_time: Stable time [s] on each step.
+:type stable_time: float
+:type params: 
+:param params: ctime (constant time response of the detector), starting time, the 6 amplitudes.
+:type params: list</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The simulated signal.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.simsig_nonorm">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">simsig_nonorm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#simsig_nonorm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.simsig_nonorm" title="Link to this definition"></a></dt>
+<dd><p>Same as simsig but without normalisation.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.statstr">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">statstr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">divide</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">median</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#statstr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.statstr" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.thepolynomial">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">thepolynomial</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#thepolynomial"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.thepolynomial" title="Link to this definition"></a></dt>
+<dd><p>Generic polynomial function</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.vec_interp">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">vec_interp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yin</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#vec_interp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.vec_interp" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.Qfiber.weighted_mean">
+<span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qfiber.</span></span><span class="sig-name descname"><span class="pre">weighted_mean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dispersion</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">renorm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qfiber.html#weighted_mean"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qfiber.weighted_mean" title="Link to this definition"></a></dt>
+<dd><p>Calculated the weighted mean of data, errors
+If dispersion is True (default) the error on the mean comes from the RMS of the data, otherwise
+the error on the weighted mean is analytically calculated from input errors</p>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.Calibration.Qdemodulation.html" class="btn btn-neutral float-left" title="lib.Calibration.Qdemodulation module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.Calibration.Qlinearity.html" class="btn btn-neutral float-right" title="lib.Calibration.Qlinearity module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

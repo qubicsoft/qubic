@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Qsamplings &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.Qsamplings</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.Qsamplings</h1><div class="highlight"><pre>
+<span></span><span class="c1"># coding: utf-8</span>
+<span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">division</span><span class="p">,</span> <span class="n">print_function</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">astropy.time</span> <span class="kn">import</span> <span class="n">Time</span><span class="p">,</span> <span class="n">TimeDelta</span>
+<span class="kn">from</span> <span class="nn">numpy.random</span> <span class="kn">import</span> <span class="n">random_sample</span> <span class="k">as</span> <span class="n">randomu</span>
+<span class="kn">from</span> <span class="nn">pyoperators</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Cartesian2SphericalOperator</span><span class="p">,</span> <span class="n">Rotation3dOperator</span><span class="p">,</span>
+    <span class="n">Spherical2CartesianOperator</span><span class="p">,</span> <span class="n">rule_manager</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">pyoperators.utils</span> <span class="kn">import</span> <span class="n">deprecated</span><span class="p">,</span> <span class="n">isscalarlike</span>
+<span class="kn">from</span> <span class="nn">pysimulators</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CartesianEquatorial2GalacticOperator</span><span class="p">,</span>
+    <span class="n">CartesianEquatorial2HorizontalOperator</span><span class="p">,</span>
+    <span class="n">CartesianHorizontal2EquatorialOperator</span><span class="p">,</span>
+    <span class="n">CartesianGalactic2EquatorialOperator</span><span class="p">,</span>
+    <span class="n">SamplingHorizontal</span><span class="p">,</span>
+    <span class="n">SphericalEquatorial2GalacticOperator</span><span class="p">,</span>
+    <span class="n">SphericalGalactic2EquatorialOperator</span><span class="p">,</span>
+    <span class="n">SphericalEquatorial2HorizontalOperator</span><span class="p">,</span>
+    <span class="n">SphericalHorizontal2EquatorialOperator</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">pysimulators.interfaces.healpy</span> <span class="kn">import</span> <span class="n">Cartesian2HealpixOperator</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;QubicSampling&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;get_pointing&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;create_random_pointings&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;create_repeat_pointings&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;create_sweeping_pointings&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;equ2gal&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;equ2hor&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;gal2equ&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;gal2hor&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;hor2equ&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;hor2gal&#39;</span><span class="p">]</span>
+
+<span class="n">DOMECLAT</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="mi">24</span> <span class="o">+</span> <span class="mf">11.</span> <span class="o">/</span> <span class="mi">60</span><span class="p">)</span> 
+<span class="n">DOMECLON</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="mi">66</span> <span class="o">+</span> <span class="mf">28.</span> <span class="o">/</span> <span class="mi">60</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="QubicSampling">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.QubicSampling">[docs]</a>
+<span class="k">class</span> <span class="nc">QubicSampling</span><span class="p">(</span><span class="n">SamplingHorizontal</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    azimuth : array-like</span>
+<span class="sd">        The pointing azimuth [degrees].</span>
+<span class="sd">    elevation : array-like</span>
+<span class="sd">        The pointing elevation [degrees].</span>
+<span class="sd">    pitch : array-like</span>
+<span class="sd">        The instrument pitch angle [degrees].</span>
+<span class="sd">    angle_hwp : array-like</span>
+<span class="sd">        The half-wave plate angle [degrees].</span>
+<span class="sd">    time : array-like</span>
+<span class="sd">        Elapsed time for each pointing since the observation start date,</span>
+<span class="sd">        in seconds.</span>
+<span class="sd">    date_obs : string or astropy.time.Time</span>
+<span class="sd">        The observation start date.</span>
+<span class="sd">    period : float</span>
+<span class="sd">        The sampling period [s].</span>
+<span class="sd">    latitude : float</span>
+<span class="sd">        Telescope latitude [degrees].</span>
+<span class="sd">    longitude : float</span>
+<span class="sd">        Telescope longitude [degrees].</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    pointing = QubicSampling(azimuth=azimuth, elevation=elevation,</span>
+<span class="sd">                             angle_hwp=angle_hwp, period=...)</span>
+<span class="sd">    pointing = QubicSampling(azimuth, elevation, pitch, angle_hwp, period=...)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">DEFAULT_DATE_OBS</span> <span class="o">=</span> <span class="s1">&#39;2016-01-01 00:00:00&#39;</span>
+    <span class="n">DEFAULT_PERIOD</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">DEFAULT_LATITUDE</span> <span class="o">=</span> <span class="n">DOMECLAT</span>
+    <span class="n">DEFAULT_LONGITUDE</span> <span class="o">=</span> <span class="n">DOMECLON</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">keywords</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+            <span class="n">angle_hwp</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">angle_hwp</span> <span class="o">=</span> <span class="n">keywords</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;angle_hwp&#39;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">SamplingHorizontal</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">angle_hwp</span><span class="o">=</span><span class="n">angle_hwp</span><span class="p">,</span> <span class="n">healpix</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                                    <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">keywords</span><span class="p">)</span>
+
+<div class="viewcode-block" id="QubicSampling.healpix">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.QubicSampling.healpix">[docs]</a>
+    <span class="k">def</span> <span class="nf">healpix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nside</span><span class="p">):</span>
+        <span class="n">time</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">date_obs</span> <span class="o">+</span> <span class="n">TimeDelta</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sec&#39;</span><span class="p">)</span>
+        <span class="n">c2h</span> <span class="o">=</span> <span class="n">Cartesian2HealpixOperator</span><span class="p">(</span><span class="n">nside</span><span class="p">)</span>
+        <span class="n">e2g</span> <span class="o">=</span> <span class="n">CartesianEquatorial2GalacticOperator</span><span class="p">()</span>
+        <span class="n">h2e</span> <span class="o">=</span> <span class="n">CartesianHorizontal2EquatorialOperator</span><span class="p">(</span>
+            <span class="s1">&#39;NE&#39;</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">latitude</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">longitude</span><span class="p">)</span>
+        <span class="n">rotation</span> <span class="o">=</span> <span class="n">c2h</span><span class="p">(</span><span class="n">e2g</span><span class="p">(</span><span class="n">h2e</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">rotation</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cartesian</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">cartesian_galactic2instrument</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the galactic-to-instrument transform.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">time</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">date_obs</span> <span class="o">+</span> <span class="n">TimeDelta</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sec&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">rule_manager</span><span class="p">(</span><span class="n">none</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">Rotation3dOperator</span><span class="p">(</span><span class="s2">&quot;ZY&#39;Z&#39;&#39;&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">azimuth</span><span class="p">,</span> <span class="mi">90</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">elevation</span><span class="p">,</span>
+                                   <span class="bp">self</span><span class="o">.</span><span class="n">pitch</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">T</span> <span class="o">*</span> \
+                <span class="n">CartesianEquatorial2HorizontalOperator</span><span class="p">(</span>
+                    <span class="s1">&#39;NE&#39;</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">latitude</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">longitude</span><span class="p">)</span> <span class="o">*</span> \
+                <span class="n">CartesianGalactic2EquatorialOperator</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">r</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">cartesian_instrument2galactic</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cartesian_galactic2instrument</span><span class="o">.</span><span class="n">I</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">cartesian_horizontal2instrument</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Return the galactic-to-instrument transform.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">time</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">date_obs</span> <span class="o">+</span> <span class="n">TimeDelta</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sec&#39;</span><span class="p">)</span>
+        <span class="k">with</span> <span class="n">rule_manager</span><span class="p">(</span><span class="n">none</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">Rotation3dOperator</span><span class="p">(</span><span class="s2">&quot;ZY&#39;Z&#39;&#39;&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">azimuth</span><span class="p">,</span> <span class="mi">90</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">elevation</span><span class="p">,</span>
+                                   <span class="bp">self</span><span class="o">.</span><span class="n">pitch</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+        <span class="k">return</span> <span class="n">r</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">cartesian_instrument2horizontal</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cartesian_horizontal2instrument</span><span class="o">.</span><span class="n">I</span></div>
+
+
+
+<span class="nd">@deprecated</span>
+<span class="k">class</span> <span class="nc">QubicPointing</span><span class="p">(</span><span class="n">QubicSampling</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="get_pointing">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.get_pointing">[docs]</a>
+<span class="k">def</span> <span class="nf">get_pointing</span><span class="p">(</span><span class="n">d</span><span class="p">):</span>
+    <span class="k">if</span> <span class="p">[</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;random_pointing&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;sweeping_pointing&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;repeat_pointing&#39;</span><span class="p">]]</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Error: you should choose one pointing&quot;</span><span class="p">)</span>
+
+    <span class="n">center</span> <span class="o">=</span> <span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;RA_center&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;DEC_center&#39;</span><span class="p">])</span>
+
+    <span class="k">if</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;random_pointing&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">create_random_pointings</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;npointings&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;dtheta&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;hwp_stepsize&#39;</span><span class="p">],</span>
+                                       <span class="n">date_obs</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;date_obs&#39;</span><span class="p">],</span> <span class="n">period</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;period&#39;</span><span class="p">],</span>
+                                       <span class="n">latitude</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;latitude&#39;</span><span class="p">],</span>
+                                       <span class="n">longitude</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;longitude&#39;</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;seed&#39;</span><span class="p">])</span>
+
+    <span class="k">elif</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;repeat_pointing&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">create_repeat_pointings</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;npointings&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;dtheta&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;nhwp_angles&#39;</span><span class="p">],</span>
+                                       <span class="n">date_obs</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;date_obs&#39;</span><span class="p">],</span> <span class="n">period</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;period&#39;</span><span class="p">],</span>
+                                       <span class="n">latitude</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;latitude&#39;</span><span class="p">],</span>
+                                       <span class="n">longitude</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;longitude&#39;</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;seed&#39;</span><span class="p">])</span>
+
+    <span class="k">elif</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;sweeping_pointing&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">create_sweeping_pointings</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;duration&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;period&#39;</span><span class="p">],</span>
+                                         <span class="n">d</span><span class="p">[</span><span class="s1">&#39;angspeed&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;delta_az&#39;</span><span class="p">],</span>
+                                         <span class="n">d</span><span class="p">[</span><span class="s1">&#39;nsweeps_per_elevation&#39;</span><span class="p">],</span>
+                                         <span class="n">d</span><span class="p">[</span><span class="s1">&#39;angspeed_psi&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;maxpsi&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;hwp_stepsize&#39;</span><span class="p">],</span>
+                                         <span class="n">date_obs</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;date_obs&#39;</span><span class="p">],</span>
+                                         <span class="n">latitude</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;latitude&#39;</span><span class="p">],</span>
+                                         <span class="n">longitude</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;longitude&#39;</span><span class="p">],</span>
+                                         <span class="n">fix_azimuth</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;fix_azimuth&#39;</span><span class="p">],</span> <span class="n">random_hwp</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;random_hwp&#39;</span><span class="p">])</span></div>
+
+
+
+<div class="viewcode-block" id="create_random_pointings">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.create_random_pointings">[docs]</a>
+<span class="k">def</span> <span class="nf">create_random_pointings</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">npointings</span><span class="p">,</span> <span class="n">dtheta</span><span class="p">,</span> <span class="n">hwp_stepsize</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                            <span class="n">period</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">latitude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">longitude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return pointings randomly and uniformly distributed in a spherical cap.</span>
+
+<span class="sd">    1) Creates random coordinates theta, phi. Range: 0 &lt; theta &lt; dtheta, 0 &lt; phi &lt; 360 </span>
+<span class="sd">    (then are converted from spherical to cartesian coordinates), </span>
+<span class="sd">    2) It rotates the points to center them in direction (RA, DEC) using Rotation3dOperator </span>
+<span class="sd">    (equatorial reference system)</span>
+<span class="sd">    3) Convertion: Equatorial to Horizontal reference system </span>
+<span class="sd">    (using CartesianEquatorial2HorizontalOperator&#39;s operator) </span>
+<span class="sd">    4) Back to cartesian coordinates (using Cartesian2SphericalOperator) </span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    center : 2-tuple</span>
+<span class="sd">        The R.A. and declination of the center of the FOV, in degrees.</span>
+<span class="sd">    npointings : int</span>
+<span class="sd">        The number of requested pointings</span>
+<span class="sd">    dtheta : float</span>
+<span class="sd">        The maximum angular distance to the center.</span>
+<span class="sd">    hwp_stepsize : float</span>
+<span class="sd">        Step angle size for the HWP.</span>
+<span class="sd">    date_obs : str or astropy.time.Time, optional</span>
+<span class="sd">        The starting date of the observation (UTC).</span>
+<span class="sd">    period : float, optional</span>
+<span class="sd">        The sampling period of the pointings, in seconds.</span>
+<span class="sd">    latitude : float, optional</span>
+<span class="sd">        The observer&#39;s latitude [degrees]. Default is DOMEC&#39;s.</span>
+<span class="sd">    longitude : float, optional</span>
+<span class="sd">        The observer&#39;s longitude [degrees]. Default is DOMEC&#39;s.</span>
+<span class="sd">    seed : int</span>
+<span class="sd">        Random seed.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+
+    <span class="n">cosdtheta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">dtheta</span><span class="p">))</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">cosdtheta</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">cosdtheta</span><span class="p">)</span> <span class="o">*</span> <span class="n">r</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">npointings</span><span class="p">)))</span>
+    <span class="n">phi</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">npointings</span><span class="p">)</span> <span class="o">*</span> <span class="mi">360</span>
+    <span class="n">pitch</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">npointings</span><span class="p">)</span> <span class="o">*</span> <span class="mi">360</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">QubicSampling</span><span class="p">(</span>
+        <span class="n">npointings</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">date_obs</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="n">period</span><span class="p">,</span> <span class="n">latitude</span><span class="o">=</span><span class="n">latitude</span><span class="p">,</span>
+        <span class="n">longitude</span><span class="o">=</span><span class="n">longitude</span><span class="p">)</span>
+    <span class="n">time</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">date_obs</span> <span class="o">+</span> <span class="n">TimeDelta</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sec&#39;</span><span class="p">)</span>
+    <span class="n">c2s</span> <span class="o">=</span> <span class="n">Cartesian2SphericalOperator</span><span class="p">(</span><span class="s1">&#39;azimuth,elevation&#39;</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">e2h</span> <span class="o">=</span> <span class="n">CartesianEquatorial2HorizontalOperator</span><span class="p">(</span>
+        <span class="s1">&#39;NE&#39;</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">latitude</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">longitude</span><span class="p">)</span>
+    <span class="n">rot</span> <span class="o">=</span> <span class="n">Rotation3dOperator</span><span class="p">(</span><span class="s2">&quot;ZY&#39;&quot;</span><span class="p">,</span> <span class="n">center</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">90</span> <span class="o">-</span> <span class="n">center</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">s2c</span> <span class="o">=</span> <span class="n">Spherical2CartesianOperator</span><span class="p">(</span><span class="s1">&#39;zenith,azimuth&#39;</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">rotation</span> <span class="o">=</span> <span class="n">c2s</span><span class="p">(</span><span class="n">e2h</span><span class="p">(</span><span class="n">rot</span><span class="p">(</span><span class="n">s2c</span><span class="p">)))</span>
+    <span class="n">coords</span> <span class="o">=</span> <span class="n">rotation</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="n">theta</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">phi</span><span class="o">.</span><span class="n">T</span><span class="p">])</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">azimuth</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">elevation</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">pitch</span> <span class="o">=</span> <span class="n">pitch</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">fix_az</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">angle_hwp</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="mi">90</span> <span class="o">/</span> <span class="n">hwp_stepsize</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">npointings</span><span class="p">)</span> <span class="o">*</span> <span class="n">hwp_stepsize</span>
+    <span class="k">return</span> <span class="n">p</span></div>
+
+
+
+<div class="viewcode-block" id="create_repeat_pointings">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.create_repeat_pointings">[docs]</a>
+<span class="k">def</span> <span class="nf">create_repeat_pointings</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">npointings</span><span class="p">,</span> <span class="n">dtheta</span><span class="p">,</span> <span class="n">nhwp_angles</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                            <span class="n">period</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">latitude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">longitude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return pointings randomly and uniformly distributed in a spherical cap. </span>
+<span class="sd">    The same pointing is repeated nhwp_angles times with a different</span>
+<span class="sd">    hwp angle each time. </span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    center : 2-tuple</span>
+<span class="sd">        The R.A. and declination of the center of the FOV, in degrees.</span>
+<span class="sd">    npointings : int</span>
+<span class="sd">        The number of requested pointings</span>
+<span class="sd">    dtheta : float</span>
+<span class="sd">        The maximum angular distance to the center.</span>
+<span class="sd">    nhwp_angles : int</span>
+<span class="sd">        The number of HWP angles used.</span>
+<span class="sd">    date_obs : str or astropy.time.Time, optional</span>
+<span class="sd">        The starting date of the observation (UTC).</span>
+<span class="sd">    period : float, optional</span>
+<span class="sd">        The sampling period of the pointings, in seconds.</span>
+<span class="sd">    latitude : float, optional</span>
+<span class="sd">        The observer&#39;s latitude [degrees]. Default is DOMEC&#39;s.</span>
+<span class="sd">    longitude : float, optional</span>
+<span class="sd">        The observer&#39;s longitude [degrees]. Default is DOMEC&#39;s.</span>
+<span class="sd">    seed : int</span>
+<span class="sd">        Random seed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">RandomState</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">nrandom</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">int</span><span class="p">(</span><span class="n">npointings</span> <span class="o">/</span> <span class="n">nhwp_angles</span><span class="p">)</span>  <span class="c1"># number of real random pointings</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;You asked </span><span class="si">{0}</span><span class="s1"> pointings with repeat strategy so I will provide </span><span class="si">{1}</span><span class="s1"> pointings &#39;</span>
+          <span class="s1">&#39;repeated </span><span class="si">{2}</span><span class="s1"> times.&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">npointings</span><span class="p">,</span> <span class="n">nrandom</span><span class="p">,</span> <span class="n">nhwp_angles</span><span class="p">))</span>
+
+    <span class="c1"># Creation of nrandom pointing </span>
+    <span class="n">cosdtheta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">dtheta</span><span class="p">))</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">cosdtheta</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">cosdtheta</span><span class="p">)</span> <span class="o">*</span> <span class="n">r</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">nrandom</span><span class="p">)))</span>
+    <span class="n">phi</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">nrandom</span><span class="p">)</span> <span class="o">*</span> <span class="mi">360</span>
+    <span class="n">pitch</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="n">nrandom</span><span class="p">)</span> <span class="o">*</span> <span class="mi">360</span>
+
+    <span class="n">p</span> <span class="o">=</span> <span class="n">QubicSampling</span><span class="p">(</span>
+        <span class="n">nrandom</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">date_obs</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="n">period</span><span class="p">,</span> <span class="n">latitude</span><span class="o">=</span><span class="n">latitude</span><span class="p">,</span>
+        <span class="n">longitude</span><span class="o">=</span><span class="n">longitude</span><span class="p">)</span>
+
+    <span class="n">time</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">date_obs</span> <span class="o">+</span> <span class="n">TimeDelta</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sec&#39;</span><span class="p">)</span>
+
+    <span class="n">c2s</span> <span class="o">=</span> <span class="n">Cartesian2SphericalOperator</span><span class="p">(</span><span class="s1">&#39;azimuth,elevation&#39;</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">e2h</span> <span class="o">=</span> <span class="n">CartesianEquatorial2HorizontalOperator</span><span class="p">(</span>
+        <span class="s1">&#39;NE&#39;</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">latitude</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">longitude</span><span class="p">)</span>
+    <span class="n">rot</span> <span class="o">=</span> <span class="n">Rotation3dOperator</span><span class="p">(</span><span class="s2">&quot;ZY&#39;&quot;</span><span class="p">,</span> <span class="n">center</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">90</span> <span class="o">-</span> <span class="n">center</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">s2c</span> <span class="o">=</span> <span class="n">Spherical2CartesianOperator</span><span class="p">(</span><span class="s1">&#39;zenith,azimuth&#39;</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">rotation</span> <span class="o">=</span> <span class="n">c2s</span><span class="p">(</span><span class="n">e2h</span><span class="p">(</span><span class="n">rot</span><span class="p">(</span><span class="n">s2c</span><span class="p">)))</span>
+    <span class="n">coords</span> <span class="o">=</span> <span class="n">rotation</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="n">theta</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">phi</span><span class="o">.</span><span class="n">T</span><span class="p">])</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+
+    <span class="n">p</span><span class="o">.</span><span class="n">azimuth</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">elevation</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">pitch</span> <span class="o">=</span> <span class="n">pitch</span>
+    <span class="n">p</span><span class="o">.</span><span class="n">fix_az</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="c1"># Replication of the same pointing with others fix hwp angles</span>
+    <span class="n">pp</span> <span class="o">=</span> <span class="n">QubicSampling</span><span class="p">(</span>
+        <span class="n">nrandom</span> <span class="o">*</span> <span class="n">nhwp_angles</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">date_obs</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="n">period</span><span class="p">,</span> <span class="n">latitude</span><span class="o">=</span><span class="n">latitude</span><span class="p">,</span>
+        <span class="n">longitude</span><span class="o">=</span><span class="n">longitude</span><span class="p">)</span>
+
+    <span class="n">pp</span><span class="o">.</span><span class="n">azimuth</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">azimuth</span><span class="p">,</span> <span class="n">nhwp_angles</span><span class="p">)</span>
+    <span class="n">pp</span><span class="o">.</span><span class="n">elevation</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">elevation</span><span class="p">,</span> <span class="n">nhwp_angles</span><span class="p">)</span>
+    <span class="n">pp</span><span class="o">.</span><span class="n">pitch</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">pitch</span><span class="p">,</span> <span class="n">nhwp_angles</span><span class="p">)</span>
+    <span class="n">pp</span><span class="o">.</span><span class="n">time</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">nhwp_angles</span><span class="p">)</span>
+    <span class="n">pp</span><span class="o">.</span><span class="n">angle_hwp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">nrandom</span> <span class="o">*</span> <span class="n">nhwp_angles</span><span class="p">)</span>
+    <span class="n">pp</span><span class="o">.</span><span class="n">fix_az</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">for</span> <span class="n">hwp</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nhwp_angles</span><span class="p">):</span>
+        <span class="n">pp</span><span class="o">.</span><span class="n">angle_hwp</span><span class="p">[</span><span class="n">hwp</span> <span class="o">*</span> <span class="n">nrandom</span><span class="p">:</span> <span class="p">(</span><span class="n">hwp</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">nrandom</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">hwp</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="p">(</span><span class="n">nhwp_angles</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)))</span>
+
+    <span class="k">return</span> <span class="n">pp</span></div>
+
+
+
+<div class="viewcode-block" id="create_sweeping_pointings">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.create_sweeping_pointings">[docs]</a>
+<span class="k">def</span> <span class="nf">create_sweeping_pointings</span><span class="p">(</span>
+        <span class="n">center</span><span class="p">,</span> <span class="n">duration</span><span class="p">,</span> <span class="n">period</span><span class="p">,</span> <span class="n">angspeed</span><span class="p">,</span> <span class="n">delta_az</span><span class="p">,</span> <span class="n">nsweeps_per_elevation</span><span class="p">,</span>
+        <span class="n">angspeed_psi</span><span class="p">,</span> <span class="n">maxpsi</span><span class="p">,</span> <span class="n">hwp_stepsize</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">latitude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">longitude</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fix_azimuth</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">random_hwp</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return pointings according to the sweeping strategy:</span>
+<span class="sd">    Sweep around the tracked FOV center azimuth at a fixed elevation, and</span>
+<span class="sd">    update elevation towards the FOV center at discrete times.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    center : array-like of size 2</span>
+<span class="sd">        The R.A. and Declination of the center of the FOV.</span>
+<span class="sd">    duration : float</span>
+<span class="sd">        The duration of the observation, in hours.</span>
+<span class="sd">    period : float</span>
+<span class="sd">        The sampling period of the pointings, in seconds.</span>
+<span class="sd">    angspeed : float</span>
+<span class="sd">        The pointing angular speed, in deg / s.</span>
+<span class="sd">    delta_az : float</span>
+<span class="sd">        The sweeping extent in degrees.</span>
+<span class="sd">    nsweeps_per_elevation : int</span>
+<span class="sd">        The number of sweeps during a phase of constant elevation.</span>
+<span class="sd">    angspeed_psi : float</span>
+<span class="sd">        The pitch angular speed, in deg / s.</span>
+<span class="sd">    maxpsi : float</span>
+<span class="sd">        The maximum pitch angle, in degrees.</span>
+<span class="sd">    latitude : float, optional</span>
+<span class="sd">        The observer&#39;s latitude [degrees]. Default is DOMEC&#39;s.</span>
+<span class="sd">    longitude : float, optional</span>
+<span class="sd">        The observer&#39;s longitude [degrees]. Default is DOMEC&#39;s.</span>
+<span class="sd">    fix_azimuth : bool</span>
+<span class="sd">    hwp_stepsize : float</span>
+<span class="sd">        Step angle size for the HWP.</span>
+<span class="sd">    date_obs : str or astropy.time.Time, optional</span>
+<span class="sd">        The starting date of the observation (UTC).</span>
+<span class="sd">    random_hwp : bool</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pointings : QubicSampling</span>
+<span class="sd">        Structured array containing the azimuth, elevation and pitch angles,</span>
+<span class="sd">        in degrees.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">nsamples</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">duration</span> <span class="o">*</span> <span class="mi">3600</span> <span class="o">/</span> <span class="n">period</span><span class="p">))</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">QubicSampling</span><span class="p">(</span>
+        <span class="n">nsamples</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">date_obs</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="n">period</span><span class="p">,</span> <span class="n">latitude</span><span class="o">=</span><span class="n">latitude</span><span class="p">,</span>
+        <span class="n">longitude</span><span class="o">=</span><span class="n">longitude</span><span class="p">)</span>
+    <span class="n">racenter</span> <span class="o">=</span> <span class="n">center</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">deccenter</span> <span class="o">=</span> <span class="n">center</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">backforthdt</span> <span class="o">=</span> <span class="n">delta_az</span> <span class="o">/</span> <span class="n">angspeed</span> <span class="o">*</span> <span class="mi">2</span>
+
+    <span class="c1"># compute the sweep number</span>
+    <span class="n">isweeps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">time</span> <span class="o">/</span> <span class="n">backforthdt</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+
+    <span class="c1"># azimuth/elevation of the center of the field as a function of time</span>
+
+    <span class="k">if</span> <span class="n">fix_azimuth</span><span class="p">[</span><span class="s1">&#39;apply&#39;</span><span class="p">]:</span>
+        <span class="n">azcenter</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">time</span> <span class="o">*</span> <span class="mi">0</span> <span class="o">+</span> <span class="n">fix_azimuth</span><span class="p">[</span><span class="s1">&#39;az&#39;</span><span class="p">]</span>
+        <span class="n">elcenter</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">time</span> <span class="o">*</span> <span class="mi">0</span> <span class="o">+</span> <span class="n">fix_azimuth</span><span class="p">[</span><span class="s1">&#39;el&#39;</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">azcenter</span><span class="p">,</span> <span class="n">elcenter</span> <span class="o">=</span> <span class="n">equ2hor</span><span class="p">(</span><span class="n">racenter</span><span class="p">,</span> <span class="n">deccenter</span><span class="p">,</span> <span class="n">out</span><span class="o">.</span><span class="n">time</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">out</span><span class="o">.</span><span class="n">date_obs</span><span class="p">,</span> <span class="n">latitude</span><span class="o">=</span><span class="n">out</span><span class="o">.</span><span class="n">latitude</span><span class="p">,</span>
+                                     <span class="n">longitude</span><span class="o">=</span><span class="n">out</span><span class="o">.</span><span class="n">longitude</span><span class="p">)</span>
+
+    <span class="c1"># compute azimuth offset for all time samples</span>
+    <span class="n">daz</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">time</span> <span class="o">*</span> <span class="n">angspeed</span>
+    <span class="n">daz</span> <span class="o">=</span> <span class="n">daz</span> <span class="o">%</span> <span class="p">(</span><span class="n">delta_az</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="n">daz</span> <span class="o">&gt;</span> <span class="n">delta_az</span>
+    <span class="n">daz</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">daz</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">delta_az</span>
+    <span class="n">daz</span> <span class="o">-=</span> <span class="n">delta_az</span> <span class="o">/</span> <span class="mi">2</span>
+
+    <span class="c1"># elevation is kept constant during nsweeps_per_elevation</span>
+    <span class="n">elcst</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">nsamples</span><span class="p">)</span>
+    <span class="n">ielevations</span> <span class="o">=</span> <span class="n">isweeps</span> <span class="o">//</span> <span class="n">nsweeps_per_elevation</span>
+    <span class="n">nelevations</span> <span class="o">=</span> <span class="n">ielevations</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nelevations</span><span class="p">):</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="n">ielevations</span> <span class="o">==</span> <span class="n">i</span>
+        <span class="n">elcst</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">elcenter</span><span class="p">[</span><span class="n">mask</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">fix_azimuth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">fix_azimuth</span><span class="p">[</span><span class="s1">&#39;apply&#39;</span><span class="p">]:</span>
+                <span class="n">el_step</span> <span class="o">=</span> <span class="n">fix_azimuth</span><span class="p">[</span><span class="s1">&#39;el_step&#39;</span><span class="p">]</span>
+                <span class="n">elcst</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">elcenter</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">-</span> <span class="n">nelevations</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">el_step</span> <span class="o">+</span> <span class="n">i</span> <span class="o">*</span> <span class="n">el_step</span>
+
+    <span class="c1"># azimuth and elevations to use for pointing</span>
+    <span class="n">azptg</span> <span class="o">=</span> <span class="n">azcenter</span> <span class="o">+</span> <span class="n">daz</span>
+    <span class="n">elptg</span> <span class="o">=</span> <span class="n">elcst</span>
+
+    <span class="c1">### scan psi as well</span>
+    <span class="n">pitch</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">time</span> <span class="o">*</span> <span class="n">angspeed_psi</span>
+    <span class="n">pitch</span> <span class="o">=</span> <span class="n">pitch</span> <span class="o">%</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">maxpsi</span><span class="p">)</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="n">pitch</span> <span class="o">&gt;</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">maxpsi</span><span class="p">)</span>
+    <span class="n">pitch</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="n">pitch</span><span class="p">[</span><span class="n">mask</span><span class="p">]</span> <span class="o">+</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">maxpsi</span>
+    <span class="n">pitch</span> <span class="o">-=</span> <span class="n">maxpsi</span>
+
+    <span class="n">out</span><span class="o">.</span><span class="n">azimuth</span> <span class="o">=</span> <span class="n">azptg</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">elevation</span> <span class="o">=</span> <span class="n">elptg</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">pitch</span> <span class="o">=</span> <span class="n">pitch</span>
+    <span class="k">if</span> <span class="n">random_hwp</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">angle_hwp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="mi">90</span> <span class="o">/</span> <span class="n">hwp_stepsize</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span> <span class="n">nsamples</span><span class="p">)</span> <span class="o">*</span> <span class="n">hwp_stepsize</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">angle_hwp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">nsamples</span><span class="p">)</span>
+        <span class="n">max_sweeps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">isweeps</span><span class="p">)</span>
+        <span class="n">delta</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">nsamples</span> <span class="o">/</span> <span class="n">max_sweeps</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">max_sweeps</span><span class="p">):</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">angle_hwp</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">delta</span><span class="p">:(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">delta</span><span class="p">]</span> <span class="o">=</span> <span class="n">hwp_stepsize</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="mi">90</span> <span class="o">/</span> <span class="n">hwp_stepsize</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">fix_azimuth</span><span class="p">[</span><span class="s1">&#39;apply&#39;</span><span class="p">]:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">fix_az</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">fix_azimuth</span><span class="p">[</span><span class="s1">&#39;fix_hwp&#39;</span><span class="p">]:</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">angle_hwp</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">pitch</span> <span class="o">*</span> <span class="mi">0</span> <span class="o">+</span> <span class="n">hwp_stepsize</span>
+        <span class="k">if</span> <span class="n">fix_azimuth</span><span class="p">[</span><span class="s1">&#39;fix_pitch&#39;</span><span class="p">]:</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">pitch</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">fix_az</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">return</span> <span class="n">out</span></div>
+
+
+
+<span class="k">def</span> <span class="nf">_format_sphconv</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">time</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="n">incoords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span><span class="o">.</span><span class="n">shape</span> <span class="o">+</span> <span class="p">(</span><span class="mi">2</span><span class="p">,))</span>
+    <span class="n">incoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span>
+    <span class="n">incoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">b</span>
+    <span class="k">if</span> <span class="n">date_obs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">incoords</span>
+    <span class="kn">import</span> <span class="nn">astropy</span>
+    <span class="k">if</span> <span class="n">astropy</span><span class="o">.</span><span class="n">__version__</span> <span class="o">&lt;</span> <span class="s2">&quot;1&quot;</span><span class="p">:</span>
+        <span class="n">time</span> <span class="o">=</span> <span class="n">Time</span><span class="p">(</span><span class="n">date_obs</span> <span class="k">if</span> <span class="n">isscalarlike</span><span class="p">(</span><span class="n">time</span><span class="p">)</span>
+                    <span class="k">else</span> <span class="p">[</span><span class="n">date_obs</span><span class="p">],</span> <span class="n">scale</span><span class="o">=</span><span class="s1">&#39;utc&#39;</span><span class="p">)</span> <span class="o">+</span> \
+               <span class="n">TimeDelta</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sec&#39;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">time</span> <span class="o">=</span> <span class="n">Time</span><span class="p">(</span><span class="n">date_obs</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="s1">&#39;utc&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">TimeDelta</span><span class="p">(</span><span class="n">time</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;sec&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">incoords</span><span class="p">,</span> <span class="n">time</span>
+
+
+<div class="viewcode-block" id="equ2gal">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.equ2gal">[docs]</a>
+<span class="k">def</span> <span class="nf">equ2gal</span><span class="p">(</span><span class="n">ra</span><span class="p">,</span> <span class="n">dec</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    equ2gal(ra, dec) -&gt; l, b</span>
+<span class="sd">    Equatorial to galactic spherical conversion. Angles are in degrees.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">incoords</span> <span class="o">=</span> <span class="n">_format_sphconv</span><span class="p">(</span><span class="n">ra</span><span class="p">,</span> <span class="n">dec</span><span class="p">)</span>
+    <span class="n">outcoords</span> <span class="o">=</span> <span class="n">SphericalEquatorial2GalacticOperator</span><span class="p">(</span><span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)(</span><span class="n">incoords</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="gal2equ">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.gal2equ">[docs]</a>
+<span class="k">def</span> <span class="nf">gal2equ</span><span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    gal2equ(l, b) -&gt; ra, dec</span>
+<span class="sd">    Galactic to equatorial spherical conversion. Angles are in degrees.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">incoords</span> <span class="o">=</span> <span class="n">_format_sphconv</span><span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+    <span class="n">outcoords</span> <span class="o">=</span> <span class="n">SphericalGalactic2EquatorialOperator</span><span class="p">(</span><span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)(</span><span class="n">incoords</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="equ2hor">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.equ2hor">[docs]</a>
+<span class="k">def</span> <span class="nf">equ2hor</span><span class="p">(</span><span class="n">ra</span><span class="p">,</span> <span class="n">dec</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">QubicSampling</span><span class="o">.</span><span class="n">DEFAULT_DATE_OBS</span><span class="p">,</span>
+            <span class="n">latitude</span><span class="o">=</span><span class="n">DOMECLAT</span><span class="p">,</span> <span class="n">longitude</span><span class="o">=</span><span class="n">DOMECLON</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    equ2hor(ra, dec, time, [date_obs, [latitude, [longitude]]]) -&gt; az, el</span>
+<span class="sd">    Equatorial to horizontal spherical conversion. Angles are in degrees.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    ra : float</span>
+<span class="sd">        Right ascension in degrees.</span>
+<span class="sd">    dec : float</span>
+<span class="sd">        Declination in degrees.</span>
+<span class="sd">    time : array-like</span>
+<span class="sd">        Elapsed time in seconds since date_obs.</span>
+<span class="sd">    date_obs : string</span>
+<span class="sd">        The starting date, UTC.</span>
+<span class="sd">    latitude : float</span>
+<span class="sd">        The observer&#39;s latitude geolocation. Default is Dome C.</span>
+<span class="sd">    longitude : float</span>
+<span class="sd">        The observer&#39;s longitude geolocation. Default is Dome C.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    &gt;&gt;&gt; equ2hor(0, 0, 0, date_obs=&#39;2000-01-01 00:00:00&#39;)</span>
+<span class="sd">    (array(135.71997181016644), array(-10.785386358099927))</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">incoords</span><span class="p">,</span> <span class="n">time</span> <span class="o">=</span> <span class="n">_format_sphconv</span><span class="p">(</span><span class="n">ra</span><span class="p">,</span> <span class="n">dec</span><span class="p">,</span> <span class="n">date_obs</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span>
+    <span class="n">outcoords</span> <span class="o">=</span> <span class="n">SphericalEquatorial2HorizontalOperator</span><span class="p">(</span>
+        <span class="s1">&#39;NE&#39;</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">latitude</span><span class="p">,</span> <span class="n">longitude</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)(</span><span class="n">incoords</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="hor2equ">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.hor2equ">[docs]</a>
+<span class="k">def</span> <span class="nf">hor2equ</span><span class="p">(</span><span class="n">azimuth</span><span class="p">,</span> <span class="n">elevation</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">QubicSampling</span><span class="o">.</span><span class="n">DEFAULT_DATE_OBS</span><span class="p">,</span>
+            <span class="n">latitude</span><span class="o">=</span><span class="n">DOMECLAT</span><span class="p">,</span> <span class="n">longitude</span><span class="o">=</span><span class="n">DOMECLON</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    hor2equ(az, el, time, [date_obs, [latitude, [longitude]]]) -&gt; ra, dec</span>
+<span class="sd">    Horizontal to equatorial spherical conversion. Angles are in degrees.</span>
+
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    azimuth : float</span>
+<span class="sd">    elevation : float</span>
+<span class="sd">    time : array-like</span>
+<span class="sd">        Elapsed time in seconds since date_obs.</span>
+<span class="sd">    date_obs : string</span>
+<span class="sd">        The starting date, UTC.</span>
+<span class="sd">    latitude : float</span>
+<span class="sd">        The observer&#39;s latitude geolocation. Default is Dome C.</span>
+<span class="sd">    longitude : float</span>
+<span class="sd">        The observer&#39;s longitude geolocation. Default is Dome C.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    &gt;&gt;&gt; hor2equ(135.71997181016644, -10.785386358099927, 0,</span>
+<span class="sd">    ...         date_obs=&#39;2000-01-01 00:00:00&#39;)</span>
+<span class="sd">    (array(1.1927080055488187e-14), array(-1.2722218725854067e-14))</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">incoords</span><span class="p">,</span> <span class="n">time</span> <span class="o">=</span> <span class="n">_format_sphconv</span><span class="p">(</span><span class="n">azimuth</span><span class="p">,</span> <span class="n">elevation</span><span class="p">,</span> <span class="n">date_obs</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span>
+    <span class="n">outcoords</span> <span class="o">=</span> <span class="n">SphericalHorizontal2EquatorialOperator</span><span class="p">(</span>
+        <span class="s1">&#39;NE&#39;</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">latitude</span><span class="p">,</span> <span class="n">longitude</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)(</span><span class="n">incoords</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="gal2hor">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.gal2hor">[docs]</a>
+<span class="k">def</span> <span class="nf">gal2hor</span><span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">QubicSampling</span><span class="o">.</span><span class="n">DEFAULT_DATE_OBS</span><span class="p">,</span>
+            <span class="n">latitude</span><span class="o">=</span><span class="n">DOMECLAT</span><span class="p">,</span> <span class="n">longitude</span><span class="o">=</span><span class="n">DOMECLON</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    gal2hor(l, b, time, [date_obs, [latitude, [longitude]]]) -&gt; az, el</span>
+<span class="sd">    Galactic to horizontal spherical conversion. Angles are in degrees.</span>
+
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    time : array-like</span>
+<span class="sd">        Elapsed time in seconds since date_obs.</span>
+<span class="sd">    date_obs : string</span>
+<span class="sd">        The starting date, UTC.</span>
+<span class="sd">    latitude : float</span>
+<span class="sd">        The observer&#39;s latitude geolocation. Default is Dome C.</span>
+<span class="sd">    longitude : float</span>
+<span class="sd">        The observer&#39;s longitude geolocation. Default is Dome C.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    &gt;&gt;&gt; gal2hor(0, 0, 0)</span>
+<span class="sd">    (array(50.35837815921487), array(39.212362279976155))</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">incoords</span><span class="p">,</span> <span class="n">time</span> <span class="o">=</span> <span class="n">_format_sphconv</span><span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">date_obs</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span>
+    <span class="n">g2e</span> <span class="o">=</span> <span class="n">SphericalGalactic2EquatorialOperator</span><span class="p">(</span><span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">e2h</span> <span class="o">=</span> <span class="n">SphericalEquatorial2HorizontalOperator</span><span class="p">(</span>
+        <span class="s1">&#39;NE&#39;</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">latitude</span><span class="p">,</span> <span class="n">longitude</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">outcoords</span> <span class="o">=</span> <span class="n">e2h</span><span class="p">(</span><span class="n">g2e</span><span class="p">(</span><span class="n">incoords</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="hor2gal">
+<a class="viewcode-back" href="../../lib.Qsamplings.html#lib.Qsamplings.hor2gal">[docs]</a>
+<span class="k">def</span> <span class="nf">hor2gal</span><span class="p">(</span><span class="n">azimuth</span><span class="p">,</span> <span class="n">elevation</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="n">QubicSampling</span><span class="o">.</span><span class="n">DEFAULT_DATE_OBS</span><span class="p">,</span>
+            <span class="n">latitude</span><span class="o">=</span><span class="n">DOMECLAT</span><span class="p">,</span> <span class="n">longitude</span><span class="o">=</span><span class="n">DOMECLON</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    hor2gal(az, el, time, [date_obs, [latitude, [longitude]]]) -&gt; l, b</span>
+<span class="sd">    Horizontal to galactic spherical conversion. Angles are in degrees.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    azimuth : float</span>
+<span class="sd">    elevation : float</span>
+<span class="sd">    time : array-like</span>
+<span class="sd">        Elapsed time in seconds since date_obs.</span>
+<span class="sd">    date_obs : string</span>
+<span class="sd">        The starting date, UTC.</span>
+<span class="sd">    latitude : float</span>
+<span class="sd">        The observer&#39;s latitude geolocation. Default is Dome C.</span>
+<span class="sd">    longitude : float</span>
+<span class="sd">        The observer&#39;s longitude geolocation. Default is Dome C.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    &gt;&gt;&gt; hor2gal(50.35837815921487, 39.212362279976155, 0)</span>
+<span class="sd">    (array(4.452776554048925e-14), array(-7.63333123551244e-14))</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">incoords</span><span class="p">,</span> <span class="n">time</span> <span class="o">=</span> <span class="n">_format_sphconv</span><span class="p">(</span><span class="n">azimuth</span><span class="p">,</span> <span class="n">elevation</span><span class="p">,</span> <span class="n">date_obs</span><span class="p">,</span> <span class="n">time</span><span class="p">)</span>
+    <span class="n">h2e</span> <span class="o">=</span> <span class="n">SphericalHorizontal2EquatorialOperator</span><span class="p">(</span>
+        <span class="s1">&#39;NE&#39;</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">latitude</span><span class="p">,</span> <span class="n">longitude</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">e2g</span> <span class="o">=</span> <span class="n">SphericalEquatorial2GalacticOperator</span><span class="p">(</span><span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">outcoords</span> <span class="o">=</span> <span class="n">e2g</span><span class="p">(</span><span class="n">h2e</span><span class="p">(</span><span class="n">incoords</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">outcoords</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

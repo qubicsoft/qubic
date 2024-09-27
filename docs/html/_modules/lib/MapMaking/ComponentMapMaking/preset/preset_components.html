@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.MapMaking.ComponentMapMaking.preset.preset_components &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.MapMaking.ComponentMapMaking.preset.preset_components</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.MapMaking.ComponentMapMaking.preset.preset_components</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pysm3</span>
+<span class="kn">import</span> <span class="nn">pysm3.units</span> <span class="k">as</span> <span class="nn">u</span>
+<span class="kn">from</span> <span class="nn">pysimulators.interfaces.healpy</span> <span class="kn">import</span> <span class="n">HealpixConvolutionGaussianOperator</span>
+<span class="kn">from</span> <span class="nn">pysm3</span> <span class="kn">import</span> <span class="n">utils</span>
+
+<span class="kn">from</span> <span class="nn">qubic.data</span> <span class="kn">import</span> <span class="n">PATH</span>
+
+
+<div class="viewcode-block" id="PresetComponents">
+<a class="viewcode-back" href="../../../../../lib.MapMaking.ComponentMapMaking.preset.preset_components.html#lib.MapMaking.ComponentMapMaking.preset.preset_components.PresetComponents">[docs]</a>
+<span class="k">class</span> <span class="nc">PresetComponents</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Preset Components.</span>
+
+<span class="sd">    Instance to initialize the Components Map-Making. It defines the Foregrounds variables and methods.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    seed_noise : int</span>
+<span class="sd">        Seed for random CMB noise generation.</span>
+<span class="sd">    preset_tools : object</span>
+<span class="sd">        Class containing tools and simulation parameters.</span>
+<span class="sd">    preset_qubic : object</span>
+<span class="sd">        Class containing qubic operator and variables and methods.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    params_cmb: dict</span>
+<span class="sd">        Dictionary containing the parameters associated with CMB.</span>
+<span class="sd">    params_foregrounds: dict</span>
+<span class="sd">        Dictionary containing the parameters associated with foregrounds.</span>
+<span class="sd">    seed: int</span>
+<span class="sd">        Seed for random CMB noise generation.</span>
+<span class="sd">    skyconfig: dict</span>
+<span class="sd">        Dictionary containing the wanted sky configuration for PySM.</span>
+<span class="sd">    components_model: list</span>
+<span class="sd">        List containing the FGBuster instance relative to the wanted components.</span>
+<span class="sd">    components_name: list</span>
+<span class="sd">        List containing the name of the components.</span>
+<span class="sd">    components: array_like</span>
+<span class="sd">        Components maps according to chosen model.</span>
+<span class="sd">    components_convolved: array_like</span>
+<span class="sd">        Convolved components maps.</span>
+<span class="sd">    components_iter: array_like</span>
+<span class="sd">        Initilize array on which we will iterate to reconstruct components maps.</span>
+<span class="sd">    nu_co: int</span>
+<span class="sd">        Frequency of the monochromatic emission, None if not chosen.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">preset_tools</span><span class="p">,</span> <span class="n">preset_qubic</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1">### Import preset QUBIC &amp; tools</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span> <span class="o">=</span> <span class="n">preset_tools</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset_qubic</span> <span class="o">=</span> <span class="n">preset_qubic</span>
+
+        <span class="c1">### Define variable for Foregrounds parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params_cmb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;CMB&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params_foregrounds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">]</span>
+
+        <span class="c1">### Define seed for CMB generation and noise</span>
+        <span class="c1">#self.seed = seed</span>
+
+        <span class="c1">### Skyconfig</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">mpi</span><span class="o">.</span><span class="n">_print_message</span><span class="p">(</span><span class="s2">&quot;    =&gt; Creating sky configuration&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sky_config</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">&quot;in&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sky_config</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">&quot;out&quot;</span><span class="p">)</span>
+
+        <span class="c1">### Define model for reconstruction</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">mpi</span><span class="o">.</span><span class="n">_print_message</span><span class="p">(</span><span class="s2">&quot;    =&gt; Creating model&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">components_model_in</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">components_name_in</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">preset_qubic</span><span class="o">.</span><span class="n">get_components_fgb</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">&quot;in&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">components_model_out</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">components_name_out</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">preset_qubic</span><span class="o">.</span><span class="n">get_components_fgb</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="s2">&quot;out&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Compute true components</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">mpi</span><span class="o">.</span><span class="n">_print_message</span><span class="p">(</span><span class="s2">&quot;    =&gt; Creating components&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">components_in</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">components_convolved_in</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_components</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig_in</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">components_out</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">components_convolved_out</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">components_iter</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_components</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">skyconfig_out</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Monochromatic emission</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;CO&quot;</span><span class="p">][</span><span class="s2">&quot;CO_in&quot;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nu_co</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;CO&quot;</span><span class="p">][</span><span class="s2">&quot;nu0_co&quot;</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nu_co</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="PresetComponents.get_sky_config">
+<a class="viewcode-back" href="../../../../../lib.MapMaking.ComponentMapMaking.preset.preset_components.html#lib.MapMaking.ComponentMapMaking.preset.preset_components.PresetComponents.get_sky_config">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_sky_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Sky configuration.</span>
+
+<span class="sd">        Method to define the sky model used by PySM3 to generate a fake sky.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        key : str</span>
+<span class="sd">            The key to access the specific parameters in the prest configuration.</span>
+<span class="sd">            Can be either &quot;in&quot; or &quot;out&quot;.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        skyconfig: dict</span>
+<span class="sd">            Dictionary containing the sky model configuration.</span>
+
+<span class="sd">        Example</span>
+<span class="sd">        -------</span>
+<span class="sd">        sky = {&#39;cmb&#39;: 42, &#39;Dust&#39;: &#39;d0&#39;}</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">sky</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params_cmb</span><span class="p">[</span><span class="s2">&quot;cmb&quot;</span><span class="p">]:</span>
+            <span class="n">sky</span><span class="p">[</span><span class="s2">&quot;CMB&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;CMB&#39;</span><span class="p">][</span><span class="s1">&#39;seed&#39;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="sa">f</span><span class="s2">&quot;Dust_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]:</span>
+            <span class="n">sky</span><span class="p">[</span><span class="s2">&quot;Dust&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;model_d&quot;</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Synchrotron&quot;</span><span class="p">][</span><span class="sa">f</span><span class="s2">&quot;Synchrotron_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]:</span>
+            <span class="n">sky</span><span class="p">[</span><span class="s2">&quot;Synchrotron&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Synchrotron&quot;</span><span class="p">][</span>
+                <span class="s2">&quot;model_s&quot;</span>
+            <span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;CO&quot;</span><span class="p">][</span><span class="sa">f</span><span class="s2">&quot;CO_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]:</span>
+            <span class="n">sky</span><span class="p">[</span><span class="s2">&quot;coline&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;co2&quot;</span>
+
+        <span class="k">return</span> <span class="n">sky</span></div>
+
+
+<div class="viewcode-block" id="PresetComponents.give_cl_cmb">
+<a class="viewcode-back" href="../../../../../lib.MapMaking.ComponentMapMaking.preset.preset_components.html#lib.MapMaking.ComponentMapMaking.preset.preset_components.PresetComponents.give_cl_cmb">[docs]</a>
+    <span class="k">def</span> <span class="nf">give_cl_cmb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">Alens</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;:math:`C_{\ell}^{BB}` CMB.</span>
+
+<span class="sd">        Generates the CMB BB power spectrum with optional lensing and tensor contributions.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        r : int, optional</span>
+<span class="sd">            Tensor-to-scalar ratio, by default 0</span>
+<span class="sd">        Alens : float, optional</span>
+<span class="sd">            Lensing amplitude, by default 1.0</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        power_spectrum: array_like</span>
+<span class="sd">            CMB power spectrum according to r and Alens.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Read the lensed scalar power spectrum from the FITS file</span>
+        <span class="n">power_spectrum</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">read_cl</span><span class="p">(</span><span class="n">PATH</span> <span class="o">+</span> <span class="s2">&quot;Cls_Planck2018_lensed_scalar.fits&quot;</span><span class="p">)[</span>
+            <span class="p">:,</span> <span class="p">:</span><span class="mi">4000</span>
+        <span class="p">]</span>
+
+        <span class="c1"># Adjust the lensing amplitude if Alens is not the default value</span>
+        <span class="k">if</span> <span class="n">Alens</span> <span class="o">!=</span> <span class="mf">1.0</span><span class="p">:</span>
+            <span class="n">power_spectrum</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*=</span> <span class="n">Alens</span>
+
+        <span class="c1"># Add tensor contributions if r is not zero</span>
+        <span class="k">if</span> <span class="n">r</span><span class="p">:</span>
+            <span class="n">power_spectrum</span> <span class="o">+=</span> <span class="p">(</span>
+                <span class="n">r</span>
+                <span class="o">*</span> <span class="n">hp</span><span class="o">.</span><span class="n">read_cl</span><span class="p">(</span>
+                    <span class="n">PATH</span> <span class="o">+</span> <span class="s2">&quot;Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits&quot;</span>
+                <span class="p">)[:,</span> <span class="p">:</span><span class="mi">4000</span><span class="p">]</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">power_spectrum</span></div>
+
+
+<div class="viewcode-block" id="PresetComponents.polarized_I">
+<a class="viewcode-back" href="../../../../../lib.MapMaking.ComponentMapMaking.preset.preset_components.html#lib.MapMaking.ComponentMapMaking.preset.preset_components.PresetComponents.polarized_I">[docs]</a>
+    <span class="k">def</span> <span class="nf">polarized_I</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">nside</span><span class="p">,</span> <span class="n">polarization_fraction</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Polarized intensity map.</span>
+
+<span class="sd">        Calculates the polarized intensity map.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        m : array_like</span>
+<span class="sd">            Input map to be polarised</span>
+<span class="sd">        nside : int</span>
+<span class="sd">            Nside parameter of the HEALPix map.</span>
+<span class="sd">        polarization_fraction : float, optional</span>
+<span class="sd">            Fraction of polarization, by default 0</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        p_map: array_like</span>
+<span class="sd">            Array containing the polarized intensity map with cosine and sine components.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Read and downgrade the polarization angle map to the desired nside resolution</span>
+        <span class="n">polangle</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">ud_grade</span><span class="p">(</span>
+            <span class="n">hp</span><span class="o">.</span><span class="n">read_map</span><span class="p">(</span><span class="n">PATH</span> <span class="o">+</span> <span class="s2">&quot;psimap_dust90_512.fits&quot;</span><span class="p">),</span> <span class="n">nside</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Read and downgrade the depolarization map to the desired nside resolution</span>
+        <span class="n">depolmap</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">ud_grade</span><span class="p">(</span>
+            <span class="n">hp</span><span class="o">.</span><span class="n">read_map</span><span class="p">(</span><span class="n">PATH</span> <span class="o">+</span> <span class="s2">&quot;gmap_dust90_512.fits&quot;</span><span class="p">),</span> <span class="n">nside</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Calculate the cosine of twice the polarization angle</span>
+        <span class="n">cospolangle</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">polangle</span><span class="p">)</span>
+
+        <span class="c1"># Calculate the sine of twice the polarization angle</span>
+        <span class="n">sinpolangle</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="mf">2.0</span> <span class="o">*</span> <span class="n">polangle</span><span class="p">)</span>
+
+        <span class="c1"># Calculate the polarized intensity map by scaling the input map with the depolarization map and polarization fraction</span>
+        <span class="n">p_map</span> <span class="o">=</span> <span class="n">polarization_fraction</span> <span class="o">*</span> <span class="n">depolmap</span> <span class="o">*</span> <span class="n">hp</span><span class="o">.</span><span class="n">ud_grade</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">nside</span><span class="p">)</span>
+
+        <span class="c1"># Return the polarized intensity map with cosine and sine components</span>
+        <span class="k">return</span> <span class="n">p_map</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">cospolangle</span><span class="p">,</span> <span class="n">sinpolangle</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="PresetComponents.get_components">
+<a class="viewcode-back" href="../../../../../lib.MapMaking.ComponentMapMaking.preset.preset_components.html#lib.MapMaking.ComponentMapMaking.preset.preset_components.PresetComponents.get_components">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_components</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skyconfig</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Components maps.</span>
+
+<span class="sd">        Read configuration dictionary which contains every compoenent and their associated model.</span>
+<span class="sd">        The CMB is randomly generated from a specific seed.</span>
+<span class="sd">        Astrophysical foregrounds come from PySM 3.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        skyconfig : dict</span>
+<span class="sd">            Dictionary containing the configuration for each component.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        components: array_like</span>
+<span class="sd">            Components maps according to chosen model.</span>
+<span class="sd">        components_convolved: array_like</span>
+<span class="sd">            Convolved components maps.</span>
+<span class="sd">        components_iter: array_like</span>
+<span class="sd">            Initilize array on which we will iterate to reconstruct components maps.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        TypeError</span>
+<span class="sd">            Raises if the chosen model does not exist.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Initialization</span>
+        <span class="n">components</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">skyconfig</span><span class="p">),</span> <span class="mi">12</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">components_convolved</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">skyconfig</span><span class="p">),</span> <span class="mi">12</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Compute convolution operator if needed</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">preset_qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;convolution_in&quot;</span><span class="p">]</span>
+            <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;convolution_out&quot;</span><span class="p">]</span>
+        <span class="p">):</span>
+            <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span>
+                <span class="n">fwhm</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset_qubic</span><span class="o">.</span><span class="n">joint_in</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">allfwhm</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+                <span class="n">lmax</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span><span class="n">fwhm</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="c1">### Compute CMB power spectrum according Planck data</span>
+        <span class="n">mycls</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">give_cl_cmb</span><span class="p">(</span><span class="n">r</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params_cmb</span><span class="p">[</span><span class="s2">&quot;r&quot;</span><span class="p">],</span> <span class="n">Alens</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params_cmb</span><span class="p">[</span><span class="s2">&quot;Alens&quot;</span><span class="p">])</span>
+
+        <span class="c1">### Build components list</span>
+        <span class="k">for</span> <span class="n">icomp</span><span class="p">,</span> <span class="n">comp_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">skyconfig</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="c1"># CMB case</span>
+            <span class="k">if</span> <span class="n">comp_name</span> <span class="o">==</span> <span class="s2">&quot;CMB&quot;</span><span class="p">:</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">skyconfig</span><span class="p">[</span><span class="n">comp_name</span><span class="p">])</span>
+                <span class="n">cmb</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">synfast</span><span class="p">(</span>
+                    <span class="n">mycls</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+                    <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                    <span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">T</span>
+                <span class="n">components</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">cmb</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">components_convolved</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">cmb</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="c1"># Dust case</span>
+            <span class="k">elif</span> <span class="n">comp_name</span> <span class="o">==</span> <span class="s2">&quot;Dust&quot;</span><span class="p">:</span>
+                <span class="n">sky_dust</span> <span class="o">=</span> <span class="n">pysm3</span><span class="o">.</span><span class="n">Sky</span><span class="p">(</span>
+                    <span class="n">nside</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+                    <span class="n">preset_strings</span><span class="o">=</span><span class="p">[</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;model_d&quot;</span><span class="p">]</span>
+                    <span class="p">],</span>
+                    <span class="n">output_unit</span><span class="o">=</span><span class="s2">&quot;uK_CMB&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="n">sky_dust</span><span class="o">.</span><span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">mbb_temperature</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="mi">20</span> <span class="o">*</span> <span class="n">sky_dust</span><span class="o">.</span><span class="n">components</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">mbb_temperature</span><span class="o">.</span><span class="n">unit</span>
+                <span class="p">)</span>
+                <span class="n">map_Dust</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                        <span class="n">sky_dust</span><span class="o">.</span><span class="n">get_emission</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;nu0_d&quot;</span><span class="p">]</span>
+                            <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span>
+                            <span class="kc">None</span><span class="p">,</span>
+                        <span class="p">)</span><span class="o">.</span><span class="n">T</span>
+                        <span class="o">*</span> <span class="n">utils</span><span class="o">.</span><span class="n">bandpass_unit_conversion</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;nu0_d&quot;</span><span class="p">]</span>
+                            <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span>
+                            <span class="kc">None</span><span class="p">,</span>
+                            <span class="n">u</span><span class="o">.</span><span class="n">uK_CMB</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+                    <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;amplification_d&quot;</span><span class="p">]</span>
+                <span class="p">)</span>
+                <span class="n">components</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">map_Dust</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">components_convolved</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">map_Dust</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="c1"># Synchrotron case</span>
+            <span class="k">elif</span> <span class="n">comp_name</span> <span class="o">==</span> <span class="s2">&quot;Synchrotron&quot;</span><span class="p">:</span>
+                <span class="n">sky_sync</span> <span class="o">=</span> <span class="n">pysm3</span><span class="o">.</span><span class="n">Sky</span><span class="p">(</span>
+                    <span class="n">nside</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+                    <span class="n">preset_strings</span><span class="o">=</span><span class="p">[</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Synchrotron&quot;</span><span class="p">][</span>
+                            <span class="s2">&quot;model_s&quot;</span>
+                        <span class="p">]</span>
+                    <span class="p">],</span>
+                    <span class="n">output_unit</span><span class="o">=</span><span class="s2">&quot;uK_CMB&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="n">map_sync</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                        <span class="n">sky_sync</span><span class="o">.</span><span class="n">get_emission</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Synchrotron&quot;</span><span class="p">][</span>
+                                <span class="s2">&quot;nu0_s&quot;</span>
+                            <span class="p">]</span>
+                            <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span>
+                            <span class="kc">None</span><span class="p">,</span>
+                        <span class="p">)</span><span class="o">.</span><span class="n">T</span>
+                        <span class="o">*</span> <span class="n">utils</span><span class="o">.</span><span class="n">bandpass_unit_conversion</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Synchrotron&quot;</span><span class="p">][</span>
+                                <span class="s2">&quot;nu0_s&quot;</span>
+                            <span class="p">]</span>
+                            <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span>
+                            <span class="kc">None</span><span class="p">,</span>
+                            <span class="n">u</span><span class="o">.</span><span class="n">uK_CMB</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+                    <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Synchrotron&quot;</span><span class="p">][</span>
+                        <span class="s2">&quot;amplification_s&quot;</span>
+                    <span class="p">]</span>
+                <span class="p">)</span>
+                <span class="n">components</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">map_sync</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">components_convolved</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">map_sync</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="c1"># CO emission case</span>
+            <span class="k">elif</span> <span class="n">comp_name</span> <span class="o">==</span> <span class="s2">&quot;coline&quot;</span><span class="p">:</span>
+                <span class="n">map_co</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">ud_grade</span><span class="p">(</span>
+                    <span class="n">hp</span><span class="o">.</span><span class="n">read_map</span><span class="p">(</span><span class="n">PATH</span> <span class="o">+</span> <span class="s2">&quot;CO_line.fits&quot;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+                <span class="p">)</span>
+                <span class="n">map_co_polarised</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">polarized_I</span><span class="p">(</span>
+                    <span class="n">map_co</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+                    <span class="n">polarization_fraction</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;CO&quot;</span><span class="p">][</span>
+                        <span class="s2">&quot;polarization_fraction&quot;</span>
+                    <span class="p">],</span>
+                <span class="p">)</span>
+                <span class="n">sky_co</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+                    <span class="p">(</span><span class="mi">12</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset_tools</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="n">sky_co</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">map_co</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">sky_co</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:]</span> <span class="o">=</span> <span class="n">map_co_polarised</span><span class="o">.</span><span class="n">T</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">components</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">sky_co</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">components_convolved</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">sky_co</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Choose right foreground model (d0, s0, ...)&quot;</span><span class="p">)</span>
+
+        <span class="c1"># if self.preset_tools.params[&#39;Foregrounds&#39;][&#39;Dust&#39;][&#39;nside_beta_out&#39;] != 0:</span>
+        <span class="c1">#     components = components.T.copy()</span>
+        <span class="n">components_iter</span> <span class="o">=</span> <span class="n">components</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">components</span><span class="p">,</span> <span class="n">components_convolved</span><span class="p">,</span> <span class="n">components_iter</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

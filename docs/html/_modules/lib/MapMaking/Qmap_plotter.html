@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.MapMaking.Qmap_plotter &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.MapMaking.Qmap_plotter</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.MapMaking.Qmap_plotter</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">pysimulators.interfaces.healpy</span> <span class="kn">import</span> <span class="n">HealpixConvolutionGaussianOperator</span>
+
+
+<span class="k">def</span> <span class="nf">_plot_reconstructed_maps</span><span class="p">(</span>
+    <span class="n">maps</span><span class="p">,</span>
+    <span class="n">m_in</span><span class="p">,</span>
+    <span class="n">seenpix</span><span class="p">,</span>
+    <span class="n">name_file</span><span class="p">,</span>
+    <span class="n">center</span><span class="p">,</span>
+    <span class="n">reso</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+    <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span>
+    <span class="n">fwhm</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="nb">min</span><span class="o">=-</span><span class="mi">8</span><span class="p">,</span>
+    <span class="nb">max</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="nb">iter</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Save a PNG with the actual maps at iteration i. It assumes that maps is 3-dimensional</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">stk</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;Q&quot;</span><span class="p">,</span> <span class="s2">&quot;U&quot;</span><span class="p">]</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+    <span class="n">_shape</span> <span class="o">=</span> <span class="n">maps</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span>
+        <span class="n">fwhm</span><span class="o">=</span><span class="n">fwhm</span><span class="p">,</span> <span class="n">lmax</span><span class="o">=</span><span class="mi">2</span> <span class="o">*</span> <span class="n">hp</span><span class="o">.</span><span class="n">npix2nside</span><span class="p">(</span><span class="n">m_in</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="p">)</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">maps</span> <span class="o">-</span> <span class="n">m_in</span>
+    <span class="n">res</span>
+    <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">inu</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">_m</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">maps</span><span class="p">[</span><span class="n">inu</span><span class="p">])</span>
+        <span class="n">_r</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">res</span><span class="p">[</span><span class="n">inu</span><span class="p">])</span>
+        <span class="n">_m</span><span class="p">[</span><span class="o">~</span><span class="n">seenpix</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+        <span class="n">_r</span><span class="p">[</span><span class="o">~</span><span class="n">seenpix</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+        <span class="k">for</span> <span class="n">istk</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+
+            <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                <span class="n">_m</span><span class="p">[:,</span> <span class="n">istk</span><span class="p">],</span>
+                <span class="n">rot</span><span class="o">=</span><span class="n">center</span><span class="p">,</span>
+                <span class="n">reso</span><span class="o">=</span><span class="n">reso</span><span class="p">,</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="n">_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="nb">min</span><span class="o">=</span><span class="nb">min</span><span class="p">[</span><span class="n">istk</span><span class="p">],</span>
+                <span class="nb">max</span><span class="o">=</span><span class="nb">max</span><span class="p">[</span><span class="n">istk</span><span class="p">],</span>
+                <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Output - </span><span class="si">{</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                <span class="n">_r</span><span class="p">[:,</span> <span class="n">istk</span><span class="p">],</span>
+                <span class="n">rot</span><span class="o">=</span><span class="n">center</span><span class="p">,</span>
+                <span class="n">reso</span><span class="o">=</span><span class="n">reso</span><span class="p">,</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="n">_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">2</span><span class="p">),</span>
+                <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="nb">min</span><span class="o">=</span><span class="nb">min</span><span class="p">[</span><span class="n">istk</span><span class="p">],</span>
+                <span class="nb">max</span><span class="o">=</span><span class="nb">max</span><span class="p">[</span><span class="n">istk</span><span class="p">],</span>
+                <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Residuals - </span><span class="si">{</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">k</span> <span class="o">+=</span> <span class="mi">2</span>
+    <span class="c1"># plt.suptitle(f&#39;Iteration #{iter}&#39;, fontsize=15, y=1.01)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">name_file</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="Plots">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.Plots">[docs]</a>
+<span class="k">class</span> <span class="nc">Plots</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Instance for plotting results of Monte-Carlo Markov Chain (i.e emcee).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">_make_samples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">chain</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">labels</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sample</span> <span class="o">=</span> <span class="n">MCSamples</span><span class="p">(</span><span class="n">samples</span><span class="o">=</span><span class="n">chain</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="n">names</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="n">labels</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Plots.make_list_free_parameter">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.Plots.make_list_free_parameter">[docs]</a>
+    <span class="k">def</span> <span class="nf">make_list_free_parameter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Make few list :</span>
+<span class="sd">            - fp       : list of value of free parameters</span>
+<span class="sd">            - fp_name  : list of name for each values</span>
+<span class="sd">            - fp_latex : list of name in LateX for each values</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">fp</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">fp_name</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">fp_latex</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">for</span> <span class="n">iname</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sky&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c1"># print(&#39;yes&#39;)</span>
+                <span class="k">for</span> <span class="n">jname</span><span class="p">,</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sky&quot;</span><span class="p">][</span><span class="n">name</span><span class="p">]):</span>
+                    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sky&quot;</span><span class="p">][</span><span class="n">name</span><span class="p">][</span><span class="n">n</span><span class="p">])</span> <span class="ow">is</span> <span class="nb">list</span><span class="p">:</span>
+                        <span class="c1"># print(self.params[&#39;Sky&#39;][name][n], n)</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sky&quot;</span><span class="p">][</span><span class="n">name</span><span class="p">][</span><span class="n">n</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;f&quot;</span><span class="p">:</span>
+                            <span class="n">fp</span> <span class="o">+=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sky&quot;</span><span class="p">][</span><span class="n">name</span><span class="p">][</span><span class="n">n</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span>
+                            <span class="n">fp_latex</span> <span class="o">+=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sky&quot;</span><span class="p">][</span><span class="n">name</span><span class="p">][</span><span class="n">n</span><span class="p">][</span><span class="mi">2</span><span class="p">]]</span>
+                            <span class="n">fp_name</span> <span class="o">+=</span> <span class="p">[</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sky&quot;</span><span class="p">][</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">())[</span><span class="n">k</span><span class="p">]]</span>
+                    <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="k">pass</span>
+
+        <span class="k">return</span> <span class="n">fp</span><span class="p">,</span> <span class="n">fp_name</span><span class="p">,</span> <span class="n">fp_latex</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_set_marker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">values</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Define the markers to see the input values in GetDist plot.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">ii</span><span class="p">,</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">values</span><span class="p">):</span>
+            <span class="c1"># print(self.names[ii], values[ii])</span>
+            <span class="nb">dict</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">[</span><span class="n">ii</span><span class="p">]]</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="n">ii</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sampler&quot;</span><span class="p">][</span><span class="s2">&quot;markers&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+            <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="nb">dict</span>
+
+<div class="viewcode-block" id="Plots.get_convergence">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.Plots.get_convergence">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_convergence</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">chain</span><span class="p">,</span> <span class="n">job_id</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        chain assumed to be not flat with shape (nsamples, nwalkers, nparams)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;params.yml&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_list_free_parameter</span><span class="p">()</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">chain</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]):</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">chain</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="mi">1</span><span class="p">,</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">chain</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">],</span> <span class="s2">&quot;-b&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.2</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">chain</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="s2">&quot;-r&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">ls</span><span class="o">=</span><span class="s2">&quot;--&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;black&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Iterations&quot;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;allplots_</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/Convergence_chain.png&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="Plots.get_triangle">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.Plots.get_triangle">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_triangle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">chain</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">job_id</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Make triangle plot of each estimated parameters</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;params.yml&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">names</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">make_list_free_parameter</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">marker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_set_marker</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">marker</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_make_samples</span><span class="p">(</span><span class="n">chain</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+        <span class="c1"># Triangle plot</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">plots</span><span class="o">.</span><span class="n">get_subplot_plotter</span><span class="p">()</span>
+        <span class="n">g</span><span class="o">.</span><span class="n">triangle_plot</span><span class="p">(</span>
+            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sample</span><span class="p">],</span>
+            <span class="n">filled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">markers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">marker</span><span class="p">,</span>
+            <span class="n">title_limit</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Sampler&quot;</span><span class="p">][</span><span class="s2">&quot;title_limit&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="c1"># title_limit=1)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;allplots_</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/triangle_plot.png&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="Plots.get_Dl_plot">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.Plots.get_Dl_plot">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_Dl_plot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ell</span><span class="p">,</span> <span class="n">Dl</span><span class="p">,</span> <span class="n">Dl_err</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">model</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nus</span><span class="p">)):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nus</span><span class="p">)):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nus</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">nus</span><span class="p">),</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">errorbar</span><span class="p">(</span><span class="n">ell</span><span class="p">,</span> <span class="n">Dl</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">yerr</span><span class="o">=</span><span class="n">Dl_err</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;or&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">errorbar</span><span class="p">(</span><span class="n">ell</span><span class="p">,</span> <span class="n">model</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;-k&quot;</span><span class="p">)</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nus</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="n">nus</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="c1"># plt.yscale(&#39;log&#39;)</span>
+                <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;allplots_</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/Dl_plot.png&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="PlotsFMM">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsFMM">[docs]</a>
+<span class="k">class</span> <span class="nc">PlotsFMM</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">stk</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;Q&quot;</span><span class="p">,</span> <span class="s2">&quot;U&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span> <span class="o">=</span> <span class="n">seenpix</span>
+
+<div class="viewcode-block" id="PlotsFMM.plot_frequency_maps">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsFMM.plot_frequency_maps">[docs]</a>
+    <span class="k">def</span> <span class="nf">plot_frequency_maps</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">m_in</span><span class="p">,</span> <span class="n">m_out</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">reso</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">nsig</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+    <span class="p">):</span>
+
+        <span class="n">m_in</span><span class="p">[:,</span> <span class="o">~</span><span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+        <span class="n">m_out</span><span class="p">[:,</span> <span class="o">~</span><span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">m_out</span> <span class="o">-</span> <span class="n">m_in</span>
+        <span class="n">nf</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">m_out</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="n">fig</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">inu</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nf</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">istk</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+
+                <span class="n">sig</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span><span class="p">,</span> <span class="n">istk</span><span class="p">])</span>
+
+                <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                    <span class="n">m_out</span><span class="p">[</span><span class="n">inu</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">],</span>
+                    <span class="n">rot</span><span class="o">=</span><span class="n">center</span><span class="p">,</span>
+                    <span class="n">reso</span><span class="o">=</span><span class="n">reso</span><span class="p">,</span>
+                    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                    <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                    <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                    <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="n">nf</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="n">k</span><span class="p">),</span>
+                    <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Output </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                    <span class="n">res</span><span class="p">[</span><span class="n">inu</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">],</span>
+                    <span class="n">rot</span><span class="o">=</span><span class="n">center</span><span class="p">,</span>
+                    <span class="n">reso</span><span class="o">=</span><span class="n">reso</span><span class="p">,</span>
+                    <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                    <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                    <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                    <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="n">nf</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                    <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Residuals </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="c1"># plt.suptitle(r&#39;$\nu$ = &#39;+f&#39;{nus[inu]:.1f} GHz&#39;, x=0.5, y=1 - inu/10)</span>
+
+                <span class="n">k</span> <span class="o">+=</span> <span class="mi">2</span>
+            <span class="c1"># plt.text(-2.3, 1 - inu/10, r&#39;$\nu$ = &#39;+f&#39;{nus[inu]:.1f} GHz&#39;, fontsize=15,</span>
+            <span class="c1">#        horizontalalignment=&#39;center&#39;)</span>
+
+        <span class="k">if</span> <span class="n">filename</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="PlotsFMM.plot_FMM_old">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsFMM.plot_FMM_old">[docs]</a>
+    <span class="k">def</span> <span class="nf">plot_FMM_old</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">m_in</span><span class="p">,</span>
+        <span class="n">m_out</span><span class="p">,</span>
+        <span class="n">center</span><span class="p">,</span>
+        <span class="n">seenpix</span><span class="p">,</span>
+        <span class="n">nus</span><span class="p">,</span>
+        <span class="n">job_id</span><span class="p">,</span>
+        <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span>
+        <span class="n">istk</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">nsig</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;signal&quot;</span><span class="p">,</span>
+    <span class="p">):</span>
+
+        <span class="n">m_in</span><span class="p">[:,</span> <span class="o">~</span><span class="n">seenpix</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+        <span class="n">m_out</span><span class="p">[:,</span> <span class="o">~</span><span class="n">seenpix</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">]):</span>
+
+            <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                <span class="n">m_in</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">],</span>
+                <span class="n">rot</span><span class="o">=</span><span class="n">center</span><span class="p">,</span>
+                <span class="n">reso</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span><span class="p">),</span>
+                <span class="n">title</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;Input - $\nu$ = &quot;</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nus</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> GHz&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                <span class="n">m_out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">],</span>
+                <span class="n">rot</span><span class="o">=</span><span class="n">center</span><span class="p">,</span>
+                <span class="n">reso</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                <span class="n">title</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;Output - $\nu$ = &quot;</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nus</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> GHz&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">res</span> <span class="o">=</span> <span class="n">m_in</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]</span> <span class="o">-</span> <span class="n">m_out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]</span>
+            <span class="n">res</span><span class="p">[</span><span class="o">~</span><span class="n">seenpix</span><span class="p">]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+
+            <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                <span class="n">res</span><span class="p">,</span>
+                <span class="n">rot</span><span class="o">=</span><span class="n">center</span><span class="p">,</span>
+                <span class="n">reso</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="p">)</span>
+
+            <span class="n">k</span> <span class="o">+=</span> <span class="mi">3</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;FMM/allplots_</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/frequency_maps_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="PlotsFMM.plot_FMM_mollview">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsFMM.plot_FMM_mollview">[docs]</a>
+    <span class="k">def</span> <span class="nf">plot_FMM_mollview</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">m_in</span><span class="p">,</span> <span class="n">m_out</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">job_id</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">istk</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">nsig</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">fwhm</span><span class="o">=</span><span class="mi">0</span>
+    <span class="p">):</span>
+
+        <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span><span class="n">fwhm</span><span class="o">=</span><span class="n">fwhm</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">]):</span>
+            <span class="n">hp</span><span class="o">.</span><span class="n">mollview</span><span class="p">(</span>
+                <span class="n">C</span><span class="p">(</span><span class="n">m_in</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span><span class="p">),</span>
+                <span class="n">title</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;Input - $\nu$ = &quot;</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nus</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> GHz&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">hp</span><span class="o">.</span><span class="n">mollview</span><span class="p">(</span>
+                <span class="n">C</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                <span class="n">title</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;Output - $\nu$ = &quot;</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nus</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> GHz&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">hp</span><span class="o">.</span><span class="n">mollview</span><span class="p">(</span>
+                <span class="n">C</span><span class="p">(</span><span class="n">m_in</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">])</span> <span class="o">-</span> <span class="n">C</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">m_out</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="p">)</span>
+
+            <span class="n">k</span> <span class="o">+=</span> <span class="mi">3</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;allplots_</span><span class="si">{</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/frequency_maps_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2">_moll.png&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="PlotsCMM">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsCMM">[docs]</a>
+<span class="k">class</span> <span class="nc">PlotsCMM</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Instance to produce plots on the convergence.</span>
+
+<span class="sd">    Arguments :</span>
+<span class="sd">    ===========</span>
+<span class="sd">        - jobid : Int number for saving figures.</span>
+<span class="sd">        - dogif : Bool to produce GIF.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">dogif</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset</span> <span class="o">=</span> <span class="n">preset</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">job_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">job_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dogif</span> <span class="o">=</span> <span class="n">dogif</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">params</span>
+
+<div class="viewcode-block" id="PlotsCMM.plot_sed">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_sed">[docs]</a>
+    <span class="k">def</span> <span class="nf">plot_sed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nus_in</span><span class="p">,</span> <span class="n">A_in</span><span class="p">,</span> <span class="n">nus_out</span><span class="p">,</span> <span class="n">A_out</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">ki</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">gif</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Plots the Spectral Energy Distribution (SED) and saves the plot as a PNG file.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        nus (array-like): Array of frequency values.</span>
+<span class="sd">        A (array-like): Array of amplitude values.</span>
+<span class="sd">        figsize (tuple, optional): Size of the figure. Defaults to (8, 6).</span>
+<span class="sd">        truth (array-like, optional): Array of true values for comparison. Defaults to None.</span>
+<span class="sd">        ki (int, optional): Iteration index for file naming. Defaults to 0.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Plots&quot;</span><span class="p">][</span><span class="s2">&quot;conv_beta&quot;</span><span class="p">]:</span>
+
+            <span class="n">nf_in</span><span class="p">,</span> <span class="n">nc_in</span> <span class="o">=</span> <span class="n">A_in</span><span class="o">.</span><span class="n">shape</span>
+            <span class="n">nf_out</span><span class="p">,</span> <span class="n">nc_out</span> <span class="o">=</span> <span class="n">A_out</span><span class="o">.</span><span class="n">shape</span>
+            <span class="n">fsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">nf_in</span> <span class="o">/</span> <span class="n">nf_out</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">ic</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nc_in</span><span class="p">):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">nus_in</span><span class="p">,</span> <span class="n">A_in</span><span class="p">[:,</span> <span class="n">ic</span><span class="p">],</span> <span class="s2">&quot;-k&quot;</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">inu</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nf_out</span><span class="p">):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">errorbar</span><span class="p">(</span>
+                    <span class="n">nus_out</span><span class="p">[</span><span class="n">inu</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">A_in</span><span class="p">[</span><span class="n">inu</span> <span class="o">*</span> <span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">inu</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">]),</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;og&quot;</span>
+                <span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">ic</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nc_out</span><span class="p">):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">errorbar</span><span class="p">(</span><span class="n">nus_out</span><span class="p">,</span> <span class="n">A_out</span><span class="p">[:,</span> <span class="n">ic</span><span class="p">],</span> <span class="n">fmt</span><span class="o">=</span><span class="s2">&quot;xb&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="mi">120</span><span class="p">,</span> <span class="mi">260</span><span class="p">)</span>
+            <span class="n">eps</span> <span class="o">=</span> <span class="mf">0.1</span>
+            <span class="n">eps_max</span> <span class="o">=</span> <span class="n">A_in</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">eps</span><span class="p">)</span>
+            <span class="n">eps_min</span> <span class="o">=</span> <span class="n">A_in</span><span class="o">.</span><span class="n">min</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">eps</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="n">eps_min</span><span class="p">,</span> <span class="n">eps_max</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">yscale</span><span class="p">(</span><span class="s2">&quot;log&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/A_iter/A_iter</span><span class="si">{</span><span class="n">ki</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">ki</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">gif</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/A_iter/A_iter</span><span class="si">{</span><span class="n">ki</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="PlotsCMM.plot_beta_iteration">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_beta_iteration">[docs]</a>
+    <span class="k">def</span> <span class="nf">plot_beta_iteration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">truth</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ki</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Method to plot beta as a function of iteration. Beta can have shape (niter) or (niter, nbeta).</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        beta : numpy.ndarray</span>
+<span class="sd">            Array containing beta values for each iteration. Can be 1D or 2D.</span>
+<span class="sd">        figsize : tuple, optional</span>
+<span class="sd">            Size of the figure to be plotted. Default is (8, 6).</span>
+<span class="sd">        truth : numpy.ndarray or float, optional</span>
+<span class="sd">            True value(s) of beta to be plotted as a reference line. Default is None.</span>
+<span class="sd">        ki : int, optional</span>
+<span class="sd">            Iteration index for saving the plot. Default is 0.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">        None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Plots&quot;</span><span class="p">][</span><span class="s2">&quot;conv_beta&quot;</span><span class="p">]:</span>
+            <span class="n">niter</span> <span class="o">=</span> <span class="n">beta</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">alliter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">niter</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">ndim</span><span class="p">(</span><span class="n">beta</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">alliter</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">beta</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+                <span class="k">if</span> <span class="n">truth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="n">truth</span><span class="p">,</span> <span class="n">ls</span><span class="o">=</span><span class="s2">&quot;--&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;red&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">beta</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">truth</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">beta</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">alliter</span><span class="p">,</span> <span class="n">beta</span><span class="p">[:,</span> <span class="n">i</span><span class="p">],</span> <span class="s2">&quot;-k&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">truth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">truth</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                            <span class="n">plt</span><span class="o">.</span><span class="n">axhline</span><span class="p">(</span><span class="n">truth</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">],</span> <span class="n">ls</span><span class="o">=</span><span class="s2">&quot;--&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;red&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">ndim</span><span class="p">(</span><span class="n">beta</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">alliter</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">truth</span> <span class="o">-</span> <span class="n">beta</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">beta</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">alliter</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">truth</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">beta</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]),</span> <span class="s2">&quot;-k&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">yscale</span><span class="p">(</span><span class="s2">&quot;log&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/beta_iter</span><span class="si">{</span><span class="n">ki</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">ki</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/beta_iter</span><span class="si">{</span><span class="n">ki</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_display_allresiduals</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">map_i</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">ki</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Display all components of the Healpix map with Gaussian convolution.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        seenpix (array-like): Boolean array indicating the pixels that are seen.</span>
+<span class="sd">        figsize (tuple): Size of the figure to be plotted. Default is (14, 10).</span>
+<span class="sd">        ki (int): Iteration index for saving the figure. Default is 0.</span>
+
+<span class="sd">        This function generates and saves a figure showing the output maps and residuals</span>
+<span class="sd">        for each component and Stokes parameter (I, Q, U). The maps are convolved using</span>
+<span class="sd">        a Gaussian operator and displayed using Healpix&#39;s gnomview function.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">stk</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;Q&quot;</span><span class="p">,</span> <span class="s2">&quot;U&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Plots&quot;</span><span class="p">][</span><span class="s2">&quot;maps&quot;</span><span class="p">]:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+            <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">A</span><span class="p">(</span><span class="n">map_i</span><span class="p">)</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">b</span>
+            <span class="n">map_res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">*</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+            <span class="n">map_res</span><span class="p">[:,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">r</span>
+
+            <span class="k">for</span> <span class="n">istk</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">icomp</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_name_out</span><span class="p">)):</span>
+
+                    <span class="n">_reso</span> <span class="o">=</span> <span class="mi">15</span>
+                    <span class="n">nsig</span> <span class="o">=</span> <span class="mi">3</span>
+
+                    <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                        <span class="n">map_res</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">],</span>
+                        <span class="n">rot</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">center</span><span class="p">,</span>
+                        <span class="n">reso</span><span class="o">=</span><span class="n">_reso</span><span class="p">,</span>
+                        <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                        <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_name_out</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2"> - r = A x - b&quot;</span><span class="p">,</span>
+                        <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                        <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">),</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                        <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                        <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]),</span>
+                    <span class="p">)</span>
+                    <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/allcomps/allres_iter</span><span class="si">{</span><span class="n">ki</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="c1"># if self.preset.tools.rank == 0:</span>
+            <span class="c1">#    if ki &gt; 0:</span>
+            <span class="c1">#        os.remove(f&#39;jobs/{self.job_id}/allcomps/allres_iter{ki}.png&#39;)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_display_allcomponents</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">ki</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">gif</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">reso</span><span class="o">=</span><span class="mi">15</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Display all components of the Healpix map with Gaussian convolution.</span>
+
+<span class="sd">        Parameters:</span>
+<span class="sd">        seenpix (array-like): Boolean array indicating the pixels that are seen.</span>
+<span class="sd">        figsize (tuple): Size of the figure to be plotted. Default is (14, 10).</span>
+<span class="sd">        ki (int): Iteration index for saving the figure. Default is 0.</span>
+
+<span class="sd">        This function generates and saves a figure showing the output maps and residuals</span>
+<span class="sd">        for each component and Stokes parameter (I, Q, U). The maps are convolved using</span>
+<span class="sd">        a Gaussian operator and displayed using Healpix&#39;s gnomview function.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span>
+            <span class="n">fwhm</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">fwhm_rec</span><span class="p">,</span>
+            <span class="n">lmax</span><span class="o">=</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="n">stk</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;Q&quot;</span><span class="p">,</span> <span class="s2">&quot;U&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Plots&quot;</span><span class="p">][</span><span class="s2">&quot;maps&quot;</span><span class="p">]:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+            <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">istk</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">icomp</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_name_out</span><span class="p">)):</span>
+
+                    <span class="c1"># if self.preset.comp.params_foregrounds[&#39;Dust&#39;][&#39;nside_beta_out&#39;] == 0:</span>
+
+                    <span class="n">map_in</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">])</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                    <span class="n">map_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+                    <span class="n">sig</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">istk</span><span class="p">])</span>
+                    <span class="n">map_in</span><span class="p">[</span><span class="o">~</span><span class="n">seenpix</span><span class="p">]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+                    <span class="n">map_out</span><span class="p">[</span><span class="o">~</span><span class="n">seenpix</span><span class="p">]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+
+                    <span class="c1"># else:</span>
+                    <span class="c1">#     if self.preset.qubic.params_qubic[&#39;convolution_in&#39;]:</span>
+                    <span class="c1">#         map_in = self.preset.comp.components_convolved_out[icomp, :, istk].copy()</span>
+                    <span class="c1">#         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()</span>
+                    <span class="c1">#         sig = np.std(self.preset.comp.components_convolved_out[icomp, seenpix, istk])</span>
+                    <span class="c1">#     else:</span>
+                    <span class="c1">#         map_in = self.preset.comp.components_out[istk, :, icomp].copy()</span>
+                    <span class="c1">#         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()</span>
+                    <span class="c1">#         sig = np.std(self.preset.comp.components_out[istk, seenpix, icomp])</span>
+                    <span class="c1">#     map_in[~seenpix] = hp.UNSEEN</span>
+                    <span class="c1">#     map_out[~seenpix] = hp.UNSEEN</span>
+
+                    <span class="n">r</span> <span class="o">=</span> <span class="n">map_in</span> <span class="o">-</span> <span class="n">map_out</span>
+                    <span class="n">nsig</span> <span class="o">=</span> <span class="mi">2</span>
+                    <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                        <span class="n">map_out</span><span class="p">,</span>
+                        <span class="n">rot</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">center</span><span class="p">,</span>
+                        <span class="n">reso</span><span class="o">=</span><span class="n">reso</span><span class="p">,</span>
+                        <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                        <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_name_out</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2"> - Output&quot;</span><span class="p">,</span>
+                        <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                        <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                        <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                        <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                        <span class="n">r</span><span class="p">,</span>
+                        <span class="n">rot</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">center</span><span class="p">,</span>
+                        <span class="n">reso</span><span class="o">=</span><span class="n">reso</span><span class="p">,</span>
+                        <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                        <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_name_out</span><span class="p">[</span><span class="n">icomp</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">stk</span><span class="p">[</span><span class="n">istk</span><span class="p">]</span><span class="si">}</span><span class="s2"> - Residual&quot;</span><span class="p">,</span>
+                        <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                        <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                        <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">seenpix</span><span class="p">]),</span>
+                        <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">seenpix</span><span class="p">]),</span>
+                    <span class="p">)</span>
+                    <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/allcomps/allcomps_iter</span><span class="si">{</span><span class="n">ki</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">ki</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">gif</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/allcomps/allcomps_iter</span><span class="si">{</span><span class="n">ki</span><span class="si">}</span><span class="s2">.png&quot;</span>
+                    <span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+<div class="viewcode-block" id="PlotsCMM.display_maps">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsCMM.display_maps">[docs]</a>
+    <span class="k">def</span> <span class="nf">display_maps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">seenpix</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">nsig</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">ki</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="s2">&quot;gnomview&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Method to display maps at given iteration.</span>
+
+<span class="sd">        Arguments:</span>
+<span class="sd">        ----------</span>
+<span class="sd">            - seenpix : array containing the id of seen pixels.</span>
+<span class="sd">            - ngif    : Int number to create GIF with ngif PNG image.</span>
+<span class="sd">            - figsize : Tuple to control size of plots.</span>
+<span class="sd">            - nsig    : Int number to compute errorbars.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Plots&quot;</span><span class="p">][</span><span class="s2">&quot;maps&quot;</span><span class="p">]:</span>
+            <span class="n">stk</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;I&quot;</span><span class="p">,</span> <span class="s2">&quot;Q&quot;</span><span class="p">,</span> <span class="s2">&quot;U&quot;</span><span class="p">]</span>
+            <span class="n">rms_i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+            <span class="k">for</span> <span class="n">istk</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">stk</span><span class="p">):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+                <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+
+                <span class="k">for</span> <span class="n">icomp</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_name_out</span><span class="p">)):</span>
+
+                    <span class="c1"># if self.preset.comp.params_foregrounds[&#39;Dust&#39;][&#39;nside_beta_out&#39;] == 0:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;convolution_in&quot;</span><span class="p">]:</span>
+                        <span class="n">map_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_convolved_out</span><span class="p">[</span>
+                            <span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span>
+                        <span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                        <span class="n">map_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">map_in</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                        <span class="n">map_out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="p">[</span><span class="n">icomp</span><span class="p">,</span> <span class="p">:,</span> <span class="n">istk</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+                    <span class="c1"># else:</span>
+                    <span class="c1">#     if self.preset.qubic.params_qubic[&#39;convolution_in&#39;]:</span>
+                    <span class="c1">#         map_in = self.preset.comp.components_convolved_out[icomp, :, istk].copy()</span>
+                    <span class="c1">#         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()</span>
+                    <span class="c1">#     else:</span>
+                    <span class="c1">#         map_in = self.preset.comp.components_out[istk, :, icomp].copy()</span>
+                    <span class="c1">#         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()</span>
+
+                    <span class="n">sig</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">map_in</span><span class="p">[</span><span class="n">seenpix</span><span class="p">])</span>
+                    <span class="n">map_in</span><span class="p">[</span><span class="o">~</span><span class="n">seenpix</span><span class="p">]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+                    <span class="n">map_out</span><span class="p">[</span><span class="o">~</span><span class="n">seenpix</span><span class="p">]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+                    <span class="n">r</span> <span class="o">=</span> <span class="n">map_in</span> <span class="o">-</span> <span class="n">map_out</span>
+                    <span class="n">r</span><span class="p">[</span><span class="o">~</span><span class="n">seenpix</span><span class="p">]</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+                    <span class="k">if</span> <span class="n">icomp</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">istk</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                            <span class="n">rms_i</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">istk</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">seenpix</span><span class="p">])</span>
+
+                    <span class="n">_reso</span> <span class="o">=</span> <span class="mi">15</span>
+                    <span class="n">nsig</span> <span class="o">=</span> <span class="mi">3</span>
+                    <span class="k">if</span> <span class="n">view</span> <span class="o">==</span> <span class="s2">&quot;gnomview&quot;</span><span class="p">:</span>
+                        <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                            <span class="n">map_in</span><span class="p">,</span>
+                            <span class="n">rot</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">center</span><span class="p">,</span>
+                            <span class="n">reso</span><span class="o">=</span><span class="n">_reso</span><span class="p">,</span>
+                            <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                            <span class="n">title</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                            <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                            <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                            <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                            <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                            <span class="n">map_out</span><span class="p">,</span>
+                            <span class="n">rot</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">center</span><span class="p">,</span>
+                            <span class="n">reso</span><span class="o">=</span><span class="n">_reso</span><span class="p">,</span>
+                            <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                            <span class="n">title</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                            <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                            <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">2</span><span class="p">),</span>
+                            <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                            <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span>
+                            <span class="n">r</span><span class="p">,</span>
+                            <span class="n">rot</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">center</span><span class="p">,</span>
+                            <span class="n">reso</span><span class="o">=</span><span class="n">_reso</span><span class="p">,</span>
+                            <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                            <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">seenpix</span><span class="p">])</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                            <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                            <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">3</span><span class="p">),</span>
+                            <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                            <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="k">elif</span> <span class="n">view</span> <span class="o">==</span> <span class="s2">&quot;mollview&quot;</span><span class="p">:</span>
+                        <span class="n">hp</span><span class="o">.</span><span class="n">mollview</span><span class="p">(</span>
+                            <span class="n">map_in</span><span class="p">,</span>
+                            <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                            <span class="n">title</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                            <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                            <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+                            <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                            <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="n">hp</span><span class="o">.</span><span class="n">mollview</span><span class="p">(</span>
+                            <span class="n">map_out</span><span class="p">,</span>
+                            <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                            <span class="n">title</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+                            <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                            <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">2</span><span class="p">),</span>
+                            <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                            <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                        <span class="p">)</span>
+                        <span class="n">hp</span><span class="o">.</span><span class="n">mollview</span><span class="p">(</span>
+                            <span class="n">r</span><span class="p">,</span>
+                            <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                            <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">seenpix</span><span class="p">])</span><span class="si">:</span><span class="s2">.3e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                            <span class="n">cmap</span><span class="o">=</span><span class="s2">&quot;jet&quot;</span><span class="p">,</span>
+                            <span class="n">sub</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">k</span> <span class="o">+</span> <span class="mi">3</span><span class="p">),</span>
+                            <span class="nb">min</span><span class="o">=-</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                            <span class="nb">max</span><span class="o">=</span><span class="n">nsig</span> <span class="o">*</span> <span class="n">sig</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="n">k</span> <span class="o">+=</span> <span class="mi">3</span>
+
+                <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2">/maps_iter</span><span class="si">{</span><span class="n">ki</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">ki</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2">/maps_iter</span><span class="si">{</span><span class="n">ki</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+                <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">rms_plot</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">rms_plot</span><span class="p">,</span> <span class="n">rms_i</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="PlotsCMM.plot_gain_iteration">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_gain_iteration">[docs]</a>
+    <span class="k">def</span> <span class="nf">plot_gain_iteration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">gain</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">ki</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Method to plot convergence of reconstructed gains.</span>
+
+<span class="sd">        Arguments :</span>
+<span class="sd">        -----------</span>
+<span class="sd">            - gain    : Array containing gain number (1 per detectors). It has the shape (Niteration, Ndet, 2) for Two Bands design and (Niteration, Ndet) for Wide Band design</span>
+<span class="sd">            - alpha   : Transparency for curves.</span>
+<span class="sd">            - figsize : Tuple to control size of plots.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Plots&quot;</span><span class="p">][</span><span class="s2">&quot;conv_gain&quot;</span><span class="p">]:</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+            <span class="n">niter</span> <span class="o">=</span> <span class="n">gain</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">ndet</span> <span class="o">=</span> <span class="n">gain</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">alliter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">niter</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+            <span class="c1"># plt.hist(gain[:, i, j])</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;two&quot;</span><span class="p">:</span>
+                <span class="n">color</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;red&quot;</span><span class="p">,</span> <span class="s2">&quot;blue&quot;</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">):</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">gain</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:,</span> <span class="n">j</span><span class="p">],</span> <span class="n">bins</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+            <span class="c1">#        plt.plot(alliter-1, np.mean(gain, axis=1)[:, j], color[j], alpha=1)</span>
+            <span class="c1">#        for i in range(ndet):</span>
+            <span class="c1">#            plt.plot(alliter-1, gain[:, i, j], color[j], alpha=alpha)</span>
+
+            <span class="c1"># elif self.preset.qubic.params_qubic[&#39;type&#39;] == &#39;wide&#39;:</span>
+            <span class="c1">#    color = [&#39;--g&#39;]</span>
+            <span class="c1">#    plt.plot(alliter-1, np.mean(gain, axis=1), color[0], alpha=1)</span>
+            <span class="c1">#    for i in range(ndet):</span>
+            <span class="c1">#        plt.plot(alliter-1, gain[:, i], color[0], alpha=alpha)</span>
+
+            <span class="c1"># plt.yscale(&#39;log&#39;)</span>
+            <span class="c1"># plt.ylabel(r&#39;|$g_{reconstructed} - g_{input}$|&#39;, fontsize=12)</span>
+            <span class="c1"># plt.xlabel(&#39;Iterations&#39;, fontsize=12)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="o">-</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">axvline</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">ls</span><span class="o">=</span><span class="s2">&quot;--&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;black&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/gain_iter</span><span class="si">{</span><span class="n">ki</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">ki</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/gain_iter</span><span class="si">{</span><span class="n">ki</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="PlotsCMM.plot_rms_iteration">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmap_plotter.html#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_rms_iteration">[docs]</a>
+    <span class="k">def</span> <span class="nf">plot_rms_iteration</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rms</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="n">ki</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Plots&quot;</span><span class="p">][</span><span class="s2">&quot;conv_rms&quot;</span><span class="p">]:</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">rms</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;-b&quot;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Q&quot;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">rms</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="mi">1</span><span class="p">],</span> <span class="s2">&quot;-r&quot;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;U&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">yscale</span><span class="p">(</span><span class="s2">&quot;log&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">()</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/rms_iter</span><span class="si">{</span><span class="n">ki</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">tools</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">ki</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CMM/jobs/</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">job_id</span><span class="si">}</span><span class="s2">/rms_iter</span><span class="si">{</span><span class="n">ki</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

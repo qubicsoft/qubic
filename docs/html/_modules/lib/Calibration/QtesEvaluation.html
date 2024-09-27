@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Calibration.QtesEvaluation &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.Calibration.QtesEvaluation</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.Calibration.QtesEvaluation</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">$Id: TES_evaluation.py</span>
+<span class="sd">$auth: Steve Torchinsky &lt;satorchi@apc.in2p3.fr&gt;</span>
+<span class="sd">$created: Tue 17 May 2022 16:57:19 CEST</span>
+<span class="sd">$license: GPLv3 or later, see https://www.gnu.org/licenses/gpl-3.0.txt</span>
+
+<span class="sd">          This is free software: you are free to change and</span>
+<span class="sd">          redistribute it.  There is NO WARRANTY, to the extent</span>
+<span class="sd">          permitted by law.</span>
+
+<span class="sd">write a fits file with a boolean array for all TES good/bad</span>
+<span class="sd">The FITS header had info about how the determination was made including:</span>
+<span class="sd"> dataset name</span>
+<span class="sd"> analysis type (I-V, NEP, timeconstant, carbon fibre, linearity,...)</span>
+<span class="sd"> analyser (person who did the analysis)</span>
+<span class="sd"> elog entry (link to elog entry for the data set)</span>
+<span class="sd"> wiki page (link to the wiki page with more information)</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">astropy.io</span> <span class="kn">import</span> <span class="n">fits</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">datetime</span> <span class="k">as</span> <span class="nn">dt</span>
+<span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
+<span class="kn">import</span> <span class="nn">qubic</span>
+
+<span class="n">hdr_comment</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;TELESCOP&#39;</span><span class="p">]</span> <span class="o">=</span><span class="s1">&#39;Telescope used for the observation&#39;</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;FILETYPE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;File identification&#39;</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;DATASET&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;QubicStudio dataset name&#39;</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;ANALYSIS&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Analysis type used to determine TES quality&#39;</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;ANALYSER&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;the person who did the analysis&#39;</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;ELOG&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;link to the elog entry for the data&#39;</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;WIKIPAGE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;link to the wiki page where there is more information&#39;</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;FILENAME&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;name of this file&#39;</span>
+<span class="n">hdr_comment</span><span class="p">[</span><span class="s1">&#39;FILEDATE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;UT date this file was created&#39;</span>
+
+<span class="n">hdr_keys</span> <span class="o">=</span> <span class="n">hdr_comment</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+
+<div class="viewcode-block" id="get_header_values">
+<a class="viewcode-back" href="../../../lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.get_header_values">[docs]</a>
+<span class="k">def</span> <span class="nf">get_header_values</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                      <span class="n">analysis</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                      <span class="n">analyser</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                      <span class="n">elog</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                      <span class="n">wikipage</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    get the descriptive information</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="c1"># initialize</span>
+    <span class="n">filename_suffix</span> <span class="o">=</span> <span class="s1">&#39;_GoodBad-TES.fits&#39;</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+    <span class="n">hdr</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hdr_keys</span><span class="p">:</span>
+        <span class="n">hdr</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;TELESCOP&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;QUBIC&#39;</span>
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;FILETYPE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;GOODBAD&#39;</span>
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;DATASET&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataset</span>
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;ANALYSIS&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">analysis</span>
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;ANALYSER&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">analyser</span>
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;ELOG&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">elog</span>
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;WIKIPAGE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">wikipage</span>
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;FILEDATE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dt</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y-%m-</span><span class="si">%d</span><span class="s1">T%H:%M:%S&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">dataset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">ans</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s1">&#39;Enter dataset name: &#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ans</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>            
+            <span class="n">dataset</span> <span class="o">=</span> <span class="n">ans</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">dataset</span> <span class="o">=</span> <span class="s1">&#39;UNKNOWN-dataset&#39;</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span><span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">dataset</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
+        <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;DATASET&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataset</span>
+            
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;DATASET&#39;</span><span class="p">],</span><span class="nb">list</span><span class="p">):</span>
+        <span class="n">first_dataset</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;DATASET&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">first_dataset</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;DATASET&#39;</span><span class="p">])</span>
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">first_dataset</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span><span class="s1">&#39;_&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">analysis</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">ans</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s1">&#39;Enter analysis method (eg. IV, NEP, timeconstant,...): &#39;</span><span class="p">)</span>
+        <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;ANALYSIS&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ans</span>
+    <span class="n">filename</span> <span class="o">+=</span> <span class="s1">&#39;_</span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;ANALYSIS&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span><span class="s1">&#39;_&#39;</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">analyser</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">ans</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s1">&#39;Who did the analysis? &#39;</span><span class="p">)</span>
+        <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;ANALYSER&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ans</span>
+
+    <span class="k">if</span> <span class="n">elog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">ans</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s1">&#39;Enter the elog entry for the dataset (if any): &#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span>
+            <span class="n">elog_url</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">elog_num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+                <span class="n">elog_url</span> <span class="o">=</span> <span class="s1">&#39;https://elog-qubic.in2p3.fr/demo/</span><span class="si">%i</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">elog_num</span>
+            <span class="k">except</span><span class="p">:</span>
+                <span class="n">elog_url</span> <span class="o">=</span> <span class="n">ans</span>
+        <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;ELOG&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">elog_url</span>
+
+    <span class="k">if</span> <span class="n">wikipage</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">ans</span> <span class="o">=</span> <span class="nb">input</span><span class="p">(</span><span class="s1">&#39;Enter wikipage where we can find more information: &#39;</span><span class="p">)</span>
+        <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;WIKIPAGE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ans</span>
+
+    <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;FILENAME&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">filename</span><span class="o">+</span><span class="n">filename_suffix</span>
+    <span class="k">return</span> <span class="n">hdr</span></div>
+
+
+
+<div class="viewcode-block" id="check_goodbad">
+<a class="viewcode-back" href="../../../lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.check_goodbad">[docs]</a>
+<span class="k">def</span> <span class="nf">check_goodbad</span><span class="p">(</span><span class="n">goodbad</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    check that the given array is an array of boolean</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">goodbad</span><span class="p">,</span><span class="nb">list</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">goodbad</span><span class="p">,</span><span class="nb">tuple</span><span class="p">):</span>
+        <span class="n">goodbad</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">goodbad</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">goodbad</span><span class="p">,</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Inappropriate input.  Please input a 1-dimensional array of Boolean&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">return</span> <span class="n">goodbad</span></div>
+
+
+
+<div class="viewcode-block" id="write_goodbad">
+<a class="viewcode-back" href="../../../lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.write_goodbad">[docs]</a>
+<span class="k">def</span> <span class="nf">write_goodbad</span><span class="p">(</span><span class="n">goodbad</span><span class="p">,</span>
+                  <span class="n">dataset</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                  <span class="n">analysis</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                  <span class="n">analyser</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                  <span class="n">elog</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                  <span class="n">wikipage</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    write a FITS file with a good/bad info</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="n">hdrval</span> <span class="o">=</span> <span class="n">get_header_values</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span>
+                               <span class="n">analysis</span><span class="p">,</span>
+                               <span class="n">analyser</span><span class="p">,</span>
+                               <span class="n">elog</span><span class="p">,</span>
+                               <span class="n">wikipage</span><span class="p">)</span>
+
+    <span class="n">goodbad</span> <span class="o">=</span> <span class="n">check_goodbad</span><span class="p">(</span><span class="n">goodbad</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">goodbad</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span> <span class="k">return</span>
+
+
+    
+    <span class="n">prihdr</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">Header</span><span class="p">()</span>
+    <span class="n">toolong</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hdrval</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">hdrval</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hdr_comment</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">comment</span> <span class="o">=</span> <span class="n">hdr_comment</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">comment</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span><span class="nb">list</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">idx</span><span class="p">,</span><span class="n">dset</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+                <span class="n">dset_num</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">subkey</span> <span class="o">=</span> <span class="s1">&#39;SET</span><span class="si">%02i</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">dset_num</span>
+                <span class="n">cardlen</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">dset</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">comment</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">cardlen</span><span class="o">&lt;</span><span class="mi">80</span><span class="p">:</span>
+                    <span class="n">prihdr</span><span class="p">[</span><span class="n">subkey</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">dset</span><span class="p">,</span><span class="n">comment</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">prihdr</span><span class="p">[</span><span class="n">subkey</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">dset</span><span class="p">,</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+                    <span class="n">toolong</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">cardlen</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">comment</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">cardlen</span><span class="o">&gt;</span><span class="mi">80</span><span class="p">:</span> <span class="n">comment</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+            <span class="n">prihdr</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">val</span><span class="p">,</span><span class="n">comment</span><span class="p">)</span>
+            
+
+    <span class="k">if</span> <span class="n">toolong</span><span class="p">:</span>
+        <span class="n">prihdr</span><span class="p">[</span><span class="s1">&#39;WARNING&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;CUTOFF&#39;</span><span class="p">,</span><span class="s1">&#39;go to HDU3 for details&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Truncated information can be found in full in the 3rd HDU&#39;</span><span class="p">)</span>
+            
+    <span class="n">prihdu</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">PrimaryHDU</span><span class="p">(</span><span class="n">header</span><span class="o">=</span><span class="n">prihdr</span><span class="p">)</span>
+
+    <span class="c1"># prepare the hdulist</span>
+    <span class="n">hdulist</span> <span class="o">=</span> <span class="p">[</span><span class="n">prihdu</span><span class="p">]</span>
+
+    <span class="c1"># the good/bad array is in its own hdu</span>
+    <span class="n">col</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">Column</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;GOODBAD&#39;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">&#39;bool&#39;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s1">&#39;Bool&#39;</span><span class="p">,</span> <span class="n">array</span><span class="o">=</span><span class="n">goodbad</span><span class="p">)</span>
+    <span class="n">cols</span>  <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">ColDefs</span><span class="p">([</span><span class="n">col</span><span class="p">])</span>
+    <span class="n">tbhdu</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">BinTableHDU</span><span class="o">.</span><span class="n">from_columns</span><span class="p">(</span><span class="n">cols</span><span class="p">)</span>
+    <span class="n">hdulist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tbhdu</span><span class="p">)</span>
+
+    <span class="c1"># make another HDU with additional info because it gets cut off in the primary header</span>
+    <span class="c1"># this is like a secondary primary header</span>
+    <span class="n">columnlist</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hdrval</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hdr_comment</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">comment</span> <span class="o">=</span> <span class="n">hdr_comment</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">comment</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+        <span class="n">val</span> <span class="o">=</span> <span class="n">hdrval</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+
+        <span class="c1"># dataset could be a list</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span><span class="nb">list</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">idx</span><span class="p">,</span><span class="n">dset</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+                <span class="n">dset_num</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span>
+                <span class="n">subkey</span> <span class="o">=</span> <span class="s1">&#39;SET</span><span class="si">%02i</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">dset_num</span>
+                
+                <span class="n">fmt</span> <span class="o">=</span> <span class="s1">&#39;A</span><span class="si">%i</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">max</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">dset</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">comment</span><span class="p">)))</span>
+                <span class="n">col</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">Column</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">subkey</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s1">&#39;text&#39;</span><span class="p">,</span> <span class="n">array</span><span class="o">=</span><span class="p">[</span><span class="n">dset</span><span class="p">,</span><span class="n">comment</span><span class="p">])</span>
+                <span class="n">columnlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">fmt</span> <span class="o">=</span> <span class="s1">&#39;A</span><span class="si">%i</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="nb">max</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">val</span><span class="p">),</span><span class="nb">len</span><span class="p">(</span><span class="n">comment</span><span class="p">)))</span>
+            <span class="n">col</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">Column</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">key</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="n">fmt</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s1">&#39;text&#39;</span><span class="p">,</span> <span class="n">array</span><span class="o">=</span><span class="p">[</span><span class="n">val</span><span class="p">,</span><span class="n">comment</span><span class="p">])</span>
+            <span class="n">columnlist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+    
+    
+    <span class="n">cols</span>  <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">ColDefs</span><span class="p">(</span><span class="n">columnlist</span><span class="p">)</span>
+    <span class="n">tbhdu</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">BinTableHDU</span><span class="o">.</span><span class="n">from_columns</span><span class="p">(</span><span class="n">cols</span><span class="p">)</span>
+    <span class="n">hdulist</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tbhdu</span><span class="p">)</span>
+
+    <span class="c1"># write the FITS file</span>
+    <span class="n">thdulist</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">HDUList</span><span class="p">(</span><span class="n">hdulist</span><span class="p">)</span>
+    <span class="n">thdulist</span><span class="o">.</span><span class="n">writeto</span><span class="p">(</span><span class="n">hdrval</span><span class="p">[</span><span class="s1">&#39;FILENAME&#39;</span><span class="p">],</span><span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;good/bad TES information written to file: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">hdrval</span><span class="p">[</span><span class="s1">&#39;FILENAME&#39;</span><span class="p">])</span>
+    <span class="k">return</span></div>
+
+
+<div class="viewcode-block" id="read_goodbad">
+<a class="viewcode-back" href="../../../lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.read_goodbad">[docs]</a>
+<span class="k">def</span> <span class="nf">read_goodbad</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span><span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    read a FITS file with good/bad information</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+
+    <span class="n">filename_fullpath</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+        <span class="n">filename_fullpath</span> <span class="o">=</span> <span class="n">filename</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">filename_fullpath</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Not a file: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">filename_fullpath</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="c1"># if not found, try to read from the default location</span>
+    <span class="k">if</span> <span class="n">filename_fullpath</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">pkg_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">qubic</span><span class="o">.</span><span class="vm">__file__</span><span class="p">)</span>
+        <span class="n">basename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+        <span class="n">filename_fullpath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">pkg_dir</span><span class="p">,</span><span class="s1">&#39;TES&#39;</span><span class="p">,</span><span class="n">basename</span><span class="p">])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filename_fullpath</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;File not found: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">filename_fullpath</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">filename</span> <span class="o">=</span> <span class="n">filename_fullpath</span>
+
+    <span class="n">hdulist</span> <span class="o">=</span> <span class="n">fits</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="n">nhdu</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">hdulist</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">nhdu</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;File does not have the necessary data: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">prihdr</span> <span class="o">=</span> <span class="n">hdulist</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">header</span>
+    <span class="k">if</span> <span class="s1">&#39;TELESCOP&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">prihdr</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="ow">or</span> <span class="n">prihdr</span><span class="p">[</span><span class="s1">&#39;TELESCOP&#39;</span><span class="p">]</span><span class="o">!=</span><span class="s1">&#39;QUBIC&#39;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Not a QUBIC file: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">if</span> <span class="s1">&#39;FILETYPE&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">prihdr</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="ow">or</span> <span class="n">prihdr</span><span class="p">[</span><span class="s1">&#39;FILETYPE&#39;</span><span class="p">]</span><span class="o">!=</span><span class="s1">&#39;GOODBAD&#39;</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Not a QUBIC TES good/bad file: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">ok</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">hdulist</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbosity</span><span class="o">&lt;</span><span class="mi">1</span><span class="p">:</span> <span class="k">return</span> <span class="n">ok</span>
+
+    <span class="n">info</span> <span class="o">=</span> <span class="p">{}</span> <span class="c1"># maybe should return this?</span>
+    <span class="n">infotitle</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">hdr_comment</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">infotitle</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">hdr_comment</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+    <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;DATASET&#39;</span><span class="p">]</span> <span class="o">=</span><span class="s1">&#39;Dataset name&#39;</span>
+    <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;SET&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Dataset name&#39;</span>
+    <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;ANALYSIS&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Analysis type&#39;</span>
+    <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;ANALYSER&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Analyser&#39;</span>
+    <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;ELOG&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;elog&#39;</span>
+    <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;WIKIPAGE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;wikipage&#39;</span>
+    <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;FILENAME&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Filename&#39;</span>
+    <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;FILEDATE&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;File created&#39;</span>
+    <span class="n">hdr</span> <span class="o">=</span> <span class="n">hdulist</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">header</span>
+    <span class="n">dat</span> <span class="o">=</span> <span class="n">hdulist</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">data</span>
+    <span class="n">nfields</span> <span class="o">=</span> <span class="n">hdr</span><span class="p">[</span><span class="s1">&#39;TFIELDS&#39;</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nfields</span><span class="p">):</span>
+        <span class="n">field_num</span> <span class="o">=</span> <span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="n">field_key</span> <span class="o">=</span> <span class="s1">&#39;TTYPE</span><span class="si">%i</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">field_num</span>
+        <span class="n">field_name</span> <span class="o">=</span> <span class="n">hdr</span><span class="p">[</span><span class="n">field_key</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">field_name</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s1">&#39;SET&#39;</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span>
+            <span class="n">ttl</span> <span class="o">=</span> <span class="n">infotitle</span><span class="p">[</span><span class="s1">&#39;SET&#39;</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">field_name</span> <span class="ow">in</span> <span class="n">infotitle</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">ttl</span> <span class="o">=</span> <span class="n">infotitle</span><span class="p">[</span><span class="n">field_name</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="n">field_name</span> <span class="ow">in</span> <span class="n">hdr_comment</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">ttl</span> <span class="o">=</span> <span class="n">hdr_comment</span><span class="p">[</span><span class="n">field_name</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ttl</span> <span class="o">=</span> <span class="s2">&quot;What is this? &quot;</span>
+        <span class="n">info</span><span class="p">[</span><span class="n">field_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">dat</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">idx</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1">: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="p">(</span><span class="n">ttl</span><span class="p">,</span><span class="n">info</span><span class="p">[</span><span class="n">field_name</span><span class="p">]))</span>
+              
+    <span class="n">hdulist</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">ok</span></div>
+
+
+<div class="viewcode-block" id="list_goodbad">
+<a class="viewcode-back" href="../../../lib.Calibration.QtesEvaluation.html#lib.Calibration.QtesEvaluation.list_goodbad">[docs]</a>
+<span class="k">def</span> <span class="nf">list_goodbad</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    list all the available TES good/bad files</span>
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">files</span> <span class="o">=</span> <span class="p">[]</span>
+    
+    <span class="n">pattern</span> <span class="o">=</span> <span class="s1">&#39;*_GoodBad-TES.fits&#39;</span>
+    <span class="n">localfiles</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">localfiles</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
+        <span class="n">localfiles</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+        <span class="n">files</span> <span class="o">+=</span> <span class="n">localfiles</span>
+
+    <span class="n">pkg_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">qubic</span><span class="o">.</span><span class="vm">__file__</span><span class="p">)</span>    
+    <span class="n">pkgpattern</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">sep</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">pkg_dir</span><span class="p">,</span><span class="s1">&#39;TES&#39;</span><span class="p">,</span><span class="n">pattern</span><span class="p">])</span>
+    <span class="n">pkgfiles</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">pkgpattern</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pkgfiles</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
+        <span class="n">pkgfiles</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">F</span> <span class="ow">in</span> <span class="n">pkgfiles</span><span class="p">:</span>
+            <span class="n">files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">F</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">files</span><span class="p">)</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;The following files are available:</span><span class="se">\n</span><span class="s1">   </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">   &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">files</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">files</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;No Good/Bad files found!&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">files</span></div>
+
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Qspectra &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.Qspectra</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.Qspectra</h1><div class="highlight"><pre>
+<span></span><span class="c1">#### General packages</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">pysimulators.interfaces.healpy</span> <span class="kn">import</span> <span class="n">HealpixConvolutionGaussianOperator</span>
+<span class="kn">from</span> <span class="nn">.Fitting</span> <span class="kn">import</span> <span class="n">Qnamaster</span>  <span class="k">as</span> <span class="n">nam</span>
+
+
+<div class="viewcode-block" id="Spectra">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectra">[docs]</a>
+<span class="k">class</span> <span class="nc">Spectra</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">,</span> <span class="n">covcut</span><span class="o">=</span><span class="mf">0.2</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">filename</span> <span class="o">=</span> <span class="n">filename</span>
+
+        <span class="c1">### Get the job ID</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobid</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">][:</span><span class="o">-</span><span class="mi">4</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">dictionary</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">open_file</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dictionary</span><span class="p">[</span><span class="s2">&quot;maps&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dictionary</span><span class="p">[</span><span class="s2">&quot;coverage&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">dictionary</span><span class="p">[</span><span class="s2">&quot;coverage&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">covcut</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dictionary</span><span class="p">[</span><span class="s2">&quot;fwhm_rec&quot;</span><span class="p">]</span>
+
+        <span class="c1">### Initiate namaster from qubic soft</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_namaster</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Spectra.open_file">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectra.open_file">[docs]</a>
+    <span class="k">def</span> <span class="nf">open_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">filename</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">dictionary</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">spectrum</span> <span class="o">=</span> <span class="n">dictionary</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">][</span><span class="s2">&quot;Spectrum&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sky</span> <span class="o">=</span> <span class="n">dictionary</span><span class="p">[</span><span class="s2">&quot;parameters&quot;</span><span class="p">][</span><span class="s2">&quot;SKY&quot;</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">dictionary</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_init_namaster</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">namaster</span> <span class="o">=</span> <span class="n">nam</span><span class="o">.</span><span class="n">Namaster</span><span class="p">(</span>
+            <span class="n">weight_mask</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span><span class="p">,</span>
+            <span class="n">lmin</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">spectrum</span><span class="p">[</span><span class="s2">&quot;lmin&quot;</span><span class="p">],</span>
+            <span class="n">lmax</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">spectrum</span><span class="p">[</span><span class="s2">&quot;lmax&quot;</span><span class="p">],</span>
+            <span class="n">delta_ell</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">spectrum</span><span class="p">[</span><span class="s2">&quot;dl&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ell</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">namaster</span><span class="o">.</span><span class="n">get_binning</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sky</span><span class="p">[</span><span class="s2">&quot;nside&quot;</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ell</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_BB_spectra</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">map</span><span class="p">,</span> <span class="n">map2</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fwhm</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="n">BB</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">namaster</span><span class="o">.</span><span class="n">get_spectra</span><span class="p">(</span>
+            <span class="nb">map</span><span class="o">=</span><span class="nb">map</span><span class="p">,</span> <span class="n">map2</span><span class="o">=</span><span class="n">map2</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">beam_correction</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">fwhm</span><span class="p">)</span>
+        <span class="p">)[</span><span class="mi">1</span><span class="p">][:,</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">BB</span>
+
+<div class="viewcode-block" id="Spectra.run">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectra.run">[docs]</a>
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">maps</span><span class="p">):</span>
+
+        <span class="n">nmaps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">maps</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="n">BBspectra</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nmaps</span><span class="p">,</span> <span class="n">nmaps</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span><span class="p">))</span>
+
+        <span class="c1">### Ensure that non seen pixels is 0</span>
+        <span class="n">maps</span><span class="p">[:,</span> <span class="o">~</span><span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">for</span> <span class="n">irec</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nmaps</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">jrec</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">irec</span><span class="p">,</span> <span class="n">nmaps</span><span class="p">):</span>
+
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;======== Cross-spectra with maps </span><span class="si">{</span><span class="n">irec</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">jrec</span><span class="si">}</span><span class="s2"> ========&quot;</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span><span class="p">[</span><span class="n">irec</span><span class="p">]</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span><span class="p">[</span><span class="n">jrec</span><span class="p">]:</span>
+                    <span class="n">fwhm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span><span class="p">[</span><span class="n">irec</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span><span class="p">[</span><span class="n">jrec</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+                    <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span><span class="n">fwhm</span><span class="o">=</span><span class="n">fwhm</span><span class="p">)</span>
+                    <span class="n">map1</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="n">irec</span><span class="p">]</span>
+                    <span class="n">map2</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">maps</span><span class="p">[</span><span class="n">jrec</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">fwhm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span><span class="p">[</span><span class="n">jrec</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">fwhm</span><span class="p">[</span><span class="n">irec</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+                    <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span><span class="n">fwhm</span><span class="o">=</span><span class="n">fwhm</span><span class="p">)</span>
+                    <span class="n">map1</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">maps</span><span class="p">[</span><span class="n">irec</span><span class="p">])</span>
+                    <span class="n">map2</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="n">jrec</span><span class="p">]</span>
+                <span class="n">BBspectra</span><span class="p">[</span><span class="n">irec</span><span class="p">,</span> <span class="n">jrec</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_BB_spectra</span><span class="p">(</span>
+                    <span class="nb">map</span><span class="o">=</span><span class="n">map1</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">map2</span><span class="o">=</span><span class="n">map2</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">fwhm</span><span class="o">=</span><span class="n">fwhm</span>
+                <span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">irec</span> <span class="o">!=</span> <span class="n">jrec</span><span class="p">:</span>
+                    <span class="n">BBspectra</span><span class="p">[</span><span class="n">jrec</span><span class="p">,</span> <span class="n">irec</span><span class="p">]</span> <span class="o">=</span> <span class="n">BBspectra</span><span class="p">[</span><span class="n">irec</span><span class="p">,</span> <span class="n">jrec</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">BBspectra</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="Spectrumold">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold">[docs]</a>
+<span class="k">class</span> <span class="nc">Spectrumold</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Class to compute the different spectra for our realisations</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">spectra_time_0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=========== Power Spectra ===========</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jobid</span> <span class="o">=</span> <span class="n">filename</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;_&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job id found : &quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">jobid</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">path_spectrum</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">file</span><span class="p">)),</span> <span class="s2">&quot;spectrum&quot;</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path_spectrum</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">path_spectrum</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;params.yml&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dict_file</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">verbose</span> <span class="o">=</span> <span class="n">verbose</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sky_maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict_file</span><span class="p">[</span><span class="s2">&quot;maps&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">noise_maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict_file</span><span class="p">[</span><span class="s2">&quot;maps_noise&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict_file</span><span class="p">[</span><span class="s2">&quot;nus&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nfreq</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nsub&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nside</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">)</span>
+
+        <span class="n">_</span><span class="p">,</span> <span class="n">nus150</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">compute_freq</span><span class="p">(</span><span class="mi">150</span><span class="p">,</span> <span class="n">Nfreq</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">nus220</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">compute_freq</span><span class="p">(</span><span class="mi">220</span><span class="p">,</span> <span class="n">Nfreq</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">fwhm150</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_fwhm_during_MM</span><span class="p">(</span><span class="n">nus150</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fwhm220</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_fwhm_during_MM</span><span class="p">(</span><span class="n">nus220</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">allfwhm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_allfwhm</span><span class="p">()</span>
+
+        <span class="c1">############ Test</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;convolution_in&quot;</span><span class="p">]</span>
+            <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;convolution_out&quot;</span><span class="p">]</span>
+        <span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict_mono</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dict</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">Q</span> <span class="o">=</span> <span class="n">acq</span><span class="o">.</span><span class="n">QubicFullBandSystematic</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dict</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nsub&quot;</span><span class="p">],</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">],</span>
+                <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;UWB&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># joint = acq.JointAcquisitionFrequencyMapMaking(self.dict, &#39;UWB&#39;, self.params[&#39;QUBIC&#39;][&#39;nrec&#39;], self.params[&#39;QUBIC&#39;][&#39;nsub&#39;])</span>
+            <span class="n">list_h</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="o">.</span><span class="n">H</span>
+            <span class="n">h_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="o">.</span><span class="n">allnus</span><span class="p">))</span>
+            <span class="n">vec_ones</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">list_h</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shapein</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">freq</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="o">.</span><span class="n">allnus</span><span class="p">)):</span>
+                <span class="n">h_list</span><span class="p">[</span><span class="n">freq</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">list_h</span><span class="p">[</span><span class="n">freq</span><span class="p">](</span><span class="n">vec_ones</span><span class="p">))</span>
+
+            <span class="n">fwhm</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_fwhm_during_MM</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="o">.</span><span class="n">allnus</span><span class="p">]</span>
+
+            <span class="k">def</span> <span class="nf">f_beta</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span> <span class="n">nu_0</span><span class="p">,</span> <span class="n">beta</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">(</span>
+                    <span class="p">(</span><span class="n">nu</span> <span class="o">/</span> <span class="n">nu_0</span><span class="p">)</span> <span class="o">**</span> <span class="n">beta</span>
+                    <span class="o">*</span> <span class="p">(</span>
+                        <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">constants</span><span class="o">.</span><span class="n">h</span> <span class="o">*</span> <span class="n">nu</span> <span class="o">*</span> <span class="mf">1e9</span> <span class="o">/</span> <span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">constants</span><span class="o">.</span><span class="n">k</span> <span class="o">*</span> <span class="mi">20</span><span class="p">))</span>
+                        <span class="o">-</span> <span class="mi">1</span>
+                    <span class="p">)</span>
+                    <span class="o">/</span> <span class="p">(</span>
+                        <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span>
+                            <span class="n">scipy</span><span class="o">.</span><span class="n">constants</span><span class="o">.</span><span class="n">h</span> <span class="o">*</span> <span class="n">nu_0</span> <span class="o">*</span> <span class="mf">1e9</span> <span class="o">/</span> <span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">constants</span><span class="o">.</span><span class="n">k</span> <span class="o">*</span> <span class="mi">20</span><span class="p">)</span>
+                        <span class="p">)</span>
+                        <span class="o">-</span> <span class="mi">1</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+
+            <span class="n">corrected_allfwhm</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">corrected_allnus</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">):</span>
+                <span class="n">corrected_fwhm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+                    <span class="n">h_list</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">]</span>
+                    <span class="o">*</span> <span class="n">f_beta</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="o">.</span><span class="n">allnus</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">],</span> <span class="mi">353</span><span class="p">,</span> <span class="mf">1.53</span>
+                    <span class="p">)</span>
+                    <span class="o">*</span> <span class="n">fwhm</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">]</span>
+                <span class="p">)</span> <span class="o">/</span> <span class="p">(</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+                        <span class="n">h_list</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">]</span>
+                        <span class="o">*</span> <span class="n">f_beta</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="o">.</span><span class="n">allnus</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">],</span>
+                            <span class="mi">353</span><span class="p">,</span>
+                            <span class="mf">1.53</span><span class="p">,</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+                <span class="n">corrected_allfwhm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">corrected_fwhm</span><span class="p">)</span>
+                <span class="n">fraction</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+                    <span class="n">h_list</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">]</span>
+                    <span class="o">*</span> <span class="n">f_beta</span><span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">Q</span><span class="o">.</span><span class="n">allnus</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">],</span> <span class="mi">353</span><span class="p">,</span> <span class="mf">1.53</span>
+                    <span class="p">)</span>
+                <span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">h_list</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">])</span>
+                <span class="n">fun</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">nu</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">fraction</span> <span class="o">-</span> <span class="n">f_beta</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span> <span class="mi">353</span><span class="p">,</span> <span class="mf">1.53</span><span class="p">))</span>
+                <span class="n">x0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="n">corrected_nu</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">optimize</span><span class="o">.</span><span class="n">minimize</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+                <span class="n">corrected_allnus</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">corrected_nu</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">])</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;nus&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;fwhm&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">allfwhm</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">]</span> <span class="o">=</span> <span class="n">corrected_allnus</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">allfwhm</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">]</span> <span class="o">=</span> <span class="n">corrected_allfwhm</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;corrected nus&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;corrected fwhm&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">allfwhm</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">kernels150</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fwhm150</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">fwhm150</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kernels220</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fwhm220</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">fwhm220</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kernels</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">kernels150</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">kernels220</span><span class="p">])</span>
+
+        <span class="c1"># Define Namaster class</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">coverage</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict_file</span><span class="p">[</span><span class="s2">&quot;coverage&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coverage</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coverage</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">0.2</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">namaster</span> <span class="o">=</span> <span class="n">nam</span><span class="o">.</span><span class="n">Namaster</span><span class="p">(</span>
+            <span class="n">weight_mask</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">seenpix</span><span class="p">)),</span>
+            <span class="n">lmin</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Spectrum&quot;</span><span class="p">][</span><span class="s2">&quot;lmin&quot;</span><span class="p">],</span>
+            <span class="n">lmax</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Spectrum&quot;</span><span class="p">][</span><span class="s2">&quot;lmax&quot;</span><span class="p">],</span>
+            <span class="n">delta_ell</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Spectrum&quot;</span><span class="p">][</span><span class="s2">&quot;dl&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ell</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">namaster</span><span class="o">.</span><span class="n">get_binning</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+
+<div class="viewcode-block" id="Spectrumold.get_ultrawideband_config">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold.get_ultrawideband_config">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_ultrawideband_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Method that pre-compute UWB configuration.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">nu_up</span> <span class="o">=</span> <span class="mf">247.5</span>
+        <span class="n">nu_down</span> <span class="o">=</span> <span class="mf">131.25</span>
+        <span class="n">nu_ave</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">nu_up</span><span class="p">,</span> <span class="n">nu_down</span><span class="p">]))</span>
+        <span class="n">delta</span> <span class="o">=</span> <span class="n">nu_up</span> <span class="o">-</span> <span class="n">nu_ave</span>
+
+        <span class="k">return</span> <span class="n">nu_ave</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">delta</span> <span class="o">/</span> <span class="n">nu_ave</span></div>
+
+
+<div class="viewcode-block" id="Spectrumold.get_dict">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold.get_dict">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Method to modify the qubic dictionary.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">nu_ave</span><span class="p">,</span> <span class="n">delta_nu_over_nu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_ultrawideband_config</span><span class="p">()</span>
+
+        <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;npointings&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;npointings&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;nf_recon&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nrec&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;nf_sub&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nsub&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;nside&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;MultiBand&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;period&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;RA_center&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;RA_center&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;DEC_center&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;SKY&quot;</span><span class="p">][</span><span class="s2">&quot;DEC_center&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;filter_nu&quot;</span><span class="p">:</span> <span class="n">nu_ave</span> <span class="o">*</span> <span class="mf">1e9</span><span class="p">,</span>
+            <span class="s2">&quot;noiseless&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;comm&quot;</span><span class="p">:</span> <span class="n">comm</span><span class="p">,</span>
+            <span class="s2">&quot;dtheta&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;dtheta&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;nprocs_sampling&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;nprocs_instrument&quot;</span><span class="p">:</span> <span class="n">comm</span><span class="o">.</span><span class="n">Get_size</span><span class="p">(),</span>
+            <span class="s2">&quot;photon_noise&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;nhwp_angles&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="s2">&quot;effective_duration&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="s2">&quot;filter_relative_bandwidth&quot;</span><span class="p">:</span> <span class="n">delta_nu_over_nu</span><span class="p">,</span>
+            <span class="s2">&quot;type_instrument&quot;</span><span class="p">:</span> <span class="s2">&quot;wide&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;TemperatureAtmosphere150&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;TemperatureAtmosphere220&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;EmissivityAtmosphere150&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;EmissivityAtmosphere220&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;detector_nep&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;NOISE&quot;</span><span class="p">][</span><span class="s2">&quot;detector_nep&quot;</span><span class="p">]),</span>
+            <span class="s2">&quot;synthbeam_kmax&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;SYNTHBEAM&quot;</span><span class="p">][</span><span class="s2">&quot;synthbeam_kmax&quot;</span><span class="p">],</span>
+        <span class="p">}</span>
+
+        <span class="n">args_mono</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">args_mono</span><span class="p">[</span><span class="s2">&quot;nf_recon&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">args_mono</span><span class="p">[</span><span class="s2">&quot;nf_sub&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="c1">### Get the default dictionary</span>
+        <span class="n">dictfilename</span> <span class="o">=</span> <span class="s2">&quot;dicts/pipeline_demo.dict&quot;</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="n">qubic</span><span class="o">.</span><span class="n">qubicdict</span><span class="o">.</span><span class="n">qubicDict</span><span class="p">()</span>
+        <span class="n">d</span><span class="o">.</span><span class="n">read_from_file</span><span class="p">(</span><span class="n">dictfilename</span><span class="p">)</span>
+        <span class="n">dmono</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+
+            <span class="n">d</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">dmono</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="n">args_mono</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">d</span><span class="p">,</span> <span class="n">dmono</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_get_fwhm_during_MM</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nu</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">deg2rad</span><span class="p">(</span><span class="mf">0.39268176</span> <span class="o">*</span> <span class="mi">150</span> <span class="o">/</span> <span class="n">nu</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_allfwhm</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to compute the fwhm for all sub bands.</span>
+
+<span class="sd">        Return :</span>
+<span class="sd">            - allfwhm (list [nfreq])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">allfwhm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nfreq</span><span class="p">)</span>
+        <span class="n">kernels</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nfreq</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nfreq</span><span class="p">):</span>
+
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;convolution_in&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">False</span>
+            <span class="p">):</span>  <span class="c1"># and self.params[&#39;QUBIC&#39;][&#39;reconvolution_after_MM&#39;] is False:</span>
+                <span class="n">allfwhm</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">elif</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;convolution_in&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span>
+            <span class="p">):</span>  <span class="c1"># and self.params[&#39;QUBIC&#39;][&#39;reconvolution_after_MM&#39;] is False:</span>
+                <span class="n">allfwhm</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dict_file</span><span class="p">[</span><span class="s2">&quot;fwhm_rec&quot;</span><span class="p">][</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">allfwhm</span>
+
+<div class="viewcode-block" id="Spectrumold.compute_auto_spectrum">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold.compute_auto_spectrum">[docs]</a>
+    <span class="k">def</span> <span class="nf">compute_auto_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">map</span><span class="p">,</span> <span class="n">fwhm</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to compute the auto-spectrum of a given map</span>
+
+<span class="sd">        Argument :</span>
+<span class="sd">            - map(array) [nrec/ncomp, npix, nstokes] : map to compute the auto-spectrum</span>
+<span class="sd">            - allfwhm(float) : in radian</span>
+<span class="sd">        Return :</span>
+<span class="sd">            - (list) [len(ell)] : BB auto-spectrum</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">DlBB</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">namaster</span><span class="o">.</span><span class="n">get_spectra</span><span class="p">(</span>
+            <span class="nb">map</span><span class="o">=</span><span class="nb">map</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="n">map2</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">beam_correction</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">fwhm</span><span class="p">)</span>
+        <span class="p">)[</span><span class="mi">1</span><span class="p">][:,</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">DlBB</span></div>
+
+
+<div class="viewcode-block" id="Spectrumold.compute_cross_spectrum">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold.compute_cross_spectrum">[docs]</a>
+    <span class="k">def</span> <span class="nf">compute_cross_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">map1</span><span class="p">,</span> <span class="n">fwhm1</span><span class="p">,</span> <span class="n">map2</span><span class="p">,</span> <span class="n">fwhm2</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to compute cross-spectrum, taking into account the different resolution of each sub-bands</span>
+
+<span class="sd">        Arguments :</span>
+<span class="sd">            - map1 &amp; map2 (array [nrec/ncomp, npix, nstokes]) : the two maps needed to compute the cross spectrum</span>
+<span class="sd">            - fwhm1 &amp; fwhm2 (float) : the respective fwhm for map1 &amp; map2 in radian</span>
+
+<span class="sd">        Return :</span>
+<span class="sd">            - (list) [len(ell)] : BB cross-spectrum</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Put the map with the highest resolution at the worst one before doing the cross spectrum</span>
+        <span class="c1"># Important because the two maps had to be at the same resolution and you can&#39;t increase the resolution</span>
+        <span class="k">if</span> <span class="n">fwhm1</span> <span class="o">&lt;</span> <span class="n">fwhm2</span><span class="p">:</span>
+            <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span><span class="n">fwhm</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">fwhm2</span><span class="o">**</span><span class="mi">2</span> <span class="o">-</span> <span class="n">fwhm1</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+            <span class="n">convoluted_map</span> <span class="o">=</span> <span class="n">C</span> <span class="o">*</span> <span class="n">map1</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">namaster</span><span class="o">.</span><span class="n">get_spectra</span><span class="p">(</span>
+                <span class="nb">map</span><span class="o">=</span><span class="n">convoluted_map</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                <span class="n">map2</span><span class="o">=</span><span class="n">map2</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">beam_correction</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">fwhm2</span><span class="p">),</span>
+            <span class="p">)[</span><span class="mi">1</span><span class="p">][:,</span> <span class="mi">2</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span><span class="n">fwhm</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">fwhm1</span><span class="o">**</span><span class="mi">2</span> <span class="o">-</span> <span class="n">fwhm2</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+            <span class="n">convoluted_map</span> <span class="o">=</span> <span class="n">C</span> <span class="o">*</span> <span class="n">map2</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">namaster</span><span class="o">.</span><span class="n">get_spectra</span><span class="p">(</span>
+                <span class="nb">map</span><span class="o">=</span><span class="n">map1</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                <span class="n">map2</span><span class="o">=</span><span class="n">convoluted_map</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="n">beam_correction</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">rad2deg</span><span class="p">(</span><span class="n">fwhm1</span><span class="p">),</span>
+            <span class="p">)[</span><span class="mi">1</span><span class="p">][:,</span> <span class="mi">2</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="Spectrumold.compute_array_power_spectra">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold.compute_array_power_spectra">[docs]</a>
+    <span class="k">def</span> <span class="nf">compute_array_power_spectra</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">maps</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to fill an array with all the power spectra computed</span>
+
+<span class="sd">        Argument :</span>
+<span class="sd">            - maps (array [nreal, nrec/ncomp, npix, nstokes]) : all your realisation maps</span>
+
+<span class="sd">        Return :</span>
+<span class="sd">            - power_spectra_array (array [nrec/ncomp, nrec/ncomp]) : element [i, i] is the auto-spectrum for the reconstructed sub-bands i</span>
+<span class="sd">                                                                     element [i, j] is the cross-spectrum between the reconstructed sub-band i &amp; j</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">power_spectra_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nfreq</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nfreq</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ell</span><span class="p">)))</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nfreq</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nfreq</span><span class="p">):</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;====== </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> ======&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">j</span><span class="p">:</span>
+                    <span class="c1"># Compute the auto-spectrum</span>
+                    <span class="n">power_spectra_array</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compute_auto_spectrum</span><span class="p">(</span>
+                        <span class="n">maps</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">allfwhm</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">power_spectra_array</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">])</span>
+                    <span class="c1"># stop</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Compute the cross-spectrum</span>
+                    <span class="n">power_spectra_array</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compute_cross_spectrum</span><span class="p">(</span>
+                        <span class="n">maps</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">allfwhm</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">maps</span><span class="p">[</span><span class="n">j</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">allfwhm</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+                    <span class="p">)</span>
+        <span class="k">return</span> <span class="n">power_spectra_array</span></div>
+
+
+<div class="viewcode-block" id="Spectrumold.compute_power_spectra">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold.compute_power_spectra">[docs]</a>
+    <span class="k">def</span> <span class="nf">compute_power_spectra</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Function to compute the power spectra array for the sky and for the noise realisations</span>
+
+<span class="sd">        Return :</span>
+<span class="sd">            - sky power spectra array (array [nrec/ncomp, nrec/ncomp])</span>
+<span class="sd">            - noise power spectra array (array [nrec/ncomp, nrec/ncomp])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">sky_power_spectra</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compute_array_power_spectra</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">sky_maps</span><span class="p">)</span>
+        <span class="n">noise_power_spectra</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compute_array_power_spectra</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">noise_maps</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sky_power_spectra</span><span class="p">,</span> <span class="n">noise_power_spectra</span></div>
+
+
+<div class="viewcode-block" id="Spectrumold.save_data">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold.save_data">[docs]</a>
+    <span class="k">def</span> <span class="nf">save_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">d</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Method to save data using pickle convention.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">handle</span><span class="p">:</span>
+            <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">handle</span><span class="p">,</span> <span class="n">protocol</span><span class="o">=</span><span class="n">pickle</span><span class="o">.</span><span class="n">HIGHEST_PROTOCOL</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Spectrumold.run">
+<a class="viewcode-back" href="../../lib.Qspectra.html#lib.Qspectra.Spectrumold.run">[docs]</a>
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">Dl</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">Nl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compute_power_spectra</span><span class="p">()</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Power spectra computed !!!&quot;</span><span class="p">)</span>
+
+        <span class="n">spectra_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">spectra_time_0</span>
+        <span class="k">if</span> <span class="n">comm</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Power Spectra computation done in </span><span class="si">{</span><span class="n">spectra_time</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> s&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">Get_rank</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Power Spectra computation done in </span><span class="si">{</span><span class="n">spectra_time</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> s&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_data</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">path_spectrum</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;spectrum_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">jobid</span><span class="si">}</span><span class="s2">.pkl&quot;</span><span class="p">,</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;nus&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">,</span>
+                <span class="s2">&quot;ell&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ell</span><span class="p">,</span>
+                <span class="s2">&quot;Dls&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">Dl</span><span class="p">,</span>
+                <span class="s2">&quot;Nl&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">Nl</span><span class="p">,</span>
+                <span class="s2">&quot;coverage&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">coverage</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span>
+                <span class="s2">&quot;duration&quot;</span><span class="p">:</span> <span class="n">spectra_time</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

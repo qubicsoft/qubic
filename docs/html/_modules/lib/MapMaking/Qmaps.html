@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.MapMaking.Qmaps &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.MapMaking.Qmaps</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.MapMaking.Qmaps</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">pickle</span>
+<span class="kn">import</span> <span class="nn">qubic</span>
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pysm3</span>
+<span class="kn">import</span> <span class="nn">pysm3.units</span> <span class="k">as</span> <span class="nn">u</span>
+<span class="kn">import</span> <span class="nn">yaml</span>
+<span class="kn">from</span> <span class="nn">pysimulators.interfaces.healpy</span> <span class="kn">import</span> <span class="n">HealpixConvolutionGaussianOperator</span>
+<span class="kn">from</span> <span class="nn">pysm3</span> <span class="kn">import</span> <span class="n">utils</span>
+<span class="kn">from</span> <span class="nn">qubic.data</span> <span class="kn">import</span> <span class="n">PATH</span> <span class="k">as</span> <span class="n">data_dir</span>
+
+
+<span class="c1"># from mapmaking.systematics import give_cl_cmb, arcmin2rad</span>
+<span class="kn">from</span> <span class="nn">..InstrumentModel.Qacquisition</span> <span class="kn">import</span> <span class="n">arcmin2rad</span>
+<span class="c1">#from qubic.lib.InstrumentModel.Qacquisition import *</span>
+<span class="c1">#from .Qcmbmodel import CMBModel</span>
+<span class="kn">from</span> <span class="nn">.FrequencyMapMaking.Qspectra_component</span> <span class="kn">import</span> <span class="n">CMBModel</span>
+
+<div class="viewcode-block" id="Maps">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.Maps">[docs]</a>
+<span class="k">class</span> <span class="nc">Maps</span><span class="p">:</span>
+    
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skyconfig</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">nrec</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">corrected_bandpass</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">=</span> <span class="n">nus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nside</span> <span class="o">=</span> <span class="n">nside</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span> <span class="o">=</span> <span class="n">nrec</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">)</span>
+        <span class="c1">#self.m_nu = np.zeros((len(self.nus), 12 * self.nside**2, 3))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig</span> <span class="o">=</span> <span class="n">skyconfig</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig_pysm</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">skyconfig</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;cmb&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">is_cmb</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig_pysm</span> <span class="o">+=</span> <span class="p">[</span><span class="n">skyconfig</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span>
+    
+<div class="viewcode-block" id="Maps.average_within_band">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.Maps.average_within_band">[docs]</a>
+    <span class="k">def</span> <span class="nf">average_within_band</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m_nu</span><span class="p">):</span>
+
+        <span class="n">m_mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">,</span> <span class="mi">12</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">):</span>
+            <span class="n">m_mean</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">m_nu</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">f</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">f</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">m_mean</span></div>
+
+    <span class="k">def</span> <span class="nf">_get_cmb</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">Alens</span><span class="p">,</span> <span class="n">seed</span><span class="p">):</span>
+
+        <span class="n">cmbmodel</span> <span class="o">=</span> <span class="n">CMBModel</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> 
+        <span class="n">mycls</span> <span class="o">=</span> <span class="n">cmbmodel</span><span class="o">.</span><span class="n">give_cl_cmb</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">Alens</span><span class="p">)</span>
+
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+        <span class="n">cmb</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">synfast</span><span class="p">(</span><span class="n">mycls</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">new</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+        <span class="k">return</span> <span class="n">cmb</span>
+<div class="viewcode-block" id="Maps.average_map">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.Maps.average_map">[docs]</a>
+    <span class="k">def</span> <span class="nf">average_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">Alens</span><span class="p">,</span> <span class="n">central_nu</span><span class="p">,</span> <span class="n">bw</span><span class="p">,</span> <span class="n">nb</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+
+        <span class="n">mysky</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">12</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">skyconfig_pysm</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">sky</span> <span class="o">=</span> <span class="n">pysm3</span><span class="o">.</span><span class="n">Sky</span><span class="p">(</span><span class="n">nside</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="p">,</span> <span class="n">preset_strings</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">skyconfig_pysm</span><span class="p">)</span>
+            <span class="n">edges_min</span> <span class="o">=</span> <span class="n">central_nu</span> <span class="o">-</span> <span class="n">bw</span> <span class="o">/</span> <span class="mi">2</span>
+            <span class="n">edges_max</span> <span class="o">=</span> <span class="n">central_nu</span> <span class="o">+</span> <span class="n">bw</span> <span class="o">/</span> <span class="mi">2</span>
+            <span class="n">bandpass_frequencies</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">edges_min</span><span class="p">,</span> <span class="n">edges_max</span><span class="p">,</span> <span class="n">nb</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Integrating bandpass from </span><span class="si">{</span><span class="n">edges_min</span><span class="si">}</span><span class="s2"> GHz to </span><span class="si">{</span><span class="n">edges_max</span><span class="si">}</span><span class="s2"> GHz with </span><span class="si">{</span><span class="n">nb</span><span class="si">}</span><span class="s2"> frequencies.&quot;</span>
+            <span class="p">)</span>
+            <span class="n">mysky</span> <span class="o">+=</span> <span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                    <span class="n">sky</span><span class="o">.</span><span class="n">get_emission</span><span class="p">(</span><span class="n">bandpass_frequencies</span> <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                    <span class="o">*</span> <span class="n">utils</span><span class="o">.</span><span class="n">bandpass_unit_conversion</span><span class="p">(</span>
+                        <span class="n">bandpass_frequencies</span> <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">uK_CMB</span>
+                    <span class="p">)</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">T</span>
+                <span class="o">/</span> <span class="mf">1.5</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_cmb</span><span class="p">:</span>
+            <span class="n">cmb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_cmb</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">Alens</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig</span><span class="p">[</span><span class="s2">&quot;cmb&quot;</span><span class="p">])</span>
+            <span class="n">mysky</span> <span class="o">+=</span> <span class="n">cmb</span>
+
+        <span class="k">return</span> <span class="n">mysky</span></div>
+
+    <span class="k">def</span> <span class="nf">_corrected_maps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">m_nu</span><span class="p">,</span> <span class="n">m_nu_fg</span><span class="p">):</span>
+
+        <span class="n">f</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">)</span>
+
+        <span class="n">mean_fg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">average_within_band</span><span class="p">(</span><span class="n">m_nu_fg</span><span class="p">)</span>
+
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nrec</span><span class="p">):</span>
+            <span class="n">delta</span> <span class="o">=</span> <span class="n">m_nu_fg</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">f</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">f</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean_fg</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+                <span class="n">m_nu</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">-=</span> <span class="n">delta</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
+                <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">m_nu</span></div>
+
+
+<div class="viewcode-block" id="PlanckMaps">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.PlanckMaps">[docs]</a>
+<span class="k">class</span> <span class="nc">PlanckMaps</span><span class="p">(</span><span class="n">Maps</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skyconfig</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">nrec</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">r</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">Alens</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span><span class="c1">#nside, r=0, Alens=1):</span>
+
+        <span class="c1">#self.params = params</span>
+
+        <span class="n">Maps</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">skyconfig</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">nrec</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="n">nside</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">experiments</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;Planck&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;frequency&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">30</span><span class="p">,</span> <span class="mi">44</span><span class="p">,</span> <span class="mi">70</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">143</span><span class="p">,</span> <span class="mi">217</span><span class="p">,</span> <span class="mi">353</span><span class="p">],</span>
+                                <span class="s1">&#39;depth_i&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">150.</span><span class="p">,</span> <span class="mf">162.</span><span class="p">,</span> <span class="mf">210.</span><span class="p">,</span> <span class="mf">77.4</span><span class="p">,</span> <span class="mf">33.</span><span class="p">,</span> <span class="mf">46.8</span><span class="p">,</span> <span class="mi">154</span><span class="p">],</span>
+                                <span class="s1">&#39;depth_p&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">210.</span><span class="p">,</span> <span class="mf">240.</span><span class="p">,</span> <span class="mf">300.</span><span class="p">,</span> <span class="mi">118</span><span class="p">,</span> <span class="mf">70.2</span><span class="p">,</span> <span class="mf">105.</span><span class="p">,</span> <span class="mi">439</span><span class="p">],</span>
+                                <span class="s1">&#39;fwhm&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">32.29</span><span class="p">,</span> <span class="mf">27.94</span><span class="p">,</span> <span class="mf">13.08</span><span class="p">,</span> <span class="mf">9.66</span><span class="p">,</span> <span class="mf">7.22</span><span class="p">,</span> <span class="mf">4.90</span><span class="p">,</span> <span class="mf">4.92</span><span class="p">],</span>
+                                <span class="s1">&#39;bw&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">]}</span>
+                    <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig</span> <span class="o">=</span> <span class="n">skyconfig</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">r</span> <span class="o">=</span> <span class="n">r</span> 
+        <span class="bp">self</span><span class="o">.</span><span class="n">Alens</span> <span class="o">=</span> <span class="n">Alens</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nside</span> <span class="o">=</span> <span class="n">nside</span>
+
+    <span class="k">def</span> <span class="nf">_get_ave_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">Alens</span><span class="p">,</span> <span class="n">skyconfig</span><span class="p">,</span> <span class="n">central_nu</span><span class="p">,</span> <span class="n">bw</span><span class="p">,</span> <span class="n">nb</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+
+        <span class="n">is_cmb</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">skyconfig</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;cmb&quot;</span><span class="p">:</span>
+                <span class="n">is_cmb</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">model</span> <span class="o">+=</span> <span class="p">[</span><span class="n">skyconfig</span><span class="p">[</span><span class="n">key</span><span class="p">]]</span>
+
+        <span class="n">mysky</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">12</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">sky</span> <span class="o">=</span> <span class="n">pysm3</span><span class="o">.</span><span class="n">Sky</span><span class="p">(</span><span class="n">nside</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="p">,</span> <span class="n">preset_strings</span><span class="o">=</span><span class="n">model</span><span class="p">)</span>
+            <span class="n">edges_min</span> <span class="o">=</span> <span class="n">central_nu</span> <span class="o">-</span> <span class="n">bw</span> <span class="o">/</span> <span class="mi">2</span>
+            <span class="n">edges_max</span> <span class="o">=</span> <span class="n">central_nu</span> <span class="o">+</span> <span class="n">bw</span> <span class="o">/</span> <span class="mi">2</span>
+            <span class="n">bandpass_frequencies</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">edges_min</span><span class="p">,</span> <span class="n">edges_max</span><span class="p">,</span> <span class="n">nb</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Integrating bandpass from </span><span class="si">{</span><span class="n">edges_min</span><span class="si">}</span><span class="s2"> GHz to </span><span class="si">{</span><span class="n">edges_max</span><span class="si">}</span><span class="s2"> GHz with </span><span class="si">{</span><span class="n">nb</span><span class="si">}</span><span class="s2"> frequencies.&quot;</span>
+            <span class="p">)</span>
+            <span class="n">mysky</span> <span class="o">+=</span> <span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                    <span class="n">sky</span><span class="o">.</span><span class="n">get_emission</span><span class="p">(</span><span class="n">bandpass_frequencies</span> <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                    <span class="o">*</span> <span class="n">utils</span><span class="o">.</span><span class="n">bandpass_unit_conversion</span><span class="p">(</span>
+                        <span class="n">bandpass_frequencies</span> <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">uK_CMB</span>
+                    <span class="p">)</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">T</span>
+                <span class="o">/</span> <span class="mf">1.5</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">is_cmb</span><span class="p">:</span>
+            <span class="n">cmb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_cmb</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">Alens</span><span class="p">,</span> <span class="n">skyconfig</span><span class="p">[</span><span class="s2">&quot;cmb&quot;</span><span class="p">])</span>
+            <span class="n">mysky</span> <span class="o">+=</span> <span class="n">cmb</span>
+
+        <span class="k">return</span> <span class="n">mysky</span>
+    <span class="k">def</span> <span class="nf">_get_fwhm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nu</span><span class="p">):</span>
+        <span class="n">fwhmi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_pkl</span><span class="p">(</span><span class="n">data_dir</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;Planck</span><span class="si">{</span><span class="n">nu</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">GHz.pkl&quot;</span><span class="p">)[</span><span class="sa">f</span><span class="s2">&quot;fwhm</span><span class="si">{</span><span class="n">nu</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">fwhmi</span>
+    <span class="k">def</span> <span class="nf">_get_noise</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nu</span><span class="p">):</span>
+        
+        <span class="n">index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">experiments</span><span class="p">[</span><span class="s1">&#39;Planck&#39;</span><span class="p">][</span><span class="s1">&#39;frequency&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">nu</span><span class="p">)</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+
+        <span class="n">sigma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">experiments</span><span class="p">[</span><span class="s1">&#39;Planck&#39;</span><span class="p">][</span><span class="s1">&#39;depth_p&#39;</span><span class="p">][</span><span class="n">index</span><span class="p">]</span> <span class="o">/</span> <span class="n">hp</span><span class="o">.</span><span class="n">nside2resol</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="p">,</span> <span class="n">arcmin</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        
+        <span class="n">out</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">standard_normal</span><span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">12</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nside</span> <span class="o">**</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span><span class="o">.</span><span class="n">shape</span>
+            <span class="p">)</span>
+            <span class="o">*</span> <span class="n">sigma</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">out</span>
+<div class="viewcode-block" id="PlanckMaps.run">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.PlanckMaps.run">[docs]</a>
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fwhm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">number_of_band_integration</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">        Method that create global variables such as :</span>
+
+<span class="sd">            - self.maps : Frequency maps from external data with shape (Nf, Npix, Nstk)</span>
+<span class="sd">            - self.external_nus  : Frequency array [GHz]</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">maps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">experiments</span><span class="p">[</span><span class="s1">&#39;Planck&#39;</span><span class="p">][</span><span class="s1">&#39;frequency&#39;</span><span class="p">]),</span> <span class="mi">12</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="n">maps_noise</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">experiments</span><span class="p">[</span><span class="s1">&#39;Planck&#39;</span><span class="p">][</span><span class="s1">&#39;frequency&#39;</span><span class="p">]),</span> <span class="mi">12</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fwhm_ext</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">inu</span><span class="p">,</span> <span class="n">nu</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">experiments</span><span class="p">[</span><span class="s1">&#39;Planck&#39;</span><span class="p">][</span><span class="s1">&#39;frequency&#39;</span><span class="p">]):</span>
+            <span class="c1"># print(self.external_nus, inu, nu)</span>
+            
+            <span class="n">bandwidth</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">experiments</span><span class="p">[</span><span class="s1">&#39;Planck&#39;</span><span class="p">][</span><span class="s1">&#39;bw&#39;</span><span class="p">][</span><span class="n">inu</span><span class="p">]</span>
+            <span class="n">maps</span><span class="p">[</span><span class="n">inu</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_ave_map</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">Alens</span><span class="p">,</span> 
+                <span class="bp">self</span><span class="o">.</span><span class="n">skyconfig</span><span class="p">,</span>
+                <span class="n">nu</span><span class="p">,</span>
+                <span class="n">nu</span> <span class="o">*</span> <span class="n">bandwidth</span><span class="p">,</span>
+                <span class="n">nb</span><span class="o">=</span><span class="n">number_of_band_integration</span>
+            <span class="p">)</span>
+
+            <span class="c1">#maps[inu] *= 0</span>
+            
+            <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_noise</span><span class="p">(</span><span class="n">nu</span><span class="p">)</span>
+            <span class="n">maps</span><span class="p">[</span><span class="n">inu</span><span class="p">]</span> <span class="o">+=</span> <span class="n">n</span>
+            <span class="n">maps_noise</span><span class="p">[</span><span class="n">inu</span><span class="p">]</span> <span class="o">+=</span> <span class="n">n</span>
+            
+            <span class="k">if</span> <span class="n">fwhm</span><span class="p">:</span>
+                <span class="n">C</span> <span class="o">=</span> <span class="n">HealpixConvolutionGaussianOperator</span><span class="p">(</span>
+                    <span class="n">fwhm</span><span class="o">=</span><span class="n">arcmin2rad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_fwhm</span><span class="p">(</span><span class="n">nu</span><span class="p">))</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fwhm_ext</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arcmin2rad</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_fwhm</span><span class="p">(</span><span class="n">nu</span><span class="p">)))</span>
+                <span class="n">maps</span><span class="p">[</span><span class="n">inu</span><span class="p">]</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">maps</span><span class="p">[</span><span class="n">inu</span><span class="p">])</span>
+                <span class="n">maps_noise</span><span class="p">[</span><span class="n">inu</span><span class="p">]</span> <span class="o">=</span> <span class="n">C</span><span class="p">(</span><span class="n">maps_noise</span><span class="p">[</span><span class="n">inu</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fwhm_ext</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">maps</span><span class="p">,</span> <span class="n">maps_noise</span></div>
+</div>
+
+
+<div class="viewcode-block" id="InputMaps">
+<a class="viewcode-back" href="../../../lib.MapMaking.Qmaps.html#lib.MapMaking.Qmaps.InputMaps">[docs]</a>
+<span class="k">class</span> <span class="nc">InputMaps</span><span class="p">(</span><span class="n">Maps</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sky</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">nrec</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span> <span class="n">corrected_bandpass</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+
+        
+        <span class="n">Maps</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sky</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">nrec</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="n">nside</span><span class="p">,</span> <span class="n">corrected_bandpass</span><span class="o">=</span><span class="n">corrected_bandpass</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">=</span> <span class="n">nus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nside</span> <span class="o">=</span> <span class="n">nside</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nrec</span> <span class="o">=</span> <span class="n">nrec</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">m_nu</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">),</span> <span class="mi">12</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sky</span> <span class="o">=</span> <span class="n">sky</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">sky</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="s2">&quot;cmb&quot;</span><span class="p">:</span>
+                <span class="n">cmb</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_cmb</span><span class="p">(</span><span class="n">r</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">Alens</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sky</span><span class="p">[</span><span class="s2">&quot;cmb&quot;</span><span class="p">])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">m_nu</span> <span class="o">+=</span> <span class="n">cmb</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="n">i</span> <span class="o">==</span> <span class="s2">&quot;dust&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sky_fg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_separe_cmb_fg</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sky_pysm</span> <span class="o">=</span> <span class="n">pysm3</span><span class="o">.</span><span class="n">Sky</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="p">,</span> <span class="n">preset_strings</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">list_fg</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">m_nu_fg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_fg_allnu</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">m_nu</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">m_nu_fg</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+                <span class="k">if</span> <span class="n">corrected_bandpass</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">m_nu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_corrected_maps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m_nu</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m_nu_fg</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">average_within_band</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m_nu</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_fg_1nu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nu</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sky_pysm</span><span class="o">.</span><span class="n">get_emission</span><span class="p">(</span><span class="n">nu</span> <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+                <span class="o">*</span> <span class="n">utils</span><span class="o">.</span><span class="n">bandpass_unit_conversion</span><span class="p">(</span><span class="n">nu</span> <span class="o">*</span> <span class="n">u</span><span class="o">.</span><span class="n">GHz</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">u</span><span class="o">.</span><span class="n">uK_CMB</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="o">/</span> <span class="mf">1.5</span>
+        <span class="p">)</span>
+    <span class="k">def</span> <span class="nf">_get_fg_allnu</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">),</span> <span class="mi">12</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">inu</span><span class="p">,</span> <span class="n">nu</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">):</span>
+            <span class="n">m</span><span class="p">[</span><span class="n">inu</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_fg_1nu</span><span class="p">(</span><span class="n">nu</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">m</span>
+    <span class="k">def</span> <span class="nf">_separe_cmb_fg</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">list_fg</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">new_s</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="s2">&quot;cmb&quot;</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">new_s</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sky</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">list_fg</span> <span class="o">+=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">sky</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span>
+
+        <span class="k">return</span> <span class="n">new_s</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

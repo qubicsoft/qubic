@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Calibration.Qselfcal module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.Calibration.QtesEvaluation module" href="lib.Calibration.QtesEvaluation.html" />
+    <link rel="prev" title="lib.Calibration.Qlinearity module" href="lib.Calibration.Qlinearity.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="lib.Calibration.html">lib.Calibration package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="lib.Calibration.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.html">lib.Fitting package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.html">lib.InstrumentModel package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.html">lib.MapMaking package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.html">lib.obsolete package</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.html#submodules">Submodules</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+          <li class="breadcrumb-item"><a href="lib.Calibration.html">lib.Calibration package</a></li>
+      <li class="breadcrumb-item active">lib.Calibration.Qselfcal module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.Calibration.Qselfcal.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.Calibration.Qselfcal">
+<span id="lib-calibration-qselfcal-module"></span><h1>lib.Calibration.Qselfcal module<a class="headerlink" href="#module-lib.Calibration.Qselfcal" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Calibration.Qselfcal.Model_Fringes_Maynooth">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qselfcal.</span></span><span class="sig-name descname"><span class="pre">Model_Fringes_Maynooth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rep</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">150000000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frame</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ONAFP'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">interp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qselfcal.html#Model_Fringes_Maynooth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qselfcal.Model_Fringes_Maynooth" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Calibration.Qselfcal.Model_Fringes_Maynooth.get_fringes" title="lib.Calibration.Qselfcal.Model_Fringes_Maynooth.get_fringes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_fringes</span></code></a>([verbose])</p></td>
+<td><p>Compute fringes on the focal plane from Maynooth simulations.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.Calibration.Qselfcal.Model_Fringes_Maynooth.get_fringes_from_combination" title="lib.Calibration.Qselfcal.Model_Fringes_Maynooth.get_fringes_from_combination"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_fringes_from_combination</span></code></a>([...])</p></td>
+<td><p>Compute fringes on the focal plane from Maynooth simulations doing the combination with S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci and Cj. :type measured_comb:  :param measured_comb: If True, returns the measured combination: S_tot - Cminus_i - Cminus_j + Sminus_ij. If False, returns the complete combination: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj. :type measured_comb: bool :type verbose:  :param verbose: :type verbose: bool.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Calibration.Qselfcal.Model_Fringes_Maynooth.get_fringes">
+<span class="sig-name descname"><span class="pre">get_fringes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qselfcal.html#Model_Fringes_Maynooth.get_fringes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qselfcal.Model_Fringes_Maynooth.get_fringes" title="Link to this definition"></a></dt>
+<dd><p>Compute fringes on the focal plane from Maynooth simulations.
+:rtype: x, y coordinates on the FP in the ONAFP frame and the corresponding power.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Calibration.Qselfcal.Model_Fringes_Maynooth.get_fringes_from_combination">
+<span class="sig-name descname"><span class="pre">get_fringes_from_combination</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">measured_comb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qselfcal.html#Model_Fringes_Maynooth.get_fringes_from_combination"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qselfcal.Model_Fringes_Maynooth.get_fringes_from_combination" title="Link to this definition"></a></dt>
+<dd><p>Compute fringes on the focal plane from Maynooth simulations doing the combination with
+S_tot, Cminus_i, Cminus_j, Sminus_ij, Ci and Cj.
+:type measured_comb: 
+:param measured_comb: If True, returns the measured combination: S_tot - Cminus_i - Cminus_j + Sminus_ij.</p>
+<blockquote>
+<div><p>If False, returns the complete combination: S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>verbose</strong> (<em>bool</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>x, y coordinates on the FP in the ONAFP frame and the corresponding power.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Calibration.Qselfcal.Model_Fringes_QubicSoft">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.Calibration.Qselfcal.</span></span><span class="sig-name descname"><span class="pre">Model_Fringes_QubicSoft</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">baseline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">theta_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phi_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">150000000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spec_irrad_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frame</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ONAFP'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">external_A</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hwp_position</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qselfcal.html#Model_Fringes_QubicSoft"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qselfcal.Model_Fringes_QubicSoft" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_all_combinations_power" title="lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_all_combinations_power"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_all_combinations_power</span></code></a>([doplot, verbose])</p></td>
+<td><p>Returns the power on the focal plane at each pointing (each position of the source),</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_fringes" title="lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_fringes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_fringes</span></code></a>([doplot, verbose])</p></td>
+<td><p>Compute the fringes on the focal plane directly opening the baseline.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_fringes_from_combination" title="lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_fringes_from_combination"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_fringes_from_combination</span></code></a>([...])</p></td>
+<td><p>Return the fringes on the FP by making the combination</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_all_combinations_power">
+<span class="sig-name descname"><span class="pre">get_all_combinations_power</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">doplot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qselfcal.html#Model_Fringes_QubicSoft.get_all_combinations_power"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_all_combinations_power" title="Link to this definition"></a></dt>
+<dd><blockquote>
+<div><p>Returns the power on the focal plane at each pointing (each position of the source),
+for different configurations of the horn array: all open, all open except i, except j,
+except i and j, only i open, only j open, only i and j open.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>x, y</strong> (<em>The coordinates on the FP.</em>)</p></li>
+<li><p><strong>S, Cminus_i, Cminus_j, Sminus_ij, Ci, Cj, Sij</strong> (<em>arrays</em>) – Power on the focal plane for each configuration, at each pointing.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_fringes">
+<span class="sig-name descname"><span class="pre">get_fringes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">doplot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qselfcal.html#Model_Fringes_QubicSoft.get_fringes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_fringes" title="Link to this definition"></a></dt>
+<dd><p>Compute the fringes on the focal plane directly opening the baseline.
+see get_response_power() for the arguments.
+Returns (x, y) coordinates and the power.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_fringes_from_combination">
+<span class="sig-name descname"><span class="pre">get_fringes_from_combination</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">measured_comb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doplot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/Qselfcal.html#Model_Fringes_QubicSoft.get_fringes_from_combination"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.Qselfcal.Model_Fringes_QubicSoft.get_fringes_from_combination" title="Link to this definition"></a></dt>
+<dd><p>Return the fringes on the FP by making the combination</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>x, y</strong> (<em>The coordinates on the FP.</em>)</p></li>
+<li><p><strong>fringes</strong> (<em>Fringes on the FP, for each coordinate, at each pointing.</em>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.Calibration.Qlinearity.html" class="btn btn-neutral float-left" title="lib.Calibration.Qlinearity module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.Calibration.QtesEvaluation.html" class="btn btn-neutral float-right" title="lib.Calibration.QtesEvaluation module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

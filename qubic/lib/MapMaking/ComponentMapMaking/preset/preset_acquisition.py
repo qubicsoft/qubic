@@ -1,10 +1,13 @@
 import numpy as np
 from pyoperators import DiagonalOperator
-import qubic
 
-from qubic.lib.InstrumentModel.Qacquisition import *
-from qubic.lib.InstrumentModel.Qnoise import *
-import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
+from ....InstrumentModel.Qacquisition import *
+from ....InstrumentModel.Qnoise import *
+from fgbuster import component_model as c
+
+#from qubic.lib.InstrumentModel.Qacquisition import *
+#from qubic.lib.InstrumentModel.Qnoise import *
+#import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
 
 
 class PresetAcquisition:
@@ -107,7 +110,7 @@ class PresetAcquisition:
         self.rms_plot = np.zeros((1, 2))
 
         ### Inverse noise-covariance matrix
-        self.preset_tools._print_message(
+        self.preset_tools.mpi._print_message(
             "    => Building inverse noise covariance matrix"
         )
         self.invN = self.preset_qubic.joint_out.get_invntt_operator(
@@ -115,28 +118,28 @@ class PresetAcquisition:
         )
 
         ### Preconditioner
-        self.preset_tools._print_message("    => Creating preconditioner")
-        self.M = self.get_preconditioner(
-            A_qubic=self.preset_mixingmatrix.Amm_in[
-                : self.preset_qubic.params_qubic["nsub_out"]
-            ],
-            A_ext=self.preset_mixingmatrix.Amm_in[
-                self.preset_qubic.params_qubic["nsub_out"] :
-            ],
-            precond=self.preset_qubic.params_qubic["preconditioner"],
-            thr=self.preset_tools.params["PLANCK"]["thr_planck"],
-        )
+        #self.preset_tools._print_message("    => Creating preconditioner")
+        #self.M = self.get_preconditioner(
+        #    A_qubic=self.preset_mixingmatrix.Amm_in[
+        #        :6#self.preset_qubic.params_qubic["nsub_out"]
+        #    ],
+        #    A_ext=self.preset_mixingmatrix.Amm_in[
+        #        7:#self.preset_qubic.params_qubic["nsub_out"]:
+        #    ],
+        #    precond=self.preset_qubic.params_qubic["preconditioner"],
+        #    thr=self.preset_tools.params["PLANCK"]["thr_planck"],
+        #)
 
         ### Get convolution
-        self.preset_tools._print_message("    => Getting convolution")
+        self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec = self.get_convolution()
 
         ### Get observed data
-        self.preset_tools._print_message("    => Getting observational data")
+        self.preset_tools.mpi._print_message("    => Getting observational data")
         self.get_tod()
 
         ### Compute initial guess for PCG
-        self.preset_tools._print_message("    => Initializing starting point")
+        self.preset_tools.mpi._print_message("    => Initializing starting point")
         self.get_x0()
 
     def get_approx_hth(self):
@@ -155,7 +158,7 @@ class PresetAcquisition:
 
         # Approximation of H.T H
         approx_hth = np.empty(
-            (self.preset_qubic.params_qubic["nsub_out"],)
+            (len(self.preset_qubic.joint_out.qubic.H),)
             + self.preset_qubic.joint_out.qubic.H[0].shapein
         )
         vector = np.ones(self.preset_qubic.joint_out.qubic.H[0].shapein)
@@ -237,13 +240,12 @@ class PresetAcquisition:
             # We sum over the frequencies, take the inverse, and only keep the information on the patch.
             for icomp in range(len(self.preset_comp.components_model_out)):
                 for istk in range(3):
-                    precond_qubic = 1 / (
-                        approx_hth[:, :, 0].T @ A_qubic[..., icomp] ** 2
-                    )
-                    preconditioner[icomp, seenpix_qubic_0_001, istk] += precond_qubic[
-                        seenpix_qubic_0_001
-                    ]
-
+                    #print(A_qubic[..., icomp])
+                    precond_qubic = 1 / (approx_hth[:, :, 0].T @ (A_qubic[..., icomp]) ** 2)
+                    preconditioner[icomp, seenpix_qubic_0_001, istk] += precond_qubic[seenpix_qubic_0_001] 
+            #stop
+            #print( preconditioner[:, seenpix_qubic_0_001, istk] )
+            #stop
             M = DiagonalOperator(preconditioner[:, self.preset_sky.seenpix, :])
             return M
         else:
@@ -371,9 +373,9 @@ class PresetAcquisition:
             fwhm_rec = np.zeros(len(self.preset_comp.components_model_out))
 
         # Print the FWHM values
-        self.preset_tools._print_message(f"FWHM for TOD making : {fwhm_tod}")
-        self.preset_tools._print_message(f"FWHM for reconstruction : {fwhm_mapmaking}")
-        self.preset_tools._print_message(f"Reconstructed FWHM : {fwhm_rec}")
+        self.preset_tools.mpi._print_message(f"FWHM for TOD making : {fwhm_tod}")
+        self.preset_tools.mpi._print_message(f"FWHM for reconstruction : {fwhm_mapmaking}")
+        self.preset_tools.mpi._print_message(f"Reconstructed FWHM : {fwhm_rec}")
 
         return fwhm_tod, fwhm_mapmaking, fwhm_rec
 
@@ -624,13 +626,18 @@ class PresetAcquisition:
                 self.preset_comp.components_iter[i] = C2(
                     C1(self.preset_comp.components_iter[i])
                 )
-                self.preset_comp.components_iter[
-                    i, mypix, :
-                ] *= self.preset_tools.params["INITIAL"]["qubic_patch_co"]
-                self.preset_comp.components_iter[i, mypix, :] += np.random.normal(
-                    0,
+                
+                for istk in range(3):
+                    if istk == 0:
+                        key = "I"
+                    else:
+                        key = "P"
+                        
+                    self.preset_comp.components_iter[i, mypix, istk] *= self.preset_tools.params["INITIAL"][f"qubic_patch_{key}_co"]
+                    
+                    self.preset_comp.components_iter[i, mypix, istk] += np.random.normal(0,
                     self.preset_tools.params["INITIAL"]["sig_map_noise"],
-                    self.preset_comp.components_iter[i, mypix, :].shape,
+                    self.preset_comp.components_iter[i, mypix, istk].shape,
                 )
             else:
                 raise TypeError(

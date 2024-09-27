@@ -2,7 +2,7 @@ path_out: 'test_to_remove/'
 datafilename: 'MC'
 
 CMB:
-    cmb: True
+    cmb: False
     seed: 1                                 # CMB realization
     r: 0
     Alens: 1
@@ -18,8 +18,8 @@ QUBIC:
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
     npointings: 1000                        # Number of time samples
-    nsub_in: 20                             # Number of sub-acquisitions
-    nsub_out: 20
+    nsub_in: 6                             # Number of sub-acquisitions
+    nsub_out: 6
     nrec: 2                                # Number of reconstructed frequency maps
     convolution_in: True                   # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
@@ -29,6 +29,7 @@ QUBIC:
         npho150: 0                          # Level of photon noise at 150 GHz
         npho220: 0                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise
+        seed: -1
     SYNTHBEAM:
         synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     dtheta: 15                             # Angle for coverage
@@ -37,7 +38,7 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 256                              # Nside of components
+    nside: 128                              # Nside of components
     coverage_cut: 0.15                      # Define a cut where the coverage is too low
     RA_center: 0                   
     DEC_center: -57
@@ -60,7 +61,7 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 2                                   # Number of PCG iterations
+    n_iter_pcg: 30                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: True
     gif: True

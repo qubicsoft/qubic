@@ -53,7 +53,7 @@ class PresetMixingMatrix:
         )
 
         ### Get input spectral index
-        self.preset_tools._print_message("    => Building Mixing Matrix")
+        self.preset_tools.mpi._print_message("    => Building Mixing Matrix")
         self.get_beta_input()
         self.get_index_seenpix_beta()
 

@@ -2,20 +2,19 @@ from .Calibration import *
 from .Fitting import *
 from .InstrumentModel import *
 from .MapMaking import *
+
+from .Qbeams import *
 from .Qcoaddition import *
 from .QdataHandling import *
 from .Qdictionary import *
 from .Qforecast import *
 from .Qplotters import *
-from .Qsamplings import *
-from .Qscene import *
 from .Qutilities import *
-from .Qripples import *
-from .Qbeams import *
-from .Qcg import *
+from .MapMaking.Qcg import *
 from .Qfit import *
 from .Qfoldertools import *
-from .Qmap_plotter import *
 from .Qmpi_tools import *
 from .Qspectra import *
-from .Qspectra_component import *
+from .Qsamplings import *
+from .Qscene import *
+from .Qripples import *

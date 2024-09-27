@@ -1,9 +1,9 @@
 import healpy as hp
 import numpy as np
-import qubic
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
-from qubic.lib.Fitting import Qnamaster as nam
-from qubic.lib.Qsamplings import equ2gal
+
+from ....Fitting import Qnamaster as nam
+from ....Qsamplings import equ2gal
 
 
 class PresetSky:
@@ -51,18 +51,18 @@ class PresetSky:
         self.params_sky = self.preset_tools.params["SKY"]
 
         ### Center of the QUBIC patch
-        self.preset_tools._print_message("    => Getting center of the QUBIC patch")
+        self.preset_tools.mpi._print_message("    => Getting center of the QUBIC patch")
         self.center = equ2gal(
             self.params_sky["RA_center"], self.params_sky["DEC_center"]
         )
 
         ### Compute coverage map
-        self.preset_tools._print_message("    => Computing coverage")
+        self.preset_tools.mpi._print_message("    => Computing coverage")
         self.coverage = preset_qubic.joint_out.qubic.coverage
         self.max_coverage = np.max(self.coverage)
 
         ### Compute seen pixels
-        self.preset_tools._print_message("    => Computing cut between Planck & QUBIC")
+        self.preset_tools.mpi._print_message("    => Computing cut between Planck & QUBIC")
 
         # All the pixels seen by QUBIC
         self.seenpix_qubic = self.coverage / self.max_coverage > 0
@@ -87,7 +87,7 @@ class PresetSky:
             self.coverage_beta = None
 
         ### Build mask for weighted Planck data
-        self.preset_tools._print_message("    => Creating mask")
+        self.preset_tools.mpi._print_message("    => Creating mask")
         self.mask = np.ones(12 * self.params_sky["nside"] ** 2)
         self.mask[self.seenpix] = self.preset_tools.params["PLANCK"]["weight_planck"]
         C = HealpixConvolutionGaussianOperator(
@@ -97,7 +97,7 @@ class PresetSky:
         self.mask = C(self.mask)
 
         ### Initialize namaster
-        self.preset_tools._print_message("    => Initializing Namaster")
+        self.preset_tools.mpi._print_message("    => Initializing Namaster")
         self.get_spectra_namaster_informations()
 
     def get_coverage(self):

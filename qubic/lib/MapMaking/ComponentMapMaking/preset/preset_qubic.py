@@ -1,9 +1,8 @@
-import numpy as np
-import qubic
+from fgbuster import component_model as c
+from .. import Qcomponent_model as model_co
+from ....InstrumentModel.Qacquisition import JointAcquisitionComponentsMapMaking
+from ....Qdictionary import qubicDict
 
-import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
-from qubic.lib.InstrumentModel.Qacquisition import JointAcquisitionComponentsMapMaking
-from qubic.lib.Qdictionary import qubicDict
 
 class PresetQubic:
     """Preset QUBIC.
@@ -38,11 +37,9 @@ class PresetQubic:
         ### MPI common arguments
         self.comm = self.preset_tools.comm
         self.size = self.comm.Get_size()
-        # print(self.size)
-        # stop
 
         ### QUBIC dictionary
-        self.preset_tools._print_message("    => Reading QUBIC dictionary")
+        self.preset_tools.mpi._print_message("    => Reading QUBIC dictionary")
         self.dict = self.get_dict()
 
         ### Define model for reconstruction
@@ -55,7 +52,7 @@ class PresetQubic:
             nu_co = None
 
         ### Joint acquisition for QUBIC operator
-        self.preset_tools._print_message("    => Building QUBIC operator")
+        self.preset_tools.mpi._print_message("    => Building QUBIC operator")
         self.joint_in = JointAcquisitionComponentsMapMaking(
             self.dict,
             self.params_qubic["instrument"],
@@ -194,9 +191,12 @@ class PresetQubic:
 
         if self.preset_tools.params["Foregrounds"]["CO"][f"CO_{key}"]:
             components += [
-                c.COLine(
-                    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
-                    active=False,
+                #c.COLine(
+                #    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
+                #    active=False,
+                #)
+                model_co.Monochromatic(
+                    nu0=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
                 )
             ]
             components_name += ["CO"]

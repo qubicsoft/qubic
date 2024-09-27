@@ -1,11 +1,76 @@
 import healpy as hp
 import numpy as np
 
-from .MapMaking.ComponentMapMaking import Qcomponent_model as c
+from ..ComponentMapMaking import Qcomponent_model as c
 import fgbuster.mixingmatrix as mm
 
-CMB_CL_FILE = "src/data/Cls_Planck2018_%s.fits"
+from qubic.data import PATH as data_dir
 
+class CMBModel:
+    """
+
+    CMB description assuming parametrized emission law such as :
+
+        Dl_CMB = r * Dl_tensor_r1 + Alens * Dl_lensed
+
+        Parameters
+        -----------
+            - params : Dictionary coming from `params.yml` file that define every parameters
+            - ell    : Multipole used during the analysis
+
+    """
+
+    def __init__(self, ell):
+
+        self.ell = ell
+
+    def give_cl_cmb(self, r, Alens):
+        """
+
+        Method to get theoretical CMB BB power spectrum according to Alens and r.
+
+
+        """
+        power_spectrum = hp.read_cl(data_dir + "Cls_Planck2018_lensed_scalar.fits")[
+            :, :4000
+        ]
+        if Alens != 1.0:
+            power_spectrum *= Alens
+        if r:
+            power_spectrum += (
+                r
+                * hp.read_cl(
+                    data_dir + "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
+                )[:, :4000]
+            )
+        return power_spectrum
+
+    def cl2dl(self, ell, cl):
+        """
+
+        Method to convert Cl to Dl which is Dl = ell * (ell + 1) * Cl / 2 * pi
+
+        Arguments :
+        -----------
+            - ell : Array containing multipoles.
+            - cl  : Array containing BB power spectrum.
+
+        """
+
+        dl = np.zeros(ell.shape[0])
+        for i in range(ell.shape[0]):
+            dl[i] = (ell[i] * (ell[i] + 1) * cl[i]) / (2 * np.pi)
+        return dl
+
+    def get_Dl_cmb(self):
+        """
+
+        Method to interpolate theoretical BB power spectrum for effective multipoles.
+
+        """
+        allDl = self.cl2dl(np.arange(1, 4001, 1), self.give_cl_cmb()[2])
+        Dl_eff = np.interp(self.ell, np.arange(1, 4001, 1), allDl)
+        return Dl_eff
 
 class SkySpectra:
 
@@ -13,6 +78,8 @@ class SkySpectra:
 
         self.nus = nus
         self.ell = ell
+        if self.ell is None:
+            self.ell = np.arange(2, 4000)
         self.nbins = len(self.ell)
         self.nfreq = len(self.nus)
         self.nu0_d = nu0_d
@@ -30,13 +97,13 @@ class SkySpectra:
         Function to compute the CMB power spectrum from the Planck data
         """
 
-        power_spectrum = hp.read_cl(CMB_CL_FILE % "lensed_scalar")[:, :4000]
+        power_spectrum = hp.read_cl(data_dir + "Cls_Planck2018_lensed_scalar.fits")[:, :4000]
 
         if Alens != 1.0:
             power_spectrum[2] *= Alens
         if r:
             power_spectrum += (
-                r * hp.read_cl(CMB_CL_FILE % "unlensed_scalar_and_tensor_r1")[:, :4000]
+                r * hp.read_cl(data_dir + "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits")[:, :4000]
             )
 
         return np.interp(self.ell, np.linspace(1, 4001, 4000), power_spectrum[2])

@@ -19,6 +19,13 @@ class MpiTools:
         
         self.comm = comm
 
+    def _print_message(self, message):
+        
+        if self.comm is not None:
+            if self.comm.Get_rank() == 0:
+                print(message)
+            
+            self.comm.Barrier()
     def _barrier(self):
         """
         Method to introduce comm._Barrier() function if MPI communicator is detected.

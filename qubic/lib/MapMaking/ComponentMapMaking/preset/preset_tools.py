@@ -1,6 +1,5 @@
-import os
 import yaml
-
+from ....Qmpi_tools import MpiTools
 
 class PresetTools:
     """Preset Tools.
@@ -19,7 +18,7 @@ class PresetTools:
 
     """
 
-    def __init__(self, comm):
+    def __init__(self, comm, parameters_file):
         """
         Initialize.
 
@@ -29,48 +28,14 @@ class PresetTools:
         self.comm = comm
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
+        self.mpi = MpiTools(self.comm)
 
         ### Open parameters file
-        self._print_message("========= Initialization =========")
-        self._print_message("    => Reading parameters file")
-        with open("CMM/params.yml", "r") as stream:
-            self.params = yaml.safe_load(stream)
-
-    def _print_message(self, message):
-        """
-        Display a `message` only for the first rank in an MPI multiprocessing environment.
-
-        Parameters:
-        message (str): The message to be displayed.
-
-        Returns:
-        None
-        """
-        if self.rank == 0:
-            print(message)
-
-    def create_folder_if_not_exists(self, folder_name):
-        """Create folder.
-
-        Creates a folder with the specified name if it does not already exist.
-
-        Parameters
-        ----------
-        folder_name: str
-            The name of the folder to create.
-
-        """
-
-        # Check if the folder exists
-        if not os.path.exists(folder_name):
-            try:
-                # Create the folder if it doesn't exist
-                os.makedirs(folder_name)
-                print(f"The folder '{folder_name}' has been created.")
-            except OSError as e:
-                print(f"Error creating the folder '{folder_name}': {e}")
-        else:
-            pass
+        self.mpi._print_message("========= Initialization =========")
+        self.mpi._print_message("    => Reading parameters file")
+        
+        with open(parameters_file, 'r') as tf:
+            self.params = yaml.safe_load(tf)
 
     def check_for_errors(self):
         """Errors check.

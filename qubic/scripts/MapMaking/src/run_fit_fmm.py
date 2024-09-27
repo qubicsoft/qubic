@@ -1,14 +1,10 @@
-import os
-
 import matplotlib.pyplot as plt
 import numpy as np
-from multiprocess import Pool
 from pyoperators import MPI
-from schwimmbad import MPIPool
 
 from lib.Qfit import FitEllSpace
 from lib.Qfoldertools import MergeAllFiles
-from lib.Qspectra_component import SkySpectra
+from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import SkySpectra
 
 comm = MPI.COMM_WORLD
 

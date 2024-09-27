@@ -1,7 +1,29 @@
+### General packages
+import os
+import pickle
 import time
+import numpy as np
+import healpy as hp
+import yaml
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+from scipy.optimize import minimize
+from pyoperators import DiagonalOperator, ReshapeOperator
 
+### Lib directory
+from ...Qsamplings import equ2gal
+from ...Qdictionary import qubicDict
+from ...InstrumentModel.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
+from ...InstrumentModel.Qnoise import QubicDualBandNoise, QubicWideBandNoise
+from ..Qcg import pcg
+from ..ComponentMapMaking.Qcomponent_model import CMB, Dust, Synchrotron
+from ...Qfoldertools import create_folder_if_not_exists, do_gif
+from ..Qmap_plotter import PlotsFMM
+from ...Qspectra import Spectra
+from ...Qmpi_tools import MpiTools
+from ..Qmaps import PlanckMaps, InputMaps
 
-
+__all__ = ["PipelineFrequencyMapMaking", 
+           "PipelineEnd2End"]
 
 
 class PipelineFrequencyMapMaking:
@@ -19,53 +41,45 @@ class PipelineFrequencyMapMaking:
 
     """
 
-    def __init__(self, comm, file, params):
+    def __init__(self, comm, file, parameters_dict):
         """
         Initialise PipelineFrequencyMapMaking
 
         """
 
+        ### MPI common arguments
+        self.comm = comm
+        self.size = self.comm.Get_size()
+        self.rank = self.comm.Get_rank()
+        self.job_id = os.environ.get("SLURM_JOB_ID")
+        
+        self.mpi = MpiTools(self.comm)
         self.mapmaking_time_0 = time.time()
 
-        self.params = params
-
-        ### Fsub
+        ### Parameters file
+        self.params = parameters_dict.copy()
+        
+        ### Sky configuration
+        self.skyconfig = self.get_sky_config()
+        
+        ### fsub
         self.fsub_in = int(self.params["QUBIC"]["nsub_in"] / self.params["QUBIC"]["nrec"])
         self.fsub_out = int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])
 
         self.file = file
         self.plot_folder = "FMM/" + self.params["path_out"] + "png/"
 
-        self.externaldata = PipelineExternalData(file, self.params)
-        self.externaldata.run(fwhm=self.params["QUBIC"]["convolution_in"], noise=True)
+        ### Create folders
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "maps/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "png/")
 
-        self.externaldata_noise = PipelineExternalData(
-            file, self.params, noise_only=True
-        )
-        self.externaldata_noise.run(
-            fwhm=self.params["QUBIC"]["convolution_in"], noise=True
-        )
-
-        if comm.Get_rank() == 0:
-            if not os.path.isdir("FMM/" + self.params["path_out"] + "maps/"):
-                os.makedirs("FMM/" + self.params["path_out"] + "maps/")
-            if not os.path.isdir("FMM/" + self.params["path_out"] + "png/"):
-                os.makedirs("FMM/" + self.params["path_out"] + "png/")
-
-        self.job_id = os.environ.get("SLURM_JOB_ID")
-        self.center = qubic.lib.Qsamplings.equ2gal(
-            self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"]
-        )
-
-        ### MPI common arguments
-        self.comm = comm
-        self.size = self.comm.Get_size()
-        self.rank = self.comm.Get_rank()
+        ### Center of the QUBIC patch
+        self.center = equ2gal(self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"])
 
         ### Sky
         self.dict_in = self.get_dict(key="in")
         self.dict_out = self.get_dict(key="out")
-        self.skyconfig = self.get_sky_config()
+        
 
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
@@ -90,36 +104,32 @@ class PipelineFrequencyMapMaking:
             H=H,
         )
 
+        self.externaldata = PlanckMaps(self.skyconfig, self.joint_tod.qubic.allnus, self.params["QUBIC"]["nrec"], nside=self.params["SKY"]["nside"])
+        self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(fwhm=self.params["QUBIC"]["convolution_in"])
         self.planck_acquisition143 = PlanckAcquisition(143, self.joint.qubic.scene)
         self.planck_acquisition217 = PlanckAcquisition(217, self.joint.qubic.scene)
         self.nus_Q = self.get_averaged_nus()
 
         ### Coverage map
         self.coverage = self.joint.qubic.subacqs[0].get_coverage()
-        covnorm = self.coverage / self.coverage.max()
-        self.seenpix = covnorm > self.params["SKY"]["coverage_cut"]
-        self.seenpix_qubic = covnorm > 0
-        self.fsky = self.seenpix.astype(float).sum() / self.seenpix.size
-        self.coverage_cut = self.coverage.copy()
-        self.coverage_cut[~self.seenpix] = 1
-
-        self.seenpix_for_plot = covnorm > 0
+        self.seenpix = self.coverage / self.coverage.max() > self.params["SKY"]["coverage_cut"]
+        self.seenpix_qubic = self.coverage / self.coverage.max() > 0
         self.mask = np.ones(12 * self.params["SKY"]["nside"] ** 2)
         self.mask[self.seenpix] = self.params["PLANCK"]["weight_planck"]
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()
 
-        self.external_timeline = ExternalData2Timeline(
+        self.maps_input = InputMaps(
             self.skyconfig,
             self.joint_tod.qubic.allnus,
             self.params["QUBIC"]["nrec"],
             nside=self.params["SKY"]["nside"],
             corrected_bandpass=self.params["QUBIC"]["bandpass_correction"],
         )
-
+        
         ### Initial maps
-        self.m_nu_in = self.get_input_map()
+        self.m_nu_in = self.get_input_map(m_nu=self.maps_input.m_nu)
         
         ### Define reconstructed and TOD operator
         self.get_H()
@@ -134,7 +144,7 @@ class PipelineFrequencyMapMaking:
         
         
         ### Noises
-        seed_noise_planck = get_random_value()
+        seed_noise_planck = self.mpi.get_random_value()
 
         self.noise143 = (
             self.planck_acquisition143.get_noise(seed_noise_planck)
@@ -315,6 +325,7 @@ class PipelineFrequencyMapMaking:
             "DEC_center": self.params["SKY"]["DEC_center"],
             "filter_nu": 150 * 1e9,
             "noiseless": False,
+            "beam_shape": 'gaussian',
             "comm": self.comm,
             "dtheta": self.params["QUBIC"]["dtheta"],
             "nprocs_sampling": 1,
@@ -336,7 +347,7 @@ class PipelineFrequencyMapMaking:
 
         ### Get the default dictionary
         dictfilename = "dicts/pipeline_demo.dict"
-        dict_qubic = qubic.lib.Qdictionary.qubicDict()
+        dict_qubic = qubicDict()
         dict_qubic.read_from_file(dictfilename)
 
         for i in args.keys():
@@ -480,7 +491,7 @@ class PipelineFrequencyMapMaking:
 
         return fwhm_in, fwhm_out, fwhm_rec
 
-    def get_input_map(self):
+    def get_input_map(self, m_nu):
         r"""Input maps.
 
         Function to get the input maps from PySM3.
@@ -498,7 +509,7 @@ class PipelineFrequencyMapMaking:
         
         for i in range(self.params["QUBIC"]["nrec"]):
             m_nu_in[i] = np.mean(
-                self.external_timeline.m_nu[i * self.fsub_out : (i + 1) * self.fsub_out], axis=0
+                m_nu[i * self.fsub_out : (i + 1) * self.fsub_out], axis=0
             )
 
         return m_nu_in
@@ -536,7 +547,7 @@ class PipelineFrequencyMapMaking:
                         C = HealpixConvolutionGaussianOperator(fwhm=0)
 
                     TOD_PLANCK[irec] = C(
-                        self.external_timeline.maps[irec] + self.noise143
+                        self.maps_input.maps[irec] + self.noise143
                     )
 
                 for irec in range(
@@ -553,7 +564,7 @@ class PipelineFrequencyMapMaking:
                         C = HealpixConvolutionGaussianOperator(fwhm=0)
 
                     TOD_PLANCK[irec] = C(
-                        self.external_timeline.maps[irec] + self.noise217
+                        self.maps_input.maps[irec] + self.noise217
                     )
             else:
                 TOD_PLANCK = np.zeros(
@@ -570,15 +581,15 @@ class PipelineFrequencyMapMaking:
                     C = HealpixConvolutionGaussianOperator(fwhm=0)
 
                 TOD_PLANCK[0] = C(
-                    self.external_timeline.maps[0] + self.noise143
+                    self.maps_input.maps[0] + self.noise143
                 )
                 TOD_PLANCK[1] = C(
-                    self.external_timeline.maps[0] + self.noise217
+                    self.maps_input.maps[0] + self.noise217
                 )
 
             TOD_PLANCK = TOD_PLANCK.ravel()
             TOD_QUBIC = (
-                self.H_in_qubic(self.external_timeline.m_nu).ravel()
+                self.H_in_qubic(self.maps_input.m_nu).ravel()
                 + self.noiseq
             )
             if self.params["PLANCK"]["external_data"]:
@@ -590,7 +601,7 @@ class PipelineFrequencyMapMaking:
 
             sh_q = self.joint.qubic.ndets * self.joint.qubic.nsamples
             TOD_QUBIC = (
-                self.H_in_qubic(self.external_timeline.m_nu).ravel()
+                self.H_in_qubic(self.maps_input.m_nu).ravel()
                 + self.noiseq
             )
             if self.params["PLANCK"]["external_data"] == False:
@@ -621,7 +632,7 @@ class PipelineFrequencyMapMaking:
                     TOD = np.r_[
                         TOD,
                         C(
-                            self.external_timeline.maps[irec] + self.noise143
+                            self.maps_input.maps[irec] + self.noise143
                         ).ravel(),
                     ]
 
@@ -642,7 +653,7 @@ class PipelineFrequencyMapMaking:
                     TOD = np.r_[
                         TOD,
                         C(
-                            self.external_timeline.maps[irec] + self.noise217
+                            self.maps_input.maps[irec] + self.noise217
                         ).ravel(),
                     ]
 
@@ -710,7 +721,7 @@ class PipelineFrequencyMapMaking:
             M = None
         return M
 
-    def pcg(self, d, x0, seenpix):
+    def call_pcg(self, d, x0, seenpix):
         r"""Preconditioned Conjugate Gradiant algorithm.
 
         Solve the map-making equation iteratively : :math:`(H^T . N^{-1} . H) . x = H^T . N^{-1} . d`.
@@ -782,13 +793,13 @@ class PipelineFrequencyMapMaking:
         if self.params["PCG"]["gif"]:
             do_gif(gif_folder, "iter_", output="animation.gif")
 
-        _barrier()
+        self.mpi._barrier()
 
         if self.params["QUBIC"]["nrec"] == 1:
             solution_qubic_planck["x"]["x"] = np.array(
                 [solution_qubic_planck["x"]["x"]]
             )
-
+        
         solution = np.ones(self.m_nu_in.shape) * hp.UNSEEN
         if self.params['PLANCK']['external_data']:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
@@ -819,16 +830,7 @@ class PipelineFrequencyMapMaking:
         self.TOD = self.get_tod()
 
         ### Wait for all processes
-        _barrier()
-
-        #maps_in = self.m_nu_in.copy()
-        #if self.params["QUBIC"]["convolution_in"]:
-        #    for i in range(self.params["QUBIC"]["nrec"]):
-        #        C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[i])
-        #        maps_in[i] = C(self.m_nu_in[i])
-
-        #x0 = self.m_nu_in.copy()
-        #x0[:, self.seenpix, :] = 0
+        self.mpi._barrier()
 
         if self.params['PLANCK']['external_data']:
             starting_point = np.zeros(self.m_nu_in[:, self.seenpix, :].shape)
@@ -836,10 +838,10 @@ class PipelineFrequencyMapMaking:
             starting_point = np.zeros(self.m_nu_in.shape)
             
         ### Solve map-making equation
-        self.s_hat = self.pcg(self.TOD, x0=starting_point, seenpix=self.seenpix)
+        self.s_hat = self.call_pcg(self.TOD, x0=starting_point, seenpix=self.seenpix)
 
         ### Wait for all processes
-        _barrier()
+        self.mpi._barrier()
 
         ### n = m_signalnoisy - m_signal
         self.s_hat_noise = self.s_hat - self.m_nu_in
@@ -854,21 +856,21 @@ class PipelineFrequencyMapMaking:
             self.external_maps = self.externaldata.maps.copy()
             self.external_maps[:, ~self.seenpix, :] = 0
 
-            self.external_maps_noise = self.externaldata_noise.maps.copy()
+            self.external_maps_noise = self.externaldata.maps_noise.copy()
             self.external_maps_noise[:, ~self.seenpix, :] = 0
             
             self.nus_rec = self.nus_Q.copy()
-            if len(self.externaldata.external_nus) != 0:
+            if len(self.externaldata.experiments['Planck']['frequency']) != 0:
                 fwhm_ext = self.externaldata.fwhm_ext.copy()
                 self.s_hat = np.concatenate((self.s_hat, self.external_maps), axis=0)
                 self.s_hat_noise = np.concatenate(
                     (self.s_hat_noise, self.external_maps_noise), axis=0
                 )
                 self.nus_rec = np.array(
-                    list(self.nus_Q) + list(self.externaldata.external_nus)
+                    list(self.nus_Q) + list(self.externaldata.experiments['Planck']['frequency'])
                 )
                 self.fwhm_rec = np.array(list(self.fwhm_rec) + list(fwhm_ext))
-
+            print(self.s_hat.shape)
             self.plots.plot_frequency_maps(
                 self.m_nu_in[: len(self.nus_Q)],
                 self.s_hat[: len(self.nus_Q)],
@@ -904,5 +906,75 @@ class PipelineFrequencyMapMaking:
             self._save_data(self.file, dict_solution)
         
         ### Wait for all processors
-        _barrier()
+        self.mpi._barrier()
 
+
+class PipelineEnd2End:
+    """FMM Pipeline.
+
+    Wrapper for End-2-End pipeline. It added class one after the others by running method.run().
+
+    """
+
+    def __init__(self, comm, parameters_path):
+        
+        with open(parameters_path, 'r') as tf:
+            self.params = yaml.safe_load(tf)
+
+        self.comm = comm
+        self.job_id = os.environ.get("SLURM_JOB_ID")
+
+        self.folder = "FMM/" + self.params["path_out"] + "maps/"
+        self.file = self.folder + self.params["datafilename"] + f"_{self.job_id}.pkl"
+        self.file_spectrum = (
+            "FMM/"
+            + self.params["path_out"]
+            + "spectrum/"
+            + "spectrum_"
+            + self.params["datafilename"]
+            + f"_{self.job_id}.pkl"
+        )
+        self.mapmaking = None
+
+    def main(self, specific_file=None):
+
+        ### Execute Frequency Map-Making
+        if self.params["Pipeline"]["mapmaking"]:
+
+            ### Initialization
+            self.mapmaking = PipelineFrequencyMapMaking(
+                self.comm, self.file, self.params
+            )
+
+            ### Run
+            self.mapmaking.run()
+
+        ### Execute spectrum
+        if self.params["Pipeline"]["spectrum"]:
+            if self.comm.Get_rank() == 0:
+                create_folder_if_not_exists(
+                    self.comm, "FMM/" + self.params["path_out"] + "spectrum/"
+                )
+
+                if self.mapmaking is not None:
+                    self.spectrum = Spectra(self.file)
+                else:
+                    self.spectrum = Spectra(specific_file)
+
+                ### Signal
+                DlBB_maps = self.spectrum.run(maps=self.spectrum.maps)
+
+                ### Noise
+                DlBB_noise = self.spectrum.run(
+                    maps=self.spectrum.dictionary["maps_noise"]
+                )
+
+                dict_solution = {
+                    "nus": self.spectrum.dictionary["nus"],
+                    "ell": self.spectrum.ell,
+                    "Dls": DlBB_maps,
+                    "Nl": DlBB_noise,
+                    "parameters": self.params,
+                }
+
+                self.mapmaking._save_data(self.file_spectrum, dict_solution)

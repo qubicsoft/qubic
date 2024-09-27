@@ -49,7 +49,7 @@ class PresetComponents:
 
     """
 
-    def __init__(self, preset_tools, preset_qubic, seed):
+    def __init__(self, preset_tools, preset_qubic):
         """
         Initialize.
 
@@ -63,15 +63,15 @@ class PresetComponents:
         self.params_foregrounds = self.preset_tools.params["Foregrounds"]
 
         ### Define seed for CMB generation and noise
-        self.seed = seed
+        #self.seed = seed
 
         ### Skyconfig
-        self.preset_tools._print_message("    => Creating sky configuration")
+        self.preset_tools.mpi._print_message("    => Creating sky configuration")
         self.skyconfig_in = self.get_sky_config(key="in")
         self.skyconfig_out = self.get_sky_config(key="out")
 
         ### Define model for reconstruction
-        self.preset_tools._print_message("    => Creating model")
+        self.preset_tools.mpi._print_message("    => Creating model")
         self.components_model_in, self.components_name_in = (
             self.preset_qubic.get_components_fgb(key="in")
         )
@@ -80,7 +80,7 @@ class PresetComponents:
         )
 
         ### Compute true components
-        self.preset_tools._print_message("    => Creating components")
+        self.preset_tools.mpi._print_message("    => Creating components")
         self.components_in, self.components_convolved_in, _ = self.get_components(
             self.skyconfig_in
         )
@@ -118,7 +118,7 @@ class PresetComponents:
 
         sky = {}
         if self.params_cmb["cmb"]:
-            sky["CMB"] = self.seed
+            sky["CMB"] = self.preset_tools.params['CMB']['seed']
 
         if self.preset_tools.params["Foregrounds"]["Dust"][f"Dust_{key}"]:
             sky["Dust"] = self.preset_tools.params["Foregrounds"]["Dust"]["model_d"]
@@ -195,12 +195,12 @@ class PresetComponents:
 
         # Read and downgrade the polarization angle map to the desired nside resolution
         polangle = hp.ud_grade(
-            hp.read_map(os.getcwd() + "/data/" + "psimap_dust90_512.fits"), nside
+            hp.read_map(PATH + "psimap_dust90_512.fits"), nside
         )
 
         # Read and downgrade the depolarization map to the desired nside resolution
         depolmap = hp.ud_grade(
-            hp.read_map(os.getcwd() + "/data/" + "gmap_dust90_512.fits"), nside
+            hp.read_map(PATH + "gmap_dust90_512.fits"), nside
         )
 
         # Calculate the cosine of twice the polarization angle
@@ -352,7 +352,7 @@ class PresetComponents:
             # CO emission case
             elif comp_name == "coline":
                 map_co = hp.ud_grade(
-                    hp.read_map("data/CO_line.fits") * 10,
+                    hp.read_map(PATH + "CO_line.fits") * 10,
                     self.preset_tools.params["SKY"]["nside"],
                 )
                 map_co_polarised = self.polarized_I(

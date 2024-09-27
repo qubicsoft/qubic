@@ -16,7 +16,7 @@ from matplotlib.gridspec import *
 from pyoperators import *
 from schwimmbad import MPIPool
 
-from lib.Qspectra_component import CMB, Foreground
+from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import CMB, Foreground
 
 # sys.path.append('/pbs/home/t/tlaclave/sps/Pipeline')
 

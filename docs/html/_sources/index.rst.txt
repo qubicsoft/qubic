@@ -11,6 +11,10 @@ qubicsoft documentation
    :caption: Contents:
 
    lib
+   Calibration
+   Fitting
+   InstrumentModel
+   MapMaking
 
 Index et tables
 =================

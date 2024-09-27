@@ -425,8 +425,11 @@ class Atmosphere_Maps(Atmosphere):
         ### Compute the maximum multipole according to the resolution of the map
         self.lmax = 3*self.params['nside']-1
         
+        ### Build water vapor density map
+        self.rho_map = self.get_water_vapor_density_2d_map(self.mean_water_vapor_density)
+        
         ### Build the temperature maps of the atmosphere
-        self.atm_temp_maps = self.get_temp_maps()
+        self.atm_temp_maps = self.get_temp_maps(self.rho_map)
         
     def get_fourier_grid_2d(self, n_grid, size_atm):
         """Fourier 2d grid.
@@ -734,7 +737,7 @@ class Atmosphere_Maps(Atmosphere):
         clth = dlth * dl2cl_factor
         
         ### Correct for the special case l=0, as the convertion factor is not valid
-        clth[0] = self.cl_from_angular_correlation_int(0, self.params['altitude_atm_2d'], self.params['correlation_length'])
+        clth[0] = self.cl_from_angular_correlation_int(0)
         
         return ell, clth
     

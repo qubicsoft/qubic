@@ -10,22 +10,18 @@ comm = MPI.COMM_WORLD
 
 simu = 'FMM'
 
-parameters_file = str(sys.argv[1])
+parameters_file = 'FMM/configuration_files/params.txt'
+file_spectrum = None
 
 if __name__ == "__main__":
 
     if simu == 'FMM':
-        
-        try:
-            file = str(sys.argv[2])
-        except IndexError:
-            file = None
 
         ### Initialization
         pipeline = PipelineEnd2End(comm, parameters_path=parameters_file)
         
         ### Execution
-        pipeline.main(specific_file=file)
+        pipeline.main(specific_file=file_spectrum)
 
     elif simu == 'CMM':
         

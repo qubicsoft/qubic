@@ -30,13 +30,14 @@ QUBIC:
     npho220: 1
     seed: -1
   SYNTHBEAM:
-    synthbeam_kmax: 1
+    synthbeam_kmax: 8
+    synthbeam_fraction: 0.99
   bandpass_correction: true
   convolution_in: false
   convolution_out: false
   dtheta: 15
   instrument: DB
-  npointings: 1000
+  npointings: 3000
   nrec: 2
   nsub_in: 6
   nsub_out: 6

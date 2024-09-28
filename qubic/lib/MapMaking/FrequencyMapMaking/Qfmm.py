@@ -343,6 +343,7 @@ class PipelineFrequencyMapMaking:
             "EmissivityAtmosphere220": None,
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
+            "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
         }
 
         ### Get the default dictionary

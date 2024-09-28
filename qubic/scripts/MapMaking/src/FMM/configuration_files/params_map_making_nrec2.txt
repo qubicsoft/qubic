@@ -37,7 +37,7 @@ QUBIC:
   convolution_out: false
   dtheta: 15
   instrument: DB
-  npointings: 5000
+  npointings: 500
   nrec: 2
   nsub_in: 16
   nsub_out: 16

@@ -1,55 +1,56 @@
+path_out: cmbdust_nrec2/
+datafilename: MC
 CMB:
-  Alens: 1
   cmb: true
-  r: 0
   seed: 1
+  r: 0
+  Alens: 1
 Foregrounds:
   Dust: true
   Synchrotron: false
-PCG:
-  fwhm_plot: 0
-  gif: true
-  n_iter_pcg: 100
-  preconditioner: true
-  resolution_plot: 15
-  tol_pcg: 1.0e-12
-PLANCK:
-  bandwidth_planck: 0.2
-  external_data: true
-  level_noise_planck: 1
-  nsub_planck: 100
-  weight_planck: 0
-Pipeline:
-  mapmaking: true
-  spectrum: true
 QUBIC:
+  instrument: DB
+  npointings: 5000
+  nsub_in: 12
+  nsub_out: 12
+  nrec: 2
+  convolution_in: false
+  convolution_out: false
+  bandpass_correction: true
   NOISE:
-    detector_nep: 4.7e-17
     ndet: 1
     npho150: 1
     npho220: 1
+    detector_nep: 4.7e-17
     seed: -1
   SYNTHBEAM:
     synthbeam_kmax: 8
     synthbeam_fraction: 0.99
-  bandpass_correction: true
-  convolution_in: false
-  convolution_out: false
   dtheta: 15
-  instrument: DB
-  npointings: 500
-  nrec: 2
-  nsub_in: 16
-  nsub_out: 16
 SKY:
-  DEC_center: -57
-  RA_center: 0
-  coverage_cut: 0.15
   nside: 256
+  coverage_cut: 0.15
+  RA_center: 0
+  DEC_center: -57
+PLANCK:
+  external_data: true
+  weight_planck: 0
+  level_noise_planck: 1
+  bandwidth_planck: 0.2
+  nsub_planck: 100
+Pipeline:
+  mapmaking: true
+  spectrum: true
+PCG:
+  n_iter_pcg: 100
+  tol_pcg: 1.0e-12
+  preconditioner: true
+  initial_guess_intensity_to_zero: false
+  gif: false
+  resolution_plot: 15
+  fwhm_plot: 0
 Spectrum:
-  aposize: 10
   dl: 30
-  lmax: 512
   lmin: 40
-datafilename: MC
-path_out: cmbdust_nrec2/
+  lmax: 512
+  aposize: 10

@@ -1,4 +1,4 @@
-path_out: 'cmbdust_nrec4/'
+path_out: 'cmbdust_nrec2/'
 datafilename: 'MC'
 
 CMB:
@@ -18,9 +18,9 @@ QUBIC:
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
     npointings: 5000                        # Number of time samples
-    nsub_in: 16                             # Number of sub-acquisitions
-    nsub_out: 16
-    nrec: 4                                # Number of reconstructed frequency maps
+    nsub_in: 12                             # Number of sub-acquisitions
+    nsub_out: 12
+    nrec: 2                                # Number of reconstructed frequency maps
     convolution_in: False                   # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
@@ -31,7 +31,7 @@ QUBIC:
         detector_nep: 4.7e-17                 # NEP of detector noise
         seed: -1
     SYNTHBEAM:
-        synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+        synthbeam_kmax: 8                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
         synthbeam_fraction: 0.99
     dtheta: 15                             # Angle for coverage
 
@@ -65,7 +65,8 @@ PCG:
     n_iter_pcg: 100                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: True
-    gif: True
+    initial_guess_intensity_to_zero: False
+    gif: False
     resolution_plot: 15
     fwhm_plot: 0
 

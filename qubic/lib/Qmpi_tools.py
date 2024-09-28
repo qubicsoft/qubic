@@ -34,8 +34,7 @@ class MpiTools:
         if self.comm is None:
             pass
         else:
-            self.comm.Barrier()
-            
+            self.comm.Barrier()      
     def get_random_value(self, init_seed=None):
             """Random value
 
@@ -56,6 +55,16 @@ class MpiTools:
 
             seed = self.comm.bcast(seed, root=0)
             return seed
+    def bcast(self, arr):
+        
+        if self.comm.Get_rank() == 0:
+            d = arr.copy()
+        else:
+            d = None
+        
+        d = self.comm.bcast(d, root=0)
+        
+        return d
     
 def join_data(comm, data):
 

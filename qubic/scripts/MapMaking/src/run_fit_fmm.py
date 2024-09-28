@@ -2,35 +2,75 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pyoperators import MPI
 
-from lib.Qfit import FitEllSpace
-from lib.Qfoldertools import MergeAllFiles
+from qubic.lib.Qfit import FitEllSpace
+from qubic.lib.Qfoldertools import MergeAllFiles
 from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import SkySpectra
+from qubic.lib.Qmpi_tools import MpiTools
+
+
+
+############################
+######## Parameters ########
+############################
+
+### Folder where spectrum should be stored
+folder_spectrum = '/Users/mregnier/Desktop/installation_qubic/qubic/qubic/scripts/MapMaking/src/FMM/cmbdust_nrec2/spectrum/'
+
+### Parameters file
+parameters_file = '/Users/mregnier/Desktop/installation_qubic/qubic/qubic/scripts/MapMaking/src/FMM/configuration_files/fit_params.txt'
+
+### Number of multipole (minimum is fixed at what you defined during the map-making)
+NBINS = 8
+SAMPLE_VARIANCE = True
+
+### Which frequency you want ot choose ?
+nus_index = np.array([True, True, False, False, False, False, False, False, False])
+
+DISCARD = 150
+NWALKERS = 30
+NSTEPS = 300
+
+############################
 
 comm = MPI.COMM_WORLD
+mpi = MpiTools(comm)
 
 ### Concatenate all realizations
-files = MergeAllFiles("/Users/mregnier/Desktop/git/Pipeline/src/FMM/CMBDUST_nrec2_new_code/spectrum/")
+files = MergeAllFiles(folder_spectrum)
 
-nus_index = np.array([True, True, False, False, False, False, False, False, True])
-NBINS = 16
-
+### Multipoles
+mpi._print_message('    => Reading multipoles')
 ell = files._reads_one_file(0, "ell")[:NBINS]
+
+### Frequencies
+mpi._print_message('    => Reading frequencies')
 nus = files._reads_one_file(0, "nus")[nus_index]
 
-BBsignal = np.mean(files._reads_all_files("Dls"), axis=0)[:, nus_index, :NBINS][
-    nus_index, :, :NBINS
-]
+BBsignal = np.mean(files._reads_all_files("Dls"), axis=0)[nus_index, :, :NBINS][:, nus_index, :NBINS]
 BBnoise = files._reads_all_files("Nl")[:, :, nus_index, :NBINS][:, nus_index, :, :NBINS]
+
+### Remove noise bias
+mpi._print_message('    => Removing noise bias')
 BBsignal -= np.mean(BBnoise, axis=0)
 
+### Define sky model in ell space
 sky = SkySpectra(ell, nus)
-fit = FitEllSpace(ell, BBsignal, BBnoise, model=sky.model)
 
-samples, samples_flat = fit.run(300, 10, discard=200, comm=comm)
+### Fit of cosmological parameters
+mpi._print_message('    => Fitting parameters')
+fit = FitEllSpace(ell, BBsignal, BBnoise, model=sky.model, parameters_file=parameters_file, sample_variance=SAMPLE_VARIANCE)
+samples, samples_flat = fit.run(NSTEPS, NWALKERS, discard=DISCARD, comm=comm)
 
 plt.figure()
+
+plt.subplot(3, 1, 1)
 plt.plot(samples[..., 0], "-k", alpha=0.1)
 plt.axhline(0)
+plt.subplot(3, 1, 2)
+plt.plot(samples[..., 1], "-k", alpha=0.1)
+plt.subplot(3, 1, 3)
+plt.plot(samples[..., 2], "-k", alpha=0.1)
+
 plt.show()
 
 print()

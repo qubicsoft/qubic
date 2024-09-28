@@ -38,7 +38,7 @@ QUBIC:
   dtheta: 15
   instrument: DB
   npointings: 5000
-  nrec: 4
+  nrec: 2
   nsub_in: 16
   nsub_out: 16
 SKY:
@@ -52,4 +52,4 @@ Spectrum:
   lmax: 512
   lmin: 40
 datafilename: MC
-path_out: cmbdust_nrec4/
+path_out: cmbdust_nrec2/

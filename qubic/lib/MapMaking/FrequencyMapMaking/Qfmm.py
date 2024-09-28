@@ -710,7 +710,7 @@ class PipelineFrequencyMapMaking:
                 for j in range(self.params["QUBIC"]["nsub_out"]):
                     approx_hth[i] = (
                         self.joint.qubic.H[i].T
-                        * self.joint.qubic.invn220
+                        * self.joint.qubic.invn150
                         * self.joint.qubic.H[j](vec)
                     )
 

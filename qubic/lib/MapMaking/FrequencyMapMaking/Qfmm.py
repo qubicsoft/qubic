@@ -104,8 +104,17 @@ class PipelineFrequencyMapMaking:
             H=H,
         )
 
+        ### Ensure that all processors have the same external dataset
         self.externaldata = PlanckMaps(self.skyconfig, self.joint_tod.qubic.allnus, self.params["QUBIC"]["nrec"], nside=self.params["SKY"]["nside"])
-        self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(fwhm=self.params["QUBIC"]["convolution_in"])
+        if self.rank == 0:
+            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(fwhm=self.params["QUBIC"]["convolution_in"])
+        else:
+            self.externaldata.maps = None
+            self.externaldata.maps_noise = None
+            
+        self.externaldata.maps = self.comm.bcast(self.externaldata.maps, root=0)
+        self.externaldata.maps_noise = self.comm.bcast(self.externaldata.maps_noise, root=0)
+
         self.planck_acquisition143 = PlanckAcquisition(143, self.joint.qubic.scene)
         self.planck_acquisition217 = PlanckAcquisition(217, self.joint.qubic.scene)
         self.nus_Q = self.get_averaged_nus()

@@ -11,7 +11,7 @@ __path__ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class FitEllSpace:
 
-    def __init__(self, x, y, yerr, model, parameters_file, sample_variance=True):
+    def __init__(self, x, y, yerr, model, parameters_file, sample_variance=True, fsky=0.015, dl=30, diagonal=False):
 
         self.x = x
         self.y = y
@@ -31,7 +31,7 @@ class FitEllSpace:
         self._init_reshape_data()
 
         ### Compute the noise covariance matrix
-        self._get_noise_covariance_matrix(sample_variance=sample_variance)
+        self._get_noise_covariance_matrix(sample_variance=sample_variance, fsky=fsky, dl=dl, diagonal=diagonal)
 
     def _reshape_spectra_model(self, data):
 
@@ -81,21 +81,31 @@ class FitEllSpace:
             (self.nreals, self.nspecs * self.nbins)
         )
 
-    def _get_noise_covariance_matrix(self, sample_variance):
+    def _get_noise_covariance_matrix(self, sample_variance, fsky, dl, diagonal=False):
 
         self.noise_covariance_matrix = np.cov(self.yerr_reshaped, rowvar=False)
         self.noise_correlation_matrix = np.corrcoef(self.yerr_reshaped, rowvar=False)
+        
+        if diagonal:
+            
+            self.noise_covariance_matrix = self.noise_covariance_matrix.reshape((self.nbins, self.nspecs, self.nbins, self.nspecs))
+            
+            for ispec in range(self.nspecs):
+                for jspec in range(self.nspecs):
+                    self.noise_covariance_matrix[:, ispec, :, jspec] *= np.eye(self.nbins)
+                    
+            self.noise_covariance_matrix = self.noise_covariance_matrix.reshape((self.nbins*self.nspecs, self.nbins*self.nspecs))
 
         if sample_variance:
-            self.noise_covariance_matrix += self._fill_sample_variance(self.y)
+            self.noise_covariance_matrix += self._fill_sample_variance(self.y, fsky, dl)
 
         self.invN = np.linalg.pinv(self.noise_covariance_matrix)
 
-    def _fill_sample_variance(self, bandpower):
+    def _fill_sample_variance(self, bandpower, fsky, dl):
 
         indices_tr = np.triu_indices(self.nmaps)
         matrix = np.zeros((self.nspecs, len(self.x), self.nspecs, len(self.x)))
-        factor_modecount = 1 / ((2 * self.x + 1) * 0.015 * 30)
+        factor_modecount = 1 / ((2 * self.x + 1) * fsky * dl)
 
         for ii, (i1, i2) in enumerate(zip(indices_tr[0], indices_tr[1])):
             for jj, (j1, j2) in enumerate(zip(indices_tr[0], indices_tr[1])):

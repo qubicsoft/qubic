@@ -332,7 +332,7 @@ class PipelineFrequencyMapMaking:
             "period": 1,
             "RA_center": self.params["SKY"]["RA_center"],
             "DEC_center": self.params["SKY"]["DEC_center"],
-            "filter_nu": 150 * 1e9,
+            "filter_nu": 220 * 1e9,
             "noiseless": False,
             "beam_shape": 'gaussian',
             "comm": self.comm,
@@ -363,7 +363,7 @@ class PipelineFrequencyMapMaking:
         for i in args.keys():
 
             dict_qubic[str(i)] = args[i]
-
+    
         return dict_qubic
 
     def _get_scalar_acquisition_operator(self):

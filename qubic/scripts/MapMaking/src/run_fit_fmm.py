@@ -12,21 +12,21 @@ from qubic.lib.Qmpi_tools import MpiTools
 ############################
 
 ### Folder where spectrum should be stored
-folder_spectrum = 'path/to/your/data/folder'
+folder_spectrum = 'FMM/cmbdust_nrec6/spectrum/'
 
 ### Parameters file
-parameters_file = 'path/to/your/parameter_file.txt'
+parameters_file = 'FMM/configuration_files/fit_params.txt'
 
 ### Number of multipole (minimum is fixed at what you defined during the map-making)
-NBINS = 10
+NBINS = 7
 SAMPLE_VARIANCE = True
 DIAGONAL = False
-FSKY = 0.01
+FSKY = 0.015
 DL = 30
 
 ### Which frequency you want ot choose ?
-nus_index = np.array([True, True, True, True,
-                      False, False, False, False, False, True, True])
+nus_index = np.array([True, True, True, True, True, True,
+                      False, False, False, False, False, False, False])
 
 DISCARD = 100
 NWALKERS = 10
@@ -68,13 +68,9 @@ samples, samples_flat = fit.run(NSTEPS, NWALKERS, discard=DISCARD, comm=comm)
 
 plt.figure()
 
-plt.subplot(3, 1, 1)
-plt.plot(samples[..., 0], "-k", alpha=0.1)
-plt.axhline(0)
-plt.subplot(3, 1, 2)
-plt.plot(samples[..., 1], "-k", alpha=0.1)
-plt.subplot(3, 1, 3)
-plt.plot(samples[..., 2], "-k", alpha=0.1)
+for iparam in range(samples.shape[-1]):
+    plt.subplot(samples.shape[-1], 1, iparam+1)
+    plt.plot(samples[..., iparam], "-k", alpha=0.1)
 
 plt.show()
 

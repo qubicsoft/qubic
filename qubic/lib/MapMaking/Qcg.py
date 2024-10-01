@@ -190,7 +190,9 @@ class PCGAlgorithm(IterativeAlgorithm):
         
         #print(self.x.shape, self.input[:, self.seenpix, :].shape)
         #stop
-        
+        if map_i.shape == 2:
+            map_i = np.expand_dims(map_i, axis=0)
+            self.input = np.expand_dims(self.input, axis=0)
         _r = map_i[:, self.seenpix, :] - self.input[:, self.seenpix, :]
         self.rms = np.std(_r, axis=1)
         

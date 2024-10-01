@@ -114,7 +114,9 @@ class Atmosphere:
             "EmissivityAtmosphere150": None,
             "EmissivityAtmosphere220": None,
             "detector_nep": 4.7e-17,
-            "synthbeam_kmax": 1,
+            "synthbeam_kmax": 2,
+            "synthbeam_fraction": 0.99,
+            "kind":'IQU'
         }
 
         ### Get the default dictionary

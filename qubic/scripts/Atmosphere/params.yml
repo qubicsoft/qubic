@@ -25,7 +25,7 @@ size_atm: 500                    # Lenght of the atm in m
 nsub_in: 2                       # Number of sub-acquisitions used to integrate over the atm spectrum
 nrec: 2
 2d: True                          # Determine if you want to simulate a 2d atm
-nside: 64
+nside: 256
 n_theta: 10000
 normalization: 1
 flat: False

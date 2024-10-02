@@ -14,14 +14,14 @@ from scipy.optimize import fmin_l_bfgs_b, minimize
 import fgbuster.mixingmatrix as mm
 
 ### Local packages
-from ...Instrument.Qacquisition import *
+from ...InstrumentModel.Qacquisition import *
 from ...MapMaking.Qcg import pcg
 from ...Qfoldertools import *
 from ...MapMaking.Qmap_plotter import *
 from ...Qmpi_tools import MpiTools
 
 # from simtools.mpi_tools import *
-from ...Instrument.Qnoise import *
+from ...InstrumentModel.Qnoise import *
 
 from .Qcostfunc import (
     Chi2Blind,
@@ -663,10 +663,10 @@ class Pipeline:
                     self.chi2,
                     x0=x0,
                     # bounds=bnds,
-                    method="L-BFGS-B",
+                    method="TNC",
                     # constraints=self.get_constrains(),
                     callback=self.callback,
-                    tol=1e-6,
+                    tol=1e-10,
                 ).x
                 Ai = self.chi2._fill_A(
                     Ai

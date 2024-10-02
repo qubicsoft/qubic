@@ -5,7 +5,7 @@ CMB:
   Alens: 1
 Foregrounds:
   fit_spectral_index: true
-  bin_mixing_matrix: 20
+  bin_mixing_matrix: 4
   blind_method: minimize
   Dust:
     Dust_in: true
@@ -18,7 +18,7 @@ Foregrounds:
     - 1000000000
     nside_beta_in: 0
     nside_beta_out: 0
-    nu0_d: 353.00000001
+    nu0_d: 150.00000001
     l_corr: 10
     amplification_d: 1
   Synchrotron:
@@ -38,9 +38,9 @@ Foregrounds:
     polarization_fraction: 0.01
 QUBIC:
   instrument: DB
-  npointings: 4000
-  nsub_in: 20
-  nsub_out: 20
+  npointings: 400
+  nsub_in: 4
+  nsub_out: 4
   convolution_in: false
   convolution_out: false
   preconditioner: true
@@ -52,8 +52,8 @@ QUBIC:
     duration_150: 3
     duration_220: 3
   SYNTHBEAM:
-    synthbeam_kmax: 8
-    synthbeam_fraction: 0.99
+    synthbeam_kmax: 1
+    synthbeam_fraction: 1
   dtheta: 15
   GAIN:
     sig_gain: 0

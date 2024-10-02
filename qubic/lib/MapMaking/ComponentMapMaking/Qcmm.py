@@ -676,35 +676,7 @@ class Pipeline:
                     for icomp in range(1, len(self.preset.comp.components_name_out)):
                         self.preset.acquisition.Amm_iter[inu, icomp] = Ai[inu, icomp]
 
-                """
-                ### Function to minimize
-                fun = partial(self.chi2._qu, tod_comp=tod_comp)
                 
-                ### Starting point
-                x0 = []
-                bnds = []
-                for ii in range(self.preset.comp.params_foregrounds['bin_mixing_matrix']):
-                    for i in range(1, len(self.preset.comp.components_name_out)):
-                        x0 += [np.mean(self.preset.acquisition.Amm_iter[ii*self.fsub:(ii+1)*self.fsub, i])]
-                        bnds += [(0, None)]
-                if self._steps == 0:
-                    x0 = np.array(x0) * 1 + 0
-                ### Constraints on frequency evolution
-                constraints = self.get_constrains()
-                
-                Ai = minimize(fun, x0=x0, 
-                            #constraints=constraints, 
-                            callback=self.callback, 
-                            bounds=bnds, 
-                            method='L-BFGS-B', 
-                            tol=1e-10).x
-                
-                k=0
-                for ii in range(self.preset.comp.params_foregrounds['bin_mixing_matrix']):
-                    for i in range(1, len(self.preset.comp.components_name_out)):
-                        self.preset.acquisition.Amm_iter[ii*self.fsub:(ii+1)*self.fsub, i] = Ai[k]
-                        k+=1
-                """
             elif self.preset.comp.params_foregrounds["blind_method"] == "PCG":
                 tod_comp_binned = np.zeros(
                     (
@@ -826,10 +798,10 @@ class Pipeline:
             )
 
             if self.preset.tools.rank == 0:
-                # print(f'Iteration k     : {previous_step.ravel()}')
-                # print(f'Iteration k + 1 : {self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
-                # print(f'Truth           : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
-                # print(f'Residuals       : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel() - self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
+                print(f'Iteration k     : {previous_step.ravel()}')
+                print(f'Iteration k + 1 : {self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
+                print(f'Truth           : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
+                print(f'Residuals       : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel() - self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
                 self.plots.plot_sed(
                     self.preset.qubic.joint_in.qubic.allnus,
                     self.preset.mixingmatrix.Amm_in[

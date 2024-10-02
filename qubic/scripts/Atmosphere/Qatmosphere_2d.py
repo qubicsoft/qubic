@@ -33,7 +33,7 @@ from pysimulators.interfaces.healpy import Cartesian2HealpixOperator, Spherical2
 #TODO : Verify if the atmosphere is in the same frame as the qubic
 #TODO : Add the possibility to have a 3d atmosphere
 
-class Atmosphere:
+class AtmosphereProperties:
     
     def __init__(self, params):
         
@@ -100,7 +100,7 @@ class Atmosphere:
             "DEC_center": -57,
             "filter_nu": 150 * 1e9,
             "noiseless": True,
-            "dtheta": 15,
+            "dtheta": self.params["dtheta"],
             "nprocs_sampling": 1,
             "photon_noise": False,
             "nhwp_angles": 3,
@@ -114,7 +114,7 @@ class Atmosphere:
             "EmissivityAtmosphere150": None,
             "EmissivityAtmosphere220": None,
             "detector_nep": 4.7e-17,
-            "synthbeam_kmax": 2,
+            "synthbeam_kmax": self.params['kmax'],
             "synthbeam_fraction": 0.99,
             "kind":'IQU'
         }
@@ -181,7 +181,7 @@ class Atmosphere:
         return temp_ground * np.exp(- altitude / h_T)
         
     def atm_absorption_coeff(self):
-        r"""Absorption spectrum.
+        r"""Absorption coefficients.
         
         Method to build the absorption spectrum of the atmopshere using files computed using the am atmospheric model (Paine, 2018).
         The absorption coefficient has two origins: the line-by-line absorption which reprensents the spectral lines, 
@@ -325,7 +325,7 @@ class Atmosphere:
         return water_mass, water_vapor_density, air_density
         
     def absorption_spectrum(self):
-        r"""Absorption coefficient.
+        r"""Absorption spectrum.
         
         The coefficient :math:`\alpha_b(\nu)` (:math:`m^2/g`) is defined by:
         
@@ -351,7 +351,7 @@ class Atmosphere:
         return abs_spectrum
     
     def get_integrated_absorption_spectrum(self, band):
-        """Integrated absorption spectrum.
+        """Integrated absorption spectrum within a band.
         
         Compute the integrated absorption spectrum in a given frequency band, according to the parameters in the self.params.yml file.
 
@@ -416,13 +416,13 @@ class Atmosphere:
         
         return np.append(int_abs_spectrum_150, int_abs_spectrum_220), np.append(nus_150, nus_220)
     
-class Atmosphere_Maps(Atmosphere):
+class AtmosphereMaps(AtmosphereProperties):
     
     def __init__(self, params):
         
         ### Import parameters and the class describing the atmosphere
         self.params = params
-        Atmosphere.__init__(self, params)
+        AtmosphereProperties.__init__(self, params)
         
         ### Compute the maximum multipole according to the resolution of the map
         self.lmax = 3*self.params['nside']-1

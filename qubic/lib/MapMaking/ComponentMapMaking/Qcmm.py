@@ -109,11 +109,9 @@ class Pipeline:
             
         
             A_qubic=self.preset.acquisition.Amm_iter[
-                :6#: self.preset.qubic.params_qubic["nsub_out"]
+                :self.preset.qubic.params_qubic["nsub_out"]
             ],
-            A_ext=self.preset.mixingmatrix.Amm_in[
-                6:#self.preset.qubic.params_qubic["nsub_out"] :
-            ],
+            A_ext=self.preset.mixingmatrix.Amm_in[self.preset.qubic.params_qubic["nsub_out"]:],
             precond=self.preset.qubic.params_qubic["preconditioner"],
         )
 

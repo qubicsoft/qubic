@@ -198,7 +198,8 @@ class FitEllSpace:
                     nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool)
                 sampler.run_mcmc(x0, nsteps, progress=True)
         else:
-            print('Running with MPI')
+            if comm.Get_rank() == 0:
+                print('Running with MPI')
             with MPIPool() as pool:
                 sampler = emcee.EnsembleSampler(
                     nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool)

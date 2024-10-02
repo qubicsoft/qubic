@@ -13,7 +13,7 @@ Foregrounds:
     type: blind
     model_d: d0
     beta_d_init:
-    - 1.54
+    - 1.3
     - 0
     - 1000000000
     nside_beta_in: 0
@@ -38,7 +38,7 @@ Foregrounds:
     polarization_fraction: 0.01
 QUBIC:
   instrument: DB
-  npointings: 1000
+  npointings: 2000
   nsub_in: 20
   nsub_out: 20
   convolution_in: false
@@ -76,16 +76,16 @@ PLANCK:
   217GHz: true
   353GHz: true
 PCG:
-  n_init_iter_pcg: 2
-  n_iter_pcg: 2
+  n_init_iter_pcg: 1
+  n_iter_pcg: 1
   tol_pcg: 1.0e-20
-  n_iter_loop: 100
+  n_iter_loop: 200
   ites_to_converge: 1
   tol_rms: 1.0e-20
   fixI: false
   reso_plot: 12
   fwhm_plot: 0
-  do_gif: false
+  do_gif: true
 INITIAL:
   fwhm0: 0
   sig_map_noise: 0

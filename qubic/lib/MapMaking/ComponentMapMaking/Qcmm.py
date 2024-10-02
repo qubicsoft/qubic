@@ -663,10 +663,10 @@ class Pipeline:
                     self.chi2,
                     x0=x0,
                     # bounds=bnds,
-                    method="L-BFGS-B",
+                    method="TNC",
                     # constraints=self.get_constrains(),
                     callback=self.callback,
-                    tol=1e-6,
+                    tol=1e-10,
                 ).x
                 Ai = self.chi2._fill_A(
                     Ai

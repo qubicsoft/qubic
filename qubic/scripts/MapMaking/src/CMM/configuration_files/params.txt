@@ -5,7 +5,7 @@ CMB:
   Alens: 1
 Foregrounds:
   fit_spectral_index: true
-  bin_mixing_matrix: 30
+  bin_mixing_matrix: 20
   blind_method: minimize
   Dust:
     Dust_in: true
@@ -38,9 +38,9 @@ Foregrounds:
     polarization_fraction: 0.01
 QUBIC:
   instrument: DB
-  npointings: 4000
-  nsub_in: 30
-  nsub_out: 30
+  npointings: 1000
+  nsub_in: 20
+  nsub_out: 20
   convolution_in: false
   convolution_out: false
   preconditioner: true
@@ -79,13 +79,13 @@ PCG:
   n_init_iter_pcg: 2
   n_iter_pcg: 2
   tol_pcg: 1.0e-20
-  n_iter_loop: 1000
+  n_iter_loop: 100
   ites_to_converge: 1
   tol_rms: 1.0e-20
   fixI: false
   reso_plot: 12
   fwhm_plot: 0
-  do_gif: true
+  do_gif: false
 INITIAL:
   fwhm0: 0
   sig_map_noise: 0
@@ -104,10 +104,10 @@ SPECTRUM:
 Plots:
   conv_beta: true
   conv_gain: false
-  conv_rms: true
+  conv_rms: false
   maps: true
   thr_plot: 0.2
 save_iter: 1
-foldername: test_convergence_blind
+foldername: defense_high_resolution
 filename: file
 lastite: true

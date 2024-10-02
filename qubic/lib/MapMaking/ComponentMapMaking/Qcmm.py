@@ -666,7 +666,7 @@ class Pipeline:
                     method="L-BFGS-B",
                     # constraints=self.get_constrains(),
                     callback=self.callback,
-                    tol=1e-8,
+                    tol=1e-6,
                 ).x
                 Ai = self.chi2._fill_A(
                     Ai

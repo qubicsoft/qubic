@@ -675,34 +675,19 @@ class Pipeline:
                     for icomp in range(1, len(self.preset.comp.components_name_out)):
                         self.preset.acquisition.Amm_iter[inu, icomp] = Ai[inu, icomp]
             elif self.preset.comp.params_foregrounds["blind_method"] == "PCG":
-                tod_comp_binned = np.zeros(
-                    (
-                        tod_comp.shape[0],
-                        self.preset.comp.params_foregrounds["bin_mixing_matrix"],
-                        tod_comp.shape[-1],
-                    )
-                )
+                
+                tod_comp_binned = np.zeros((tod_comp.shape[0], self.preset.comp.params_foregrounds["bin_mixing_matrix"], tod_comp.shape[-1],))
+                
                 for k in range(len(self.preset.comp.components_name_out)):
-                    for i in range(
-                        self.preset.comp.params_foregrounds["bin_mixing_matrix"]
-                    ):
-                        tod_comp_binned[k, i] = np.sum(
-                            tod_comp[k, i * self.fsub : (i + 1) * self.fsub], axis=0
-                        )
+                    for i in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
+                        tod_comp_binned[k, i] = np.sum(tod_comp[k, i * self.fsub : (i + 1) * self.fsub], axis=0)
 
                 tod_cmb150 = self.preset.tools.comm.allreduce(
-                    np.sum(tod_comp[0, : int(tod_comp.shape[1] / 2)], axis=0),
+                    np.sum(tod_comp[0, :int(tod_comp.shape[1]/2)], axis=0),
                     op=MPI.SUM,
                 )
                 tod_cmb220 = self.preset.tools.comm.allreduce(
-                    np.sum(
-                        tod_comp[
-                            0, int(tod_comp.shape[1] / 2) : int(tod_comp.shape[1])
-                        ],
-                        axis=0,
-                    ),
-                    op=MPI.SUM,
-                )
+                    np.sum(tod_comp[0, int(tod_comp.shape[1]/2):int(tod_comp.shape[1])], axis=0), op=MPI.SUM)
 
                 tod_in_150 = self.preset.tools.comm.allreduce(
                     self.preset.acquisition.TOD_qubic[: int(self.preset.acquisition.TOD_qubic.shape[0] / 2)], op=MPI.SUM
@@ -719,7 +704,7 @@ class Pipeline:
                 tod_without_cmb = np.r_[
                     tod_in_150 - tod_cmb150, tod_in_220 - tod_cmb220
                 ]
-                print(self.preset.acquisition.TOD_qubic.shape)
+                
                 tod_without_cmb_reshaped = np.sum(
                     tod_without_cmb.reshape((2, int(self.preset.acquisition.TOD_qubic.shape[0] / 2))), axis=0
                 )
@@ -818,6 +803,8 @@ class Pipeline:
                     # do_gif(f'jobs/{self.preset.job_id}/allcomps/', 'iter_', output='animation.gif')
             del tod_comp
             gc.collect()
+            
+            
         elif method == "parametric_blind":
             previous_step = self.preset.acquisition.Amm_iter[
                 : self.preset.qubic.joint_out.qubic.nsub * 2, 1:

@@ -5,21 +5,21 @@ CMB:
   Alens: 0.1
 Foregrounds:
   fit_spectral_index: true
-  bin_mixing_matrix: 20
+  bin_mixing_matrix: 10
   blind_method: PCG
   Dust:
     Dust_in: true
     Dust_out: true
     type: blind
-    model_d: d6
+    model_d: d0
     beta_d_init:
-    - 1.54
+    - 1.4
     - 0
     - 1000000000
     nside_beta_in: 0
     nside_beta_out: 0
     nu0_d: 150.00000001
-    l_corr: 10
+    l_corr: 100000
     amplification_d: 1
   Synchrotron:
     Synchrotron_in: false
@@ -38,16 +38,16 @@ Foregrounds:
     polarization_fraction: 0.01
 QUBIC:
   instrument: DB
-  npointings: 3000
-  nsub_in: 20
-  nsub_out: 20
+  npointings: 1000
+  nsub_in: 30
+  nsub_out: 30
   convolution_in: false
   convolution_out: false
   preconditioner: true
   NOISE:
-    ndet: 1
-    npho150: 1
-    npho220: 1
+    ndet: 0.001
+    npho150: 0.001
+    npho220: 0.001
     detector_nep: 4.7e-17
     duration_150: 3
     duration_220: 3
@@ -59,7 +59,7 @@ QUBIC:
     sig_gain: 0
     fit_gain: false
 SKY:
-  nside: 128
+  nside: 64
   RA_center: 0
   DEC_center: -57
 PLANCK:

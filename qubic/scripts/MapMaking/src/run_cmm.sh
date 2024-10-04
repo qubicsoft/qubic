@@ -5,7 +5,7 @@
 # we ask for n MPI tasks with N cores each on c nodes
 
 #SBATCH --partition=bigmem
-#SBATCH --nodes=2                # c
+#SBATCH --nodes=1                # c
 #SBATCH --ntasks-per-node=4      # n
 #SBATCH --cpus-per-task=4        # N
 #SBATCH --mem=30G

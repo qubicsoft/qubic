@@ -711,7 +711,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
+    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None):
 
         ### Define class arguments
         self.dict = dictionary
@@ -753,7 +753,10 @@ class QubicMultiAcquisitions:
         self.multiinstrument = QubicMultibandInstrumentTrapezoidalIntegration(
             self.dict
         )
-        self.sampling = get_pointing(self.dict)
+        if sampling is None:
+            self.sampling = get_pointing(self.dict)
+        else:
+            self.sampling = sampling
         self.scene = QubicScene(self.dict)
         self.npix = 12 * self.scene.nside**2
 

@@ -17,7 +17,7 @@ QUBIC:
     ### This section control the parameters related to QUBIC
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
-    npointings: 1000                        # Number of time samples
+    npointings: 500                        # Number of time samples
     nsub_in: 6                             # Number of sub-acquisitions
     nsub_out: 4
     nrec: 2                                # Number of reconstructed frequency maps

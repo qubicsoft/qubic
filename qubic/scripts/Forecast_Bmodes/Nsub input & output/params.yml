@@ -17,7 +17,7 @@ QUBIC:
     ### This section control the parameters related to QUBIC
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
-    npointings: 100                        # Number of time samples
+    npointings: 1000                        # Number of time samples
     nsub_in: 6                             # Number of sub-acquisitions
     nsub_out: 4
     nrec: 2                                # Number of reconstructed frequency maps
@@ -37,7 +37,7 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 256                              # Nside of components
+    nside: 64                              # Nside of components
     coverage_cut: 0.15                      # Define a cut where the coverage is too low
     RA_center: 0                   
     DEC_center: -57

@@ -106,14 +106,13 @@ class Pipeline:
         initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
 
         ### Update the precondtionner M
-        self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(
-            
-        
-            A_qubic=self.preset.acquisition.Amm_iter[
-                :self.preset.qubic.params_qubic["nsub_out"]
-            ],
+        #if self._steps == 0:
+        self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(seenpix=seenpix,
+            A_qubic=self.preset.acquisition.Amm_iter[:self.preset.qubic.params_qubic["nsub_out"]],
+        #self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(A_qubic=self.preset.mixingmatrix.Amm_in[:self.preset.qubic.params_qubic["nsub_out"]],
             A_ext=self.preset.mixingmatrix.Amm_in[self.preset.qubic.params_qubic["nsub_out"]:],
-            precond=self.preset.qubic.params_qubic["preconditioner"],
+            precond=self.preset.qubic.params_qubic["preconditioner"], 
+            thr=self.preset.tools.params["PLANCK"]["thr_planck"]
         )
 
         ### Run PCG
@@ -662,7 +661,7 @@ class Pipeline:
                     self.chi2,
                     x0=x0,
                     # bounds=bnds,
-                    method="TNC",
+                    method="L-BFGS-B",
                     # constraints=self.get_constrains(),
                     callback=self.callback,
                     tol=1e-10,
@@ -712,11 +711,10 @@ class Pipeline:
                 dnu = self.preset.tools.comm.allreduce(tod_comp_binned[1:], op=MPI.SUM)
                 dnu = dnu.reshape((dnu.shape[0] * dnu.shape[1], dnu.shape[2]))
 
-                A = dnu @ dnu.T
-                b = dnu @ tod_without_cmb_reshaped
+                A = 1e20 * (dnu @ dnu.T)
+                b = 1e20 * (dnu @ tod_without_cmb_reshaped)
 
-                s = pcg_op(A, b, disp=False, tol=1e-20, maxiter=10000)
-                #print(s['x'])
+                s = pcg_op(A, b, disp=False, tol=1e-40, maxiter=10000)
 
                 k = 0
                 for i in range(1, len(self.preset.comp.components_name_out)):
@@ -783,13 +781,9 @@ class Pipeline:
                 print(f'Residuals       : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel() - self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
                 self.plots.plot_sed(
                     self.preset.qubic.joint_in.qubic.allnus,
-                    self.preset.mixingmatrix.Amm_in[
-                        : self.preset.qubic.joint_in.qubic.nsub, 1:
-                    ],
+                    self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_in.qubic.nsub, 1:],
                     self.preset.qubic.joint_out.qubic.allnus,
-                    self.preset.acquisition.Amm_iter[
-                        : self.preset.qubic.joint_out.qubic.nsub, 1:
-                    ],
+                    self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:],
                     ki=self._steps,
                     gif=self.preset.tools.params["PCG"]["do_gif"],
                 )

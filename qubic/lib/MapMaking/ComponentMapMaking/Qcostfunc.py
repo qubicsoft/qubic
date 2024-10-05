@@ -142,11 +142,7 @@ class Chi2DualBand:
                 ### Compute residuals in time domain
                 _residuals = ysim - self.preset.acquisition.TOD_qubic
                 self.Lplanck = 0
-                self.Lqubic = _dot(
-                    _residuals.T,
-                    self.preset.acquisition.invN.operands[0](_residuals),
-                    self.preset.comm,
-                )
+                self.Lqubic = _dot( _residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
                 return self.Lqubic
         elif self.dsim.ndim == 4:
             # print(x, x.shape, self.nc-1, self.npix)

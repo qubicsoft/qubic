@@ -3,13 +3,13 @@ CMB:
     seed: 1                                     # CMB realization
     r: 0
     Alens: 1
- 
+
 Foregrounds:
- 
+
     ### This section define the in/out foregrounds contribution
 
     fit_spectral_index: True                    # If False, the beta reconstruction is skipped
-    bin_mixing_matrix: 20
+    bin_mixing_matrix: 8
     blind_method: 'minimize'                    # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 'alternate' or 'minimize'
 
     # Thermal Dust emission
@@ -49,9 +49,9 @@ QUBIC:
     ### This section control the parameters related to QUBIC
 
     instrument: 'DB'                       # Instrumental design (DB or UWB)
-    npointings: 4000                       # Number of time samples
-    nsub_in: 20                             # Number of sub-acquisitions
-    nsub_out: 20                            # Number of sub-acquisitions for the reconstruction
+    npointings: 2000                       # Number of time samples
+    nsub_in: 24                             # Number of sub-acquisitions
+    nsub_out: 24                            # Number of sub-acquisitions for the reconstruction
     convolution_in: False                  # Angular resolution in the input TOD
     convolution_out: False                 # Angular resolution in the reconstruction
     preconditioner: True
@@ -74,7 +74,7 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 256                              # Nside of components
+    nside: 64                              # Nside of components
     RA_center: 0                   
     DEC_center: -57
 

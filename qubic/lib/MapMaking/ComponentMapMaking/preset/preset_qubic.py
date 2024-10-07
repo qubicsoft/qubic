@@ -1,6 +1,6 @@
 from fgbuster import component_model as c
 from .. import Qcomponent_model as model_co
-from ....Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
+from ....InstrumentModel.Qacquisition import JointAcquisitionComponentsMapMaking
 from ....Qdictionary import qubicDict
 
 
@@ -176,7 +176,6 @@ class PresetQubic:
                 c.Dust(
                     nu0=self.preset_tools.params["Foregrounds"]["Dust"]["nu0_d"],
                     temp=20,
-                    beta_d=None,
                 )
             ]
             components_name += ["Dust"]

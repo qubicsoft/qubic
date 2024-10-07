@@ -416,7 +416,7 @@ class PlotsCMM:
                 plt.errorbar(nus_out, A_out[:, ic], fmt="xb")
 
             plt.xlim(120, 260)
-            eps = 0.1
+            eps = 0.4
             eps_max = A_in.max() * (1 + eps)
             eps_min = A_in.min() * (1 - eps)
             plt.ylim(eps_min, eps_max)

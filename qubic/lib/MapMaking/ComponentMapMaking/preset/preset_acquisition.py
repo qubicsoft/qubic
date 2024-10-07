@@ -1,13 +1,17 @@
 import numpy as np
 from pyoperators import DiagonalOperator
 
-from ....Instrument.Qacquisition import *
-from ....Instrument.Qnoise import *
+from ....InstrumentModel.Qacquisition import *
+from ....InstrumentModel.Qnoise import *
 from fgbuster import component_model as c
+
+#from qubic.lib.InstrumentModel.Qacquisition import *
+#from qubic.lib.InstrumentModel.Qnoise import *
+#import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
 
 
 class PresetAcquisition:
-    """Preset Acquisition.
+    r"""Preset Acquisition.
 
     Instance to initialize the Components Map-Making. It defines the data acquisition variables and methods.
 
@@ -181,7 +185,7 @@ class PresetAcquisition:
 
         return approx_hth, _r.T(approx_hth_ext)
 
-    def get_preconditioner(self, A_qubic, A_ext, precond=True, thr=0):
+    def get_preconditioner(self, seenpix, A_qubic, A_ext, precond=True, thr=0):
         """Preconditioner for PCG algorithm.
 
         Calculates and returns the preconditioner matrix for the optimization process.
@@ -206,10 +210,6 @@ class PresetAcquisition:
 
         if precond:
 
-            seenpix_qubic_0_001 = (
-                self.preset_sky.coverage / self.preset_sky.max_coverage > thr
-            )
-
             # Calculate the approximate H^T * H matrix
             approx_hth, approx_hth_ext = self.get_approx_hth()
 
@@ -229,20 +229,19 @@ class PresetAcquisition:
                     )
                     precond_ext[precond_ext == np.inf] = 0
                     preconditioner[icomp, :, istk] = precond_ext
-                    preconditioner[
-                        icomp, seenpix_qubic_0_001, istk
-                    ] *= self.preset_tools.params["PLANCK"]["weight_planck"]
+                    preconditioner[icomp, seenpix, istk] *= self.preset_tools.params["PLANCK"]["weight_planck"]
 
             # We sum over the frequencies, take the inverse, and only keep the information on the patch.
             for icomp in range(len(self.preset_comp.components_model_out)):
                 for istk in range(3):
                     #print(A_qubic[..., icomp])
                     precond_qubic = 1 / (approx_hth[:, :, 0].T @ (A_qubic[..., icomp]) ** 2)
-                    preconditioner[icomp, seenpix_qubic_0_001, istk] += precond_qubic[seenpix_qubic_0_001] 
+                    preconditioner[icomp, self.preset_sky.seenpix, istk] += precond_qubic[self.preset_sky.seenpix] 
+            
             #stop
             #print( preconditioner[:, seenpix_qubic_0_001, istk] )
             #stop
-            M = DiagonalOperator(preconditioner[:, self.preset_sky.seenpix, :])
+            M = DiagonalOperator(preconditioner[:, seenpix, :])
             return M
         else:
             return None

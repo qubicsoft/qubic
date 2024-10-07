@@ -12,8 +12,8 @@ from pyoperators import DiagonalOperator, ReshapeOperator
 ### Lib directory
 from ...Qsamplings import equ2gal
 from ...Qdictionary import qubicDict
-from ...Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
-from ...Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
+from ...InstrumentModel.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
+from ...InstrumentModel.Qnoise import QubicDualBandNoise, QubicWideBandNoise
 from ..Qcg import pcg
 from ..ComponentMapMaking.Qcomponent_model import CMB, Dust, Synchrotron
 from ...Qfoldertools import create_folder_if_not_exists, do_gif

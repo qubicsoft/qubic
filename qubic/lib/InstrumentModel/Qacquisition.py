@@ -722,14 +722,14 @@ class QubicMultiAcquisitions:
         self.fsub = int(self.nsub / self.nrec)
 
         ### Compute frequencies on the edges
-        _, allnus_edges_150, _, _, _, _ = compute_freq(
+        _, _, nus_subbands_150, _, _, _ = compute_freq(
             150,
-            Nfreq=int(self.nsub / 2) - 1,
+            Nfreq=int(self.nsub / 2) ,
             relative_bandwidth=self.dict["filter_relative_bandwidth"],
         )
-        _, allnus_edges_220, _, _, _, _ = compute_freq(
+        _, _, nus_subbands_150, _, _, _ = compute_freq(
             220,
-            Nfreq=int(self.nsub / 2) - 1,
+            Nfreq=int(self.nsub / 2) ,
             relative_bandwidth=self.dict["filter_relative_bandwidth"],
         )
 
@@ -746,7 +746,8 @@ class QubicMultiAcquisitions:
         )
 
         ### Joint 150 and 220 GHz band
-        self.allnus = np.array(list(allnus_edges_150) + list(allnus_edges_220))
+        #self.allnus = np.array(list(allnus_edges_150) + list(allnus_edges_220))
+        self.allnus = np.array(list(nus_subbands_150) + list(nus_subbands_150))
         self.allnus_rec = np.array(list(nus150) + list(nus220))
 
         ### Multi-frequency instrument

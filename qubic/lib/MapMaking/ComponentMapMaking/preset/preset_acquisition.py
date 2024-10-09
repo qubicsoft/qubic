@@ -224,9 +224,7 @@ class PresetAcquisition:
 
             for icomp in range(len(self.preset_comp.components_model_out)):
                 for istk in range(3):
-                    precond_ext = 1 / (
-                        approx_hth_ext[:, :, 0].T @ A_ext[..., icomp] ** 2
-                    )
+                    precond_ext = 1 / (approx_hth_ext[:, :, 0].T @ A_ext[..., icomp] ** 2)
                     precond_ext[precond_ext == np.inf] = 0
                     preconditioner[icomp, :, istk] = precond_ext
                     preconditioner[icomp, seenpix, istk] *= self.preset_tools.params["PLANCK"]["weight_planck"]
@@ -236,11 +234,8 @@ class PresetAcquisition:
                 for istk in range(3):
                     #print(A_qubic[..., icomp])
                     precond_qubic = 1 / (approx_hth[:, :, 0].T @ (A_qubic[..., icomp]) ** 2)
-                    preconditioner[icomp, self.preset_sky.seenpix, istk] += precond_qubic[self.preset_sky.seenpix] 
+                    preconditioner[icomp, self.preset_sky.seenpix_qubic, istk] += precond_qubic[self.preset_sky.seenpix_qubic] 
             
-            #stop
-            #print( preconditioner[:, seenpix_qubic_0_001, istk] )
-            #stop
             M = DiagonalOperator(preconditioner[:, seenpix, :])
             return M
         else:

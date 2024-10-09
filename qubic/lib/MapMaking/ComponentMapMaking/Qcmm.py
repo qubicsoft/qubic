@@ -141,7 +141,7 @@ class Pipeline:
             gif_folder=gif_folder,
             job_id=self.preset.job_id,
             seenpix=seenpix,
-            seenpix_plot=seenpix,
+            seenpix_plot=self.preset.sky.seenpix,
             center=self.preset.sky.center,
             reso=self.preset.tools.params["PCG"]["reso_plot"],
             fwhm_plot=self.preset.tools.params["PCG"]["fwhm_plot"],

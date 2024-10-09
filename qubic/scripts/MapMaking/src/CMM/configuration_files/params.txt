@@ -5,11 +5,11 @@ CMB:
   Alens: 1
 Foregrounds:
   fit_spectral_index: false
-  bin_mixing_matrix: 6
+  bin_mixing_matrix: 4
   blind_method: minimize
   Dust:
-    Dust_in: true
-    Dust_out: true
+    Dust_in: false
+    Dust_out: false
     type: parametric
     model_d: d0
     beta_d_init:
@@ -38,12 +38,12 @@ Foregrounds:
     polarization_fraction: 0.01
 QUBIC:
   instrument: UWB
-  npointings: 500
-  nsub_in: 6
-  nsub_out: 6
+  npointings: 2000
+  nsub_in: 4
+  nsub_out: 4
   convolution_in: false
   convolution_out: false
-  preconditioner: false
+  preconditioner: true
   NOISE:
     ndet: 1
     npho150: 1
@@ -59,7 +59,7 @@ QUBIC:
     sig_gain: 0
     fit_gain: false
 SKY:
-  nside: 64
+  nside: 128
   RA_center: 0
   DEC_center: -57
 PLANCK:
@@ -76,14 +76,14 @@ PLANCK:
   217GHz: true
   353GHz: true
 PCG:
-  n_init_iter_pcg: 50
-  n_iter_pcg: 50
+  n_init_iter_pcg: 5
+  n_iter_pcg: 5
   tol_pcg: 1.0e-20
-  n_iter_loop: 1000
+  n_iter_loop: 20
   ites_to_converge: 1
   tol_rms: 1.0e-20
   fixI: false
-  reso_plot: 12
+  reso_plot: 25
   fwhm_plot: 0
   do_gif: true
 INITIAL:

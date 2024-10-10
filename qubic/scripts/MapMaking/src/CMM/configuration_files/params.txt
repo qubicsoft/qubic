@@ -4,16 +4,16 @@ CMB:
   r: 0
   Alens: 1
 Foregrounds:
-  fit_spectral_index: false
-  bin_mixing_matrix: 4
+  fit_spectral_index: true
+  bin_mixing_matrix: 10
   blind_method: minimize
   Dust:
-    Dust_in: false
-    Dust_out: false
+    Dust_in: true
+    Dust_out: true
     type: parametric
     model_d: d0
     beta_d_init:
-    - 1.54
+    - 1.5
     - 0
     - 1000000000
     nside_beta_in: 0
@@ -38,12 +38,12 @@ Foregrounds:
     polarization_fraction: 0.01
 QUBIC:
   instrument: UWB
-  npointings: 2000
-  nsub_in: 4
-  nsub_out: 4
+  npointings: 5000
+  nsub_in: 10
+  nsub_out: 10
   convolution_in: false
   convolution_out: false
-  preconditioner: true
+  preconditioner: false
   NOISE:
     ndet: 1
     npho150: 1
@@ -52,14 +52,14 @@ QUBIC:
     duration_150: 3
     duration_220: 3
   SYNTHBEAM:
-    synthbeam_kmax: 1
-    synthbeam_fraction: 1
+    synthbeam_kmax: 8
+    synthbeam_fraction: 0.99
   dtheta: 15
   GAIN:
     sig_gain: 0
     fit_gain: false
 SKY:
-  nside: 128
+  nside: 256
   RA_center: 0
   DEC_center: -57
 PLANCK:
@@ -76,16 +76,16 @@ PLANCK:
   217GHz: true
   353GHz: true
 PCG:
-  n_init_iter_pcg: 5
-  n_iter_pcg: 5
+  n_init_iter_pcg: 10
+  n_iter_pcg: 10
   tol_pcg: 1.0e-20
-  n_iter_loop: 20
+  n_iter_loop: 100
   ites_to_converge: 1
   tol_rms: 1.0e-20
   fixI: false
-  reso_plot: 25
+  reso_plot: 12
   fwhm_plot: 0
-  do_gif: true
+  do_gif: false
 INITIAL:
   fwhm0: 0
   sig_map_noise: 0
@@ -108,6 +108,6 @@ Plots:
   maps: true
   thr_plot: 0.2
 save_iter: 1
-foldername: test_convergence_blind
+foldername: with_planck
 filename: file
 lastite: true

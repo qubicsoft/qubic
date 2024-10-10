@@ -508,9 +508,7 @@ class PresetAcquisition:
 
         ### Observed TOD (Planck is assumed on the full sky)
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
-        self.TOD_obs_zero_outside = np.r_[
-            self.TOD_qubic, self.TOD_external_zero_outside_patch
-        ]
+        self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch]
 
     def get_x0(self):
         """PCG starting point.

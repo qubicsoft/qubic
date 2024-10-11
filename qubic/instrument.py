@@ -1266,7 +1266,7 @@ class QubicInstrument(Instrument):
         sec = secondary_beam(theta, phi)
         if use_file:
             return DiagonalOperator(sr_det / sr_beam, broadcast='rightward')
-	else:
+        else:
             sec = secondary_beam(theta, phi)
             return DiagonalOperator(sr_det / sr_beam * sec, broadcast='rightward')
 

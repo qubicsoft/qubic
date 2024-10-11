@@ -1,0 +1,444 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+
+import sys
+from importlib import reload
+import matplotlib.pyplot as plt
+from astropy.visualization import astropy_mpl_style, quantity_support
+plt.style.use(astropy_mpl_style)
+quantity_support()
+from matplotlib.backends.backend_pdf import PdfPages
+import mpld3
+import cartopy.crs as ccrs
+import os
+
+rc('figure',figsize=(20,12))
+rc('font',size=12)
+
+
+# QUBIC packages
+import qubic
+from qubicpack.utilities import Qubic_DataDir
+sys.path.append('/Users/hamilton/Python/GitQubic/qubic/qubic/scripts/Calibration/Point_source_reconstruction/')
+
+import toolfit_hpmap as fh
+
+import astropy.units as u
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz, HADec, BaseRADecFrame, get_moon, get_sun
+
+Salta = EarthLocation(lat=-24.731358*u.deg, lon=-65.409535*u.deg, height=1152*u.m)
+utcoffset = -3*u.hour  # Eastern Daylight Time
+
+# Hard Limit from Salta:
+# mini = 115-20
+# maxi = 115+25
+mini = -30
+maxi = 30
+el_min = 30.
+el_max = 70.
+
+
+door_az = (maxi+mini)/2
+az_span = maxi-mini
+print(door_az - az_span/2)
+print(door_az + az_span/2)
+
+```
+
+```{python}
+### Good days are from 10/07 to 14/07
+
+### On July 5th 2022 we measured a 50 deg back and forth scan including FLL at VE14 to be 3 minutes 16 seconds = 196 seconds
+```
+
+```{python}
+reload(qubic)
+dead_time = 5.
+
+### all days in July:
+# days = ['2022-07-10', '2022-07-11', '2022-07-12', '2022-07-13', '2022-07-14'] 
+### Just one day in July
+days = ['2022-07-14']
+
+### all days in August:
+# days = ['2022-08-06', '2022-08-07', '2022-08-08', '2022-08-09', '2022-08-10'] 
+### Just one day in AUgust
+# days = ['2022-08-10']
+
+
+
+
+### April 2023 
+days = ['2023-04-19', '2023-04-20']
+
+>>>>>>> mathias_dev2
+save_html = False
+
+
+for day in days:
+
+    start_obs_hour = '00:00:00'
+
+    date = Time(day+ ' 00:00:00')
+    start_obs_date = day +' '+start_obs_hour
+
+    delta_time = np.linspace(12,30, 1000)*u.hour
+
+    time0 = Time(start_obs_date)-utcoffset
+    alltimes = time0 + delta_time
+    local_time_hours = ((Time(start_obs_date) + delta_time).cxcsec - date.cxcsec)/3600
+
+    ### Local coordinates
+    frame_Salta = AltAz(obstime=alltimes, location=Salta)
+
+    ### Moon
+    moon_Salta = get_moon(alltimes)
+    moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+
+    ### Moon
+    sun_Salta = get_sun(alltimes)
+    sunaltazs_Salta = sun_Salta.transform_to(frame_Salta)  
+
+    delta_el = 20
+    valid = (moonaltazs_Salta.alt.value < (el_max+delta_el)) & (moonaltazs_Salta.alt.value > (el_min-delta_el)) & (moonaltazs_Salta.az.value > 0) & (moonaltazs_Salta.az.value < 360)
+    tstart = np.min(local_time_hours[valid])
+    tstop = np.max(local_time_hours[valid])
+    local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
+    local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
+    UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
+    UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
+
+
+
+    #####################################################################################################################
+    # Now let's prepare a back & forth in elevation scanning strategy as provided in qubic_soft
+    d = qubic.qubicdict.qubicDict()
+    d.read_from_file(os.environ['QUBIC_DICT']+'/dicts/MoonObservation.dict')
+    d['date_obs'] = str(Time(start_obs_date)-utcoffset+tstart*u.hour)
+    d['latitude'] = -24.731377    ### Salta Regional Noroeste
+    d['longitude'] = -65.409546   ### Salta Regional Noroeste
+    d['sampling'] = 1.
+    moon_ra_mean = np.mean(moon_Salta.ra[valid]/u.deg)
+    moon_dec_mean = np.mean(moon_Salta.dec[valid]/u.deg)
+    d['RA_center'] = moon_ra_mean #deg
+    d['DEC_center'] = moon_dec_mean #deg
+
+
+
+    d['duration'] = tstop-tstart # Hours
+    d['angspeed'] = 0.82 #deg/s
+    d['delta_az'] = az_span #deg
+    d['nsweeps_per_elevation'] = 1
+
+    d['angspeed_psi'] = 0. #deg/s
+    backforthdt = d['delta_az'] / d['angspeed'] * 2
+    print('Scan Duration: ',backforthdt)
+    d['dead_time'] = dead_time
+    print('Dead Time = {}'.format(d['dead_time']))
+    print('Total time between two start-scan = {}'.format(backforthdt+d['dead_time']))
+    
+    
+    n_elevations = int(d['duration']*3600/(backforthdt+d['dead_time']))+1
+    el_step = np.round((el_max - el_min) / n_elevations * 100) / 100
+    d['fix_azimuth'] = {'apply':True,'az':door_az,
+                         'el':(el_min+el_max)/2,'el_step':el_step, 'fix_hwp':True, 'fix_pitch':True}
+    print(d['fix_azimuth'])
+    print('call')
+    p = qubic.get_pointing(d)
+    print(p.elevation)
+    
+    el_min_final = np.min(p.elevation)
+    el_max_final = np.max(p.elevation)
+
+    fig1 = figure()
+    plot(p.azimuth, p.elevation, alpha=0.5, 
+         label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
+                        d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
+    scatter(moonaltazs_Salta.az[valid], moonaltazs_Salta.alt[valid],
+                c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
+    plot(sunaltazs_Salta.az[valid], sunaltazs_Salta.alt[valid], 'r.', lw=3, label='Sun (needs to be far)')
+    fill_between([door_az-az_span/2, door_az+az_span/2], 
+                 [el_max,el_max], y2=[el_min, el_min], color='r', alpha=0.5, 
+                 label='Observing Window' )
+    legend(loc='upper left', fontsize=10)
+    title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+    colorbar().set_label('Local Time')
+    xlabel('Absolute Azimuth [deg]')
+    ylabel('Absolute Elevation [deg]')
+    xlim(door_az-az_span/2-10, door_az+az_span/2+10)
+    ylim(5, 75)
+
+#     fig1_bis = figure()
+#     ax = fig1_bis.add_subplot(111, projection='mollweide')
+#     plot(np.radians(p.azimuth), np.radians(p.elevation), label = 'QUBIC Scanning')
+#     plot(np.radians(np.array(moonaltazs_Salta.az[valid])), np.radians(np.array(moonaltazs_Salta.alt[valid])), label='Moon', lw=4)
+#     plot(np.radians(np.array(sunaltazs_Salta.az[valid])), np.radians(np.array(sunaltazs_Salta.alt[valid])), label='Sun', lw=4)
+#     legend(title='Local Coordinates')
+#     title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+#     xlabel('Absolute Azimuth [deg]')
+#     ylabel('Absolute Elevation [deg]')
+
+
+    fig2 = figure()
+    plot(p.equatorial[:,0], p.equatorial[:,1], alpha=0.5, 
+         label = '{} scans with Δaz = {} deg, Δel = {} deg el_min={:5.2f} deg, el_max={:5.2f} deg, az_center={:5.1f} deg, dead_time={} sec'.format(n_elevations, 
+                        d['delta_az'], el_step, el_min_final, el_max_final, d['fix_azimuth']['az'], d['dead_time']))
+    scatter(moon_Salta.ra[valid]/u.deg, moon_Salta.dec[valid]/u.deg,
+                c=local_time_hours[valid], label='Moon', lw=0, s=200, marker='o', cmap='jet')
+    plot(sun_Salta.ra[valid]/u.deg, sun_Salta.ra[valid]/u.deg, 'r.', lw=3, label='Sun (needs to be far)')
+    colorbar().set_label('Local Time')
+    legend(loc='upper left', fontsize=10)
+    title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+    xlabel('RA')
+    ylabel('DEC')
+    xlim(np.min(p.equatorial[:,0])-5, np.max(p.equatorial[:,0])+5)
+    ylim(np.min(p.equatorial[:,1])-5, np.max(p.equatorial[:,1])+5)
+
+#     fig2_bis = figure()
+#     ax = fig2_bis.add_subplot(111, projection='mollweide')
+#     plot(np.radians((((p.equatorial[:,0])+180) % 360)-180), np.radians(p.equatorial[:,1]), label = 'QUBIC Scanning')
+#     plot(np.radians((((np.array(moon_Salta.ra[valid]))+180) % 360)-180), np.radians(np.array(moon_Salta.dec[valid])), label='Moon', lw=4)
+#     plot(np.radians((((np.array(sun_Salta.ra[valid]))+180) % 360)-180), np.radians(np.array(sun_Salta.dec[valid])), label='Sun', lw=4)
+#     legend(title='Sky Coordinates')
+#     title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+
+
+    fig3 = figure()
+    title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+    subplot(2,1,1)
+    plot(local_time_hours[valid][0]+p.time/3600, p.azimuth, label='Scanning')
+    plot(local_time_hours[valid], moonaltazs_Salta.az[valid], label='Moon')
+    plot(local_time_hours[valid], sunaltazs_Salta.az[valid], label='Sun')
+    xlabel('Local Time in hour')
+    ylabel('Absolute Azimuth [deg]')
+    legend(loc='upper left')
+    ylim(door_az-az_span/2-10, door_az+az_span/2+10)
+
+    subplot(2,1,2)
+    plot(local_time_hours[valid][0]+p.time/3600, p.elevation, label='Scanning')
+    plot(local_time_hours[valid], moonaltazs_Salta.alt[valid], label='Moon')
+    plot(local_time_hours[valid], sunaltazs_Salta.alt[valid], label='Sun')
+    xlabel('Local Time in hour')
+    ylabel('Absolute Elevation [deg]')
+    legend(loc='upper left')
+    ylim(5, 75)
+
+    show()
+    
+    if save_html:
+        html_str1 = mpld3.fig_to_html(fig1)
+#         html_str1_bis = mpld3.fig_to_html(fig1_bis)
+        html_str2 = mpld3.fig_to_html(fig2)
+#         html_str2_bis = mpld3.fig_to_html(fig2_bis)
+        html_str3 = mpld3.fig_to_html(fig3)
+
+        Html_file= open("moon{}.html".format(day),"w")
+        #Html_file.write('<html> \n\n <head> \n <title>Moon Observation : {} </title>  \n </head>\n\n\n'.format(day))
+        Html_file.write('<h1>Moon Observation with QUBIC on {} </h1>\n'.format(day))
+        Html_file.write('<h2>Back and Forth Scans with: </h2>\n')
+        Html_file.write('<h4>  - Number of scans: {} </h4>\n'.format(n_elevations))
+        Html_file.write('<h4>  - Dead time between back-and-forth scans: {} sec</h4>\n'.format(d['dead_time']))
+        Html_file.write('<h4>  - Absolute_azimuth center = {:5.1f} deg </h4>\n'.format(d['fix_azimuth']['az']))
+        Html_file.write('<h4>  - Delta_az = {} deg </h4>\n'.format(d['delta_az']))
+        Html_file.write('<h4>  - Increment_el = {} deg </h4>\n'.format(el_step))
+        Html_file.write('<h4>  - el_min={:5.2f} deg, el_max={:5.2f} deg </h4>'.format(el_min_final, el_max_final))
+        Html_file.write('<h4> Operations start (local time):  '+local_start+'</h4>\n')
+        Html_file.write('<h4> Operations stop (local time):  '+local_stop+'</h4>\n')
+        Html_file.write('<h4> Operations start (UTC):  '+UTC_start+'</h4>\n')
+        Html_file.write('<h4> Operations stop (UTC):  '+UTC_stop+'</h4>\n')
+        Html_file.write(' \n')
+
+        Html_file.write(' \n')
+#         Html_file.write(html_str1 + html_str1_bis+ html_str2 + html_str2_bis + html_str3 )
+        Html_file.write(html_str1 + html_str2 + html_str3 )
+        Html_file.write('\n</body> \n </html>')
+        Html_file.close()
+
+
+
+        os.system('scp moon{}.html apcssh.in2p3.fr:~/DownloadDir/QUBIC/MoonObservations/'.format(day))
+
+    print()
+    print('Moon Observation with QUBIC on {}'.format(day))
+    print('Back and Forth Scans with:')
+    print(' * Number of scans: {}'.format(n_elevations))
+    print(' * Dead-time between back-and-forth scans: {} sec'.format(d['dead_time']))
+    print(' * Absolute_azimuth center = {:5.1f} deg'.format(d['fix_azimuth']['az']))
+    print(' * $\Delta$az = {} deg'.format(d['delta_az']))
+    print(' * Increment_el = {} deg'.format(el_step))
+    print(' * el_min={} deg, el_max={} deg'.format(el_min_final, el_max_final))
+    print('Operations start (local time): '+local_start)
+    print('Operations stop (local time): '+local_stop)
+    print('Operations start (UTC): '+UTC_start)
+    print('Operations stop (UTC): '+UTC_stop)
+    print()
+
+```
+
+```{python}
+
+```
+
+# 2D Plots using projections
+They do not display well in html
+
+```{python}
+fig1_bis = figure()
+ax = fig1_bis.add_subplot(111, projection='mollweide')
+plot(np.radians(p.azimuth), np.radians(p.elevation), label = 'QUBIC Scanning')
+plot(np.radians(np.array(moonaltazs_Salta.az[valid])), np.radians(np.array(moonaltazs_Salta.alt[valid])), label='Moon', lw=4)
+plot(np.radians(np.array(sunaltazs_Salta.az[valid])), np.radians(np.array(sunaltazs_Salta.alt[valid])), label='Sun', lw=4)
+legend(title='Local Coordinates')
+title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+xlabel('Absolute Azimuth [deg]')
+ylabel('Absolute Elevation [deg]')
+
+```
+
+```{python}
+fig2_bis = figure()
+ax = fig2_bis.add_subplot(111, projection='mollweide')
+plot(np.radians((((p.equatorial[:,0])+180) % 360)-180), np.radians(p.equatorial[:,1]), label = 'QUBIC Scanning')
+plot(np.radians((((np.array(moon_Salta.ra[valid]))+180) % 360)-180), np.radians(np.array(moon_Salta.dec[valid])), label='Moon', lw=4)
+plot(np.radians((((np.array(sun_Salta.ra[valid]))+180) % 360)-180), np.radians(np.array(sun_Salta.dec[valid])), label='Sun', lw=4)
+legend(title='Sky Coordinates')
+title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+
+
+```
+
+```{python}
+#### Does not display well in html...
+
+fig1_bis = figure()
+ax = fig1_bis.add_subplot(111, projection=ccrs.Mollweide())
+ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
+ax.set_extent([-180, 180, 0, 90], crs=ccrs.PlateCarree())
+plot(p.azimuth, p.elevation,transform=ccrs.Geodetic(), label = 'QUBIC Scanning')
+plot(np.array(moonaltazs_Salta.az[valid]), np.array(moonaltazs_Salta.alt[valid]), label='Moon',transform=ccrs.Geodetic(), lw=4)
+plot(np.array(sunaltazs_Salta.az[valid]), np.array(sunaltazs_Salta.alt[valid]), label='Sun',transform=ccrs.Geodetic(), lw=4)
+legend(title='Local Coordinates')
+title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+# colorbar().set_label('Local Time')
+xlabel('Absolute Azimuth [deg]')
+ylabel('Absolute Elevation [deg]')
+
+```
+
+```{python}
+#### Does not display well in html...
+fig2_bis = figure()
+ax = fig2_bis.add_subplot(111, projection=ccrs.Mollweide())
+ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
+plot(0, -90,'k', transform=ccrs.Geodetic(), alpha=0)
+plot(0, 90,'k', transform=ccrs.Geodetic(), alpha=0)
+plot(-180, 0,'k', transform=ccrs.Geodetic(), alpha=0)
+plot(180, 0,'k', transform=ccrs.Geodetic(), alpha=0)
+plot(p.equatorial[:,0], p.equatorial[:,1],transform=ccrs.Geodetic(), label = 'QUBIC Scanning')
+plot(np.array(moon_Salta.ra[valid]), np.array(moon_Salta.dec[valid]), label='Moon',transform=ccrs.Geodetic(), lw=4)
+plot(np.array(sun_Salta.ra[valid]), np.array(sun_Salta.dec[valid]), label='Sun',transform=ccrs.Geodetic(), lw=4)
+legend(title='Sky Coordinates')
+title('Operations from {} to {} (local time)'.format(local_start, local_stop))
+
+
+```
+
+# Plots for a given day and hours (avoiding the sun)
+
+```{python}
+# days = ['2022-07-01', '2022-07-15', '2022-08-01', '2022-08-15', '2022-09-01']
+
+days = ['2023-04-19']
+
+save_html = False
+
+if save_html:
+    html_str = ''
+    Html_file= open("sun_avoidance.html","w")
+    Html_file.write('<h1>Sun avoidance from Salta </h1>\n')
+    Html_file.write(' \n')
+
+for day in days:
+
+    start_obs_hour = '00:00:00'
+
+    date = Time(day+ ' 00:00:00')
+    start_obs_date = day +' '+start_obs_hour
+
+    delta_time = np.linspace(0,24, 1000)*u.hour
+
+    time0 = Time(start_obs_date)-utcoffset
+    alltimes = time0 + delta_time
+    local_time_hours = ((Time(start_obs_date) + delta_time).cxcsec - date.cxcsec)/3600
+
+    ### Local coordinates
+    frame_Salta = AltAz(obstime=alltimes, location=Salta)
+
+    ### Moon
+    moon_Salta = get_moon(alltimes)
+    moonaltazs_Salta = moon_Salta.transform_to(frame_Salta)  
+
+    ### Sun
+    sun_Salta = get_sun(alltimes)
+    sunaltazs_Salta = sun_Salta.transform_to(frame_Salta)  
+
+    tstart = np.min(local_time_hours)
+    tstop = np.max(local_time_hours)
+    local_start = str(Time(start_obs_date)+tstart*u.hour)[:16]
+    local_stop = str(Time(start_obs_date)+tstop*u.hour)[:16]
+    UTC_start = str(Time(start_obs_date)-utcoffset+tstart*u.hour)[:16]
+    UTC_stop = str(Time(start_obs_date)-utcoffset+tstop*u.hour)[:16]
+
+    fig = figure()
+    scatter(sunaltazs_Salta.az, sunaltazs_Salta.alt,
+                c=local_time_hours, label='Sun', lw=0, s=200, marker='o', cmap='jet')
+    fill_between([door_az-az_span/2, door_az+az_span/2], 
+                 [el_max,el_max], y2=[el_min, el_min], color='r', alpha=0.5, 
+                 label='Observing Window' )
+    legend(loc='upper left', fontsize=10)
+    title('Sun Positions from {} to {} (local time)'.format(local_start, local_stop))
+    colorbar().set_label('Local Time')
+    xlabel('Absolute Azimuth [deg]')
+    ylabel('Absolute Elevation [deg]')
+#     xlim(door_az-90, door_az+90)
+    xlim(0,360)
+    ylim(0, 90)
+    show()
+    
+    if save_html:
+        html_str += mpld3.fig_to_html(fig)
+        
+if save_html:
+    Html_file.write(' \n')
+    Html_file.write(html_str)
+    Html_file.write('\n</body> \n </html>')
+    Html_file.close()
+    os.system('scp sun_avoidance.html apcssh.in2p3.fr:~/DownloadDir/QUBIC/MoonObservations/')
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -1,0 +1,353 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+from qubic import fibtools as ft
+import fitting as fit
+from importlib import reload
+
+rc('figure',figsize=(20,6))
+rc('font',size=12)
+
+```
+
+```{python}
+#### Simulate input true "sky"
+npix = 50
+xpix = np.linspace(0,1,npix)
+
+x0 = 0.5
+maxy = 1.
+α = -maxy / (x0-x0**2)
+β = - α
+amp = 1.
+w0 = 0.1
+ph = 0.3
+
+truey = α*xpix**2 + β*xpix + amp*np.sin(xpix/w0+2*np.pi * ph)
+
+plot(xpix, truey, label='True Sky')
+xlabel('pixel')
+ylabel('sky')
+legend()
+###########
+
+```
+
+```{python}
+#np.random.seed(42)
+
+###### Simulate observations including intercalibration
+ndet = 60
+nsamples = 100
+
+###### Noise:
+# Uniform noise
+# sig = np.zeros(ndet) + 1e-2
+# Variable noise across detectors
+sig = 1e-2*(np.random.rand(ndet)+0.5)
+
+H = np.zeros((ndet*nsamples, npix))
+for i in range(npix):
+    H[:,i] = np.random.randint(0,2, size=nsamples*ndet)
+
+# nnn = nsamples // npix
+# H = np.zeros((ndet*nsamples, npix))
+# ### We want each pixel to be seen by all detectors
+# for i in range(npix):
+#     seenpix = np.zeros((ndet, nsamples))
+#     for k in range(nnn): 
+#         seenpix[:, k*npix+i] = 1
+#         H[:,i] = np.ravel(seenpix)
+    
+intercal = np.append([1], (np.random.rand(ndet-1)+0.5))
+alltod_intercal = np.dot(H, truey)
+alltod = alltod_intercal.copy()
+alltod_noiseless = alltod_intercal.copy()
+for k in range(ndet):
+    alltod_noiseless[k*nsamples:(k+1)*nsamples] *= intercal[k]
+    alltod[k*nsamples:(k+1)*nsamples] *= intercal[k]
+    alltod[k*nsamples:(k+1)*nsamples] += np.random.randn(nsamples)*sig[k]
+#########################
+
+
+print(np.std(np.reshape(alltod, (ndet, nsamples)), axis=1))
+
+```
+
+# Full Fit with Minuit
+
+```{python}
+class simulate_signal_intercal:
+    def __init__(self, xpix, ndet, nsamples, H):
+        self.xpix = xpix
+        self.ndet = ndet
+        self.nsamples = nsamples
+        self.H = H
+    def __call__(self, x, sky_and_intercal):
+        sky = sky_and_intercal[:len(self.xpix)]
+        intercal = sky_and_intercal[len(self.xpix):]
+        alltod = np.dot(self.H, sky)
+        for k in range(self.ndet):
+            alltod[k*self.nsamples:(k+1)*self.nsamples] *= intercal[k]
+        return alltod
+
+
+myH = simulate_signal_intercal(xpix, ndet, nsamples, H)
+
+guess_sky = np.append(np.zeros(len(xpix)), np.ones(ndet))
+
+sigmas = np.ones(len(alltod))
+for k in range(ndet):
+    sigmas[k*nsamples:(k+1)*nsamples] *= sig[k]
+
+xxx = np.zeros(len(alltod))   # not used
+data = fit.Data(xxx, alltod, sigmas*0+1, myH)
+m, ch2, ndf = data.fit_minuit(guess_sky, fixpars = [len(xpix)])
+
+mymap = m.values[:len(xpix)]
+myintercals = m.values[len(xpix):]
+mytod_th = myH(0, m.values)
+chi2_ana = np.sum( ((mytod_th-alltod)/sigmas)**2)
+
+
+print('Minuit says : chi2={} ndf={}'.format(ch2, ndf))
+print('============================')
+print('My Chi2 = {}'.format(chi2_ana))
+print('The number of unknowns is: {}'.format(npix + ndet -1))
+print('The number of points is: {}'.format(len(alltod)))
+print('The ndf={}'.format(len(alltod)-(npix+ndet-1)))
+
+
+
+
+
+subplot(2,2,1)
+plot(xpix, truey, label='True Sky')
+plot(xpix, mymap, 'ro', label='reconstructed')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(2,2,2)
+plot(xpix, mymap - truey, label='Residuals σ={0:5.3g}'.format(np.std(mymap - truey)))
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(2,2,3)
+plot(intercal, label='True Intercals')
+plot(myintercals, 'ro', label='reconstructed intercals')
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+subplot(2,2,4)
+plot(myintercals-intercal, label='Residuals σ={0:5.3g}'.format(np.std(myintercals-intercal)))
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+tight_layout()
+
+
+print()
+print('RMS Residuals')
+print('          M')
+print('    Map.        Inter     ')
+print('   {0:5.3g}   {1:5.3g}'.format(np.std(mymap - truey), np.std(myintercals-intercal)))
+
+```
+
+# Fit with Minuit + Analytical for intercals
+
+
+We have data from $n_d$ detectors that observe a sky $\vec{s}$ through an instrument modeled by the operator $H$. Each detector has its own intercalibration.
+
+So the perfectly intercalibrated data writes:
+    $$ \vec{D} = H\vec{s} + \vec{n}$$
+And the maximum likelihood solution would be:
+    $$\hat{\vec{s}} = \left(H^t N^{-1} H\right)^{-1} H^t N^{-1} \vec{D}$$
+    
+But in reality we measure $\vec{d}$ which is not intercalibrated:
+$$\vec{d}=\vec{D} A$$ where A is unknown...
+
+So we proceed with the "inverse problem" approach:
+$$\vec{d}=\vec{D} A = H \vec{s} A+\vec{n}$$
+
+We vary $A$ and $\vec{s}$ and minimize:
+$$\chi^2(A,\vec{s}) = \left(H\vec{s}A-\vec{d}\right)^t N^{-1}\left(H\vec{s}A-\vec{d}\right)$$
+the solution is obtained by solving:
+$$\frac{d\chi^2}{dA^t} = 0 = \vec{s}^t H^t N^{-1} H \vec{s}A - \vec{s}^t H^t N^{-1}\vec{d}$$
+$$\Rightarrow~~~~ A= \left(\vec{s}^t H^t N^{-1} H \vec{s}\right)^{-1} \vec{s}^t H^t N^{-1}\vec{d}$$
+
+So, at each step of the conjugate gradient (at each call to Minuit), we will test a sky $\vec{s}_i$ that correpsonds to "test"-intercalibrated data $\vec{D}_i = H\vec{s}_i$. We will compute at each of those steps:
+$$A_i = \left(\vec{D}_i^t N^{-1}\vec{D}_i\right) \vec{D}_i^t N^{-1} \vec{d}$$
+which allows to compute the corresponding $\chi^2$ as:
+$$ \chi^2 = \left(\vec{D}_i A_i-\vec{d}\right)^t N^{-1}\left(\vec{D}_i A_i -\vec{d}\right)$$
+and we minimize it only with respect to $\vec{s}$.
+
+Once we have converged on $\hat{\vec{s}}$, the intercalibrations will be obtained by:
+$$ \hat{\vec{D}} = H\hat{\vec{s}}$$
+and
+$$ \hat{A} = \left(\hat{\vec{D}}^t N^{-1}\hat{\vec{D}}\right)^{-1} \hat{\vec{D}}^t N^{-1} \vec{d}$$
+
+
+### In practice:
+If $N$ is dense it is possibly a large problem...
+
+- if $N\propto \mathbb{1}$ the problem is completely simplified and $N$ disappears:
+    - $\vec{D}_i = H\vec{s}_i$
+    - $A_i = \left(\vec{D}^t\vec{D}\right)^{-1}\vec{D}^t \vec{d}$
+    - $\chi^2 = \| \vec{D}_i A_i -\vec{d}\|^2$
+    
+- If $N$ is diagonal: $N^{-1} = \vec{w}\mathbb{1}$
+    - $\vec{D}_i = H\vec{s}_i$
+    - $A_i = \left(\vec{D}^t\vec{w}\vec{D}\right)^{-1}\vec{D}^t \vec{w}\vec{d}$
+    - $\chi^2 = \|\vec{\sqrt{w}}\cdot\left(\vec{D}_i A_i -\vec{d}\right)\|^2$
+
+
+
+# My current inmplementation (that seems suboptimal -> my $N^{-1}$ is not well implemented)
+
+```{python}
+reload(fit)
+
+
+
+class simulate_signal_intercal:
+    def __init__(self, xpix, ndet, nsamples, H, d, w):
+        self.xpix = xpix
+        self.ndet = ndet
+        self.nsamples = nsamples
+        self.H = H
+        self.d = np.reshape(d, (ndet, nsamples))
+        self.w = w
+    def __call__(self, x, sky):
+        D, intercal = self.give_intercals(sky)
+        for k in range(self.ndet):
+            D[k,:] *= intercal[k]
+        return np.ravel(D)
+    def give_intercals(self, sky):
+        ### We remove the first detector from the fit as its intercalibration is forced to 1
+        D = (np.reshape(np.dot(self.H, sky), (self.ndet, self.nsamples)))
+        myD = D[1:,:]
+        myw = self.w[1:]
+        w = np.diag(myw)
+        matrix = myD @ (myD.T @ w)
+        intercal_rec = np.append(1, np.diag(np.linalg.inv(matrix) @ (myD @ (self.d[1:,:].T @ w))))
+        return D, intercal_rec
+
+sigmas = np.ones(len(alltod))
+for k in range(ndet):
+    sigmas[k*nsamples:(k+1)*nsamples] *= sig[k]
+
+#### Fit
+myH = simulate_signal_intercal(xpix, ndet, nsamples, H, alltod, 1./sig**2)
+guess_sky = np.ones(len(xpix))
+xxx = np.zeros(len(alltod))   # not used
+data = fit.Data(xxx, alltod, sigmas, myH)
+m, ch2, ndf = data.fit_minuit(guess_sky)
+mytod_th = myH(0, m.values)
+chi2_ana = np.sum( ((mytod_th-alltod)/sigmas)**2)
+
+
+
+
+print('Minuit says : chi2={} ndf={}'.format(ch2, ndf))
+print('But we know it forgets the {} variables we fit analytically, so it should say {}'.format(ndet-1, ndf-(ndet-1)))
+print('============================')
+print('My Chi2 = {}'.format(chi2_ana))
+print('The number of unknowns is: {}'.format(npix + ndet -1))
+print('The number of points is: {}'.format(len(alltod)))
+print('The ndf={}'.format(len(alltod)-(npix+ndet-1)))
+print('============================')
+print('With True Sky')
+
+mytod_true = myH(0, truey)
+chi2_true = np.sum( ((mytod_true-alltod)/sigmas)**2)
+print('Chi2 True = {}'.format(chi2_true))
+
+mymap2 = np.array(m.values)
+myresult2, myintercals2 = myH.give_intercals(m.values)
+
+subplot(2,3,1)
+plot(xpix, truey, label='True Sky')
+plot(xpix, mymap2, 'ro', label='reconstructed')
+xlabel('pixel')
+ylabel('sky')
+legend()
+
+subplot(2,3,2)
+plot(xpix, mymap2 - truey, label='Minuit + Ana Residuals σ={0:5.3g}'.format(np.std(mymap2 - truey)))
+plot(xpix, mymap - truey, label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(mymap - truey)), alpha=0.5)
+xlabel('pixel')
+ylabel('sky')
+legend(fontsize=10)
+
+subplot(2,3,3)
+a = fit.myhist(mymap2 - truey, label='Minuit + Ana Residuals')
+a = fit.myhist(mymap - truey, label='Full Minuit Residuals')
+
+subplot(2,3,4)
+plot(intercal, label='True Intercals')
+plot(myintercals2, 'ro', label='reconstructed intercals')
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+subplot(2,3,5)
+plot(myintercals2-intercal, label='Minuit + Ana Residuals σ={0:5.3g}'.format(np.std(myintercals2-intercal)))
+plot(myintercals-intercal, label='Full Minuit Residuals σ={0:5.3g}'.format(np.std(myintercals-intercal)), alpha=0.5)
+xlabel('Det')
+ylabel('Intercal')
+legend()
+
+subplot(2,3,6)
+a = fit.myhist(myintercals2-intercal, label='Minuit + Ana Residuals')
+a = fit.myhist(myintercals-intercal, label='Full Minuit Residuals')
+
+tight_layout()
+
+print()
+print('RMS Residuals')
+print('                   M+A                    M')
+print('              Map.      Inter.      Map.        Inter     ')
+print('            {0:5.3g}   {1:5.3g}    {2:5.3g}   {3:5.3g}'.format(np.std(mymap2 - truey), np.std(myintercals2-intercal), np.std(mymap - truey), np.std(myintercals-intercal)))
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

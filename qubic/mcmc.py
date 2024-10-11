@@ -1,6 +1,6 @@
 import emcee
 from scipy.optimize import curve_fit
-from scipy.integrate import cumtrapz
+from scipy.integrate import cumulative_trapezoid as cumtrapz
 from pylab import *
 from qubic import fibtools as ft
 
@@ -35,7 +35,7 @@ class LogLikelihood:
 
         self.flatprior = flatprior
         if flatprior is None:
-            initial_fit = self.minuit(p0=self.p0, chi2=self.chi2)
+            initial_fit = self.minuit(p0=self.p0, chi2=self.chi2, verbose=False)
             self.fitresult = [initial_fit[0], initial_fit[1]]
 
     def __call__(self, mytheta, extra_args=None, verbose=False):
@@ -122,16 +122,16 @@ class LogLikelihood:
             for d in range(ndim):
                 pos[:, d] = np.random.randn(nwalkers) * np.sqrt(self.fitresult[1][d, d]) * nsigmas + self.fitresult[0][
                     d]
-        print('Ndim init:', ndim)
+        #print('Ndim init:', ndim)
         if self.fixedpars is not None:
             ndim = int(np.sum(self.fixedpars == 0))
-        print('New ndim:', ndim)
+        #print('New ndim:', ndim)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, self.__call__)
         if self.fixedpars is not None:
-            print('Len(pos):', np.shape(pos))
-            print('len(fixedpars):', len(self.fixedpars))
+            #print('Len(pos):', np.shape(pos))
+            #print('len(fixedpars):', len(self.fixedpars))
             pos = pos[:, self.fixedpars == 0]
-            print('New len(pos):', np.shape(pos))
+            #print('New len(pos):', np.shape(pos))
         sampler.run_mcmc(pos, nbmc, progress=True)
         return sampler
 

@@ -65,6 +65,7 @@ dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
 seed=1
 
+sweeping_pointing_deadtime=False
 sweeping_pointing=False
 duration=20 #h
 angspeed= 0.4 #deg/s

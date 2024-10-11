@@ -1,0 +1,705 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.0
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import os
+
+### This part is if one runs it as a command-line using
+### ipython -c "%run TimeConst2022.ipynb"
+# matplotlib.use('pdf')
+# numfile = int(os.getenv('numfile'))
+
+
+
+
+
+# %config InlineBackend.figure_format='retina'
+from IPython.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+rc('figure',figsize=(20,12))
+rc('font',size=12)
+
+from scipy.signal import medfilt
+from scipy.interpolate import interp1d
+import glob
+import scipy.ndimage.filters as scfilt
+
+from qubicpack.qubicfp import qubicfp
+from qubic import fibtools as ft
+
+from importlib import reload
+import healpy as hp
+import iminuit
+from iminuit.cost import LeastSquares
+from sklearn.cluster import DBSCAN
+
+
+import time_domain_tools as tdt
+
+```
+
+```{python}
+##### August 2022
+# mydatadir = '/Volumes/HD JCH SSD/Qubic/QubicData/Calib-TD/'
+# thedate = '2022-08-24'
+# thedirs = glob.glob(mydatadir + '/' + thedate + '/*')
+
+
+##### Nov 2019
+data_dir = '/Volumes/HD JCH SSD/Qubic/QubicData/Calib-TD/2019-11-12/*NewBisTimeCstScript*'
+thedirs = np.sort(glob.glob(data_dir))
+
+
+
+print('Here are all the available files')
+for i in range(len(thedirs)):
+    print(i,thedirs[i])
+
+# start with one file
+#del(numfile)
+if 'numfile' not in locals():
+    numfile=13
+    
+thedata = thedirs[numfile]
+print()
+print('We will analyse:')
+print(numfile, thedata)
+
+```
+
+```{python}
+### Read data
+print(thedata)
+a = qubicfp()
+a.read_qubicstudio_dataset(thedata)
+
+tt, alltod = a.tod()
+calsource_dict = a.calsource_info()
+print(calsource_dict)
+del(a)
+
+### We remove tt[0]
+tinit = tt[1]
+tt -= tinit
+
+print()
+print('Modulator frequency:  ',calsource_dict['modulator']['frequency'])
+print('Modulator Duty Cycle: ',calsource_dict['modulator']['duty_cycle'])
+```
+
+```{python}
+rc('figure',figsize=(20,12))
+TESnum = 95
+tod = alltod[TESnum-1,:]
+plot(tt, tod)
+xlabel('t')
+ylabel('TOD')
+
+```
+
+```{python}
+rc('figure',figsize=(20,12))
+thefreqmod = calsource_dict['modulator']['frequency'] #Hz
+if thefreqmod > 100:
+    thefreqmod/=1000
+period = 1./ thefreqmod
+print(period)
+nbins = 100
+lowcut = 0.01
+highcut = 20.
+
+xmin = 0.001
+xmax = 90.
+ymin = 1e1
+ymax = 1e17
+
+############ Power spectrum
+subplot(2,1,1)
+spectrum_f, freq_f = ft.power_spectrum(tt, tod, rebin=True)
+plot(freq_f, scfilt.gaussian_filter1d(spectrum_f,1),label='Raw Data')
+yscale('log')
+xscale('log')
+xlabel('Frequency [Hz]')
+ylabel('Power Spectrum')
+xlim(xmin, xmax)
+ylim(ymin, ymax)
+title('TES#={}'.format(TESnum))
+
+for i in range(20):
+    plot([1./period*i,1./period*i],[ymin,ymax],'k--',alpha=0.3)
+
+plot([lowcut, lowcut],[ymin,ymax],'k')
+plot([highcut, highcut],[ymin,ymax],'k')
+legend()
+
+########## Folding
+folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata, fn, nn= ft.fold_data(tt, np.reshape(tod, (1,len(tod))), period, nbins, lowcut=lowcut, highcut=highcut, 
+                                                median=True, rebin=True, verbose=True, return_error=True,
+                                               return_noise_harmonics=30)
+
+
+subplot(2,1,2)
+errorbar(t, folded_nonorm[0,:], yerr=dfolded_nonorm[0,:], fmt='ro', label='Filtered Data {} < f < {} Hz'.format(lowcut,highcut))
+xlim(0,period)
+xlabel('Time [sec]')
+ylabel('Folded Signal [ADU]')
+legend()
+
+########## New Power spectrum
+spectrum_f2, freq_f2 = ft.power_spectrum(tt, newdata, rebin=True)
+subplot(2,1,1)
+plot(freq_f2, scfilt.gaussian_filter1d(spectrum_f2,1),label='Filtered data')
+
+plot(fn, nn[0,:]**2,'ro-', label='Noise level between peaks')
+legend()
+
+tight_layout()
+```
+
+```{python}
+class asymsig_spl_class:
+    def __init__(self, x, y, err, nbspl):
+        #print('Number of spline: {}'.format(nbspl))
+        self.spl = tdt.MySplineFitting(x, y, err, nbspl)
+        
+    def __call__(self, x, pars):
+        pars_asymsig = pars[:5]
+        asym_sig = simsig_asym_nooffset(x, pars_asymsig)
+        pars_spl = pars[5:]
+        splvals = self.spl.with_alpha(x, pars_spl)
+        return asym_sig + splvals
+
+def simsig_asym(x, pars):
+        dx = x[1] - x[0]
+        cycle = np.nan_to_num(pars[0])
+        ctime_rise = np.nan_to_num(pars[1])
+        ctime_fall = np.nan_to_num(pars[2])
+        t0 = np.nan_to_num(pars[3])
+        amp = np.nan_to_num(pars[4])
+        offset = np.nan_to_num(pars[5])
+        sim_init = np.zeros(len(x))
+        ok = x < (cycle * (np.max(x)))
+        sim_init[ok] = -1 + np.exp(-x[ok] / ctime_rise)
+        if ok.sum() > 0:
+                endval = sim_init[ok][-1]
+        else:
+                endval = -1.
+        sim_init[~ok] = -np.exp(-(x[~ok] - x[~ok][0]) / ctime_fall) + 1 + endval
+        thesim = np.interp((x - t0) % max(x), x, sim_init)
+        thesim = thesim * amp + offset
+        return np.nan_to_num(thesim)
+
+def simsig_asym_nooffset(x, pars):
+        dx = x[1] - x[0]
+        cycle = np.nan_to_num(pars[0])
+        ctime_rise = np.nan_to_num(pars[1])
+        ctime_fall = np.nan_to_num(pars[2])
+        t0 = np.nan_to_num(pars[3])
+        amp = np.nan_to_num(pars[4])
+        sim_init = np.zeros(len(x))
+        ok = x < (cycle * (np.max(x)))
+        sim_init[ok] = -1 + np.exp(-x[ok] / ctime_rise)
+        if ok.sum() > 0:
+                endval = sim_init[ok][-1]
+        else:
+                endval = -1.
+        sim_init[~ok] = -np.exp(-(x[~ok] - x[~ok][0]) / ctime_fall) + 1 + endval
+        thesim = np.interp((x - t0) % max(x), x, sim_init)
+        thesim = thesim * amp
+        return np.nan_to_num(thesim)
+
+def asymsig_poly(x, pars):
+    pars_asymsig = pars[:5]
+    asym_sig = simsig_asym_nooffset(x, pars_asymsig)
+    pars_poly = pars[5:][::-1]
+    polvals = np.poly1d(pars_poly)(x)
+    return asym_sig + polvals
+
+
+
+def fit_one(t, tofit, errors, initguess, nparams_ext, fctfit = asymsig_poly, fixpars = None, limits=None, scan=None):
+    ok = np.isfinite(tofit) & (errors != 0)
+    myls = LeastSquares(t[ok], tofit[ok], errors[ok], fctfit)
+    guess = np.append(initguess, np.zeros(nparams_ext-1)+initguess[-1])
+    try:
+        m = iminuit.Minuit(myls, guess)
+        ## Limits
+        if limits is not None:
+            mylimits = []
+            for k in range(len(guess)):
+                mylimits.append((None, None))
+            for k in range(len(limits)):
+                mylimits[limits[k][0]] = (limits[k][1], limits[k][2])
+            m.limits = mylimits
+        ## Fixed parameters
+        if fixpars is not None:
+            for k in range(len(guess)):
+                m.fixed["x{}".format(k)]=False
+            for k in range(len(fixpars)):
+                m.fixed["x{}".format(fixpars[k])]=True
+        if scan is not None:
+            print('scanning',scan)
+            m.scan(ncall=scan)
+        m.migrad()  # finds minimum of least_squares function
+        m.hesse()   # accurately computes uncertainties
+        ch2 = m.fval
+        ndf = len(t[ok]) - m.nfit
+        return m, ch2, ndf
+    except:
+        print('Minuit Failed')
+        return 0., 0., 0.
+
+    
+rc('figure',figsize=(20,12))
+### Vectors to fit
+tofit = np.reshape(folded_nonorm, nbins)
+errors = np.reshape(dfolded_nonorm, nbins)
+
+### Initial guess
+pnames = ['cycle', 'risetime', 'falltime', 't0']
+tstart=t[argmin(np.gradient(tofit))]
+amplitude = np.max(tofit) - np.min(tofit)
+offset = np.max(tofit)
+guess = [calsource_dict['modulator']['duty_cycle']/100, 0.1, 0.14, tstart, amplitude, offset]
+print('Guess: ',guess)
+
+### Limits
+limits = [[0, 0., 1], [1, 0., 1.], [2, 0., 1.], [3, 0., period]]
+
+### Fixed parameters
+fixpars = []
+
+
+############################################################################
+######## Two options for fitting: Time-Cst with Polynomials or with Splines 
+########              (seems better with splines)
+######## select below the one you want to use by commenting the other
+############################################################################
+
+### Polynomials + Time Cst
+# typefit = 'poly'
+# nparams_ext = 1
+
+### Splines + Time Cst
+typefit = 'spl'
+nparams_ext = 4
+
+
+
+
+
+if typefit == 'spl':
+    ### Instanciate timecst+spline object
+    fctfit = asymsig_spl_class(t, tofit, errors, nparams_ext)
+else:
+    fctfit = asymsig_poly
+    
+allguess = np.append(guess, np.zeros(nparams_ext-1)+offset)
+guess_fct = fctfit(t, allguess)
+myguesspars = allguess.copy()
+myguesspars[4] = 0
+myslowguess = fctfit(t, myguesspars)
+
+# subplot(2,3,1)
+# plot(t, guess_fct, label='guess')
+# plot(t, myslowguess, label='slow guess')
+# errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
+# legend()
+
+# figure()
+
+
+####### Time-cst + polynomial fitting
+m, ch2, ndf = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
+
+
+print(m.values)
+
+### Plot the fit
+subplot(2,3,1)
+# plot(t, guess_fct, label='guess')
+# plot(t, myslowguess, label='slow guess')
+errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
+plot(t, fctfit(t, m.values), label="Time-cst + "+typefit)
+fit_info = [
+    f"$\\chi^2$ / $n_\\mathrm{{dof}}$ = {ch2:.1f} / {ndf}",
+]
+for i in range(4):
+    vi = m.values[i]
+    ei = m.errors[i]
+    fit_info.append(f"{pnames[i]} = ${vi:.3f} \\pm {ei:.3f}$")
+legend(title="\n".join(fit_info));
+
+
+### Plot the data and fit corrected for slow-variations fitted with splines or polynomial
+# slow variations are obtained with the same params but amplitude 0
+myslowpars = np.array(m.values)
+myslowpars[4] = 0.
+myslow = fctfit(t, myslowpars)
+
+subplot(2,3,2)
+errorbar(t, tofit, yerr=errors, fmt='ro', label='Data', alpha=0.5)
+plot(t, fctfit(t, m.values), label='Fitted')
+plot(t, myslow, label='Slow component')
+legend()
+
+subplot(2,3,3)
+errorbar(t, tofit-myslow, yerr=errors, fmt='ro', label='Data Corrected', alpha=0.5)
+plot(t, fctfit(t, m.values)-myslow, label='Time-CSt Fit')
+legend(title="\n".join(fit_info))
+
+
+tstart_guess = m.values[3]
+print('Guess Tstart: {}'.format(tstart_guess))
+m
+```
+
+# Now fold all data
+
+```{python}
+reload(ft)
+nbins = 200
+lowcut = 0.01
+highcut = 20.
+
+folded, t, folded_nonorm, dfolded, dfolded_nonorm, newdata, fn, nn= ft.fold_data(tt, alltod, period, nbins, lowcut=lowcut, highcut=highcut, 
+                                            median=True, rebin=True, verbose=False, return_error=True,
+                                           return_noise_harmonics=30)
+
+
+
+
+```
+
+```{python}
+### Polynomials + Time Cst
+# typefit = 'poly'
+# nparams_ext = 2
+
+### Splines + Time Cst
+typefit = 'spl'
+nparams_ext = 4
+
+
+ch2vals = np.zeros(256)
+ndfvals = np.zeros(256)
+risefit = np.zeros(256)
+riseerr = np.zeros(256)
+fallfit = np.zeros(256)
+fallerr = np.zeros(256)
+t0fit   = np.zeros(256)
+t0err   = np.zeros(256)
+validfit = np.zeros(256, dtype=bool)
+
+### Limits and fixed parameters
+limits = [[0, 0., 1], [1, 0., 2], [2, 0., 2], [3, 0., period]]
+fixpars = [0]
+
+rc('figure',figsize=(20,4))
+
+nh = 3
+print('Fitting')
+for i in range(256):
+    ### Vectors to fit
+    tofit = folded_nonorm[i]
+    errors = dfolded_nonorm[i]
+    
+    ### Initial guess
+    tstart=tstart_guess
+    amplitude = np.max(tofit) - np.min(tofit)
+    offset = np.max(tofit)
+    guess = [calsource_dict['modulator']['duty_cycle']/100, 0.1, 0.14, tstart, amplitude, offset]
+    
+    if typefit == 'spl':
+        ### Instanciate timecst+spline object
+        fctfit = asymsig_spl_class(t, tofit, errors, nparams_ext)
+    else:
+        fctfit = asymsig_poly
+    
+    ### Run minuit
+    m, ch2, ndf = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
+    if m != 0:
+        ch2vals[i] = ch2
+        ndfvals[i] = ndf
+        risefit[i] = m.values[1]
+        riseerr[i] = m.errors[1]
+        fallfit[i] = m.values[2]
+        fallerr[i] = m.errors[2]
+        t0fit[i] = m.values[3]
+        t0err[i] = m.errors[3]
+        validfit[i] = m.valid
+        
+    if ((i)%nh) == 0:
+        show()
+        fig, axs = plt.subplots(2, nh, sharex=True)
+        fig.subplots_adjust(hspace=0)
+
+    if m != 0:
+        fit_info = [
+            f"$\\chi^2$ / $n_\\mathrm{{dof}}$ = {ch2:.1f} / {ndf}",
+        ]
+        fit_info.append(f"{pnames[1]} = ${m.values[1]:.2f} \\pm {m.errors[1]:.2f}$")
+        fit_info.append(f"{pnames[2]} = ${m.values[2]:.2f} \\pm {m.errors[2]:.2f}$")
+        fit_info.append(f"{pnames[3]} = ${m.values[3]:.2f} \\pm {m.errors[3]:.2f}$")
+
+    #### We plot the data and fit with slow components on the top
+    axs[0][i%nh].set_title('TES #{}'.format(i+1))
+    if m !=0:
+        myslowpars = np.array(m.values)
+        myslowpars[4] = 0.
+        myslow = fctfit(t, myslowpars)
+        axs[0][i%nh].errorbar(t, tofit, yerr=errors, fmt='ko', label='Data', alpha=0.5)
+        axs[0][i%nh].plot(t, myslow, 'm', lw=3, label='Slow part',zorder=4)
+        axs[0][i%nh].plot(t, fctfit(t, m.values), 'r', lw=3, label='Tcst + '+typefit+' fit',zorder=5)
+        axs[0][i%nh].legend(fontsize=8, framealpha=0, loc='lower right')
+    #### and we plot the data correct for slow component with only the time-cst fit on the bottom
+    if m !=0:
+        axs[1][i%nh].errorbar(t, tofit-myslow, yerr=errors, fmt='ko', label='Data Corrected', alpha=0.5)
+        axs[1][i%nh].plot(t, fctfit(t, m.values)-myslow, 'b', lw=3, label='Tcst fit',zorder=5)
+        axs[1][i%nh].legend(fontsize=8, framealpha=0, title="\n".join(fit_info), title_fontsize=8, loc='lower right')
+
+
+```
+
+```{python}
+def run_DBSCAN(results, doplot=False, parnames = None):
+    clustering = DBSCAN(eps=1.3, min_samples=10).fit(np.nan_to_num(results))
+    labels = clustering.labels_
+    nfound = len(np.unique(np.sort(labels)))
+    unique_labels = unique(labels)  
+    colors = [plt.cm.jet(each)
+              for each in np.linspace(0, 1, len(unique_labels))]
+    
+    nnn = np.shape(results)[1]
+    if doplot:
+        for i in range(nnn):
+            for j in range(i+1, nnn):
+                subplot(nnn, nnn, i*nnn+j+1)
+                if parnames is None:
+                    xlabel('Param {}'.format(j))
+                    ylabel('Param {}'.format(i))
+                else:
+                    xlabel(parnames[j])
+                    ylabel(parnames[i])
+                plot(results[:,j], results[:,i], 'k.')
+                for k in range(len(unique_labels)):
+                    thisone = labels == unique_labels[k]
+                    plot(results[thisone,j],results[thisone,i], '.',
+                            label='Type {} : n={}'.format(unique_labels[k],thisone.sum()))
+                if (i+j-1)==0: legend()
+        tight_layout()
+    return (labels)
+
+rc('figure',figsize=(20,8))
+
+results = np.array([ch2vals, t0fit/t0err])
+labels = run_DBSCAN(results.T, doplot=True)
+print(np.unique(labels))
+ok = (labels==-1) & validfit
+
+figure()
+h = hist(t0fit, bins=100, range=[0, period], density=True, alpha=0.5)
+h = hist(t0fit[ok], bins=100, range=[0, period], density=True, alpha=0.5)
+
+t0mean = np.mean(t0fit[ok])
+t0meancut, ss = ft.meancut(t0fit[ok], 3)
+t0median = np.median(t0fit[ok])
+
+print('Mean: ', t0mean)
+print('Mean Cut', t0meancut)
+print('Median: ', t0median)
+
+axvline(x=t0mean, ls='--', color='r', label='Mean')
+axvline(x=t0meancut, ls='--', color='b', label='Clipped Mean')
+axvline(x=t0median, ls='--', color='g', label='Median')
+legend()
+
+figure()
+subplot(1,2,1)
+h = hist(risefit, bins=20, range=[0, 2], density=True, alpha=0.5)
+h = hist(risefit[ok], bins=20, range=[0, 2], density=True, alpha=0.5)
+subplot(1,2,2)
+h = hist(fallfit, bins=20, range=[0, 2], density=True, alpha=0.5)
+h = hist(fallfit[ok], bins=20, range=[0, 2], density=True, alpha=0.5)
+
+figure()
+errorbar(risefit[ok], fallfit[ok], xerr=riseerr[ok]/100, yerr=fallerr[ok]/100, fmt='ro')
+```
+
+# Try a second pass
+## Only fitting rise and fall + splines
+
+```{python}
+t0_best = t0median
+
+### Polynomials + Time Cst
+typefit = 'poly'
+nparams_ext = 2
+
+### Splines + Time Cst
+# typefit = 'spl'
+# nparams_ext = 4
+
+new_ch2vals = np.zeros(256)
+new_ndfvals = np.zeros(256)
+new_risefit = np.zeros(256)
+new_riseerr = np.zeros(256)
+new_fallfit = np.zeros(256)
+new_fallerr = np.zeros(256)
+new_validfit = np.zeros(256, dtype=bool)
+
+limits = [[0, 0., 1], [1, 0., 2], [2, 0., 2], [3, 0., period]]
+fixpars = [0,3]
+
+rc('figure',figsize=(20,3))
+
+nh = 3
+for i in range(256):
+    ### Vectors to fit
+    tofit = folded_nonorm[i]
+    errors = dfolded_nonorm[i]
+    
+    ### Initial guess
+    tstart=t0_best
+    amplitude = np.max(tofit) - np.min(tofit)
+    offset = np.max(tofit)
+    guess = [calsource_dict['modulator']['duty_cycle']/100, 0.1, 0.14, tstart, amplitude, offset]
+    
+    if typefit == 'spl':
+        ### Instanciate timecst+spline object
+        fctfit = asymsig_spl_class(t, tofit, errors, nparams_ext)
+    else:
+        fctfit = asymsig_poly
+    
+    ### Run minuit
+    m, ch2, ndf = fit_one(t, tofit, errors, guess, nparams_ext, fctfit = fctfit, limits=limits, fixpars=fixpars)
+    if m != 0:
+        new_ch2vals[i] = ch2
+        new_ndfvals[i] = ndf
+        new_risefit[i] = m.values[1]
+        new_riseerr[i] = m.errors[1]
+        new_fallfit[i] = m.values[2]
+        new_fallerr[i] = m.errors[2]
+        new_validfit[i] = m.valid
+    
+    if ((i)%nh) == 0:
+        show()
+        fig, axs = plt.subplots(2, nh, sharex=True)
+        fig.subplots_adjust(hspace=0)
+
+    fit_info = [
+        f"$\\chi^2$ / $n_\\mathrm{{dof}}$ = {ch2:.1f} / {ndf}",
+    ]
+    fit_info.append(f"{pnames[1]} = ${m.values[1]:.2f} \\pm {m.errors[1]:.2f}$")
+    fit_info.append(f"{pnames[2]} = ${m.values[2]:.2f} \\pm {m.errors[2]:.2f}$")
+
+    #### We plot the data and fit with slow components on the top
+    myslowpars = np.array(m.values)
+    myslowpars[4] = 0.
+    myslow = fctfit(t, myslowpars)
+    axs[0][i%nh].set_title('TES #{}'.format(i+1))
+    axs[0][i%nh].errorbar(t, tofit, yerr=errors, fmt='ko', label='Data', alpha=0.5)
+    axs[0][i%nh].plot(t, fctfit(t, m.values), 'r', lw=3, label='Tcst + '+typefit+' fit',zorder=5)
+    axs[0][i%nh].plot(t, myslow, 'm', lw=3, label='Slow part',zorder=4)
+    axs[0][i%nh].legend(fontsize=8, framealpha=0, loc='lower right')
+    #### and we plot the data correct for slow component with only the time-cst fit on the bottom
+    axs[1][i%nh].errorbar(t, tofit-myslow, yerr=errors, fmt='ko', label='Data Corrected', alpha=0.5)
+    axs[1][i%nh].plot(t, fctfit(t, m.values)-myslow, 'b', lw=3, label='Tcst fit',zorder=5)
+    axs[1][i%nh].legend(fontsize=8, framealpha=0, title="\n".join(fit_info), title_fontsize=8, loc='lower right')
+
+```
+
+```{python}
+reload(ft)
+
+rc('figure',figsize=(20,8))
+results = np.array([ch2vals, new_risefit, new_riseerr, new_fallfit, new_fallerr])
+labels = run_DBSCAN(results.T, doplot=True, parnames=['Ch2', 'Rise', 'RiseErr', 'Fall', 'FallErr'])
+print(np.unique(labels))
+ok = (labels==-1) & new_validfit & (new_fallfit < 1) & (new_risefit < 1) & (new_fallfit >0) & (new_risefit >0)
+
+figure()
+labels = run_DBSCAN(results[:,ok].T, doplot=True, parnames=['Ch2', 'Rise', 'RiseErr', 'Fall', 'FallErr'])
+
+rng = [0., 0.3]
+nb = 10
+
+figure()
+subplot(1,2,1)
+h = hist(new_risefit, weights=1./new_riseerr**2, bins=nb, range=rng, density=True, alpha=0.5, label='All')
+h = hist(new_risefit[ok], weights=1./new_riseerr[ok]**2, bins=nb, range=rng, density=True, alpha=0.5, label='Selected')
+mm, ss = ft.weighted_mean(new_risefit[ok], new_riseerr[ok], dispersion=False, renorm=True)
+axvline(x=mm, ls='--', color='r', lw=3, label='Weighted Mean: {0:5.3f}+/-{1:5.3f}'.format(mm, ss))
+axvline(x=mm-ss, ls='--', color='r')
+axvline(x=mm+ss, ls='--', color='r')
+xlabel('RiseTime')
+legend()
+
+subplot(1,2,2)
+h = hist(new_fallfit, weights=1./new_fallerr**2, bins=nb, range=rng, density=True, alpha=0.5, label='All')
+h = hist(new_fallfit[ok], weights=1./new_fallerr[ok]**2, bins=nb, range=rng, density=True, alpha=0.5, label='Selected')
+mm, ss = ft.weighted_mean(new_fallfit[ok], new_fallerr[ok], dispersion=False, renorm=True)
+axvline(x=mm, ls='--', color='r', lw=3, label='Weighted Mean: {0:5.3f}+/-{1:5.3f}'.format(mm, ss))
+axvline(x=mm-ss, ls='--', color='r')
+axvline(x=mm+ss, ls='--', color='r')
+legend()
+xlabel('FallTime')
+
+figure()
+subplot(1,2,1)
+errorbar(new_risefit[ok], new_fallfit[ok], xerr=new_riseerr[ok]/100, yerr=new_fallerr[ok]/100, fmt='ro')
+xlabel('RiseTime')
+ylabel('FallTime')
+
+subplot(1,2,2)
+plot(risefit[ok], new_risefit[ok], 'r.', label='Risetime')
+plot(fallfit[ok], new_fallfit[ok], 'g.', label='Falltime')
+plot(np.linspace(0,1,10), np.linspace(0,1,10), 'k')
+xlabel('First Pass')
+ylabel('Second Pass')
+xlim(-0.1, 2.1)
+ylim(-0.1, 2.1)
+legend()
+```
+
+```{python}
+
+```
+
+```{python}
+np.savetxt('Tcst-Fit-JC_'+thedata.split('/')[-1]+'.txt',np.array([ch2vals, ndfvals, risefit, riseerr, fallfit, 
+                                                                  fallerr, t0fit, t0err, new_ch2vals, new_ndfvals, new_risefit, 
+                                                                  new_riseerr, new_fallfit, new_fallerr, ok, validfit]))
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

@@ -117,21 +117,28 @@ def thepolynomial(x, pars, extra_args=None):
         return f(x)
 
 
-class MyChi2:
+class MyChi2(object):
         """
         Class defining the minimizer and the data
         """
 
-        def __init__(self, xin, yin, covarin, functname, extra_args=None):
+        def __init__(self, xin, yin, covarin, functname, extra_args=None, invcovar=None, diag=False):
                 self.x = xin
                 self.y = yin
                 self.covar = covarin
-                self.invcov = np.linalg.inv(covarin)
+                if invcovar is None:
+                        self.invcov = np.linalg.inv(covarin)
+                else:
+                        self.invcov = invcovar
                 self.functname = functname
                 self.extra_args = extra_args
+                self.diag = diag
         def __call__(self, *pars, extra_args=None):
                 val = self.functname(self.x, pars, extra_args=self.extra_args)
-                chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
+                if self.diag == False:
+                        chi2 = np.dot(np.dot(self.y - val, self.invcov), self.y - val)
+                else:
+                        chi2 = np.sum((self.y-val)**2 / np.diag(self.covar))
                 return chi2
 
 class Chi2Minimizer(object):
@@ -139,11 +146,14 @@ class Chi2Minimizer(object):
         Parent classes with the model to minimize
         """
 
-        def __init__(self, functname, xin, yin, covarin, extra_args = None):
+        def __init__(self, functname, xin, yin, covarin, extra_args = None, invcovar=None):
                 self.x = xin
                 self.y = yin
                 self.covar = covarin
-                self.invcov = np.linalg.inv(covarin)
+                if invcovar is None:
+                        self.invcov = np.linalg.inv(covarin)
+                else:
+                        self.invcov = invcovar
                 self.functname = functname
                 self.extra_args = extra_args
  
@@ -182,23 +192,26 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
 
         # check if covariance or error bars were given
         covar = covarin.copy()
+        invcovar = None
+        diag = False
         if np.size(np.shape(covarin)) == 1:
+                diag = True
                 if force_diag:
                         covar = covarin.copy()
                 else:
                         err = covarin
                         covar = np.zeros((np.size(err), np.size(err)))
                         covar[np.arange(np.size(err)), np.arange(np.size(err))] = err ** 2
+                        invcovar = np.zeros((np.size(err), np.size(err)))
+                        invcovar[np.arange(np.size(err)), np.arange(np.size(err))] = 1. / err ** 2
         # instantiate minimizer
         if chi2 is None:
-                chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args)
+                chi2 = MyChi2(x, y, covar, functname, extra_args=extra_args, invcovar=invcovar, diag=diag)
         else:
                 chi2 = Chi2Implement(functname, x, y, covar, extra_args=extra_args)
-
                 # nohesse=False
         #elif chi2.__name__ is 'MyChi2_nocov':
         #    chi2 = chi2(x, y, covar, functname)
-
         # variables
         ndim = np.size(guess)
         parnames = []
@@ -348,35 +361,36 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
                 others = None
         for i in np.arange(nbins):
                 ok = (x > xmin[i]) & (x < xmax[i])
-                newy = y[ok]
-                if clip is not None:
-                        for k in np.arange(3):
-                                newy, mini, maxi = scipy.stats.sigmaclip(newy, low=clip, high=clip)
-                nn[i] = len(newy)
-                if median:
-                        yval[i] = np.median(y[ok])
-                elif mode:
-                        mm, ss = meancut(y[ok], 3)
-                        hh = np.histogram(y[ok], bins=int(np.min([len(y[ok]) / 30, 100])), range=[mm - 5 * ss, mm + 5 * ss])
-                        idmax = np.argmax(hh[0])
-                        yval[i] = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
-                else:
-                        yval[i] = np.mean(y[ok])
-                xc[i] = (xmax[i] + xmin[i]) / 2
-                if rebin_as_well is not None:
-                        for o in range(nother):
-                                others[i, o] = np.mean(rebin_as_well[o][ok])
-                if dispersion:
-                        fact = 1
-                else:
-                        fact = np.sqrt(len(y[ok]))
-                dy[i] = np.std(y[ok]) / fact
-                dx[i] = np.std(x[ok]) / fact
+                if ok.sum() > 0:
+                        newy = y[ok]
+                        if clip is not None:
+                                for k in np.arange(3):
+                                        newy, mini, maxi = scipy.stats.sigmaclip(newy, low=clip, high=clip)
+                        nn[i] = len(newy)
+                        if median:
+                                yval[i] = np.median(y[ok])
+                        elif mode:
+                                mm, ss = meancut(y[ok], 3)
+                                hh = np.histogram(y[ok], bins=int(np.min([len(y[ok]) / 30, 100])), range=[mm - 5 * ss, mm + 5 * ss])
+                                idmax = np.argmax(hh[0])
+                                yval[i] = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
+                        else:
+                                yval[i] = np.mean(y[ok])
+                        xc[i] = (xmax[i] + xmin[i]) / 2
+                        if rebin_as_well is not None:
+                                for o in range(nother):
+                                        others[i, o] = np.mean(rebin_as_well[o][ok])
+                        if dispersion:
+                                fact = 1
+                        else:
+                                fact = np.sqrt(len(y[ok]))
+                        dy[i] = np.std(y[ok]) / fact
+                        dx[i] = np.std(x[ok]) / fact
         if plot:
                 if fmt is None:
                         fmt = 'ro'
                 errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
-        ok = nn != 0
+        ok = (nn != 0) & (dy != 0)
         if cutbad:
                 if others is None:
                         return xc[ok], yval[ok], dx[ok], dy[ok], others
@@ -649,7 +663,7 @@ def meancut(data, nsig, med=False, disp=True):
                 return np.mean(dd), np.std(dd) / sc
 
 
-def weighted_mean(x, dx, dispersion=True):
+def weighted_mean(x, dx, dispersion=True, renorm=False):
         """
         Calculated the weighted mean of data, errors
         If dispersion is True (default) the error on the mean comes from the RMS of the data, otherwise
@@ -662,6 +676,10 @@ def weighted_mean(x, dx, dispersion=True):
                 ss = np.std(x)
         else:
                 ss = 1. / np.sqrt(sumw)
+        if renorm:
+                ### We scale errors to have a chi2=1
+                ch2 = np.sum(w*(x-mm)**2)
+                ss *= np.sqrt(ch2)
         return mm, ss
 
 

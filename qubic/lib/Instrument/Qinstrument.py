@@ -190,6 +190,21 @@ class QubicInstrument(Instrument):
         ripples = d['ripples']
         nripples = d['nripples']
 
+        #check if synthetic beam peaks are from file or calculated in peak_angles
+        use_file=d.get(('use_synthbeam_fits_file'))
+        self.use_file=bool(use_file)
+        sbeam=bool(d.get('synthbeam'))
+        
+        if sbeam == False:
+            #Put in a dummy synthetic beam
+            self.sbeam_fits = 'CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
+            d['synthbeam'] = 'CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
+            print('There is no fits file given in this dictionary. Using analytical model of beam parameters')
+            use_file=False
+        else:
+            self.sbeam_fits = d['synthbeam']
+
+
         # Choose the primary beam calibration file
         if d['beam_shape'] == 'gaussian':
             d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '2')
@@ -219,6 +234,7 @@ class QubicInstrument(Instrument):
         self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
         self.synthbeam.fraction = synthbeam_fraction
         self.synthbeam.kmax = synthbeam_kmax
+        self.synthbeam_file(d)
 
         layout = self._get_detector_layout(detector_ngrids, detector_nep,
                                            detector_fknee, detector_fslope,
@@ -303,6 +319,15 @@ class QubicInstrument(Instrument):
         optics.focal_length = d['focal_length']
         optics.polarizer = bool(polarizer)
         self.optics = optics
+
+    def synthbeam_file(self, d):
+        #read in beam peak locations from a fits file
+        thetafits,phifits,valfits,freqs, mheader = self.calibration.get('synthbeam')
+        self.thetafits = thetafits
+        self.phifits = phifits
+        self.valfits = valfits
+        self.freqs = freqs
+        self.numpeaks=np.zeros(10)
 
     def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
         sb = SyntheticBeam()
@@ -1244,7 +1269,7 @@ class QubicInstrument(Instrument):
 
         """
         return QubicInstrument._get_detector_integration_operator(
-            self.detector.center, self.detector.area, self.secondary_beam)
+            self.detector.center, self.detector.area, self.secondary_beam,self.use_file)
 
     @staticmethod
     def _get_detector_integration_operator(position, area, secondary_beam):
@@ -1259,7 +1284,12 @@ class QubicInstrument(Instrument):
         sr_det = -area / position[..., 2] ** 2 * np.cos(theta) ** 3
         sr_beam = secondary_beam.solid_angle
         sec = secondary_beam(theta, phi)
-        return DiagonalOperator(sr_det / sr_beam * sec, broadcast='rightward')
+
+        if use_file:
+            return DiagonalOperator(sr_det / sr_beam, broadcast='rightward')
+        else:
+            sec = secondary_beam(theta, phi)
+            return DiagonalOperator(sr_det / sr_beam * sec, broadcast='rightward')
 
     def get_detector_response_operator(self, sampling, tau=None):
         """
@@ -1362,18 +1392,47 @@ class QubicInstrument(Instrument):
 
         return QubicInstrument._get_projection_operator(
             rotation, scene, self.filter.nu, self.detector.center,
-            self.synthbeam, horn, primary_beam, verbose=verbose)
+            self.synthbeam, horn, primary_beam,self.thetafits, self.phifits, 
+	    self.valfits,self.use_file,self.numpeaks,self.freqs, verbose=verbose)
 
     @staticmethod
     def _get_projection_operator(
             rotation, scene, nu, position, synthbeam, horn, primary_beam,
-            verbose=True):
+            thetafits, phifits, valfits, use_file, numpeaks, freqs, verbose=True):
         ndetectors = position.shape[0]
         ntimes = rotation.data.shape[0]
         nside = scene.nside
 
-        thetas, phis, vals = QubicInstrument._peak_angles(
-            scene, nu, position, synthbeam, horn, primary_beam)
+        isfreq=int(np.floor(nu/1000000000))
+        frq=len(str(freqs[0]))
+        
+        if (frq <= 4):
+            freqid=np.where(freqs == isfreq)
+        else:
+            freqid=np.where(freqs == nu)
+        
+        importshape=np.shape(np.shape(thetafits))
+        
+        if use_file == True:
+            
+            if importshape[0] <= 2:
+                thetas,phis,vals = thetafits, phifits, valfits
+            
+            
+            else:
+                thetafits=thetafits[freqid].reshape((np.shape(thetafits)[1],np.shape(thetafits)[2]))
+                phifits=phifits[freqid].reshape((np.shape(phifits)[1],np.shape(phifits)[2]))
+                valfits=valfits[freqid].reshape((np.shape(valfits)[1],np.shape(valfits)[2]))
+
+    
+                thetas, phis, vals, = thetafits, phifits, valfits
+                print('Getting Thetas from Fits File')
+    
+            thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas, phis, vals, synthbeam)
+        
+        else:
+            thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+            
         ncolmax = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator('zenith,azimuth')(thetaphi)
@@ -1442,6 +1501,27 @@ class QubicInstrument(Instrument):
             np.product(self.optics.components['transmission']) *
             self.detector.efficiency, broadcast='rightward')
 
+    def remove_significant_peaks (thetas, phis, vals, synthbeam):
+        
+        #now remove insignificant peaks
+        vals[~np.isfinite(vals)] = 0
+        index = _argsort_reverse(vals)
+        thetas = thetas[tuple(index)]
+        phis = phis[tuple(index)]
+        vals = vals[tuple(index)]
+        cumval = np.cumsum(vals, axis=-1)
+        imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None],axis=-1) + 1
+        imax = max(imaxs)
+        # remove additional per-detector non-significant peaks
+        # and remove potential NaN in theta, phi
+        for idet, imax_ in enumerate(imaxs):
+            vals[idet, imax_:] = 0
+            thetas[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
+            phis[idet, imax_:] = 0
+
+        return thetas, phis, vals
+
+    
     @staticmethod
     def _peak_angles(scene, nu, position, synthbeam, horn, primary_beam):
         """

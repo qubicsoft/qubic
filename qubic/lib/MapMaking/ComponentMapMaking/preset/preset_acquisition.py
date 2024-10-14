@@ -2,13 +2,8 @@ import numpy as np
 from pyoperators import DiagonalOperator
 
 from ....Instrument.Qacquisition import *
-from ....Instrument.Qnoise import *
+from ....Qnoise import *
 from fgbuster import component_model as c
-
-#from qubic.lib.Instrument.Qacquisition import *
-#from qubic.lib.Instrument.Qnoise import *
-#import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
-
 
 class PresetAcquisition:
     r"""Preset Acquisition.

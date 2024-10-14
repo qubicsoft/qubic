@@ -22,7 +22,7 @@ from ...MapMaking.Qmap_plotter import *
 from ...Qmpi_tools import MpiTools
 
 # from simtools.mpi_tools import *
-from ...Instrument.Qnoise import *
+from ...Qnoise import *
 
 from .Qcostfunc import (
     Chi2Blind,

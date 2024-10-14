@@ -1461,6 +1461,9 @@ class QubicInstrument(Instrument):
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
+            thetaphis = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
+            directions = Spherical2CartesianOperator('zenith,azimuth')(thetaphis)
+            e_nf = direction[:, None, :, :]
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
                 np.take(table, c2h(e_ni).astype(int), out=index[i])

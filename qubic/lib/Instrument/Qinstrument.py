@@ -1641,10 +1641,12 @@ class QubicInstrument(Instrument):
             phi_hwp = np.arange(0, 8) * np.pi / 16
             xx = external_A[0]
             yy = external_A[1]
-            Ax = external_A[2]
-            Ay = external_A[3]
-            phi_x = external_A[4]
-            phi_y = external_A[5]
+            ix = np.argmin(np.abs(xx - position[0, 0]))
+            jy = np.argmin(np.abs(yy - position[0, 1]))
+            Ax = external_A[2][:, ix, jy]
+            Ay = external_A[3][:, ix, jy]
+            phi_x = external_A[4][:, ix, jy]
+            phi_y = external_A[5][:, ix, jy]
             Ex = Ax * (np.cos(phi_x) + 1j * np.sin(phi_x)) * np.cos(2 * phi_hwp[hwp_position])
             Ey = Ay * (np.cos(phi_y) + 1j * np.sin(phi_y)) * np.sin(2 * phi_hwp[hwp_position])
             A = Ex + Ey

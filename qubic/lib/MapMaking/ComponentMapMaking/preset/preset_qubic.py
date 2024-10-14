@@ -1,5 +1,5 @@
 from fgbuster.component_model import Dust, CMB
-from .. import QcomponentModel.Monochromatic as Monochromatic
+from .. QcomponentModel import Monochromatic
 from ....Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
 from ....Qdictionary import qubicDict
 

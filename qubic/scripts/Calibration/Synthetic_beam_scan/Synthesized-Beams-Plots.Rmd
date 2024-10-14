@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.14.0
+      jupytext_version: 1.16.2
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -23,20 +23,31 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 
 import importlib
 import healpy as hp
-import qubic
 from importlib import reload
+
+
+#### QUBIC IMPORT
+from qubic.lib.Instrument import Qinstrument
+from qubic.lib import Qdictionary 
+from qubic.lib import Qscene
+from qubic.lib.Qutilities import progress_bar
+
+
 
 rc('figure',figsize=(20,10))
 rc('font',size=15)
 
 
+
+
 ### QUBIC Instrument instanciation
 ns = 1024
-d = qubic.qubicdict.qubicDict()
+d = Qdictionary.qubicDict()
+# dictfilename = 'pipeline_demo.dict'
 d.read_from_file('/Users/hamilton/Python/GitQubicMousset/qubic/qubic/dicts/global_source_oneDet.dict')
 d['nside']=ns
-q = qubic.QubicInstrument(d)
-s = qubic.QubicScene(d)
+q = Qinstrument.QubicInstrument(d)
+s = Qscene.QubicScene(d)
 ```
 
 ## Ideal Synthesized beam
@@ -73,7 +84,7 @@ allphiX = np.zeros((nbhorns,nn,nn))
 allampY = np.zeros((nbhorns,nn,nn))
 allphiY = np.zeros((nbhorns,nn,nn))
 #### Read the files
-bar = qubic.progress_bar(nbhorns)
+bar = progress_bar(nbhorns)
 for i in range(nbhorns):
     bar.update()
     data = np.loadtxt(rep+'x{0:02d}y{1:02d}.dat'.format(q.horn.row[i]-1, q.horn.column[i]-1), skiprows=4)
@@ -132,11 +143,11 @@ We use the same `get_synthbeam()` function, but adding the `external_A` data fro
 ```{python}
 
 sb_nui = q.get_synthbeam(s, idet, external_A=external_A)
-figure()
-hp.gnomview(sb_nui/np.max(sb_nui), rot=[0,90], 
-        reso=10, min=0, max=1, title='Nui Beam - Detector #{}'.format(idet), sub=(1,2,1))
-hp.gnomview(10*np.log10(sb_nui/np.max(sb_nui)), rot=[0,90], 
-        reso=10, min=-40, max=0, unit='dB', title='NUI Beam - Detector #{}'.format(idet), sub=(1,2,2))
+# figure()
+# hp.gnomview(sb_nui/np.max(sb_nui), rot=[0,90], 
+#         reso=10, min=0, max=1, title='Nui Beam - Detector #{}'.format(idet), sub=(1,2,1))
+# hp.gnomview(10*np.log10(sb_nui/np.max(sb_nui)), rot=[0,90], 
+#         reso=10, min=-40, max=0, unit='dB', title='NUI Beam - Detector #{}'.format(idet), sub=(1,2,2))
 
 ```
 

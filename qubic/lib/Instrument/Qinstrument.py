@@ -1272,7 +1272,7 @@ class QubicInstrument(Instrument):
             self.detector.center, self.detector.area, self.secondary_beam,self.use_file)
 
     @staticmethod
-    def _get_detector_integration_operator(position, area, secondary_beam):
+    def _get_detector_integration_operator(position, area, secondary_beam, use_file):
         """
         Integrate flux density in detector solid angles and take into account
         the secondary beam transmission.

@@ -12,8 +12,8 @@ from qubic.data import PATH as data_dir
 
 
 # from mapmaking.systematics import give_cl_cmb, arcmin2rad
-from ..InstrumentModel.Qacquisition import arcmin2rad
-#from qubic.lib.InstrumentModel.Qacquisition import *
+from ..Instrument.Qacquisition import arcmin2rad
+#from qubic.lib.Instrument.Qacquisition import *
 #from .Qcmbmodel import CMBModel
 from .FrequencyMapMaking.Qspectra_component import CMBModel
 

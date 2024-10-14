@@ -1,6 +1,6 @@
 from fgbuster import component_model as c
 from .. import Qcomponent_model as model_co
-from ....InstrumentModel.Qacquisition import JointAcquisitionComponentsMapMaking
+from ....Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
 from ....Qdictionary import qubicDict
 
 

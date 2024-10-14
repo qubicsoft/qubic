@@ -13,9 +13,9 @@ from qubic.data import PATH as data_dir
 from qubic.lib.Instrument.Qinstrument import QubicInstrument, QubicMultibandInstrument
 from qubic.lib.Qsamplings import get_pointing
 from qubic.lib.Qscene import QubicScene
-from qubic.lib.MapMaking.ComponentMapMaking import QcomponentModel as c
 from qubic.lib.Instrument.Qinstrument import compute_freq
 from fgbuster.mixingmatrix import MixingMatrix
+from fgbuster.component_model import CMB, Dust
 
 from pysimulators import *
 from pyoperators import *
@@ -2006,13 +2006,13 @@ class Sky:
                 self.is_cmb = True
                 self.cmb = self.get_cmb(self.sky_config[i])
                 self.i_cmb = k
-                self.comp += [c.CMB()]
+                self.comp += [CMB()]
                 map_ref += [self.cmb]
             elif i == 'dust':
                 self.is_dust = True
                 self.dust = self.get_dust(self.nu0, self.sky_config[i])
                 map_ref += [self.dust]
-                self.comp += [c.Dust(nu0=self.nu0, temp=20)]
+                self.comp += [Dust(nu0=self.nu0, temp=20)]
                 self.i_dust = k
             k+=1
         self.map_ref = np.array(map_ref)

@@ -1762,24 +1762,13 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         self.d = d
         d1 = d.copy()
 
-        Nf, nus_edge150, filter_nus150, deltas150, Delta, Nbbands = compute_freq(
+        _, nus_edge150, filter_nus150, deltas150, _, _ = compute_freq(
             150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
         )
-        Nf, nus_edge220, filter_nus220, deltas220, Delta, Nbbands = compute_freq(
+        _, nus_edge220, filter_nus220, deltas220, _, _ = compute_freq(
             220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
         )
 
-        # W150 = IntegrationTrapezeOperator(nus_edge150)
-        # deltas150_trap = np.array(
-        #     [W150.operands[i].todense(shapein=1)[0][0] for i in range(len(nus_edge150))]
-        # )
-        # W220 = IntegrationTrapezeOperator(nus_edge220)
-        # deltas220_trap = np.array(
-        #     [W220.operands[i].todense(shapein=1)[0][0] for i in range(len(nus_edge220))]
-        # )
-
-        # delta_nu_over_nu_150 = deltas150_trap / nus_edge150
-        # delta_nu_over_nu_220 = deltas220_trap / nus_edge220
         delta_nu_over_nu_150 = deltas150 / filter_nus150
         delta_nu_over_nu_220 = deltas220 / filter_nus220
 
@@ -1807,17 +1796,15 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         else:
 
             self.subinstruments = []
-            W = IntegrationTrapezeOperator(nus_edge150)
             for i in range(self.nsubbands):
-                d1["filter_nu"] = nus_edge150[i] * 1e9
+                d1["filter_nu"] = filter_nus150[i] * 1e9
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
                 q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                 q.detector.center = np.array([[0.0, 0.0, -0.3]])
                 self.subinstruments.append(q)
 
-            W = IntegrationTrapezeOperator(nus_edge220)
             for i in range(self.nsubbands):
-                d1["filter_nu"] = nus_edge220[i] * 1e9
+                d1["filter_nu"] = filter_nus220[i] * 1e9
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
                 q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                 q.detector.center = np.array([[0.0, 0.0, -0.3]])
@@ -1825,26 +1812,61 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
 
             """
 
-            Old integration using rectangle
+            "Trapeze" integration
             -------------------------------
 
-            self.nsubbands = len(filter_nus)
-            if not d['center_detector']:
+            W150 = IntegrationTrapezeOperator(nus_edge150)
+            deltas150_trap = np.array(
+                [W150.operands[i].todense(shapein=1)[0][0] for i in range(len(nus_edge150))]
+            )
+            W220 = IntegrationTrapezeOperator(nus_edge220)
+            deltas220_trap = np.array(
+                [W220.operands[i].todense(shapein=1)[0][0] for i in range(len(nus_edge220))]
+            )
 
+            delta_nu_over_nu_150 = deltas150_trap / nus_edge150
+            delta_nu_over_nu_220 = deltas220_trap / nus_edge220
+
+            if not d["center_detector"]:
                 self.subinstruments = []
-                for i in range(len(filter_nus)):
+                W = IntegrationTrapezeOperator(nus_edge150)
+                for i in range(len(nus_edge150)):
+                    if self.d["debug"]:
+                        print(
+                            f"Integration done with nu = {nus_edge150[i]} GHz with weight {delta_nu_over_nu_150[i]}"
+                        )
+                    # print(nus_edge150)
+                    d1["filter_nu"] = nus_edge150[i] * 1e9
+                    d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
+                    self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
 
-                    d1['filter_nu'] = filter_nus[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                W = IntegrationTrapezeOperator(nus_edge220)
+                for i in range(len(nus_edge220)):
+                    if self.d["debug"]:
+                        print(
+                            f"Integration done with nu = {nus_edge220[i]} GHz with weight {delta_nu_over_nu_220[i]}"
+                        )
+                    # print(nus_edge220)
+                    d1["filter_nu"] = nus_edge220[i] * 1e9
+                    d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
             else:
 
                 self.subinstruments = []
+                W = IntegrationTrapezeOperator(nus_edge150)
                 for i in range(self.nsubbands):
-                    d1['filter_nu'] = filter_nus[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                    d1["filter_nu"] = nus_edge150[i] * 1e9
+                    d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)[0]
-                    q.detector.center = np.array([[0., 0., -0.3]])
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
+                    self.subinstruments.append(q)
+
+                W = IntegrationTrapezeOperator(nus_edge220)
+                for i in range(self.nsubbands):
+                    d1["filter_nu"] = nus_edge220[i] * 1e9
+                    d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
+                    q = QubicInstrument(d1, FRBW=self.FRBW)[0]
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
                     self.subinstruments.append(q)
 
             """

@@ -5,9 +5,9 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.5.0
+      jupytext_version: 1.16.2
   kernelspec:
-    display_name: Python 3
+    display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
@@ -38,21 +38,26 @@ rc('font',size=20)
 rc('text',usetex=False)
 
 from qubicpack.utilities import Qubic_DataDir
-import qubic
-import qubic.selfcal_lib as sc 
-
 #Qubicpack to translate TES to qubicsoft indexes
 from qubicpack.pixel_translation import make_id_focalplane, tes2index
+
+#### QUBIC IMPORT
+from qubic.lib.Instrument import Qinstrument
+from qubic.lib import Qdictionary 
+from qubic.lib import Qscene
+import qubic.selfcal_lib as sc 
+
 ```
 
 ```{python}
-d = qubic.qubicdict.qubicDict()
-d.read_from_file('pipeline_demo.dict')
+d = Qdictionary.qubicDict()
+dictfilename = 'pipeline_demo.dict'
+d.read_from_file(dictfilename)
 ```
 
 ```{python}
 d['config'] = 'FI'
-q = qubic.QubicInstrument(d)
+q = Qinstrument.QubicInstrument(d)
 ```
 
 ### The QubicScene
@@ -60,7 +65,7 @@ It is also important to create an object called QubicScene that descibes the env
 
 ```{python}
 d['nside'] = 512
-scene = qubic.QubicScene(d)
+scene = Qscene.QubicScene(d)
 ```
 
 ### Looking at the detector array
@@ -103,7 +108,7 @@ The q.horn.open object returns the list of horns that are open or closed. It can
 ```{python}
 ### Horns for FI
 d['config'] = 'FI'
-instFI = qubic.QubicInstrument(d)
+instFI = Qinstrument.QubicInstrument(d)
 hornsFI = instFI.horn.open
 
 
@@ -111,7 +116,7 @@ hornsTD = (col >= 8) & (col <= 15) & (row >= 8) & (row <= 15)
 # print(hornsTD)
 
 ### Now create First Instrument and TD monochromatic
-instTD = qubic.QubicInstrument(d)
+instTD = Qinstrument.QubicInstrument(d)
 instTD.horn.open[~hornsTD] = False
 
 plt.figure()
@@ -200,7 +205,7 @@ Just for the pleasure one can study the synthesized beam resolution:
 
 ```{python}
 # location of maximum 
-maxx, maxy = np.unravel_index(np.argmax(mapFI), dims=(200, 200))
+maxx, maxy = np.unravel_index(np.argmax(mapFI), shape=(200, 200))
 
 # diagonal cut of array shifted so that maximum is at center
 initcutFI = np.diag(np.roll(np.roll(mapFI, 99-maxx, axis=0), 
@@ -256,16 +261,16 @@ https://drive.google.com/open?id=19dPHw_CeuFZ068b-VRT7N-LWzOL1fmfG
 
 ```{python}
 ## Path to the simulated files 
-#rep = Qubic_DataDir(datafile='detcentres.txt')
-#print('rep:', rep)
+# rep = Qubic_DataDir(datafile='detcentres.txt')
+# print('rep:', rep)
 
-#files = sorted(glob.glob('../*.txt'))
-#print('#files :', len(files)) # Should be 64 (TD)
+# files = sorted(glob.glob('../*.txt'))
+# print('#files :', len(files)) # Should be 64 (TD)
 
-## Look at one file
-#data = pd.read_csv(files[6], sep='\t', skiprows=0)
-#data.head(10)
-#print(data.shape)
+# # Look at one file
+# data = pd.read_csv(files[6], sep='\t', skiprows=0)
+# data.head(10)
+# print(data.shape)
 ```
 
 ```{python}

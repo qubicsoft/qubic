@@ -1,0 +1,55 @@
+data:
+  path : '/pbs/home/t/tlaclave/sps/FMM_data/E2E_nrec2/cmb_convolved_DB/'
+  foldername : 'spectrum'
+  filename : 'pyroot_test'
+  n_real : 20
+
+nbins: 15
+
+simu: 
+  nrec : 2
+  convo : True
+  noise : True
+  cmb : True
+  dust : False
+  sync : False
+  corr_dust_sync : False
+
+MCMC:
+  nwalkers : 10
+  mcmc_steps : 200
+  discard : 100
+  stretch_move_factor : 0.7
+  snooker_move_gamma : 1.7
+  thin : 15
+
+diagonal_qubic: False
+diagonal_planck: False
+
+sample_variance : True
+
+NUS:
+  qubic: True
+  
+  # Planck
+  30GHz: False
+  44GHz: False
+  70GHz: False
+  100GHz: False
+  143GHz: False
+  217GHz: False
+  353GHz: False
+
+SKY_PARAMETERS:
+  r : [True, -0.01, 0.02, -1, 1] 
+  Alens : [1, 1, 0.2, 0, 10]
+  nu0_d : [353, 0, 10, 0, 1000]
+  Ad : [0, 3.5, 1, 0, 10]
+  alphad : [0, -2.3, 0.5, -3, 0]
+  betad : [1.54, 1.5, 0.2, 0, 10000]
+  deltad : [1, 0, 1, 0, 1000]
+  nu0_s : [23, 0, 1, 0, 1000]
+  As : [0, 0, 0.1, -100000, 10000]
+  alphas : [0, 1, 0.1, -100000, 10000]
+  betas : [-3, -3, 0.1, -10, 0]
+  eps : [0, 0, 0.01, -1, 1]

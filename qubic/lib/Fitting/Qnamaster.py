@@ -69,8 +69,7 @@ class Namaster(object):
         b = nmt.NmtBin(bpws=self.bpws, ells=self.ells, weights=self.weights,lmax=self.lmax).from_lmax_linear(self.lmax, self.delta_ell, is_Dell=True)
         ell_binned = b.get_effective_ells()
         self.ell_binned = ell_binned[np.where(ell_binned >= self.lmin)]
-        print(self.ell_binned)
-
+        
         return ell_binned, b
 
     def bin_spectra(self, input_cls, nside):

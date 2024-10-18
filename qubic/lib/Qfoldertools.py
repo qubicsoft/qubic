@@ -19,7 +19,7 @@ def yaml_to_txt(yaml_file, txt_file, comm=None):
             yaml_data = yaml.safe_load(yf)
         
         with open(txt_file, 'w') as tf:
-            yaml.dump(yaml_data, tf, default_flow_style=False)
+            yaml.dump(yaml_data, tf, default_flow_style=False, sort_keys=False)
         
         print(f"Successfully converted {yaml_file} to {txt_file}")
     except Exception as e:
@@ -116,7 +116,8 @@ class MergeAllFiles:
         
         list_not_readed_files = []
         for ireal in range(self.number_of_realizations):
-            print(f'========= Reading realization {ireal} =========')
+            if verbose:
+                print(f'========= Reading realization {ireal} =========')
             try:
                 arr[ireal] = self._reads_one_file(ireal, key)
             except:

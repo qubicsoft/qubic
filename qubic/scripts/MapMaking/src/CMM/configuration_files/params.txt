@@ -1,113 +1,113 @@
 CMB:
-  Alens: 1
   cmb: true
-  r: 0
   seed: 1
+  r: 0
+  Alens: 1
 Foregrounds:
+  fit_spectral_index: true
+  bin_mixing_matrix: 10
+  blind_method: minimize
+  Dust:
+    Dust_in: true
+    Dust_out: true
+    type: parametric
+    model_d: d0
+    beta_d_init:
+    - 1.5
+    - 0
+    - 1000000000
+    nside_beta_in: 0
+    nside_beta_out: 0
+    nu0_d: 150.00000001
+    l_corr: 100000
+    amplification_d: 1
+  Synchrotron:
+    Synchrotron_in: false
+    Synchrotron_out: false
+    type: parametric
+    model_s: s0
+    beta_s_init:
+    - -3
+    - 0
+    nu0_s: 150
+    amplification_s: 1
   CO:
     CO_in: false
     CO_out: false
     nu0_co: 230.538
     polarization_fraction: 0.01
-  Dust:
-    Dust_in: true
-    Dust_out: true
-    amplification_d: 1
-    beta_d_init:
-    - 1.54
-    - 0
-    - 1000000000
-    l_corr: 1000000
-    model_d: d0
-    nside_beta_in: 0
-    nside_beta_out: 0
-    nu0_d: 150.00000001
-    type: blind
-  Synchrotron:
-    Synchrotron_in: false
-    Synchrotron_out: false
-    amplification_s: 1
-    beta_s_init:
-    - -3
-    - 0
-    model_s: s0
-    nu0_s: 150
-    type: parametric
-  bin_mixing_matrix: 6
-  blind_method: minimize
-  fit_spectral_index: false
-INITIAL:
-  fwhm0: 0
-  qubic_patch_I_cmb: 0
-  qubic_patch_I_co: 0
-  qubic_patch_I_dust: 0
-  qubic_patch_I_sync: 0
-  qubic_patch_P_cmb: 0
-  qubic_patch_P_co: 0
-  qubic_patch_P_dust: 0
-  qubic_patch_P_sync: 0
-  sig_map_noise: 0
-PCG:
-  do_gif: true
-  fixI: false
-  fwhm_plot: 0
-  ites_to_converge: 1
-  n_init_iter_pcg: 2000
-  n_iter_loop: 1
-  n_iter_pcg: 2000
-  reso_plot: 12
-  tol_pcg: 1.0e-20
-  tol_rms: 1.0e-20
+QUBIC:
+  instrument: UWB
+  npointings: 5000
+  nsub_in: 10
+  nsub_out: 10
+  convolution_in: false
+  convolution_out: false
+  preconditioner: false
+  NOISE:
+    ndet: 1
+    npho150: 1
+    npho220: 1
+    detector_nep: 4.7e-17
+    duration_150: 3
+    duration_220: 3
+  SYNTHBEAM:
+    synthbeam_kmax: 8
+    synthbeam_fraction: 0.99
+  dtheta: 15
+  GAIN:
+    sig_gain: 0
+    fit_gain: false
+SKY:
+  nside: 256
+  RA_center: 0
+  DEC_center: -57
 PLANCK:
+  level_noise_planck: 1
+  nintegr_planck: 1
+  thr_planck: 0.05
+  weight_planck: 1
+  fwhm_weight_planck: 0
+  30GHz: false
+  44GHz: false
+  70GHz: false
   100GHz: true
   143GHz: true
   217GHz: true
-  30GHz: false
   353GHz: true
-  44GHz: false
-  70GHz: false
-  fwhm_weight_planck: 0
-  level_noise_planck: 1
-  nintegr_planck: 1
-  thr_planck: 0.1
-  weight_planck: 0
+PCG:
+  n_init_iter_pcg: 10
+  n_iter_pcg: 10
+  tol_pcg: 1.0e-20
+  n_iter_loop: 100
+  ites_to_converge: 1
+  tol_rms: 1.0e-20
+  fixI: false
+  reso_plot: 12
+  fwhm_plot: 0
+  do_gif: false
+INITIAL:
+  fwhm0: 0
+  sig_map_noise: 0
+  qubic_patch_I_cmb: 1
+  qubic_patch_I_dust: 1
+  qubic_patch_I_sync: 1
+  qubic_patch_I_co: 1
+  qubic_patch_P_cmb: 1
+  qubic_patch_P_dust: 1
+  qubic_patch_P_sync: 1
+  qubic_patch_P_co: 1
+SPECTRUM:
+  lmin: 40
+  dl: 30
+  aposize: 10
 Plots:
   conv_beta: true
   conv_gain: false
   conv_rms: true
   maps: true
   thr_plot: 0.2
-QUBIC:
-  GAIN:
-    fit_gain: false
-    sig_gain: 0
-  NOISE:
-    detector_nep: 4.7e-17
-    duration_150: 3
-    duration_220: 3
-    ndet: 1
-    npho150: 1
-    npho220: 1
-  SYNTHBEAM:
-    synthbeam_fraction: 1
-    synthbeam_kmax: 1
-  convolution_in: false
-  convolution_out: false
-  dtheta: 15
-  instrument: DB
-  npointings: 1000
-  nsub_in: 6
-  nsub_out: 6
-  preconditioner: true
-SKY:
-  DEC_center: -57
-  RA_center: 0
-  nside: 64
-SPECTRUM:
-  aposize: 10
-  dl: 5
-  lmin: 3
-filename: file
-foldername: test_to_remove_cmm_blind
-lastite: true
 save_iter: 1
+foldername: with_planck
+filename: file
+lastite: true

@@ -1,0 +1,56 @@
+path_out: cmbdust_nrec4/
+datafilename: MC
+CMB:
+  cmb: true
+  seed: 1
+  r: 0
+  Alens: 1
+Foregrounds:
+  Dust: true
+  Synchrotron: false
+QUBIC:
+  instrument: DB
+  npointings: 5000
+  nsub_in: 12
+  nsub_out: 12
+  nrec: 4
+  convolution_in: false
+  convolution_out: false
+  bandpass_correction: true
+  NOISE:
+    ndet: 1
+    npho150: 1
+    npho220: 1
+    detector_nep: 4.7e-17
+    seed: -1
+  SYNTHBEAM:
+    synthbeam_kmax: 8
+    synthbeam_fraction: 0.99
+  dtheta: 15
+SKY:
+  nside: 256
+  coverage_cut: 0.15
+  RA_center: 0
+  DEC_center: -57
+PLANCK:
+  external_data: true
+  weight_planck: 0
+  level_noise_planck: 1
+  bandwidth_planck: 0.2
+  nsub_planck: 100
+Pipeline:
+  mapmaking: true
+  spectrum: true
+PCG:
+  n_iter_pcg: 100
+  tol_pcg: 1.0e-12
+  preconditioner: true
+  initial_guess_intensity_to_zero: false
+  gif: false
+  resolution_plot: 15
+  fwhm_plot: 0
+Spectrum:
+  dl: 30
+  lmin: 40
+  lmax: 512
+  aposize: 10

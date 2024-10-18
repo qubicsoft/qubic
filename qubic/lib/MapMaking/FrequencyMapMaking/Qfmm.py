@@ -104,8 +104,17 @@ class PipelineFrequencyMapMaking:
             H=H,
         )
 
+        ### Ensure that all processors have the same external dataset
         self.externaldata = PlanckMaps(self.skyconfig, self.joint_tod.qubic.allnus, self.params["QUBIC"]["nrec"], nside=self.params["SKY"]["nside"])
-        self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(fwhm=self.params["QUBIC"]["convolution_in"])
+        if self.rank == 0:
+            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(fwhm=self.params["QUBIC"]["convolution_in"])
+        else:
+            self.externaldata.maps = None
+            self.externaldata.maps_noise = None
+            
+        self.externaldata.maps = self.comm.bcast(self.externaldata.maps, root=0)
+        self.externaldata.maps_noise = self.comm.bcast(self.externaldata.maps_noise, root=0)
+
         self.planck_acquisition143 = PlanckAcquisition(143, self.joint.qubic.scene)
         self.planck_acquisition217 = PlanckAcquisition(217, self.joint.qubic.scene)
         self.nus_Q = self.get_averaged_nus()
@@ -323,7 +332,7 @@ class PipelineFrequencyMapMaking:
             "period": 1,
             "RA_center": self.params["SKY"]["RA_center"],
             "DEC_center": self.params["SKY"]["DEC_center"],
-            "filter_nu": 150 * 1e9,
+            "filter_nu": 220 * 1e9,
             "noiseless": False,
             "beam_shape": 'gaussian',
             "comm": self.comm,
@@ -343,6 +352,7 @@ class PipelineFrequencyMapMaking:
             "EmissivityAtmosphere220": None,
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
+            "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
         }
 
         ### Get the default dictionary
@@ -353,7 +363,7 @@ class PipelineFrequencyMapMaking:
         for i in args.keys():
 
             dict_qubic[str(i)] = args[i]
-
+    
         return dict_qubic
 
     def _get_scalar_acquisition_operator(self):
@@ -658,19 +668,6 @@ class PipelineFrequencyMapMaking:
                     ]
 
         return TOD
-
-    def _print_message(self, message):
-        """
-        Method to print message only on rank 0 if MPI communicator is detected. It display simple message if not.
-
-        """
-
-        if self.comm is None:
-            print(message)
-        else:
-            if self.rank == 0:
-                print(message)
-
     def get_preconditioner(self):
         """PCG Preconditioner.
 
@@ -697,12 +694,11 @@ class PipelineFrequencyMapMaking:
             vec = np.ones(self.joint.qubic.H[0].shapein)
 
             for i in range(self.params["QUBIC"]["nsub_out"]):
-                for j in range(self.params["QUBIC"]["nsub_out"]):
-                    approx_hth[i] = (
-                        self.joint.qubic.H[i].T
-                        * self.joint.qubic.invn220
-                        * self.joint.qubic.H[j](vec)
-                    )
+                
+                if i < int(self.params["QUBIC"]["nrec"]/2):
+                    approx_hth[i] = (self.joint.qubic.H[i].T * self.joint.qubic.invn150 * self.joint.qubic.H[i](vec))
+                else:
+                    approx_hth[i] = (self.joint.qubic.H[i].T * self.joint.qubic.invn220 * self.joint.qubic.H[i](vec))
 
             for irec in range(self.params["QUBIC"]["nrec"]):
                 imin = irec * self.fsub_out
@@ -824,7 +820,7 @@ class PipelineFrequencyMapMaking:
 
         """
 
-        self._print_message("\n=========== Map-Making ===========\n")
+        self.mpi._print_message("\n=========== Map-Making ===========\n")
 
         ### Get simulated data
         self.TOD = self.get_tod()
@@ -834,9 +830,13 @@ class PipelineFrequencyMapMaking:
 
         if self.params['PLANCK']['external_data']:
             starting_point = np.zeros(self.m_nu_in[:, self.seenpix, :].shape)
+            if self.params['PCG']['initial_guess_intensity_to_zero'] is False:
+                starting_point[..., 0] = self.m_nu_in[:, self.seenpix, 0].copy()
         else:
             starting_point = np.zeros(self.m_nu_in.shape)
-            
+            if self.params['PCG']['initial_guess_intensity_to_zero'] is False:
+                starting_point[..., 0] = self.m_nu_in[..., 0].copy()
+
         ### Solve map-making equation
         self.s_hat = self.call_pcg(self.TOD, x0=starting_point, seenpix=self.seenpix)
 

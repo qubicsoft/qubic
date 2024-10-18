@@ -11,15 +11,15 @@ __path__ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class FitEllSpace:
 
-    def __init__(self, x, y, yerr, model):
+    def __init__(self, x, y, yerr, model, parameters_file, sample_variance=True, fsky=0.015, dl=30, diagonal=False):
 
         self.x = x
         self.y = y
         self.yerr = yerr
         self.model = model
 
-        with open(__path__ + "/FMM/fitting/fit_params.yaml", "r") as stream:
-            self.params = yaml.safe_load(stream)
+        with open(parameters_file, 'r') as tf:
+            self.params = yaml.safe_load(tf)
 
         ### Check if the user is giving the right dimensions
         self._check_shapein()
@@ -31,7 +31,7 @@ class FitEllSpace:
         self._init_reshape_data()
 
         ### Compute the noise covariance matrix
-        self._get_noise_covariance_matrix()
+        self._get_noise_covariance_matrix(sample_variance=sample_variance, fsky=fsky, dl=dl, diagonal=diagonal)
 
     def _reshape_spectra_model(self, data):
 
@@ -81,27 +81,35 @@ class FitEllSpace:
             (self.nreals, self.nspecs * self.nbins)
         )
 
-    def _get_noise_covariance_matrix(self):
+    def _get_noise_covariance_matrix(self, sample_variance, fsky, dl, diagonal=False):
 
         self.noise_covariance_matrix = np.cov(self.yerr_reshaped, rowvar=False)
         self.noise_correlation_matrix = np.corrcoef(self.yerr_reshaped, rowvar=False)
+        
+        if diagonal:
+            
+            self.noise_covariance_matrix = self.noise_covariance_matrix.reshape((self.nbins, self.nspecs, self.nbins, self.nspecs))
+            
+            for ispec in range(self.nspecs):
+                for jspec in range(self.nspecs):
+                    self.noise_covariance_matrix[:, ispec, :, jspec] *= np.eye(self.nbins)
+                    
+            self.noise_covariance_matrix = self.noise_covariance_matrix.reshape((self.nbins*self.nspecs, self.nbins*self.nspecs))
 
-        self.noise_covariance_matrix += self._fill_sample_variance(self.y)
+        if sample_variance:
+            self.noise_covariance_matrix += self._fill_sample_variance(self.y, fsky, dl)
 
         self.invN = np.linalg.pinv(self.noise_covariance_matrix)
 
-    def _fill_sample_variance(self, bandpower):
+    def _fill_sample_variance(self, bandpower, fsky, dl):
 
         indices_tr = np.triu_indices(self.nmaps)
         matrix = np.zeros((self.nspecs, len(self.x), self.nspecs, len(self.x)))
-        factor_modecount = 1 / ((2 * self.x + 1) * 0.015 * 30)
+        factor_modecount = 1 / ((2 * self.x + 1) * fsky * dl)
 
         for ii, (i1, i2) in enumerate(zip(indices_tr[0], indices_tr[1])):
             for jj, (j1, j2) in enumerate(zip(indices_tr[0], indices_tr[1])):
-                covar = (
-                    bandpower[i1, j1, :] * bandpower[i2, j2, :]
-                    + bandpower[i1, j2, :] * bandpower[i2, j1, :]
-                ) * factor_modecount
+                covar = (bandpower[i1, j1, :] * bandpower[i2, j2, :] + bandpower[i1, j2, :] * bandpower[i2, j1, :]) * factor_modecount
                 matrix[ii, :, jj, :] = np.diag(covar)
         return matrix.reshape((self.nspecs * len(self.x), self.nspecs * len(self.x)))
 
@@ -154,12 +162,11 @@ class FitEllSpace:
     def _fill_params(self, x):
 
         xnew = np.array([])
-        keys = self.params.keys()
+        comps = self.params.keys()
         count = 0
-        for key in keys:
+        for key in comps:
             params = self.params[key].keys()
             for param in params:
-
                 ### Add values of the fixed parameters only if there is no True in the params.yaml file
                 if self.params[key][param]["fit"] is True:
                     xnew = np.append(xnew, x[count])
@@ -170,14 +177,12 @@ class FitEllSpace:
         return xnew
 
     def loglikelihood(self, x):
-
+        
+        ### Fill in array with fixed and free parameters
         x = self._fill_params(x)
 
         lp = self.log_prior(x)
-        residuals = self.y_reshaped - self._reshape_spectra_model(
-            self.model(*x)
-        ).reshape(self.y_reshaped.shape)
-        # residuals = residuals.reshape(self.y_reshaped.shape)
+        residuals = self.y_reshaped - self._reshape_spectra_model(self.model(*x)).reshape(self.y_reshaped.shape)
 
         return lp - 0.5 * ((residuals).T @ self.invN @ (residuals))
 
@@ -186,11 +191,19 @@ class FitEllSpace:
         ### Initial condition for each parameters
         x0 = self._initial_conditions(nwalkers)
 
-        with Pool() as pool:
-            sampler = emcee.EnsembleSampler(
-                nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool
-            )
-            sampler.run_mcmc(x0, nsteps, progress=True)
+        if comm.Get_size() == 1 or comm is None:
+            print('Running on multi-threading')
+            with Pool() as pool:
+                sampler = emcee.EnsembleSampler(
+                    nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool)
+                sampler.run_mcmc(x0, nsteps, progress=True)
+        else:
+            if comm.Get_rank() == 0:
+                print('Running with MPI')
+            with MPIPool() as pool:
+                sampler = emcee.EnsembleSampler(
+                    nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool)
+                sampler.run_mcmc(x0, nsteps, progress=True)
 
         samples_flat = sampler.get_chain(flat=True, discard=discard, thin=15)
         samples = sampler.get_chain()

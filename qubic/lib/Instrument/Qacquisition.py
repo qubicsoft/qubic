@@ -785,6 +785,9 @@ class QubicMultiAcquisitions:
             self.subacqs += [QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)]
             
             self.allnus = np.append(self.allnus, nu_co)
+        
+        for acq in self.subacqs:
+            acq.comm = self.subacqs[0].comm
         #print(self.allnus)
         #stop
         ### Angular resolution

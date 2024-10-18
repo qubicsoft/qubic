@@ -1,18 +1,20 @@
 #!/bin/bash
 
-#SBATCH --job-name=fitting
+#SBATCH --job-name=FMM
 
 # we ask for n MPI tasks with N cores each on c nodes
 
-#SBATCH --partition=hpc
+#SBATCH --partition=bigmem
 #SBATCH --nodes=1                # c
-#SBATCH --ntasks-per-node=10      # n
+#SBATCH --ntasks-per-node=2      # n
 #SBATCH --cpus-per-task=2        # N
-#SBATCH --mem=15G
+#SBATCH --mem=30G
 #SBATCH --time=0-05:00:00
-#SBATCH --output=cmbdust_DB_nrec8_HFI_%j.log
+#SBATCH --output=mulitple_jobs_%j.log
+#SBATCH --array=1-300
 
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 
 module load mpich
-mpirun -np $SLURM_NTASKS python fitting.py
+
+mpirun -np $SLURM_NTASKS python run_fmm.py $1 $2

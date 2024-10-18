@@ -137,16 +137,12 @@ class Chi2DualBand:
                     self.preset.acquisition.invN.operands[1](_residuals),
                     self.preset.comm,
                 )
-                return self.Lqubic  # + self.Lplanck
+                return self.Lqubic + self.Lplanck
             else:
                 ### Compute residuals in time domain
                 _residuals = ysim - self.preset.acquisition.TOD_qubic
                 self.Lplanck = 0
-                self.Lqubic = _dot(
-                    _residuals.T,
-                    self.preset.acquisition.invN.operands[0](_residuals),
-                    self.preset.comm,
-                )
+                self.Lqubic = _dot( _residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
                 return self.Lqubic
         elif self.dsim.ndim == 4:
             # print(x, x.shape, self.nc-1, self.npix)
@@ -288,20 +284,24 @@ class Chi2UltraWideBand:
 
                 ### Compute Planck part of the chi^2
                 mycomp = self.preset.comp.components_iter.copy()
-                seenpix_comp = np.tile(
-                    self.preset.sky.seenpix_qubic, (mycomp.shape[0], 3, 1)
-                ).reshape(mycomp.shape)
-                ysim_pl = H_planck(mycomp * seenpix_comp)
+                mycomp[:, ~self.preset.sky.seenpix_qubic, :] = 0
+                
+                ysim_pl = H_planck(mycomp)
+                
+                _residuals = np.r_[ysim] - self.preset.acquisition.TOD_qubic
+                self.Lqubic = _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
 
+                _residuals_pl = (np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch)
+                
+                self.Lplanck = _dot(_residuals_pl.T, self.preset.acquisition.invN.operands[1](_residuals_pl), self.preset.comm)
+                return self.Lqubic + self.Lplanck
                 ### Compute residuals in time domain
-                _residuals = np.r_[ysim, ysim_pl] - self.dobs
+                #_residuals = np.r_[ysim, ysim_pl] - self.dobs
                 # _residuals = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
 
-                return _dot(
-                    _residuals.T,
-                    self.preset.acquisition.invN(_residuals),
-                    self.preset.comm,
-                )
+                #self.Lqubic = _dot(_residuals.T, self.preset.acquisition.invN(_residuals), self.preset.comm)
+                
+                #return self.Lqubic
             else:
                 ### Compute residuals in time domain
                 _residuals = ysim - self.dobs
@@ -359,7 +359,6 @@ class Chi2UltraWideBand:
                 raise TypeError(
                     "Varying mixing matrix along the LOS is not yet implemented"
                 )
-
         else:
             raise TypeError("dsim should have 3 or 4 dimensions.")
 

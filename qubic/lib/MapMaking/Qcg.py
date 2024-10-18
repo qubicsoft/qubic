@@ -11,6 +11,7 @@ from pyoperators.utils.mpi import MPI
 
 from ..Qfoldertools import *
 from .Qmap_plotter import _plot_reconstructed_maps
+from ..Qfoldertools import create_folder_if_not_exists
 
 __all__ = ["pcg"]
 
@@ -101,10 +102,6 @@ class PCGAlgorithm(IterativeAlgorithm):
         self.fwhm = fwhm_plot
         self.is_planck = is_planck
 
-        if self.gif is not None:
-            if not os.path.isdir(self.gif):
-                os.makedirs(self.gif)
-
         dtype = A.dtype or np.dtype(float)
         if dtype.kind == "c":
             raise TypeError("The complex case is not yet implemented.")
@@ -148,6 +145,10 @@ class PCGAlgorithm(IterativeAlgorithm):
         self.rank = self.comm.Get_rank()
         self.norm = lambda x: _norm2(x, self.comm)
         self.dot = lambda x, y: _dot(x, y, self.comm)
+
+        if self.gif is not None:
+            if not os.path.isdir(self.gif):
+                create_folder_if_not_exists(self.comm, self.gif)#os.makedirs(self.gif)
 
         if M is None:
             M = IdentityOperator()

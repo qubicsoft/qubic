@@ -1,4 +1,4 @@
-path_out: 'test_to_remove/'
+path_out: 'cmbdust_nrec2/'
 datafilename: 'MC'
 
 CMB:
@@ -9,6 +9,7 @@ CMB:
 
 Foregrounds:
 
+    Dust: True                              # Thermal Dust emission
     Dust: True                              # Thermal Dust emission
     Synchrotron: False                      # Synchrotron emission
 
@@ -31,7 +32,8 @@ QUBIC:
         detector_nep: 4.7e-17                 # NEP of detector noise
         seed: -1
     SYNTHBEAM:
-        synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+        synthbeam_kmax: 8                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+        synthbeam_fraction: 0.99
     dtheta: 15                             # Angle for coverage
 
 SKY:
@@ -55,16 +57,17 @@ PLANCK:
 
 Pipeline:
     mapmaking: True                              # Run MapMaking Pipeline
-    spectrum: False                              # Compute Power Spectra of the frequency maps
+    spectrum: True                              # Compute Power Spectra of the frequency maps
 
 PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 30                                   # Number of PCG iterations
+    n_iter_pcg: 100                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: True
-    gif: True
+    initial_guess_intensity_to_zero: False
+    gif: False
     resolution_plot: 15
     fwhm_plot: 0
 
@@ -72,7 +75,7 @@ Spectrum:
 
     ### This section define the parameters to compute the power spectra
 
-    dl: 10                                      
-    lmin: 20
-    lmax: 120
+    dl: 30                                      
+    lmin: 40
+    lmax: 512
     aposize: 10

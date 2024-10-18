@@ -16,6 +16,7 @@ import fgbuster.mixingmatrix as mm
 ### Local packages
 from ...Instrument.Qacquisition import *
 from ...MapMaking.Qcg import pcg
+from pyoperators import pcg as pcg_op
 from ...Qfoldertools import *
 from ...MapMaking.Qmap_plotter import *
 from ...Qmpi_tools import MpiTools
@@ -105,16 +106,13 @@ class Pipeline:
         initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
 
         ### Update the precondtionner M
-        self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(
-            
-        
-            A_qubic=self.preset.acquisition.Amm_iter[
-                :6#: self.preset.qubic.params_qubic["nsub_out"]
-            ],
-            A_ext=self.preset.mixingmatrix.Amm_in[
-                6:#self.preset.qubic.params_qubic["nsub_out"] :
-            ],
-            precond=self.preset.qubic.params_qubic["preconditioner"],
+        #if self._steps == 0:
+        self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(seenpix=seenpix,
+            A_qubic=self.preset.acquisition.Amm_iter[:self.preset.qubic.params_qubic["nsub_out"]],
+        #self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(A_qubic=self.preset.mixingmatrix.Amm_in[:self.preset.qubic.params_qubic["nsub_out"]],
+            A_ext=self.preset.mixingmatrix.Amm_in[self.preset.qubic.params_qubic["nsub_out"]:],
+            precond=self.preset.qubic.params_qubic["preconditioner"], 
+            thr=self.preset.tools.params["PLANCK"]["thr_planck"]
         )
 
         ### Run PCG
@@ -143,7 +141,7 @@ class Pipeline:
             gif_folder=gif_folder,
             job_id=self.preset.job_id,
             seenpix=seenpix,
-            seenpix_plot=seenpix,
+            seenpix_plot=self.preset.sky.seenpix,
             center=self.preset.sky.center,
             reso=self.preset.tools.params["PCG"]["reso_plot"],
             fwhm_plot=self.preset.tools.params["PCG"]["fwhm_plot"],
@@ -631,9 +629,7 @@ class Pipeline:
                         ki=self._steps,
                     )
         elif method == "blind":
-            previous_step = self.preset.acquisition.Amm_iter[
-                : self.preset.qubic.joint_out.qubic.nsub, 1:
-            ].copy()
+            previous_step = self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, 1:].copy()
             if self._steps == 0:
                 self.allAmm_iter = np.array([self.preset.acquisition.Amm_iter])
 
@@ -665,7 +661,7 @@ class Pipeline:
                     self.chi2,
                     x0=x0,
                     # bounds=bnds,
-                    method="BFGS",
+                    method="L-BFGS-B",
                     # constraints=self.get_constrains(),
                     callback=self.callback,
                     tol=1e-10,
@@ -677,73 +673,28 @@ class Pipeline:
                 for inu in range(self.preset.qubic.joint_out.qubic.nsub):
                     for icomp in range(1, len(self.preset.comp.components_name_out)):
                         self.preset.acquisition.Amm_iter[inu, icomp] = Ai[inu, icomp]
-
-                """
-                ### Function to minimize
-                fun = partial(self.chi2._qu, tod_comp=tod_comp)
-                
-                ### Starting point
-                x0 = []
-                bnds = []
-                for ii in range(self.preset.comp.params_foregrounds['bin_mixing_matrix']):
-                    for i in range(1, len(self.preset.comp.components_name_out)):
-                        x0 += [np.mean(self.preset.acquisition.Amm_iter[ii*self.fsub:(ii+1)*self.fsub, i])]
-                        bnds += [(0, None)]
-                if self._steps == 0:
-                    x0 = np.array(x0) * 1 + 0
-                ### Constraints on frequency evolution
-                constraints = self.get_constrains()
-                
-                Ai = minimize(fun, x0=x0, 
-                            #constraints=constraints, 
-                            callback=self.callback, 
-                            bounds=bnds, 
-                            method='L-BFGS-B', 
-                            tol=1e-10).x
-                
-                k=0
-                for ii in range(self.preset.comp.params_foregrounds['bin_mixing_matrix']):
-                    for i in range(1, len(self.preset.comp.components_name_out)):
-                        self.preset.acquisition.Amm_iter[ii*self.fsub:(ii+1)*self.fsub, i] = Ai[k]
-                        k+=1
-                """
             elif self.preset.comp.params_foregrounds["blind_method"] == "PCG":
-                tod_comp_binned = np.zeros(
-                    (
-                        tod_comp.shape[0],
-                        self.preset.comp.params_foregrounds["bin_mixing_matrix"],
-                        tod_comp.shape[-1],
-                    )
-                )
+                
+                tod_comp_binned = np.zeros((tod_comp.shape[0], self.preset.comp.params_foregrounds["bin_mixing_matrix"], tod_comp.shape[-1],))
+                
                 for k in range(len(self.preset.comp.components_name_out)):
-                    for i in range(
-                        self.preset.comp.params_foregrounds["bin_mixing_matrix"]
-                    ):
-                        tod_comp_binned[k, i] = np.sum(
-                            tod_comp[k, i * self.fsub : (i + 1) * self.fsub], axis=0
-                        )
+                    for i in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
+                        tod_comp_binned[k, i] = np.sum(tod_comp[k, i * self.fsub : (i + 1) * self.fsub], axis=0)
 
                 tod_cmb150 = self.preset.tools.comm.allreduce(
-                    np.sum(tod_comp[0, : int(tod_comp.shape[1] / 2)], axis=0),
+                    np.sum(tod_comp[0, :int(tod_comp.shape[1]/2)], axis=0),
                     op=MPI.SUM,
                 )
                 tod_cmb220 = self.preset.tools.comm.allreduce(
-                    np.sum(
-                        tod_comp[
-                            0, int(tod_comp.shape[1] / 2) : int(tod_comp.shape[1])
-                        ],
-                        axis=0,
-                    ),
-                    op=MPI.SUM,
-                )
+                    np.sum(tod_comp[0, int(tod_comp.shape[1]/2):int(tod_comp.shape[1])], axis=0), op=MPI.SUM)
 
                 tod_in_150 = self.preset.tools.comm.allreduce(
-                    self.preset.TOD_Q[: int(self.preset.TOD_Q.shape[0] / 2)], op=MPI.SUM
+                    self.preset.acquisition.TOD_qubic[: int(self.preset.acquisition.TOD_qubic.shape[0] / 2)], op=MPI.SUM
                 )
                 tod_in_220 = self.preset.tools.comm.allreduce(
-                    self.preset.TOD_Q[
-                        int(self.preset.TOD_Q.shape[0] / 2) : int(
-                            self.preset.TOD_Q.shape[0]
+                    self.preset.acquisition.TOD_qubic[
+                        int(self.preset.acquisition.TOD_qubic.shape[0] / 2) : int(
+                            self.preset.acquisition.TOD_qubic.shape[0]
                         )
                     ],
                     op=MPI.SUM,
@@ -752,28 +703,24 @@ class Pipeline:
                 tod_without_cmb = np.r_[
                     tod_in_150 - tod_cmb150, tod_in_220 - tod_cmb220
                 ]
+                
                 tod_without_cmb_reshaped = np.sum(
-                    tod_without_cmb.reshape((2, int(self.preset.nsnd / 2))), axis=0
+                    tod_without_cmb.reshape((2, int(self.preset.acquisition.TOD_qubic.shape[0] / 2))), axis=0
                 )
 
                 dnu = self.preset.tools.comm.allreduce(tod_comp_binned[1:], op=MPI.SUM)
                 dnu = dnu.reshape((dnu.shape[0] * dnu.shape[1], dnu.shape[2]))
 
-                A = dnu @ dnu.T
-                b = dnu @ tod_without_cmb_reshaped
+                A = 1e20 * (dnu @ dnu.T)
+                b = 1e20 * (dnu @ tod_without_cmb_reshaped)
 
-                s = mypcg(A, b, disp=False, tol=1e-20, maxiter=10000)["x"]
+                s = pcg_op(A, b, disp=False, tol=1e-40, maxiter=10000)
 
                 k = 0
                 for i in range(1, len(self.preset.comp.components_name_out)):
                     for ii in range(
-                        self.preset.comp.params_foregrounds["bin_mixing_matrix"]
-                    ):
-                        self.preset.acquisition.Amm_iter[
-                            ii * self.fsub : (ii + 1) * self.fsub, i
-                        ] = s["x"][
-                            k
-                        ]  # Ai[k]
+                        self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
+                        self.preset.acquisition.Amm_iter[ii * self.fsub : (ii + 1) * self.fsub, i] = s["x"][k]  # Ai[k]
                         k += 1
             elif self.preset.comp.params_foregrounds["blind_method"] == "alternate":
                 for i in range(len(self.preset.comp.components_name_out)):
@@ -828,19 +775,15 @@ class Pipeline:
             )
 
             if self.preset.tools.rank == 0:
-                # print(f'Iteration k     : {previous_step.ravel()}')
-                # print(f'Iteration k + 1 : {self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
-                # print(f'Truth           : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
-                # print(f'Residuals       : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel() - self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
+                print(f'Iteration k     : {previous_step.ravel()}')
+                print(f'Iteration k + 1 : {self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
+                print(f'Truth           : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
+                print(f'Residuals       : {self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel() - self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}')
                 self.plots.plot_sed(
                     self.preset.qubic.joint_in.qubic.allnus,
-                    self.preset.mixingmatrix.Amm_in[
-                        : self.preset.qubic.joint_in.qubic.nsub, 1:
-                    ],
+                    self.preset.mixingmatrix.Amm_in[:self.preset.qubic.joint_in.qubic.nsub, 1:],
                     self.preset.qubic.joint_out.qubic.allnus,
-                    self.preset.acquisition.Amm_iter[
-                        : self.preset.qubic.joint_out.qubic.nsub, 1:
-                    ],
+                    self.preset.acquisition.Amm_iter[:self.preset.qubic.joint_out.qubic.nsub, 1:],
                     ki=self._steps,
                     gif=self.preset.tools.params["PCG"]["do_gif"],
                 )
@@ -854,6 +797,8 @@ class Pipeline:
                     # do_gif(f'jobs/{self.preset.job_id}/allcomps/', 'iter_', output='animation.gif')
             del tod_comp
             gc.collect()
+            
+            
         elif method == "parametric_blind":
             previous_step = self.preset.acquisition.Amm_iter[
                 : self.preset.qubic.joint_out.qubic.nsub * 2, 1:

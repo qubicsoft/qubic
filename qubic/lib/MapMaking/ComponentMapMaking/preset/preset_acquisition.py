@@ -185,7 +185,7 @@ class PresetAcquisition:
 
         return approx_hth, _r.T(approx_hth_ext)
 
-    def get_preconditioner(self, A_qubic, A_ext, precond=True, thr=0):
+    def get_preconditioner(self, seenpix, A_qubic, A_ext, precond=True, thr=0):
         """Preconditioner for PCG algorithm.
 
         Calculates and returns the preconditioner matrix for the optimization process.
@@ -210,10 +210,6 @@ class PresetAcquisition:
 
         if precond:
 
-            seenpix_qubic_0_001 = (
-                self.preset_sky.coverage / self.preset_sky.max_coverage > thr
-            )
-
             # Calculate the approximate H^T * H matrix
             approx_hth, approx_hth_ext = self.get_approx_hth()
 
@@ -228,25 +224,19 @@ class PresetAcquisition:
 
             for icomp in range(len(self.preset_comp.components_model_out)):
                 for istk in range(3):
-                    precond_ext = 1 / (
-                        approx_hth_ext[:, :, 0].T @ A_ext[..., icomp] ** 2
-                    )
+                    precond_ext = 1 / (approx_hth_ext[:, :, 0].T @ A_ext[..., icomp] ** 2)
                     precond_ext[precond_ext == np.inf] = 0
                     preconditioner[icomp, :, istk] = precond_ext
-                    preconditioner[
-                        icomp, seenpix_qubic_0_001, istk
-                    ] *= self.preset_tools.params["PLANCK"]["weight_planck"]
+                    preconditioner[icomp, seenpix, istk] *= self.preset_tools.params["PLANCK"]["weight_planck"]
 
             # We sum over the frequencies, take the inverse, and only keep the information on the patch.
             for icomp in range(len(self.preset_comp.components_model_out)):
                 for istk in range(3):
                     #print(A_qubic[..., icomp])
                     precond_qubic = 1 / (approx_hth[:, :, 0].T @ (A_qubic[..., icomp]) ** 2)
-                    preconditioner[icomp, seenpix_qubic_0_001, istk] += precond_qubic[seenpix_qubic_0_001] 
-            #stop
-            #print( preconditioner[:, seenpix_qubic_0_001, istk] )
-            #stop
-            M = DiagonalOperator(preconditioner[:, self.preset_sky.seenpix, :])
+                    preconditioner[icomp, self.preset_sky.seenpix_qubic, istk] += precond_qubic[self.preset_sky.seenpix_qubic] 
+            
+            M = DiagonalOperator(preconditioner[:, seenpix, :])
             return M
         else:
             return None
@@ -518,9 +508,7 @@ class PresetAcquisition:
 
         ### Observed TOD (Planck is assumed on the full sky)
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
-        self.TOD_obs_zero_outside = np.r_[
-            self.TOD_qubic, self.TOD_external_zero_outside_patch
-        ]
+        self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch]
 
     def get_x0(self):
         """PCG starting point.

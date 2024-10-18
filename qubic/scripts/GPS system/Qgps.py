@@ -17,55 +17,86 @@ class GPS:
         self.base_antenna_position = base_antenna_position
         self.distance_between_antennas = distance_between_antennas
         self.distance_calsource = distance_calsource
+        self.observation_date = observation_date
         
         ### Convert the data from GPS system into a dictionary
         self.gps_data = self.read_gps_bindat(gps_data_file_path)
         
         ### Import all the GPS data from the dictionary and convert them in proper units
-        self.timestamp = self.gps_data['timestamp']
+        self.timestamp = np.array(self.gps_data['timestamp'])
         
-        # rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
-        self.rpN = np.array(self.gps_data['rpN']) / 10000                       # in m
-        self.rpE = np.array(self.gps_data['rpE']) / 10000                       # in m
-        self.rpD = np.array(self.gps_data['rpD']) / 10000                       # in m
-        
-        # roll give the angle between antenna 2 - antenna 1 vector and the North axis
-        self.roll = np.radians(np.array(self.gps_data['roll']) / 1000)          # in rad
-        
-        # yaw give the angle between antenna 2 - antenna 1 vector and the horizontal plane
-        #! Need to double check that
-        self.yaw = np.radians(np.array(self.gps_data['yaw']) / 1000)            # in rad
-        
-        self.pitchIMU = np.radians(np.array(self.gps_data['pitchIMU']) / 1000)  # in rad
-        self.rollIMU = np.radians(np.array(self.gps_data['rollIMU']) / 1000)    # in rad
-        self.temperature = np.array(self.gps_data['temperature']) / 10          # in Celsius
-        self.checksum = np.array(self.gps_data['checksum'])
-        
-        ### Build datetime array
+         ### Build datetime array
         self.datetime = self.create_datetime_array(self.timestamp)
         
         ### 
-        observation_indices = self.observation_indices(self.datetime, observation_date)
+        self.observation_indices = self.get_observation_indices(self.datetime, self.observation_date)
+        self.observation_time = self.timestamp[self.observation_indices]
+        
+        # rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
+        self.rpN = np.array(self.gps_data['rpN'])[self.observation_indices] / 10000                       # in m
+        self.rpE = np.array(self.gps_data['rpE'])[self.observation_indices] / 10000                       # in m
+        self.rpD = np.array(self.gps_data['rpD'])[self.observation_indices] / 10000                       # in m
+        
+        # roll give the angle between antenna 2 - antenna 1 vector and the North axis
+        self.roll = np.radians(np.array(self.gps_data['roll'])[self.observation_indices] / 1000)          # in rad
+        
+        # yaw give the angle between antenna 2 - antenna 1 vector and the horizontal plane
+        #! Need to double check that
+        self.yaw = np.radians(np.array(self.gps_data['yaw'])[self.observation_indices] / 1000)            # in rad
+        
+        self.pitchIMU = np.radians(np.array(self.gps_data['pitchIMU'])[self.observation_indices] / 1000)  # in rad
+        self.rollIMU = np.radians(np.array(self.gps_data['rollIMU'])[self.observation_indices] / 1000)    # in rad
+        self.temperature = np.array(self.gps_data['temperature'])[self.observation_indices] / 10          # in Celsius
+        self.checksum = np.array(self.gps_data['checksum'])[self.observation_indices]
         
         ### Compute position of antennas 1 & 2 and calibration source in North, East, Down cooridnates
-        self.position_antenna2 = np.array([self.position_antenna_2(self.base_antenna_position, self.datetime[index]) for index in observation_indices])
-        self.position_antenna1 = np.array([self.position_wrt_antenna_2(self.distance_between_antennas, self.datetime[index]) for index in observation_indices]) + self.position_antenna2
-        self.position_calsource = np.array([self.position_wrt_antenna_2(self.distance_calsource, self.datetime[index]) for index in observation_indices]) + self.position_antenna2
+        #! Be careful: as it is now, the calibration source needs to be on the straight line formed by antenna 1 and antenna 2
+        self.position_antenna2_ned = self.position_antenna_2(self.base_antenna_position)
+        self.position_antenna1_ned = self.position_wrt_antenna_2(self.distance_between_antennas) + self.position_antenna2_ned
+        self.position_calsource_ned = self.position_wrt_antenna_2(self.distance_calsource) + self.position_antenna2_ned
+
+        ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
+        self.vector_vector_1_2_ned = self.position_antenna2_ned - self.position_antenna1_ned
+        self.vector_calsource_ned = self.position_calsource_ned 
+        
+        ### Compute the vectors in the XYZ coordinates system, define such that ex is the direction of the calsource vector, ey is the orthogonal vector on the North-East plane and ez is the Down axis
+        self.vector_vector_1_2_xyz = self.ned_to_xyz(self.vector_vector_1_2_ned)
+        self.vector_calsource_xyz = self.ned_to_xyz(self.vector_calsource_ned)
+        
+        ### Compute the calibration source orientation angles
+        self.calsource_orientation_angles = self.calsource_orientation(self.vector_vector_1_2_xyz)        
     
-    def read_gps_bindat(self, filename):
-        '''
-        read the binary data acquired from by RTK simple broadcast
-        '''
-        if not os.path.isfile(filename):
-            print('ERROR!  File not found: %s' % filename)
+    def read_gps_bindat(self, path_file):
+        """GPS binary data.
+        
+        Method to convert the binary data acquired from by RTK simple broadcast into readable format and store them in a dictionary.
+
+        Parameters
+        ----------
+        path_file : str
+            GPS file path.
+
+        Returns
+        -------
+        dat: dict
+            Dictionary containing the GPS data.
+
+        Raises
+        ------
+        ValueError
+            If the file is not found.
+        """   
+        
+        if not os.path.isfile(path_file):
+            print('ERROR!  File not found: %s' % path_file)
             return
 
-        # read the data
-        h = open(filename,'rb')
+        ### read the data
+        h = open(path_file,'rb')
         bindat = h.read()
         h.close()
 
-        # interpret the binary data
+        ### interpret the binary data
         fmt = '<Bdiiiiiiifi'
         nbytes = 45
         names = "STX,timestamp,rpN,rpE,rpD,roll,yaw,pitchIMU,rollIMU,temperature,checksum".split(',')
@@ -129,7 +160,7 @@ class GPS:
         ------
         TypeError
             Raise TypeError if the chosen date is not in the form of a string or a datetime object.
-        ValueError
+        IndexError
             Raise ValueError if the chosen date is not in the data.
         """            
 
@@ -142,10 +173,10 @@ class GPS:
 
         try:
             return np.where(datetime == date)[0][0]
-        except IndexError:
-            raise ValueError('ERROR! The date you chose is not in the data.')
+        except :
+            raise IndexError('ERROR! The date you chose is not in the data.')
         
-    def observation_indices(self, datetime, observation_date):
+    def get_observation_indices(self, datetime, observation_date):
         """Observation indices.
         
         Return the indices associated to the chosen date. 
@@ -170,22 +201,22 @@ class GPS:
             Raise ValueError if the date does not have the proper shape, 1 or 2.
         """        
          
-        # If we give an unique observation date
+        ### If we give an unique observation date
         try :
             observation_date.shape
         except:
             return self.datetime_to_index(datetime, observation_date)
         
-        # If we give a starting and stoping date
+        ### If we give a starting and stoping dates
         if observation_date.shape[0] == 2:
             start_index = self.datetime_to_index(datetime, observation_date[0])
             end_index = self.datetime_to_index(datetime, observation_date[1])
-            return np.arange(start_index, end_index, 1)
+            return np.arange(start_index, end_index, 1, dtype=int)
         
         else:
             raise ValueError('ERROR! Please choose a correct shape for the date: 1 or 2.')
 
-    def position_antenna_2(self, base_antenna_position, observation_date):
+    def position_antenna_2(self, base_antenna_position):
         """Position antenna 2.
         
         Method to compute the position of the antenna 2 in North, East, Down coordinates.
@@ -205,23 +236,23 @@ class GPS:
             Position of the antenna 2 in North, East, Down coordinates.
         """        
         
-        ### Find the index associated to the chosen date
-        date_index = self.observation_indices(self.datetime, observation_date)
-        
         ### Call the base antenna position in North, East, Down coordinates
         rpN_base, rpE_base, rpD_base = base_antenna_position
         
         ### Compute the position of the antenna 2 in North, East, Down coordinates
-        rpN_antenna_2 = self.rpN[date_index] + rpN_base
-        rpE_antenna_2 = self.rpE[date_index] + rpE_base
-        rpD_antenna_2 = self.rpD[date_index] + rpD_base
+        rpN_antenna_2 = self.rpN + rpN_base
+        rpE_antenna_2 = self.rpE + rpE_base
+        rpD_antenna_2 = self.rpD + rpD_base
         
         return np.array([rpN_antenna_2, rpE_antenna_2, rpD_antenna_2])
     
-    def position_wrt_antenna_2(self, distance_w_antenna_2, observation_date):
+    def position_wrt_antenna_2(self, distance_w_antenna_2):
         """Position wrt antenna 2.
         
         General fonction to compute the position of any point located on the straight line formed by the antenna 1 - anntenna 2 vector, wrt antenna 2 in North, East, Down coordinates.
+        
+        Be careful, yaw is not the usual theta angle in sphercial cooridinates (i.e. the latitude angle): it corresponds to the elevation angle. 
+        It is why we need to add np.pi/2 in the conversion formulas.
 
         Parameters
         ----------
@@ -238,18 +269,75 @@ class GPS:
             Position of the point wrt antenna 2 in North, East, Down coordinates.
         """        
         
-        ### Find the index associated to the chosen date
-        date_index = self.observation_indices(self.datetime, observation_date)
-        
-        ### Call the angles associated with antenna 1 - antenna 2 vector
-        roll = self.roll[date_index]
-        yaw = self.yaw[date_index]
-        
         ### Compute the position of the antenna 1 wrt antenna 2 in North, East, Down coordinates
-        _rpN = distance_w_antenna_2 * np.cos(roll) * np.sin(yaw + np.pi/2)
-        _rpE = distance_w_antenna_2 * np.sin(roll) * np.sin(yaw + np.pi/2)
-        _rpD = distance_w_antenna_2 * np.cos(yaw + np.pi/2)
+        _rpN = distance_w_antenna_2 * np.cos(self.roll) * np.sin(self.yaw + np.pi/2)
+        _rpE = distance_w_antenna_2 * np.sin(self.roll) * np.sin(self.yaw + np.pi/2)
+        _rpD = distance_w_antenna_2 * np.cos(self.yaw + np.pi/2)
         
         return np.array([_rpN, _rpE, _rpD])
-        
     
+    def ned_to_xyz(self, ned_vector):
+        """NED to XYZ.
+        
+        Method to compute the XYZ coordinates of a vector expressed in NED coordinates. The XYZ coordinates are defined such that ex is oriented in calsource direction,
+        ey is the orthogonal vector to ex in the plane defined by the North and East axis, and ez is simply the Down axis.
+
+        Parameters
+        ----------
+        ned_vector : array_like
+            Vector expressed in NED coordinates.
+        calsource_vector : array_like
+            Vector used to define the XYZ coordinates.
+
+        Returns
+        -------
+        xyz_vector : array_like
+            ned_vector expressed in XYZ coordinates.
+        """        
+        
+        ### Compute the rotation matrix
+        north_vector = np.array([1, 0, 0])
+        theta = np.arccos(np.dot(north_vector, ned_vector) / (np.linalg.norm(north_vector) * np.linalg.norm(ned_vector)))
+        rotation_matrix = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                    [np.sin(theta), np.cos(theta), 0],
+                                    [0, 0, 1]])
+        
+        ### Compute ned_vector in xyz coordinates
+        xyz_vector = np.dot(rotation_matrix, ned_vector)
+        return xyz_vector
+        
+    def calsource_orientation(self, vector_1_2_xyz):
+        """Calsource orientation.
+        
+        Method to compute the orientation of the calsource in the XYZ coordinates.
+
+        Parameters
+        ----------
+        vector_1_2_xyz : array_like
+            Vector used to compute the orientation of the calsource in the XYZ coordinates.
+
+        Returns
+        -------
+        angles : array_like
+            Orientation angles of the calsource in the XYZ coordinates.
+        """        
+        
+        ex, ey, ez = np.array([1, 0, 0]), np.array([0, 1, 0]), np.array([0, 0, 1])
+        
+        angles = np.zeros(vector_1_2_xyz.shape)
+        print('0', vector_1_2_xyz.shape)
+        print('0 bis', vector_1_2_xyz[0, 0].shape)
+        print('1', vector_1_2_xyz[:, 0].shape)
+        print('2 bis', vector_1_2_xyz[:, 0])
+        print('2', np.dot(vector_1_2_xyz[:, 0], ex).shape)
+
+        for itime_index in range(vector_1_2_xyz.shape[1]):
+            # Rotation around the x-axis
+            angles[0, itime_index] = np.arccos(np.dot(vector_1_2_xyz[:, itime_index], ey) / np.sqrt((np.dot(vector_1_2_xyz[:, itime_index], ey))**2 + np.dot(vector_1_2_xyz[:, itime_index], ez)**2))
+            # Rotation around the y-axis
+            #! I don't think that we can have this information from the GPS data.
+            angles[1, itime_index] = 0
+            # Rotation around the z-axis
+            angles[2, itime_index] = np.arccos(np.dot(vector_1_2_xyz[:, itime_index], ex) / np.sqrt((np.dot(vector_1_2_xyz[:, itime_index], ex))**2 + np.dot(vector_1_2_xyz[:, itime_index], ey)**2))
+            
+        return angles

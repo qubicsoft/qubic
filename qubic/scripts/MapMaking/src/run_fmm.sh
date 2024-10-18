@@ -4,14 +4,14 @@
 
 # we ask for n MPI tasks with N cores each on c nodes
 
-#SBATCH --partition=bigmem
+#SBATCH --partition=htc
 #SBATCH --nodes=1                # c
 #SBATCH --ntasks-per-node=2      # n
 #SBATCH --cpus-per-task=2        # N
-#SBATCH --mem=30G
+#SBATCH --mem=50G
 #SBATCH --time=0-05:00:00
 #SBATCH --output=mulitple_jobs_%j.log
-#SBATCH --array=1-300
+#SBATCH --array=1-1
 
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 

@@ -10,7 +10,6 @@ CMB:
 Foregrounds:
 
     Dust: True                              # Thermal Dust emission
-    Dust: True                              # Thermal Dust emission
     Synchrotron: False                      # Synchrotron emission
 
 QUBIC:
@@ -19,8 +18,8 @@ QUBIC:
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
     npointings: 1000                        # Number of time samples
-    nsub_in: 20                             # Number of sub-acquisitions
-    nsub_out: 20
+    nsub_in: 8                             # Number of sub-acquisitions
+    nsub_out: 8
     nrec: 2                                # Number of reconstructed frequency maps
     convolution_in: False                   # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
@@ -57,13 +56,13 @@ PLANCK:
 
 Pipeline:
     mapmaking: True                              # Run MapMaking Pipeline
-    spectrum: True                              # Compute Power Spectra of the frequency maps
+    spectrum: False                              # Compute Power Spectra of the frequency maps
 
 PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 100                                   # Number of PCG iterations
+    n_iter_pcg: 10                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: False

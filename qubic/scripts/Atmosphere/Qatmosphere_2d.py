@@ -11,7 +11,7 @@ from astropy.cosmology import Planck18
 import qubic
 from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qscene import QubicScene
-from qubic.lib.InstrumentModel.Qinstrument import QubicInstrument, compute_freq
+from qubic.lib.Instrument.Qinstrument import QubicInstrument, compute_freq
 
 from pyoperators import *
 from pysimulators import (

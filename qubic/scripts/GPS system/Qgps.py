@@ -58,10 +58,10 @@ class GPS:
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
         self.vector_vector_1_2_ned = self.position_antenna2_ned - self.position_antenna1_ned
         self.vector_calsource_ned = self.position_calsource_ned 
-        
+
         ### Compute the vectors in the XYZ coordinates system, define such that ex is the direction of the calsource vector, ey is the orthogonal vector on the North-East plane and ez is the Down axis
-        self.vector_vector_1_2_xyz = self.ned_to_xyz(self.vector_vector_1_2_ned)
-        self.vector_calsource_xyz = self.ned_to_xyz(self.vector_calsource_ned)
+        self.vector_vector_1_2_xyz = self.ned_to_xyz(self.vector_vector_1_2_ned, self.vector_calsource_ned)
+        self.vector_calsource_xyz = self.ned_to_xyz(self.vector_calsource_ned, self.vector_calsource_ned)
         
         ### Compute the calibration source orientation angles
         self.calsource_orientation_angles = self.calsource_orientation(self.vector_vector_1_2_xyz)        
@@ -276,7 +276,7 @@ class GPS:
         
         return np.array([_rpN, _rpE, _rpD])
     
-    def ned_to_xyz(self, ned_vector):
+    def ned_to_xyz(self, ned_vector, calsource_vector):
         """NED to XYZ.
         
         Method to compute the XYZ coordinates of a vector expressed in NED coordinates. The XYZ coordinates are defined such that ex is oriented in calsource direction,
@@ -297,14 +297,22 @@ class GPS:
         
         ### Compute the rotation matrix
         north_vector = np.array([1, 0, 0])
-        theta = np.arccos(np.dot(north_vector, ned_vector) / (np.linalg.norm(north_vector) * np.linalg.norm(ned_vector)))
-        rotation_matrix = np.array([[np.cos(theta), -np.sin(theta), 0],
-                                    [np.sin(theta), np.cos(theta), 0],
-                                    [0, 0, 1]])
+        theta = np.arccos(np.dot(north_vector, calsource_vector) / (np.linalg.norm(north_vector) * np.linalg.norm(calsource_vector)))
+        print('theta', theta.shape)
+        
+        rotation_matrix = np.zeros((theta.shape[0], 3, 3))
+        rotation_matrix[:, 0, 0] = np.cos(theta)
+        rotation_matrix[:, 0, 1] = -np.sin(theta)
+        rotation_matrix[:, 1, 0] = np.sin(theta)
+        rotation_matrix[:, 1, 1] = np.cos(theta)
+        rotation_matrix[:, 2, 2] = 1
         
         ### Compute ned_vector in xyz coordinates
-        xyz_vector = np.dot(rotation_matrix, ned_vector)
-        return xyz_vector
+        xyz_vectors = np.zeros((3, theta.shape[0]))
+        for itime in range(theta.shape[0]):
+            xyz_vectors[:, itime] = np.dot(rotation_matrix[itime], ned_vector[:, itime])
+
+        return xyz_vectors
         
     def calsource_orientation(self, vector_1_2_xyz):
         """Calsource orientation.
@@ -325,11 +333,6 @@ class GPS:
         ex, ey, ez = np.array([1, 0, 0]), np.array([0, 1, 0]), np.array([0, 0, 1])
         
         angles = np.zeros(vector_1_2_xyz.shape)
-        print('0', vector_1_2_xyz.shape)
-        print('0 bis', vector_1_2_xyz[0, 0].shape)
-        print('1', vector_1_2_xyz[:, 0].shape)
-        print('2 bis', vector_1_2_xyz[:, 0])
-        print('2', np.dot(vector_1_2_xyz[:, 0], ex).shape)
 
         for itime_index in range(vector_1_2_xyz.shape[1]):
             # Rotation around the x-axis

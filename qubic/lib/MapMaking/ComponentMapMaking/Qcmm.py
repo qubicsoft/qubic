@@ -14,14 +14,14 @@ from scipy.optimize import fmin_l_bfgs_b, minimize
 import fgbuster.mixingmatrix as mm
 
 ### Local packages
-from ...InstrumentModel.Qacquisition import *
+from ...Instrument.Qacquisition import *
 from ...MapMaking.Qcg import pcg
 from ...Qfoldertools import *
 from ...MapMaking.Qmap_plotter import *
 from ...Qmpi_tools import MpiTools
 
 # from simtools.mpi_tools import *
-from ...InstrumentModel.Qnoise import *
+from ...Instrument.Qnoise import *
 
 from .Qcostfunc import (
     Chi2Blind,

@@ -1,5 +1,5 @@
 path_out: 'test/'
-datafilename: 'MC'
+datafilename: 'demonstration_bis'
 
 CMB:
     cmb: True
@@ -17,16 +17,16 @@ QUBIC:
     ### This section control the parameters related to QUBIC
 
     instrument: 'DB'                        # Instrumental design (DB or UWB)
-    npointings: 30                        # Number of time samples
+    npointings: 1000                        # Number of time samples
     nsub: 4                                # Number of sub-acquisitions
     nrec: 2                                 # Number of reconstructed frequency maps
     convolution_in: False                   # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
-        ndet: 1                             # Level of detector noise
-        npho150: 1                          # Level of photon noise at 150 GHz
-        npho220: 1                          # Level of photon noise at 220 GHz
+        ndet: 0.1                             # Level of detector noise
+        npho150: 0.1                          # Level of photon noise at 150 GHz
+        npho220: 0.1                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise
     SYNTHBEAM:
         synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
@@ -36,7 +36,7 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 64                              # Nside of components
+    nside: 128                              # Nside of components
     coverage_cut: 0.2                       # Define a cut where the coverage is too low
     RA_center: 0                   
     DEC_center: -57
@@ -52,14 +52,14 @@ PLANCK:
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
 
 Pipeline:
-    mapmaking: True                              # Run MapMaking Pipeline
-    spectrum: False                              # Compute Power Spectra of the frequency maps
+    mapmaking: False                              # Run MapMaking Pipeline
+    spectrum: True                              # Compute Power Spectra of the frequency maps
 
 PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 200                                   # Number of PCG iterations
+    n_iter_pcg: 100                                   # Number of PCG iterations
     tol_pcg: 1.0e-10                                # Tolerance for PCG
 
 Spectrum:
@@ -68,6 +68,6 @@ Spectrum:
 
     dl: 30                                      
     lmin: 40
-    lmax: 511
+    lmax: 255
     aposize: 10
 

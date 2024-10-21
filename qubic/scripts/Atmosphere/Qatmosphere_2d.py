@@ -32,6 +32,7 @@ from pysimulators.interfaces.healpy import Cartesian2HealpixOperator, Spherical2
 #TODO : Verify frequency dependence of the atmosphere
 #TODO : Verify if the atmosphere is in the same frame as the qubic
 #TODO : Add the possibility to have a 3d atmosphere
+#TODO : Verify that get_integrated_absorption_spectrum works as expected, i.e. tha same way as in MM pipeline to build maps
 
 class AtmosphereProperties:
     
@@ -357,7 +358,7 @@ class AtmosphereProperties:
 
         Parameters
         ----------
-        band : int, optional
+        band : int
             QUBIC frequency band. Can be either 150 or 220.
 
         Returns

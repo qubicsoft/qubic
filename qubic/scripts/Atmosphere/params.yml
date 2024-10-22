@@ -29,8 +29,8 @@ nside: 256
 n_theta: 10000
 normalization: 1
 flat: False
-external_data: True
-coverage_cut: 0
+external_data: False
+coverage_cut: 0.2
 dtheta: 15
 
 # Qubic parameters

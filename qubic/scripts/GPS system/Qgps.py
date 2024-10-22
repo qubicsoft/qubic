@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 
 import datetime as dt
 
+#TODO : Add case where the cal source is not aligned with the antenna vector
+#TODO : Add case where the base antenna is not located at the center of the QUBIC window
 
 class GPS:
     
@@ -25,12 +27,13 @@ class GPS:
         ### Import all the GPS data from the dictionary and convert them in proper units
         self.timestamp = np.array(self.gps_data['timestamp'])
         
-         ### Build datetime array
+        ### Build datetime array
         self.datetime = self.create_datetime_array(self.timestamp)
         
         ### 
         self.observation_indices = self.get_observation_indices(self.datetime, self.observation_date)
         self.observation_time = self.timestamp[self.observation_indices]
+        self.observation_datetime = self.datetime[self.observation_indices]
         
         # rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
         self.rpN = np.array(self.gps_data['rpN'])[self.observation_indices] / 10000                       # in m
@@ -60,11 +63,13 @@ class GPS:
         self.vector_calsource_ned = self.position_calsource_ned 
 
         ### Compute the vectors in the XYZ coordinates system, define such that ex is the direction of the calsource vector, ey is the orthogonal vector on the North-East plane and ez is the Down axis
+        self.position_antenna2_xyz = self.ned_to_xyz(self.position_antenna2_ned, self.vector_calsource_ned)
+        self.position_antenna1_xyz = self.ned_to_xyz(self.position_antenna1_ned, self.vector_calsource_ned)
         self.vector_vector_1_2_xyz = self.ned_to_xyz(self.vector_vector_1_2_ned, self.vector_calsource_ned)
         self.vector_calsource_xyz = self.ned_to_xyz(self.vector_calsource_ned, self.vector_calsource_ned)
         
         ### Compute the calibration source orientation angles
-        self.calsource_orientation_angles = self.calsource_orientation(self.vector_vector_1_2_xyz)        
+        self.calsource_orientation_angles = np.degrees(self.calsource_orientation(self.vector_vector_1_2_xyz))        
     
     def read_gps_bindat(self, path_file):
         """GPS binary data.
@@ -202,13 +207,11 @@ class GPS:
         """        
          
         ### If we give an unique observation date
-        try :
-            observation_date.shape
-        except:
-            return self.datetime_to_index(datetime, observation_date)
+        if len(observation_date.shape) == 1 and observation_date.shape[0] == 1:
+            return np.array([self.datetime_to_index(datetime, observation_date[0])])
         
         ### If we give a starting and stoping dates
-        if observation_date.shape[0] == 2:
+        if len(observation_date.shape) == 1 and observation_date.shape[0] == 2:
             start_index = self.datetime_to_index(datetime, observation_date[0])
             end_index = self.datetime_to_index(datetime, observation_date[1])
             return np.arange(start_index, end_index, 1, dtype=int)
@@ -298,9 +301,8 @@ class GPS:
         ### Compute the rotation matrix
         north_vector = np.array([1, 0, 0])
         theta = np.arccos(np.dot(north_vector, calsource_vector) / (np.linalg.norm(north_vector) * np.linalg.norm(calsource_vector)))
-        print('theta', theta.shape)
         
-        rotation_matrix = np.zeros((theta.shape[0], 3, 3))
+        rotation_matrix = np.zeros((self.observation_indices.shape[0], 3, 3))
         rotation_matrix[:, 0, 0] = np.cos(theta)
         rotation_matrix[:, 0, 1] = -np.sin(theta)
         rotation_matrix[:, 1, 0] = np.sin(theta)

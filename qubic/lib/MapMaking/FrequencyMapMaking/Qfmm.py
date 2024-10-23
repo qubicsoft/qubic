@@ -901,6 +901,7 @@ class PipelineFrequencyMapMaking:
                 "fwhm_out": self.fwhm_out,
                 "fwhm_rec": self.fwhm_rec,
                 "duration": mapmaking_time,
+                "qubic_dict":self.dict_out,
             }
 
             self._save_data(self.file, dict_solution)

@@ -1093,6 +1093,7 @@ class Pipeline:
                                 "fwhm_in": self.preset.acquisition.fwhm_tod,
                                 "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
                                 "fwhm_rec": self.preset.acquisition.fwhm_rec,
+                                "qubic_dict": self.preset.qubic.dict,
                                 #'fwhm':self.preset.acquisition.fwhm_tod,
                                 #'acquisition.fwhm_rec':self.preset.acquisition.fwhm_mapmaking
                             },

@@ -543,7 +543,7 @@ class AtmosphereMaps(AtmosphereProperties):
         ### Compute the spatial frequencies & power spectrum.
         _, _, k = self.get_fourier_grid_2d(n_grid, size_atm)
         kolmogorov_spectrum = self.normalized_kolmogorov_spectrum_2d(k, r0)
-        
+
         ### Generate spatial fluctuations through random phases in Fourier space
         phi = np.random.uniform(0, 2*np.pi, size=(self.params['n_grid'], self.params['n_grid']))
         delta_rho_k = np.sqrt(kolmogorov_spectrum) * np.exp(1j * phi)

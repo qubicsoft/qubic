@@ -549,7 +549,7 @@ class AtmosphereMaps(AtmosphereProperties):
         delta_rho_k = np.sqrt(kolmogorov_spectrum) * np.exp(1j * phi)
 
         ### Apply inverse Fourier transform to obtain spatial fluctuations in real space
-        delta_rho = np.fft.irfft2(delta_rho_k, s=(self.params['n_grid'], self.params['n_grid']))
+        delta_rho = np.fft.ifft2(delta_rho_k, s=(self.params['n_grid'], self.params['n_grid'])).real
         
         return delta_rho  
     

@@ -146,7 +146,9 @@ class PlanckMaps(Maps):
 
         return mysky
     def _get_fwhm(self, nu):
-        fwhmi = self.read_pkl(data_dir + f"Planck{nu:.0f}GHz.pkl")[f"fwhm{nu:.0f}"]
+        with open(data_dir + f"Planck{nu:.0f}GHz.pkl", "rb") as f:
+            data = pickle.load(f)
+        fwhmi = data[f"fwhm{nu:.0f}"]
         return fwhmi
     def _get_noise(self, nu):
         

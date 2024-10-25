@@ -452,11 +452,11 @@ class PipelineFrequencyMapMaking:
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
 
             if self.params["Foregrounds"]["Dust"]:
-                f_dust = c.ModifiedBlackBody(nu0=353, beta_d=1.54)
+                f_dust = Dust(nu0=353, beta_d=1.54)
                 weight_factor = f_dust.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_dust.eval(nu))
             else:
-                f_cmb = c.CMB()
+                f_cmb = CMB()
                 weight_factor = f_cmb.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_cmb.eval(nu))
 

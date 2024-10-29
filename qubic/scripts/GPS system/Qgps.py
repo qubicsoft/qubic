@@ -59,11 +59,11 @@ class GPS:
         self.position_calsource = self.position_wrt_antenna_2(self.distance_calsource) + self.position_antenna2
 
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
-        self.vector_vector_1_2 = self.position_antenna2 - self.position_antenna1
+        self.vector_1_2 = self.position_antenna2 - self.position_antenna1
         self.vector_calsource = self.position_calsource 
         
         ### Compute the calibration source orientation angles
-        self.calsource_orientation_angles = np.degrees(self.calsource_orientation(self.vector_vector_1_2, self.vector_calsource))        
+        self.calsource_orientation_angles = np.degrees(self.calsource_orientation(self.vector_1_2, self.vector_calsource))        
     
     def read_gps_bindat(self, path_file):
         """GPS binary data.
@@ -302,13 +302,12 @@ class GPS:
         ### Projections of vector_1_2 on planes ortho to down axis and vector_cal
         vector_1_2_ortho_n_cal = vector_1_2 - (np.sum(vector_1_2 * n_cal, axis=0) / np.sum(n_cal * n_cal, axis=0))[None, :] * n_cal
         vector_1_2_ortho_ed = vector_1_2 - (np.sum(vector_1_2 * ed[:, None], axis=0) / np.dot(ed, ed))[None, :] * ed[:, None]
-            
+        
         ### Build orthogonal vector to vector_cal and down axis
         vector_ortho = np.cross(n_cal, ed, axisa=0).T
-        print(vector_ortho.shape)
         
         ### Compute the angles
-        angles[0] = np.arccos(np.sum(vector_1_2_ortho_n_cal * vector_ortho, axis=0) / (np.linalg.norm(vector_1_2_ortho_n_cal) * np.linalg.norm(vector_ortho)))
-        angles[2] = np.arccos(np.sum(vector_1_2_ortho_ed * vector_ortho, axis=0) / (np.linalg.norm(vector_1_2_ortho_ed) * np.linalg.norm(vector_ortho)))
-        
+        angles[0] = np.arccos(np.sum(vector_1_2_ortho_n_cal * vector_ortho, axis=0) / (np.linalg.norm(vector_1_2_ortho_n_cal, axis=0) * np.linalg.norm(vector_ortho, axis=0)))
+        angles[2] = np.arccos(np.sum(vector_1_2_ortho_ed * vector_ortho, axis=0) / (np.linalg.norm(vector_1_2_ortho_ed, axis=0) * np.linalg.norm(vector_ortho, axis=0)))
+
         return angles

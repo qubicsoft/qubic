@@ -276,17 +276,19 @@ class GPS:
     def calsource_orientation(self, vector_1_2, vector_cal):
         """Calsource orientation.
         
-        Method to compute the orientation of the calsource in the XYZ coordinates.
+        Method to compute the orientation of the calsource.
 
         Parameters
         ----------
-        vector_1_2_xyz : array_like
-            Vector used to compute the orientation of the calsource in the XYZ coordinates.
+        vector_1_2 : array_like
+            Vector between antenna 1 and 2.
+        vector_cal : array_like
+            Vector QUBIC and the calibration source.
 
         Returns
         -------
         angles : array_like
-            Orientation angles of the calsource in the XYZ coordinates.
+            Orientation angles of the calsource.
         """
         
         angles = np.zeros(vector_1_2.shape)        
@@ -298,14 +300,15 @@ class GPS:
         n_cal = vector_cal / np.linalg.norm(vector_cal)
         
         ### Projections of vector_1_2 on planes ortho to down axis and vector_cal
-        vector_1_2_ortho_n_cal = vector_1_2 - np.dot(np.dot(vector_1_2, n_cal) / np.dot(n_cal, n_cal), n_cal)
-        vector_1_2_ortho_ed = vector_1_2 - np.dot(np.dot(vector_1_2, ed) / np.dot(ed, ed), ed)
-        
+        vector_1_2_ortho_n_cal = vector_1_2 - (np.sum(vector_1_2 * n_cal, axis=0) / np.sum(n_cal * n_cal, axis=0))[None, :] * n_cal
+        vector_1_2_ortho_ed = vector_1_2 - (np.sum(vector_1_2 * ed[:, None], axis=0) / np.dot(ed, ed))[None, :] * ed[:, None]
+            
         ### Build orthogonal vector to vector_cal and down axis
-        vector_ortho = np.cross(n_cal, ed)
+        vector_ortho = np.cross(n_cal, ed, axisa=0).T
+        print(vector_ortho.shape)
         
         ### Compute the angles
-        angles[0] = np.arccos(np.dot(vector_1_2_ortho_n_cal, vector_ortho) / (np.linalg.norm(vector_1_2_ortho_n_cal) * np.linalg.norm(vector_ortho)))
-        angles[2] = np.arccos(np.dot(vector_1_2_ortho_ed, vector_ortho) / (np.linalg.norm(vector_1_2_ortho_ed) * np.linalg.norm(vector_ortho)))
+        angles[0] = np.arccos(np.sum(vector_1_2_ortho_n_cal * vector_ortho, axis=0) / (np.linalg.norm(vector_1_2_ortho_n_cal) * np.linalg.norm(vector_ortho)))
+        angles[2] = np.arccos(np.sum(vector_1_2_ortho_ed * vector_ortho, axis=0) / (np.linalg.norm(vector_1_2_ortho_ed) * np.linalg.norm(vector_ortho)))
         
         return angles

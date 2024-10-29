@@ -30,7 +30,7 @@ class GPS:
         ### Build datetime array
         self.datetime = self.create_datetime_array(self.timestamp)
         
-        ### 
+        ### Build observation variables : index, time, datetime
         self.observation_indices = self.get_observation_indices(self.datetime, self.observation_date)
         self.observation_time = self.timestamp[self.observation_indices]
         self.observation_datetime = self.datetime[self.observation_indices]
@@ -47,6 +47,7 @@ class GPS:
         #! Need to double check that
         self.yaw = np.radians(np.array(self.gps_data['yaw'])[self.observation_indices] / 1000)            # in rad
         
+        # Other GPS parameters, not used yet
         self.pitchIMU = np.radians(np.array(self.gps_data['pitchIMU'])[self.observation_indices] / 1000)  # in rad
         self.rollIMU = np.radians(np.array(self.gps_data['rollIMU'])[self.observation_indices] / 1000)    # in rad
         self.temperature = np.array(self.gps_data['temperature'])[self.observation_indices] / 10          # in Celsius
@@ -274,9 +275,35 @@ class GPS:
         return np.array([_rpN, _rpE, _rpD])
     
     def calsource_orientation(self, vector_1_2, vector_cal):
-        """Calsource orientation.
+        r"""Calsource orientation.
         
         Method to compute the orientation of the calsource.
+        - angles[0] is the angle around vector_cal. To compute it, let's define :
+        
+        .. math::
+            \vec{n_{cal}} = \frac{\vec{V_{base \rightarrow cal}}}{||\vec{V_{base \rightarrow cal}}||}, \vec{e_D} = (0, 0, 1) and \vec{V_{ortho}} = \vec{V_{base \rightarrow cal}} \times \vec{e_D}
+            
+            Projection of the vector_1_2 on the orthogonal plane to vector_cal and down axis :
+        
+        .. math::
+            \vec{V_{1 \rightarrow 2, cal}} = \vec{V_{1 \rightarrow 2}} - \frac{\vec{V_{1 \rightarrow 2}} \cdot \vec{n_{cal}}}{\vec{n_{cal}}\cdot \vec{n_{cal}}} \cdot \vec{n_{cal}}
+            
+            Then : 
+        .. math ::
+            \cos(angle[0]) = \frac{\vec{V_{base \rightarrow cal} \cdot \vec{V_{ortho}}}}{||\vec{V_{base \rightarrow cal}}||\cdot||\vec{V_{ortho}}||}
+        
+        - angles[1] is the angle around the axis orthogonal to vector_cal and down axis. It is fixed to 0 as we can't compute it with the system.
+        
+        - angles[2] is the angle around the down axis. To compute it, let's define :
+
+            Projection of the vector_1_2 on the down axis :
+        
+        .. math::
+            \vec{V_{1 \rightarrow 2, D}} = \vec{V_{1 \rightarrow 2}} - \frac{\vec{V_{1 \rightarrow 2}} \cdot \vec{e_{D}}}{\vec{e_{D}} \cdot \vec{e_{D}}} \cdot \vec{e_{D}}
+            
+            Then : 
+        .. math ::
+            \cos(angle[0]) = \frac{\vec{V_{1 \rightarrow 2, D}} \cdot \vec{V_{ortho}}}}{||\vec{V_{1 \rightarrow 2, D}}||\cdot||\vec{V_{ortho}}||}
 
         Parameters
         ----------

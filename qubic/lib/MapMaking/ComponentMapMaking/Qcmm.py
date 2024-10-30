@@ -1093,7 +1093,7 @@ class Pipeline:
                                 "fwhm_in": self.preset.acquisition.fwhm_tod,
                                 "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
                                 "fwhm_rec": self.preset.acquisition.fwhm_rec,
-                                "qubic_dict": self.preset.qubic.dict,
+                                "qubic_dict": {k:v for k,v in self.preset.qubic.dict.items() if k != 'comm'}, # Need to remove the MPI communictor, which is not suppurted by pickle
                                 #'fwhm':self.preset.acquisition.fwhm_tod,
                                 #'acquisition.fwhm_rec':self.preset.acquisition.fwhm_mapmaking
                             },

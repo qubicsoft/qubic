@@ -11,12 +11,11 @@ import datetime as dt
 
 class GPS:
     
-    def __init__(self, gps_data_file_path, base_antenna_position, distance_between_antennas, distance_calsource, observation_date):
+    def __init__(self, gps_data_file_path, distance_between_antennas, distance_calsource, observation_date, position_qubic = np.array([0, 0, 0])):
         
         ### Fixed parameters
-        #! Need to decide in which coordinate system I should express it
-        #! Maybe in a cartesian system centered on the center of the QUBIC window/horn array
-        self.base_antenna_position = base_antenna_position
+        self.base_antenna_position = np.array([0, 0, 0])
+        self.position_qubic = position_qubic
         self.distance_between_antennas = distance_between_antennas
         self.distance_calsource = distance_calsource
         self.observation_date = observation_date
@@ -60,7 +59,7 @@ class GPS:
 
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
         self.vector_1_2 = self.position_antenna2 - self.position_antenna1
-        self.vector_calsource = self.position_calsource 
+        self.vector_calsource = self.position_calsource - self.position_qubic[:, None]
         
         ### Compute the calibration source orientation angles
         self.calsource_orientation_angles = np.degrees(self.calsource_orientation(self.vector_1_2, self.vector_calsource))        
@@ -338,7 +337,7 @@ class GPS:
 
         return angles
     
-    def plot_angle_3d(self, ax, origin, v1, v2, angle, num_points=100, radius=0.5, **kwargs):
+    def plot_angle_3d(self, ax, origin, v1, v2, angle, num_points=1000, radius=0.5, **kwargs):
         """Plot angle 3d.
         
         General function to plot a 3D angle between two vectors v1 and v2.
@@ -386,9 +385,8 @@ class GPS:
                     np.cross(normal, v1_norm) * np.sin(theta) + \
                     normal * np.dot(normal, v1_norm) * (1 - np.cos(theta))
             arc_points[i] = origin + radius * rotated
-        
+            
         ax.plot(arc_points[:, 0], arc_points[:, 1], arc_points[:, 2], **kwargs)
-        
     def plot_system(self, index=0):
         """Plot the system.
         
@@ -404,14 +402,18 @@ class GPS:
         #* I don't want to add too arguments now, as it is a very specific function, associated with the GPS instance
 
         ### Initialize the 3d figure
-        fig = plt.figure(figsize=(8, 10))
+        fig = plt.figure(figsize=(15, 10))
         ax = fig.add_subplot(111, projection='3d')
+        
+        ### Compute a standard size for the plot
+        standard_size = np.max([np.linalg.norm(self.vector_1_2[:, index]), np.linalg.norm(self.vector_calsource[:, index])])
 
-        ### Plot antenna1, antenna 2, base antenna and the calibration source
+        ### Plot antenna1, antenna 2, base antenna, qubic and the calibration source
         ax.scatter(self.position_antenna1[0, index], self.position_antenna1[1, index], self.position_antenna1[2, index], color='b', marker='s', s=100, label='Antenna 1')
         ax.scatter(self.position_antenna2[0, index], self.position_antenna2[1, index], self.position_antenna2[2, index], color='b', marker='^', s=100, label='Antenna 2')
         ax.scatter(self.base_antenna_position[0], self.base_antenna_position[1], self.base_antenna_position[2], color='k', s=100, label='Base antenna')
-        ax.scatter(self.vector_calsource[0, index], self.vector_calsource[1, index], self.vector_calsource[2, index], color='r', marker='*', s=100, label='Calibration Source')
+        ax.scatter(self.position_qubic[0], self.position_qubic[1], self.position_qubic[2], color='pink', marker='o', s=100, label='Qubic')
+        ax.scatter(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index], color='r', marker='*', s=100, label='Calibration Source')
         
         ### Plot the vector between antenna 1 and antenna 2
         ax.quiver(self.position_antenna1[0, index], self.position_antenna1[1, index], self.position_antenna1[2, index], 
@@ -420,61 +422,126 @@ class GPS:
                     self.position_antenna2[2, index] - self.position_antenna1[2, index],
                     color='b', arrow_length_ratio=0.1, linewidth=2, label='Vector 1-2')
         
+        ### Projection of the vector between antenna 1 and antenna 2 on the North/East plane
+        ax.quiver(self.position_antenna1[0, index], self.position_antenna1[1, index], 0*self.position_antenna1[2, index],
+                  self.vector_1_2_ortho_ed[0, index] * standard_size, 
+                  self.vector_1_2_ortho_ed[1, index] * standard_size, 
+                  0*self.vector_1_2_ortho_ed[2, index] * standard_size,
+                  color='darkblue', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7, label='Vector 1-2 - Projection on horizontal plane')
+        ax.quiver(self.position_antenna1[0, index], self.position_antenna1[1, index], 0*self.position_antenna1[2, index],
+                  -self.vector_1_2_ortho_ed[0, index] * standard_size, 
+                  -self.vector_1_2_ortho_ed[1, index] * standard_size, 
+                  -0*self.vector_1_2_ortho_ed[2, index] * standard_size,
+                  color='darkblue', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
+        
+        ### Projection on Qubic-Calsource plane
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index],  self.position_calsource[2, index],
+                  self.vector_1_2_ortho_n_cal[0, index] * standard_size, 
+                  self.vector_1_2_ortho_n_cal[1, index] * standard_size, 
+                  self.vector_1_2_ortho_n_cal[2, index] * standard_size,
+                  color='turquoise', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7, label='Vector 1-2 - Projection on plane orthogonal to calsource')
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index],  self.position_calsource[2, index],
+                  -self.vector_1_2_ortho_n_cal[0, index] * standard_size, 
+                  -self.vector_1_2_ortho_n_cal[1, index] * standard_size, 
+                  -self.vector_1_2_ortho_n_cal[2, index] * standard_size,
+                  color='turquoise', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
+        
         ### Plot the vector between QUBIC and the calibration source
-        ax.quiver(self.base_antenna_position[0], self.base_antenna_position[1], self.base_antenna_position[2], 
-                    self.vector_calsource[0, index] - self.base_antenna_position[0], 
-                    self.vector_calsource[1, index] - self.base_antenna_position[1], 
-                    self.vector_calsource[2, index] - self.base_antenna_position[2], 
+        ax.quiver(self.position_qubic[0], self.position_qubic[1], self.position_qubic[2], 
+                    self.position_calsource[0, index] - self.position_qubic[0], 
+                    self.position_calsource[1, index] - self.position_qubic[1], 
+                    self.position_calsource[2, index] - self.position_qubic[2], 
                     color='r', arrow_length_ratio=0.1, linewidth=2, label='Vector QUBIC-Calibration Source')
         
         ### Plot the 3 rotation axis
         # Plot the QUBIC-calsource axis
-        ax.quiver(self.base_antenna_position[0], self.base_antenna_position[1], self.base_antenna_position[2], 
-                    (self.vector_calsource[0, index] - self.base_antenna_position[0])*2, 
-                    (self.vector_calsource[1, index] - self.base_antenna_position[1])*2, 
-                    (self.vector_calsource[2, index] - self.base_antenna_position[2])*2, 
-                    color='orange', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
+        ax.quiver(self.position_qubic[0], self.position_qubic[1], self.position_qubic[2], 
+                    (self.position_calsource[0, index] - self.position_qubic[0]) * standard_size, 
+                    (self.position_calsource[1, index] - self.position_qubic[1]) * standard_size, 
+                    (self.position_calsource[2, index] - self.position_qubic[2]) * standard_size, 
+                    color='orange', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7, label='Calsource axis')
 
         # Plot the orthogonal vertical axis
-        ax.quiver(self.vector_calsource[0,index], self.vector_calsource[1,index], self.vector_calsource[2, index], 
-                    (self.vector_ortho[0, index] - self.base_antenna_position[0])*2, 
-                    (self.vector_ortho[1, index] - self.base_antenna_position[1])*2, 
-                    (self.vector_ortho[2, index] - self.base_antenna_position[2])*2, 
-                    color='grey', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
-        ax.quiver(self.vector_calsource[0,index], self.vector_calsource[1,index], self.vector_calsource[2, index], 
-                    (self.vector_ortho[0, index] - self.base_antenna_position[0])*-2, 
-                    (self.vector_ortho[1, index] - self.base_antenna_position[1])*-2, 
-                    (self.vector_ortho[2, index] - self.base_antenna_position[2])*-2, 
+        orth_vert_norm = np.linalg.norm(self.vector_ortho[:, index])
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index], 
+                    (self.vector_ortho[0, index]) / orth_vert_norm * standard_size, 
+                    (self.vector_ortho[1, index]) / orth_vert_norm * standard_size, 
+                    (self.vector_ortho[2, index]) / orth_vert_norm * standard_size, 
+                    color='grey', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7, label = 'Orthogonal axis')
+        ax.quiver(self.position_calsource[0,index], self.position_calsource[1,index], self.position_calsource[2, index], 
+                    (self.vector_ortho[0, index]) / - orth_vert_norm * standard_size, 
+                    (self.vector_ortho[1, index]) / - orth_vert_norm * standard_size, 
+                    (self.vector_ortho[2, index]) / - orth_vert_norm * standard_size, 
                     color='grey', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
         # Plot the orthogonal horizontal axis
-        ax.quiver(self.vector_calsource[0,index], self.vector_calsource[1,index], self.vector_calsource[2, index] - 1, 
+        ax.quiver(self.position_calsource[0,index], self.position_calsource[1,index], self.position_calsource[2, index] - 1, 
                     0, 
                     0, 
-                    2, 
-                    color='green', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
+                    2 * standard_size, 
+                    color='green', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7, label='Down axis')
 
         ### Plot the angle around the QUBIC-calsource axis
-        self.plot_angle_3d(ax, origin=self.vector_calsource[:, index], v1=self.vector_1_2_ortho_n_cal[:, index],
-                    v2=self.vector_ortho[:, index], angle=np.radians(self.calsource_orientation_angles[0, index]), radius=0.2, 
-                    color='orange', linewidth=3, label = f'Angle around orthogonal axis : {float(self.calsource_orientation_angles[0, index]):.2f} °')
+        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=self.vector_1_2_ortho_n_cal[:, index],
+                    v1=self.vector_ortho[:, index], angle=np.radians(self.calsource_orientation_angles[0, index]), 
+                    radius=0.25 * standard_size,
+                    color='orange', linewidth=3, label = f'Angle around orthogonal axis : {self.calsource_orientation_angles[0, index]:.2f} °')
         
         ### Plot the angle around Down axis
-        self.plot_angle_3d(ax, origin=self.vector_calsource[:, index], v1=self.vector_1_2_ortho_ed[:, index], 
-                    v2=self.vector_ortho[:, index] - self.position_antenna2[:, index], angle=np.radians(self.calsource_orientation_angles[2, index]), radius=0.2, 
-                    color='green', linewidth=3, label = f'Angle around Down axis : {float(self.calsource_orientation_angles[2, index]):.2f} °')
+        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=self.vector_1_2_ortho_ed[:, index], 
+                    v1=self.vector_ortho[:, index], angle=np.radians(self.calsource_orientation_angles[2, index]), 
+                    radius=0.25 * standard_size,
+                    color='green', linewidth=3, label = f'Angle around Down axis : {self.calsource_orientation_angles[2, index]:.2f} °')
         
-        ax.set_xlim([-1, 1])
-        ax.set_ylim([-1, 1])
-        ax.set_zlim([-1, 1])
+        ax.set_xlim([-standard_size, standard_size])
+        ax.set_ylim([-standard_size, standard_size])
+        ax.set_zlim([-standard_size, standard_size])
         ax.set_xlabel('North', fontsize=12, labelpad=10)
         ax.set_ylabel('East', fontsize=12, labelpad=10)
         ax.set_zlabel('Down', fontsize=12, labelpad=10)
 
-        ax.set_title('Calibration source - Position and Orientation', fontsize=16, pad=20)
+        ax.set_title(f'Calibration source - Position and Orientation - {self.observation_datetime[index]}', fontsize=16, pad=20)
         ax.grid(True, linestyle='--', alpha=0.7)
         ax.xaxis.pane.fill = False
         ax.yaxis.pane.fill = False
         ax.zaxis.pane.fill = False
 
-        plt.legend()
-        plt.tight_layout()
+        # First legend for positions
+        legend1 = ax.legend(
+            [ax.get_children()[i] for i in [0, 1, 2, 3, 4]], 
+            ['Antenna 1', 'Antenna 2', 'Base antenna', 'Qubic', 'Calibration Source'],
+            loc='upper left', bbox_to_anchor=(1, 1)
+        )
+        ax.add_artist(legend1)
+
+        # Second legend for vectors
+        legend2 = ax.legend(
+            [ax.get_children()[i] for i in [5, 7, 9, 10]], 
+            ['Vector 1-2', 
+             'Vector 1-2 - Horizontal projection', 
+             'Vector 1-2 - Orthogonal projection',
+             'Vector QUBIC-Calibration Source'],
+             loc='upper left', bbox_to_anchor=(1, 0.8)
+        )
+        ax.add_artist(legend2)
+        
+        # Third legend for vectors
+        legend3 = ax.legend(
+            [ax.get_children()[i] for i in [11, 13, 14]], 
+            ['Calsource axis',
+             'Orthogonal axis',
+             'Down axis'],
+             loc='upper left', bbox_to_anchor=(1, 0.6)
+        )
+        ax.add_artist(legend3)
+
+        # Fourth legend for angles
+        legend4 = ax.legend(
+            [ax.get_children()[i] for i in [15, 16]], 
+            [f'Angle around orthogonal axis : {self.calsource_orientation_angles[0, index]:.2f} °',
+            f'Angle around Down axis : {self.calsource_orientation_angles[2, index]:.2f} °'],
+            loc='upper left', bbox_to_anchor=(1, 0.4)
+        )
+        ax.add_artist(legend4)
+        
+        plt.tight_layout(rect=[0, 0, 0.85, 0.85])
+        

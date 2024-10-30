@@ -901,7 +901,7 @@ class PipelineFrequencyMapMaking:
                 "fwhm_out": self.fwhm_out,
                 "fwhm_rec": self.fwhm_rec,
                 "duration": mapmaking_time,
-                "qubic_dict":self.dict_out,
+                "qubic_dict": {k:v for k,v in self.dict_out.items() if k != 'comm'} # I have to remove the MPI communicator, which is not supported by pickle
             }
 
             self._save_data(self.file, dict_solution)

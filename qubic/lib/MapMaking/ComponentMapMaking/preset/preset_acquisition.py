@@ -1,12 +1,12 @@
 import numpy as np
 from pyoperators import DiagonalOperator
 
-from ....InstrumentModel.Qacquisition import *
-from ....InstrumentModel.Qnoise import *
+from ....Instrument.Qacquisition import *
+from ....Instrument.Qnoise import *
 from fgbuster import component_model as c
 
-#from qubic.lib.InstrumentModel.Qacquisition import *
-#from qubic.lib.InstrumentModel.Qnoise import *
+#from qubic.lib.Instrument.Qacquisition import *
+#from qubic.lib.Instrument.Qnoise import *
 #import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
 
 

@@ -117,9 +117,9 @@ class FitEllSpace:
 
         x0 = np.zeros((0, nwalkers))
         keys = self.params.keys()
-
+    
         for key in keys:
-            params = self.params[key].keys()
+            params = self.params[key]
             for param in params:
 
                 ### Check if the user define the parameter as free and not fixed at given value

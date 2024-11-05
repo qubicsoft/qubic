@@ -11,14 +11,15 @@ import datetime as dt
 
 class GPS:
     
-    def __init__(self, gps_data_file_path, distance_between_antennas, distance_calsource, observation_date, position_qubic = np.array([0, 0, 0])):
+    def __init__(self, gps_data_file_path, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, observation_date, position_qubic = np.array([0, 0, 0])):
         
         ### Fixed parameters
         self.base_antenna_position = np.array([0, 0, 0])
-        self.position_qubic = position_qubic
-        self.distance_between_antennas = distance_between_antennas
-        self.distance_calsource = distance_calsource
+        self.position_ini_antenna1 = position_ini_antenna1
+        self.position_ini_antenna2 = position_ini_antenna2
+        self.position_ini_calsource = position_ini_calsource
         self.observation_date = observation_date
+        self.position_qubic = position_qubic
         
         ### Convert the data from GPS system into a dictionary
         self.gps_data = self.read_gps_bindat(gps_data_file_path)
@@ -53,16 +54,19 @@ class GPS:
         
         ### Compute position of antennas 1 & 2 and calibration source in North, East, Down cooridnates
         #! Be careful: as it is now, the calibration source needs to be on the straight line formed by antenna 1 and antenna 2
+        self.distance_between_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
         self.position_antenna2 = self.get_position_antenna_2(self.base_antenna_position)
-        self.position_antenna1 = self.get_position_wrt_antenna_2(self.distance_between_antennas) 
-        self.position_calsource = self.get_position_wrt_antenna_2(self.distance_calsource) 
+        self.position_antenna1 = self.get_position_antenna_1(self.distance_between_antennas) 
+        self.position_calsource = self.get_calsource_position(self.position_ini_antenna1, self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna1, self.position_antenna2) 
+        print('ini', self.position_ini_calsource)
+        print('rota', self.position_calsource)
 
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
-        self.vector_1_2 = self.position_antenna2 - self.position_antenna1
-        self.vector_calsource = self.position_calsource - self.position_qubic[:, None]
+        vector_1_2 = self.position_antenna2 - self.position_antenna1
+        vector_calsource = self.position_calsource - self.position_qubic[:, None]
         
         ### Compute the calibration source orientation angles
-        self.calsource_orientation_angles = np.degrees(self.get_calsource_orientation(self.vector_1_2, self.vector_calsource))        
+        self.calsource_orientation_angles = np.degrees(self.get_calsource_orientation(vector_1_2, vector_calsource))        
     
     def read_gps_bindat(self, path_file):
         """GPS binary data.
@@ -242,7 +246,7 @@ class GPS:
         
         return np.array([rpN_antenna_2, rpE_antenna_2, rpD_antenna_2])
     
-    def get_position_wrt_antenna_2(self, distance_w_antenna_2):
+    def get_position_antenna_1(self, distance_w_antenna_2):
         """Position wrt antenna 2.
         
         General fonction to compute the position of any point located on the straight line formed by the antenna 1 - anntenna 2 vector, wrt antenna 2 in North, East, Down coordinates.
@@ -272,6 +276,51 @@ class GPS:
         
         return np.array([_rpN, _rpE, _rpD]) + self.position_antenna2
     
+    def get_calsource_position(self, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, position_antenna1, position_antenna2):
+        
+        vector_calsource_ini = position_ini_calsource - position_ini_antenna1
+        vector_antennas_ini = position_ini_antenna2 - position_ini_antenna1
+        vector_antennas = position_antenna2 - position_antenna1
+
+        ### Basis vectors
+        en = np.array([1, 0, 0])[:, None]
+        ee = np.array([0, 1, 0])[:, None]
+        ed = np.array([0, 0, 1])[:, None]
+                
+        ### Angle around North
+        vector_antennas_ini_north = vector_antennas_ini - (np.sum(vector_antennas_ini * en, axis=0) / np.sum(en * en, axis=0)) * en
+        vector_antennas_north = vector_antennas - (np.sum(vector_antennas * en, axis=0) / np.sum(en * en, axis=0)) * en
+        angle_north = np.arccos(np.sum(vector_antennas_ini_north * vector_antennas_north, axis=0) / (np.linalg.norm(vector_antennas_ini_north, axis=0) * np.linalg.norm(vector_antennas_north, axis=0)))
+
+        ### Angle around East
+        vector_antennas_ini_east = vector_antennas_ini - (np.sum(vector_antennas_ini * ee, axis=0) / np.sum(ee * ee, axis=0)) * ee
+        vector_antennas_east = vector_antennas - (np.sum(vector_antennas * ee, axis=0) / np.sum(ee * ee, axis=0)) * ee
+        angle_east = np.arccos(np.sum(vector_antennas_ini_east * vector_antennas_east, axis=0) / (np.linalg.norm(vector_antennas_ini_east, axis=0) * np.linalg.norm(vector_antennas_east, axis=0)))
+        
+        ### Angle around Down
+        vector_antennas_ini_down = vector_antennas_ini - (np.sum(vector_antennas_ini * ed, axis=0) / np.sum(ed * ed, axis=0)) * ed
+        vector_antennas_down = vector_antennas - (np.sum(vector_antennas * ed, axis=0) / np.sum(ed * ed, axis=0)) * ed
+        angle_down = np.arccos(np.sum(vector_antennas_ini_down * vector_antennas_down, axis=0) / (np.linalg.norm(vector_antennas_ini_down, axis=0) * np.linalg.norm(vector_antennas_down, axis=0)))
+        
+        ### Be sure that angles are defined
+        print('angles', angle_north, angle_east, angle_down)
+        angle_north = np.where(np.isnan(angle_north), 0, angle_north)
+        angle_east = np.where(np.isnan(angle_east), 0, angle_east)
+        angle_down = np.where(np.isnan(angle_down), 0, angle_down)
+        print('angles', angle_north, angle_east, angle_down)
+        
+        ### Rotation matrices
+        R_north = np.array([[1, 0, 0],
+                            [0, np.cos(angle_north), -np.sin(angle_north)],
+                            [0, np.sin(angle_north), np.cos(angle_north)]])
+        R_east = np.array([[np.cos(angle_east), 0, np.sin(angle_east)],
+                           [0, 1, 0],
+                           [-np.sin(angle_east), 0, np.cos(angle_east)]])
+        R_down = np.array([[np.cos(angle_down), -np.sin(angle_down), 0],
+                           [np.sin(angle_down), np.cos(angle_down), 0],
+                           [0, 0, 1]])
+        
+        return np.dot(R_north, np.dot(R_east, np.dot(R_down, vector_calsource_ini))) + position_antenna1
     def get_calsource_orientation(self, vector_1_2, vector_cal):
         r"""Calsource orientation.
         
@@ -325,16 +374,16 @@ class GPS:
         self.n_cal = vector_cal / np.linalg.norm(vector_cal)
         
         ### Build orthogonal vector to vector_cal
-        self.vector_ortho_vert = np.cross(self.n_cal, ed, axisa=0).T
-        self.vector_ortho_horiz = np.cross(self.n_cal, self.vector_ortho_vert, axisa=0, axisb=0).T
+        vector_ortho_vert = np.cross(self.n_cal, ed, axisa=0).T
+        vector_ortho_horiz = np.cross(self.n_cal, vector_ortho_vert, axisa=0, axisb=0).T
         
         ### Projections of vector_1_2 on planes ortho to vector_cal
-        self.vector_1_2_ortho = vector_1_2 - (np.sum(vector_1_2 * self.n_cal, axis=0) / np.sum(self.n_cal * self.n_cal, axis=0))[None, :] * self.n_cal
-        self.vector_1_2_proj = vector_1_2 - (np.sum(vector_1_2 * self.vector_ortho_horiz, axis=0) / np.sum(self.vector_ortho_horiz * self.vector_ortho_horiz, axis=0))[None, :] * self.vector_ortho_horiz
+        vector_1_2_ortho = vector_1_2 - (np.sum(vector_1_2 * self.n_cal, axis=0) / np.sum(self.n_cal * self.n_cal, axis=0))[None, :] * self.n_cal
+        vector_1_2_proj = vector_1_2 - (np.sum(vector_1_2 * vector_ortho_horiz, axis=0) / np.sum(vector_ortho_horiz * vector_ortho_horiz, axis=0))[None, :] * vector_ortho_horiz
         
         ### Compute the angles
-        angles[0] = np.arccos(np.sum(self.vector_1_2_ortho * self.vector_ortho_vert, axis=0) / (np.linalg.norm(self.vector_1_2_ortho, axis=0) * np.linalg.norm(self.vector_ortho_vert, axis=0)))
-        angles[2] = np.arccos(np.sum(self.vector_1_2_proj * self.vector_ortho_vert, axis=0) / (np.linalg.norm(self.vector_1_2_proj, axis=0) * np.linalg.norm(self.vector_ortho_vert, axis=0)))
+        angles[0] = np.arccos(np.sum(vector_1_2_ortho * vector_ortho_vert, axis=0) / (np.linalg.norm(vector_1_2_ortho, axis=0) * np.linalg.norm(vector_ortho_vert, axis=0)))
+        angles[2] = np.arccos(np.sum(vector_1_2_proj * vector_ortho_vert, axis=0) / (np.linalg.norm(vector_1_2_proj, axis=0) * np.linalg.norm(vector_ortho_vert, axis=0)))
 
         return angles
     
@@ -408,7 +457,7 @@ class GPS:
         ax = fig.add_subplot(111, projection='3d')
         
         ### Compute a standard size for the plot
-        standard_size = np.max([np.linalg.norm(self.vector_1_2[:, index]), np.linalg.norm(self.vector_calsource[:, index])])
+        standard_size = np.max([np.linalg.norm(vector_1_2[:, index]), np.linalg.norm(vector_calsource[:, index])])
 
         ### Plot antenna1, antenna 2, base antenna, qubic and the calibration source
         ax.scatter(self.position_antenna1[0, index], self.position_antenna1[1, index], self.position_antenna1[2, index], color='b', marker='s', s=100)
@@ -426,26 +475,26 @@ class GPS:
         
         ### Projection of the vector between antenna 1 and antenna 2 on the North/East plane
         ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index],
-                  self.vector_1_2_ortho[0, index] * standard_size, 
-                  self.vector_1_2_ortho[1, index] * standard_size, 
-                  self.vector_1_2_ortho[2, index] * standard_size,
+                  vector_1_2_ortho[0, index] * standard_size, 
+                  vector_1_2_ortho[1, index] * standard_size, 
+                  vector_1_2_ortho[2, index] * standard_size,
                   color='darkblue', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
         ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index],
-                  -self.vector_1_2_ortho[0, index] * standard_size, 
-                  -self.vector_1_2_ortho[1, index] * standard_size, 
-                  -self.vector_1_2_ortho[2, index] * standard_size,
+                  -vector_1_2_ortho[0, index] * standard_size, 
+                  -vector_1_2_ortho[1, index] * standard_size, 
+                  -vector_1_2_ortho[2, index] * standard_size,
                   color='darkblue', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
         
         ### Projection on Qubic-Calsource plane
         ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index],  self.position_calsource[2, index],
-                  self.vector_1_2_proj[0, index] * standard_size, 
-                  self.vector_1_2_proj[1, index] * standard_size, 
-                  self.vector_1_2_proj[2, index] * standard_size,
+                  vector_1_2_proj[0, index] * standard_size, 
+                  vector_1_2_proj[1, index] * standard_size, 
+                  vector_1_2_proj[2, index] * standard_size,
                   color='turquoise', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
         ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index],  self.position_calsource[2, index],
-                  -self.vector_1_2_proj[0, index] * standard_size, 
-                  -self.vector_1_2_proj[1, index] * standard_size, 
-                  -self.vector_1_2_proj[2, index] * standard_size,
+                  -vector_1_2_proj[0, index] * standard_size, 
+                  -vector_1_2_proj[1, index] * standard_size, 
+                  -vector_1_2_proj[2, index] * standard_size,
                   color='turquoise', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
         
         ### Plot the vector between QUBIC and the calibration source
@@ -464,38 +513,38 @@ class GPS:
                     color='orange', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
 
         # Plot the orthogonal vertical axis
-        orth_vert_norm = np.linalg.norm(self.vector_ortho_vert[:, index])
+        orth_vert_norm = np.linalg.norm(vector_ortho_vert[:, index])
         ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index], 
-                    (self.vector_ortho_vert[0, index]) / orth_vert_norm * standard_size, 
-                    (self.vector_ortho_vert[1, index]) / orth_vert_norm * standard_size, 
-                    (self.vector_ortho_vert[2, index]) / orth_vert_norm * standard_size, 
+                    (vector_ortho_vert[0, index]) / orth_vert_norm * standard_size, 
+                    (vector_ortho_vert[1, index]) / orth_vert_norm * standard_size, 
+                    (vector_ortho_vert[2, index]) / orth_vert_norm * standard_size, 
                     color='grey', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
         ax.quiver(self.position_calsource[0,index], self.position_calsource[1,index], self.position_calsource[2, index], 
-                    (self.vector_ortho_vert[0, index]) / - orth_vert_norm * standard_size, 
-                    (self.vector_ortho_vert[1, index]) / - orth_vert_norm * standard_size, 
-                    (self.vector_ortho_vert[2, index]) / - orth_vert_norm * standard_size, 
+                    (vector_ortho_vert[0, index]) / - orth_vert_norm * standard_size, 
+                    (vector_ortho_vert[1, index]) / - orth_vert_norm * standard_size, 
+                    (vector_ortho_vert[2, index]) / - orth_vert_norm * standard_size, 
                     color='grey', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
         # Plot the orthogonal horizontal axis
-        orth_horiz_norm = np.linalg.norm(self.vector_ortho_horiz[:, index])
+        orth_horiz_norm = np.linalg.norm(vector_ortho_horiz[:, index])
         ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index], 
-                    (self.vector_ortho_horiz[0, index]) / orth_horiz_norm * standard_size, 
-                    (self.vector_ortho_horiz[1, index]) / orth_horiz_norm * standard_size, 
-                    (self.vector_ortho_horiz[2, index]) / orth_horiz_norm * standard_size, 
+                    (vector_ortho_horiz[0, index]) / orth_horiz_norm * standard_size, 
+                    (vector_ortho_horiz[1, index]) / orth_horiz_norm * standard_size, 
+                    (vector_ortho_horiz[2, index]) / orth_horiz_norm * standard_size, 
                     color='green', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
         ax.quiver(self.position_calsource[0,index], self.position_calsource[1,index], self.position_calsource[2, index], 
-                    (self.vector_ortho_horiz[0, index]) / - orth_horiz_norm * standard_size, 
-                    (self.vector_ortho_horiz[1, index]) / - orth_horiz_norm * standard_size, 
-                    (self.vector_ortho_horiz[2, index]) / - orth_horiz_norm * standard_size, 
+                    (vector_ortho_horiz[0, index]) / - orth_horiz_norm * standard_size, 
+                    (vector_ortho_horiz[1, index]) / - orth_horiz_norm * standard_size, 
+                    (vector_ortho_horiz[2, index]) / - orth_horiz_norm * standard_size, 
                     color='green', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
         ### Plot the angle around the QUBIC-calsource axis
-        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=self.vector_1_2_ortho[:, index],
-                    v1=self.vector_ortho_vert[:, index], angle=np.radians(self.calsource_orientation_angles[0, index]), 
+        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=vector_1_2_ortho[:, index],
+                    v1=vector_ortho_vert[:, index], angle=np.radians(self.calsource_orientation_angles[0, index]), 
                     radius=0.25 * standard_size,
                     color='orange', linewidth=3)
         
         ### Plot the angle around Down axis
-        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=self.vector_1_2_proj[:, index], 
-                    v1=self.vector_ortho_vert[:, index], angle=np.radians(self.calsource_orientation_angles[2, index]), 
+        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=vector_1_2_proj[:, index], 
+                    v1=vector_ortho_vert[:, index], angle=np.radians(self.calsource_orientation_angles[2, index]), 
                     radius=0.25 * standard_size,
                     color='green', linewidth=3)
         

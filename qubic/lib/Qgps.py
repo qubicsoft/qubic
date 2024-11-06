@@ -11,20 +11,27 @@ import datetime as dt
 
 class GPS:
     
-    def __init__(self, gps_data_file_path, distance_between_antennas, distance_calsource, observation_date, position_qubic = np.array([0, 0, 0])):
+    def __init__(self, gps_data, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, observation_date, position_qubic = np.array([0, 0, 0])):
         
         ### Fixed parameters
         self.base_antenna_position = np.array([0, 0, 0])
-        self.position_qubic = position_qubic
-        self.distance_between_antennas = distance_between_antennas
-        self.distance_calsource = distance_calsource
+        self.position_ini_antenna1 = position_ini_antenna1
+        self.position_ini_antenna2 = position_ini_antenna2
+        self.position_ini_calsource = position_ini_calsource
         self.observation_date = observation_date
+        self.position_qubic = position_qubic
         
         ### Convert the data from GPS system into a dictionary
-        self.gps_data = self.read_gps_bindat(gps_data_file_path)
+        if type(gps_data) == str:
+            if os.path.isfile(gps_data):
+                self.gps_data = self.read_gps_bindat(gps_data)
+            else:
+                raise ValueError("The GPS data file does not exist")
+        else:
+            self.gps_data = gps_data
         
         ### Import all the GPS data from the dictionary and convert them in proper units
-        self.timestamp = np.array(self.gps_data['timestamp'])
+        self.timestamp = np.array([self.gps_data['timestamp']])
         
         ### Build datetime array
         self.datetime = self.create_datetime_array(self.timestamp)
@@ -35,28 +42,29 @@ class GPS:
         self.observation_datetime = self.datetime[self.observation_indices]
         
         # rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
-        self.rpN = np.array(self.gps_data['rpN'])[self.observation_indices] / 10000                       # in m
-        self.rpE = np.array(self.gps_data['rpE'])[self.observation_indices] / 10000                       # in m
-        self.rpD = np.array(self.gps_data['rpD'])[self.observation_indices] / 10000                       # in m
+        self.rpN = np.array([self.gps_data['rpN']])[self.observation_indices] / 10000                       # in m
+        self.rpE = np.array([self.gps_data['rpE']])[self.observation_indices] / 10000                       # in m
+        self.rpD = np.array([self.gps_data['rpD']])[self.observation_indices] / 10000                       # in m
         
         # roll give the angle between antenna 2 - antenna 1 vector and the North axis
-        self.roll = np.radians(np.array(self.gps_data['roll'])[self.observation_indices] / 1000)          # in rad
+        self.roll = np.radians(np.array([self.gps_data['roll']])[self.observation_indices] / 1000)          # in rad
         
         # yaw give the angle between antenna 2 - antenna 1 vector and the horizontal plane
-        self.yaw = np.radians(np.array(self.gps_data['yaw'])[self.observation_indices] / 1000)            # in rad
+        self.yaw = np.radians(np.array([self.gps_data['yaw']])[self.observation_indices] / 1000)            # in rad
         
         # Other GPS parameters, not used yet
-        self.pitchIMU = np.radians(np.array(self.gps_data['pitchIMU'])[self.observation_indices] / 1000)  # in rad
-        self.rollIMU = np.radians(np.array(self.gps_data['rollIMU'])[self.observation_indices] / 1000)    # in rad
-        self.temperature = np.array(self.gps_data['temperature'])[self.observation_indices] / 10          # in Celsius
-        self.checksum = np.array(self.gps_data['checksum'])[self.observation_indices]
+        self.pitchIMU = np.radians(np.array([self.gps_data['pitchIMU']])[self.observation_indices] / 1000)  # in rad
+        self.rollIMU = np.radians(np.array([self.gps_data['rollIMU']])[self.observation_indices] / 1000)    # in rad
+        self.temperature = np.array([self.gps_data['temperature']])[self.observation_indices] / 10          # in Celsius
+        self.checksum = np.array([self.gps_data['checksum']])[self.observation_indices]
         
         ### Compute position of antennas 1 & 2 and calibration source in North, East, Down cooridnates
         #! Be careful: as it is now, the calibration source needs to be on the straight line formed by antenna 1 and antenna 2
+        self.distance_between_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
         self.position_antenna2 = self.get_position_antenna_2(self.base_antenna_position)
-        self.position_antenna1 = self.get_position_wrt_antenna_2(self.distance_between_antennas) 
-        self.position_calsource = self.get_position_wrt_antenna_2(self.distance_calsource) 
-
+        self.position_antenna1 = self.get_position_antenna_1(self.distance_between_antennas) 
+        self.position_calsource = self.get_calsource_position(self.position_ini_antenna1, self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna1, self.position_antenna2) 
+        
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
         self.vector_1_2 = self.position_antenna2 - self.position_antenna1
         self.vector_calsource = self.position_calsource - self.position_qubic[:, None]
@@ -232,17 +240,9 @@ class GPS:
             Position of the antenna 2 in North, East, Down coordinates.
         """        
         
-        ### Call the base antenna position in North, East, Down coordinates
-        rpN_base, rpE_base, rpD_base = base_antenna_position
-        
-        ### Compute the position of the antenna 2 in North, East, Down coordinates
-        rpN_antenna_2 = self.rpN + rpN_base
-        rpE_antenna_2 = self.rpE + rpE_base
-        rpD_antenna_2 = self.rpD + rpD_base
-        
-        return np.array([rpN_antenna_2, rpE_antenna_2, rpD_antenna_2])
+        return base_antenna_position[:, None] + np.array([self.rpN, self.rpE, self.rpD])
     
-    def get_position_wrt_antenna_2(self, distance_w_antenna_2):
+    def get_position_antenna_1(self, distance_w_antenna_2):
         """Position wrt antenna 2.
         
         General fonction to compute the position of any point located on the straight line formed by the antenna 1 - anntenna 2 vector, wrt antenna 2 in North, East, Down coordinates.
@@ -272,6 +272,29 @@ class GPS:
         
         return np.array([_rpN, _rpE, _rpD]) + self.position_antenna2
     
+    def get_calsource_position(self, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, position_antenna1, position_antenna2):
+        
+        ### Define vectors
+        vector_antennas_ini = position_ini_antenna2 - position_ini_antenna1
+        vector_antennas = position_antenna2 - position_antenna1
+        vec_ini_norm = vector_antennas_ini / np.linalg.norm(vector_antennas_ini)
+        vec_norm = vector_antennas / np.linalg.norm(vector_antennas)
+        
+        ### Compute barycenters
+        C = (position_ini_antenna1 + position_ini_antenna2) / 2
+        C_ = (position_antenna1 + position_antenna2) / 2
+        
+        ### Compute rotation through singular value decomposition
+        H = np.outer(vec_ini_norm, vec_norm)
+        U, S, Vt = np.linalg.svd(H)
+        d = np.linalg.det(Vt.T @ U.T)
+        R = Vt.T @ np.diag([1, 1, d]) @ U.T
+        
+        ### Compute new position of the calsource using the rigid transformation
+        position_calsource = R @ (position_ini_calsource - C) + C_
+        
+        return position_calsource      
+       
     def get_calsource_orientation(self, vector_1_2, vector_cal):
         r"""Calsource orientation.
         
@@ -281,7 +304,7 @@ class GPS:
         .. math::
             \vec{n_{cal}} = \frac{\vec{V_{base \rightarrow cal}}}{||\vec{V_{base \rightarrow cal}}||}, \vec{e_D} = (0, 0, 1) and \vec{V_{ortho}} = \vec{V_{base \rightarrow cal}} \times \vec{e_D}
             
-            Projection of the vector_1_2 on the orthogonal plane to vector_cal and down axis :
+            Projection of the self.vector_1_2 on the orthogonal plane to vector_cal and down axis :
         
         .. math::
             \vec{V_{1 \rightarrow 2, cal}} = \vec{V_{1 \rightarrow 2}} - \frac{\vec{V_{1 \rightarrow 2}} \cdot \vec{n_{cal}}}{\vec{n_{cal}}\cdot \vec{n_{cal}}} \cdot \vec{n_{cal}}
@@ -294,7 +317,7 @@ class GPS:
         
         - angles[2] is the angle around the down axis. To compute it, let's define :
 
-            Projection of the vector_1_2 on the down axis :
+            Projection of the self.vector_1_2 on the down axis :
         
         .. math::
             \vec{V_{1 \rightarrow 2, D}} = \vec{V_{1 \rightarrow 2}} - \frac{\vec{V_{1 \rightarrow 2}} \cdot \vec{e_{D}}}{\vec{e_{D}} \cdot \vec{e_{D}}} \cdot \vec{e_{D}}
@@ -305,7 +328,7 @@ class GPS:
 
         Parameters
         ----------
-        vector_1_2 : array_like
+        self.vector_1_2 : array_like
             Vector between antenna 1 and 2.
         vector_cal : array_like
             Vector between QUBIC and the calibration source.
@@ -328,10 +351,10 @@ class GPS:
         self.vector_ortho_vert = np.cross(self.n_cal, ed, axisa=0).T
         self.vector_ortho_horiz = np.cross(self.n_cal, self.vector_ortho_vert, axisa=0, axisb=0).T
         
-        ### Projections of vector_1_2 on planes ortho to vector_cal
+        ### Projections of self.vector_1_2 on planes ortho to vector_cal
         self.vector_1_2_ortho = vector_1_2 - (np.sum(vector_1_2 * self.n_cal, axis=0) / np.sum(self.n_cal * self.n_cal, axis=0))[None, :] * self.n_cal
         self.vector_1_2_proj = vector_1_2 - (np.sum(vector_1_2 * self.vector_ortho_horiz, axis=0) / np.sum(self.vector_ortho_horiz * self.vector_ortho_horiz, axis=0))[None, :] * self.vector_ortho_horiz
-        
+
         ### Compute the angles
         angles[0] = np.arccos(np.sum(self.vector_1_2_ortho * self.vector_ortho_vert, axis=0) / (np.linalg.norm(self.vector_1_2_ortho, axis=0) * np.linalg.norm(self.vector_ortho_vert, axis=0)))
         angles[2] = np.arccos(np.sum(self.vector_1_2_proj * self.vector_ortho_vert, axis=0) / (np.linalg.norm(self.vector_1_2_proj, axis=0) * np.linalg.norm(self.vector_ortho_vert, axis=0)))
@@ -408,7 +431,8 @@ class GPS:
         ax = fig.add_subplot(111, projection='3d')
         
         ### Compute a standard size for the plot
-        standard_size = np.max([np.linalg.norm(self.vector_1_2[:, index]), np.linalg.norm(self.vector_calsource[:, index])])
+        standard_size = np.maximum(np.linalg.norm(self.vector_1_2, axis=0), np.linalg.norm(self.vector_calsource, axis=0))
+
 
         ### Plot antenna1, antenna 2, base antenna, qubic and the calibration source
         ax.scatter(self.position_antenna1[0, index], self.position_antenna1[1, index], self.position_antenna1[2, index], color='b', marker='s', s=100)
@@ -419,9 +443,9 @@ class GPS:
         
         ### Plot the vector between antenna 1 and antenna 2
         ax.quiver(self.position_antenna1[0, index], self.position_antenna1[1, index], self.position_antenna1[2, index], 
-                    self.position_antenna2[0, index] - self.position_antenna1[0, index], 
-                    self.position_antenna2[1, index] - self.position_antenna1[1, index], 
-                    self.position_antenna2[2, index] - self.position_antenna1[2, index],
+                    self.vector_1_2[0, index],
+                    self.vector_1_2[1, index],
+                    self.vector_1_2[2, index],
                     color='b', arrow_length_ratio=0.1, linewidth=2)
         
         ### Projection of the vector between antenna 1 and antenna 2 on the North/East plane
@@ -450,17 +474,18 @@ class GPS:
         
         ### Plot the vector between QUBIC and the calibration source
         ax.quiver(self.position_qubic[0], self.position_qubic[1], self.position_qubic[2], 
-                    self.position_calsource[0, index] - self.position_qubic[0], 
-                    self.position_calsource[1, index] - self.position_qubic[1], 
-                    self.position_calsource[2, index] - self.position_qubic[2], 
+                    self.vector_calsource[0, index], 
+                    self.vector_calsource[1, index],
+                    self.vector_calsource[2, index],
                     color='r', arrow_length_ratio=0.1, linewidth=2)
         
         ### Plot the 3 rotation axis
         # Plot the QUBIC-calsource axis
+        vector_calsource_norm = np.linalg.norm(self.vector_calsource[:, index])
         ax.quiver(self.position_qubic[0], self.position_qubic[1], self.position_qubic[2], 
-                    (self.position_calsource[0, index] - self.position_qubic[0]) * standard_size, 
-                    (self.position_calsource[1, index] - self.position_qubic[1]) * standard_size, 
-                    (self.position_calsource[2, index] - self.position_qubic[2]) * standard_size, 
+                    self.vector_calsource[0, index] / vector_calsource_norm * standard_size,
+                    self.vector_calsource[1, index] / vector_calsource_norm * standard_size,
+                    self.vector_calsource[2, index] / vector_calsource_norm * standard_size,
                     color='orange', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
 
         # Plot the orthogonal vertical axis

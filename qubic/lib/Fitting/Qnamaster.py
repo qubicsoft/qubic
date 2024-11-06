@@ -159,10 +159,10 @@ class Namaster(object):
             if beam_correction is True:
                 # Default value for QUBIC at 150 GHz
                 beam = hp.gauss_beam(np.deg2rad(0.39268176),
-                                     lmax=self.lmax)
+                                     lmax=3*nside-1)
             else:
                 beam = hp.gauss_beam(np.deg2rad(beam_correction),
-                                     lmax=self.lmax)
+                                     lmax=3*nside-1)
         else:
             beam = None
 

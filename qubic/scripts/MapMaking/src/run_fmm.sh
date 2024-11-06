@@ -6,8 +6,8 @@
 
 #SBATCH --partition=htc
 #SBATCH --nodes=1                # c
-#SBATCH --ntasks-per-node=2      # n
-#SBATCH --cpus-per-task=2        # N
+#SBATCH --ntasks-per-node=1      # n
+#SBATCH --cpus-per-task=4        # N
 #SBATCH --mem=50G
 #SBATCH --time=0-05:00:00
 #SBATCH --output=mulitple_jobs_%j.log

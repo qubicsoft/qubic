@@ -953,7 +953,7 @@ class PipelineEnd2End:
         ### Execute spectrum
         if self.params["Pipeline"]["spectrum"]:
             
-            if self.params['Spectrum']['lmax'] > 2*self.params['Sky']['nside'] - 1:
+            if self.params['Spectrum']['lmax'] > 2*self.params['SKY']['nside'] - 1:
                 raise ValueError("lmax should be lower than 2*nside - 1")
             
             if self.comm.Get_rank() == 0:

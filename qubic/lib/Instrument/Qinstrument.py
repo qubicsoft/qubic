@@ -314,7 +314,7 @@ class QubicInstrument(Instrument):
             parth, parfr, parbeam, alpha, xspl = self.calibration.get("primbeam")
             PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu)
         self.primary_beam = PrimBeam
-        if secondary is "gaussian":
+        if secondary == "gaussian":
             SecBeam = BeamGaussian(
                 np.radians(self.calibration.get("primbeam")), nu=nu, backward=True
             )
@@ -1176,18 +1176,21 @@ class QubicInstrument(Instrument):
     def _get_projection_operator(
         rotation, scene, nu, position, synthbeam, horn, primary_beam, verbose=True
     ):
+        
+        ### Compute the spherical coordinates of the beam peaks for each detectors
         ndetectors = position.shape[0]
         ntimes = rotation.data.shape[0]
         nside = scene.nside
         thetas, phis, vals = QubicInstrument._peak_angles(
             scene, nu, position, synthbeam, horn, primary_beam
         )
-
-        ncolmax = thetas.shape[-1]
-        thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
+        
+        ### Compute normed peaks direction vector for each detectors in cartesian coordinates
+        npeaks = thetas.shape[-1]
+        thetaphi = _pack_vector(thetas, phis)  # (ndetectors, npeaks, 2)
         direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
         e_nf = direction[:, None, :, :]
-
+        
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:
@@ -1196,41 +1199,45 @@ class QubicInstrument(Instrument):
         cls = {"I": FSRMatrix, "QU": FSRRotation2dMatrix, "IQU": FSRRotation3dMatrix}[
             scene.kind
         ]
-        ndims = len(scene.kind)
+        
+        nstokes = len(scene.kind)
         nscene = len(scene)
         nscenetot = product(scene.shape[: scene.ndim])
         s = cls(
-            (ndetectors * ntimes * ndims, nscene * ndims),
-            ncolmax=ncolmax,
+            (ndetectors * ntimes * nstokes, nscene * nstokes),
+            ncolmax=npeaks,
             dtype=synthbeam.dtype,
             dtype_index=dtype_index,
             verbose=verbose,
         )
-
-        index = s.data.index.reshape((ndetectors, ntimes, ncolmax))
+        
+        index = s.data.index.reshape((ndetectors, ntimes, npeaks))
         c2h = Cartesian2HealpixOperator(nside)
         if nscene != nscenetot:
             table = np.full(nscenetot, -1, dtype_index)
             table[scene.index] = np.arange(len(scene), dtype=dtype_index)
 
+        ### Change of coordinates, from instrument to galactic + compute the associated healpix indeces
         def func_thread(i):
-            # e_nf[i] shape: (1, ncolmax, 3)
-            # e_ni shape: (ntimes, ncolmax, 3)
+            # e_nf[i] shape: (1, npeaks, 3)
+            # e_ni shape: (ntimes, npeaks, 3)
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
                 np.take(table, c2h(e_ni).astype(int), out=index[i])
             else:
                 index[i] = c2h(e_ni)
 
+        ### Parallelisation
         with pool_threading() as pool:
             pool.map(func_thread, range(ndetectors))
 
+        ### Compute the integration value for each peaks
         if scene.kind == "I":
-            value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
+            value = s.data.value.reshape(ndetectors, ntimes, npeaks)
             value[...] = vals[:, None, :]
             shapeout = (ndetectors, ntimes)
+            
         else:
-
             if str(dtype_index) not in ("int32", "int64") or str(
                 synthbeam.dtype
             ) not in ("float32", "float64"):
@@ -1239,12 +1246,13 @@ class QubicInstrument(Instrument):
                     "nd {1}.".format(dtype_index, synthbeam.dtype)
                 )
             func = "matrix_rot{0}d_i{1}_r{2}".format(
-                ndims, dtype_index.itemsize, synthbeam.dtype.itemsize
+                nstokes, dtype_index.itemsize, synthbeam.dtype.itemsize
             )
+            
             getattr(flib.polarization, func)(
                 rotation.data.T, direction.T, s.data.ravel().view(np.int8), vals.T
             )
-
+            
             if scene.kind == "QU":
                 shapeout = (ndetectors, ntimes, 2)
             else:

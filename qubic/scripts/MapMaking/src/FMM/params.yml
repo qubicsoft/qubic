@@ -1,4 +1,4 @@
-path_out: 'new_filter_operator/'
+path_out: 'test_python3.10/'
 datafilename: 'MC'
 
 CMB:

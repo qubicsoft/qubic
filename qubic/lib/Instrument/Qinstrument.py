@@ -1257,7 +1257,7 @@ class QubicInstrument(Instrument):
                 shapeout = (ndetectors, ntimes, 2)
             else:
                 shapeout = (ndetectors, ntimes, 3)
-
+                
         return ProjectionOperator(s, shapeout=shapeout)
 
     def get_transmission_operator(self):

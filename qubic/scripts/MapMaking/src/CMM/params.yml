@@ -28,8 +28,8 @@ Foregrounds:
     
     # Synchrotron emission
     Synchrotron:
-        Synchrotron_in: False
-        Synchrotron_out: False
+        Synchrotron_in: True
+        Synchrotron_out: True
 
         type: 'parametric'                      # Reconstruction method
         model_s: 's0'                           # PySM model

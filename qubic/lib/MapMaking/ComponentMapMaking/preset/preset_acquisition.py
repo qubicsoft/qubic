@@ -347,7 +347,7 @@ class PresetAcquisition:
                     fwhm_rec[comp] = np.sum(
                         scalar_acquisition_operators
                         * f_sync.eval(self.preset_qubic.joint_out.qubic.allnus)
-                        * self.fwhm_tod
+                        * fwhm_tod
                     ) / (
                         np.sum(
                             scalar_acquisition_operators

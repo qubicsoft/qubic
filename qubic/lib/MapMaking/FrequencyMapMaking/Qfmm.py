@@ -15,12 +15,13 @@ from ...Qdictionary import qubicDict
 from ...Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
 from ...Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
 from ..Qcg import pcg
-from ..ComponentMapMaking.Qcomponent_model import CMB, Dust, Synchrotron
 from ...Qfoldertools import create_folder_if_not_exists, do_gif
 from ..Qmap_plotter import PlotsFMM
 from ...Qspectra import Spectra
 from ...Qmpi_tools import MpiTools
 from ..Qmaps import PlanckMaps, InputMaps
+
+from fgbuster.component_model import CMB, Dust, Synchrotron
 
 __all__ = ["PipelineFrequencyMapMaking", 
            "PipelineEnd2End"]
@@ -452,7 +453,7 @@ class PipelineFrequencyMapMaking:
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
 
             if self.params["Foregrounds"]["Dust"]:
-                f_dust = Dust(nu0=353, beta_d=1.54)
+                f_dust = Dust(nu0=353, beta_d=1.54, temp=20)
                 weight_factor = f_dust.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_dust.eval(nu))
             else:

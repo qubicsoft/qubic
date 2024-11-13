@@ -9,7 +9,7 @@ CMB:
 
 Foregrounds:
 
-    Dust: False                              # Thermal Dust emission
+    Dust: True                              # Thermal Dust emission
     Synchrotron: False                      # Synchrotron emission
 
 QUBIC:

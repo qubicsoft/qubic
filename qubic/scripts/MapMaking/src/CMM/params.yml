@@ -4,7 +4,7 @@ CMB:
     r: 0
     Alens: 1
 
-Foregrounds:
+Foregrounds: 
 
     ### This section define the in/out foregrounds contribution
 

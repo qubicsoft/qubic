@@ -322,11 +322,10 @@ class PresetAcquisition:
                         scalar_acquisition_operators * fwhm_tod
                     ) / (np.sum(scalar_acquisition_operators))
                 if self.preset_comp.components_name_out[comp] == "Dust":
-                    f_dust = c.ModifiedBlackBody(
+                    f_dust = c.Dust(
                         nu0=self.preset_comp.params_foregrounds["Dust"]["nu0_d"],
-                        beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][
-                            0
-                        ],
+                        beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][0],
+                        temp=20
                     )
                     fwhm_rec[comp] = np.sum(
                         scalar_acquisition_operators
@@ -339,7 +338,7 @@ class PresetAcquisition:
                         )
                     )
                 if self.preset_comp.components_name_out[comp] == "Synchrotron":
-                    f_sync = c.PowerLaw(
+                    f_sync = c.Synchrotron(
                         nu0=self.preset_comp.params_foregrounds["Synchrotron"]["nu0_s"],
                         beta_pl=self.preset_comp.params_foregrounds["Synchrotron"][
                             "beta_s_init"
@@ -368,7 +367,7 @@ class PresetAcquisition:
         self.preset_tools.mpi._print_message(f"Reconstructed FWHM : {fwhm_rec}")
 
         return fwhm_tod, fwhm_mapmaking, fwhm_rec
-
+    
     def get_noise(self):
         """Noise.
 

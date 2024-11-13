@@ -30,7 +30,7 @@ QUBIC:
         npho220: 0                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise
     SYNTHBEAM:
-        synthbeam_kmax: 9                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+        synthbeam_kmax: 2                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     dtheta: 15                             # Angle for coverage
 
 SKY:

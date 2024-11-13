@@ -549,9 +549,9 @@ class PipelineFrequencyMapMaking:
                     if self.params["QUBIC"]["convolution_in"]:
                         C = HealpixConvolutionGaussianOperator(
                             fwhm=np.min(
-                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in], lmax = self.params['Spectrum']['lmax'],
+                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]), lmax = self.params['Spectrum']['lmax'],
                             )
-                        )
+                        
 
                     else:
                         C = HealpixConvolutionGaussianOperator(fwhm=0)
@@ -566,8 +566,8 @@ class PipelineFrequencyMapMaking:
                     if self.params["QUBIC"]["convolution_in"]:
                         C = HealpixConvolutionGaussianOperator(
                             fwhm=np.min(
-                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in], lmax = self.params['Spectrum']['lmax']
-                            )
+                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]), lmax = self.params['Spectrum']['lmax']
+                            
                         )
 
                     else:

@@ -1,4 +1,4 @@
-path_out: 'test_python3.10/'
+path_out: 'test_UWB/'
 datafilename: 'MC'
 
 CMB:
@@ -16,7 +16,7 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
     
-    instrument: 'DB'                        # Instrumental design (DB or UWB)
+    instrument: 'UWB'                        # Instrumental design (DB or UWB)
     npointings: 1000                        # Number of time samples
     nsub_in: 6                             # Number of sub-acquisitions
     nsub_out: 6
@@ -76,5 +76,5 @@ Spectrum:
 
     dl: 30                                      
     lmin: 40
-    lmax: 511
+    lmax: 255
     aposize: 10

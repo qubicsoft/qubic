@@ -1,4 +1,5 @@
 import os
+import yaml
 
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -543,10 +544,9 @@ class PlotsCMM:
         for each component and Stokes parameter (I, Q, U). The maps are convolved using
         a Gaussian operator and displayed using Healpix's gnomview function.
         """
-        C = HealpixConvolutionGaussianOperator(
-            fwhm=self.preset.acquisition.fwhm_rec,
-            lmax=3 * self.params["SKY"]["nside"],
-        )
+        C = [HealpixConvolutionGaussianOperator(
+            fwhm=self.preset.acquisition.fwhm_rec[i],
+            lmax=3 * self.params["SKY"]["nside"]) for i in range(len(self.preset.comp.components_name_out))]
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
             plt.figure(figsize=figsize)
@@ -556,7 +556,7 @@ class PlotsCMM:
 
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
 
-                    map_in = C(self.preset.comp.components_out[icomp, :, istk]).copy()
+                    map_in = C[icomp](self.preset.comp.components_out[icomp, :, istk]).copy()
                     map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
 
                     sig = np.std(self.preset.comp.components_out[icomp, seenpix, istk])

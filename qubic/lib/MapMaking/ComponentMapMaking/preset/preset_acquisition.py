@@ -539,10 +539,9 @@ class PresetAcquisition:
 
         # Build beta map for spatially varying spectral index
         self.allbeta = np.array([self.beta_iter])
-        C1 = HealpixConvolutionGaussianOperator(
-            fwhm=self.fwhm_rec,
-            lmax=3 * self.preset_tools.params["SKY"]["nside"],
-        )
+        C1 = [HealpixConvolutionGaussianOperator(
+            fwhm=self.fwhm_rec[i],
+            lmax=3 * self.preset_tools.params["SKY"]["nside"]) for i in range(len(self.preset_comp.components_model_out))]
         C2 = HealpixConvolutionGaussianOperator(
             fwhm=self.preset_tools.params["INITIAL"]["fwhm0"],
             lmax=3 * self.preset_tools.params["SKY"]["nside"],
@@ -553,7 +552,7 @@ class PresetAcquisition:
         for i in range(len(self.preset_comp.components_model_out)):
             if self.preset_comp.components_name_out[i] == "CMB":
                 self.preset_comp.components_iter[i] = C2(
-                    C1(self.preset_comp.components_iter[i])
+                    C1[i](self.preset_comp.components_iter[i])
                 )
                 for istk in range(3):
                     if istk == 0:
@@ -572,7 +571,7 @@ class PresetAcquisition:
                     )
             elif self.preset_comp.components_name_out[i] == "Dust":
                 self.preset_comp.components_iter[i] = C2(
-                    C1(self.preset_comp.components_iter[i])
+                    C1[i](self.preset_comp.components_iter[i])
                 )
                 for istk in range(3):
                     if istk == 0:
@@ -591,7 +590,7 @@ class PresetAcquisition:
                     )
             elif self.preset_comp.components_name_out[i] == "Synchrotron":
                 self.preset_comp.components_iter[i] = C2(
-                    C1(self.preset_comp.components_iter[i])
+                    C1[i](self.preset_comp.components_iter[i])
                 )
                 for istk in range(3):
                     if istk == 0:
@@ -611,7 +610,7 @@ class PresetAcquisition:
                     )
             elif self.preset_comp.components_name_out[i] == "CO":
                 self.preset_comp.components_iter[i] = C2(
-                    C1(self.preset_comp.components_iter[i])
+                    C1[i](self.preset_comp.components_iter[i])
                 )
                 
                 for istk in range(3):

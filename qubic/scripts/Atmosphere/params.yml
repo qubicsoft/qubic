@@ -18,18 +18,17 @@ sigma_rho: 1                    # Variance of water vapor density in g/m³
 
 # Simulation parameters
 
-n_grid: 2000                       # Number of squares in the grid
+n_grid: 300                       # Number of squares in the grid
 h_grid: 1                         # Number of sqares for the altitude, i for 2d model
 h_qubic: 4869                     # QUBIC altitude in m
-size_atm: 1000                    # Lenght of the atm in m
+size_atm: 2000                    # Lenght of the atm in m
 nsub_in: 20                       # Number of sub-acquisitions used to integrate over the atm spectrum
 nrec: 2
 2d: True                          # Determine if you want to simulate a 2d atm
 nside: 128
 n_theta: 10000
 normalization: 1
-flat: False
-external_data: False
+flat: True
 coverage_cut: 0.2
 dtheta: 15
 

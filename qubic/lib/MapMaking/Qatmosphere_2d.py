@@ -11,6 +11,7 @@ from astropy.cosmology import Planck18
 import qubic
 from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qscene import QubicScene
+from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Instrument.Qinstrument import QubicInstrument, compute_freq
 
 from pyoperators import *
@@ -429,7 +430,7 @@ class AtmosphereMaps(AtmosphereProperties):
         self.lmax = 3*self.params['nside']-1
         
         ### Build water vapor density map
-        self.rho_map = self.get_water_vapor_density_2d_map(self.mean_water_vapor_density)
+        self.rho_map = self.get_water_vapor_density_2d_map(self.mean_water_vapor_density, flat=self.params['flat'])
         
         ### Build the temperature maps of the atmosphere
         self.atm_temp_maps = self.get_temp_maps(self.rho_map)
@@ -767,7 +768,7 @@ class AtmosphereMaps(AtmosphereProperties):
         
         return delta_rho
         
-    def get_water_vapor_density_2d_map(self, mean_rho, angular=True):
+    def get_water_vapor_density_2d_map(self, mean_rho, flat=True):
         """Water vapor density 2d map.
         
         Get the water vapor density 2d map with simulated fluctuations.
@@ -788,10 +789,10 @@ class AtmosphereMaps(AtmosphereProperties):
         """             
         
         ### Build water vapor density fluctuations
-        if angular:
-            delta_rho = self.generate_spatial_fluctuation_sphercial_harmonics()
-        else:
+        if flat:
             delta_rho = self.generate_spatial_fluctuations_fourier(self.params['n_grid'], self.params['size_atm'], self.params['correlation_length'])
+        else:
+            delta_rho = self.generate_spatial_fluctuation_sphercial_harmonics()
             
         ### Normalize fluctuations
         normalized_delta_rho = delta_rho * np.sqrt(self.params['sigma_rho'] / np.var(delta_rho))  
@@ -822,8 +823,11 @@ class AtmosphereMaps(AtmosphereProperties):
         
         ### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021
         ###! I assume that the multiplication by the beam profile is done when applying the acquisition operator.
-        temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.temperature * maps
-        
+        if len(maps.shape) == 1:
+            temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.temperature * maps
+        else:
+            temp_maps = self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.temperature * maps
+            
         ### Convert them into micro Kelvin CMB
         temp_maps -= Planck18.Tcmb0.value
         temp_maps *= 1e6
@@ -859,7 +863,7 @@ class AtmosphereMaps(AtmosphereProperties):
         
         return r, az, el
     
-    def get_healpy_atm_maps_2d(self):
+    def get_healpy_atm_maps_2d(self, maps):
         """Healpy 2d atmosphere maps.
         
         Function to project the 2d atmosphere maps in cartesian coordinates, and then project them in spherical coordinates using healpy.
@@ -881,7 +885,9 @@ class AtmosphereMaps(AtmosphereProperties):
         azel_coordinates = np.asarray([az_list, el_list]).T
         
         ### Build rotation operator
-        rotation_above_qubic = Cartesian2SphericalOperator('azimuth,elevation')(Rotation3dOperator("ZY'", - self.qubic_dict['latitude'], self.qubic_dict['longitude'])(Spherical2CartesianOperator('azimuth,elevation')))
+        longitude, latitude = equ2gal(self.qubic_dict['RA_center'], self.qubic_dict['DEC_center'])
+        print(longitude, latitude)
+        rotation_above_qubic = Cartesian2SphericalOperator('azimuth,elevation')(Rotation3dOperator("ZY'", longitude, 90 - latitude, degrees=True)(Spherical2CartesianOperator('azimuth,elevation')))
         
         ### Build healpy projection operator
         rotation_azel2hp = Spherical2HealpixOperator(self.params['nside'], 'azimuth,elevation')
@@ -890,6 +896,6 @@ class AtmosphereMaps(AtmosphereProperties):
         hp_maps_index = rotation_azel2hp(rotation_above_qubic(azel_coordinates)).astype(int)
         hp_maps_2d = np.zeros((len(self.frequencies), hp.nside2npix(self.params['nside'])))
         for ifreq in range(len(self.frequencies)):
-            hp_maps_2d[ifreq, hp_maps_index] = self.get_maps()[ifreq].flatten()
+            hp_maps_2d[ifreq, hp_maps_index] = maps[ifreq].flatten()
         
         return hp_maps_2d

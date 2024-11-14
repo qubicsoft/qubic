@@ -1,4 +1,4 @@
-import signal, traceback, os, string
+import signal, traceback, os, string, re
 from progressbar import ProgressBar, Bar, ETA, Percentage
 import numpy as np
 from PIL import Image
@@ -203,8 +203,10 @@ def find_file(filename,verbosity=1):
     if 'QUBIC_DICT' in os.environ.keys():
         dir_list.append(os.environ['QUBIC_DICT'])
 
-    if 'QUBIC_DATADIR' in os.environ.keys():
-        dir_list.append(os.environ['QUBIC_DATADIR'])
+    for var in os.environ.keys():
+        match = re.search('QUBIC_.*DIR',var)
+        if match:
+            dir_list.append(var)
         
     dir_list += [dicts_dir,cal_dir,data_dir]
     

@@ -60,11 +60,11 @@ class GPS:
         self.distance_between_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
         self.position_antenna2 = self.get_position_antenna_2(self.base_antenna_position)
         self.position_antenna1 = self.get_position_antenna_1(self.distance_between_antennas) 
-        self.position_cal_qubicsource = self.get_calsource_position(self.position_ini_antenna1, self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna1, self.position_antenna2, ini_wrt_antenna2=ini_wrt_antenna2) 
+        self.position_calsource = self.get_calsource_position(self.position_ini_antenna1, self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna1, self.position_antenna2, ini_wrt_antenna2=ini_wrt_antenna2) 
         
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
         self.vector_1_2 = self.position_antenna2 - self.position_antenna1
-        self.vector_calsource_qubic = self.position_cal_qubicsource - self.position_qubic[:, None]
+        self.vector_calsource_qubic = self.position_calsource - self.position_qubic[:, None]
         
         ### Compute the calibration source orientation angles
         self.calsource_orientation_angles = np.degrees(self.get_calsource_orientation(self.vector_1_2, self.vector_calsource_qubic))        
@@ -297,7 +297,7 @@ class GPS:
 
         Returns
         -------
-        position_cal_qubicsource : array_like
+        position_calsource : array_like
             Current position of the calibration source.
             
         """  
@@ -319,7 +319,7 @@ class GPS:
         B_ = (position_antenna1 + position_antenna2) / 2
         
         ### Compute rotation through singular value decomposition
-        position_cal_qubicsource = np.zeros_like(position_antenna1)
+        position_calsource = np.zeros_like(position_antenna1)
     
         for i in range(position_antenna1.shape[1]):
             M = np.outer(vec_ini_norm, vec_norm[:, i])
@@ -328,9 +328,9 @@ class GPS:
             R = Vt.T @ np.diag([1, 1, d]) @ U.T
         
             ### Compute new position using the rigid transformation
-            position_cal_qubicsource[:, i] = R @ (position_ini_calsource - B) + B_[:, i]
+            position_calsource[:, i] = R @ (position_ini_calsource - B) + B_[:, i]
             
-        return position_cal_qubicsource      
+        return position_calsource      
        
     def get_calsource_orientation(self, vector_cal, vector_cal_qubic):
         r"""Calsource orientation.
@@ -478,7 +478,7 @@ class GPS:
         ax.scatter(self.position_antenna2[0, index], self.position_antenna2[1, index], self.position_antenna2[2, index], color='b', marker='^', s=100)
         ax.scatter(self.base_antenna_position[0], self.base_antenna_position[1], self.base_antenna_position[2], color='k', s=100)
         ax.scatter(self.position_qubic[0], self.position_qubic[1], self.position_qubic[2], color='pink', marker='o', s=100)
-        ax.scatter(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index], self.position_cal_qubicsource[2, index], color='r', marker='*', s=100)
+        ax.scatter(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index], color='r', marker='*', s=100)
         
         ### Plot the vector between antenna 1 and antenna 2
         ax.quiver(self.position_antenna1[0, index], self.position_antenna1[1, index], self.position_antenna1[2, index], 
@@ -488,36 +488,36 @@ class GPS:
                     color='b', arrow_length_ratio=0.1, linewidth=2)
         
         ### Projection of the vector between antenna 1 and antenna 2 on the plane orthogonal to Qubic-Calsource
-        ax.quiver(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index], self.position_cal_qubicsource[2, index],
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index],
                   self.vector_1_2_calsource_proj[0, index] * standard_size, 
                   self.vector_1_2_calsource_proj[1, index] * standard_size, 
                   self.vector_1_2_calsource_proj[2, index] * standard_size,
                   color='darkblue', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
-        ax.quiver(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index], self.position_cal_qubicsource[2, index],
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index],
                   -self.vector_1_2_calsource_proj[0, index] * standard_size, 
                   -self.vector_1_2_calsource_proj[1, index] * standard_size, 
                   -self.vector_1_2_calsource_proj[2, index] * standard_size,
                   color='darkblue', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
         
         ### Projection of the vector between antenna 1 and antenna 2 on Qubic-Calsource/ortho vertical plane
-        ax.quiver(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index],  self.position_cal_qubicsource[2, index],
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index],  self.position_calsource[2, index],
                   self.vector_1_2_vertical_proj[0, index] * standard_size,
                   self.vector_1_2_vertical_proj[1, index] * standard_size,
                   self.vector_1_2_vertical_proj[2, index] * standard_size,
                   color='royalblue', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
-        ax.quiver(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index],  self.position_cal_qubicsource[2, index],
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index],  self.position_calsource[2, index],
                   -self.vector_1_2_vertical_proj[0, index] * standard_size,
                   -self.vector_1_2_vertical_proj[1, index] * standard_size,
                   -self.vector_1_2_vertical_proj[2, index] * standard_size,
                   color='royalblue', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
         
         ### Projection of the vector between antenna 1 and antenna 2 on Qubic-Calsource/ortho horizontal plane
-        ax.quiver(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index],  self.position_cal_qubicsource[2, index],
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index],  self.position_calsource[2, index],
                   self.vector_1_2_horizontal_proj[0, index] * standard_size, 
                   self.vector_1_2_horizontal_proj[1, index] * standard_size, 
                   self.vector_1_2_horizontal_proj[2, index] * standard_size,
                   color='turquoise', arrow_length_ratio=0., linewidth=2, linestyle='--', alpha=0.7)
-        ax.quiver(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index],  self.position_cal_qubicsource[2, index],
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index],  self.position_calsource[2, index],
                   -self.vector_1_2_horizontal_proj[0, index] * standard_size, 
                   -self.vector_1_2_horizontal_proj[1, index] * standard_size, 
                   -self.vector_1_2_horizontal_proj[2, index] * standard_size,
@@ -541,42 +541,42 @@ class GPS:
 
         # Plot the orthogonal vertical axis
         orth_vert_norm = np.linalg.norm(self.vector_ortho_vert[:, index])
-        ax.quiver(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index], self.position_cal_qubicsource[2, index], 
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index], 
                     (self.vector_ortho_vert[0, index]) / orth_vert_norm * standard_size, 
                     (self.vector_ortho_vert[1, index]) / orth_vert_norm * standard_size, 
                     (self.vector_ortho_vert[2, index]) / orth_vert_norm * standard_size, 
                     color='grey', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
-        ax.quiver(self.position_cal_qubicsource[0,index], self.position_cal_qubicsource[1,index], self.position_cal_qubicsource[2, index], 
+        ax.quiver(self.position_calsource[0,index], self.position_calsource[1,index], self.position_calsource[2, index], 
                     (self.vector_ortho_vert[0, index]) / - orth_vert_norm * standard_size, 
                     (self.vector_ortho_vert[1, index]) / - orth_vert_norm * standard_size, 
                     (self.vector_ortho_vert[2, index]) / - orth_vert_norm * standard_size, 
                     color='grey', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
         # Plot the orthogonal horizontal axis
         orth_horiz_norm = np.linalg.norm(self.vector_ortho_horiz[:, index])
-        ax.quiver(self.position_cal_qubicsource[0, index], self.position_cal_qubicsource[1, index], self.position_cal_qubicsource[2, index], 
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index], 
                     (self.vector_ortho_horiz[0, index]) / orth_horiz_norm * standard_size, 
                     (self.vector_ortho_horiz[1, index]) / orth_horiz_norm * standard_size, 
                     (self.vector_ortho_horiz[2, index]) / orth_horiz_norm * standard_size, 
                     color='green', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
-        ax.quiver(self.position_cal_qubicsource[0,index], self.position_cal_qubicsource[1,index], self.position_cal_qubicsource[2, index], 
+        ax.quiver(self.position_calsource[0,index], self.position_calsource[1,index], self.position_calsource[2, index], 
                     (self.vector_ortho_horiz[0, index]) / - orth_horiz_norm * standard_size, 
                     (self.vector_ortho_horiz[1, index]) / - orth_horiz_norm * standard_size, 
                     (self.vector_ortho_horiz[2, index]) / - orth_horiz_norm * standard_size, 
                     color='green', arrow_length_ratio=0., linewidth=1, linestyle='--', alpha=0.7)
         ### Plot the angle around the QUBIC-calsource axis
-        self.plot_angle_3d(ax, origin=self.position_cal_qubicsource[:, index], v2=self.vector_1_2_calsource_proj[:, index],
+        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=self.vector_1_2_calsource_proj[:, index],
                     v1=self.vector_ortho_vert[:, index], angle=np.radians(self.calsource_orientation_angles[0, index]), 
                     radius=0.25 * standard_size,
                     color='orange', linewidth=3)
         
         ### Plot the angle around horizontal orthognoal axis
-        self.plot_angle_3d(ax, origin=self.position_cal_qubicsource[:, index], v2=self.vector_1_2_vertical_proj[:, index],
+        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=self.vector_1_2_vertical_proj[:, index],
                            v1=self.vector_ortho_horiz[:, index], angle=np.radians(self.calsource_orientation_angles[1, index]),
                            radius=0.25 * standard_size,
                            color='grey', linewidth=3)
         
         ### Plot the angle around vertical orthognoal axis
-        self.plot_angle_3d(ax, origin=self.position_cal_qubicsource[:, index], v2=self.vector_1_2_horizontal_proj[:, index], 
+        self.plot_angle_3d(ax, origin=self.position_calsource[:, index], v2=self.vector_1_2_horizontal_proj[:, index], 
                     v1=self.vector_ortho_vert[:, index], angle=np.radians(self.calsource_orientation_angles[2, index]), 
                     radius=0.25 * standard_size,
                     color='green', linewidth=3)

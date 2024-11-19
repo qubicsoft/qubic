@@ -352,14 +352,13 @@ def create_sweeping_pointings(
     isweeps = np.floor(out.time / backforthdt).astype(int)
 
     # azimuth/elevation of the center of the field as a function of time
-
     if fix_azimuth['apply']:
         azcenter = out.time * 0 + fix_azimuth['az']
         elcenter = out.time * 0 + fix_azimuth['el']
     else:
         azcenter, elcenter = equ2hor(racenter, deccenter, out.time, date_obs=out.date_obs, latitude=out.latitude,
                                      longitude=out.longitude)
-
+    
     # compute azimuth offset for all time samples
     daz = out.time * angspeed
     daz = daz % (delta_az * 2)
@@ -479,7 +478,13 @@ def equ2hor(ra, dec, time, date_obs=QubicSampling.DEFAULT_DATE_OBS,
     (array(135.71997181016644), array(-10.785386358099927))
 
     """
-    incoords, time = _format_sphconv(ra, dec, date_obs, time)
+    _, time = _format_sphconv(ra, dec, date_obs, time)
+
+    ra_array = np.ones(time.shape) * ra
+    dec_array = np.ones(time.shape) * dec
+    incoords = np.zeros((time.shape[0], 2))
+    incoords[..., 0], incoords[..., 1] = ra_array, dec_array
+
     outcoords = SphericalEquatorial2HorizontalOperator(
         'NE', time, latitude, longitude, degrees=True)(incoords)
     return outcoords[..., 0], outcoords[..., 1]

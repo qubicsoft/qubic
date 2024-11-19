@@ -33,5 +33,5 @@ coverage_cut: 0.2
 dtheta: 15
 
 # Qubic parameters
-npointings: 100
+npointings: 1
 kmax: 1

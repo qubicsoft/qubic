@@ -170,12 +170,12 @@ class QubicInstrument(Instrument):
 
         ## Choose the relevant Optics calibration file
         self.nu1 = 150e9
-        self.nu1_up = 150e9 * (1 + self.FRBW / 1.99999)
-        self.nu1_down = 150e9 * (1 - self.FRBW / 1.99999)
+        self.nu1_up = 150e9 * (1 + self.FRBW / 2)
+        self.nu1_down = 150e9 * (1 - self.FRBW / 2)
 
         self.nu2 = 220e9
-        self.nu2_up = 220e9 * (1 + self.FRBW / 1.99999)
-        self.nu2_down = 220e9 * (1 - self.FRBW / 1.99999)
+        self.nu2_up = 220e9 * (1 + self.FRBW / 2)
+        self.nu2_down = 220e9 * (1 - self.FRBW / 2)
 
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
             d["optics"] = d["optics"].replace(d["optics"][-7:-4], "150")

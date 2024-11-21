@@ -863,6 +863,16 @@ class AtmosphereMaps(AtmosphereProperties):
         
         return r, az, el
     
+    def get_azel_coordinates(self):
+        
+        az_list, el_list = [], []
+        for ind_x in range(len(self.x_list)):
+            for ind_y in range(len(self.y_list)):
+                _, az, el = self.horizontal_plane_to_azel(self.x_list[ind_x], self.y_list[ind_y], self.altitude[0])
+                az_list.append(az)
+                el_list.append(el) 
+        return np.asarray([az_list, el_list]).T
+    
     def get_healpy_atm_maps_2d(self, maps):
         """Healpy 2d atmosphere maps.
         
@@ -876,13 +886,7 @@ class AtmosphereMaps(AtmosphereProperties):
         """        
         
         ### Build list of azimuth and elevation coordinates for each point of the atmosphere
-        az_list, el_list = [], []
-        for ind_x in range(len(self.x_list)):
-            for ind_y in range(len(self.y_list)):
-                _, az, el = self.horizontal_plane_to_azel(self.x_list[ind_x], self.y_list[ind_y], self.altitude[0])
-                az_list.append(az)
-                el_list.append(el) 
-        azel_coordinates = np.asarray([az_list, el_list]).T
+        azel_coordinates = self.get_azel_coordinates()
         
         ### Build rotation operator
         longitude, latitude = equ2gal(self.qubic_dict['RA_center'], self.qubic_dict['DEC_center'])

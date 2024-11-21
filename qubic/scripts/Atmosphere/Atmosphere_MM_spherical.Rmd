@@ -1,0 +1,370 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt 
+import healpy as hp
+
+from qubic.lib.MapMaking.Qatmosphere_2d import AtmosphereMaps
+
+import sys
+import yaml
+
+sys.path.append('/home/laclavere/qubic/qubic/Pipeline')
+
+import qubic
+
+from qubic.lib.MapMaking.Qmaps import InputMaps
+from qubic.lib.MapMaking.Qcg import PCGAlgorithm
+from pyoperators.iterative.core import AbnormalStopIteration
+
+from pyoperators import *
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+
+# %matplotlib inline
+```
+
+```{python}
+# Import simulation parameters
+with open('params.yml', 'r') as file:
+    params = yaml.safe_load(file) 
+```
+
+```{python}
+# Call the class which build the atmosphere maps
+atm = AtmosphereMaps(params)
+```
+
+```{python}
+# Import the atm absorption spectrum
+abs_spectrum = atm.absorption_spectrum()
+
+plt.plot(abs_spectrum)
+plt.ylim(0, 0.0002)
+```
+
+```{python}
+# Import the atm temperature maps
+atm_maps = atm.get_temp_maps(atm.rho_map)
+print(atm_maps.shape)
+
+# Import the atm integrated absorption spectrum
+integrated_abs_spectrum, frequencies = atm.integrated_absorption_spectrum()
+```
+
+```{python}
+mean_atm_maps = []
+for i in range(atm_maps.shape[0]):
+    mean_atm_maps.append(np.mean(atm_maps[i, :]))
+plt.figure()
+plt.plot(frequencies, mean_atm_maps, '.')
+plt.title('Atmosphere maps')
+plt.xlabel('Frequency (GHz)')
+plt.ylabel(r'Mean temperature ($\mu K_{CMB}$)')
+plt.figure()
+plt.plot(frequencies, integrated_abs_spectrum, '.')
+plt.xlabel('Frequency (GHz)')
+plt.ylabel('Integrated absorption spectrum')
+```
+
+```{python}
+hp.mollview(atm_maps[0], title='Atmosphere temperature map at {:.2f} GHz'.format(frequencies[0]), cmap='jet', unit='µK_CMB')
+```
+
+```{python}
+# Import CMB maps
+cmb_maps = InputMaps({'cmb':42}, atm.frequencies, 2, params['nside']).m_nu
+print(cmb_maps.shape)
+hp.mollview(cmb_maps[-1, :, 0],cmap='jet', unit='µK_CMB', title='CMB map')
+```
+
+```{python}
+# Build input maps : CMB + Atmsophere (only for I map)
+input_maps = cmb_maps.copy() * 0
+input_maps[:, :, 0] += atm_maps
+print(input_maps[0, :, 0].shape)
+for irec in range(input_maps.shape[0]):
+    input_maps[irec, :, 0] -= np.mean(input_maps[irec, :, 0])
+
+hp.mollview(input_maps[-1, :, 0] ,cmap='jet', unit='µK_CMB', norm='hist', title='Input map {:.2f} GHz'.format(frequencies[-1]))
+hp.graticule()
+```
+
+```{python}
+# Compute the Nrec maps from the Nsub maps
+true_maps = np.zeros((params['nrec'], 12*params['nside']**2, 3))
+true_frequencies = np.zeros(params['nrec'])
+fsub = int(params['nsub_in'] / params['nrec'])
+for i in range(params['nrec']):
+    true_maps[i, :, :] = np.mean(input_maps[i*fsub:(i+1)*fsub, :, :], axis=0)
+    true_frequencies[i] = np.mean(frequencies[i*fsub:(i+1)*fsub])
+print(true_maps.shape) 
+print(true_frequencies)   
+plt.plot(true_frequencies, np.mean(true_maps, axis=1)[..., 0], '.')
+plt.ylabel(r'Mean temperature ($\mu K_{CMB}$)')
+plt.xlabel('Frequency (GHz)')
+plt.xlim(130, 250)
+```
+
+```{python}
+for inu in range(len(true_frequencies)):
+    hp.mollview(true_maps[inu, :, 0],title='Input - {:.2f} GHz'.format(true_frequencies[inu]))
+```
+
+# Map-making
+
+```{python}
+#coverage = joint.qubic.subacqs[0].get_coverage()
+
+```
+
+```{python}
+# Build the QUBIC operators
+H_tod_qubic = qubic.lib.InstrumentModel.Qacquisition.QubicDualBand(atm.qubic_dict, nsub=params['nsub_in'], nrec=params['nsub_in']).get_operator()
+Qacq = qubic.lib.InstrumentModel.Qacquisition.QubicDualBand(atm.qubic_dict, nsub=params['nsub_in'], nrec=params['nrec'])
+H_rec_qubic = Qacq.get_operator().operands[1]
+invN_qubic = Qacq.get_invntt_operator()
+tod_qubic = H_tod_qubic(input_maps).ravel()
+```
+
+```{python}
+coverage = Qacq.coverage
+
+covnorm = coverage / coverage.max()
+seenpix = covnorm > params['coverage_cut']
+
+center = np.array([0, -57])
+qubic_patch = qubic.lib.Qsamplings.equ2gal(center[0], center[1])
+```
+
+```{python}
+print('H_rec', H_rec_qubic.shapein, H_rec_qubic.shapeout)
+print('invN', invN_qubic.shapein, invN_qubic.shapeout)
+print('H_tod', H_tod_qubic.shapein, H_tod_qubic.shapeout)
+```
+
+```{python}
+H_tod = H_tod_qubic
+R = ReshapeOperator(H_rec_qubic.shapeout, invN_qubic.shapein)
+H_rec = R(H_rec_qubic)
+invN = invN_qubic
+tod = tod_qubic
+```
+
+```{python}
+print('H_rec_qubic', H_rec_qubic.shapein, H_rec_qubic.shapeout)
+print("H_rec", H_rec.shapein, H_rec.shapeout)
+print("invN", invN.shapein, invN.shapeout)
+print('invN qubic', invN_qubic.shapein, invN_qubic.shapeout)
+print("TOD", tod.shape)
+```
+
+```{python}
+# Build PCG
+R = ReshapeOperator(tod.shape, invN_qubic.shapein)
+A = H_rec.T * invN * H_rec
+b = H_rec.T * invN * R(tod)
+x0 = true_maps*0
+```
+
+```{python}
+H_rec.operands[1].operands[0].operands[0]
+```
+
+```{python}
+stacked_dptdp_inv = np.zeros((len(H_rec.operands),12*params['nside']**2))
+for i in range(len(H_rec.operands)):
+    H_single = H_rec.operands[1].operands[i].operands[0]
+    D = H_single.operands[1]
+    P = H_single.operands[-1]
+    sh = P.matrix.data.index.shape
+    no_det = 992
+    
+    point_per_det = int(sh[0] / no_det)
+    mapPtP_perdet_seq = np.zeros((no_det,12*params['nside']**2))
+    for det in range(no_det):
+        mapPitPi = np.zeros(12*params['nside']**2)
+        for peak in range(sh[1]):
+            for sample in range(det*point_per_det, (det+1)*point_per_det):
+                mapPitPi[P.matrix.data.index[sample,peak]] += P.matrix.data.r11[sample,peak]**2
+        mapPtP_perdet_seq[det,:] = mapPitPi
+
+    D_elements = D.data
+    D_sq = D_elements**2
+    mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq 
+    dptdp = mapPtP_seq_scaled.sum(axis = 0)
+    dptdp_inv = 1 / dptdp
+    dptdp_inv[np.isinf(dptdp_inv)] = 0.
+    stacked_dptdp_inv[i] = dptdp_inv
+M = BlockDiagonalOperator( \
+            [DiagonalOperator(ci, broadcast='rightward') for ci in stacked_dptdp_inv],
+            new_axisin=0)
+```
+
+```{python}
+print('A', A.shapein, A.shapeout)
+print('b', b.shape)
+```
+
+```{python}
+# Code to compute the preconditioner
+
+# approx_hth = np.zeros((x0.shape))
+# conditioner = np.zeros((x0.shape))
+# vec = np.ones(Qacq.H[0].shapein)
+
+# for i in range(x0.shape[0]):
+#     for j in range(x0.shape[0]):
+#         approx_hth[i] = (
+#             Qacq.H[i].T
+#             * Qacq.invn220
+#             * Qacq.H[j](vec)
+#         )
+# fsub_out = int(params["nsub_in"] / params["nrec"])
+# for irec in range(params["nrec"]):
+#     imin = irec * fsub_out
+#     imax = (irec + 1) * fsub_out
+#     for istk in range(3):
+#         conditioner[irec, seenpix, istk] = 1 / (
+#             np.sum(approx_hth[imin:imax, seenpix, 0], axis=0)
+#         )
+
+# conditioner[conditioner == np.inf] = 1
+# M = DiagonalOperator(conditioner)
+```
+
+```{python}
+print(M.shapein, M.shapeout)
+```
+
+```{python}
+# Run PCG
+algo = PCGAlgorithm(
+    A,
+    b,
+    comm,
+    x0=x0,
+    tol=1e-10,
+    maxiter=200,
+    disp=True,
+    M=None,
+    center=[0, -57],
+    reso=15,
+    seenpix=seenpix,
+    input=true_maps,
+)
+try:
+    output = algo.run()
+    success = True
+    message = 'Success'
+except AbnormalStopIteration as e:
+    output = algo.finalize()
+    success = False
+    message = str(e)
+```
+
+```{python}
+plt.plot(output['convergence'])
+plt.yscale('log')
+plt.xlabel('Iteration')
+plt.ylabel('Convergence')
+```
+
+```{python}
+stokes = ['I', 'Q', 'U']
+```
+
+```{python}
+
+plt.figure(figsize=(8, 8), dpi=200)
+k=1
+true_maps[:, ~seenpix, :] = hp.UNSEEN
+output['x'][:, ~seenpix, :] = hp.UNSEEN
+
+istk = 0
+n_sig = 3
+reso = 15
+
+for inu in range(output['x'].shape[0]):
+    sigma = np.std(true_maps[inu, seenpix, istk])
+    hp.gnomview(true_maps[inu, :, istk], min=np.min(true_maps[inu, seenpix, istk]), max=np.max(true_maps[inu, seenpix, istk]), cmap='jet', rot=qubic_patch,title='Input - {:.2f} GHz'.format(true_frequencies[inu]), reso=reso, sub=(output['x'].shape[0], 3, k), notext=True)
+    hp.gnomview(output['x'][inu, :, istk], min=np.min(true_maps[inu, seenpix, istk]), max=np.max(true_maps[inu, seenpix, istk]), cmap='jet', rot=qubic_patch,title='Output - {:.2f} GHz'.format(true_frequencies[inu]), reso=reso, sub=(output['x'].shape[0], 3, k+1), notext=True)
+    hp.gnomview(output['x'][inu, :, istk] - true_maps[inu, :, 0], cmap='jet', rot=qubic_patch,title='Residual - {:.2f} GHz'.format(true_frequencies[inu]), reso=reso, sub=(output['x'].shape[0], 3, k+2), notext=True)
+    k+=3
+```
+
+```{python}
+for inu in range(output['x'].shape[0]):
+    sigma = np.std(true_maps[inu, seenpix, istk])
+    hp.mollview(output['x'][inu, :, istk] - true_maps[inu, :, istk], cmap='jet',title='Input - {:.2f} GHz'.format(true_frequencies[inu]))
+    hp.graticule()
+```
+
+```{python}
+plt.figure(figsize=(8, 8), dpi=200)
+
+k=1
+true_maps[:, ~seenpix, :] = hp.UNSEEN
+output['x'][:, ~seenpix, :] = hp.UNSEEN
+
+istk = 1
+n_sig = 2
+
+for inu in range(output['x'].shape[0]):
+    sigma = np.std(true_maps[inu, seenpix, istk])
+    hp.gnomview(true_maps[inu, :, istk], cmap='jet', rot=qubic_patch,title='Input - {:.2f} GHz'.format(true_frequencies[inu]), reso=15, sub=(output['x'].shape[0], 3, k), notext=True)
+    hp.gnomview(output['x'][inu, :, istk], cmap='jet', rot=qubic_patch,title='Output - {:.2f} GHz'.format(true_frequencies[inu]), reso=15, sub=(output['x'].shape[0], 3, k+1), notext=True)
+    hp.gnomview(output['x'][inu, :, istk] - true_maps[inu, :, istk], cmap='jet', rot=qubic_patch,title='Residual - {:.2f} GHz'.format(true_frequencies[inu]), reso=15, sub=(output['x'].shape[0], 3, k+2), notext=True)
+    k+=3
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+stop
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

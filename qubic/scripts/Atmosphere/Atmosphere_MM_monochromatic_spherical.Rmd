@@ -1,0 +1,277 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt 
+import healpy as hp
+
+from qubic.lib.MapMaking.Qatmosphere_2d import AtmosphereMaps
+
+import yaml
+
+import qubic
+from qubic.lib.Instrument.Qacquisition import QubicAcquisition
+from qubic.lib.Instrument.Qinstrument import QubicInstrument
+from qubic.lib.Qscene import QubicScene
+from qubic.lib.Qsamplings import get_pointing
+
+from qubic.lib.MapMaking.Qmaps import InputMaps
+
+from qubic.lib.MapMaking.Qcg import PCGAlgorithm
+from pyoperators.iterative.core import AbnormalStopIteration
+
+from pyoperators import MPI, BlockColumnOperator, BlockDiagonalOperator, DiagonalOperator, ReshapeOperator
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+
+# %matplotlib inline 
+```
+
+```{python}
+# Import simulation parameters
+with open('params.yml', 'r') as file:
+    params = yaml.safe_load(file) 
+```
+
+```{python}
+# Call the class which build the atmosphere maps
+atm = AtmosphereMaps(params)
+qubic_dict = atm.qubic_dict
+```
+
+```{python}
+cmb_maps = InputMaps({'cmb':42}, [150e9], 1, params['nside']).m_nu[0]
+print(cmb_maps.shape)
+hp.mollview(cmb_maps[:, 0], title='CMB map')
+```
+
+```{python}
+wv_fluctuations = atm.rho_map
+print(wv_fluctuations.shape[0])
+hp.mollview(wv_fluctuations, cmap='jet', title='Water vapor density fluctuations', unit=r'$g/m^{3}$')
+```
+
+```{python}
+atm.frequencies
+```
+
+```{python}
+temp_fluctuations = np.zeros((wv_fluctuations.shape[0], 3))
+temp_fluctuations[:, 0] = atm.get_temp_maps(wv_fluctuations)[0]
+temp_fluctuations[:, 0] -= np.mean(temp_fluctuations[:, 0])
+
+hp.mollview(temp_fluctuations[:, 0], title='Temperature fluctuations', unit='µK_CMB')
+```
+
+```{python}
+q_instrument = QubicInstrument(qubic_dict)
+q_sampling = get_pointing(qubic_dict)
+q_scene = QubicScene(qubic_dict)
+
+q_acquisition = QubicAcquisition(q_instrument, q_sampling, q_scene, qubic_dict)
+```
+
+```{python}
+coverage = q_acquisition.get_coverage()
+
+covnorm = coverage / coverage.max()
+seenpix = covnorm > params['coverage_cut']
+
+center = np.array([0, -57])
+qubic_patch = qubic.lib.Qsamplings.equ2gal(center[0], center[1])
+```
+
+```{python}
+H_qubic = q_acquisition.get_operator()
+R_qubic = ReshapeOperator(H_qubic.shapeout, H_qubic.shape[0])
+invN_qubic = R_qubic(q_acquisition.get_invntt_operator(False, False)(R_qubic.T))
+d_qubic = H_qubic(temp_fluctuations).ravel()
+```
+
+```{python}
+print(temp_fluctuations.shape)
+print(cmb_maps.shape)
+```
+
+```{python}
+H_planck = ReshapeOperator(temp_fluctuations.shape, temp_fluctuations.ravel().shape)
+invN_planck = DiagonalOperator(np.ones(H_planck.shapeout))
+d_planck = H_planck(temp_fluctuations)
+```
+
+```{python}
+if params['external_data']:
+    H = BlockColumnOperator([R_qubic(H_qubic), H_planck], axisout=0)
+    invN = BlockDiagonalOperator([invN_qubic, invN_planck], axisout=0)
+    d = np.concatenate((d_qubic, d_planck))
+else:
+    H = R_qubic(H_qubic)
+    invN = invN_qubic
+    d = d_qubic
+```
+
+```{python}
+A = H.T * invN * H
+b = H.T * invN * d.flatten()
+x0 = temp_fluctuations*0
+true_maps = temp_fluctuations #+ cmb_maps
+```
+
+```{python}
+stacked_dptdp_inv = np.zeros((len(H.operands),12*params['nside']**2))
+for i in range(len(H.operands)):
+    H_single = H
+    D = H_single.operands[2]
+    P = H_single.operands[-1]
+    sh = P.matrix.data.index.shape
+    no_det = 992
+    
+    point_per_det = int(sh[0] / no_det)
+    mapPtP_perdet_seq = np.zeros((no_det,12*params['nside']**2))
+    for det in range(no_det):
+        mapPitPi = np.zeros(12*params['nside']**2)
+        for peak in range(sh[1]):
+            for sample in range(det*point_per_det, (det+1)*point_per_det):
+                mapPitPi[P.matrix.data.index[sample,peak]] += P.matrix.data.r11[sample,peak]**2
+        mapPtP_perdet_seq[det,:] = mapPitPi
+
+    D_elements = D.data
+    D_sq = D_elements**2
+    mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq 
+    dptdp = mapPtP_seq_scaled.sum(axis = 0)
+    dptdp_inv = 1 / dptdp
+    dptdp_inv[np.isinf(dptdp_inv)] = 0.
+    stacked_dptdp_inv[i] = dptdp_inv
+M = BlockDiagonalOperator( \
+            [DiagonalOperator(ci, broadcast='rightward') for ci in stacked_dptdp_inv],
+            new_axisin=0)
+#preconditioner = DiagonalOperator(cov_inv, broadcast='rightward') za monoacquisition
+```
+
+```{python}
+# Run PCG
+algo = PCGAlgorithm(
+    A,
+    b,
+    comm,
+    x0=x0,
+    tol=1e-15,
+    maxiter=200,
+    disp=True,
+    M=M.operands[0],
+    center=[0, -57],
+    reso=15,
+    seenpix=seenpix,
+    input=true_maps,
+)
+try:
+    output = algo.run()
+    success = True
+    message = 'Success'
+except AbnormalStopIteration as e:
+    output = algo.finalize()
+    success = False
+    message = str(e)
+```
+
+```{python}
+plt.plot(output['convergence'])
+plt.yscale('log')
+plt.xlabel('Iteration')
+plt.ylabel('Convergence')
+```
+
+```{python}
+plt.figure(figsize=(10, 12), dpi=200)
+k=1
+true_maps[~seenpix, :] = hp.UNSEEN
+output['x'][~seenpix, :] = hp.UNSEEN
+
+istk = 0
+n_sig = 3
+
+sigma = np.std(true_maps[seenpix, istk])
+hp.gnomview(true_maps[:, istk], min=np.min(true_maps[seenpix, istk]), max=np.max(true_maps[seenpix, istk]), cmap='jet', rot=qubic_patch, reso=15, sub=(1, 3, k), title='Input', notext=True)
+hp.gnomview(output['x'][:, istk], min=np.min(true_maps[seenpix, istk]), max=np.max(true_maps[seenpix, istk]), cmap='jet', rot=qubic_patch, reso=15, sub=(1, 3, k+1), title='Output', notext=True)
+hp.gnomview(output['x'][:, istk] - true_maps[:, istk], cmap='jet', rot=qubic_patch, reso=15, sub=(1, 3, k+2), title='Residual', notext=True)
+k+=3
+```
+
+```{python}
+plt.figure(figsize=(12, 25))
+k=1
+true_maps[~seenpix, :] = hp.UNSEEN
+output['x'][~seenpix, :] = hp.UNSEEN
+
+istk = 0
+n_sig = 3
+
+sigma = np.std(true_maps[seenpix, istk])
+hp.mollview(true_maps[:, istk], min=np.min(true_maps[seenpix, istk]), max=np.max(true_maps[seenpix, istk]), cmap='jet', sub=(1, 3, k), title='Input', notext=True)
+hp.mollview(output['x'][:, istk], min=np.min(true_maps[seenpix, istk]), max=np.max(true_maps[seenpix, istk]), cmap='jet', sub=(1, 3, k+1), title='Output', notext=True)
+hp.mollview(output['x'][:, istk] - true_maps[:, istk], cmap='jet', sub=(1, 3, k+2), title='Residual', notext=True)
+k+=3
+```
+
+```{python}
+plt.figure(figsize=(10, 12), dpi=200)
+k=1
+true_maps[~seenpix, :] = hp.UNSEEN
+output['x'][~seenpix, :] = hp.UNSEEN
+
+istk = 1
+n_sig = 3
+
+sigma = np.std(true_maps[seenpix, istk])
+hp.gnomview(true_maps[:, istk], min=np.min(true_maps[seenpix, istk]), max=np.max(true_maps[seenpix, istk]), cmap='jet', rot=qubic_patch, reso=15, sub=(1, 3, k), title='Input', notext=True)
+hp.gnomview(output['x'][:, istk], min=np.min(true_maps[seenpix, istk]), max=np.max(true_maps[seenpix, istk]), cmap='jet', rot=qubic_patch, reso=15, sub=(1, 3, k+1), title='Output', notext=True)
+hp.gnomview(output['x'][:, istk] - true_maps[:, istk], cmap='jet', rot=qubic_patch, reso=15, sub=(1, 3, k+2), title='Residual', notext=True)
+k+=3
+```
+
+```{python}
+npix = hp.nside2npix(128)
+test = np.ones(npix)
+cl = hp.anafast(test)
+```
+
+```{python}
+plt.plot(cl)
+```
+
+```{python}
+cl = np.zeros(100)
+cl[10] = 1
+cl[20] = 1
+maps = hp.synfast(cl, 256)
+```
+
+```{python}
+maps.shape
+```
+
+```{python}
+hp.mollview(maps)
+```
+
+```{python}
+plt.plot(hp.anafast(maps))
+```
+
+```{python}
+
+```

@@ -1,0 +1,392 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.4
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+import healpy as hp
+import glob
+
+import pickle as pkl
+import yaml
+
+from pyoperators import *
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+import qubic
+from qubic.scripts.MapMaking.src.FMM import pipeline
+
+# %matplotlib inline
+```
+
+# Nsub_in
+
+```{python}
+# Initialize pipeline arguments
+    
+with open('/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Forecast_Bmodes/Nsub in & out/params.yml', 'r') as file:
+    params = yaml.safe_load(file)
+    
+comm = MPI.COMM_WORLD
+
+file = '/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Forecast_Bmodes/Nsub in & out'
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+stop
+```
+
+# Nsub_out
+
+```{python}
+ifreq = 0
+istk = 1
+```
+
+```{python}
+pkl_test = pkl.load(open('/home/laclavere/Documents/Thesis/Pipeline/testmaps/FastSim_wo_convolutions_nsub_in=20_out=20_None.pkl', 'rb'))
+map_test = pkl_test['maps']
+input_map_test = pkl_test['maps_in']
+
+plt.figure(figsize=(15,8))
+plt.axis("off")
+plt.title('Corrected - Nsub_in = 20 / Nsub_out = 16')
+
+coverage = pkl_test['coverage']
+covnorm = coverage / coverage.max()
+seenpix = covnorm > 0.2
+
+map_test[:, ~seenpix, :] = hp.UNSEEN
+input_map_test[:, ~seenpix, :] = hp.UNSEEN
+
+sigma = np.max([np.std(input_map_test[ifreq, seenpix, istk]), np.std(map_test[ifreq, seenpix, istk])])
+n = 2
+C = HealpixConvolutionGaussianOperator(pkl_test['fwhm_rec'][ifreq])
+C_test = HealpixConvolutionGaussianOperator(0.001)
+
+hp.gnomview(C*input_map_test[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_test['center'],reso=15, notext=True, cmap='jet', title='input', sub=(1, 3, 1))
+hp.gnomview(C_test*map_test[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_test['center'], reso=15, notext=True, cmap='jet', title='reconstructed', sub=(1, 3, 2))
+hp.gnomview(C*input_map_test[ifreq, :, istk]-C_test*map_test[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_test['center'], reso=15, notext=True, cmap='jet', title='residual', sub=(1, 3, 3))
+```
+
+```{python}
+pkl_list_wo = []
+nsub_wo = ['4', '8', '12', '16', '20']
+for i in nsub_wo:
+    path = glob.glob(f'/pbs/home/t/tlaclave/sps/FMM_data/test/maps/noiseless_wo_convolutions_nsub_in=20_out={i}*')[0]
+    pkl_ = pkl.load(open(path, 'rb'))
+    pkl_list_wo.append(pkl_)
+```
+
+```{python}
+pkl_list_w = []
+nsub_w = ['4', '8', '12', '16', '20']
+for i in nsub_w:
+    path = glob.glob(f'/pbs/home/t/tlaclave/sps/FMM_data/test/maps/noiseless_w_convolutions_nsub_in=20_out={i}*')[0]
+    pkl_ = pkl.load(open(path, 'rb'))
+    pkl_list_w.append(pkl_)
+```
+
+```{python}
+hist_list = []
+for i in range(len(pkl_list_w)):
+    plt.figure(figsize=(15,8))
+    plt.axis("off")
+    plt.title('With convolutions - Nsub_in = 20 / Nsub_out = ' + nsub_w[i])
+    pkl_file = pkl_list_w[i]
+
+    maps = pkl_file['maps']
+    input_maps = pkl_file['maps_in']
+    
+    coverage = pkl_file['coverage']
+    covnorm = coverage / coverage.max()
+    seenpix = covnorm > 0.2
+    
+    maps[:, ~seenpix, :] = hp.UNSEEN
+    input_maps[:, ~seenpix, :] = hp.UNSEEN
+    residual = input_maps[ifreq, :, istk]-maps[ifreq, :, istk]
+    
+    sigma = np.max([np.std(input_maps[ifreq, seenpix, istk]), np.std(maps[ifreq, seenpix, istk])])
+    n = 3
+    
+    hp.gnomview(input_maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'],reso=15, notext=True, cmap='jet', title='input', sub=(1, 3, 1))
+    hp.gnomview(maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='reconstructed', sub=(1, 3, 2))
+    hp.gnomview(residual,min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='residual', sub=(1, 3, 3))
+         
+    hist_list.append(np.histogram(residual))
+```
+
+```{python}
+plt.figure()
+for i, ihist in enumerate(hist_list):
+    print(nsub_w[i], ihist[0])
+    plt.plot(ihist[0], label=f'Nsub = {nsub_w[i]}')
+plt.legend()
+```
+
+```{python}
+hist_list = []
+for i in range(len(pkl_list_w)):
+    plt.figure(figsize=(15,8))
+    plt.axis("off")
+    plt.title('With convolutions - Nsub_in = 20 / Nsub_out = ' + nsub_w[i])
+    pkl_file = pkl_list_w[i]
+
+    fwhm = pkl_file['fwhm_rec']
+    C = HealpixConvolutionGaussianOperator(fwhm[ifreq], lmax=2*256)
+    maps = pkl_file['maps']
+    input_maps = pkl_file['maps_in']
+    print(pkl_file['parameters']['QUBIC'])
+    
+    coverage = pkl_file['coverage']
+    covnorm = coverage / coverage.max()
+    seenpix = covnorm > 0.2
+    
+    maps[:, ~seenpix, :] = hp.UNSEEN
+    input_maps[:, ~seenpix, :] = hp.UNSEEN
+    residual = C*input_maps[ifreq, :, istk]-maps[ifreq, :, istk]
+    
+    sigma = np.max([np.std(input_maps[ifreq, seenpix, istk]), np.std(maps[ifreq, seenpix, istk])])
+    n = 3
+    
+    hp.gnomview(C*input_maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'],reso=15, notext=True, cmap='jet', title='input', sub=(1, 3, 1))
+    hp.gnomview(maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='reconstructed', sub=(1, 3, 2))
+    hp.gnomview(residual,min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='residual', sub=(1, 3, 3))
+
+    hist_list.append(np.hstack((C*input_maps[ifreq, :, istk]-maps[ifreq, :, istk])[seenpix]))
+```
+
+```{python}
+plt.figure()
+for i, ihist in enumerate(hist_list):
+    print(nsub_w[i], ihist[0])
+    plt.hist(ihist, bins='auto',histtype='step',label=f'Nsub_out = {nsub_w[i]}', alpha=0.5)
+plt.legend()
+plt.xlabel('Pixels value in QUBIC patch')
+plt.title('With convolutions - Nsub_in = 20')
+```
+
+```{python}
+for i in range(len(pkl_list_w)):
+    plt.figure(figsize=(15,8))
+    plt.axis("off")
+    plt.title('Without convolutions - Nsub_in = 20 / Nsub_out = ' + nsub_wo[i])
+    pkl_file = pkl_list_wo[i]
+
+    fwhm = pkl_file['fwhm_rec']
+    C = HealpixConvolutionGaussianOperator(fwhm[ifreq], lmax=2*256)
+    maps = pkl_file['maps']
+    input_maps = pkl_file['maps_in']
+    print(pkl_file['parameters']['QUBIC'])
+    
+    coverage = pkl_file['coverage']
+    covnorm = coverage / coverage.max()
+    seenpix = covnorm > 0.2
+    
+    maps[:, ~seenpix, :] = hp.UNSEEN
+    input_maps[:, ~seenpix, :] = hp.UNSEEN
+    
+    sigma = np.max([np.std(input_maps[ifreq, seenpix, istk]), np.std(maps[ifreq, seenpix, istk])])
+    n = 3
+    
+    hp.gnomview(C*input_maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'],reso=15, notext=True, cmap='jet', title='input', sub=(1, 3, 1))
+    hp.gnomview(maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='reconstructed', sub=(1, 3, 2))
+    hp.gnomview(C*input_maps[ifreq, :, istk]-maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='residual', sub=(1, 3, 3))
+
+```
+
+```{python}
+plt.figure()
+for i, ihist in enumerate(hist_list):
+    print(nsub_wo[i], ihist[0])
+    plt.hist(ihist, bins='auto',histtype='step',label=f'Nsub_out = {nsub_wo[i]}', alpha=0.5)
+plt.legend()
+plt.xlabel('Pixels value in QUBIC patch')
+plt.title('Without convolutions - Nsub_in = 20')
+```
+
+```{python}
+pkl_list = []
+nsub = ['4', '8', '12', '16', '20']
+for i in nsub:
+    path = glob.glob(f'/pbs/home/t/tlaclave/sps/FMM_data/test/maps/noiseless_wo_convolutions_nsub_in=20_out={i}_pla*')[0]
+    pkl_ = pkl.load(open(path, 'rb'))
+    pkl_list.append(pkl_)
+```
+
+```{python}
+hist_list = []
+for i in range(len(pkl_list)):
+    plt.figure(figsize=(15,8))
+    plt.axis("off")
+    plt.title('Without convolutions - Nsub_in = 20 / Nsub_out = ' + nsub[i] + ' - Planck (outside the patch)')
+    pkl_file = pkl_list[i]
+
+    fwhm = pkl_file['fwhm_rec']
+    C = HealpixConvolutionGaussianOperator(fwhm[ifreq], lmax=2*256)
+    C_test = HealpixConvolutionGaussianOperator(0.001, lmax=512)
+    
+    maps = pkl_file['maps']
+    input_maps = pkl_file['maps_in']
+    
+    coverage = pkl_file['coverage']
+    covnorm = coverage / coverage.max()
+    seenpix = covnorm > 0.2
+    
+    maps[:, ~seenpix, :] = hp.UNSEEN
+    input_maps[:, ~seenpix, :] = hp.UNSEEN
+    residual = C*input_maps[ifreq, :, istk]-C_test*maps[ifreq, :, istk]
+    
+    sigma = np.max([np.std(input_maps[ifreq, seenpix, istk]), np.std(maps[ifreq, seenpix, istk])])
+    n = 3
+    
+    hp.gnomview(C*input_maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'],reso=15, notext=True, cmap='jet', title='input', sub=(1, 3, 1))
+    hp.gnomview(C_test*maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='reconstructed', sub=(1, 3, 2))
+    hp.gnomview(residual,min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='residual', sub=(1, 3, 3))
+
+    hist_list.append(np.hstack((residual)[seenpix]))
+```
+
+```{python}
+plt.figure()
+for i, ihist in enumerate(hist_list):
+    print(nsub[i], ihist[0])
+    plt.hist(ihist, bins='auto',histtype='step',label=f'Nsub_out = {nsub[i]}', alpha=0.5)
+plt.legend()
+plt.xlabel('Pixels value in QUBIC patch')
+plt.title('Without convolutions - Nsub_in = 20 - With Planck (outside the patch)')
+```
+
+```{python}
+pkl_list = []
+nsub = ['4', '8', '12', '16', '20']
+for i in nsub:
+    path = glob.glob(f'/pbs/home/t/tlaclave/sps/FMM_data/test/maps/CMB_noiseless_wo_convolutions_nsub_in=20_out={i}*')[0]
+    pkl_ = pkl.load(open(path, 'rb'))
+    pkl_list.append(pkl_)
+```
+
+```{python}
+hist_list = []
+for i in range(len(pkl_list)):
+    plt.figure(figsize=(15,8))
+    plt.axis("off")
+    plt.title('Without convolutions - Nsub_in = 20 / Nsub_out = ' + nsub[i] + ' - CMB only')
+    pkl_file = pkl_list[i]
+
+    fwhm = pkl_file['fwhm_rec']
+    C = HealpixConvolutionGaussianOperator(fwhm[ifreq], lmax=2*256)
+    C_test = HealpixConvolutionGaussianOperator(0.001, lmax=512)
+    
+    maps = pkl_file['maps']
+    input_maps = pkl_file['maps_in']
+    
+    coverage = pkl_file['coverage']
+    covnorm = coverage / coverage.max()
+    seenpix = covnorm > 0.2
+    
+    maps[:, ~seenpix, :] = hp.UNSEEN
+    input_maps[:, ~seenpix, :] = hp.UNSEEN
+    residual = C*input_maps[ifreq, :, istk]-C_test*maps[ifreq, :, istk]
+    
+    sigma = np.max([np.std(input_maps[ifreq, seenpix, istk]), np.std(maps[ifreq, seenpix, istk])])
+    n = 3
+    
+    hp.gnomview(C*input_maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'],reso=15, notext=True, cmap='jet', title='input', sub=(1, 3, 1))
+    hp.gnomview(C_test*maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='reconstructed', sub=(1, 3, 2))
+    hp.gnomview(residual,min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='residual', sub=(1, 3, 3))
+
+    hist_list.append(np.hstack((residual)[seenpix]))
+```
+
+```{python}
+plt.figure()
+for i, ihist in enumerate(hist_list):
+    print(nsub[i], ihist[0])
+    plt.hist(ihist, bins='auto',histtype='step',label=f'Nsub_out = {nsub[i]}', alpha=0.5)
+plt.legend()
+plt.xlabel('Pixels value in QUBIC patch')
+plt.title('Without convolutions - Nsub_in = 20 - CMB only')
+```
+
+```{python}
+pkl_list_ = []
+nsub_ = ['10', '20', '30', '35']
+for i in nsub_:
+    path = glob.glob(f'/pbs/home/t/tlaclave/sps/FMM_data/test/maps/noiseless_w_convolutions_nsub_in=40_out={i}*')[0]
+    pkl_ = pkl.load(open(path, 'rb'))
+    pkl_list_.append(pkl_)
+```
+
+```{python}
+hist_list = []
+for i in range(len(pkl_list_)):
+    plt.figure(figsize=(15,8))
+    plt.axis("off")
+    plt.title('Without convolutions - Nsub_in = 40 / Nsub_out = ' + nsub_[i])
+    pkl_file = pkl_list_[i]
+
+    fwhm = pkl_file['fwhm_rec']
+    C = HealpixConvolutionGaussianOperator(fwhm[ifreq], lmax=2*256)
+    maps = pkl_file['maps']
+    input_maps = pkl_file['maps_in']
+    
+    coverage = pkl_file['coverage']
+    covnorm = coverage / coverage.max()
+    seenpix = covnorm > 0.2
+    
+    maps[:, ~seenpix, :] = hp.UNSEEN
+    input_maps[:, ~seenpix, :] = hp.UNSEEN
+    residual = C*input_maps[ifreq, :, istk]-maps[ifreq, :, istk]
+    
+    sigma = np.max([np.std(input_maps[ifreq, seenpix, istk]), np.std(maps[ifreq, seenpix, istk])])
+    n = 2
+    
+    hp.gnomview(C*input_maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'],reso=15, notext=True, cmap='jet', title='input', sub=(1, 3, 1))
+    hp.gnomview(maps[ifreq, :, istk],min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='reconstructed', sub=(1, 3, 2))
+    hp.gnomview(residual,min=-n*sigma, max=n*sigma, rot=pkl_file['center'], reso=15, notext=True, cmap='jet', title='residual', sub=(1, 3, 3))
+
+    hist_list.append(np.hstack((residual)[seenpix]))
+```
+
+```{python}
+plt.figure()
+for i, ihist in enumerate(hist_list):
+    print(nsub_[i], ihist[0])
+    plt.hist(ihist, bins='auto',histtype='step',label=f'Nsub_out = {nsub_[i]}', alpha=0.5)
+plt.legend()
+plt.xlabel('Pixels value in QUBIC patch')
+plt.title('With convolutions - Nsub_in = 40')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

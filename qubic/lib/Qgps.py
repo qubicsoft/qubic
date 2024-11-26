@@ -367,10 +367,14 @@ class GPSCalsource(GPSAntenna):
         self.position_calsource = self.get_calsource_position(self.position_ini_antenna1, self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna1, self.position_antenna2, ini_wrt_antenna2=ini_wrt_antenna2) 
         
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
+        self.vector_1_2_ini =  self.position_ini_antenna2 - self.position_ini_antenna1
         self.vector_1_2 = self.position_antenna2 - self.position_antenna1
+        self.vector_calsource_qubic_ini = self.position_ini_calsource - self.position_qubic
+        self.vector_calsource_deviated = -self.get_calsource_qubic_vector(self.vector_calsource_qubic_ini, self.get_angles(self.vector_1_2, self.vector_1_2_ini))
         self.vector_calsource_qubic = self.position_calsource - self.position_qubic[:, None]
         
         ### Compute the calibration source orientation angles
+        self.calsource_orientation_angles_ini = np.degrees(self.get_calsource_orientation(self.vector_1_2_ini[:, None], self.vector_calsource_qubic_ini[:, None]))
         self.calsource_orientation_angles = np.degrees(self.get_calsource_orientation(self.vector_1_2, self.vector_calsource_qubic))        
         
     def _get_observation_data(self, observation_indices):
@@ -454,7 +458,154 @@ class GPSCalsource(GPSAntenna):
             position_calsource[:, i] = R @ (position_ini_calsource - B) + B_[:, i]
             
         return position_calsource      
-       
+        
+    def _get_projection(self, vector_1, vector_2):
+        print(vector_1.shape, vector_2.shape)
+        return vector_1 - np.sum(np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_2)*np.linalg.norm(vector_1)) * vector_2, axis=0)
+    
+    def _get_vector_angle(self, vector_1, vector_2):
+
+        return np.arccos(np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1) * np.linalg.norm(vector_2)))
+        
+    def get_angles(self, vector_1_2, vector_1_2_ini):
+        
+        # Basis vectors
+        en, ee, ed = np.array([1, 0, 0]), np.array([0, 1, 0]), np.array([0, 0, 1])
+        
+        # angle around north
+        vector_1_2_north = self._get_projection(vector_1_2, en[:, None])
+        vector_1_2_ini_north = self._get_projection(vector_1_2_ini, en)[:, None]
+        angle_north = self._get_vector_angle(vector_1_2_north, vector_1_2_ini_north)          
+        
+        # angle around east
+        vector_1_2_east = self._get_projection(vector_1_2, ee[:, None])
+        vector_1_2_ini_east = self._get_projection(vector_1_2_ini, ee)[:, None]
+        angle_east = self._get_vector_angle(vector_1_2_east, vector_1_2_ini_east)
+        
+        # angle around down
+        vector_1_2_down = self._get_projection(vector_1_2, ed[:, None])
+        vector_1_2_ini_down = self._get_projection(vector_1_2_ini, ed)[:, None]
+        angle_down = self._get_vector_angle(vector_1_2_down, vector_1_2_ini_down) 
+        
+        return np.array([angle_north, angle_east, angle_down])
+    
+    def get_calsource_qubic_vector(self, vector_calsource_qubic_ini, angles):
+        
+        rotation_matrix_north = np.array([[1, 0, 0],
+                                          [0, np.cos(angles[0]), -np.sin(angles[0])],
+                                          [0, np.sin(angles[0]), np.cos(angles[0])]])
+        rotation_matrix_east = np.array([[np.cos(angles[1]), 0, np.sin(angles[1])],
+                                         [0, 1, 0],
+                                         [-np.sin(angles[1]), 0, np.cos(angles[1])]])
+        rotation_matrix_down = np.array([[np.cos(angles[2]), -np.sin(angles[2]), 0],
+                                         [np.sin(angles[2]), np.cos(angles[2]), 0],
+                                         [0, 0, 1]])
+        
+        return rotation_matrix_north @ rotation_matrix_east @ rotation_matrix_down @ vector_calsource_qubic_ini
+    
+    def plot_angle_3d(self, ax, origin, v1, v2, angle, num_points=1000, radius=0.5, **kwargs):
+        """Plot angle 3d.
+        
+        General function to plot a 3D angle between two vectors v1 and v2.
+
+        Parameters
+        ----------
+        ax : mpl_toolkits.mplot3d.axes3d.Axes3D
+            Matplotlib 3D axis
+        origin : array_like
+            Position of the origin of the angle.
+        v1 : array_like
+            Vector 1.
+        v2 : array_like
+            Vector 2.
+        angle : float
+            Angle between v1 and v2, in radians.
+        num_points : int, optional
+            Number of points used to plot the angle, by default 100
+        radius : float, optional
+            Radiius from the origin at which the angle is plotted, by default 0.5
+            
+        Other Parameters
+        ----------------
+        kwargs : optional
+            Any kwarg for plt.plot()
+        """       
+        
+        #! This function can be moved in a more genral repostitory
+        
+        v1_norm = v1 / np.linalg.norm(v1)
+        v2_norm = v2 / np.linalg.norm(v2)
+        
+        # Create orthonormal basis for the plane containing v1 and v2
+        normal = np.cross(v1_norm, v2_norm)
+        if np.allclose(normal, 0):
+            # Vectors are parallel, choose an arbitrary perpendicular vector
+            normal = np.array([1, 0, 0]) if np.allclose(v1_norm, [0, 1, 0]) else np.cross(v1_norm, [0, 1, 0])
+        normal = normal / np.linalg.norm(normal)
+        
+        angles = np.linspace(0, angle, num_points)
+        arc_points = np.zeros((num_points, 3))
+        
+        for i, theta in enumerate(angles):
+            rotated = v1_norm * np.cos(theta) + \
+                    np.cross(normal, v1_norm) * np.sin(theta) + \
+                    normal * np.dot(normal, v1_norm) * (1 - np.cos(theta))
+            arc_points[i] = origin + radius * rotated
+            
+        ax.plot(arc_points[:, 0], arc_points[:, 1], arc_points[:, 2], **kwargs)
+        
+    def plot_calsource_deviation(self, index):
+        
+        ### Initialize the 3d figure
+        fig = plt.figure(figsize=(15, 10))
+        ax = fig.add_subplot(111, projection='3d')
+
+        ### Plot antenna1, antenna 2, base antenna, qubic and the calibration source
+        ax.scatter(self.position_antenna1[0, index], self.position_antenna1[1, index], self.position_antenna1[2, index], color='darkblue', marker='s', s=100, label='Antenna 1')
+        ax.scatter(self.position_antenna2[0, index], self.position_antenna2[1, index], self.position_antenna2[2, index], color='darkblue', marker='^', s=100, label='Antenna 2')
+        ax.scatter(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index], color='darkred', marker='*', s=100, label='Calibration Source')
+        ax.scatter(self.position_ini_antenna1[0], self.position_ini_antenna1[1], self.position_ini_antenna1[2], color='b', marker='s', s=100, label='Initial Antenna 1')
+        ax.scatter(self.position_ini_antenna2[0], self.position_ini_antenna2[1], self.position_ini_antenna2[2], color='b', marker='^', s=100, label='Initial Antenna 2')
+        ax.scatter(self.position_ini_calsource[0], self.position_ini_calsource[1], self.position_ini_calsource[2], color='r', marker='*', s=100, label='Initial Calibration Source')
+        ax.scatter(self.base_antenna_position[0], self.base_antenna_position[1], self.base_antenna_position[2], color='k', s=100, label='Base Antenna')
+        ax.scatter(self.position_qubic[0], self.position_qubic[1], self.position_qubic[2], color='pink', marker='o', s=100, label='QUBIC')
+
+        ### Plot the vector between antenna 1 and antenna 2
+        ax.quiver(self.position_antenna1[0, index], self.position_antenna1[1, index], self.position_antenna1[2, index], 
+                    self.vector_1_2[0, index],
+                    self.vector_1_2[1, index],
+                    self.vector_1_2[2, index],
+                    color='darkblue', arrow_length_ratio=0.1, linewidth=2, label='Vector Antenna 1 to 2')
+        ax.quiver(self.position_ini_antenna1[0], self.position_ini_antenna1[1], self.position_ini_antenna1[2], 
+                    self.vector_1_2_ini[0],
+                    self.vector_1_2_ini[1],
+                    self.vector_1_2_ini[2],
+                    color='b', arrow_length_ratio=0.1, linewidth=2, label='Initial Vector Antenna 1 to 2')
+        
+        ### Plot the vector between QUBIC and the calibration source
+        ax.quiver(self.position_calsource[0], self.position_calsource[1], self.position_calsource[2],
+                  self.vector_calsource_deviated[0], self.vector_calsource_deviated[1], self.vector_calsource_deviated[2],
+                  color='darkred', arrow_length_ratio=0.1, linewidth=2, label='Vector Calibration Source Deviation')
+        ax.quiver(self.position_ini_calsource[0], self.position_ini_calsource[1], self.position_ini_calsource[2], 
+                    -self.vector_calsource_qubic_ini[0], 
+                    -self.vector_calsource_qubic_ini[1],
+                    -self.vector_calsource_qubic_ini[2],
+                    color='red', arrow_length_ratio=0.1, linewidth=2, label='Vector QUBIC to Calibration Source')
+        
+        ax.set_xlim([-1.5, 1.5])
+        ax.set_ylim([-1.5, 1.5]) 
+        ax.set_zlim([-1, 1])
+        ax.set_xlabel('North', fontsize=12, labelpad=10)
+        ax.set_ylabel('East', fontsize=12, labelpad=10)
+        ax.set_zlabel('Down', fontsize=12, labelpad=10)
+
+        ax.set_title(f'Calibration source - Position and Orientation - {self.datetime[index]}', fontsize=16, pad=20)
+        ax.grid(True, linestyle='--', alpha=0.7)
+        ax.xaxis.pane.fill = False
+        ax.yaxis.pane.fill = False
+        ax.zaxis.pane.fill = False
+        ax.legend() 
+        
     def get_calsource_orientation(self, vector_cal, vector_cal_qubic):
         r"""Calsource orientation.
         
@@ -522,59 +673,8 @@ class GPSCalsource(GPSAntenna):
         angles[2] = np.arccos(np.sum(self.vector_1_2_horizontal_proj * self.vector_ortho_vert, axis=0) / (np.linalg.norm(self.vector_1_2_horizontal_proj, axis=0) * np.linalg.norm(self.vector_ortho_vert, axis=0)))
 
         return angles
-    
-    def plot_angle_3d(self, ax, origin, v1, v2, angle, num_points=1000, radius=0.5, **kwargs):
-        """Plot angle 3d.
         
-        General function to plot a 3D angle between two vectors v1 and v2.
-
-        Parameters
-        ----------
-        ax : mpl_toolkits.mplot3d.axes3d.Axes3D
-            Matplotlib 3D axis
-        origin : array_like
-            Position of the origin of the angle.
-        v1 : array_like
-            Vector 1.
-        v2 : array_like
-            Vector 2.
-        angle : float
-            Angle between v1 and v2, in radians.
-        num_points : int, optional
-            Number of points used to plot the angle, by default 100
-        radius : float, optional
-            Radiius from the origin at which the angle is plotted, by default 0.5
-            
-        Other Parameters
-        ----------------
-        kwargs : optional
-            Any kwarg for plt.plot()
-        """       
-        
-        #! This function can be moved in a more genral repostitory
-        
-        v1_norm = v1 / np.linalg.norm(v1)
-        v2_norm = v2 / np.linalg.norm(v2)
-        
-        # Create orthonormal basis for the plane containing v1 and v2
-        normal = np.cross(v1_norm, v2_norm)
-        if np.allclose(normal, 0):
-            # Vectors are parallel, choose an arbitrary perpendicular vector
-            normal = np.array([1, 0, 0]) if np.allclose(v1_norm, [0, 1, 0]) else np.cross(v1_norm, [0, 1, 0])
-        normal = normal / np.linalg.norm(normal)
-        
-        angles = np.linspace(0, angle, num_points)
-        arc_points = np.zeros((num_points, 3))
-        
-        for i, theta in enumerate(angles):
-            rotated = v1_norm * np.cos(theta) + \
-                    np.cross(normal, v1_norm) * np.sin(theta) + \
-                    normal * np.dot(normal, v1_norm) * (1 - np.cos(theta))
-            arc_points[i] = origin + radius * rotated
-            
-        ax.plot(arc_points[:, 0], arc_points[:, 1], arc_points[:, 2], **kwargs)
-        
-    def plot_system(self, index=0):
+    def plot_system(self, index):
         """Plot the system.
         
         Function the plot the all system : antenna1, antenna 2, base antenna and the calibration source, positions, the associated vectors and the calsource orientation angles.
@@ -734,7 +834,7 @@ class GPSCalsource(GPSAntenna):
         ax.set_ylabel('East', fontsize=12, labelpad=10)
         ax.set_zlabel('Down', fontsize=12, labelpad=10)
 
-        ax.set_title(f'Calibration source - Position and Orientation - {self.observation_datetime[index]}', fontsize=16, pad=20)
+        ax.set_title(f'Calibration source - Position and Orientation - {self.datetime[index]}', fontsize=16, pad=20)
         ax.grid(True, linestyle='--', alpha=0.7)
         ax.xaxis.pane.fill = False
         ax.yaxis.pane.fill = False

@@ -3,6 +3,7 @@ import struct
 
 import numpy as np
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 import datetime as dt
 
@@ -87,19 +88,20 @@ class GPStools:
         self._datetime = self.create_datetime_array(self._timestamp)
         
         # rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
-        self._rpN = np.array(gps_data['rpN']) / 10000                           # in m
-        self._rpE = np.array(gps_data['rpE']) / 10000                           # in m
-        self._rpD = np.array(gps_data['rpD']) / 10000                           # in m
+        self.rpN = np.array(gps_data['rpN']) / 10000                           # in m
+        self.rpE = np.array(gps_data['rpE']) / 10000                           # in m
+        #! Mettre signe - ????
+        self.rpD = np.array(gps_data['rpD']) / 10000                         # in m
         
         # roll give the angle between antenna 2 - antenna 1 vector and the North axis
-        self._roll = np.radians(np.array(gps_data['roll'])) / 1000              # in rad
+        self.roll = np.radians(np.array(gps_data['roll'])) / 1000              # in rad
         
         # yaw give the angle between antenna 2 - antenna 1 vector and the horizontal plane
-        self._yaw = np.radians(np.array(gps_data['yaw'])) / 1000                # in rad
+        self.yaw = np.radians(np.array(gps_data['yaw'])) / 1000                # in rad
         
         # Other GPS parameters, not used yet
         self._pitchIMU = np.radians(np.array(gps_data['pitchIMU'])) / 1000      # in rad
-        self._rollIMU = np.radians(np.array(gps_data['rollIMU'])) / 1000        # in rad
+        self.rollIMU = np.radians(np.array(gps_data['rollIMU'])) / 1000        # in rad
         self._temperature = np.array(gps_data['temperature']) / 10              # in Celsius
         self._checksum = np.array(gps_data['checksum'])
     
@@ -204,10 +206,10 @@ class GPStools:
 
         ax.set_xlabel('Date')
         ax.set_ylabel('Position (m)')
-        ax.plot(self._datetime[index_start:index_stop], self._rpN[index_start:index_stop], color = 'red', label = 'North component')
+        ax.plot(self._datetime[index_start:index_stop], self.rpN[index_start:index_stop], color = 'red', label = 'North component')
 
-        ax.plot(self._datetime[index_start:index_stop], self._rpE[index_start:index_stop], color = 'blue', label = 'East component')
-        ax.plot(self._datetime[index_start:index_stop], self._rpD[index_start:index_stop], color = 'green', label = 'Down component')
+        ax.plot(self._datetime[index_start:index_stop], self.rpE[index_start:index_stop], color = 'blue', label = 'East component')
+        ax.plot(self._datetime[index_start:index_stop], self.rpD[index_start:index_stop], color = 'green', label = 'Down component')
 
         fig.tight_layout() 
         ax.set_title("Position Vector Components")
@@ -221,15 +223,15 @@ class GPStools:
         ax.set_xlabel('Date')
         ax.set_ylabel('Angles (rad)')
 
-        ax.plot(self._datetime[index_start:index_stop], self._roll[index_start:index_stop], color = 'pink', label = 'Roll angle')
-        ax.plot(self._datetime[index_start:index_stop], self._yaw[index_start:index_stop], color = 'brown', label = 'Yaw angle')
+        ax.plot(self._datetime[index_start:index_stop], self.roll[index_start:index_stop], color = 'pink', label = 'Roll angle')
+        ax.plot(self._datetime[index_start:index_stop], self.yaw[index_start:index_stop], color = 'brown', label = 'Yaw angle')
 
         fig.tight_layout() 
         ax.set_title("Angles")
         fig.legend()
         plt.show()
         
-    def plot_gps_data(self, index_start=0, index_stop=-1):
+    def plot_gps_data(self, index_observation, index_start=0, index_stop=-1):
 
         fig, ax1 = plt.subplots(figsize = (15,5))
 
@@ -240,14 +242,15 @@ class GPStools:
         color_c = 'tab:brown'
         ax1.set_xlabel('Date')
         ax1.set_ylabel('Position Vector Components (m)', color = color_r)
-        ax1.plot(self._datetime[index_start:index_stop], self._rpN[index_start:index_stop], color = color_a, label = 'North component')
-        ax1.plot(self._datetime[index_start:index_stop], self._rpE[index_start:index_stop], color = color_b, label = 'East component')
-        ax1.plot(self._datetime[index_start:index_stop], self._rpD[index_start:index_stop], color = color_d, label = 'Down component')
+        ax1.plot(self._datetime[index_start:index_stop], self.rpN[index_start:index_stop], color = color_a, label = 'North component')
+        ax1.plot(self._datetime[index_start:index_stop], self.rpE[index_start:index_stop], color = color_b, label = 'East component')
+        ax1.plot(self._datetime[index_start:index_stop], self.rpD[index_start:index_stop], color = color_d, label = 'Down component')
+        ax1.axvline(x=self._datetime[index_observation], ymin=self.rpN[index_start:index_stop].min(), ymax=self.rpN[index_start:index_stop].max(), color='grey', linestyle='--', linewidth=1, label='Start')
 
         ax2 = ax1.twinx()
 
-        ax2.plot(self._datetime[index_start:index_stop], self._roll[index_start:index_stop], color = color_r, label = 'Roll angle')
-        ax2.plot(self._datetime[index_start:index_stop], self._yaw[index_start:index_stop], color = color_c, label = 'Yaw angle')
+        ax2.plot(self._datetime[index_start:index_stop], self.roll[index_start:index_stop], color = color_r, label = 'Roll angle')
+        ax2.plot(self._datetime[index_start:index_stop], self.yaw[index_start:index_stop], color = color_c, label = 'Yaw angle')
         ax2.set_xlabel('Date')
         ax2.set_ylabel('Angles (rad)', color = color_a)
 
@@ -295,9 +298,9 @@ class GPSAntenna(GPStools):
         rpN_base, rpE_base, rpD_base = base_antenna_position
         
         ### Compute the position of the antenna 2 in North, East, Down coordinates
-        rpN_antenna_2 = self._rpN + rpN_base
-        rpE_antenna_2 = self._rpE + rpE_base
-        rpD_antenna_2 = self._rpD + rpD_base
+        rpN_antenna_2 = self.rpN + rpN_base
+        rpE_antenna_2 = self.rpE + rpE_base
+        rpD_antenna_2 = self.rpD + rpD_base
         
         return np.array([rpN_antenna_2, rpE_antenna_2, rpD_antenna_2])
     
@@ -325,9 +328,9 @@ class GPSAntenna(GPStools):
         """        
         
         ### Compute the position of the antenna 1 wrt antenna 2 in North, East, Down coordinates
-        _rpN = distance_between_antennas * np.cos(self._roll) * np.sin(np.pi/2 - self._yaw)
-        _rpE = distance_between_antennas * np.sin(self._roll) * np.sin(np.pi/2 - self._yaw)
-        _rpD = - distance_between_antennas * np.cos(np.pi/2 - self._yaw)
+        _rpN = distance_between_antennas * np.cos(self.roll) * np.sin(np.pi/2 - self.yaw)
+        _rpE = distance_between_antennas * np.sin(self.roll) * np.sin(np.pi/2 - self.yaw)
+        _rpD = - distance_between_antennas * np.cos(np.pi/2 - self.yaw)
         
         return np.array([_rpN, _rpE, _rpD]) + self.position_antenna2
 
@@ -358,7 +361,7 @@ class GPSCalsource(GPSAntenna):
         self.observation_datetime = self.datetime[self.observation_indices].reshape(-1)
         
         ### Get data during observation time
-        self._get_observation_data(self.observation_indices)
+        #self._get_observation_data(self.observation_indices)
         
         ### Compute position of antennas 1 & 2 and calibration source in North, East, Down cooridnates
         self.distance_between_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
@@ -367,32 +370,36 @@ class GPSCalsource(GPSAntenna):
         self.position_calsource = self.get_calsource_position(self.position_ini_antenna1, self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna1, self.position_antenna2, ini_wrt_antenna2=ini_wrt_antenna2) 
         
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
+        #! ATTENTION !!!! Vérifier signes des vecteurs, surtout entre calsource et qubic
         self.vector_1_2_ini =  self.position_ini_antenna2 - self.position_ini_antenna1
         self.vector_1_2 = self.position_antenna2 - self.position_antenna1
-        self.vector_calsource_qubic_ini = self.position_ini_calsource - self.position_qubic
-        self.vector_calsource_deviated = -self.get_calsource_qubic_vector(self.vector_calsource_qubic_ini, self.get_angles(self.vector_1_2, self.vector_1_2_ini))
-        self.vector_calsource_qubic = self.position_calsource - self.position_qubic[:, None]
+        self.vector_calsource_qubic_ini = self.position_qubic - self.position_ini_calsource
+
+        ### Compute the calibration source orientation angles
+        self.rotation_angles = self.get_angles(self.vector_1_2, self.vector_1_2_ini)
+        self.vector_calsource_deviated = -self.get_calsource_qubic_vector(self.vector_calsource_qubic_ini, self.rotation_angles)
+        #self.vector_calsource_qubic = self.position_calsource - self.position_qubic[:, None]
         
         ### Compute the calibration source orientation angles
-        self.calsource_orientation_angles_ini = np.degrees(self.get_calsource_orientation(self.vector_1_2_ini[:, None], self.vector_calsource_qubic_ini[:, None]))
-        self.calsource_orientation_angles = np.degrees(self.get_calsource_orientation(self.vector_1_2, self.vector_calsource_qubic))        
+        #self.calsource_orientation_angles_ini = np.degrees(self.get_calsource_orientation(self.vector_1_2_ini[:, None], self.vector_calsource_qubic_ini[:, None]))
+        #self.calsource_orientation_angles = np.degrees(self.get_calsource_orientation(self.vector_1_2, self.vector_calsource_qubic))        
         
     def _get_observation_data(self, observation_indices):
         
         ### rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
-        self.rpN = self._rpN[observation_indices].reshape(-1)                                      # in m
-        self.rpE = self._rpE[observation_indices].reshape(-1)                                      # in m
-        self.rpD = self._rpD[observation_indices].reshape(-1)                                      # in m
+        self.rpN = self.rpN[observation_indices].reshape(-1)                                      # in m
+        self.rpE = self.rpE[observation_indices].reshape(-1)                                      # in m
+        self.rpD = self.rpD[observation_indices].reshape(-1)                                      # in m
         
         ### roll give the angle between antenna 2 - antenna 1 vector and the North axis
-        self.roll = self._roll[observation_indices].reshape(-1)                                    # in rad
+        self.roll = self.roll[observation_indices].reshape(-1)                                    # in rad
         
         ### yaw give the angle between antenna 2 - antenna 1 vector and the horizontal plane
-        self.yaw = self._yaw[observation_indices].reshape(-1)                                      # in rad
+        self.yaw = self.yaw[observation_indices].reshape(-1)                                      # in rad
         
         ### Other GPS parameters, not used yet
         self.pitchIMU = self._pitchIMU[observation_indices].reshape(-1)                            # in rad
-        self.rollIMU = self._rollIMU[observation_indices].reshape(-1)                              # in rad
+        self.rollIMU = self.rollIMU[observation_indices].reshape(-1)                              # in rad
         self.temperature = self._temperature[observation_indices].reshape(-1)                      # in Celsius
         self.checksum = self._checksum[observation_indices].reshape(-1)
     
@@ -459,49 +466,77 @@ class GPSCalsource(GPSAntenna):
             
         return position_calsource      
         
-    def _get_projection(self, vector_1, vector_2):
-        print(vector_1.shape, vector_2.shape)
-        return vector_1 - np.sum(np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_2)*np.linalg.norm(vector_1)) * vector_2, axis=0)
+    def _get_projection(self, vector, e1, e2):
+        proj_u1 = np.sum(vector * e1, axis=0) * e1
+        proj_u2 = np.sum(vector * e2, axis=0) * e2
+
+        p = proj_u1 + proj_u2
+        return p
     
     def _get_vector_angle(self, vector_1, vector_2):
 
-        return np.arccos(np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1) * np.linalg.norm(vector_2)))
+        return np.arccos(np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1, axis=0) * np.linalg.norm(vector_2, axis=0)))
         
     def get_angles(self, vector_1_2, vector_1_2_ini):
         
         # Basis vectors
         en, ee, ed = np.array([1, 0, 0]), np.array([0, 1, 0]), np.array([0, 0, 1])
-        
+
         # angle around north
-        vector_1_2_north = self._get_projection(vector_1_2, en[:, None])
-        vector_1_2_ini_north = self._get_projection(vector_1_2_ini, en)[:, None]
-        angle_north = self._get_vector_angle(vector_1_2_north, vector_1_2_ini_north)          
+        vector_1_2_north = self._get_projection(vector_1_2, ee[:, None], ed[:, None])
+        vector_1_2_ini_north = self._get_projection(vector_1_2_ini, ee, ed)[:, None]
+        angle_north = self._get_vector_angle(vector_1_2_north, vector_1_2_ini_north)   
         
         # angle around east
-        vector_1_2_east = self._get_projection(vector_1_2, ee[:, None])
-        vector_1_2_ini_east = self._get_projection(vector_1_2_ini, ee)[:, None]
+        vector_1_2_east = self._get_projection(vector_1_2, en[:, None], ed[:, None])
+        vector_1_2_ini_east = self._get_projection(vector_1_2_ini, en, ed)[:, None]
         angle_east = self._get_vector_angle(vector_1_2_east, vector_1_2_ini_east)
         
         # angle around down
-        vector_1_2_down = self._get_projection(vector_1_2, ed[:, None])
-        vector_1_2_ini_down = self._get_projection(vector_1_2_ini, ed)[:, None]
+        vector_1_2_down = self._get_projection(vector_1_2, en[:, None], ee[:, None])
+        vector_1_2_ini_down = self._get_projection(vector_1_2_ini, en, ee)[:, None]
         angle_down = self._get_vector_angle(vector_1_2_down, vector_1_2_ini_down) 
         
-        return np.array([angle_north, angle_east, angle_down])
+        return np.nan_to_num(np.array([angle_north, angle_east, angle_down]))
     
     def get_calsource_qubic_vector(self, vector_calsource_qubic_ini, angles):
+                
+        # Extract the individual angles
+        angle_north = angles[0]  # Shape (N,)
+        angle_east = angles[1]   # Shape (N,)
+        angle_down = angles[2]   # Shape (N,)
+
+        # Rotation matrices for all angles
+        # Shape of each: (3, 3, N)
+        rotation_matrix_north = np.array([
+            [np.ones_like(angle_north), np.zeros_like(angle_north), np.zeros_like(angle_north)],
+            [np.zeros_like(angle_north), np.cos(angle_north), -np.sin(angle_north)],
+            [np.zeros_like(angle_north), np.sin(angle_north), np.cos(angle_north)],
+        ]).transpose(2, 0, 1)  # Shape: (N, 3, 3)
+
+        rotation_matrix_east = np.array([
+            [np.cos(angle_east), np.zeros_like(angle_east), np.sin(angle_east)],
+            [np.zeros_like(angle_east), np.ones_like(angle_east), np.zeros_like(angle_east)],
+            [-np.sin(angle_east), np.zeros_like(angle_east), np.cos(angle_east)],
+        ]).transpose(2, 0, 1)  # Shape: (N, 3, 3)
+
+        rotation_matrix_down = np.array([
+            [np.cos(angle_down), -np.sin(angle_down), np.zeros_like(angle_down)],
+            [np.sin(angle_down), np.cos(angle_down), np.zeros_like(angle_down)],
+            [np.zeros_like(angle_down), np.zeros_like(angle_down), np.ones_like(angle_down)],
+        ]).transpose(2, 0, 1)  # Shape: (N, 3, 3)
+
+        # Combine all rotations: R = R_north @ R_east @ R_down
+        # Shape: (N, 3, 3)
+        combined_rotation_matrix = np.einsum('nij,njk->nik', rotation_matrix_north, rotation_matrix_east)
+        combined_rotation_matrix = np.einsum('nij,njk->nik', rotation_matrix_down, combined_rotation_matrix)
+
+        # Apply rotation to the initial vector
+        # vector_calsource_qubic_ini: Shape (3,)
+        # Broadcasted to (N, 3, 1), resulting in (N, 3)
+        rotated_vectors = np.einsum('nij,j->ni', combined_rotation_matrix, vector_calsource_qubic_ini).T
         
-        rotation_matrix_north = np.array([[1, 0, 0],
-                                          [0, np.cos(angles[0]), -np.sin(angles[0])],
-                                          [0, np.sin(angles[0]), np.cos(angles[0])]])
-        rotation_matrix_east = np.array([[np.cos(angles[1]), 0, np.sin(angles[1])],
-                                         [0, 1, 0],
-                                         [-np.sin(angles[1]), 0, np.cos(angles[1])]])
-        rotation_matrix_down = np.array([[np.cos(angles[2]), -np.sin(angles[2]), 0],
-                                         [np.sin(angles[2]), np.cos(angles[2]), 0],
-                                         [0, 0, 1]])
-        
-        return rotation_matrix_north @ rotation_matrix_east @ rotation_matrix_down @ vector_calsource_qubic_ini
+        return rotated_vectors
     
     def plot_angle_3d(self, ax, origin, v1, v2, angle, num_points=1000, radius=0.5, **kwargs):
         """Plot angle 3d.
@@ -554,6 +589,156 @@ class GPSCalsource(GPSAntenna):
             
         ax.plot(arc_points[:, 0], arc_points[:, 1], arc_points[:, 2], **kwargs)
         
+    def plot_vector_plotly(self, fig, pos, vector, color='blue', name='vector', index = 0, show_arrow=True, arrow_size = 0.2):
+        start = pos
+        end = pos + vector
+        # Vecteur normalisé pour l'effet pointe
+        norm = np.linalg.norm(vector)
+
+        if norm == 0:
+            return
+        vector_unit = vector / norm
+
+        # Ajouter le vecteur principal
+        fig.add_trace(go.Scatter3d(
+                x=[start[0], end[0]], 
+                y=[start[1], end[1]], 
+                z=[start[2], end[2]],
+                mode='lines',
+                line=dict(color=color, width=2),
+                name=name
+            ))
+
+        if show_arrow:
+            if vector_unit[0] != 0 or vector_unit[1] != 0:
+                # General case: construct perpendicular vectors
+                ortho1 = np.cross(vector_unit, [0, 0, 1])
+            else:
+                # Special case: vector is along z-axis
+                ortho1 = np.cross(vector_unit, [1, 0, 0])
+            
+            ortho1 /= np.linalg.norm(ortho1)  # Normalize the first orthogonal vector
+            ortho2 = np.cross(vector_unit, ortho1)  # Compute the second orthogonal vector
+            ortho2 /= np.linalg.norm(ortho2)  # Normalize the second orthogonal vector
+
+            # Base of the arrowhead
+            tip_base = np.array(end) - arrow_size * vector_unit
+
+            # Compute the points for the arrowhead
+            point1 = tip_base + arrow_size * 0.5 * ortho1
+            point2 = tip_base - arrow_size * 0.5 * ortho1
+            # point3 = tip_base + arrow_size * 0.5 * ortho2
+            # point4 = tip_base - arrow_size * 0.5 * ortho2
+
+            # Add the arrowhead segments
+            for point in [point1, point2]: #, point3, point4]:
+                fig.add_trace(go.Scatter3d(
+                    x=[end[0], point[0]],
+                    y=[end[1], point[1]],
+                    z=[end[2], point[2]],
+                    mode='lines',
+                    line=dict(color=color, width=5),
+                    showlegend=False
+                ))
+
+        
+    def plot_calsource_deviation_plotly(self, index):
+        """
+        Fast 3D visualization of calibration source deviation using plotly
+        """
+
+        fig = go.Figure()
+
+        points_data = [
+            (self.position_antenna1[:, index], 'darkblue', 'square', 'Antenna 1'),
+            (self.position_antenna2[:, index], 'darkblue', 'diamond', 'Antenna 2'),
+            (self.position_calsource[:, index], 'darkred', 'x', 'Calibration Source'),
+            (self.position_ini_antenna1, 'blue', 'square', 'Initial Antenna 1'),
+            (self.position_ini_antenna2, 'blue', 'diamond', 'Initial Antenna 2'),
+            (self.position_ini_calsource, 'red', 'x', 'Initial Calibration Source'),
+            (self.base_antenna_position, 'pink', 'circle', 'Base Antenna'),
+            (self.position_qubic, 'black', 'circle', 'QUBIC')
+        ]
+        
+        vectors_data = [
+            (self.position_antenna1[:, index], self.vector_1_2[:, index], 'darkblue', 'Vector Antenna 1 to 2'),
+            (self.position_ini_antenna1, self.vector_1_2_ini, 'blue', 'Initial Vector Antenna 1 to 2'),
+            (self.position_calsource[:, index], self.vector_calsource_deviated[:, index], 'darkred', 'Vector Calibration Source'),
+            (self.position_ini_calsource, self.vector_calsource_qubic_ini, 'red', 'Initial Vector Calibration Source')
+        ]
+
+        ### Plot points as 3D scatter
+        for pos, color, symbol, name in points_data:
+            fig.add_trace(go.Scatter3d(
+                x=[pos[0]], y=[pos[1]], z=[pos[2]],
+                mode='markers',
+                marker=dict(size=5, color=color, symbol=symbol),
+                name=name
+            ))
+
+        ### Plot vectors
+        for pos, vector, color, name in vectors_data:
+            self.plot_vector_plotly(fig, pos, vector, color=color, name=name, show_arrow=True)
+            
+        # Get min/max coordinates of all points and vectors
+        all_points = np.vstack([
+            self.position_antenna1[:, index],
+            self.position_antenna2[:, index],
+            self.position_calsource[:, index],
+            self.position_ini_antenna1,
+            self.position_ini_antenna2,
+            self.position_ini_calsource,
+            self.base_antenna_position,
+            self.position_qubic
+        ])
+
+        # Add vector endpoints
+        vector_endpoints = np.vstack([
+            self.position_antenna1[:, index] + self.vector_1_2[:, index],
+            self.position_ini_antenna1 + self.vector_1_2_ini,
+            self.position_calsource[:, index] + self.vector_calsource_deviated[:, index], 
+            self.position_ini_calsource - self.vector_calsource_qubic_ini
+        ])
+
+        all_points = np.vstack([all_points, vector_endpoints])
+
+        # Calculate characteristic scale
+        margin = 0.2
+        min_coords = np.min(all_points, axis=0)
+        max_coords = np.max(all_points, axis=0)
+        plot_range = max_coords - min_coords
+        char_scale = np.max(plot_range)  # Use largest range as characteristic scale
+        
+        # Calculate center points
+        center = (max_coords + min_coords) / 2
+
+        # Set consistent limits using characteristic scale
+        limits_min = center - (1 + margin) * char_scale/2
+        limits_max = center + (1 + margin) * char_scale/2
+
+        # Update layout with calculated limits
+        fig.update_layout(
+            width=1200,
+            height=800,
+            scene=dict(
+                xaxis=dict(range=[limits_min[0], limits_max[0]], title='North'),
+                yaxis=dict(range=[limits_min[1], limits_max[1]], title='East'),
+                zaxis=dict(range=[limits_min[2], limits_max[2]], title='Down'),
+                aspectmode='cube',
+                camera=dict(
+                    up=dict(x=0, y=0, z=1),
+                    center=dict(x=0, y=0, z=0),
+                    eye=dict(x=1.5, y=1.5, z=1.5)
+                )
+            ),
+            title=f'Calibration source - Position and Orientation - {self.datetime[index]}',
+            showlegend=True,
+            legend=dict(x=1.1, y=0.5)
+        )
+
+
+        return fig
+        
     def plot_calsource_deviation(self, index):
         
         ### Initialize the 3d figure
@@ -583,8 +768,8 @@ class GPSCalsource(GPSAntenna):
                     color='b', arrow_length_ratio=0.1, linewidth=2, label='Initial Vector Antenna 1 to 2')
         
         ### Plot the vector between QUBIC and the calibration source
-        ax.quiver(self.position_calsource[0], self.position_calsource[1], self.position_calsource[2],
-                  self.vector_calsource_deviated[0], self.vector_calsource_deviated[1], self.vector_calsource_deviated[2],
+        ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index],
+                  self.vector_calsource_deviated[0, index], self.vector_calsource_deviated[1, index], self.vector_calsource_deviated[2, index],
                   color='darkred', arrow_length_ratio=0.1, linewidth=2, label='Vector Calibration Source Deviation')
         ax.quiver(self.position_ini_calsource[0], self.position_ini_calsource[1], self.position_ini_calsource[2], 
                     -self.vector_calsource_qubic_ini[0], 
@@ -882,3 +1067,100 @@ class GPSCalsource(GPSAntenna):
         
         plt.tight_layout(rect=[0, 0, 0.85, 0.85])
         
+
+    def plot_system_plotly(self, index):
+        """
+        Interactive 3D visualization of the GPS system using plotly
+        """
+        import plotly.graph_objects as go
+        
+        # Get min/max coordinates for plot range
+        all_points = np.vstack([
+            self.position_antenna1[:, index],
+            self.position_antenna2[:, index], 
+            self.base_antenna_position,
+            self.position_qubic,
+            self.position_calsource[:, index]
+        ])
+        
+        min_coords = np.min(all_points, axis=0)
+        max_coords = np.max(all_points, axis=0)
+        margin = 0.2
+        plot_range = max_coords - min_coords
+        limits_min = min_coords - margin * plot_range
+        limits_max = max_coords + margin * plot_range
+        
+        # Create figure
+        fig = go.Figure()
+        
+        # Add points
+        points_data = [
+            (self.position_antenna1[:, index], 'blue', 'square', 'Antenna 1'),
+            (self.position_antenna2[:, index], 'blue', 'triangle-up', 'Antenna 2'),
+            (self.base_antenna_position, 'black', 'circle', 'Base Antenna'),
+            (self.position_qubic, 'pink', 'circle', 'QUBIC'),
+            (self.position_calsource[:, index], 'red', 'star', 'Calibration Source')
+        ]
+        
+        for pos, color, symbol, name in points_data:
+            fig.add_trace(go.Scatter3d(
+                x=[pos[0]], y=[pos[1]], z=[pos[2]],
+                mode='markers',
+                marker=dict(size=10, color=color, symbol=symbol),
+                name=name
+            ))
+        
+        # Add vectors
+        def add_vector(start, vector, color, name, dash=None):
+            end = start + vector
+            fig.add_trace(go.Scatter3d(
+                x=[start[0], end[0]],
+                y=[start[1], end[1]],
+                z=[start[2], end[2]],
+                mode='lines',
+                line=dict(color=color, width=4, dash=dash),
+                name=name
+            ))
+        
+        # Main vectors
+        add_vector(self.position_antenna1[:, index], self.vector_1_2[:, index], 'blue', 'Vector 1-2')
+        add_vector(self.position_qubic, self.vector_calsource_qubic[:, index], 'red', 'Vector QUBIC-Calibration Source')
+        
+        # Projections
+        add_vector(self.position_calsource[:, index], self.vector_1_2_calsource_proj[:, index], 'darkblue', 'Vector 1-2 Calsource proj', 'dash')
+        add_vector(self.position_calsource[:, index], self.vector_1_2_vertical_proj[:, index], 'royalblue', 'Vector 1-2 Vertical proj', 'dash')
+        add_vector(self.position_calsource[:, index], self.vector_1_2_horizontal_proj[:, index], 'turquoise', 'Vector 1-2 Horizontal proj', 'dash')
+        
+        # Rotation axes
+        add_vector(self.position_calsource[:, index], self.vector_ortho_vert[:, index], 'grey', 'Orthogonal vertical axis', 'dot')
+        add_vector(self.position_calsource[:, index], self.vector_ortho_horiz[:, index], 'green', 'Orthogonal horizontal axis', 'dot')
+        
+        # Add angles as text annotations
+        fig.add_trace(go.Scatter3d(
+            x=[self.position_calsource[0, index]],
+            y=[self.position_calsource[1, index]],
+            z=[self.position_calsource[2, index]],
+            mode='text',
+            text=[f'Angles:<br>Around calsource: {self.calsource_orientation_angles[0, index]:.2f}°<br>' + 
+                f'Around vertical: {self.calsource_orientation_angles[1, index]:.2f}°<br>' +
+                f'Around horizontal: {self.calsource_orientation_angles[2, index]:.2f}°'],
+            name='Orientation angles'
+        ))
+        
+        # Update layout
+        fig.update_layout(
+            scene=dict(
+                xaxis_title='North',
+                yaxis_title='East', 
+                zaxis_title='Down',
+                xaxis=dict(range=[limits_min[0], limits_max[0]]),
+                yaxis=dict(range=[limits_min[1], limits_max[1]]),
+                zaxis=dict(range=[limits_min[2], limits_max[2]]),
+                aspectmode='cube'
+            ),
+            title=f'Calibration source - Position and Orientation - {self.datetime[index]}',
+            showlegend=True,
+            legend=dict(x=1.1, y=0.5)
+        )
+        
+        return fig

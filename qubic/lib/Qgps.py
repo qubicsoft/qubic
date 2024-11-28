@@ -474,10 +474,8 @@ class GPSCalsource(GPSAntenna):
         return p
     
     def _get_vector_angle(self, vector_1, vector_2):
-        angle = np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1, axis=0) * np.linalg.norm(vector_2, axis=0))
-        if angle < 0:
-            angle = 2*np.pi - angle
-        return np.arccos(angle)
+        cos_angles = np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1, axis=0) * np.linalg.norm(vector_2, axis=0))
+        return np.arccos(np.clip(cos_angles, -1, 1))
         
     def get_angles(self, vector_1_2, vector_1_2_ini):
         

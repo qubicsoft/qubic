@@ -474,8 +474,10 @@ class GPSCalsource(GPSAntenna):
         return p
     
     def _get_vector_angle(self, vector_1, vector_2):
-
-        return np.arccos(np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1, axis=0) * np.linalg.norm(vector_2, axis=0)))
+        angle = np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1, axis=0) * np.linalg.norm(vector_2, axis=0))
+        if angle < 0:
+            angle = 2*np.pi - angle
+        return np.arccos(angle)
         
     def get_angles(self, vector_1_2, vector_1_2_ini):
         
@@ -589,7 +591,7 @@ class GPSCalsource(GPSAntenna):
             
         ax.plot(arc_points[:, 0], arc_points[:, 1], arc_points[:, 2], **kwargs)
         
-    def plot_vector_plotly(self, fig, pos, vector, color='blue', name='vector', index = 0, show_arrow=True, arrow_size = 0.2):
+    def plot_vector_plotly(self, fig, pos, vector, color='blue', name='vector', show_arrow=True, arrow_size = 0.2):
         start = pos
         end = pos + vector
         # Vecteur normalisé pour l'effet pointe
@@ -606,7 +608,14 @@ class GPSCalsource(GPSAntenna):
                 z=[start[2], end[2]],
                 mode='lines',
                 line=dict(color=color, width=2),
-                name=name
+                name=name,
+                text=[name, name],
+                hovertemplate=(
+                        "<b>%{text}</b><br>"
+                        "X: %{x:.2f}<br>"
+                        "Y: %{y:.2f}<br>"
+                        "Z: %{z:.2f}<extra></extra>" 
+                        )
             ))
 
         if show_arrow:
@@ -638,10 +647,14 @@ class GPSCalsource(GPSAntenna):
                     z=[end[2], point[2]],
                     mode='lines',
                     line=dict(color=color, width=5),
-                    showlegend=False
+                    showlegend=False,
+                    hovertemplate=(
+                        "X: %{x:.2f}<br>"
+                        "Y: %{y:.2f}<br>"
+                        "Z: %{z:.2f}<extra></extra>" 
+                        )
                 ))
-
-        
+    
     def plot_calsource_deviation_plotly(self, index):
         """
         Fast 3D visualization of calibration source deviation using plotly
@@ -673,7 +686,14 @@ class GPSCalsource(GPSAntenna):
                 x=[pos[0]], y=[pos[1]], z=[pos[2]],
                 mode='markers',
                 marker=dict(size=5, color=color, symbol=symbol),
-                name=name
+                text=[name],
+                name=name,
+                hovertemplate=(
+                        "<b>%{text}</b><br>"
+                        "X: %{x:.2f}<br>"
+                        "Y: %{y:.2f}<br>"
+                        "Z: %{z:.2f}<extra></extra>" 
+                        )
             ))
 
         ### Plot vectors
@@ -1067,7 +1087,6 @@ class GPSCalsource(GPSAntenna):
         
         plt.tight_layout(rect=[0, 0, 0.85, 0.85])
         
-
     def plot_system_plotly(self, index):
         """
         Interactive 3D visualization of the GPS system using plotly

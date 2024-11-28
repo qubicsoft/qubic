@@ -3,6 +3,7 @@ import struct
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation as R
 import plotly.graph_objects as go
 
 import datetime as dt
@@ -91,7 +92,8 @@ class GPStools:
         self.rpN = np.array(gps_data['rpN']) / 10000                           # in m
         self.rpE = np.array(gps_data['rpE']) / 10000                           # in m
         #! Mettre signe - ????
-        self.rpD = np.array(gps_data['rpD']) / 10000                         # in m
+        # - sign to switch from Down to Up axis, which is more usual
+        self.rpD = - np.array(gps_data['rpD']) / 10000                         # in m
         
         # roll give the angle between antenna 2 - antenna 1 vector and the North axis
         self.roll = np.radians(np.array(gps_data['roll'])) / 1000              # in rad
@@ -330,7 +332,7 @@ class GPSAntenna(GPStools):
         ### Compute the position of the antenna 1 wrt antenna 2 in North, East, Down coordinates
         _rpN = distance_between_antennas * np.cos(self.roll) * np.sin(np.pi/2 - self.yaw)
         _rpE = distance_between_antennas * np.sin(self.roll) * np.sin(np.pi/2 - self.yaw)
-        _rpD = - distance_between_antennas * np.cos(np.pi/2 - self.yaw)
+        _rpD = distance_between_antennas * np.cos(np.pi/2 - self.yaw)
         
         return np.array([_rpN, _rpE, _rpD]) + self.position_antenna2
 
@@ -376,9 +378,10 @@ class GPSCalsource(GPSAntenna):
         self.vector_calsource_qubic_ini = self.position_qubic - self.position_ini_calsource
 
         ### Compute the calibration source orientation angles
-        self.rotation_angles = self.get_angles(self.vector_1_2, self.vector_1_2_ini)
-        self.vector_calsource_deviated = -self.get_calsource_qubic_vector(self.vector_calsource_qubic_ini, self.rotation_angles)
-        #self.vector_calsource_qubic = self.position_calsource - self.position_qubic[:, None]
+        #self.rotation_angles = self.get_angles_test(self.vector_1_2, self.vector_1_2_ini)
+        self.euler_angles = self.calculate_euler_angles_between_vectors(self.vector_1_2[:, self.observation_indices[0]], self.vector_1_2_ini)
+        #self.vector_calsource_deviated = self.get_calsource_qubic_vector(self.vector_calsource_qubic_ini, self.rotation_angles)
+        self.vector_calsource_deviated = self.apply_euler_angles_to_vector(self.vector_calsource_qubic_ini, self.euler_angles)
         
         ### Compute the calibration source orientation angles
         #self.calsource_orientation_angles_ini = np.degrees(self.get_calsource_orientation(self.vector_1_2_ini[:, None], self.vector_calsource_qubic_ini[:, None]))
@@ -465,7 +468,7 @@ class GPSCalsource(GPSAntenna):
             position_calsource[:, i] = R @ (position_ini_calsource - B) + B_[:, i]
             
         return position_calsource      
-        
+            
     def _get_projection(self, vector, e1, e2):
         proj_u1 = np.sum(vector * e1, axis=0) * e1
         proj_u2 = np.sum(vector * e2, axis=0) * e2
@@ -474,8 +477,8 @@ class GPSCalsource(GPSAntenna):
         return p
     
     def _get_vector_angle(self, vector_1, vector_2):
-        cos_angles = np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1, axis=0) * np.linalg.norm(vector_2, axis=0))
-        return np.arccos(np.clip(cos_angles, -1, 1))
+        
+        return np.arccos(np.sum(vector_1 * vector_2, axis=0) / (np.linalg.norm(vector_1, axis=0) * np.linalg.norm(vector_2, axis=0)))
         
     def get_angles(self, vector_1_2, vector_1_2_ini):
         
@@ -488,7 +491,7 @@ class GPSCalsource(GPSAntenna):
         angle_north = self._get_vector_angle(vector_1_2_north, vector_1_2_ini_north)   
         
         # angle around east
-        vector_1_2_east = self._get_projection(vector_1_2, en[:, None], ed[:, None])
+        vector_1_2_east = self._get_projection(vector_1_2, ed[:, None], en[:, None])
         vector_1_2_ini_east = self._get_projection(vector_1_2_ini, en, ed)[:, None]
         angle_east = self._get_vector_angle(vector_1_2_east, vector_1_2_ini_east)
         
@@ -499,44 +502,110 @@ class GPSCalsource(GPSAntenna):
         
         return np.nan_to_num(np.array([angle_north, angle_east, angle_down]))
     
+    def compute_angle(self, vector1, vector2):
+        det = vector1[0] * vector2[1] - vector1[1] * vector2[0]
+        dot = vector1[0] * vector2[0] + vector1[1] * vector2[1]
+        return np.arctan2(det, dot)
+    
+    def get_angles_test(self, vector_1_2, vector_1_2_ini):
+        
+        ### Build 2d vectors
+        vector_1_2_east_down = np.array([vector_1_2[1], vector_1_2[2]])
+        vector_1_2_ini_east_down = np.array([vector_1_2_ini[1], vector_1_2_ini[2]])
+        
+        vector_1_2_north_down = np.array([vector_1_2[0], vector_1_2[2]])
+        vector_1_2_ini_north_down = np.array([vector_1_2_ini[0], vector_1_2_ini[2]])
+        
+        vector_1_2_north_east = np.array([vector_1_2[0], vector_1_2[1]])
+        vector_1_2_ini_north_east = np.array([vector_1_2_ini[0], vector_1_2_ini[1]])
+        
+        ### Compute angles
+        angles_north = self.compute_angle(vector_1_2_east_down, vector_1_2_ini_east_down)
+        angles_east = self.compute_angle(vector_1_2_north_down, vector_1_2_ini_north_down)
+        angles_down = self.compute_angle(vector_1_2_north_east, vector_1_2_ini_north_east)
+        
+        return np.array([angles_north, angles_east, angles_down])
+    
     def get_calsource_qubic_vector(self, vector_calsource_qubic_ini, angles):
                 
-        # Extract the individual angles
-        angle_north = angles[0]  # Shape (N,)
-        angle_east = angles[1]   # Shape (N,)
-        angle_down = angles[2]   # Shape (N,)
+        ### Extract the individual angles
+        angle_north = angles[0]
+        angle_east = angles[1] 
+        angle_down = angles[2] 
 
-        # Rotation matrices for all angles
-        # Shape of each: (3, 3, N)
+        ### Rotation matrices for all angles
         rotation_matrix_north = np.array([
             [np.ones_like(angle_north), np.zeros_like(angle_north), np.zeros_like(angle_north)],
             [np.zeros_like(angle_north), np.cos(angle_north), -np.sin(angle_north)],
             [np.zeros_like(angle_north), np.sin(angle_north), np.cos(angle_north)],
-        ]).transpose(2, 0, 1)  # Shape: (N, 3, 3)
+        ]).transpose(2, 0, 1) 
 
         rotation_matrix_east = np.array([
             [np.cos(angle_east), np.zeros_like(angle_east), np.sin(angle_east)],
             [np.zeros_like(angle_east), np.ones_like(angle_east), np.zeros_like(angle_east)],
             [-np.sin(angle_east), np.zeros_like(angle_east), np.cos(angle_east)],
-        ]).transpose(2, 0, 1)  # Shape: (N, 3, 3)
+        ]).transpose(2, 0, 1) 
 
         rotation_matrix_down = np.array([
             [np.cos(angle_down), -np.sin(angle_down), np.zeros_like(angle_down)],
             [np.sin(angle_down), np.cos(angle_down), np.zeros_like(angle_down)],
             [np.zeros_like(angle_down), np.zeros_like(angle_down), np.ones_like(angle_down)],
-        ]).transpose(2, 0, 1)  # Shape: (N, 3, 3)
+        ]).transpose(2, 0, 1) 
 
-        # Combine all rotations: R = R_north @ R_east @ R_down
-        # Shape: (N, 3, 3)
-        combined_rotation_matrix = np.einsum('nij,njk->nik', rotation_matrix_north, rotation_matrix_east)
-        combined_rotation_matrix = np.einsum('nij,njk->nik', rotation_matrix_down, combined_rotation_matrix)
+        ### Combine all rotations: R = R_north @ R_east @ R_down
+        combined_rotation_matrix = np.einsum('nij,njk->nik', rotation_matrix_down, rotation_matrix_east)
+        combined_rotation_matrix = np.einsum('nij,njk->nik', combined_rotation_matrix , rotation_matrix_north)
 
-        # Apply rotation to the initial vector
-        # vector_calsource_qubic_ini: Shape (3,)
-        # Broadcasted to (N, 3, 1), resulting in (N, 3)
+        ### Apply rotation to the initial vector
         rotated_vectors = np.einsum('nij,j->ni', combined_rotation_matrix, vector_calsource_qubic_ini).T
         
         return rotated_vectors
+    
+    def calculate_reference_vector(self, v1, v2):
+        v1 = np.array(v1)
+        v2 = np.array(v2)
+        
+        reference_vector = np.cross(v1, v2)
+        
+        if np.isclose(np.linalg.norm(reference_vector), 0):
+            if not np.isclose(v1[0], 0): 
+                reference_vector = np.cross(v1, [0, 1, 0])
+            else:
+                reference_vector = np.cross(v1, [1, 0, 0])
+        
+        reference_vector = reference_vector / np.linalg.norm(reference_vector)
+        
+        return reference_vector
+    
+    def calculate_euler_angles_between_vectors(self, v1, v2, sequence='xyz'):
+        v1 = np.array(v1)
+        v2 = np.array(v2)
+        
+        v1 = v1 / np.linalg.norm(v1)
+        v2 = v2 / np.linalg.norm(v2)
+        
+        dot_product = np.dot(v1, v2)
+        cross_product = np.cross(v1, v2)
+        
+        angle = np.arctan2(np.linalg.norm(cross_product), dot_product)
+        
+        rotation_axis = cross_product / np.linalg.norm(cross_product)
+        
+        quaternion = R.from_rotvec(angle * rotation_axis)
+        
+        euler_angles = quaternion.as_euler(sequence)
+        
+        return euler_angles
+        
+    def apply_euler_angles_to_vector(self, v, euler_angles, sequence='xyz'):
+        
+        rotation = R.from_euler(sequence, euler_angles)
+        rotated_vector = rotation.apply(v)
+        
+        if np.dot(rotated_vector, v) < 0:
+            rotated_vector = -rotated_vector
+        
+        return rotated_vector
     
     def plot_angle_3d(self, ax, origin, v1, v2, angle, num_points=1000, radius=0.5, **kwargs):
         """Plot angle 3d.
@@ -674,7 +743,7 @@ class GPSCalsource(GPSAntenna):
         vectors_data = [
             (self.position_antenna1[:, index], self.vector_1_2[:, index], 'darkblue', 'Vector Antenna 1 to 2'),
             (self.position_ini_antenna1, self.vector_1_2_ini, 'blue', 'Initial Vector Antenna 1 to 2'),
-            (self.position_calsource[:, index], self.vector_calsource_deviated[:, index], 'darkred', 'Vector Calibration Source'),
+            (self.position_calsource[:, index], self.vector_calsource_deviated, 'darkred', 'Vector Calibration Source'),
             (self.position_ini_calsource, self.vector_calsource_qubic_ini, 'red', 'Initial Vector Calibration Source')
         ]
 
@@ -714,7 +783,7 @@ class GPSCalsource(GPSAntenna):
         vector_endpoints = np.vstack([
             self.position_antenna1[:, index] + self.vector_1_2[:, index],
             self.position_ini_antenna1 + self.vector_1_2_ini,
-            self.position_calsource[:, index] + self.vector_calsource_deviated[:, index], 
+            self.position_calsource[:, index] + self.vector_calsource_deviated, 
             self.position_ini_calsource - self.vector_calsource_qubic_ini
         ])
 

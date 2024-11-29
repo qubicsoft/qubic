@@ -378,30 +378,36 @@ class GPSCalsource(GPSAntenna):
         self.vector_calsource_qubic_ini = self.position_qubic - self.position_ini_calsource
 
         ### Compute the calibration source orientation angles
-        self.euler_angles = self.calculate_euler_angles_between_vectors(self.vector_1_2_ini, self.vector_1_2[:, self.observation_indices[0]])
+        self.euler_angles = self.calculate_euler_angles_between_vectors(self.vector_1_2, self.vector_1_2_ini[:, None])
         print(self.euler_angles.shape)
-        print('The euler angles are : ', self.euler_angles)
+        print('The euler angles are : ', self.euler_angles[self.observation_indices[0]])
         self.vector_calsource_deviated = self.apply_euler_angles_to_vector(self.vector_calsource_qubic_ini, self.euler_angles)
         
         self.position_calsource = self.get_calsource_position(self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna2) 
-    
+        print('The position of the calibration source is : ', self.position_calsource.shape)
+        print('deviated vector : ', self.vector_calsource_deviated.shape)
+        
     def calculate_euler_angles_between_vectors(self, v1, v2, sequence='xyz'):
         
-        v1 = v1 / np.linalg.norm(v1)
-        v2 = v2 / np.linalg.norm(v2)
+        v1_norm = np.linalg.norm(v1, axis=0)
+        v2_norm = np.linalg.norm(v2, axis=0)
         
-        dot_product = np.dot(v1, v2)
-        cross_product = np.cross(v1, v2)
+        v1_normalized = v1 / v1_norm
+        v2_normalized = v2 / v2_norm
+        
+        dot_product = np.sum(v1_normalized * v2_normalized, axis=0)
+        cross_product = np.cross(v2_normalized.T, v1_normalized.T).T
         
         angle = np.arctan2(cross_product, dot_product)
-
-        rotation_axis = cross_product / np.linalg.norm(cross_product)
-
+        
+        rotation_axis = cross_product / np.linalg.norm(cross_product, axis=0)
+        
         quaternion = R.from_rotvec((angle * rotation_axis).T)
         
         euler_angles = quaternion.as_euler(sequence)
-        return euler_angles
         
+        return euler_angles  
+          
     def apply_euler_angles_to_vector(self, v, euler_angles, sequence='xyz'):
         
         rotation = R.from_euler(sequence, euler_angles)
@@ -413,7 +419,7 @@ class GPSCalsource(GPSAntenna):
         euler_angles = self.euler_angles
 
         rotation = self.apply_euler_angles_to_vector(np.array(position_ini_calsource - position_ini_antenna), euler_angles)     
-        translation = rotation[:, None] + position_antenna
+        translation = rotation + position_antenna
         return  translation
     
     def cartesian_to_azimuthelevation(self, x, y, z):
@@ -509,7 +515,7 @@ class GPSCalsource(GPSAntenna):
         vectors_data = [
             (self.position_antenna1[:, index], self.vector_1_2[:, index], 'darkblue', 'Vector Antenna 1 to 2'),
             (self.position_ini_antenna1, self.vector_1_2_ini, 'blue', 'Initial Vector Antenna 1 to 2'),
-            (self.position_calsource[:, index], self.vector_calsource_deviated, 'darkred', 'Vector Calibration Source'),
+            (self.position_calsource[:, index], self.vector_calsource_deviated[:, index], 'darkred', 'Vector Calibration Source'),
             (self.position_ini_calsource, self.vector_calsource_qubic_ini, 'red', 'Initial Vector Calibration Source')
         ]
 
@@ -549,7 +555,7 @@ class GPSCalsource(GPSAntenna):
         vector_endpoints = np.vstack([
             self.position_antenna1[:, index] + self.vector_1_2[:, index],
             self.position_ini_antenna1 + self.vector_1_2_ini,
-            self.position_calsource[:, index] + self.vector_calsource_deviated, 
+            self.position_calsource[:, index] + self.vector_calsource_deviated[:, index], 
             self.position_ini_calsource - self.vector_calsource_qubic_ini
         ])
 

@@ -379,13 +379,11 @@ class GPSCalsource(GPSAntenna):
 
         ### Compute the calibration source orientation angles
         self.euler_angles = self.calculate_euler_angles_between_vectors(self.vector_1_2, self.vector_1_2_ini[:, None])
-        print(self.euler_angles.shape)
-        print('The euler angles are : ', self.euler_angles[self.observation_indices[0]])
         self.vector_calsource_deviated = self.apply_euler_angles_to_vector(self.vector_calsource_qubic_ini, self.euler_angles)
         
         self.position_calsource = self.get_calsource_position(self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna2) 
-        print('The position of the calibration source is : ', self.position_calsource.shape)
-        print('deviated vector : ', self.vector_calsource_deviated.shape)
+        
+        self.position_calsource_azel = self.cartesian_to_azel(self.position_calsource)
         
     def calculate_euler_angles_between_vectors(self, v1, v2, sequence='xyz'):
         
@@ -422,7 +420,9 @@ class GPSCalsource(GPSAntenna):
         translation = rotation + position_antenna
         return  translation
     
-    def cartesian_to_azimuthelevation(self, x, y, z):
+    def cartesian_to_azel(self, cartesian_position):
+        
+        x, y, z = cartesian_position
 
         r = np.sqrt(x**2 + y**2 + z**2)
         theta = np.arctan2(y, x)
@@ -431,7 +431,7 @@ class GPSCalsource(GPSAntenna):
         azimuth = np.degrees(theta)
         elevation = np.degrees(phi)
 
-        return azimuth, elevation
+        return np.array([azimuth, elevation])
         
     def plot_vector_plotly(self, fig, pos, vector, color='blue', name='vector', show_arrow=True, arrow_size = 0.2):
         start = pos

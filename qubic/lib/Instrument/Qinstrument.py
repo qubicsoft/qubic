@@ -27,8 +27,7 @@ from qubic.lib.Qutilities import _compress_mask
 from qubic.lib.Qripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
 from qubic.lib.Qbeams import (BeamGaussian, BeamFitted, MultiFreqBeam)
 
-__all__ = ['QubicInstrument',
-           'QubicMultibandInstrument']
+__all__ = ["QubicInstrument", "QubicMultibandInstrument"]
 
 def compute_freq(band, Nfreq=None, relative_bandwidth=0.25):
     """
@@ -141,9 +140,9 @@ class QubicInstrument(Instrument):
 
         """
         self.d = d
-        self.debug = d['debug']  # if True allows debuging prints
-        filter_nu = d['filter_nu']
-        filter_relative_bandwidth = d['filter_relative_bandwidth']
+        self.debug = d["debug"]  # if True allows debuging prints
+        filter_nu = d["filter_nu"]
+        filter_relative_bandwidth = d["filter_relative_bandwidth"]
         if FRBW is not None:
             self.FRBW = FRBW
         else:
@@ -159,36 +158,36 @@ class QubicInstrument(Instrument):
         self.nu2_up = 220e9 * (1 + self.FRBW / 2)
         self.nu2_down = 220e9 * (1 - self.FRBW / 2)
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
-            d['optics'] = d['optics'].replace(d['optics'][-7:-4], '150')
+            d["optics"] = d["optics"].replace(d["optics"][-7:-4], '150')
         elif (filter_nu <= self.nu2_up) and (filter_nu >= self.nu2_down):
-            d['optics'] = d['optics'].replace(d['optics'][-7:-4], '220')
-            if d['config'] == 'TD':
+            d["optics"] = d["optics"].replace(d["optics"][-7:-4], '220')
+            if d["config"] == 'TD':
                 raise ValueError("TD Not used at frequency " +
-                                 str(int(d['filter_nu'] / 1e9)) + ' GHz')
+                                 str(int(d["filter_nu"] / 1e9)) + ' GHz')
         else:
-            raise ValueError("frequency = " + str(int(d['filter_nu'] / 1e9)) +
+            raise ValueError("frequency = " + str(int(d["filter_nu"] / 1e9)) +
                              " out of bounds")
-        d['optics'] = d['optics'].replace(d['optics'][-10:-8], d['config'])
-        d['detarray'] = d['detarray'].replace(d['detarray'][-7:-5], d['config'])
-        d['hornarray'] = d['hornarray'].replace(d['hornarray'][-7:-5], d['config'])
+        d["optics"] = d["optics"].replace(d["optics"][-10:-8], d["config"])
+        d["detarray"] = d["detarray"].replace(d["detarray"][-7:-5], d["config"])
+        d["hornarray"] = d["hornarray"].replace(d["hornarray"][-7:-5], d["config"])
 
-        if d['nf_sub'] is None and d['MultiBand'] is True:
+        if d["nf_sub"] is None and d["MultiBand"] is True:
             raise ValueError("Error: number of subband not specified")
 
-        detector_fknee = d['detector_fknee']
-        detector_fslope = d['detector_fslope']
-        detector_ncorr = d['detector_ncorr']
-        detector_nep = d['detector_nep']
-        detector_ngrids = d['detector_ngrids']
-        detector_tau = d['detector_tau']
+        detector_fknee = d["detector_fknee"]
+        detector_fslope = d["detector_fslope"]
+        detector_ncorr = d["detector_ncorr"]
+        detector_nep = d["detector_nep"]
+        detector_ngrids = d["detector_ngrids"]
+        detector_tau = d["detector_tau"]
 
-        polarizer = d['polarizer']
+        polarizer = d["polarizer"]
         synthbeam_dtype = np.float32
-        synthbeam_fraction = d['synthbeam_fraction']
-        synthbeam_kmax = d['synthbeam_kmax']
-        synthbeam_peak150_fwhm = np.radians(d['synthbeam_peak150_fwhm'])
-        ripples = d['ripples']
-        nripples = d['nripples']
+        synthbeam_fraction = d["synthbeam_fraction"]
+        synthbeam_kmax = d["synthbeam_kmax"]
+        synthbeam_peak150_fwhm = np.radians(d["synthbeam_peak150_fwhm"])
+        ripples = d["ripples"]
+        nripples = d["nripples"]
 
         #check if synthetic beam peaks are from file or calculated in peak_angles
         use_file=d.get(('use_synthbeam_fits_file'))
@@ -198,30 +197,30 @@ class QubicInstrument(Instrument):
         if sbeam == False:
             #Put in a dummy synthetic beam
             self.sbeam_fits = 'CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
-            d['synthbeam'] = 'CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
+            d["synthbeam"] = 'CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits'
             print('There is no fits file given in this dictionary. Using analytical model of beam parameters')
             use_file=False
         else:
-            self.sbeam_fits = d['synthbeam']
+            self.sbeam_fits = d["synthbeam"]
 
 
         # Choose the primary beam calibration file
-        if d['beam_shape'] == 'gaussian':
-            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '2')
+        if d["beam_shape"] == 'gaussian':
+            d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], '2')
             primary_shape = 'gaussian'
             secondary_shape = 'gaussian'
-        elif d['beam_shape'] == 'fitted_beam':
-            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '3')
+        elif d["beam_shape"] == 'fitted_beam':
+            d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], '3')
             primary_shape = 'fitted_beam'
             secondary_shape = 'fitted_beam'
         else:
-            d['primbeam'] = d['primbeam'].replace(d['primbeam'][-6], '4')
+            d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], '4')
             primary_shape = 'multi_freq'
             secondary_shape = 'multi_freq'
         if self.debug:
             print('primary_shape', primary_shape)
-            print("d['primbeam']", d['primbeam'])
-        self.config = d['config']
+            print("d["primbeam"]", d["primbeam"])
+        self.config = d["config"]
         calibration =  QubicCalibration(d)
         self.calibration = calibration
 
@@ -315,8 +314,8 @@ class QubicInstrument(Instrument):
     def _init_optics(self, polarizer, d):
         optics = Optics()
         calib = self.calibration.get('optics')
-        optics.components = calib['components']
-        optics.focal_length = d['focal_length']
+        optics.components = calib["components"]
+        optics.focal_length = d["focal_length"]
         optics.polarizer = bool(polarizer)
         self.optics = optics
 
@@ -531,10 +530,10 @@ class QubicInstrument(Instrument):
         noise = Noise()
 
         # adding sky components to the photon power and noise sources
-        noise.temperatures = np.r_[T_cmb, T_atm, cc['temperature']]
-        noise.transmissions = np.r_[1, tr_atm, cc['transmission']]
-        noise.emissivities = np.r_[1, em_atm, cc['emissivity']]
-        noise.gp = np.r_[1, 1, cc['nstates_pol']] # polarization of each component
+        noise.temperatures = np.r_[T_cmb, T_atm, cc["temperature"]]
+        noise.transmissions = np.r_[1, tr_atm, cc["transmission"]]
+        noise.emissivities = np.r_[1, em_atm, cc["emissivity"]]
+        noise.gp = np.r_[1, 1, cc["nstates_pol"]] # polarization of each component
 
         n = len(noise.temperatures) # MARTIN: number of optical elements + cmb + atm
         ndet = len(self.detector) # MARTIN: number of detectors
@@ -570,7 +569,7 @@ class QubicInstrument(Instrument):
         noise.NEP_phot2_nobunch = np.zeros_like(noise.P_phot)
         noise.NEP_phot2 = np.zeros_like(noise.P_phot)
         noise.g = np.zeros_like(noise.P_phot)
-        names = ['CMB', 'atm']
+        names = ["CMB', 'atm"]
         for i in range(len(cc)):
             names.append(cc[i][0])
 
@@ -1259,7 +1258,7 @@ class QubicInstrument(Instrument):
                                                       **keywords)
         fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
         if 'ripples' in keywords.keys():
-            del keywords['ripples']
+            del keywords["ripples"]
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)
 
     def get_detector_integration_operator(self):
@@ -1501,7 +1500,7 @@ class QubicInstrument(Instrument):
         transmission.
         """
         return DiagonalOperator(
-            np.product(self.optics.components['transmission']) *
+            np.product(self.optics.components["transmission"]) *
             self.detector.efficiency, broadcast='rightward')
 
     def remove_significant_peaks (thetas, phis, vals, synthbeam):
@@ -1931,115 +1930,115 @@ class QubicMultibandInstrument:
             Needed to study the synthesised beam
         """
         
-        self.FRBW = d['filter_relative_bandwidth']  # initial Full Relative Band Width
+        self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
         self.d = d
         d1 = d.copy()
 
 
         ### Monochromatic
-        if d['nf_sub'] == 1 and d['type_instrument'] != 'wide' :
-            band = d['filter_nu']/1e9
+        if d["nf_sub"] == 1 and d["type_instrument"] != "wide" :
+            band = d["filter_nu"]/1e9
             Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = compute_freq(band,
-                                                                        d['nf_sub'],
-                                                                        d['filter_relative_bandwidth'])
+                                                                        d["nf_sub"],
+                                                                        d["filter_relative_bandwidth"])
             
             
             self.nsubbands = len(filter_nus)
-            if not d['center_detector']:
+            if not d["center_detector"]:
 
                 self.subinstruments = []
                 for i in range(len(filter_nus)):
 
-                    d1['filter_nu'] = filter_nus[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                    d1["filter_nu"] = filter_nus[i] * 1e9
+                    d1["filter_relative_bandwidth"] = deltas[i] / filter_nus[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
             else:
 
                 self.subinstruments = []
                 for i in range(self.nsubbands):
-                    d1['filter_nu'] = filter_nus[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                    d1["filter_nu"] = filter_nus[i] * 1e9
+                    d1["filter_relative_bandwidth"] = deltas[i] / filter_nus[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                     q.detector.center = np.array([[0., 0., -0.3]])
                     self.subinstruments.append(q)
         
-        elif d['nf_sub'] == 1 and d['type_instrument'] == 'wide':
+        elif d["nf_sub"] == 1 and d["type_instrument"] == "wide":
 
             Nf, nus_edge150, filter_nus150, deltas150, Delta, Nbbands = compute_freq(150,
-                                                                        d['nf_sub'],
+                                                                        d["nf_sub"],
                                                                         0.25)
             Nf, nus_edge220, filter_nus220, deltas220, Delta, Nbbands = compute_freq(220,
-                                                                        d['nf_sub'],
+                                                                        d["nf_sub"],
                                                                         0.25)
             
-            if not d['center_detector']:
+            if not d["center_detector"]:
 
                 self.subinstruments = []
                 for i in range(len(filter_nus150)):
 
-                    d1['filter_nu'] = filter_nus150[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas150[i] / filter_nus150[i]
+                    d1["filter_nu"] = filter_nus150[i] * 1e9
+                    d1["filter_relative_bandwidth"] = deltas150[i] / filter_nus150[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
 
                 for i in range(len(filter_nus220)):
 
-                    d1['filter_nu'] = filter_nus220[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas220[i] / filter_nus220[i]
+                    d1["filter_nu"] = filter_nus220[i] * 1e9
+                    d1["filter_relative_bandwidth"] = deltas220[i] / filter_nus220[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
             else:
 
                 self.subinstruments = []
                 for i in range(self.nsubbands):
-                    d1['filter_nu'] = filter_nus[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                    d1["filter_nu"] = filter_nus[i] * 1e9
+                    d1["filter_relative_bandwidth"] = deltas[i] / filter_nus[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                     q.detector.center = np.array([[0., 0., -0.3]])
                     self.subinstruments.append(q)
         ### Multichromatic
         else:
-            #print(int(d['nf_sub']/2))
+            #print(int(d["nf_sub"]/2))
             Nf, nus_edge150, filter_nus, deltas, Delta, Nbbands = compute_freq(150,
-                                                                        d['nf_sub']-1,
+                                                                        d["nf_sub"]-1,
                                                                         0.25)
             Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = compute_freq(220,
-                                                                        d['nf_sub']-1,
+                                                                        d["nf_sub"]-1,
                                                                         0.25)
 
-            if d['type_instrument'] == 'wide':
+            if d["type_instrument"] == "wide":
                 self.nsubbands = len(filter_nus)
-                if not d['center_detector']:
+                if not d["center_detector"]:
                     self.subinstruments = []
                     W = IntegrationTrapezeOperator(nus_edge150)
                     for i in range(len(nus_edge150)):
-                        if self.d['debug']:
+                        if self.d["debug"]:
                             print(f'Integration done with nu = {nus_edge150[i]} GHz with weight {W.operands[i].todense(shapein=1)[0][0]}')
                         #print(nus_edge150)
-                        d1['filter_nu'] = nus_edge150[i] * 1e9
-                        d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
+                        d1["filter_nu"] = nus_edge150[i] * 1e9
+                        d1["filter_relative_bandwidth"] = W.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
                         self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
 
                     W = IntegrationTrapezeOperator(nus_edge220)
                     for i in range(len(nus_edge220)):
-                        if self.d['debug']:
+                        if self.d["debug"]:
                             print(f'Integration done with nu = {nus_edge220[i]} GHz with weight {W.operands[i].todense(shapein=1)[0][0]}')
                         #print(nus_edge220)
-                        d1['filter_nu'] = nus_edge220[i] * 1e9
-                        d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
+                        d1["filter_nu"] = nus_edge220[i] * 1e9
+                        d1["filter_relative_bandwidth"] = W.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
                         self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
                 else:
                     self.subinstruments = []
                     W = IntegrationTrapezeOperator(nus_edge150)
                     for i in range(self.nsubbands):
-                        d1['filter_nu'] = nus_edge150[i] * 1e9
-                        d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
+                        d1["filter_nu"] = nus_edge150[i] * 1e9
+                        d1["filter_relative_bandwidth"] = W.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
                         q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                         q.detector.center = np.array([[0., 0., -0.3]])
                         self.subinstruments.append(q)
 
                     W = IntegrationTrapezeOperator(nus_edge220)
                     for i in range(self.nsubbands):
-                        d1['filter_nu'] = nus_edge220[i] * 1e9
-                        d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
+                        d1["filter_nu"] = nus_edge220[i] * 1e9
+                        d1["filter_relative_bandwidth"] = W.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
                         q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                         q.detector.center = np.array([[0., 0., -0.3]])
                         self.subinstruments.append(q)
@@ -2047,49 +2046,49 @@ class QubicMultibandInstrument:
             else:
                 self.nsubbands = len(filter_nus)
 
-                if not d['center_detector']:
-                    if self.d['filter_nu'] == 150e9:
+                if not d["center_detector"]:
+                    if self.d["filter_nu"] == 150e9:
                         self.subinstruments = []
                         W = IntegrationTrapezeOperator(nus_edge150)
                         for i in range(len(nus_edge150)):
-                            if self.d['debug']:
+                            if self.d["debug"]:
                                 print(f'Integration done with nu = {nus_edge150[i]} GHz with weight {W.operands[i].todense(shapein=1)[0][0]}')
                             #print(nus_edge150)
-                            d1['filter_nu'] = nus_edge150[i] * 1e9
-                            d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
+                            d1["filter_nu"] = nus_edge150[i] * 1e9
+                            d1["filter_relative_bandwidth"] = W.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
                             self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
 
-                    elif self.d['filter_nu'] == 220e9:
+                    elif self.d["filter_nu"] == 220e9:
                         self.subinstruments = []
                         W = IntegrationTrapezeOperator(nus_edge220)
                         for i in range(len(nus_edge220)):
-                            if self.d['debug']:
+                            if self.d["debug"]:
                                 print(f'Integration done with nu = {nus_edge220[i]} GHz with weight {W.operands[i].todense(shapein=1)[0][0]}')
                             #print(nus_edge150)
-                            d1['filter_nu'] = nus_edge220[i] * 1e9
-                            d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
+                            d1["filter_nu"] = nus_edge220[i] * 1e9
+                            d1["filter_relative_bandwidth"] = W.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
                             self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
                     else: raise TypeError('Wrong band')
                 else:
-                    if self.d['filter_nu'] == 150e9:
+                    if self.d["filter_nu"] == 150e9:
                         self.subinstruments = []
                         W = IntegrationTrapezeOperator(nus_edge150)
                         for i in range(len(nus_edge150)):
                             #print(nus_edge150)
-                            d1['filter_nu'] = nus_edge150[i] * 1e9
-                            d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
+                            d1["filter_nu"] = nus_edge150[i] * 1e9
+                            d1["filter_relative_bandwidth"] = W.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
                             
                             q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                             q.detector.center = np.array([[0., 0., -0.3]])
                             self.subinstruments.append(q)
 
-                    elif self.d['filter_nu'] == 220e9:
+                    elif self.d["filter_nu"] == 220e9:
                         self.subinstruments = []
                         W = IntegrationTrapezeOperator(nus_edge220)
                         for i in range(len(nus_edge220)):
                             #print(nus_edge150)
-                            d1['filter_nu'] = nus_edge220[i] * 1e9
-                            d1['filter_relative_bandwidth'] = W.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
+                            d1["filter_nu"] = nus_edge220[i] * 1e9
+                            d1["filter_relative_bandwidth"] = W.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
                             q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                             q.detector.center = np.array([[0., 0., -0.3]])
                             self.subinstruments.append(q)
@@ -2101,20 +2100,20 @@ class QubicMultibandInstrument:
             -------------------------------
 
             self.nsubbands = len(filter_nus)
-            if not d['center_detector']:
+            if not d["center_detector"]:
 
                 self.subinstruments = []
                 for i in range(len(filter_nus)):
 
-                    d1['filter_nu'] = filter_nus[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                    d1["filter_nu"] = filter_nus[i] * 1e9
+                    d1["filter_relative_bandwidth"] = deltas[i] / filter_nus[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
             else:
 
                 self.subinstruments = []
                 for i in range(self.nsubbands):
-                    d1['filter_nu'] = filter_nus[i] * 1e9
-                    d1['filter_relative_bandwidth'] = deltas[i] / filter_nus[i]
+                    d1["filter_nu"] = filter_nus[i] * 1e9
+                    d1["filter_relative_bandwidth"] = deltas[i] / filter_nus[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                     q.detector.center = np.array([[0., 0., -0.3]])
                     self.subinstruments.append(q)

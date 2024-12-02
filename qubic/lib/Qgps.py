@@ -750,10 +750,10 @@ class GPSCalsource(GPSAntenna):
         margin = 0.2
         min_coords = np.min(all_points, axis=0)
         max_coords = np.max(all_points, axis=0)
-        char_scale = np.max(plot_range)  
+        plot_range = max_coords - min_coords
         
         ### Use largest range as characteristic scale
-        plot_range = max_coords - min_coords
+        char_scale = np.max(plot_range)  
         center = (max_coords + min_coords) / 2
         limits_min = center - (1 + margin) * char_scale/2
         limits_max = center + (1 + margin) * char_scale/2
@@ -773,7 +773,7 @@ class GPSCalsource(GPSAntenna):
                     eye=dict(x=1.5, y=1.5, z=1.5)
                 )
             ),
-            title=f'Calibration source - Position and Orientation - {self.datetime[index]}',
+            title=f'Calibration source - Position and Orientation at time : {self.datetime[index]}',
             showlegend=True,
             legend=dict(x=1.1, y=0.5)
         )
@@ -840,54 +840,20 @@ class GPSCalsource(GPSAntenna):
         ax.yaxis.pane.fill = False
         ax.zaxis.pane.fill = False
         ax.legend() 
- 
-    def plot_angle_3d(self, ax, origin, v1, v2, angle, num_points=1000, radius=0.5, **kwargs):
-        """Plot angle 3d.
-        
-        General function to plot a 3D angle between two vectors v1 and v2.
 
-        Parameters
-        ----------
-        ax : mpl_toolkits.mplot3d.axes3d.Axes3D
-            Matplotlib 3D axis
-        origin : array_like
-            Position of the origin of the angle.
-        v1 : array_like
-            Vector 1.
-        v2 : array_like
-            Vector 2.
-        angle : float
-            Angle between v1 and v2, in radians.
-        num_points : int, optional
-            Number of points used to plot the angle, by default 100
-        radius : float, optional
-            Radiius from the origin at which the angle is plotted, by default 0.5
-            
-        Other Parameters
-        ----------------
-        kwargs : optional
-            Any kwarg for plt.plot()
-        """       
+    def plot_position_calsource_azel(self, start_index=0, end_index=-1):
+        """Plot position calsource azel.
         
-        #! This function can be moved in a more genral repostitory
+        Function to plot the evolution of the position of the calibration source in azel.
+        """
         
-        v1_norm = v1 / np.linalg.norm(v1)
-        v2_norm = v2 / np.linalg.norm(v2)
+        plt.figure()
         
-        # Create orthonormal basis for the plane containing v1 and v2
-        normal = np.cross(v1_norm, v2_norm)
-        if np.allclose(normal, 0):
-            # Vectors are parallel, choose an arbitrary perpendicular vector
-            normal = np.array([1, 0, 0]) if np.allclose(v1_norm, [0, 1, 0]) else np.cross(v1_norm, [0, 1, 0])
-        normal = normal / np.linalg.norm(normal)
+        az, el = self.position_calsource_azel[:, start_index:end_index]
         
-        angles = np.linspace(0, angle, num_points)
-        arc_points = np.zeros((num_points, 3))
-        
-        for i, theta in enumerate(angles):
-            rotated = v1_norm * np.cos(theta) + \
-                    np.cross(normal, v1_norm) * np.sin(theta) + \
-                    normal * np.dot(normal, v1_norm) * (1 - np.cos(theta))
-            arc_points[i] = origin + radius * rotated
-            
-        ax.plot(arc_points[:, 0], arc_points[:, 1], arc_points[:, 2], **kwargs)
+        plt.plot(az, el, '.', label='Calibration Source')
+        plt.xlabel('Azimuth [deg]')
+        plt.ylabel('Elevation [deg]')
+        plt.title('Calibration Source Position in Azimuth and Elevation')
+        plt.grid(True)
+        plt.show()

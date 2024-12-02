@@ -8,11 +8,18 @@ import plotly.graph_objects as go
 
 import datetime as dt
 
-from scipy.optimize import fsolve, minimize
-
 class GPStools:
     
     def __init__(self, gps_data_path):
+        """GPSTools class.
+        
+        Class to handle the GPS data and to perform the operations neccessary to use them.
+
+        Parameters
+        ----------
+        gps_data_path : string or dict
+            Path of the GPS binary file or dictionary containing the GPS data.
+        """
 
         ### Convert the data from GPS system into a dictionary
         self.gps_data = self.get_gps_data(gps_data_path)
@@ -21,6 +28,25 @@ class GPStools:
         self.extract_gps_data(self.gps_data)
 
     def get_gps_data(self, gps_data_path):
+        """GPS Data.
+        
+        Method used to build the dictionnary that contains the GPS Data, either by converting the binary file or by using the given dictionary.
+
+        Parameters
+        ----------
+        gps_data_path : string or dict
+            Path of the GPS binary file or dictionary containing the GPS data.
+
+        Returns
+        -------
+        gps_data: dict
+            Dictionary containing the GPS data.
+
+        Raises
+        ------
+        ValueError
+            If the GPS data file does not exist.
+        """
         
         ### Convert the data from GPS system into a dictionary
         if type(gps_data_path) == str:
@@ -29,7 +55,7 @@ class GPStools:
             else:
                 raise ValueError("The GPS data file does not exist")
         else:
-            self.gps_data = gps_data_path
+            return gps_data_path
 
     def read_gps_bindat(self, gps_data_path):
         """GPS binary data.
@@ -85,24 +111,34 @@ class GPStools:
         return data
     
     def extract_gps_data(self, gps_data):
+        """Extract GPS data.
         
-        # Build datetime array
+        Method to extract the GPS data from the dictionary and convert them in proper units.
+        It also converts the Down data into Up coordinates (usual vectical axis in cartesian coordinates).
+
+        Parameters
+        ----------
+        gps_data : dict
+            Dictionary containing the GPS data.
+        """
+        
+        ### Build datetime array
         self._timestamp = np.array(gps_data['timestamp'])
         self._datetime = self.create_datetime_array(self._timestamp)
         
-        # rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
+        ### rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
         self.rpN = np.array(gps_data['rpN']) / 10000                           # in m
         self.rpE = np.array(gps_data['rpE']) / 10000                           # in m
         #! - sign to switch from Down to Up axis, which is more usual
         self.rpD = - np.array(gps_data['rpD']) / 10000                         # in m
         
-        # roll give the angle between antenna 2 - antenna 1 vector and the North axis
+        ### roll give the angle between antenna 2 - antenna 1 vector and the North axis
         self.roll = np.radians(np.array(gps_data['roll'])) / 1000              # in rad
         
-        # yaw give the angle between antenna 2 - antenna 1 vector and the horizontal plane
+        ### yaw give the angle between antenna 2 - antenna 1 vector and the horizontal plane
         self.yaw = np.radians(np.array(gps_data['yaw'])) / 1000                # in rad
         
-        # Other GPS parameters, not used yet
+        ### Other GPS parameters, not used yet
         self._pitchIMU = np.radians(np.array(gps_data['pitchIMU'])) / 1000      # in rad
         self.rollIMU = np.radians(np.array(gps_data['rollIMU'])) / 1000        # in rad
         self._temperature = np.array(gps_data['temperature']) / 10              # in Celsius
@@ -204,13 +240,23 @@ class GPStools:
             raise ValueError('ERROR! Please choose a correct shape for the date: 1 or 2.')
         
     def plot_gps_position_vector(self, index_start=0, index_stop=-1):
+        """Plot GPS position vector.
+    
+        Plot the position vector of the antenna in the North, East and Up directions.
+
+        Parameters
+        ----------
+        index_start : int, optional
+            First observation index, by default 0
+        index_stop : int, optional
+            Last observation index, by default -1
+        """
         
         fig, ax = plt.subplots(figsize = (15,5))
 
         ax.set_xlabel('Date')
         ax.set_ylabel('Position (m)')
         ax.plot(self._datetime[index_start:index_stop], self.rpN[index_start:index_stop], color = 'red', label = 'North component')
-
         ax.plot(self._datetime[index_start:index_stop], self.rpE[index_start:index_stop], color = 'blue', label = 'East component')
         ax.plot(self._datetime[index_start:index_stop], self.rpD[index_start:index_stop], color = 'green', label = 'Up component')
 
@@ -220,6 +266,17 @@ class GPStools:
         plt.show()
 
     def plot_gps_angles(self, index_start=0, index_stop=-1):
+        """Plot GPS angles.
+        
+        Plot the roll and yaw angles.
+
+        Parameters
+        ----------
+        index_start : int, optional
+            First observation index, by default 0
+        index_stop : int, optional
+            Last observation index, by default -1
+        """        
 
         fig, ax = plt.subplots(figsize = (15,5))
         
@@ -234,7 +291,18 @@ class GPStools:
         fig.legend()
         plt.show()
         
-    def plot_gps_data(self, index_observation, index_start=0, index_stop=-1):
+    def plot_gps_data(self, index_start=0, index_stop=-1):
+        """Plot GPS data.
+        
+        Plot the position vector and the angles.
+
+        Parameters
+        ----------
+        index_start : int, optional
+            First observation index, by default 0
+        index_stop : int, optional
+            Last observation index, by default -1
+        """
 
         fig, ax1 = plt.subplots(figsize = (15,5))
 
@@ -243,12 +311,13 @@ class GPStools:
         color_b = 'tab:blue'
         color_d = 'tab:green'
         color_c = 'tab:brown'
+        
         ax1.set_xlabel('Date')
         ax1.set_ylabel('Position Vector Components (m)', color = color_r)
         ax1.plot(self._datetime[index_start:index_stop], self.rpN[index_start:index_stop], color = color_a, label = 'North component')
         ax1.plot(self._datetime[index_start:index_stop], self.rpE[index_start:index_stop], color = color_b, label = 'East component')
         ax1.plot(self._datetime[index_start:index_stop], self.rpD[index_start:index_stop], color = color_d, label = 'Up component')
-        ax1.axvline(x=self._datetime[index_observation], ymin=self.rpN[index_start:index_stop].min(), ymax=self.rpN[index_start:index_stop].max(), color='grey', linestyle='--', linewidth=1, label='Start')
+        ax1.axvline(x=self._datetime[index_start:index_stop], ymin=np.min(self.rpN[index_start:index_stop]), ymax=np.max(self.rpN[index_start:index_stop]), color='grey', linestyle='--', linewidth=1, label='Start')
 
         ax2 = ax1.twinx()
 
@@ -258,7 +327,7 @@ class GPStools:
         ax2.set_ylabel('Angles (rad)', color = color_a)
 
 
-        fig.tight_layout()  # otherwise the right y-label is slightly clipped
+        fig.tight_layout()
         ax1.set_title("Position vector components")
         fig.legend()
         plt.show()
@@ -266,7 +335,19 @@ class GPStools:
 class GPSAntenna(GPStools):
     
     def __init__(self, gps_data_path, distance_between_antennas):
+        """GPSAntenna class.
         
+        Class to compute the position of the two GPS antennas.
+
+        Parameters
+        ----------
+        gps_data_path : string or dict
+            Path of the GPS binary file or dictionary containing the GPS data.
+        distance_between_antennas : float
+            Distance between the two antennas, it's necessary to compute the position of antenna 1.
+        """
+        
+        ### Initialize the GPSTools class
         GPStools.__init__(self, gps_data_path)
         
         ### Fixed parameters
@@ -277,7 +358,7 @@ class GPSAntenna(GPStools):
         self.position_antenna2 = self.get_position_antenna_2(self.base_antenna_position)
         self.position_antenna1 = self.get_position_antenna_1(self.distance_between_antennas)     
         
-    def get_position_antenna_2(self, base_antenna_position):
+    def get_position_antenna_2(self, base_antenna_position = np.array([0, 0, 0])):
         """Position antenna 2.
         
         Method to compute the position of the antenna 2 in North, East, Down coordinates.
@@ -310,7 +391,8 @@ class GPSAntenna(GPStools):
     def get_position_antenna_1(self, distance_between_antennas):
         """Position wrt antenna 2.
         
-        General fonction to compute the position of any point located on the straight line formed by the antenna 1 - anntenna 2 vector, wrt antenna 2 in North, East, Down coordinates.
+        General fonction to compute the position of any point located on the straight line formed by the antenna 1 - anntenna 2 vector.
+        In the code, we used it only to compute the position of the antenna 1.
         
         Be careful, yaw is not the usual theta angle in sphercial cooridinates (i.e. the latitude angle): it corresponds to the elevation angle. 
         It is why we need to add np.pi/2 in the conversion formulas.
@@ -339,7 +421,7 @@ class GPSAntenna(GPStools):
 
 class GPSCalsource(GPSAntenna):
     
-    def __init__(self, gps_data, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, distance_between_antennas, observation_date, position_qubic = np.array([0, 0, 0])):
+    def __init__(self, gps_data, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, distance_between_antennas, observation_date, position_qubic = np.array([0, 0, 0]), observation_only = False):
         
         GPSAntenna.__init__(self, gps_data, distance_between_antennas)
         
@@ -353,18 +435,16 @@ class GPSCalsource(GPSAntenna):
         
         ### Import all the GPS data from the dictionary and convert them in proper units
         self.timestamp = self._timestamp.reshape(-1)
-        
-        ### Build datetime array
+        # Build datetime array
         self.datetime = self.create_datetime_array(self.timestamp)
-        
-        ### Build observation variables : index, time, datetime
+        # Build observation variables : index, time, datetime
         self.observation_indices = self.get_observation_indices(self.datetime, self.observation_date).reshape(-1)
         print('The observation indices are : ', self.observation_indices)
         self.observation_time = self.timestamp[self.observation_indices].reshape(-1)
         self.observation_datetime = self.datetime[self.observation_indices].reshape(-1)
-        
-        ### Get data during observation time
-        # self._get_observation_data(self.observation_indices)
+        # Keep only data during observatin time
+        if observation_only:
+            self._get_observation_data(self.observation_indices)
         
         ### Compute position of antennas 1 & 2 and calibration source in North, East, Down cooridnates
         self.distance_between_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
@@ -372,54 +452,119 @@ class GPSCalsource(GPSAntenna):
         self.position_antenna1 = self.get_position_antenna_1(self.distance_between_antennas) 
         
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
-        #! ATTENTION !!!! Vérifier signes des vecteurs, surtout entre calsource et qubic
         self.vector_1_2_ini =  self.position_ini_antenna2 - self.position_ini_antenna1
         self.vector_1_2 = self.position_antenna2 - self.position_antenna1
         self.vector_calsource_qubic_ini = self.position_qubic - self.position_ini_calsource
 
-        ### Compute the calibration source orientation angles
-        self.euler_angles = self.calculate_euler_angles_between_vectors(self.vector_1_2, self.vector_1_2_ini[:, None])
-        self.vector_calsource_deviated = self.apply_euler_angles_to_vector(self.vector_calsource_qubic_ini, self.euler_angles)
+        ### Compute the calibration source orientation vector
+        self.rotation_instance = self.compute_rotation(self.vector_1_2, self.vector_1_2_ini[:, None])
+        self.vector_calsource_orientation = self.apply_rotation(self.vector_calsource_qubic_ini, self.rotation_instance)
         
-        self.position_calsource = self.get_calsource_position(self.position_ini_antenna2, self.position_ini_calsource, self.position_antenna2) 
-        
+        ### Compute the position of the calibration source in cartesian and azimutal coordinates
+        self.position_calsource = self.get_calsource_position(self.position_ini_antenna2[:, None], self.position_ini_calsource[:, None], self.position_antenna2) 
         self.position_calsource_azel = self.cartesian_to_azel(self.position_calsource)
+                
+    def _get_observation_data(self, observation_indices):
+
+        ### rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
+        self.rpN = self.rpN[observation_indices].reshape(-1)                                      # in m
+        self.rpE = self.rpE[observation_indices].reshape(-1)                                      # in m
+        self.rpD = self.rpD[observation_indices].reshape(-1)                                      # in m
+
+        ### roll give the angle between antenna 2 - antenna 1 vector and the North axis
+        self.roll = self.roll[observation_indices].reshape(-1)                                    # in rad
+
+        ### yaw give the angle between antenna 2 - antenna 1 vector and the horizontal plane
+        self.yaw = self.yaw[observation_indices].reshape(-1)                                      # in rad
+
+        ### Other GPS parameters, not used yet
+        self.pitchIMU = self._pitchIMU[observation_indices].reshape(-1)                           # in rad
+        self.rollIMU = self.rollIMU[observation_indices].reshape(-1)                              # in rad
+        self.temperature = self._temperature[observation_indices].reshape(-1)                     # in Celsius
+        self.checksum = self._checksum[observation_indices].reshape(-1)
         
-    def calculate_euler_angles_between_vectors(self, v1, v2, sequence='xyz'):
+    def compute_rotation(self, v1, v2):
+        """Rotation.
         
-        v1_norm = np.linalg.norm(v1, axis=0)
-        v2_norm = np.linalg.norm(v2, axis=0)
+        Compute the rotation instance from Spipy.spatial.transform.Rotation, that transforms v1 to v2.
+
+        Parameters
+        ----------
+        v1 : array_like
+            Fisrt vector.
+        v2 : array_like
+            Second vector.
+
+        Returns
+        -------
+        rotationon_instance : Rotation
+            Rotation instance from Spipy.spatial.transform.Rotation.
+        """
         
-        v1_normalized = v1 / v1_norm
-        v2_normalized = v2 / v2_norm
-        
+        ### Normalize the vectors and compute the dot product and cross product
+        v1_normalized = v1 / np.linalg.norm(v1, axis=0)
+        v2_normalized = v2 / np.linalg.norm(v2, axis=0)
         dot_product = np.sum(v1_normalized * v2_normalized, axis=0)
         cross_product = np.cross(v2_normalized.T, v1_normalized.T).T
         
+        ### Define the rotation axis and angle between the vectors
+        rotation_axis = cross_product / np.linalg.norm(cross_product, axis=0)
         angle = np.arctan2(cross_product, dot_product)
         
-        rotation_axis = cross_product / np.linalg.norm(cross_product, axis=0)
+        ### Build the scipy Rotation instance
+        rotation_instance = R.from_rotvec((angle * rotation_axis).T)
         
-        quaternion = R.from_rotvec((angle * rotation_axis).T)
-        
-        euler_angles = quaternion.as_euler(sequence)
-        
-        return euler_angles  
+        return rotation_instance  
           
-    def apply_euler_angles_to_vector(self, v, euler_angles, sequence='xyz'):
+    def apply_rotation(self, v, rotation_instance):
+        """Apply rotation.
         
-        rotation = R.from_euler(sequence, euler_angles)
-        rotated_vector = rotation.apply(v)
+        Apply the rotation instance to the vector v.
+
+        Parameters
+        ----------
+        v : array_like
+            Vector to rotate.
+        rotation_instance : Rotation
+            Rotation instance from Spipy.spatial.transform.Rotation.
+            
+        Returns
+        -------
+        rotated_vector : array_like
+            Rotated vector.
+        """
+        
+        ### Rotate the vector using the rotation instance
+        rotated_vector = rotation_instance.apply(v)
         return rotated_vector.T
     
     def get_calsource_position(self, position_ini_antenna, position_ini_calsource, position_antenna):
+        """Calsource position.
         
-        euler_angles = self.euler_angles
+        Compute the position of the calibration source, using the translation between the initial and current position of one antenna.
+        This translation is then applied on the initial position of the calibration source.
+        
+        Parameters
+        ----------
+        position_ini_antenna : array_like
+            Initial position of the antenna.
+        position_ini_calsource : array_like
+            Initial position of the calibration source.
+        position_antenna : array_like
+            Position of the antenna.
 
-        rotation = self.apply_euler_angles_to_vector(np.array(position_ini_calsource - position_ini_antenna), euler_angles)     
-        translation = rotation + position_antenna
-        return  translation
-    
+        Returns
+        -------
+        position_calsource : array_like
+            Position of the calibration source.
+        """
+        
+        ### Compute the translation between the initial and current position of the antenna
+        translation = position_antenna - position_ini_antenna
+        
+        ### Apply the translation to the initial position of the calibration source
+        return position_ini_calsource + translation
+        
     def cartesian_to_azel(self, cartesian_position):
         
         x, y, z = cartesian_position
@@ -515,7 +660,7 @@ class GPSCalsource(GPSAntenna):
         vectors_data = [
             (self.position_antenna1[:, index], self.vector_1_2[:, index], 'darkblue', 'Vector Antenna 1 to 2'),
             (self.position_ini_antenna1, self.vector_1_2_ini, 'blue', 'Initial Vector Antenna 1 to 2'),
-            (self.position_calsource[:, index], self.vector_calsource_deviated[:, index], 'darkred', 'Vector Calibration Source'),
+            (self.position_calsource[:, index], self.vector_calsource_orientation[:, index], 'darkred', 'Vector Calibration Source'),
             (self.position_ini_calsource, self.vector_calsource_qubic_ini, 'red', 'Initial Vector Calibration Source')
         ]
 
@@ -555,7 +700,7 @@ class GPSCalsource(GPSAntenna):
         vector_endpoints = np.vstack([
             self.position_antenna1[:, index] + self.vector_1_2[:, index],
             self.position_ini_antenna1 + self.vector_1_2_ini,
-            self.position_calsource[:, index] + self.vector_calsource_deviated[:, index], 
+            self.position_calsource[:, index] + self.vector_calsource_orientation[:, index], 
             self.position_ini_calsource - self.vector_calsource_qubic_ini
         ])
 
@@ -628,7 +773,7 @@ class GPSCalsource(GPSAntenna):
         
         ### Plot the vector between QUBIC and the calibration source
         ax.quiver(self.position_calsource[0, index], self.position_calsource[1, index], self.position_calsource[2, index],
-                  self.vector_calsource_deviated[0, index], self.vector_calsource_deviated[1, index], self.vector_calsource_deviated[2, index],
+                  self.vector_calsource_orientation[0, index], self.vector_calsource_orientation[1, index], self.vector_calsource_orientation[2, index],
                   color='darkred', arrow_length_ratio=0.1, linewidth=2, label='Vector Calibration Source Deviation')
         ax.quiver(self.position_ini_calsource[0], self.position_ini_calsource[1], self.position_ini_calsource[2], 
                     -self.vector_calsource_qubic_ini[0], 

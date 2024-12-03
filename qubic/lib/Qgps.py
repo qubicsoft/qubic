@@ -421,8 +421,10 @@ class GPSAntenna(GPStools):
 
 class GPSCalsource(GPSAntenna):
     
-    def __init__(self, gps_data, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, distance_antennas, observation_date, position_qubic = np.array([0, 0, 0]), observation_only = False):
+    def __init__(self, gps_data, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, observation_date, distance_antennas = False, position_qubic = np.array([0, 0, 0]), observation_only = False):
         
+        ### Distance between antennas to initialize GPSAntenna
+        self.distance_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
         GPSAntenna.__init__(self, gps_data, distance_antennas)
         
         ### Fixed parameters
@@ -440,16 +442,9 @@ class GPSCalsource(GPSAntenna):
         # Build observation variables : index, time, datetime
         self.observation_indices = self.get_observation_indices(self.datetime, self.observation_date).reshape(-1)
         print('The observation indices are : ', self.observation_indices)
-        self.observation_time = self.timestamp[self.observation_indices].reshape(-1)
-        self.observation_datetime = self.datetime[self.observation_indices].reshape(-1)
         # Keep only data during observatin time
         if observation_only:
             self._get_observation_data(self.observation_indices)
-        
-        ### Compute position of antennas 1 & 2 and calibration source in North, East, Down cooridnates
-        self.distance_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
-        self.position_antenna2 = self.get_position_antenna_2(self.base_antenna_position)
-        self.position_antenna1 = self.get_position_antenna_1(self.distance_antennas) 
         
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
         self.vector_1_2_ini =  self.position_ini_antenna2 - self.position_ini_antenna1
@@ -466,6 +461,10 @@ class GPSCalsource(GPSAntenna):
                 
     def _get_observation_data(self, observation_indices):
 
+        ### Time and datetime during observation period
+        self.observation_time = self.timestamp[self.observation_indices].reshape(-1)
+        self.observation_datetime = self.datetime[self.observation_indices].reshape(-1)
+        
         ### rpN, rpE, rpD give the relative position of the antenna 2 wrt base antenna in North, East, Down coordinates
         self.rpN = self.rpN[observation_indices].reshape(-1)                                      # in m
         self.rpE = self.rpE[observation_indices].reshape(-1)                                      # in m

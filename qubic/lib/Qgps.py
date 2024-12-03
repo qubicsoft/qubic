@@ -3,10 +3,11 @@ import struct
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation as R
 import plotly.graph_objects as go
 
 import datetime as dt
+from scipy.spatial.transform import Rotation as R
+
 
 class GPStools:
     
@@ -139,9 +140,9 @@ class GPStools:
         self.yaw = np.radians(np.array(gps_data['yaw'])) / 1000                # in rad
         
         ### Other GPS parameters, not used yet
-        self._pitchIMU = np.radians(np.array(gps_data['pitchIMU'])) / 1000      # in rad
+        self._pitchIMU = np.radians(np.array(gps_data['pitchIMU'])) / 1000     # in rad
         self.rollIMU = np.radians(np.array(gps_data['rollIMU'])) / 1000        # in rad
-        self._temperature = np.array(gps_data['temperature']) / 10              # in Celsius
+        self._temperature = np.array(gps_data['temperature']) / 10             # in Celsius
         self._checksum = np.array(gps_data['checksum'])
     
     def create_datetime_array(self, timestamp, utc_offset=0):
@@ -317,7 +318,6 @@ class GPStools:
         ax1.plot(self._datetime[index_start:index_stop], self.rpN[index_start:index_stop], color = color_a, label = 'North component')
         ax1.plot(self._datetime[index_start:index_stop], self.rpE[index_start:index_stop], color = color_b, label = 'East component')
         ax1.plot(self._datetime[index_start:index_stop], self.rpD[index_start:index_stop], color = color_d, label = 'Up component')
-        ax1.axvline(x=self._datetime[index_start:index_stop], ymin=np.min(self.rpN[index_start:index_stop]), ymax=np.max(self.rpN[index_start:index_stop]), color='grey', linestyle='--', linewidth=1, label='Start')
 
         ax2 = ax1.twinx()
 
@@ -334,7 +334,7 @@ class GPStools:
     
 class GPSAntenna(GPStools):
     
-    def __init__(self, gps_data_path, distance_between_antennas):
+    def __init__(self, gps_data_path, distance_antennas):
         """GPSAntenna class.
         
         Class to compute the position of the two GPS antennas.
@@ -343,7 +343,7 @@ class GPSAntenna(GPStools):
         ----------
         gps_data_path : string or dict
             Path of the GPS binary file or dictionary containing the GPS data.
-        distance_between_antennas : float
+        distance_antennas : float
             Distance between the two antennas, it's necessary to compute the position of antenna 1.
         """
         
@@ -352,11 +352,11 @@ class GPSAntenna(GPStools):
         
         ### Fixed parameters
         self.base_antenna_position = np.array([0, 0, 0])
-        self.distance_between_antennas = distance_between_antennas
+        self.distance_antennas = distance_antennas
         
         ### Compute position of antennas 1 & 2 and calibration source in North, East, Down cooridnates
         self.position_antenna2 = self.get_position_antenna_2(self.base_antenna_position)
-        self.position_antenna1 = self.get_position_antenna_1(self.distance_between_antennas)     
+        self.position_antenna1 = self.get_position_antenna_1(self.distance_antennas)     
         
     def get_position_antenna_2(self, base_antenna_position = np.array([0, 0, 0])):
         """Position antenna 2.
@@ -388,7 +388,7 @@ class GPSAntenna(GPStools):
         
         return np.array([rpN_antenna_2, rpE_antenna_2, rpD_antenna_2])
     
-    def get_position_antenna_1(self, distance_between_antennas):
+    def get_position_antenna_1(self, distance_antennas):
         """Position wrt antenna 2.
         
         General fonction to compute the position of any point located on the straight line formed by the antenna 1 - anntenna 2 vector.
@@ -399,7 +399,7 @@ class GPSAntenna(GPStools):
 
         Parameters
         ----------
-        distance_between_antennas : float
+        distance_antennas : float
             Distance between a point located  on the straight line formed by the antenna 1 - anntenna 2 vector and antenna 2.
         gps_data : dict
             Dictionary containing the GPS data.
@@ -413,17 +413,17 @@ class GPSAntenna(GPStools):
         """        
         
         ### Compute the position of the antenna 1 wrt antenna 2 in North, East, Down coordinates
-        _rpN = distance_between_antennas * np.cos(self.roll) * np.sin(np.pi/2 - self.yaw)
-        _rpE = distance_between_antennas * np.sin(self.roll) * np.sin(np.pi/2 - self.yaw)
-        _rpD = distance_between_antennas * np.cos(np.pi/2 - self.yaw)
+        _rpN = distance_antennas * np.cos(self.roll) * np.sin(np.pi/2 - self.yaw)
+        _rpE = distance_antennas * np.sin(self.roll) * np.sin(np.pi/2 - self.yaw)
+        _rpD = distance_antennas * np.cos(np.pi/2 - self.yaw)
         
         return np.array([_rpN, _rpE, _rpD]) + self.position_antenna2
 
 class GPSCalsource(GPSAntenna):
     
-    def __init__(self, gps_data, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, distance_between_antennas, observation_date, position_qubic = np.array([0, 0, 0]), observation_only = False):
+    def __init__(self, gps_data, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, distance_antennas, observation_date, position_qubic = np.array([0, 0, 0]), observation_only = False):
         
-        GPSAntenna.__init__(self, gps_data, distance_between_antennas)
+        GPSAntenna.__init__(self, gps_data, distance_antennas)
         
         ### Fixed parameters
         self.base_antenna_position = np.array([0, 0, 0])
@@ -447,9 +447,9 @@ class GPSCalsource(GPSAntenna):
             self._get_observation_data(self.observation_indices)
         
         ### Compute position of antennas 1 & 2 and calibration source in North, East, Down cooridnates
-        self.distance_between_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
+        self.distance_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
         self.position_antenna2 = self.get_position_antenna_2(self.base_antenna_position)
-        self.position_antenna1 = self.get_position_antenna_1(self.distance_between_antennas) 
+        self.position_antenna1 = self.get_position_antenna_1(self.distance_antennas) 
         
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
         self.vector_1_2_ini =  self.position_ini_antenna2 - self.position_ini_antenna1

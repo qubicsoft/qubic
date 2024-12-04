@@ -42,7 +42,7 @@ from ..Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
 from ..Qutilities import _compress_mask
 
 
-__all__ = ["QubicInstrument", "QubicMultibandInstrument"]
+__all__ = ["QubicInstrument", "QubicMultibandInstrumentTrapezoidalIntegration","QubicMultibandInstrument"]
 
 def compute_freq(band, Nfreq=None, relative_bandwidth=0.25):
     """

@@ -423,10 +423,6 @@ class GPSCalsource(GPSAntenna):
     
     def __init__(self, gps_data, position_ini_antenna1, position_ini_antenna2, position_ini_calsource, observation_date, distance_antennas = False, position_qubic = np.array([0, 0, 0]), observation_only = False):
         
-        ### Distance between antennas to initialize GPSAntenna
-        self.distance_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
-        GPSAntenna.__init__(self, gps_data, distance_antennas)
-        
         ### Fixed parameters
         self.base_antenna_position = np.array([0, 0, 0])
         self.position_ini_antenna1 = position_ini_antenna1
@@ -434,6 +430,13 @@ class GPSCalsource(GPSAntenna):
         self.position_ini_calsource = position_ini_calsource
         self.observation_date = observation_date
         self.position_qubic = position_qubic
+        
+        ### Distance between antennas to initialize GPSAntenna
+        if not distance_antennas:
+            distance_antennas = np.linalg.norm(self.position_ini_antenna2 - self.position_ini_antenna1)
+        else:
+            distance_antennas = distance_antennas
+        GPSAntenna.__init__(self, gps_data, distance_antennas)
         
         ### Import all the GPS data from the dictionary and convert them in proper units
         self.timestamp = self._timestamp.reshape(-1)
@@ -452,6 +455,7 @@ class GPSCalsource(GPSAntenna):
         self.vector_calsource_qubic_ini = self.position_qubic - self.position_ini_calsource
 
         ### Compute the calibration source orientation vector
+        self.deviation_angle = self.compute_angle(self.vector_1_2, self.vector_1_2_ini[:, None])
         self.rotation_instance = self.compute_rotation(self.vector_1_2, self.vector_1_2_ini[:, None])
         self.vector_calsource_orientation = self.apply_rotation(self.vector_calsource_qubic_ini, self.rotation_instance)
         
@@ -482,6 +486,28 @@ class GPSCalsource(GPSAntenna):
         self.temperature = self._temperature[observation_indices].reshape(-1)                     # in Celsius
         self.checksum = self._checksum[observation_indices].reshape(-1)
         
+    def _compute_dot_product(self, v1, v2):
+        v1_normalized = v1 / np.linalg.norm(v1, axis=0)
+        v2_normalized = v2 / np.linalg.norm(v2, axis=0)
+        dot_product = np.sum(v1_normalized * v2_normalized, axis=0)
+        
+        return dot_product
+    
+    def _compute_cross_product(self, v1, V2):
+        v1_normalized = v1 / np.linalg.norm(v1, axis=0)
+        v2_normalized = V2 / np.linalg.norm(V2, axis=0)
+        cross_product = np.cross(v2_normalized.T, v1_normalized.T).T
+
+        return cross_product
+    
+    def compute_angle(self, v1, v2):
+        
+        dot_product = self._compute_dot_product(v1, v2)
+        cross_product = self._compute_cross_product(v1, v2)
+        
+        angle = np.arctan2(cross_product, dot_product)
+        return angle
+        
     def compute_rotation(self, v1, v2):
         """Rotation.
         
@@ -500,17 +526,16 @@ class GPSCalsource(GPSAntenna):
             Rotation instance from Spipy.spatial.transform.Rotation.
         """
         
-        ### Normalize the vectors and compute the dot product and cross product
-        v1_normalized = v1 / np.linalg.norm(v1, axis=0)
-        v2_normalized = v2 / np.linalg.norm(v2, axis=0)
-        dot_product = np.sum(v1_normalized * v2_normalized, axis=0)
-        cross_product = np.cross(v2_normalized.T, v1_normalized.T).T
-        
+        cross_product = self._compute_cross_product(v1, v2)
+   
         ### Define the rotation axis and angle between the vectors
         rotation_axis = cross_product / np.linalg.norm(cross_product, axis=0)
-        angle = np.arctan2(cross_product, dot_product)
+        angle = self.compute_angle(v1, v2)
         
         ### Build the scipy Rotation instance
+        print(angle.shape)
+        print(rotation_axis.shape)
+        print((angle * rotation_axis).shape )
         rotation_instance = R.from_rotvec((angle * rotation_axis).T)
         
         return rotation_instance  

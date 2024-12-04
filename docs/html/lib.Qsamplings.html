@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Qsamplings module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.Qscene module" href="lib.Qscene.html" />
+    <link rel="prev" title="lib.Qripples module" href="lib.Qripples.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="lib.html#subpackages">Subpackages</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#submodules">Submodules</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="lib.Qbeams.html">lib.Qbeams module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html">lib.Qcoaddition module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html">lib.QdataHandling module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html">lib.Qdictionary module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfit.html">lib.Qfit module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfoldertools.html">lib.Qfoldertools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qforecast.html">lib.Qforecast module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qhorns.html">lib.Qhorns module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qmpi_tools.html">lib.Qmpi_tools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qplotters.html">lib.Qplotters module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qripples.html">lib.Qripples module</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">lib.Qsamplings module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.QubicSampling"><code class="docutils literal notranslate"><span class="pre">QubicSampling</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.create_random_pointings"><code class="docutils literal notranslate"><span class="pre">create_random_pointings()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.create_repeat_pointings"><code class="docutils literal notranslate"><span class="pre">create_repeat_pointings()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.create_sweeping_pointings"><code class="docutils literal notranslate"><span class="pre">create_sweeping_pointings()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.equ2gal"><code class="docutils literal notranslate"><span class="pre">equ2gal()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.equ2hor"><code class="docutils literal notranslate"><span class="pre">equ2hor()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.gal2equ"><code class="docutils literal notranslate"><span class="pre">gal2equ()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.gal2hor"><code class="docutils literal notranslate"><span class="pre">gal2hor()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.get_pointing"><code class="docutils literal notranslate"><span class="pre">get_pointing()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.hor2equ"><code class="docutils literal notranslate"><span class="pre">hor2equ()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qsamplings.hor2gal"><code class="docutils literal notranslate"><span class="pre">hor2gal()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qscene.html">lib.Qscene module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html">lib.QskySim module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html">lib.Qspectra module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qutilities.html">lib.Qutilities module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+      <li class="breadcrumb-item active">lib.Qsamplings module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.Qsamplings.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.Qsamplings">
+<span id="lib-qsamplings-module"></span><h1>lib.Qsamplings module<a class="headerlink" href="#module-lib.Qsamplings" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">QubicSampling</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">keywords</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qsamplings.html#QubicSampling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.QubicSampling" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">SamplingHorizontal</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.azimuth">
+<span class="sig-name descname"><span class="pre">azimuth</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.azimuth" title="Link to this definition"></a></dt>
+<dd><p>The pointing azimuth [degrees].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array-like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.elevation">
+<span class="sig-name descname"><span class="pre">elevation</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.elevation" title="Link to this definition"></a></dt>
+<dd><p>The pointing elevation [degrees].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array-like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.pitch">
+<span class="sig-name descname"><span class="pre">pitch</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.pitch" title="Link to this definition"></a></dt>
+<dd><p>The instrument pitch angle [degrees].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array-like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.angle_hwp">
+<span class="sig-name descname"><span class="pre">angle_hwp</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.angle_hwp" title="Link to this definition"></a></dt>
+<dd><p>The half-wave plate angle [degrees].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array-like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.time">
+<span class="sig-name descname"><span class="pre">time</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.time" title="Link to this definition"></a></dt>
+<dd><p>Elapsed time for each pointing since the observation start date,
+in seconds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array-like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.date_obs">
+<span class="sig-name descname"><span class="pre">date_obs</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.date_obs" title="Link to this definition"></a></dt>
+<dd><p>The observation start date.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>string or astropy.time.Time</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.period">
+<span class="sig-name descname"><span class="pre">period</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.period" title="Link to this definition"></a></dt>
+<dd><p>The sampling period [s].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.latitude">
+<span class="sig-name descname"><span class="pre">latitude</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.latitude" title="Link to this definition"></a></dt>
+<dd><p>Telescope latitude [degrees].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.longitude">
+<span class="sig-name descname"><span class="pre">longitude</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.longitude" title="Link to this definition"></a></dt>
+<dd><p>Telescope longitude [degrees].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<p class="rubric">Examples</p>
+<dl class="simple">
+<dt>pointing = QubicSampling(azimuth=azimuth, elevation=elevation,</dt><dd><p>angle_hwp=angle_hwp, period=…)</p>
+</dd>
+</dl>
+<p>pointing = QubicSampling(azimuth, elevation, pitch, angle_hwp, period=…)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Attributes<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">all</span></code></dt><dd><p>Give access to the unpacked attributes, without creating a cyclic reference.</p>
+</dd>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">cartesian2spherical</span></code></dt><dd><p>Return the cartesian-to-spherical transform.</p>
+</dd>
+<dt><a class="reference internal" href="#lib.Qsamplings.QubicSampling.cartesian_galactic2instrument" title="lib.Qsamplings.QubicSampling.cartesian_galactic2instrument"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cartesian_galactic2instrument</span></code></a></dt><dd><p>Return the galactic-to-instrument transform.</p>
+</dd>
+<dt><a class="reference internal" href="#lib.Qsamplings.QubicSampling.cartesian_horizontal2instrument" title="lib.Qsamplings.QubicSampling.cartesian_horizontal2instrument"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cartesian_horizontal2instrument</span></code></a></dt><dd><p>Return the galactic-to-instrument transform.</p>
+</dd>
+<dt><strong>cartesian_instrument2galactic</strong></dt><dd></dd>
+<dt><strong>cartesian_instrument2horizontal</strong></dt><dd></dd>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">equatorial</span></code></dt><dd><p>Return the spherical coordinates in the equatorial referential.</p>
+</dd>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">galactic</span></code></dt><dd><p>Return the spherical coordinates in the galactic referential.</p>
+</dd>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">index</span></code></dt><dd><p>Return the index as an int array.</p>
+</dd>
+<dt><strong>removed</strong></dt><dd></dd>
+<dt><code class="xref py py-obj docutils literal notranslate"><span class="pre">spherical2cartesian</span></code></dt><dd><p>Return the spherical-to-cartesian transform.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">cartesian</span></code>()</p></td>
+<td><p>Return the cartesian coordinates in the equatorial referential.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">copy</span></code>()</p></td>
+<td><p>Return a deep copy of the packed array.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">gather</span></code>(*args)</p></td>
+<td><p>MPI-gather the (already scattered) table or a given array.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_center</span></code>()</p></td>
+<td><p>Return the average pointing direction.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">pack</span></code>(x[, out, copy])</p></td>
+<td><p>Convert a multi-dimensional array into a 1-dimensional array which only includes the selected components, potentially ordered according to a given ordering.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">scatter</span></code>([comm])</p></td>
+<td><p>MPI-scatter of the table.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">spherical</span></code>()</p></td>
+<td><p>Return the spherical coordinates as an (N, 2) ndarray.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">split</span></code>(n)</p></td>
+<td><p>Split the table in partitioning groups.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">unpack</span></code>(x[, out, missing_value, copy])</p></td>
+<td><p>Convert a 1-dimensional array into a multi-dimensional array which includes the non-selected components, mimicking the multi-dimensional layout.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>healpix</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>time</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>velocity</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.DEFAULT_DATE_OBS">
+<span class="sig-name descname"><span class="pre">DEFAULT_DATE_OBS</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'2016-01-01</span> <span class="pre">00:00:00'</span></em><a class="headerlink" href="#lib.Qsamplings.QubicSampling.DEFAULT_DATE_OBS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.DEFAULT_LATITUDE">
+<span class="sig-name descname"><span class="pre">DEFAULT_LATITUDE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">-24.183333333333334</span></em><a class="headerlink" href="#lib.Qsamplings.QubicSampling.DEFAULT_LATITUDE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.DEFAULT_LONGITUDE">
+<span class="sig-name descname"><span class="pre">DEFAULT_LONGITUDE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">-66.46666666666667</span></em><a class="headerlink" href="#lib.Qsamplings.QubicSampling.DEFAULT_LONGITUDE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.DEFAULT_PERIOD">
+<span class="sig-name descname"><span class="pre">DEFAULT_PERIOD</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#lib.Qsamplings.QubicSampling.DEFAULT_PERIOD" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.cartesian_galactic2instrument">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cartesian_galactic2instrument</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.cartesian_galactic2instrument" title="Link to this definition"></a></dt>
+<dd><p>Return the galactic-to-instrument transform.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.cartesian_horizontal2instrument">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cartesian_horizontal2instrument</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.cartesian_horizontal2instrument" title="Link to this definition"></a></dt>
+<dd><p>Return the galactic-to-instrument transform.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.cartesian_instrument2galactic">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cartesian_instrument2galactic</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.cartesian_instrument2galactic" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.cartesian_instrument2horizontal">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cartesian_instrument2horizontal</span></span><a class="headerlink" href="#lib.Qsamplings.QubicSampling.cartesian_instrument2horizontal" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qsamplings.QubicSampling.healpix">
+<span class="sig-name descname"><span class="pre">healpix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nside</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qsamplings.html#QubicSampling.healpix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.QubicSampling.healpix" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.create_random_pointings">
+<span class="sig-name descname"><span class="pre">create_random_pointings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">npointings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtheta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hwp_stepsize</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">latitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">longitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qsamplings.html#create_random_pointings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.create_random_pointings" title="Link to this definition"></a></dt>
+<dd><p>Return pointings randomly and uniformly distributed in a spherical cap.</p>
+<p>1) Creates random coordinates theta, phi. Range: 0 &lt; theta &lt; dtheta, 0 &lt; phi &lt; 360
+(then are converted from spherical to cartesian coordinates),
+2) It rotates the points to center them in direction (RA, DEC) using Rotation3dOperator
+(equatorial reference system)
+3) Convertion: Equatorial to Horizontal reference system
+(using CartesianEquatorial2HorizontalOperator’s operator)
+4) Back to cartesian coordinates (using Cartesian2SphericalOperator)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>center</strong> (<em>2-tuple</em>) – The R.A. and declination of the center of the FOV, in degrees.</p></li>
+<li><p><strong>npointings</strong> (<em>int</em>) – The number of requested pointings</p></li>
+<li><p><strong>dtheta</strong> (<em>float</em>) – The maximum angular distance to the center.</p></li>
+<li><p><strong>hwp_stepsize</strong> (<em>float</em>) – Step angle size for the HWP.</p></li>
+<li><p><strong>date_obs</strong> (<em>str</em><em> or </em><em>astropy.time.Time</em><em>, </em><em>optional</em>) – The starting date of the observation (UTC).</p></li>
+<li><p><strong>period</strong> (<em>float</em><em>, </em><em>optional</em>) – The sampling period of the pointings, in seconds.</p></li>
+<li><p><strong>latitude</strong> (<em>float</em><em>, </em><em>optional</em>) – The observer’s latitude [degrees]. Default is DOMEC’s.</p></li>
+<li><p><strong>longitude</strong> (<em>float</em><em>, </em><em>optional</em>) – The observer’s longitude [degrees]. Default is DOMEC’s.</p></li>
+<li><p><strong>seed</strong> (<em>int</em>) – Random seed.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.create_repeat_pointings">
+<span class="sig-name descname"><span class="pre">create_repeat_pointings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">npointings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtheta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nhwp_angles</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">latitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">longitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qsamplings.html#create_repeat_pointings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.create_repeat_pointings" title="Link to this definition"></a></dt>
+<dd><p>Return pointings randomly and uniformly distributed in a spherical cap.
+The same pointing is repeated nhwp_angles times with a different
+hwp angle each time.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>center</strong> (<em>2-tuple</em>) – The R.A. and declination of the center of the FOV, in degrees.</p></li>
+<li><p><strong>npointings</strong> (<em>int</em>) – The number of requested pointings</p></li>
+<li><p><strong>dtheta</strong> (<em>float</em>) – The maximum angular distance to the center.</p></li>
+<li><p><strong>nhwp_angles</strong> (<em>int</em>) – The number of HWP angles used.</p></li>
+<li><p><strong>date_obs</strong> (<em>str</em><em> or </em><em>astropy.time.Time</em><em>, </em><em>optional</em>) – The starting date of the observation (UTC).</p></li>
+<li><p><strong>period</strong> (<em>float</em><em>, </em><em>optional</em>) – The sampling period of the pointings, in seconds.</p></li>
+<li><p><strong>latitude</strong> (<em>float</em><em>, </em><em>optional</em>) – The observer’s latitude [degrees]. Default is DOMEC’s.</p></li>
+<li><p><strong>longitude</strong> (<em>float</em><em>, </em><em>optional</em>) – The observer’s longitude [degrees]. Default is DOMEC’s.</p></li>
+<li><p><strong>seed</strong> (<em>int</em>) – Random seed.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.create_sweeping_pointings">
+<span class="sig-name descname"><span class="pre">create_sweeping_pointings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">duration</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angspeed</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta_az</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsweeps_per_elevation</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angspeed_psi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maxpsi</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hwp_stepsize</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date_obs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">latitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">longitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fix_azimuth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">random_hwp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qsamplings.html#create_sweeping_pointings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.create_sweeping_pointings" title="Link to this definition"></a></dt>
+<dd><p>Return pointings according to the sweeping strategy:
+Sweep around the tracked FOV center azimuth at a fixed elevation, and
+update elevation towards the FOV center at discrete times.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>center</strong> (<em>array-like</em><em> of </em><em>size 2</em>) – The R.A. and Declination of the center of the FOV.</p></li>
+<li><p><strong>duration</strong> (<em>float</em>) – The duration of the observation, in hours.</p></li>
+<li><p><strong>period</strong> (<em>float</em>) – The sampling period of the pointings, in seconds.</p></li>
+<li><p><strong>angspeed</strong> (<em>float</em>) – The pointing angular speed, in deg / s.</p></li>
+<li><p><strong>delta_az</strong> (<em>float</em>) – The sweeping extent in degrees.</p></li>
+<li><p><strong>nsweeps_per_elevation</strong> (<em>int</em>) – The number of sweeps during a phase of constant elevation.</p></li>
+<li><p><strong>angspeed_psi</strong> (<em>float</em>) – The pitch angular speed, in deg / s.</p></li>
+<li><p><strong>maxpsi</strong> (<em>float</em>) – The maximum pitch angle, in degrees.</p></li>
+<li><p><strong>latitude</strong> (<em>float</em><em>, </em><em>optional</em>) – The observer’s latitude [degrees]. Default is DOMEC’s.</p></li>
+<li><p><strong>longitude</strong> (<em>float</em><em>, </em><em>optional</em>) – The observer’s longitude [degrees]. Default is DOMEC’s.</p></li>
+<li><p><strong>fix_azimuth</strong> (<em>bool</em>)</p></li>
+<li><p><strong>hwp_stepsize</strong> (<em>float</em>) – Step angle size for the HWP.</p></li>
+<li><p><strong>date_obs</strong> (<em>str</em><em> or </em><em>astropy.time.Time</em><em>, </em><em>optional</em>) – The starting date of the observation (UTC).</p></li>
+<li><p><strong>random_hwp</strong> (<em>bool</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>pointings</strong> – Structured array containing the azimuth, elevation and pitch angles,
+in degrees.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#lib.Qsamplings.QubicSampling" title="lib.Qsamplings.QubicSampling">QubicSampling</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.equ2gal">
+<span class="sig-name descname"><span class="pre">equ2gal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ra</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dec</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">l</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">b</span></span></span><a class="reference internal" href="_modules/lib/Qsamplings.html#equ2gal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.equ2gal" title="Link to this definition"></a></dt>
+<dd><p>Equatorial to galactic spherical conversion. Angles are in degrees.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.equ2hor">
+<span class="sig-name descname"><span class="pre">equ2hor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ra</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">date_obs</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">latitude</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">longitude</span></span></em><span class="optional">]</span><span class="optional">]</span><span class="optional">]</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">az</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">el</span></span></span><a class="reference internal" href="_modules/lib/Qsamplings.html#equ2hor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.equ2hor" title="Link to this definition"></a></dt>
+<dd><p>Equatorial to horizontal spherical conversion. Angles are in degrees.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ra</strong> (<em>float</em>) – Right ascension in degrees.</p></li>
+<li><p><strong>dec</strong> (<em>float</em>) – Declination in degrees.</p></li>
+<li><p><strong>time</strong> (<em>array-like</em>) – Elapsed time in seconds since date_obs.</p></li>
+<li><p><strong>date_obs</strong> (<em>string</em>) – The starting date, UTC.</p></li>
+<li><p><strong>latitude</strong> (<em>float</em>) – The observer’s latitude geolocation. Default is Dome C.</p></li>
+<li><p><strong>longitude</strong> (<em>float</em>) – The observer’s longitude geolocation. Default is Dome C.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">equ2hor</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">date_obs</span><span class="o">=</span><span class="s1">&#39;2000-01-01 00:00:00&#39;</span><span class="p">)</span>
+<span class="go">(array(135.71997181016644), array(-10.785386358099927))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.gal2equ">
+<span class="sig-name descname"><span class="pre">gal2equ</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ra</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dec</span></span></span><a class="reference internal" href="_modules/lib/Qsamplings.html#gal2equ"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.gal2equ" title="Link to this definition"></a></dt>
+<dd><p>Galactic to equatorial spherical conversion. Angles are in degrees.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.gal2hor">
+<span class="sig-name descname"><span class="pre">gal2hor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">l</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">date_obs</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">latitude</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">longitude</span></span></em><span class="optional">]</span><span class="optional">]</span><span class="optional">]</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">az</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">el</span></span></span><a class="reference internal" href="_modules/lib/Qsamplings.html#gal2hor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.gal2hor" title="Link to this definition"></a></dt>
+<dd><p>Galactic to horizontal spherical conversion. Angles are in degrees.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>time</strong> (<em>array-like</em>) – Elapsed time in seconds since date_obs.</p></li>
+<li><p><strong>date_obs</strong> (<em>string</em>) – The starting date, UTC.</p></li>
+<li><p><strong>latitude</strong> (<em>float</em>) – The observer’s latitude geolocation. Default is Dome C.</p></li>
+<li><p><strong>longitude</strong> (<em>float</em>) – The observer’s longitude geolocation. Default is Dome C.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">gal2hor</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="go">(array(50.35837815921487), array(39.212362279976155))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.get_pointing">
+<span class="sig-name descname"><span class="pre">get_pointing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qsamplings.html#get_pointing"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.get_pointing" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.hor2equ">
+<span class="sig-name descname"><span class="pre">hor2equ</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">az</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">el</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">date_obs</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">latitude</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">longitude</span></span></em><span class="optional">]</span><span class="optional">]</span><span class="optional">]</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ra</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dec</span></span></span><a class="reference internal" href="_modules/lib/Qsamplings.html#hor2equ"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.hor2equ" title="Link to this definition"></a></dt>
+<dd><p>Horizontal to equatorial spherical conversion. Angles are in degrees.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>azimuth</strong> (<em>float</em>)</p></li>
+<li><p><strong>elevation</strong> (<em>float</em>)</p></li>
+<li><p><strong>time</strong> (<em>array-like</em>) – Elapsed time in seconds since date_obs.</p></li>
+<li><p><strong>date_obs</strong> (<em>string</em>) – The starting date, UTC.</p></li>
+<li><p><strong>latitude</strong> (<em>float</em>) – The observer’s latitude geolocation. Default is Dome C.</p></li>
+<li><p><strong>longitude</strong> (<em>float</em>) – The observer’s longitude geolocation. Default is Dome C.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">hor2equ</span><span class="p">(</span><span class="mf">135.71997181016644</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.785386358099927</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">date_obs</span><span class="o">=</span><span class="s1">&#39;2000-01-01 00:00:00&#39;</span><span class="p">)</span>
+<span class="go">(array(1.1927080055488187e-14), array(-1.2722218725854067e-14))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Qsamplings.hor2gal">
+<span class="sig-name descname"><span class="pre">hor2gal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">az</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">el</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">date_obs</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">latitude</span></span></em><span class="optional">[</span>, <em class="sig-param"><span class="n"><span class="pre">longitude</span></span></em><span class="optional">]</span><span class="optional">]</span><span class="optional">]</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">l</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">b</span></span></span><a class="reference internal" href="_modules/lib/Qsamplings.html#hor2gal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qsamplings.hor2gal" title="Link to this definition"></a></dt>
+<dd><p>Horizontal to galactic spherical conversion. Angles are in degrees.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>azimuth</strong> (<em>float</em>)</p></li>
+<li><p><strong>elevation</strong> (<em>float</em>)</p></li>
+<li><p><strong>time</strong> (<em>array-like</em>) – Elapsed time in seconds since date_obs.</p></li>
+<li><p><strong>date_obs</strong> (<em>string</em>) – The starting date, UTC.</p></li>
+<li><p><strong>latitude</strong> (<em>float</em>) – The observer’s latitude geolocation. Default is Dome C.</p></li>
+<li><p><strong>longitude</strong> (<em>float</em>) – The observer’s longitude geolocation. Default is Dome C.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">hor2gal</span><span class="p">(</span><span class="mf">50.35837815921487</span><span class="p">,</span> <span class="mf">39.212362279976155</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="go">(array(4.452776554048925e-14), array(-7.63333123551244e-14))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.Qripples.html" class="btn btn-neutral float-left" title="lib.Qripples module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.Qscene.html" class="btn btn-neutral float-right" title="lib.Qscene module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

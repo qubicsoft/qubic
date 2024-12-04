@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Qcoaddition &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.Qcoaddition</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.Qcoaddition</h1><div class="highlight"><pre>
+<span></span><span class="c1">### General modules</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">bottleneck</span> <span class="k">as</span> <span class="nn">bn</span>
+<span class="kn">from</span> <span class="nn">scipy.signal</span> <span class="kn">import</span> <span class="n">medfilt</span>
+<span class="kn">import</span> <span class="nn">scipy.signal</span>
+<span class="kn">from</span> <span class="nn">scipy.interpolate</span> <span class="kn">import</span> <span class="n">interp1d</span>
+<span class="kn">from</span> <span class="nn">sklearn.cluster</span> <span class="kn">import</span> <span class="n">DBSCAN</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">interpolate</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="c1">### Specific modules </span>
+
+<span class="kn">from</span> <span class="nn">.Qdictionary</span> <span class="kn">import</span> <span class="n">qubicDict</span>
+<span class="kn">from</span> <span class="nn">.Qutilities</span> <span class="kn">import</span> <span class="n">progress_bar</span>
+<span class="kn">from</span> <span class="nn">.InstrumentModel.Qinstrument</span> <span class="kn">import</span> <span class="n">QubicInstrument</span>
+<span class="kn">from</span> <span class="nn">.Calibration</span> <span class="kn">import</span> <span class="n">Qselfcal</span> <span class="k">as</span> <span class="n">scal</span>
+<span class="kn">from</span> <span class="nn">.Calibration</span> <span class="kn">import</span> <span class="n">Qfiber</span> <span class="k">as</span> <span class="n">ft</span>
+
+<span class="c1">#from qubic.lib.Qdictionary import qubicDict</span>
+<span class="c1">#from qubic.lib.Qutilities import progress_bar</span>
+<span class="c1">#from qubic.lib.InstrumentModel.Qinstrument import QubicInstrument</span>
+<span class="c1">#from qubic.lib.Calibration import Qselfcal as scal</span>
+<span class="c1">#from qubic.lib.Calibration import Qfiber as ft</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;MySplineFitting&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;Pip1Tes&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;FocalPlane&#39;</span><span class="p">,</span>
+           <span class="s1">&#39;PipAllTes&#39;</span><span class="p">]</span>
+
+<div class="viewcode-block" id="MySplineFitting">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.MySplineFitting">[docs]</a>
+<span class="k">class</span> <span class="nc">MySplineFitting</span><span class="p">:</span>
+	
+	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">xin</span><span class="p">,</span><span class="n">yin</span><span class="p">,</span><span class="n">covarin</span><span class="p">,</span><span class="n">nbspl</span><span class="p">,</span><span class="n">logspace</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+		<span class="c1"># input parameters</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">=</span><span class="n">xin</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">=</span><span class="n">yin</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">nbspl</span><span class="o">=</span><span class="n">nbspl</span>
+		<span class="n">covar</span><span class="o">=</span><span class="n">covarin</span>
+		<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">covarin</span><span class="p">))</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="n">err</span><span class="o">=</span><span class="n">covarin</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">covar</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">err</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">invcovar</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">err</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">covar</span><span class="o">=</span><span class="n">covarin</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">invcovar</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">covarin</span><span class="p">)</span>
+		
+		<span class="c1"># Prepare splines</span>
+		<span class="n">xspl</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">),</span><span class="n">nbspl</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">logspace</span><span class="o">==</span><span class="kc">True</span><span class="p">:</span> <span class="n">xspl</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">logspace</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">)),</span><span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">)),</span><span class="n">nbspl</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">xspl</span><span class="o">=</span><span class="n">xspl</span>
+		<span class="n">F</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">xin</span><span class="p">),</span><span class="n">nbspl</span><span class="p">))</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">F</span><span class="o">=</span><span class="n">F</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">nbspl</span><span class="p">):</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">F</span><span class="p">[:,</span><span class="n">i</span><span class="p">]</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_spline_tofit</span><span class="p">(</span><span class="n">xspl</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">xin</span><span class="p">)</span>
+		
+		<span class="c1"># solution of the chi square</span>
+		<span class="n">ft_cinv_y</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">F</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">invcovar</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">))</span>
+		<span class="n">covout</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">F</span><span class="p">),</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">invcovar</span><span class="p">,</span><span class="n">F</span><span class="p">)))</span>
+		<span class="n">alpha</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">covout</span><span class="p">,</span><span class="n">ft_cinv_y</span><span class="p">)</span>
+		<span class="n">fitted</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">F</span><span class="p">,</span><span class="n">alpha</span><span class="p">)</span>
+		
+		<span class="c1"># output</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">residuals</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">-</span><span class="n">fitted</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">chi2</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">residuals</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">invcovar</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">residuals</span><span class="p">))</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ndf</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">xin</span><span class="p">)</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">alpha</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="o">=</span><span class="n">alpha</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">covout</span><span class="o">=</span><span class="n">covout</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">dalpha</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diagonal</span><span class="p">(</span><span class="n">covout</span><span class="p">))</span>
+	
+	<span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">x</span><span class="p">):</span>
+		<span class="n">theF</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">x</span><span class="p">),</span><span class="bp">self</span><span class="o">.</span><span class="n">nbspl</span><span class="p">))</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nbspl</span><span class="p">):</span> <span class="n">theF</span><span class="p">[:,</span><span class="n">i</span><span class="p">]</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_spline_tofit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xspl</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">x</span><span class="p">)</span>
+		<span class="k">return</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">theF</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">))</span>
+
+<div class="viewcode-block" id="MySplineFitting.with_alpha">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.MySplineFitting.with_alpha">[docs]</a>
+	<span class="k">def</span> <span class="nf">with_alpha</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">x</span><span class="p">,</span><span class="n">alpha</span><span class="p">):</span>
+		<span class="n">theF</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">x</span><span class="p">),</span><span class="bp">self</span><span class="o">.</span><span class="n">nbspl</span><span class="p">))</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nbspl</span><span class="p">):</span> <span class="n">theF</span><span class="p">[:,</span><span class="n">i</span><span class="p">]</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">get_spline_tofit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xspl</span><span class="p">,</span><span class="n">i</span><span class="p">,</span><span class="n">x</span><span class="p">)</span>
+		<span class="k">return</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">theF</span><span class="p">,</span><span class="n">alpha</span><span class="p">))</span></div>
+
+			
+<div class="viewcode-block" id="MySplineFitting.get_spline_tofit">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.MySplineFitting.get_spline_tofit">[docs]</a>
+	<span class="k">def</span> <span class="nf">get_spline_tofit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="n">xspline</span><span class="p">,</span><span class="n">index</span><span class="p">,</span><span class="n">xx</span><span class="p">):</span>
+		<span class="n">yspline</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">xspline</span><span class="p">))</span>
+		<span class="n">yspline</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="o">=</span><span class="mf">1.</span>
+		<span class="n">tck</span><span class="o">=</span><span class="n">interpolate</span><span class="o">.</span><span class="n">splrep</span><span class="p">(</span><span class="n">xspline</span><span class="p">,</span><span class="n">yspline</span><span class="p">)</span>
+		<span class="n">yy</span><span class="o">=</span><span class="n">interpolate</span><span class="o">.</span><span class="n">splev</span><span class="p">(</span><span class="n">xx</span><span class="p">,</span><span class="n">tck</span><span class="p">,</span><span class="n">der</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+		<span class="k">return</span><span class="p">(</span><span class="n">yy</span><span class="p">)</span></div>
+</div>
+
+
+<div class="viewcode-block" id="Pip1Tes">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes">[docs]</a>
+<span class="k">class</span> <span class="nc">Pip1Tes</span><span class="p">:</span>
+<span class="w">    </span>
+<span class="w">    </span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    </span>
+<span class="sd">	Instance to treat TES one by one.</span>
+<span class="sd">    </span>
+<span class="sd">	&quot;&quot;&quot;</span>
+    
+	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tt</span><span class="p">,</span> <span class="n">tod</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">thk</span><span class="p">):</span>
+        
+		<span class="bp">self</span><span class="o">.</span><span class="n">tt</span> <span class="o">=</span> <span class="n">tt</span><span class="o">-</span><span class="n">tt</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tod</span> <span class="o">=</span> <span class="n">tod</span><span class="o">-</span><span class="n">tod</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">az</span> <span class="o">=</span> <span class="n">az</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">el</span> <span class="o">=</span> <span class="n">el</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thk</span> <span class="o">=</span> <span class="n">thk</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">scantype_hk</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">azt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">elt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">scantype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_scantype</span><span class="p">(</span><span class="mf">0.035</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Pip1Tes.identify_scans">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.identify_scans">[docs]</a>
+	<span class="k">def</span> <span class="nf">identify_scans</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inthk</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">tt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">median_size</span><span class="o">=</span><span class="mi">101</span><span class="p">,</span> <span class="n">thr_speedmin</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">plotrange</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1000</span><span class="p">]):</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">		This function identifies and assign numbers the various regions of a back-and-forth scanning using the housepkeeping time, az, el</span>
+<span class="sd">			- a numbering for each back &amp; forth scan</span>
+<span class="sd">			- a region to remove at the end of each scan (bad data due to FLL reset, slowingg down of the moiunt, possibly HWP rotation</span>
+<span class="sd">			- is the scan back or forth ?</span>
+<span class="sd">		It optionnaly iinterpolate this information to the TOD sampling iif provided.</span>
+
+<span class="sd">		Parameters</span>
+<span class="sd">		----------</span>
+<span class="sd">		input</span>
+<span class="sd">		thk : np.array()</span>
+<span class="sd">				time samples (seconds) for az and el at the housekeeeping sampling rate</span>
+<span class="sd">		az : np.array()</span>
+<span class="sd">			azimuth in degrees at the housekeeping sampling rate</span>
+<span class="sd">		el : np.array()</span>
+<span class="sd">			elevation in degrees at the housekeeping sampling rate</span>
+<span class="sd">		tt : Optional : np.array()</span>
+<span class="sd">			None buy default, if not None:</span>
+<span class="sd">			time samples (seconds) at the TOD sampling rate</span>
+<span class="sd">			Then. the output will also containe az,el and scantype interpolated at TOD sampling rate</span>
+<span class="sd">		thr_speedmin : Optional : float</span>
+<span class="sd">			Threshold for angular velocity to be considered as slow</span>
+<span class="sd">		doplot : [Optional] : Boolean</span>
+<span class="sd">			If True displays some useeful plot</span>
+<span class="sd">		output : </span>
+<span class="sd">		scantype_hk: np.array(int)</span>
+<span class="sd">			type of scan for each sample at housekeeping sampling rate:</span>
+<span class="sd">			* 0 = speed to slow - Bad data</span>
+<span class="sd">			* n = scanning towards positive azimuth</span>
+<span class="sd">			* -n = scanning towards negative azimuth</span>
+<span class="sd">			where n is the scan number (starting at 1)</span>
+<span class="sd">		azt : [optional] np.array()</span>
+<span class="sd">			azimuth (degrees) at the TOD sampling rate</span>
+<span class="sd">		elt : [optional] np.array()</span>
+<span class="sd">			elevation (degrees) at the TOD sampling rate</span>
+<span class="sd">		scantype : [optiona] np.array()</span>
+<span class="sd">			same as scantype_hk, but interpolated at TOD sampling rate</span>
+<span class="sd">		&quot;&quot;&quot;</span>
+	
+		<span class="n">thk</span> <span class="o">=</span> <span class="n">inthk</span> <span class="o">-</span> <span class="n">inthk</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+		<span class="c1">### Sampling for HK data</span>
+		<span class="n">timesample</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="n">thk</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="o">-</span><span class="n">thk</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+		<span class="c1">### angular velocity </span>
+		<span class="n">medaz_dt</span> <span class="o">=</span> <span class="n">medfilt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">gradient</span><span class="p">(</span><span class="n">az</span><span class="p">,</span> <span class="n">timesample</span><span class="p">),</span> <span class="n">median_size</span><span class="p">)</span>
+		<span class="c1">### Identify regions of change</span>
+		<span class="c1"># Low velocity -&gt; Bad</span>
+		<span class="n">c0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">medaz_dt</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">thr_speedmin</span>
+		<span class="c1"># Positive velicity =&gt; Good</span>
+		<span class="n">cpos</span> <span class="o">=</span> <span class="p">(</span><span class="o">~</span><span class="n">c0</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">medaz_dt</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+		<span class="c1"># Negative velocity =&gt; Good</span>
+		<span class="n">cneg</span> <span class="o">=</span> <span class="p">(</span><span class="o">~</span><span class="n">c0</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">medaz_dt</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>
+	
+		<span class="c1">### Scan identification at HK sampling</span>
+		<span class="n">scantype_hk</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">thk</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;int&#39;</span><span class="p">)</span><span class="o">-</span><span class="mi">10</span>
+		<span class="n">scantype_hk</span><span class="p">[</span><span class="n">c0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="n">scantype_hk</span><span class="p">[</span><span class="n">cpos</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+		<span class="n">scantype_hk</span><span class="p">[</span><span class="n">cneg</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+
+		<span class="c1"># check that we have them all</span>
+		<span class="n">count_them</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scantype_hk</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scantype_hk</span><span class="o">==-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scantype_hk</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">count_them</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">scantype_hk</span><span class="p">):</span>
+			<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Identify_scans: Bad Scan counting at HK sampling level - Error: </span><span class="si">{}</span><span class="s1"> </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">scantype_hk</span><span class="p">),</span> <span class="n">count_them</span><span class="p">))</span>
+			<span class="n">stop</span>
+	
+		<span class="c1">### Now give a number to each back and forth scan</span>
+		<span class="n">num</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="n">previous</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">scantype_hk</span><span class="p">)):</span>
+			<span class="k">if</span> <span class="n">scantype_hk</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+				<span class="n">previous</span> <span class="o">=</span> <span class="mi">0</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">if</span> <span class="p">(</span><span class="n">previous</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">scantype_hk</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">):</span>
+					<span class="c1"># we have a change</span>
+					<span class="n">num</span> <span class="o">+=</span> <span class="mi">1</span>
+				<span class="n">previous</span> <span class="o">=</span> <span class="mi">1</span>
+				<span class="n">scantype_hk</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*=</span> <span class="n">num</span>
+			
+		<span class="n">dead_time</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">c0</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">thk</span><span class="p">)</span>
+
+		<span class="k">if</span> <span class="n">tt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+			<span class="c1">### We propagate these at TOD sampling rate  (this is an &quot;step interpolation&quot;: we do not want intermediatee values&quot;)</span>
+			<span class="n">scantype</span> <span class="o">=</span> <span class="n">interp1d</span><span class="p">(</span><span class="n">thk</span><span class="p">,</span> <span class="n">scantype_hk</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;previous&#39;</span><span class="p">,</span> <span class="n">fill_value</span><span class="o">=</span><span class="s1">&#39;extrapolate&#39;</span><span class="p">)(</span><span class="n">tt</span><span class="p">)</span>
+			<span class="n">scantype</span> <span class="o">=</span> <span class="n">scantype</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+			<span class="n">count_them</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scantype</span><span class="o">==</span><span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scantype</span><span class="o">&lt;=-</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">scantype</span><span class="o">&gt;=</span><span class="mi">1</span><span class="p">)</span>
+			<span class="k">if</span> <span class="n">count_them</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">scantype</span><span class="p">):</span>
+				<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Bad Scan counting at data sampling level - Error&#39;</span><span class="p">)</span>
+				<span class="n">stop</span>
+			<span class="c1">### Interpolate azimuth and elevation to TOD sampling</span>
+			<span class="n">azt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">thk</span><span class="p">,</span> <span class="n">az</span><span class="p">)</span>
+			<span class="n">elt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">tt</span><span class="p">,</span> <span class="n">thk</span><span class="p">,</span> <span class="n">el</span><span class="p">)</span>
+			<span class="c1">### Return evereything</span>
+			<span class="k">return</span> <span class="n">scantype_hk</span><span class="p">,</span> <span class="n">azt</span><span class="p">,</span> <span class="n">elt</span><span class="p">,</span> <span class="n">scantype</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="c1">### Return scantype at HK sampling only</span>
+			<span class="k">return</span> <span class="n">scantype_hk</span></div>
+
+	<span class="k">def</span> <span class="nf">_scantype</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">speedmin</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		Method to run scantype analysis.</span>
+<span class="sd">  </span>
+<span class="sd">		Parameters :</span>
+<span class="sd">		------------</span>
+<span class="sd">			- speedmin : float number that describe the mount speed.</span>
+
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="n">scantype_hk</span><span class="p">,</span> <span class="n">azt</span><span class="p">,</span> <span class="n">elt</span><span class="p">,</span> <span class="n">scantype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">identify_scans</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">thk</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">az</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">el</span><span class="p">,</span> <span class="n">tt</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">,</span> <span class="n">plotrange</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="mi">2000</span><span class="p">],</span> <span class="n">thr_speedmin</span><span class="o">=</span><span class="n">speedmin</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">scantype_hk</span><span class="p">,</span> <span class="n">azt</span><span class="p">,</span> <span class="n">elt</span><span class="p">,</span> <span class="n">scantype</span>
+	<span class="k">def</span> <span class="nf">_remove_drifts_spline</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nsplines</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span> <span class="n">nresample</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">nedge</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		Method to remove drifts using spline interpolation.</span>
+
+<span class="sd">		&quot;&quot;&quot;</span>
+		
+  		<span class="c1">### Linear function using the beginning and end of the samples (nn samples)</span>
+		<span class="c1">### In order to approach periodicity of the signal to be resampled</span>
+		<span class="n">nnedge</span> <span class="o">=</span> <span class="mi">100</span>
+		<span class="n">x0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">[:</span><span class="n">nedge</span><span class="p">])</span>
+		<span class="n">y0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[:</span><span class="n">nedge</span><span class="p">])</span>
+		<span class="n">x1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">[</span><span class="o">-</span><span class="n">nedge</span><span class="p">:])</span>
+		<span class="n">y1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="o">-</span><span class="n">nedge</span><span class="p">:])</span>	
+		<span class="n">p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">poly1d</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([(</span><span class="n">y1</span><span class="o">-</span><span class="n">y0</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">x1</span><span class="o">-</span><span class="n">x0</span><span class="p">),</span> <span class="n">y0</span><span class="p">]))</span>
+		
+		<span class="c1">### Resample TOD-linearfunction to apply spline</span>
+		<span class="n">tt_resample</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">nresample</span><span class="p">)</span>
+		<span class="n">tod_resample</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="o">-</span><span class="n">p</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">),</span> <span class="n">nresample</span><span class="p">)</span> <span class="o">+</span> <span class="n">p</span><span class="p">(</span><span class="n">tt_resample</span><span class="p">)</span>
+
+		<span class="c1">### Perform spline fitting</span>
+		<span class="n">splfit</span> <span class="o">=</span> <span class="n">MySplineFitting</span><span class="p">(</span><span class="n">tt_resample</span><span class="p">,</span> <span class="n">tod_resample</span><span class="p">,</span> <span class="n">tod_resample</span><span class="o">*</span><span class="mi">0</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">nsplines</span><span class="p">)</span>
+		<span class="n">fitted</span> <span class="o">=</span> <span class="n">splfit</span><span class="p">(</span><span class="n">tt_resample</span><span class="p">)</span>
+
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="o">-</span><span class="n">splfit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">)</span>
+	<span class="k">def</span> <span class="nf">_remove_offset_scan</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;meancut&#39;</span><span class="p">,</span> <span class="n">apply_to_bad</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		Method to remove offsets.</span>
+
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="c1">### We remove offsets for each good scan but we also need to remove a coomparable offset for the scantype==0 reggiions in order to keep coninuity </span>
+		<span class="c1">### This si donee by apply_to_bad=True</span>
+    
+		<span class="n">indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">))</span>
+		<span class="n">last_index</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="n">myoffsetn</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="n">myoffsetp</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="n">donefirst</span> <span class="o">=</span> <span class="mi">0</span>
+    
+		<span class="n">nscans</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scantype</span><span class="p">))</span>
+		<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">nscans</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+	    	<span class="c1"># scan +</span>
+			<span class="n">ok</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scantype</span> <span class="o">==</span> <span class="n">n</span>
+			<span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;meancut&#39;</span><span class="p">:</span>
+				<span class="n">myoffsetp</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">meancut</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="mi">3</span><span class="p">)</span>
+			<span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;median&#39;</span><span class="p">:</span>
+				<span class="n">myoffsetp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+			<span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;mode&#39;</span><span class="p">:</span>
+				<span class="n">myoffsetp</span> <span class="o">=</span> <span class="n">get_mode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">break</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">]</span> <span class="o">-=</span> <span class="n">myoffsetp</span>        
+			<span class="k">if</span> <span class="n">apply_to_bad</span><span class="p">:</span>
+				<span class="n">first_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+				<span class="k">if</span> <span class="p">(</span><span class="n">n</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">donefirst</span><span class="o">==</span><span class="mi">0</span><span class="p">):</span> <span class="n">myoffsetn</span> <span class="o">=</span> <span class="n">myoffsetp</span> <span class="c1">### deal with first region</span>
+				<span class="n">vals_offsets</span> <span class="o">=</span> <span class="n">myoffsetn</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span> <span class="n">first_index</span><span class="o">-</span><span class="n">last_index</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">myoffsetp</span><span class="o">-</span><span class="n">myoffsetn</span><span class="p">)</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">last_index</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">first_index</span><span class="p">]</span> <span class="o">-=</span> <span class="n">vals_offsets</span>
+				<span class="n">last_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+				<span class="n">donefirst</span> <span class="o">=</span> <span class="mi">1</span>
+        
+        
+	    	<span class="c1"># scan -</span>
+			<span class="n">ok</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scantype</span> <span class="o">==</span> <span class="p">(</span><span class="o">-</span><span class="n">n</span><span class="p">)</span>
+			<span class="k">if</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;meancut&#39;</span><span class="p">:</span>
+				<span class="n">myoffsetn</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">meancut</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="mi">3</span><span class="p">)</span>
+			<span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;median&#39;</span><span class="p">:</span>
+				<span class="n">myoffsetn</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+			<span class="k">elif</span> <span class="n">method</span> <span class="o">==</span> <span class="s1">&#39;mode&#39;</span><span class="p">:</span>
+				<span class="n">myoffsetn</span> <span class="o">=</span> <span class="n">get_mode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">break</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">]</span> <span class="o">-=</span> <span class="n">myoffsetn</span>
+			<span class="k">if</span> <span class="n">apply_to_bad</span><span class="p">:</span>
+				<span class="n">first_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+				<span class="k">if</span> <span class="p">(</span><span class="n">n</span><span class="o">==</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">donefirst</span><span class="o">==</span><span class="mi">0</span><span class="p">):</span> <span class="n">myoffsetp</span> <span class="o">=</span> <span class="n">myoffsetn</span> <span class="c1">### deal with first region</span>
+				<span class="n">vals_offsets</span> <span class="o">=</span> <span class="n">myoffsetp</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span> <span class="n">first_index</span><span class="o">-</span><span class="n">last_index</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">myoffsetn</span><span class="o">-</span><span class="n">myoffsetp</span><span class="p">)</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">last_index</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">first_index</span><span class="p">]</span> <span class="o">-=</span> <span class="n">vals_offsets</span>
+				<span class="n">last_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+				<span class="n">donefirst</span> <span class="o">=</span> <span class="mi">1</span>
+    
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span>
+<div class="viewcode-block" id="Pip1Tes.decorel_azel">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.decorel_azel">[docs]</a>
+	<span class="k">def</span> <span class="nf">decorel_azel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nbins</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">n_el</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">degree</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nbspl</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		Method to remove correlation in azimuth.</span>
+
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="c1">### Profiling in Azimuth and elevation</span>
+		<span class="n">el_lims</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elt</span><span class="p">)</span><span class="o">-</span><span class="mf">0.0001</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elt</span><span class="p">)</span><span class="o">+</span><span class="mf">0.0001</span><span class="p">,</span> <span class="n">n_el</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+		<span class="n">el_av</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">el_lims</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">+</span> <span class="n">el_lims</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+
+		<span class="n">okall</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scantype</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> 
+		<span class="n">okpos</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scantype</span> <span class="o">&gt;</span> <span class="mi">0</span> 
+		<span class="n">okneg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scantype</span> <span class="o">&lt;</span> <span class="mi">0</span> 
+		<span class="n">oks</span> <span class="o">=</span> <span class="p">[</span><span class="n">okpos</span><span class="p">,</span> <span class="n">okneg</span><span class="p">]</span>
+		<span class="n">oks_names</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;+ scans&#39;</span><span class="p">,</span> <span class="s1">&#39;- scans&#39;</span><span class="p">]</span>
+		<span class="n">minaz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">azt</span><span class="p">[</span><span class="n">okall</span><span class="p">])</span>
+		<span class="n">maxaz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">azt</span><span class="p">[</span><span class="n">okall</span><span class="p">])</span>
+		<span class="n">xaz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">minaz</span><span class="p">,</span> <span class="n">maxaz</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+    
+		<span class="c1">### Use polynomials or spline fitting to remove drifts and large features</span>
+		<span class="k">if</span> <span class="n">degree</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+			<span class="n">coefficients</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="n">n_el</span><span class="p">,</span> <span class="n">degree</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="n">coefficients</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span> <span class="n">n_el</span><span class="p">,</span> <span class="n">nbspl</span><span class="p">))</span>
+
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">oks</span><span class="p">)):</span>	
+			<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_el</span><span class="p">):</span>
+				<span class="n">ok</span> <span class="o">=</span> <span class="n">oks</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&amp;</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elt</span> <span class="o">&gt;=</span> <span class="n">el_lims</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="o">&amp;</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elt</span> <span class="o">&lt;</span> <span class="n">el_lims</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span>
+				<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">ok</span><span class="p">)</span><span class="o">==</span><span class="mi">0</span><span class="p">:</span>
+					<span class="k">break</span>
+			<span class="n">xc</span><span class="p">,</span> <span class="n">yc</span><span class="p">,</span> <span class="n">dx</span><span class="p">,</span> <span class="n">dy</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">profile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">azt</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">rng</span><span class="o">=</span><span class="p">[</span><span class="n">minaz</span><span class="p">,</span> <span class="n">maxaz</span><span class="p">],</span> <span class="n">nbins</span><span class="o">=</span><span class="n">nbins</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dispersion</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+			<span class="k">if</span> <span class="n">degree</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+				<span class="c1">### Polynomial Fitting</span>
+				<span class="n">z</span> <span class="o">=</span> <span class="n">polyfit</span><span class="p">(</span><span class="n">xc</span><span class="p">,</span> <span class="n">yc</span><span class="p">,</span> <span class="n">degree</span><span class="p">,</span> <span class="n">w</span><span class="o">=</span><span class="mf">1.</span><span class="o">/</span><span class="n">dy</span><span class="p">)</span>
+				<span class="n">coefficients</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">z</span>
+				<span class="n">p</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">poly1d</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+				<span class="n">fitted</span> <span class="o">=</span> <span class="n">p</span><span class="p">(</span><span class="n">xaz</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="c1">### Spline Fitting</span>
+				<span class="n">splfit</span> <span class="o">=</span> <span class="n">MySplineFitting</span><span class="p">(</span><span class="n">xc</span><span class="p">,</span> <span class="n">yc</span><span class="p">,</span> <span class="n">dy</span><span class="p">,</span> <span class="n">nbspl</span><span class="p">)</span>
+				<span class="n">coefficients</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,:]</span> <span class="o">=</span> <span class="n">splfit</span><span class="o">.</span><span class="n">alpha</span>
+				<span class="n">fitted</span> <span class="o">=</span> <span class="n">splfit</span><span class="p">(</span><span class="n">xaz</span><span class="p">)</span>
+
+		<span class="c1">### Now interpolate this to remove it to the data</span>
+		<span class="n">nscans</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scantype</span><span class="p">))</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">nscans</span><span class="o">+</span><span class="mi">1</span><span class="p">):</span>
+			<span class="n">okp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scantype</span> <span class="o">==</span> <span class="n">i</span>
+			<span class="n">okn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scantype</span> <span class="o">==</span> <span class="p">(</span><span class="o">-</span><span class="n">i</span><span class="p">)</span>
+		<span class="k">for</span> <span class="n">ok</span> <span class="ow">in</span> <span class="p">[</span><span class="n">okp</span><span class="p">,</span> <span class="n">okn</span><span class="p">]:</span>
+			<span class="n">the_el</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">elt</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+			<span class="k">if</span> <span class="n">degree</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+				<span class="n">myp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">poly1d</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">the_el</span><span class="p">,</span> <span class="n">el_av</span><span class="p">,</span> <span class="n">coefficients</span><span class="p">[</span><span class="mi">0</span><span class="p">,:,</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">degree</span><span class="o">+</span><span class="mi">1</span><span class="p">)])</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">]</span> <span class="o">-=</span> <span class="n">myp</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">azt</span><span class="p">[</span><span class="n">ok</span><span class="p">])</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">myalpha</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">the_el</span><span class="p">,</span> <span class="n">el_av</span><span class="p">,</span> <span class="n">coefficients</span><span class="p">[</span><span class="mi">0</span><span class="p">,:,</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">nbspl</span><span class="p">)]</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">ok</span><span class="p">]</span> <span class="o">-=</span> <span class="n">splfit</span><span class="o">.</span><span class="n">with_alpha</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">azt</span><span class="p">[</span><span class="n">ok</span><span class="p">],</span> <span class="n">myalpha</span><span class="p">)</span>
+                    
+                    
+		<span class="c1">### And interpolate for scantype==0 regions</span>
+		<span class="n">bad_chunks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_chunks</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tod</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linear_rescale_chunks</span><span class="p">(</span><span class="n">bad_chunks</span><span class="p">,</span> <span class="n">sz</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span></div>
+
+<div class="viewcode-block" id="Pip1Tes.linear_rescale_chunks">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.linear_rescale_chunks">[docs]</a>
+	<span class="k">def</span> <span class="nf">linear_rescale_chunks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">chunks</span><span class="p">,</span> <span class="n">sz</span><span class="o">=</span><span class="mi">1000</span><span class="p">):</span>
+<span class="w">    </span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		</span>
+
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chunks</span><span class="p">)):</span>
+			<span class="n">thechunk</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+			<span class="n">chunklen</span> <span class="o">=</span> <span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span>
+			<span class="k">if</span> <span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+				<span class="c1"># this is the starting index =&gt; just the average</span>
+				<span class="n">vals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">chunklen</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span> <span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">sz</span><span class="p">])</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">-=</span> <span class="n">vals</span>
+			<span class="k">elif</span> <span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">==</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+				<span class="c1"># this is the last one =&gt; just the average</span>
+				<span class="n">vals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">chunklen</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="o">-</span><span class="n">sz</span><span class="p">:</span> <span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">-=</span> <span class="n">vals</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="n">left</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="o">-</span><span class="n">sz</span><span class="p">:</span> <span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+				<span class="n">right</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span> <span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="n">sz</span><span class="p">])</span>
+				<span class="n">vals</span> <span class="o">=</span> <span class="n">left</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span> <span class="n">chunklen</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">right</span><span class="o">-</span><span class="n">left</span><span class="p">)</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">-=</span> <span class="n">np</span><span class="o">.</span><span class="n">median</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span><span class="n">thechunk</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">])</span> <span class="o">-</span> <span class="n">vals</span>
+            
+		<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span></div>
+
+<div class="viewcode-block" id="Pip1Tes.get_chunks">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.get_chunks">[docs]</a>
+	<span class="k">def</span> <span class="nf">get_chunks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		</span>
+
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="c1">### returns chunks corresponding to a given value</span>
+		<span class="n">current_chunk</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">chunk_idx</span> <span class="o">=</span> <span class="p">[]</span>
+		<span class="n">inchunk</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="n">chunknum</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scantype</span><span class="p">)):</span>
+			<span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scantype</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">==</span><span class="n">value</span><span class="p">:</span>
+				<span class="n">inchunk</span> <span class="o">=</span> <span class="mi">1</span>
+				<span class="n">current_chunk</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+			<span class="k">else</span><span class="p">:</span>
+				<span class="k">if</span> <span class="n">inchunk</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+					<span class="n">chunknum</span> <span class="o">+=</span> <span class="mi">1</span>
+					<span class="n">chunk_idx</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">current_chunk</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">current_chunk</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">current_chunk</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+					<span class="n">current_chunk</span> <span class="o">=</span> <span class="p">[]</span>
+					<span class="n">inchunk</span> <span class="o">=</span> <span class="mi">0</span>
+		<span class="k">if</span> <span class="n">inchunk</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+			<span class="n">chunk_idx</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">current_chunk</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">current_chunk</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">current_chunk</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+		<span class="k">return</span> <span class="n">chunk_idx</span></div>
+
+<div class="viewcode-block" id="Pip1Tes.healpix_map_">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.healpix_map_">[docs]</a>
+	<span class="k">def</span> <span class="nf">healpix_map_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="n">countcut</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">unseen_val</span><span class="o">=</span><span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  </span>
+<span class="sd">		Method to project data on the sky using coaddition.</span>
+<span class="sd">  </span>
+<span class="sd">		&quot;&quot;&quot;</span>
+  
+		<span class="n">ips</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">ang2pix</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">azt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">elt</span><span class="p">,</span> <span class="n">lonlat</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+		<span class="n">mymap</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">12</span><span class="o">*</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+		<span class="n">mapcount</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">12</span><span class="o">*</span><span class="n">nside</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">azt</span><span class="p">)):</span>
+			<span class="n">mymap</span><span class="p">[</span><span class="n">ips</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">-=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+			<span class="n">mapcount</span><span class="p">[</span><span class="n">ips</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">+=</span> <span class="mi">1</span>
+		<span class="n">unseen</span> <span class="o">=</span> <span class="n">mapcount</span> <span class="o">&lt;=</span> <span class="n">countcut</span>
+		<span class="n">mymap</span><span class="p">[</span><span class="n">unseen</span><span class="p">]</span> <span class="o">=</span> <span class="n">unseen_val</span>
+		<span class="n">mapcount</span><span class="p">[</span><span class="n">unseen</span><span class="p">]</span> <span class="o">=</span> <span class="n">unseen_val</span>
+		<span class="n">mymap</span><span class="p">[</span><span class="o">~</span><span class="n">unseen</span><span class="p">]</span> <span class="o">=</span> <span class="n">mymap</span><span class="p">[</span><span class="o">~</span><span class="n">unseen</span><span class="p">]</span> <span class="o">/</span> <span class="n">mapcount</span><span class="p">[</span><span class="o">~</span><span class="n">unseen</span><span class="p">]</span>
+		<span class="k">return</span> <span class="n">mymap</span></div>
+
+<div class="viewcode-block" id="Pip1Tes.run">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.Pip1Tes.run">[docs]</a>
+	<span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remove_drift</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">remove_offset</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">decorel</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">healpix_map</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  </span>
+<span class="sd">		Main method to run the pipeline.</span>
+<span class="sd">  </span>
+<span class="sd">		&quot;&quot;&quot;</span>
+  
+		<span class="k">if</span> <span class="n">remove_drift</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">tod</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remove_drifts_spline</span><span class="p">()</span>
+		<span class="k">if</span> <span class="n">remove_offset</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">tod</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remove_offset_scan</span><span class="p">()</span>
+		<span class="k">if</span> <span class="n">decorel</span><span class="p">:</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">tod</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decorel_azel</span><span class="p">()</span>
+
+		<span class="k">if</span> <span class="n">healpix_map</span><span class="p">:</span>
+			<span class="n">m</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">healpix_map_</span><span class="p">()</span>
+			<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">,</span> <span class="n">m</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span>  </div>
+</div>
+
+        
+<div class="viewcode-block" id="FocalPlane">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.FocalPlane">[docs]</a>
+<span class="k">class</span> <span class="nc">FocalPlane</span><span class="p">:</span>
+
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd"> </span>
+<span class="sd">	Instance to display data on the FP (assuming Technical Demonstrator)</span>
+<span class="sd"> </span>
+<span class="sd">	&quot;&quot;&quot;</span>
+ 
+	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tt</span><span class="p">,</span> <span class="n">tod</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">thk</span><span class="p">):</span>
+		
+		<span class="c1">### Save tod</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span> <span class="o">=</span> <span class="n">tt</span><span class="p">,</span> <span class="n">tod</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ndets</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">az</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">el</span> <span class="o">=</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thk</span> <span class="o">=</span> <span class="n">thk</span>
+
+		<span class="c1">### Useful arguments to plot focal plane</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">coord_thermo</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">17</span><span class="o">*</span><span class="mi">11</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">17</span><span class="o">*</span><span class="mi">12</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">17</span><span class="o">*</span><span class="mi">13</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">17</span><span class="o">*</span><span class="mi">14</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">275</span><span class="p">,</span> <span class="mi">276</span><span class="p">,</span> <span class="mi">277</span><span class="p">,</span> <span class="mi">278</span><span class="p">])</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">numbering_tes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">129</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+		<span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mf">0.0504</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.0024</span><span class="p">,</span> <span class="mi">17</span><span class="p">)</span>
+		<span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mf">0.0024</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.0504</span><span class="p">,</span> <span class="mi">17</span><span class="p">)</span>
+
+		<span class="c1">### Detector coordinates</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+    
+	<span class="k">def</span> <span class="nf">_get_instrument</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  </span>
+<span class="sd">		Method to initiate QUBIC instrument.</span>
+<span class="sd">  </span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="n">dictfilename</span> <span class="o">=</span> <span class="s1">&#39;global_source_oneDet.dict&#39;</span>
+		<span class="n">d</span> <span class="o">=</span> <span class="n">qubicDict</span><span class="p">()</span>
+		<span class="n">d</span><span class="o">.</span><span class="n">read_from_file</span><span class="p">(</span><span class="n">dictfilename</span><span class="p">)</span>
+		<span class="n">d</span><span class="p">[</span><span class="s1">&#39;synthbeam&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits&#39;</span>
+		<span class="n">q</span> <span class="o">=</span> <span class="n">QubicInstrument</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+		<span class="k">return</span> <span class="n">q</span>
+	<span class="k">def</span> <span class="nf">_get_place_ONAFP_with_TES</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tes</span><span class="p">,</span> <span class="n">asic</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  </span>
+<span class="sd">		Method to compute coordintates for FP plot using TES and ASIC numbering.</span>
+<span class="sd">  </span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="n">xtes</span><span class="p">,</span> <span class="n">ytes</span><span class="p">,</span> <span class="n">FP_index</span><span class="p">,</span> <span class="n">index_q</span> <span class="o">=</span> <span class="n">scal</span><span class="o">.</span><span class="n">TES_Instru2coord</span><span class="p">(</span><span class="n">TES</span><span class="o">=</span><span class="n">tes</span><span class="p">,</span> <span class="n">ASIC</span><span class="o">=</span><span class="n">asic</span><span class="p">,</span> <span class="n">q</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_instrument</span><span class="p">(),</span> <span class="n">frame</span><span class="o">=</span><span class="s1">&#39;ONAFP&#39;</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+		<span class="n">ind</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">((</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">xtes</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">ytes</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="p">,</span> <span class="mi">4</span><span class="p">)))</span>
+		<span class="k">return</span> <span class="n">ind</span><span class="c1">#ind[0][0]*17+ind[1][0]+1</span>
+<div class="viewcode-block" id="FocalPlane.create_subplots">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.FocalPlane.create_subplots">[docs]</a>
+	<span class="k">def</span> <span class="nf">create_subplots</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tes</span><span class="p">,</span> <span class="n">asic</span><span class="p">,</span> <span class="n">ax</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  </span>
+<span class="sd">		Method to make many subplots for each TES.</span>
+<span class="sd">  </span>
+<span class="sd">		&quot;&quot;&quot;</span>
+  
+		<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tes</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">4</span><span class="p">,</span><span class="mi">36</span><span class="p">,</span><span class="mi">68</span><span class="p">,</span><span class="mi">100</span><span class="p">]))</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+
+			<span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coord_thermo</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">k_thermo</span><span class="p">]</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">k_thermo</span> <span class="o">+=</span> <span class="mi">1</span>
+			
+		<span class="k">else</span><span class="p">:</span>
+			
+			<span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_place_ONAFP_with_TES</span><span class="p">(</span><span class="n">tes</span><span class="p">,</span> <span class="n">asic</span><span class="p">)</span>
+			
+			<span class="k">if</span> <span class="n">asic</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+				<span class="n">tes</span> <span class="o">+=</span> <span class="mi">128</span>
+			<span class="n">idx</span> <span class="o">=</span> <span class="n">tes</span> <span class="o">-</span> <span class="mi">1</span>
+			
+			<span class="n">ax</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">idx</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+			<span class="n">ax</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">annotate</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">tes</span><span class="p">),</span> <span class="n">xy</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>  <span class="n">xycoords</span><span class="o">=</span><span class="s1">&#39;axes fraction&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">9</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span>
+															<span class="n">fontstyle</span><span class="o">=</span><span class="s1">&#39;italic&#39;</span><span class="p">,</span> <span class="n">fontweight</span><span class="o">=</span><span class="s1">&#39;bold&#39;</span><span class="p">,</span> <span class="n">xytext</span><span class="o">=</span><span class="p">(</span><span class="mf">0.05</span><span class="p">,</span><span class="mf">0.85</span><span class="p">),</span><span class="n">backgroundcolor</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">)</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">bar</span><span class="o">.</span><span class="n">update</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="FocalPlane.create_subplots_healpix">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.FocalPlane.create_subplots_healpix">[docs]</a>
+	<span class="k">def</span> <span class="nf">create_subplots_healpix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tes</span><span class="p">,</span> <span class="n">asic</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">reso</span><span class="p">,</span> <span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  </span>
+<span class="sd">		Method to make many subplots for each TES with healpix projection.</span>
+<span class="sd">  </span>
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tes</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">4</span><span class="p">,</span><span class="mi">36</span><span class="p">,</span><span class="mi">68</span><span class="p">,</span><span class="mi">100</span><span class="p">]))</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+
+			<span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coord_thermo</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">k_thermo</span><span class="p">]</span>
+			<span class="bp">self</span><span class="o">.</span><span class="n">k_thermo</span> <span class="o">+=</span> <span class="mi">1</span>
+			
+		<span class="k">else</span><span class="p">:</span>
+			
+			<span class="n">i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_place_ONAFP_with_TES</span><span class="p">(</span><span class="n">tes</span><span class="p">,</span> <span class="n">asic</span><span class="p">)</span>
+			
+			<span class="k">if</span> <span class="n">asic</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+				<span class="n">tes</span> <span class="o">+=</span> <span class="mi">128</span>
+
+			<span class="n">mproj</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">gnomview</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">rot</span><span class="o">=</span><span class="n">center</span><span class="p">,</span> <span class="n">reso</span><span class="o">=</span><span class="n">reso</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">notext</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cbar</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">return_projected_map</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">bgcolor</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span> <span class="n">badcolor</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;jet&#39;</span><span class="p">)</span>
+			<span class="n">ax</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">mproj</span><span class="p">,</span> <span class="n">origin</span><span class="o">=</span><span class="s1">&#39;lower&#39;</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;jet&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+			<span class="n">ax</span><span class="p">[</span><span class="n">i</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">i</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]]</span><span class="o">.</span><span class="n">annotate</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">tes</span><span class="p">),</span> <span class="n">xy</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>  <span class="n">xycoords</span><span class="o">=</span><span class="s1">&#39;axes fraction&#39;</span><span class="p">,</span> <span class="n">fontsize</span><span class="o">=</span><span class="mi">9</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;black&#39;</span><span class="p">,</span>
+															<span class="n">fontstyle</span><span class="o">=</span><span class="s1">&#39;italic&#39;</span><span class="p">,</span> <span class="n">fontweight</span><span class="o">=</span><span class="s1">&#39;bold&#39;</span><span class="p">,</span> <span class="n">xytext</span><span class="o">=</span><span class="p">(</span><span class="mf">0.05</span><span class="p">,</span><span class="mf">0.85</span><span class="p">),</span><span class="n">backgroundcolor</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">)</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">bar</span><span class="o">.</span><span class="n">update</span><span class="p">()</span></div>
+
+	<span class="k">def</span> <span class="nf">_get_FP_line</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">type_of_data</span><span class="o">=</span><span class="s1">&#39;line&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">reso</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		Method to display data in the FP (assuming TD configuration).</span>
+
+<span class="sd">		&quot;&quot;&quot;</span>
+  
+		<span class="bp">self</span><span class="o">.</span><span class="n">bar</span> <span class="o">=</span> <span class="n">progress_bar</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="s1">&#39;Display focal plane&#39;</span><span class="p">)</span>
+		
+		<span class="k">if</span> <span class="n">color</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+			<span class="n">color</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;black&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndets</span>
+
+		<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="mi">17</span><span class="p">,</span> <span class="mi">17</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="mi">30</span><span class="p">))</span>
+		<span class="c1">### Remove all x and y axis</span>
+		<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">17</span><span class="p">):</span>
+			<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">17</span><span class="p">):</span>
+				<span class="n">ax</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">get_xaxis</span><span class="p">()</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+				<span class="n">ax</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">get_yaxis</span><span class="p">()</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+		
+		<span class="bp">self</span><span class="o">.</span><span class="n">k_thermo</span> <span class="o">=</span> <span class="mi">0</span>
+
+		<span class="c1">### Main loop</span>
+		<span class="n">k</span><span class="o">=</span><span class="mi">0</span>
+		<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]:</span>
+			<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">numbering_tes</span><span class="p">:</span>
+		
+				<span class="c1">#plt.rc(&#39;font&#39;,size=6)</span>
+				<span class="k">if</span> <span class="n">type_of_data</span> <span class="o">==</span> <span class="s1">&#39;line&#39;</span><span class="p">:</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">create_subplots</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">ax</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+				<span class="k">elif</span> <span class="n">type_of_data</span> <span class="o">==</span> <span class="s1">&#39;healpix&#39;</span><span class="p">:</span>
+					
+					<span class="c1">### Herit some methods</span>
+					<span class="n">pipeline</span> <span class="o">=</span> <span class="n">Pip1Tes</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">az</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">el</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">thk</span><span class="p">)</span>
+					<span class="n">m</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">healpix_map_</span><span class="p">(</span><span class="n">nside</span><span class="o">=</span><span class="n">nside</span><span class="p">)</span>
+					<span class="bp">self</span><span class="o">.</span><span class="n">create_subplots_healpix</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">reso</span><span class="p">,</span> <span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+				
+				<span class="n">k</span><span class="o">+=</span><span class="mi">1</span>
+	
+		<span class="c1">### Saving</span>
+		<span class="k">if</span> <span class="n">save</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+			<span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">save</span><span class="p">)</span>
+        
+		<span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="PipAllTes">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.PipAllTes">[docs]</a>
+<span class="k">class</span> <span class="nc">PipAllTes</span><span class="p">:</span>
+<span class="w">    </span>
+<span class="w">	</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    </span>
+<span class="sd">	Instance to analyse and display all TES. </span>
+<span class="sd">    </span>
+<span class="sd">	&quot;&quot;&quot;</span>
+    
+	<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tt</span><span class="p">,</span> <span class="n">tod</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span><span class="p">,</span> <span class="n">thk</span><span class="p">):</span>
+        
+		<span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span> <span class="o">=</span> <span class="n">tt</span><span class="p">,</span> <span class="n">tod</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">ndets</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">az</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">el</span> <span class="o">=</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">thk</span> <span class="o">=</span> <span class="n">thk</span>
+		<span class="bp">self</span><span class="o">.</span><span class="n">_create_folder</span><span class="p">(</span><span class="s1">&#39;plots&#39;</span><span class="p">)</span>
+	
+	<span class="k">def</span> <span class="nf">_create_folder</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder_name</span><span class="p">):</span>
+<span class="w">	</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		Method to create folder to save plots.</span>
+
+<span class="sd">		Parameters :</span>
+<span class="sd">		------------</span>
+<span class="sd">			- folder_name : str </span>
+
+<span class="sd">		&quot;&quot;&quot;</span>
+
+		<span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">folder_name</span><span class="p">):</span>
+			<span class="k">try</span><span class="p">:</span>
+				<span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">folder_name</span><span class="p">)</span>
+			<span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+				<span class="k">pass</span>
+		<span class="k">else</span><span class="p">:</span>
+			<span class="k">pass</span>
+
+  
+<div class="viewcode-block" id="PipAllTes.run">
+<a class="viewcode-back" href="../../lib.Qcoaddition.html#lib.Qcoaddition.PipAllTes.run">[docs]</a>
+	<span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">remove_drift</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">remove_offset</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">decorel</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot_FP</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">plot_FP_healpix</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">reso</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="mi">128</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">		</span>
+<span class="w">		</span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">		Method to run loop for all TES. You can add useful arguments using **kwargs keyword.</span>
+<span class="sd">  </span>
+<span class="sd">		Parameters :</span>
+<span class="sd">		------------</span>
+<span class="sd">			- remove_drift    : bool</span>
+<span class="sd">			- remove_offset   : bool</span>
+<span class="sd">			- decorel         : bool</span>
+<span class="sd">			- plot_FP         : bool to plot FP with TOD</span>
+<span class="sd">			- plot_FP_healpix : bool to plot FP with projected maps</span>
+<span class="sd">			- center          : tuple</span>
+<span class="sd">			- reso            : Int number for healpix resolution</span>
+<span class="sd">			- color           : list of color for each TES</span>
+<span class="sd">			- nside           : Int number for map pixelization</span>
+<span class="sd">  </span>
+<span class="sd">		&quot;&quot;&quot;</span>
+		
+		<span class="k">for</span> <span class="n">idet</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ndets</span><span class="p">):</span>
+			
+			<span class="c1">### If treatment is needed, it initiate pipeline for a single TES</span>
+			<span class="k">if</span> <span class="n">remove_drift</span> <span class="ow">or</span> <span class="n">remove_offset</span> <span class="ow">or</span> <span class="n">decorel</span><span class="p">:</span>
+				<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;============ Treating TES #</span><span class="si">{</span><span class="n">idet</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s1"> ============&#39;</span><span class="p">)</span>
+				<span class="n">pipeline</span> <span class="o">=</span> <span class="n">Pip1Tes</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">idet</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">az</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">el</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">thk</span><span class="p">)</span>
+			
+			<span class="k">if</span> <span class="n">remove_drift</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">idet</span><span class="p">]</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">_remove_drifts_spline</span><span class="p">()</span>
+    
+			<span class="k">if</span> <span class="n">remove_offset</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">idet</span><span class="p">]</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">_remove_offset_scan</span><span class="p">()</span>
+    
+			<span class="k">if</span> <span class="n">decorel</span><span class="p">:</span>
+				<span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">[</span><span class="n">idet</span><span class="p">]</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">decorel_azel</span><span class="p">()</span>
+
+		<span class="c1">### Initiate FP instance</span>
+		<span class="n">fp</span> <span class="o">=</span> <span class="n">FocalPlane</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tod</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">az</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">el</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">thk</span><span class="p">)</span>
+  
+		<span class="k">if</span> <span class="n">plot_FP</span><span class="p">:</span>
+			<span class="n">fp</span><span class="o">.</span><span class="n">_get_FP_line</span><span class="p">(</span><span class="n">type_of_data</span><span class="o">=</span><span class="s1">&#39;line&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="s1">&#39;plots/FP.png&#39;</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">plot_FP_healpix</span><span class="p">:</span>
+			<span class="n">fp</span><span class="o">.</span><span class="n">_get_FP_line</span><span class="p">(</span><span class="n">type_of_data</span><span class="o">=</span><span class="s1">&#39;healpix&#39;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="s1">&#39;plots/FP_healpix.png&#39;</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="n">center</span><span class="p">,</span> <span class="n">reso</span><span class="o">=</span><span class="n">reso</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="n">nside</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
+</div>
+
+
+
+
+
+		
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

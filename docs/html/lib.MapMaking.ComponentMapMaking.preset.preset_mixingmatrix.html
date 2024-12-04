@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.MapMaking.ComponentMapMaking.preset.preset_qubic module" href="lib.MapMaking.ComponentMapMaking.preset.preset_qubic.html" />
+    <link rel="prev" title="lib.MapMaking.ComponentMapMaking.preset.preset_gain module" href="lib.MapMaking.ComponentMapMaking.preset.preset_gain.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.html">lib.Calibration package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.html">lib.Fitting package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.html">lib.InstrumentModel package</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="lib.MapMaking.html">lib.MapMaking package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="lib.MapMaking.html#subpackages">Subpackages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="lib.MapMaking.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.html">lib.obsolete package</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.html#submodules">Submodules</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+          <li class="breadcrumb-item"><a href="lib.MapMaking.html">lib.MapMaking package</a></li>
+          <li class="breadcrumb-item"><a href="lib.MapMaking.ComponentMapMaking.html">lib.MapMaking.ComponentMapMaking package</a></li>
+          <li class="breadcrumb-item"><a href="lib.MapMaking.ComponentMapMaking.preset.html">lib.MapMaking.ComponentMapMaking.preset package</a></li>
+      <li class="breadcrumb-item active">lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix">
+<span id="lib-mapmaking-componentmapmaking-preset-preset-mixingmatrix-module"></span><h1>lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix module<a class="headerlink" href="#module-lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">PresetMixingMatrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">preset_tools</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_qubic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_comp</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/ComponentMapMaking/preset/preset_mixingmatrix.html#PresetMixingMatrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Preset Mixing Matrix.</p>
+<p>Instance to initialize the Components Map-Making. It defines Mixing Matrix variables and methodes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>preset_tools</strong> (<em>object</em>) – Class containing tools and simulation parameters.</p></li>
+<li><p><strong>preset_qubic</strong> (<em>object</em>) – Class containing qubic operator and variables and methods.</p></li>
+<li><p><strong>preset_comp</strong> (<em>object</em>) – Class containing component variables and methods.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.nus_eff_in">
+<span class="sig-name descname"><span class="pre">nus_eff_in</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.nus_eff_in" title="Link to this definition"></a></dt>
+<dd><p>Input effective frequencies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.nus_eff_out">
+<span class="sig-name descname"><span class="pre">nus_eff_out</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.nus_eff_out" title="Link to this definition"></a></dt>
+<dd><p>Output effective frequencies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.Amm_in">
+<span class="sig-name descname"><span class="pre">Amm_in</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.Amm_in" title="Link to this definition"></a></dt>
+<dd><p>Input mixing matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.beta_in">
+<span class="sig-name descname"><span class="pre">beta_in</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.beta_in" title="Link to this definition"></a></dt>
+<dd><p>Input spectral indices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.extra_sed" title="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.extra_sed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">extra_sed</span></code></a>(nus, correlation_length)</p></td>
+<td><p>Spectral Energy Distribution.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_beta_input" title="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_beta_input"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_beta_input</span></code></a>()</p></td>
+<td><p>Spectral index.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_decorrelated_mixing_matrix" title="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_decorrelated_mixing_matrix"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_decorrelated_mixing_matrix</span></code></a>(lcorr, seed)</p></td>
+<td><p>Decorrelated mixing matrix.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_index_seenpix_beta" title="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_index_seenpix_beta"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_index_seenpix_beta</span></code></a>()</p></td>
+<td><p>Spatially varying spectral index.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_mixingmatrix" title="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_mixingmatrix"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_mixingmatrix</span></code></a>(nus, beta[, key])</p></td>
+<td><p>Mixing Matrix.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.spectral_index_modifiedblackbody" title="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.spectral_index_modifiedblackbody"><code class="xref py py-obj docutils literal notranslate"><span class="pre">spectral_index_modifiedblackbody</span></code></a>(nside)</p></td>
+<td><p>ModifiedBlackBody spectral indices.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.spectral_index_powerlaw" title="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.spectral_index_powerlaw"><code class="xref py py-obj docutils literal notranslate"><span class="pre">spectral_index_powerlaw</span></code></a>(nside)</p></td>
+<td><p>PowerLaw spectral indices.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.extra_sed">
+<span class="sig-name descname"><span class="pre">extra_sed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">correlation_length</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/ComponentMapMaking/preset/preset_mixingmatrix.html#PresetMixingMatrix.extra_sed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.extra_sed" title="Link to this definition"></a></dt>
+<dd><p>Spectral Energy Distribution.</p>
+<p>Calculates the extra SED (Spectral Energy Distribution) based on the given parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>nus</strong> (<em>array_like</em>) – Array containing frequencies.</p></li>
+<li><p><strong>correlation_length</strong> (<em>float</em>) – The correlation lenght.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>extra</strong> – Array containing the extra SED values.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_beta_input">
+<span class="sig-name descname"><span class="pre">get_beta_input</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/ComponentMapMaking/preset/preset_mixingmatrix.html#PresetMixingMatrix.get_beta_input"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_beta_input" title="Link to this definition"></a></dt>
+<dd><p>Spectral index.</p>
+<p>Define the input spectral indices based on the model type.</p>
+<p>If the model is ‘d0’ or ‘d6’, the input spectral index is fixed (1.54).
+Otherwise, the model assumes varying spectral indices across the sky by calling the previous method.
+In this case, the shape of beta is (Nbeta, Ncomp).</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">nus_eff_in</span></span><a class="headerlink" href="#id0" title="Link to this definition"></a></dt>
+<dd><p>Input effective frequencies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">nus_eff_out</span></span><a class="headerlink" href="#id1" title="Link to this definition"></a></dt>
+<dd><p>Output effective frequencies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id2">
+<span class="sig-name descname"><span class="pre">Amm_in</span></span><a class="headerlink" href="#id2" title="Link to this definition"></a></dt>
+<dd><p>Input mixing matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id3">
+<span class="sig-name descname"><span class="pre">beta_in</span></span><a class="headerlink" href="#id3" title="Link to this definition"></a></dt>
+<dd><p>Input spectral indices.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>TypeError</strong> – Raises if the chosen model is not implemented.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_decorrelated_mixing_matrix">
+<span class="sig-name descname"><span class="pre">get_decorrelated_mixing_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lcorr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'in'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/ComponentMapMaking/preset/preset_mixingmatrix.html#PresetMixingMatrix.get_decorrelated_mixing_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_decorrelated_mixing_matrix" title="Link to this definition"></a></dt>
+<dd><p>Decorrelated mixing matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lcorr</strong> (<em>float</em>) – Correlation lenght.</p></li>
+<li><p><strong>seed</strong> (<em>int</em>) – Seed for random decorrealtion.</p></li>
+<li><p><strong>key</strong> (<em>str</em><em>, </em><em>optional</em>) – The key to access the specific parameters in the prest configuration.
+Can be either “in” or “out”, by default “in”</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>Adeco</strong> – Decorrelated mixing matrix.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_index_seenpix_beta">
+<span class="sig-name descname"><span class="pre">get_index_seenpix_beta</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/ComponentMapMaking/preset/preset_mixingmatrix.html#PresetMixingMatrix.get_index_seenpix_beta"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_index_seenpix_beta" title="Link to this definition"></a></dt>
+<dd><p>Spatially varying spectral index.</p>
+<p>Method to initialize index seenpix beta variable.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_mixingmatrix">
+<span class="sig-name descname"><span class="pre">get_mixingmatrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'in'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/ComponentMapMaking/preset/preset_mixingmatrix.html#PresetMixingMatrix.get_mixingmatrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.get_mixingmatrix" title="Link to this definition"></a></dt>
+<dd><p>Mixing Matrix.</p>
+<p>Method to get the mixing matrix from FGBuster according to compoenents model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>nus</strong> (<em>array_like</em>) – Array containing frequencies.</p></li>
+<li><p><strong>beta</strong> (<em>float</em>) – Spectral index.</p></li>
+<li><p><strong>key</strong> (<em>str</em><em>, </em><em>optional</em>) – The key to access the specific parameters in the prest configuration.
+Can be either “in” or “out”, by default “in”</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>Amm</strong> – Mixing matrix.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> – Raises in case of incorrect key.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.spectral_index_modifiedblackbody">
+<span class="sig-name descname"><span class="pre">spectral_index_modifiedblackbody</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nside</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/ComponentMapMaking/preset/preset_mixingmatrix.html#PresetMixingMatrix.spectral_index_modifiedblackbody"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.spectral_index_modifiedblackbody" title="Link to this definition"></a></dt>
+<dd><p>ModifiedBlackBody spectral indices.</p>
+<p>Method to define input spectral indices if the d1 model is used for thermal Dust description.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>nside</strong> (<em>int</em>) – Nside parameter for HEALPix map.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>mbb_index</strong> – Array containing the spectral indices for the thermal Dust model.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.spectral_index_powerlaw">
+<span class="sig-name descname"><span class="pre">spectral_index_powerlaw</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nside</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/MapMaking/ComponentMapMaking/preset/preset_mixingmatrix.html#PresetMixingMatrix.spectral_index_powerlaw"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix.PresetMixingMatrix.spectral_index_powerlaw" title="Link to this definition"></a></dt>
+<dd><p>PowerLaw spectral indices.</p>
+<p>Define input spectral indices if the s1 model is used for Synchrotron description.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>nside</strong> (<em>int</em>) – Nside parameter for HEALPix map.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>pl_index</strong> – Array containing the spectral indices for the Synchrotron model.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.MapMaking.ComponentMapMaking.preset.preset_gain.html" class="btn btn-neutral float-left" title="lib.MapMaking.ComponentMapMaking.preset.preset_gain module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.MapMaking.ComponentMapMaking.preset.preset_qubic.html" class="btn btn-neutral float-right" title="lib.MapMaking.ComponentMapMaking.preset.preset_qubic module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

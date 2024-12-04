@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Fitting.QanalysisMC &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.Fitting.QanalysisMC</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.Fitting.QanalysisMC</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">healpy</span> <span class="k">as</span> <span class="nn">hp</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="kn">import</span> <span class="n">interpolate</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+
+<span class="kn">from</span> <span class="nn">..QskySim</span> <span class="kn">import</span> <span class="n">cov2corr</span>
+<span class="kn">from</span> <span class="nn">..InstrumentModel.Qinstrument</span> <span class="kn">import</span> <span class="n">compute_freq</span>
+<span class="kn">from</span> <span class="nn">..Fitting</span> <span class="kn">import</span> <span class="n">QreadMC</span> <span class="k">as</span> <span class="n">rmc</span>
+<span class="c1">#from qubic.lib.QskySim import cov2corr</span>
+<span class="c1">#from qubic.lib.Instrument.Qinstrument import compute_freq</span>
+<span class="c1">#from qubic.lib.Fitting import QreadMC as rmc</span>
+
+
+<span class="c1"># ============ Functions do statistical tests on maps ===========#</span>
+<div class="viewcode-block" id="std_profile">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.std_profile">[docs]</a>
+<span class="k">def</span> <span class="nf">std_profile</span><span class="p">(</span><span class="n">many_patch</span><span class="p">,</span> <span class="n">nbins</span><span class="p">,</span> <span class="n">nside</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">seenmap</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get the std profile of a patch over pixels and realisations</span>
+<span class="sd">    from the center to the border.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    many_patch : array of shape (nreal, nsub, npixok, 3)</span>
+<span class="sd">        Many realisations of one patch.</span>
+<span class="sd">    nbins : int</span>
+<span class="sd">        Number of bins.</span>
+<span class="sd">    nside : int</span>
+<span class="sd">        NSIDE in the patch.</span>
+<span class="sd">    center : array</span>
+<span class="sd">        Coordinates of the center of the patch in degree (lon, lat)</span>
+<span class="sd">    seenmap : array</span>
+<span class="sd">        Array of booleans of shape #pixels,</span>
+<span class="sd">        True inside the patch and False outside.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    bin_centers : array with angles associated to each bin.</span>
+<span class="sd">    ang : array with angles associated to each pixel</span>
+<span class="sd">    std_bin : array of shape (nbins, nsub, 3)</span>
+<span class="sd">        Std value in each bin, for each subband and IQU.</span>
+<span class="sd">    std_profile : array of shape (npixok, nsub, 3)</span>
+<span class="sd">        Quadratic interpolation of the std_bin.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ang</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">pix2ang</span><span class="p">(</span><span class="n">nside</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">seenmap</span><span class="p">)</span>
+
+    <span class="n">bin_edges</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">ang</span><span class="p">),</span> <span class="n">nbins</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">bin_centers</span> <span class="o">=</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">bin_edges</span><span class="p">[</span><span class="mi">0</span><span class="p">:</span><span class="n">nbins</span><span class="p">]</span> <span class="o">+</span> <span class="n">bin_edges</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+
+    <span class="c1"># Std in each bin</span>
+    <span class="n">nsub</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">many_patch</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">std_bin</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">nbins</span><span class="p">,</span> <span class="n">nsub</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nbins</span><span class="p">):</span>
+        <span class="n">ok</span> <span class="o">=</span> <span class="p">(</span><span class="n">ang</span> <span class="o">&gt;</span> <span class="n">bin_edges</span><span class="p">[</span><span class="n">b</span><span class="p">])</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">ang</span> <span class="o">&lt;</span> <span class="n">bin_edges</span><span class="p">[</span><span class="n">b</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span>
+        <span class="n">std_bin</span><span class="p">[</span><span class="n">b</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">many_patch</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">ok</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+    <span class="c1"># Interpolation to get a profile</span>
+    <span class="n">fit</span> <span class="o">=</span> <span class="n">interpolate</span><span class="o">.</span><span class="n">interp1d</span><span class="p">(</span><span class="n">bin_centers</span><span class="p">,</span> <span class="n">std_bin</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">&#39;linear&#39;</span><span class="p">,</span> <span class="n">fill_value</span><span class="o">=</span><span class="s1">&#39;extrapolate&#39;</span><span class="p">)</span>
+    <span class="n">std_profile</span> <span class="o">=</span> <span class="n">fit</span><span class="p">(</span><span class="n">ang</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">bin_centers</span><span class="p">,</span> <span class="n">ang</span><span class="p">,</span> <span class="n">std_bin</span><span class="p">,</span> <span class="n">std_profile</span></div>
+
+
+
+<div class="viewcode-block" id="get_residuals">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_residuals">[docs]</a>
+<span class="k">def</span> <span class="nf">get_residuals</span><span class="p">(</span><span class="n">fits_noise</span><span class="p">,</span> <span class="n">fits_noiseless</span><span class="p">,</span> <span class="n">residuals_way</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute residuals in a given way.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    fits_noise: list</span>
+<span class="sd">        List containing the reconstructed noisy maps (fits files)</span>
+<span class="sd">    fits_noiseless: str</span>
+<span class="sd">        Fits file containing the noiseless reconstruction</span>
+<span class="sd">    residuals_way : str</span>
+<span class="sd">        Way to compute residuals. 3 keywords : noiseless, conv or mean_recon</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">        residuals : array of shape (#reals, #bands, #pixels, 3)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">nreals</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">fits_noise</span><span class="p">)</span>
+    <span class="n">residuals</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="n">residuals_way</span> <span class="o">==</span> <span class="s1">&#39;mean_recon&#39;</span><span class="p">:</span>
+        <span class="n">seenmap</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">get_seenmap</span><span class="p">(</span><span class="n">fits_noise</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">recon</span><span class="p">,</span> <span class="n">conv</span><span class="p">,</span> <span class="n">diff</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">get_patch</span><span class="p">(</span><span class="n">fits_noise</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">seenmap</span><span class="p">)</span>
+        <span class="n">nbands</span><span class="p">,</span> <span class="n">npix</span><span class="p">,</span> <span class="n">nstk</span> <span class="o">=</span> <span class="n">recon</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">rec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nreals</span><span class="p">,</span> <span class="n">nbands</span><span class="p">,</span> <span class="n">npix</span><span class="p">,</span> <span class="n">nstk</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nreals</span><span class="p">):</span>
+            <span class="n">seenmap</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">get_seenmap</span><span class="p">(</span><span class="n">fits_noise</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+            <span class="n">rec</span><span class="p">[</span><span class="n">j</span><span class="p">],</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">get_patch</span><span class="p">(</span><span class="n">fits_noise</span><span class="p">[</span><span class="n">j</span><span class="p">],</span> <span class="n">seenmap</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nreals</span><span class="p">):</span>
+        <span class="n">seenmap</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">get_seenmap</span><span class="p">(</span><span class="n">fits_noise</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">recon</span><span class="p">,</span> <span class="n">conv</span><span class="p">,</span> <span class="n">diff</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">get_patch</span><span class="p">(</span><span class="n">fits_noise</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">seenmap</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">residuals_way</span> <span class="o">==</span> <span class="s1">&#39;noiseless&#39;</span><span class="p">:</span>
+            <span class="n">recon_nl</span><span class="p">,</span> <span class="n">conv_nl</span><span class="p">,</span> <span class="n">diff_nl</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">get_patch</span><span class="p">(</span><span class="n">fits_noiseless</span><span class="p">,</span> <span class="n">seenmap</span><span class="p">)</span>
+            <span class="n">residuals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">recon</span> <span class="o">-</span> <span class="n">recon_nl</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">residuals_way</span> <span class="o">==</span> <span class="s1">&#39;conv&#39;</span><span class="p">:</span>
+            <span class="n">residuals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">diff</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="n">residuals_way</span> <span class="o">==</span> <span class="s1">&#39;mean_recon&#39;</span><span class="p">:</span>
+            <span class="n">residuals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">recon</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">rec</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;The way to compute residuals is not valid.&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">residuals</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="rms_method">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.rms_method">[docs]</a>
+<span class="k">def</span> <span class="nf">rms_method</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">residuals_way</span><span class="p">,</span> <span class="n">zones</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">simulation_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get the std of the residuals from one simulation. </span>
+<span class="sd">    STD are computed over realisations and pixels for I, Q, U separately.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">        Simulation file.</span>
+<span class="sd">    residuals_way : str</span>
+<span class="sd">        Way to compute residuals. 3 keywords : noiseless, conv or mean_recon</span>
+<span class="sd">    zones : int</span>
+<span class="sd">        Number of zones to divide the patch.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    rms_I, rms_Q, rms_U : dictionarys containing RMS for IQU </span>
+<span class="sd">    setpar : a dict with some parameters of the simu.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">dictfile</span> <span class="o">=</span> <span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;.dict&#39;</span>
+    <span class="k">if</span> <span class="n">simulation_dir</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">dictfile</span> <span class="o">=</span> <span class="n">simulation_dir</span> <span class="o">+</span> <span class="n">os</span><span class="o">.</span><span class="n">sep</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;.dict&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">dictfile</span><span class="p">):</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;ERROR! Dictionary file does not exist: </span><span class="si">%s</span><span class="s1">&#39;</span> <span class="o">%</span> <span class="n">dictfile</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        
+
+    <span class="c1"># Dictionary saved during the simulation</span>
+    <span class="c1"># if the dictionary is given without an absolute path, it will search in the package directory</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="n">qubic</span><span class="o">.</span><span class="n">qubicdict</span><span class="o">.</span><span class="n">qubicDict</span><span class="p">()</span>
+    <span class="n">dict_ok</span> <span class="o">=</span> <span class="n">d</span><span class="o">.</span><span class="n">read_from_file</span><span class="p">(</span><span class="n">dictfile</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">dict_ok</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;ERROR! Dictionary not read.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    
+    <span class="n">setpar</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;tol&#39;</span><span class="p">:</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;tol&#39;</span><span class="p">],</span> <span class="s1">&#39;nep&#39;</span><span class="p">:</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;detector_nep&#39;</span><span class="p">],</span> <span class="s1">&#39;npoint&#39;</span><span class="p">:</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;npointings&#39;</span><span class="p">]}</span>
+
+    <span class="n">nf_recon</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;nf_recon&#39;</span><span class="p">]</span>
+
+    <span class="n">rms_I</span><span class="p">,</span> <span class="n">rms_Q</span><span class="p">,</span> <span class="n">rms_U</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(),</span> <span class="nb">dict</span><span class="p">(),</span> <span class="nb">dict</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">irec</span> <span class="ow">in</span> <span class="n">nf_recon</span><span class="p">:</span>
+        <span class="n">residuals</span> <span class="o">=</span> <span class="n">get_residuals</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">rep_simu</span><span class="p">,</span> <span class="n">residuals_way</span><span class="p">,</span> <span class="n">irec</span><span class="p">)</span>
+        <span class="n">files</span><span class="p">,</span> <span class="n">maps_recon_patch</span><span class="p">,</span> <span class="n">maps_conv_patch</span><span class="p">,</span> <span class="n">maps_diff_patch</span> <span class="o">=</span> \
+            <span class="n">rmc</span><span class="o">.</span><span class="n">get_patch_many_files</span><span class="p">(</span><span class="n">rep_simu</span> <span class="o">+</span> <span class="n">name</span><span class="p">,</span> <span class="s1">&#39;*nfrecon</span><span class="si">{}</span><span class="s1">*False*&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">irec</span><span class="p">),</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="n">npix_patch</span> <span class="o">=</span> <span class="n">maps_diff_patch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">setpar</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s1">&#39;pixpatch&#39;</span><span class="p">:</span> <span class="n">npix_patch</span><span class="p">})</span>
+        <span class="c1">#         print(setpar)</span>
+
+        <span class="n">nreals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">residuals</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c1"># This if is for the number of zones (1 or more)</span>
+        <span class="k">if</span> <span class="n">zones</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">rms_i</span><span class="p">,</span> <span class="n">rms_q</span><span class="p">,</span> <span class="n">rms_u</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">irec</span><span class="p">,)),</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">irec</span><span class="p">,)),</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">irec</span><span class="p">,))</span>
+
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">irec</span><span class="p">):</span>
+                <span class="c1"># STD over pixels and realisations</span>
+                <span class="n">rms_i</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">residuals</span><span class="p">[:,</span> <span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">])</span>
+                <span class="n">rms_q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">residuals</span><span class="p">[:,</span> <span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">])</span>
+                <span class="n">rms_u</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">residuals</span><span class="p">[:,</span> <span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">angle</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">if</span> <span class="n">zones</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">angle</span> <span class="o">=</span> <span class="kc">True</span>
+
+            <span class="n">center</span> <span class="o">=</span> <span class="n">qubic</span><span class="o">.</span><span class="n">equ2gal</span><span class="p">(</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;RA_center&#39;</span><span class="p">],</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;DEC_center&#39;</span><span class="p">])</span>
+            <span class="n">seenmap</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">get_seenmap</span><span class="p">(</span><span class="n">files</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">nside</span> <span class="o">=</span> <span class="n">d</span><span class="p">[</span><span class="s1">&#39;nside&#39;</span><span class="p">]</span>
+
+            <span class="n">residuals_zones</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">nreals</span><span class="p">,</span> <span class="n">zones</span><span class="p">,</span> <span class="n">irec</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">real</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nreals</span><span class="p">):</span>
+                <span class="n">pix_zones</span><span class="p">,</span> <span class="n">residuals_zones</span><span class="p">[</span><span class="n">real</span><span class="p">]</span> <span class="o">=</span> <span class="n">rmc</span><span class="o">.</span><span class="n">make_zones</span><span class="p">(</span><span class="n">residuals</span><span class="p">[</span><span class="n">real</span><span class="p">],</span> <span class="n">zones</span><span class="p">,</span> <span class="n">nside</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">seenmap</span><span class="p">,</span>
+                                                                  <span class="n">angle</span><span class="o">=</span><span class="n">angle</span><span class="p">,</span> <span class="n">dtheta</span><span class="o">=</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;dtheta&#39;</span><span class="p">],</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                                                                  <span class="n">doplot</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+            <span class="n">rms_i</span><span class="p">,</span> <span class="n">rms_q</span><span class="p">,</span> <span class="n">rms_u</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">zones</span><span class="p">,</span> <span class="n">irec</span><span class="p">,)),</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">zones</span><span class="p">,</span> <span class="n">irec</span><span class="p">,)),</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">zones</span><span class="p">,</span> <span class="n">irec</span><span class="p">,))</span>
+            <span class="k">for</span> <span class="n">izone</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">zones</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">irec</span><span class="p">):</span>
+                    <span class="n">rms_i</span><span class="p">[</span><span class="n">izone</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">residuals_zones</span><span class="p">[:,</span> <span class="n">izone</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">])</span>
+                    <span class="n">rms_q</span><span class="p">[</span><span class="n">izone</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">residuals_zones</span><span class="p">[:,</span> <span class="n">izone</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">])</span>
+                    <span class="n">rms_u</span><span class="p">[</span><span class="n">izone</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">residuals_zones</span><span class="p">[:,</span> <span class="n">izone</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">])</span>
+
+        <span class="n">rms_I</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="nb">str</span><span class="p">(</span><span class="n">irec</span><span class="p">):</span> <span class="n">rms_i</span><span class="p">})</span>
+        <span class="n">rms_Q</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="nb">str</span><span class="p">(</span><span class="n">irec</span><span class="p">):</span> <span class="n">rms_q</span><span class="p">})</span>
+        <span class="n">rms_U</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="nb">str</span><span class="p">(</span><span class="n">irec</span><span class="p">):</span> <span class="n">rms_u</span><span class="p">})</span>
+
+    <span class="k">return</span> <span class="n">rms_I</span><span class="p">,</span> <span class="n">rms_Q</span><span class="p">,</span> <span class="n">rms_U</span><span class="p">,</span> <span class="n">setpar</span></div>
+
+
+
+<div class="viewcode-block" id="get_covcorr1pix">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_covcorr1pix">[docs]</a>
+<span class="k">def</span> <span class="nf">get_covcorr1pix</span><span class="p">(</span><span class="n">maps</span><span class="p">,</span> <span class="n">ipix</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">stokesjoint</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    This function return the covariance matrix for one pixel given a list of maps.</span>
+<span class="sd">    Each of the Nreal maps has the shape (nfrec, npix, 3) (see save_simu_fits() ).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    -------</span>
+<span class="sd">    maps: array</span>
+<span class="sd">        Input maps with shape (nrealizations, nfrecons, npix, 3)</span>
+<span class="sd">    ipix: int</span>
+<span class="sd">        pixel where the covariance will be computed</span>
+<span class="sd">    verbose : bool</span>
+<span class="sd">        If True, print information. False by default.</span>
+<span class="sd">    stokesjoint: bool </span>
+<span class="sd">        If True return Stokes parameter together </span>
+<span class="sd">        I0,I1,..., Q0,Q1,..., U0, U1, ... . Otherwise will return</span>
+<span class="sd">        I0,Q0,U0,  I1,Q1,U1, ... </span>
+<span class="sd">        Default: False</span>
+
+<span class="sd">    Return</span>
+<span class="sd">    -------</span>
+<span class="sd">    cov1pix: np.array</span>
+<span class="sd">        covariance matrix for a given pixel (ipix) with shape 3*nfrec x 3*nfrec</span>
+
+<span class="sd">    corr1pix: np.array</span>
+<span class="sd">        correlation matrix for a given pixel (ipix) with shape 3*nfrec x 3*nfrec</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">ipix</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s1">&#39;ipix has to be an integer number&#39;</span><span class="p">)</span>
+
+    <span class="n">nreal</span><span class="p">,</span> <span class="n">nfrec</span><span class="p">,</span> <span class="n">npix</span><span class="p">,</span> <span class="n">nstk</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">maps</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;The shape of the input map has to be: (nsample, nfrecons, npix, 3): </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">maps</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Number of reconstructed sub-bands to analyze: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nfrec</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Number of realizations: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nreal</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Number of Stokes: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nstk</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Computing covariance matrix in pixel </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">ipix</span><span class="p">))</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">maps</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">ipix</span><span class="p">,</span> <span class="p">:],</span> <span class="p">(</span><span class="n">nreal</span><span class="p">,</span> <span class="n">nfrec</span> <span class="o">*</span> <span class="n">nstk</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">stokesjoint</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">nfrec</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">elif</span> <span class="n">nfrec</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">permutation</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">istk</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstk</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">isub</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nfrec</span><span class="p">):</span>
+                    <span class="n">permutation</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nstk</span> <span class="o">*</span> <span class="n">isub</span> <span class="o">+</span> <span class="n">istk</span><span class="p">)</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">maps</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">ipix</span><span class="p">,</span> <span class="p">:],</span> <span class="p">(</span><span class="n">nreal</span><span class="p">,</span> <span class="n">nfrec</span> <span class="o">*</span> <span class="n">nstk</span><span class="p">))</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:,</span> <span class="n">permutation</span><span class="p">]</span>
+
+    <span class="n">cov1pix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rowvar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">corr1pix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">corrcoef</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">rowvar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">cov1pix</span><span class="p">,</span> <span class="n">corr1pix</span></div>
+
+
+
+<div class="viewcode-block" id="get_covcorr_patch">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_covcorr_patch">[docs]</a>
+<span class="k">def</span> <span class="nf">get_covcorr_patch</span><span class="p">(</span><span class="n">patch</span><span class="p">,</span> <span class="n">stokesjoint</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">doplot</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function computes the covariance matrix and the correlation matrix for a given patch in the sky.</span>
+<span class="sd">    It uses get_covcorr1pix() to compute the covariance and correlation matrix for each pixel (ipix).</span>
+
+<span class="sd">    Asumptions: patch.shape = (nreals, nbands, npix_patch, nstokes) --&gt; to be able to use get_covcorr1pix</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    patch: np.array</span>
+<span class="sd">        Sky patch observed (see get_patch_many_files() from ReadMC module)</span>
+
+<span class="sd">    stokesjoint: bool </span>
+<span class="sd">        If True return Stokes parameter together </span>
+<span class="sd">        I0,I1,..., Q0,Q1,..., U0, U1, ... . Otherwise will return</span>
+<span class="sd">        I0,Q0,U0,  I1,Q1,U1, ... </span>
+<span class="sd">        Default: False</span>
+
+<span class="sd">    doplot: If True return a imshow plot of the matrix</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">    -----------</span>
+<span class="sd">    covterm: np.array</span>
+<span class="sd">        Covariance matrix for each pixel in a given patch in the sky.</span>
+<span class="sd">        Shape = (3xnfreq, 3xnfreq, npix).</span>
+
+<span class="sd">    corrterm: np.array</span>
+<span class="sd">        Correlation matrix for each pixel in a given patch in the sky.</span>
+<span class="sd">        Shape = (3xnfreq, 3xnfreq, npix)</span>
+
+<span class="sd">    plot: Mean over the pixels of the covariance and correlation matrices</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">nrecons</span> <span class="o">=</span> <span class="n">patch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">npix</span> <span class="o">=</span> <span class="n">patch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">nstokes</span> <span class="o">=</span> <span class="n">patch</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+    <span class="n">dim</span> <span class="o">=</span> <span class="n">nrecons</span> <span class="o">*</span> <span class="n">nstokes</span>
+
+    <span class="n">cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">dim</span><span class="p">,</span> <span class="n">dim</span><span class="p">,</span> <span class="n">npix</span><span class="p">))</span>
+    <span class="n">corr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">dim</span><span class="p">,</span> <span class="n">dim</span><span class="p">,</span> <span class="n">npix</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">ipix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">npix</span><span class="p">):</span>
+        <span class="n">cov1pix</span><span class="p">,</span> <span class="n">corr1pix</span> <span class="o">=</span> <span class="n">get_covcorr1pix</span><span class="p">(</span><span class="n">patch</span><span class="p">,</span> <span class="n">ipix</span><span class="p">,</span> <span class="n">stokesjoint</span><span class="o">=</span><span class="n">stokesjoint</span><span class="p">)</span>
+        <span class="n">cov</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">=</span> <span class="n">cov1pix</span>
+        <span class="n">corr</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">=</span> <span class="n">corr1pix</span>
+
+    <span class="k">if</span> <span class="n">doplot</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">()</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">121</span><span class="p">)</span>
+        <span class="n">vmax</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">cov</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">]))</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">cov</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">vmin</span><span class="o">=-</span><span class="n">vmax</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="n">vmax</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;bwr&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Covariance pixel 0&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">()</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="mi">122</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">corr</span><span class="p">[:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;bwr&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s1">&#39;Correlation pixel 0&#39;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">colorbar</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">cov</span><span class="p">,</span> <span class="n">corr</span></div>
+
+
+
+<div class="viewcode-block" id="plot_hist">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.plot_hist">[docs]</a>
+<span class="k">def</span> <span class="nf">plot_hist</span><span class="p">(</span><span class="n">mat_npix</span><span class="p">,</span> <span class="n">bins</span><span class="p">,</span> <span class="n">title_prefix</span><span class="p">,</span> <span class="n">ymax</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">&#39;b&#39;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Plots the histograms of each element of the matrix.</span>
+<span class="sd">    Each histogram represents the distribution of a given</span>
+<span class="sd">    term over the pixels..</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mat_npix : array of shape (3 x nfreq, 3 x nfreq, npix)</span>
+<span class="sd">        Cov or corr matrix for each pixel.</span>
+<span class="sd">    bins : int</span>
+<span class="sd">        Numbers of bins for the histogram</span>
+<span class="sd">    title_prefix : str</span>
+<span class="sd">        Prefix for the title of the plot.</span>
+<span class="sd">    ymax : float</span>
+<span class="sd">        Limit max on the y axis (between 0 and 1)</span>
+<span class="sd">    color : str</span>
+<span class="sd">        Color of the histogram</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">stokes</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;I&#39;</span><span class="p">,</span> <span class="s1">&#39;Q&#39;</span><span class="p">,</span> <span class="s1">&#39;U&#39;</span><span class="p">]</span>
+    <span class="n">dim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">mat_npix</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="nb">min</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">mat_npix</span><span class="p">)</span>
+    <span class="nb">max</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">mat_npix</span><span class="p">)</span>
+
+    <span class="n">ttl</span> <span class="o">=</span> <span class="n">title_prefix</span> <span class="o">+</span> <span class="s1">&#39; Hist over pix for each matrix element&#39;</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">ttl</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">iterm</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">jterm</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">):</span>
+            <span class="n">idx</span> <span class="o">=</span> <span class="n">dim</span> <span class="o">*</span> <span class="n">iterm</span> <span class="o">+</span> <span class="n">jterm</span> <span class="o">+</span> <span class="mi">1</span>
+
+            <span class="n">mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">mat_npix</span><span class="p">[</span><span class="n">iterm</span><span class="p">,</span> <span class="n">jterm</span><span class="p">,</span> <span class="p">:])</span>
+            <span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">mat_npix</span><span class="p">[</span><span class="n">iterm</span><span class="p">,</span> <span class="n">jterm</span><span class="p">,</span> <span class="p">:])</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">subplot</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">dim</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">hist</span><span class="p">(</span><span class="n">mat_npix</span><span class="p">[</span><span class="n">iterm</span><span class="p">,</span> <span class="n">jterm</span><span class="p">,</span> <span class="p">:],</span> <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">density</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                     <span class="n">bins</span><span class="o">=</span><span class="n">bins</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s1">&#39;m=</span><span class="si">{0:.2f}</span><span class="s1"> </span><span class="se">\n</span><span class="s1"> $\sigma$=</span><span class="si">{1:.2f}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">mean</span><span class="p">,</span> <span class="n">std</span><span class="p">))</span>
+            <span class="c1"># no yticks for histogram in middle</span>
+            <span class="k">if</span> <span class="n">idx</span> <span class="o">%</span> <span class="n">dim</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">yticks</span><span class="p">([])</span>
+            <span class="c1"># no xticks for histogram in middle</span>
+            <span class="k">if</span> <span class="n">idx</span> <span class="o">&lt;</span> <span class="n">dim</span> <span class="o">*</span> <span class="p">(</span><span class="n">dim</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">xticks</span><span class="p">([])</span>
+
+            <span class="c1"># Names</span>
+            <span class="k">if</span> <span class="n">iterm</span> <span class="o">==</span> <span class="p">(</span><span class="n">dim</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="n">stokes</span><span class="p">[</span><span class="n">jterm</span> <span class="o">%</span> <span class="mi">3</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">jterm</span> <span class="o">/</span> <span class="mi">3</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">jterm</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="n">stokes</span><span class="p">[</span><span class="n">iterm</span> <span class="o">%</span> <span class="mi">3</span><span class="p">]</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">iterm</span> <span class="o">/</span> <span class="mi">3</span><span class="p">))</span>
+
+            <span class="c1"># same scale for each plot</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">((</span><span class="nb">min</span><span class="p">,</span> <span class="nb">max</span><span class="p">))</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">((</span><span class="mf">0.</span><span class="p">,</span> <span class="n">ymax</span><span class="p">))</span>
+
+            <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">fontsize</span><span class="o">=</span><span class="s1">&#39;xx-small&#39;</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">subplots_adjust</span><span class="p">(</span><span class="n">hspace</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span> <span class="n">wspace</span><span class="o">=</span><span class="mf">0.</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_covcorr_between_pix">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_covcorr_between_pix">[docs]</a>
+<span class="k">def</span> <span class="nf">get_covcorr_between_pix</span><span class="p">(</span><span class="n">maps</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute the pixel covariance matrix and correlation matrix</span>
+<span class="sd">    minus the identity over many realisations. You will obtain nsub x 3</span>
+<span class="sd">    matrices of shape (npix x npix).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    maps: array</span>
+<span class="sd">        Input maps with shape (nreal, nsub, npix, 3)</span>
+<span class="sd">    verbose : bool</span>
+<span class="sd">        If True, print information. False by default.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    cov_pix : array of shape (nsub, nstokes, npix, npix)</span>
+<span class="sd">        The covariance matrices for each subband and I, Q, U.</span>
+<span class="sd">    corr_pix : array of shape (nsub, nstokes, npix, npix)</span>
+<span class="sd">        The correlation matrices minus the identity (0. on the diagonal).</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">nreal</span><span class="p">,</span> <span class="n">nsub</span><span class="p">,</span> <span class="n">npix</span><span class="p">,</span> <span class="n">nstokes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">maps</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;The shape of the input map has to be: (nreal, nsub, npix, 3)&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Number of reconstructed sub-bands to analyze: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nsub</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Number of realizations: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nreal</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Number of pixels </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">npix</span><span class="p">))</span>
+
+    <span class="n">cov_pix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">nsub</span><span class="p">,</span> <span class="n">nstokes</span><span class="p">,</span> <span class="n">npix</span><span class="p">,</span> <span class="n">npix</span><span class="p">))</span>
+    <span class="n">corr_pix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">nsub</span><span class="p">,</span> <span class="n">nstokes</span><span class="p">,</span> <span class="n">npix</span><span class="p">,</span> <span class="n">npix</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">sub</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nsub</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstokes</span><span class="p">):</span>
+            <span class="n">cov_pix</span><span class="p">[</span><span class="n">sub</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">maps</span><span class="p">[:,</span> <span class="n">sub</span><span class="p">,</span> <span class="p">:,</span> <span class="n">s</span><span class="p">],</span> <span class="n">rowvar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">corr_pix</span><span class="p">[</span><span class="n">sub</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">corrcoef</span><span class="p">(</span><span class="n">maps</span><span class="p">[:,</span> <span class="n">sub</span><span class="p">,</span> <span class="p">:,</span> <span class="n">s</span><span class="p">],</span> <span class="n">rowvar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">identity</span><span class="p">(</span><span class="n">npix</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">cov_pix</span><span class="p">,</span> <span class="n">corr_pix</span></div>
+
+
+
+<div class="viewcode-block" id="distance_square">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.distance_square">[docs]</a>
+<span class="k">def</span> <span class="nf">distance_square</span><span class="p">(</span><span class="n">matrix</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return a distance associated to a matrix (n*n).</span>
+<span class="sd">    Sum of the square elements normalized by n**2.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">matrix</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">matrix</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">d</span> <span class="o">/</span> <span class="n">n</span> <span class="o">**</span> <span class="mi">2</span></div>
+
+
+
+<div class="viewcode-block" id="distance_sup">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.distance_sup">[docs]</a>
+<span class="k">def</span> <span class="nf">distance_sup</span><span class="p">(</span><span class="n">matrix</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return a distance associated to a matrix (n*n).</span>
+<span class="sd">    Normalized by n.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">matrix</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">matrix</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">d</span> <span class="o">/</span> <span class="n">n</span></div>
+
+
+
+<div class="viewcode-block" id="covariance_IQU_subbands">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.covariance_IQU_subbands">[docs]</a>
+<span class="k">def</span> <span class="nf">covariance_IQU_subbands</span><span class="p">(</span><span class="n">allmaps</span><span class="p">,</span> <span class="n">stokesjoint</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns the mean maps, averaged over pixels and realisations and the</span>
+<span class="sd">    covariance matrices of the maps.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    allmaps : list</span>
+<span class="sd">        List of arrays of shape (nreals, nsub, npix, 3)</span>
+<span class="sd">        List of maps for each number of sub-bands.</span>
+<span class="sd">    </span>
+<span class="sd">    stokesjoint: if True return Stokes parameter together </span>
+<span class="sd">        I0,I1,..., Q0,Q1,..., U0,U1, ... . Otherwise will return</span>
+<span class="sd">        I0,Q0,U0,  I1,Q1,U1, ... </span>
+<span class="sd">        Default: False</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    allmean : list of arrays of shape 3*nsub</span>
+<span class="sd">        mean for I, Q, U for each subband</span>
+<span class="sd">    allcov : list of arrays of shape (3*nsub, 3*nsub)</span>
+<span class="sd">        covariance matrices between stokes parameters and sub frequency bands</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">allmean</span><span class="p">,</span> <span class="n">allcov</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">isub</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">allmaps</span><span class="p">)):</span>
+
+        <span class="n">sh</span> <span class="o">=</span> <span class="n">allmaps</span><span class="p">[</span><span class="n">isub</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">nsub</span> <span class="o">=</span> <span class="n">sh</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>  <span class="c1"># Number of subbands</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">nsub</span><span class="p">)</span>
+        <span class="n">cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span> <span class="o">*</span> <span class="n">nsub</span><span class="p">,</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">nsub</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">iqu</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">band</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nsub</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">stokesjoint</span><span class="p">:</span>
+                    <span class="n">i</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">iqu</span> <span class="o">+</span> <span class="n">band</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">i</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">band</span> <span class="o">+</span> <span class="n">iqu</span>
+                <span class="n">map_i</span> <span class="o">=</span> <span class="n">allmaps</span><span class="p">[:,</span> <span class="n">band</span><span class="p">,</span> <span class="p">:,</span> <span class="n">iqu</span><span class="p">]</span>
+                <span class="n">mean</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">map_i</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">iqu2</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+                    <span class="k">for</span> <span class="n">band2</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nsub</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">stokesjoint</span><span class="p">:</span>
+                            <span class="n">j</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">iqu2</span> <span class="o">+</span> <span class="n">band2</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">j</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">band2</span> <span class="o">+</span> <span class="n">iqu2</span>
+                        <span class="n">map_j</span> <span class="o">=</span> <span class="n">allmaps</span><span class="p">[:,</span> <span class="n">band2</span><span class="p">,</span> <span class="p">:,</span> <span class="n">iqu2</span><span class="p">]</span>
+                        <span class="n">cov</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">map_i</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">map_i</span><span class="p">))</span> <span class="o">*</span> <span class="p">(</span><span class="n">map_j</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">map_j</span><span class="p">)))</span>
+
+        <span class="n">allmean</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mean</span><span class="p">)</span>
+        <span class="n">allcov</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cov</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">allmean</span><span class="p">,</span> <span class="n">allcov</span></div>
+
+
+
+<div class="viewcode-block" id="get_weighted_correlation_average">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_weighted_correlation_average">[docs]</a>
+<span class="k">def</span> <span class="nf">get_weighted_correlation_average</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">cov</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute a weighted average taking into account the correlations between the variables.</span>
+<span class="sd">    The mean obtained is the one that has the minimal variance possible.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    x : 1D array</span>
+<span class="sd">        Values you want to average.</span>
+<span class="sd">    cov : 2D array</span>
+<span class="sd">        Covariance matrix associated to the values in x.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    The weighted mean and the variance on that mean.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Try with Cholesky method (faster)</span>
+        <span class="n">L</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">cholesky</span><span class="p">(</span><span class="n">cov</span><span class="p">))</span>
+        <span class="n">inv_cov</span> <span class="o">=</span> <span class="n">L</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="n">L</span>
+    <span class="k">except</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">LinAlgError</span><span class="p">:</span>
+        <span class="c1"># If singular matrix because of numerical precision do it with np.inv</span>
+        <span class="n">inv_cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">cov</span><span class="p">)</span>
+    <span class="n">sig2</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">inv_cov</span><span class="p">)</span>
+    <span class="n">weighted_mean</span> <span class="o">=</span> <span class="n">sig2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">inv_cov</span> <span class="o">@</span> <span class="n">x</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">weighted_mean</span><span class="p">,</span> <span class="n">sig2</span></div>
+
+
+
+<div class="viewcode-block" id="get_Cp">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_Cp">[docs]</a>
+<span class="k">def</span> <span class="nf">get_Cp</span><span class="p">(</span><span class="n">patch</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">doplot</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Returns covariance matrices between subbands for each Stokes parameter</span>
+<span class="sd">    and each pixel.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    patch: ndarray</span>
+<span class="sd">        Shape (#reals, #bands, #pixels, 3)</span>
+<span class="sd">    verbose: Bool</span>
+<span class="sd">        If True makes a lot of prints.</span>
+<span class="sd">    doplot: Bool</span>
+<span class="sd">        If True, plot the mean cov and corr matrices over pixels.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Cp: array of shape (#bands, #bands, 3, #pixels)</span>
+<span class="sd">        The covariance matrices.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">nreals</span><span class="p">,</span> <span class="n">nfrecon</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">,</span> <span class="n">nstk</span> <span class="o">=</span> <span class="n">patch</span><span class="o">.</span><span class="n">shape</span>
+
+    <span class="c1"># Prepare to save</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;==== Computing Cp matrix ====&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;# realisations &#39;</span><span class="p">,</span> <span class="n">nreals</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;# bands &#39;</span><span class="p">,</span> <span class="n">nfrecon</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;patch.shape = &#39;</span><span class="p">,</span> <span class="n">patch</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;npix_patch = &#39;</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">)</span>
+
+    <span class="c1"># The full one</span>
+    <span class="n">covariance</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">get_covcorr_patch</span><span class="p">(</span><span class="n">patch</span><span class="p">,</span> <span class="n">stokesjoint</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">doplot</span><span class="o">=</span><span class="n">doplot</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;covariance.shape =&#39;</span><span class="p">,</span> <span class="n">covariance</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="c1"># Cut the covariance matrix for each Stokes parameter</span>
+    <span class="n">Cp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">nfrecon</span><span class="p">,</span> <span class="n">nfrecon</span><span class="p">,</span> <span class="n">nstk</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">istokes</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstk</span><span class="p">):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">istokes</span> <span class="o">*</span> <span class="n">nfrecon</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="p">(</span><span class="n">istokes</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">nfrecon</span>
+        <span class="n">Cp</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">covariance</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span><span class="n">b</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Cp.shape = &#39;</span><span class="p">,</span> <span class="n">Cp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+        <span class="c1"># Look at the value in Cp and the determinant</span>
+        <span class="k">for</span> <span class="n">ipix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">istokes</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstk</span><span class="p">):</span>
+                <span class="n">det</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">det</span><span class="p">(</span><span class="n">Cp</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">])</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;det = &#39;</span><span class="p">,</span> <span class="n">det</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;==== Done. Cp matrix computed ====&#39;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">Cp</span></div>
+
+
+
+<div class="viewcode-block" id="make_weighted_av">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.make_weighted_av">[docs]</a>
+<span class="k">def</span> <span class="nf">make_weighted_av</span><span class="p">(</span><span class="n">patch</span><span class="p">,</span> <span class="n">Cp</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Average the maps over subbands using the covariance matrix between subbands.</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    patch: array</span>
+<span class="sd">        Shape (#reals, #bands, #pixels, #nstks)</span>
+<span class="sd">    Cp: array</span>
+<span class="sd">        The covariance matrices.</span>
+<span class="sd">        Shape (#bands, #bands, #nstks, #pixels)</span>
+<span class="sd">    verbose: bool</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    weighted_av: map averaged over bands</span>
+<span class="sd">    sig2: variances over realisations on the map</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">nreals</span><span class="p">,</span> <span class="n">nbands</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">,</span> <span class="n">nstks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">patch</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Cp.shape = &#39;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">Cp</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;# realizations = &#39;</span><span class="p">,</span> <span class="n">nreals</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;# bands = &#39;</span><span class="p">,</span> <span class="n">nbands</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;# pixels = &#39;</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;# stokes = &#39;</span><span class="p">,</span> <span class="n">nstks</span><span class="p">)</span>
+
+    <span class="n">weighted_av</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nreals</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">,</span> <span class="n">nstks</span><span class="p">))</span>
+    <span class="n">sig2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">npix_patch</span><span class="p">,</span> <span class="n">nstks</span><span class="p">))</span>
+
+    <span class="n">nsing</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">ireal</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nreals</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ipix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">npix_patch</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">istokes</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstks</span><span class="p">):</span>
+                <span class="n">x</span> <span class="o">=</span> <span class="n">patch</span><span class="p">[</span><span class="n">ireal</span><span class="p">,</span> <span class="p">:,</span> <span class="n">ipix</span><span class="p">,</span> <span class="n">istokes</span><span class="p">]</span>
+                <span class="c1"># Only do it if the matrix is not singular:</span>
+                <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">det</span><span class="p">(</span><span class="n">Cp</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">])</span> <span class="o">!=</span> <span class="mf">0.</span><span class="p">:</span>
+                    <span class="n">weighted_av</span><span class="p">[</span><span class="n">ireal</span><span class="p">,</span> <span class="n">ipix</span><span class="p">,</span> <span class="n">istokes</span><span class="p">],</span> <span class="n">sig2</span><span class="p">[</span><span class="n">ipix</span><span class="p">,</span> <span class="n">istokes</span><span class="p">]</span> <span class="o">=</span> \
+                        <span class="n">get_weighted_correlation_average</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Cp</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">nsing</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;# singular matrices: &#39;</span><span class="p">,</span> <span class="n">nsing</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Weigthed mean matrix per pixel, shape: &#39;</span><span class="p">,</span> <span class="n">weighted_av</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Variance in MC simulation, shape: &#39;</span><span class="p">,</span> <span class="n">sig2</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">weighted_av</span><span class="p">,</span> <span class="n">sig2</span></div>
+
+
+
+<div class="viewcode-block" id="average_pix_sig2">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.average_pix_sig2">[docs]</a>
+<span class="k">def</span> <span class="nf">average_pix_sig2</span><span class="p">(</span><span class="n">sig2</span><span class="p">,</span> <span class="n">ang</span><span class="p">,</span> <span class="n">ang_threshold</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Average the variances over pixels in a given angle.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sig2mean</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">3</span><span class="p">,))</span>
+    <span class="n">npix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">ang</span><span class="p">[</span><span class="n">ang</span> <span class="o">&lt;</span> <span class="n">ang_threshold</span><span class="p">])</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;npix =&#39;</span><span class="p">,</span> <span class="n">npix</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">istokes</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+        <span class="n">sig2mean</span><span class="p">[</span><span class="n">istokes</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">sig2</span><span class="p">[:,</span> <span class="n">istokes</span><span class="p">][</span><span class="n">ang</span> <span class="o">&lt;</span> <span class="n">ang_threshold</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">sig2mean</span></div>
+
+
+
+<div class="viewcode-block" id="Cp2Cp_prime">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.Cp2Cp_prime">[docs]</a>
+<span class="k">def</span> <span class="nf">Cp2Cp_prime</span><span class="p">(</span><span class="n">Cp</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Average the covariance matrices over pixels. A normalization by the 00 element is done</span>
+<span class="sd">    before averaging.</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    Cp: array</span>
+<span class="sd">        The covariance matrices for each pixel.</span>
+<span class="sd">        Shape (#bands, #bands, #stokes, #pixels)</span>
+<span class="sd">    verbose: bool</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Cp_prime: array of shape (#bands, #bands, #Stokes, #pixels)</span>
+<span class="sd">        The covariance matrices for each pixel.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">nfrec</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">nstk</span><span class="p">,</span> <span class="n">npix_patch</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">Cp</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;nfrec =&#39;</span><span class="p">,</span> <span class="n">nfrec</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;nstk =&#39;</span><span class="p">,</span> <span class="n">nstk</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;npix_patch =&#39;</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">)</span>
+
+    <span class="c1"># Normalize each matrix by the first element</span>
+    <span class="n">Np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">Cp</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">istokes</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstk</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ipix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">npix_patch</span><span class="p">):</span>
+            <span class="n">Np</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">=</span> <span class="n">Cp</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">/</span> <span class="n">Cp</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">]</span>
+
+    <span class="c1"># We can now average the matrices over the pixels</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">Np</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;N shape:&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="c1"># We re-multiply N by the first term</span>
+    <span class="n">Cp_prime</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">Cp</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">istokes</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstk</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ipix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">npix_patch</span><span class="p">):</span>
+            <span class="n">Cp_prime</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">=</span> <span class="n">Cp</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">*</span> <span class="n">N</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Cp_prime.shape =&#39;</span><span class="p">,</span> <span class="n">Cp_prime</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">N</span><span class="p">,</span> <span class="n">Cp_prime</span></div>
+
+
+
+<div class="viewcode-block" id="Cp2Cp_prime_viaCorr">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.Cp2Cp_prime_viaCorr">[docs]</a>
+<span class="k">def</span> <span class="nf">Cp2Cp_prime_viaCorr</span><span class="p">(</span><span class="n">Cp</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Average the covariance matrices over pixels. A normalization is done</span>
+<span class="sd">    on pixels before the average.</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    Cp: array</span>
+<span class="sd">        The covariance matrices for each pixel.</span>
+<span class="sd">        Shape: (#bands, #bands, #Stokes, #pixels)</span>
+<span class="sd">    verbose: bool</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Cp_prime: array of shape (#bands, #bands, #Stokes, #pixels)</span>
+<span class="sd">        The covariance matrices for each pixel.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">nfrec</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">nstk</span><span class="p">,</span> <span class="n">npix_patch</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">Cp</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;nfrec =&#39;</span><span class="p">,</span> <span class="n">nfrec</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;nstk =&#39;</span><span class="p">,</span> <span class="n">nstk</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;npix_patch =&#39;</span><span class="p">,</span> <span class="n">npix_patch</span><span class="p">)</span>
+
+    <span class="c1"># Convert cov matrices to correlation matrices</span>
+    <span class="n">Np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">Cp</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">istokes</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstk</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ipix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">npix_patch</span><span class="p">):</span>
+            <span class="n">Np</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">=</span> <span class="n">cov2corr</span><span class="p">(</span><span class="n">Cp</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">])</span>
+
+    <span class="c1"># We can now average the correlation matrices over the pixels</span>
+    <span class="n">N</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">Np</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;N shape:&#39;</span><span class="p">,</span> <span class="n">N</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="c1"># We re-multiply N to get back to covariance matrices</span>
+    <span class="n">Cp_prime</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">Cp</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">istokes</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nstk</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ipix</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">npix_patch</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nfrec</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nfrec</span><span class="p">):</span>
+                    <span class="n">coeff</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">Cp</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">*</span> <span class="n">Cp</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">])</span>
+                    <span class="n">Cp_prime</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">istokes</span><span class="p">,</span> <span class="n">ipix</span><span class="p">]</span> <span class="o">=</span> <span class="n">N</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">istokes</span><span class="p">]</span> <span class="o">*</span> <span class="n">coeff</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Cp_prime.shape =&#39;</span><span class="p">,</span> <span class="n">Cp_prime</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">N</span><span class="p">,</span> <span class="n">Cp_prime</span></div>
+
+
+
+<div class="viewcode-block" id="get_corrections">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_corrections">[docs]</a>
+<span class="k">def</span> <span class="nf">get_corrections</span><span class="p">(</span><span class="n">nf_sub</span><span class="p">,</span> <span class="n">nf_recon</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="mi">150</span><span class="p">,</span> <span class="n">relative_bandwidth</span><span class="o">=</span><span class="mf">0.25</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The reconstructed subbands have different widths.</span>
+<span class="sd">    Here, we compute the corrections you can applied to</span>
+<span class="sd">    the variances and covariances to take this into account.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    nf_sub : int</span>
+<span class="sd">        Number of input subbands</span>
+<span class="sd">    nf_recon : int</span>
+<span class="sd">        Number of reconstructed subbands</span>
+<span class="sd">    band : int</span>
+<span class="sd">        QUBIC frequency band, in GHz. 150 by default</span>
+<span class="sd">        Typical values: 150, 220.</span>
+<span class="sd">    relative_bandwidth : float</span>
+<span class="sd">        Ratio of the difference between the edges of the</span>
+<span class="sd">        frequency band over the average frequency of the band</span>
+<span class="sd">        Typical value: 0.25</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    ----------</span>
+<span class="sd">    corrections : list</span>
+<span class="sd">        Correction coefficients for each subband.</span>
+<span class="sd">    correction_mat : array of shape (3xnf_recon, 3xnf_recon)</span>
+<span class="sd">        Matrix containing the corrections.</span>
+<span class="sd">        It can be multiplied term by term to a covariance matrix.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">nb</span> <span class="o">=</span> <span class="n">nf_sub</span> <span class="o">//</span> <span class="n">nf_recon</span>  <span class="c1"># Number of input subbands in each reconstructed subband</span>
+
+    <span class="n">_</span><span class="p">,</span> <span class="n">nus_edge</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">deltas</span><span class="p">,</span> <span class="n">Delta</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">compute_freq</span><span class="p">(</span><span class="n">band</span><span class="p">,</span> <span class="n">nf_sub</span><span class="p">,</span> <span class="n">relative_bandwidth</span><span class="p">)</span>
+
+    <span class="n">corrections</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">isub</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nf_recon</span><span class="p">):</span>
+        <span class="c1"># Compute wide of the sub-band</span>
+        <span class="n">sum_delta_i</span> <span class="o">=</span> <span class="n">deltas</span><span class="p">[</span><span class="n">isub</span> <span class="o">*</span> <span class="n">nb</span><span class="p">:</span> <span class="n">isub</span> <span class="o">*</span> <span class="n">nb</span> <span class="o">+</span> <span class="n">nb</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+        <span class="n">corrections</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Delta</span> <span class="o">/</span> <span class="n">sum_delta_i</span><span class="p">)</span>
+
+    <span class="n">correction_mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">3</span> <span class="o">*</span> <span class="n">nf_recon</span><span class="p">,</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">nf_recon</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">nf_recon</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">nf_recon</span><span class="p">):</span>
+            <span class="n">freq_i</span> <span class="o">=</span> <span class="n">i</span> <span class="o">//</span> <span class="n">nf_recon</span>
+            <span class="n">freq_j</span> <span class="o">=</span> <span class="n">j</span> <span class="o">//</span> <span class="n">nf_recon</span>
+            <span class="n">sum_delta_i</span> <span class="o">=</span> <span class="n">deltas</span><span class="p">[</span><span class="n">freq_i</span> <span class="o">*</span> <span class="n">nb</span><span class="p">:</span> <span class="n">freq_i</span> <span class="o">*</span> <span class="n">nb</span> <span class="o">+</span> <span class="n">nb</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+            <span class="n">sum_delta_j</span> <span class="o">=</span> <span class="n">deltas</span><span class="p">[</span><span class="n">freq_j</span> <span class="o">*</span> <span class="n">nb</span><span class="p">:</span> <span class="n">freq_j</span> <span class="o">*</span> <span class="n">nb</span> <span class="o">+</span> <span class="n">nb</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+            <span class="n">correction_mat</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">Delta</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">sum_delta_i</span> <span class="o">*</span> <span class="n">sum_delta_j</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">corrections</span><span class="p">,</span> <span class="n">correction_mat</span></div>
+
+
+
+<span class="c1"># =================== Old functions ================</span>
+<div class="viewcode-block" id="get_rms_covar">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_rms_covar">[docs]</a>
+<span class="k">def</span> <span class="nf">get_rms_covar</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">,</span> <span class="n">seenmap</span><span class="p">,</span> <span class="n">allmapsout</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Test done by Matthieu Tristram :</span>
+<span class="sd">Calculate the variance map in each case accounting for the band-band covariance matrix for each pixel from the MC.</span>
+<span class="sd">This is pretty noisy so it may be interesting to get the average matrix.</span>
+<span class="sd">We calculate all the matrices for each pixel and normalize them to average 1</span>
+<span class="sd">and then calculate the average matrix over the pixels.</span>
+
+<span class="sd">variance_map : array of shape (len(nsubvals), 3, npixok)</span>
+
+<span class="sd">allmeanmat : list of arrays (nsub, nsub, 3)</span>
+<span class="sd">        Mean over pixels of the cov matrices freq-freq</span>
+<span class="sd">allstdmat : list of arrays (nsub, nsub, 3)</span>
+<span class="sd">        Std over pixels of the cov matrices freq-freq</span>
+<span class="sd">&quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">Calculating variance map with freq-freq cov matrix for each pixel from MC&#39;</span><span class="p">)</span>
+    <span class="n">seen</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">seenmap</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">npixok</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">seenmap</span><span class="p">)</span>
+    <span class="n">variance_map</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">npixok</span><span class="p">))</span> <span class="o">+</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+    <span class="n">allmeanmat</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">allstdmat</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">isub</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">)):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;for nsub = </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">[</span><span class="n">isub</span><span class="p">]))</span>
+        <span class="n">mapsout</span> <span class="o">=</span> <span class="n">allmapsout</span><span class="p">[</span><span class="n">isub</span><span class="p">]</span>
+        <span class="n">covmat_freqfreq</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nsubvals</span><span class="p">[</span><span class="n">isub</span><span class="p">],</span> <span class="n">nsubvals</span><span class="p">[</span><span class="n">isub</span><span class="p">],</span> <span class="nb">len</span><span class="p">(</span><span class="n">seen</span><span class="p">),</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="c1"># Loop over pixels</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">seen</span><span class="p">)):</span>
+            <span class="c1"># Loop over I Q U</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+                <span class="n">mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="n">mapsout</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">p</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">T</span><span class="p">)</span>
+                <span class="c1"># Normalisation</span>
+                <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">variance_map</span><span class="p">[</span><span class="n">isub</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">mat</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">variance_map</span><span class="p">[</span><span class="n">isub</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">mat</span><span class="p">))</span>
+                <span class="n">covmat_freqfreq</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">p</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">mat</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
+                <span class="c1"># its normalization is irrelevant for the later average</span>
+        <span class="c1"># Average and std over pixels</span>
+        <span class="n">meanmat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nsubvals</span><span class="p">[</span><span class="n">isub</span><span class="p">],</span> <span class="n">nsubvals</span><span class="p">[</span><span class="n">isub</span><span class="p">],</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="n">stdmat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">nsubvals</span><span class="p">[</span><span class="n">isub</span><span class="p">],</span> <span class="n">nsubvals</span><span class="p">[</span><span class="n">isub</span><span class="p">],</span> <span class="mi">3</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+            <span class="n">meanmat</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">covmat_freqfreq</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">stdmat</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">covmat_freqfreq</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="n">i</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+        <span class="n">allmeanmat</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">meanmat</span><span class="p">)</span>
+        <span class="n">allstdmat</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stdmat</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">variance_map</span><span class="p">),</span> <span class="n">allmeanmat</span><span class="p">,</span> <span class="n">allstdmat</span></div>
+
+
+
+<div class="viewcode-block" id="get_rms_covarmean">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_rms_covarmean">[docs]</a>
+<span class="k">def</span> <span class="nf">get_rms_covarmean</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">,</span> <span class="n">seenmap</span><span class="p">,</span> <span class="n">allmapsout</span><span class="p">,</span> <span class="n">allmeanmat</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    RMS map and mean map over the realisations using the pixel</span>
+<span class="sd">    averaged freq-freq covariance matrix computed with get_rms_covar</span>
+<span class="sd">    meanmap_cov : array of shape (len(nsubvals), 3, npixok)</span>
+
+<span class="sd">    rmsmap_cov : array of shape (len(nsubvals), 3, npixok)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n\n</span><span class="s1">Calculating variance map with pixel averaged freq-freq cov matrix from MC&#39;</span><span class="p">)</span>
+    <span class="n">npixok</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">seenmap</span><span class="p">)</span>
+
+    <span class="n">rmsmap_cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">npixok</span><span class="p">))</span> <span class="o">+</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+    <span class="n">meanmap_cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="n">npixok</span><span class="p">))</span> <span class="o">+</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span>
+
+    <span class="k">for</span> <span class="n">isub</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">)):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;For nsub = </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">nsubvals</span><span class="p">[</span><span class="n">isub</span><span class="p">]))</span>
+        <span class="n">mapsout</span> <span class="o">=</span> <span class="n">allmapsout</span><span class="p">[</span><span class="n">isub</span><span class="p">]</span>
+        <span class="n">sh</span> <span class="o">=</span> <span class="n">mapsout</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">nreals</span> <span class="o">=</span> <span class="n">sh</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">iqu</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+            <span class="c1"># cov matrice freq-freq averaged over pixels</span>
+            <span class="n">covmat</span> <span class="o">=</span> <span class="n">allmeanmat</span><span class="p">[</span><span class="n">isub</span><span class="p">][:,</span> <span class="p">:,</span> <span class="n">iqu</span><span class="p">]</span>
+            <span class="n">invcovmat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">covmat</span><span class="p">)</span>
+            <span class="c1"># Loop over pixels</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">npixok</span><span class="p">):</span>
+                <span class="n">mean_cov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">nreals</span><span class="p">)</span>
+
+                <span class="c1"># Loop over realisations</span>
+                <span class="k">for</span> <span class="n">real</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nreals</span><span class="p">):</span>
+                    <span class="n">vals</span> <span class="o">=</span> <span class="n">mapsout</span><span class="p">[</span><span class="n">real</span><span class="p">,</span> <span class="p">:,</span> <span class="n">p</span><span class="p">,</span> <span class="n">iqu</span><span class="p">]</span>
+                    <span class="n">mean_cov</span><span class="p">[</span><span class="n">real</span><span class="p">]</span> <span class="o">=</span> <span class="n">get_mean_cov</span><span class="p">(</span><span class="n">vals</span><span class="p">,</span> <span class="n">invcovmat</span><span class="p">)</span>
+                <span class="c1"># Mean and rms over realisations</span>
+                <span class="n">meanmap_cov</span><span class="p">[</span><span class="n">isub</span><span class="p">,</span> <span class="n">iqu</span><span class="p">,</span> <span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">mean_cov</span><span class="p">)</span>
+                <span class="n">rmsmap_cov</span><span class="p">[</span><span class="n">isub</span><span class="p">,</span> <span class="n">iqu</span><span class="p">,</span> <span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">mean_cov</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">meanmap_cov</span><span class="p">,</span> <span class="n">rmsmap_cov</span></div>
+
+
+
+<div class="viewcode-block" id="get_mean_cov">
+<a class="viewcode-back" href="../../../lib.Fitting.QanalysisMC.html#lib.Fitting.QanalysisMC.get_mean_cov">[docs]</a>
+<span class="k">def</span> <span class="nf">get_mean_cov</span><span class="p">(</span><span class="n">vals</span><span class="p">,</span> <span class="n">invcov</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function does the same as: get_weighted_correlation_average</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">AtNid</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">invcov</span><span class="p">,</span> <span class="n">vals</span><span class="p">))</span>
+    <span class="n">AtNiA_inv</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">invcov</span><span class="p">)</span>
+    <span class="n">mean_cov</span> <span class="o">=</span> <span class="n">AtNid</span> <span class="o">*</span> <span class="n">AtNiA_inv</span>
+    <span class="k">return</span> <span class="n">mean_cov</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

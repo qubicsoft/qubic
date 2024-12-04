@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.QskySim module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.Qspectra module" href="lib.Qspectra.html" />
+    <link rel="prev" title="lib.Qscene module" href="lib.Qscene.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="lib.html#subpackages">Subpackages</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#submodules">Submodules</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="lib.Qbeams.html">lib.Qbeams module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qcoaddition.html">lib.Qcoaddition module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html">lib.QdataHandling module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html">lib.Qdictionary module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfit.html">lib.Qfit module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfoldertools.html">lib.Qfoldertools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qforecast.html">lib.Qforecast module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qhorns.html">lib.Qhorns module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qmpi_tools.html">lib.Qmpi_tools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qplotters.html">lib.Qplotters module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qripples.html">lib.Qripples module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html">lib.Qsamplings module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qscene.html">lib.Qscene module</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">lib.QskySim module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lib.QskySim.Qubic_sky"><code class="docutils literal notranslate"><span class="pre">Qubic_sky</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.QskySim.sky"><code class="docutils literal notranslate"><span class="pre">sky</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html">lib.Qspectra module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qutilities.html">lib.Qutilities module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+      <li class="breadcrumb-item active">lib.QskySim module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.QskySim.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.QskySim">
+<span id="lib-qskysim-module"></span><h1>lib.QskySim module<a class="headerlink" href="#module-lib.QskySim" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.QskySim.Qubic_sky">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Qubic_sky</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">skyconfig</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_directory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'./'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_prefix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'qubic_sky'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/QskySim.html#Qubic_sky"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.QskySim.Qubic_sky" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#lib.QskySim.sky" title="lib.QskySim.sky"><code class="xref py py-class docutils literal notranslate"><span class="pre">sky</span></code></a></p>
+<p>Define a sky object as seen by Qubic</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.QskySim.Qubic_sky.create_noise_maps" title="lib.QskySim.Qubic_sky.create_noise_maps"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_noise_maps</span></code></a>(sigma_sec, coverage[, ...])</p></td>
+<td><p>This returns a realization of noise maps for I, Q and U with no correlation between them, according to a noise RMS map built according to the coverage specified as an attribute to the class The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain more realistic noise profile.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.QskySim.Qubic_sky.get_fullsky_convolved_maps" title="lib.QskySim.Qubic_sky.get_fullsky_convolved_maps"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_fullsky_convolved_maps</span></code></a>([FWHMdeg, verbose])</p></td>
+<td><p>This returns full sky maps at each subfrequency convolved by the beam of  the  instrument at each frequency or with another beam if FWHMdeg is provided.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.QskySim.Qubic_sky.get_partial_sky_maps_withnoise" title="lib.QskySim.Qubic_sky.get_partial_sky_maps_withnoise"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_partial_sky_maps_withnoise</span></code></a>([coverage, ...])</p></td>
+<td><p>This returns maps in the same way as with get_simple_sky_map but cut according to the coverage and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec The default integration time is 4 years but can be modified with optional variable Nyears Note that the maps are convolved with the instrument beam by default, or with FWHMdeg (can be an array) if provided.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_simple_sky_map</span></code>()</p></td>
+<td><p>Create as many skies as the number of input frequencies.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.QskySim.Qubic_sky.smoothing" title="lib.QskySim.Qubic_sky.smoothing"><code class="xref py py-obj docutils literal notranslate"><span class="pre">smoothing</span></code></a>(maps, FWHMdeg, Nf, central_nus[, ...])</p></td>
+<td><p>Convolve the maps to the FWHM at each sub-frequency or to a common beam if FWHMdeg is given.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.QskySim.Qubic_sky.theoretical_noise_maps" title="lib.QskySim.Qubic_sky.theoretical_noise_maps"><code class="xref py py-obj docutils literal notranslate"><span class="pre">theoretical_noise_maps</span></code></a>(sigma_sec, coverage)</p></td>
+<td><p>This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.QskySim.Qubic_sky.create_noise_maps">
+<span class="sig-name descname"><span class="pre">create_noise_maps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sigma_sec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coverage</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsub</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nyears</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">effective_variance_invcov</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clnoise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sub_bands_cov</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/QskySim.html#Qubic_sky.create_noise_maps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.QskySim.Qubic_sky.create_noise_maps" title="Link to this definition"></a></dt>
+<dd><p>This returns a realization of noise maps for I, Q and U with no correlation between them, according to a
+noise RMS map built according to the coverage specified as an attribute to the class
+The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
+more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
+with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
+used through interpolation when generating the noise.
+The clnoise option is used to apply a convolution to the noise to obtain spatially correlated noise. This cl should be
+calculated from the c(theta) of the noise that can be measured using the function ctheta_parts() below. The transformation
+of this C9theta) into Cl has to be done using wrappers on camb function found in camb_interface.py of the QUBIC software:
+the functions to back and forth from ctheta to cl are: cl_2_ctheta and ctheta_2_cell. The simulation of the noise itself
+calls a function of camb_interface called simulate_correlated_map().
+:type sigma_sec: 
+:param sigma_sec:
+:type coverage: 
+:param coverage:
+:type Nyears: 
+:param Nyears:
+:type verbose: 
+:param verbose:
+:type seed: 
+:param seed:
+:type effective_variance_invcov: 
+:param effective_variance_invcov:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.QskySim.Qubic_sky.get_fullsky_convolved_maps">
+<span class="sig-name descname"><span class="pre">get_fullsky_convolved_maps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">FWHMdeg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/QskySim.html#Qubic_sky.get_fullsky_convolved_maps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.QskySim.Qubic_sky.get_fullsky_convolved_maps" title="Link to this definition"></a></dt>
+<dd><p>This returns full sky maps at each subfrequency convolved by the beam of  the  instrument at
+each frequency or with another beam if FWHMdeg is provided.
+when FWHMdeg is 0, the maps are not convolved.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>FWHMdeg</strong> (<em>float</em>)</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.QskySim.Qubic_sky.get_partial_sky_maps_withnoise">
+<span class="sig-name descname"><span class="pre">get_partial_sky_maps_withnoise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coverage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">version_FastSim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'01'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sigma_sec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nyears</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FWHMdeg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_profile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spatial_noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nunu_correlation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">integrate_into_band</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_covcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/QskySim.html#Qubic_sky.get_partial_sky_maps_withnoise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.QskySim.Qubic_sky.get_partial_sky_maps_withnoise" title="Link to this definition"></a></dt>
+<dd><p>This returns maps in the same way as with get_simple_sky_map but cut according to the coverage
+and with noise added according to this coverage and the RMS in muK.sqrt(sec) given by sigma_sec
+The default integration time is 4 years but can be modified with optional variable Nyears
+Note that the maps are convolved with the instrument beam by default, or with FWHMdeg (can be an array)
+if provided.
+If seed is provided, it will be used for the noise realization. If not it will be a new realization at
+each call.
+The optional effective_variance_invcov keyword is a modification law to be applied to the coverage in order to obtain
+more realistic noise profile. It is a law for effective RMS as a function of inverse coverage and is 2D array
+with the first one being (nx samples) inverse coverage and the second being the corresponding effective variance to be
+used through interpolation when generating the noise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>coverage</strong> (<em>array</em>) – Coverage map of the sky.
+By default, we load a coverage centered on the galactic center with 10000 pointings.</p></li>
+<li><p><strong>version_FastSim</strong> (<em>str</em>) – Version of the FastSimulator files: 01, 02, 03… For now, only 01 exists.</p></li>
+<li><p><strong>sigma_sec</strong> (<em>float</em>)</p></li>
+<li><p><strong>Nyears</strong> (<em>float</em>) – Integration time for observation to scale the noise, by default it is 4.</p></li>
+<li><p><strong>FWHMdeg</strong></p></li>
+<li><p><strong>seed</strong></p></li>
+<li><p><strong>noise_profile</strong></p></li>
+<li><p><strong>spatial_noise</strong> (<em>bool</em>) – If True, spatial noise correlations are added. True by default.</p></li>
+<li><p><strong>nunu_correlation</strong> (<em>bool</em>) – If True, correlations between frequency sub-bands are added. True by default.</p></li>
+<li><p><strong>noise_only</strong> (<em>bool</em>) – If True, only returns the noise maps and the coverage (without the sky signal).</p></li>
+<li><p><strong>integrate_into_band</strong> (<em>bool</em>) – If True, averaging input sub-band maps into reconstruction sub-bands. True by default.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>maps + noisemaps, maps, noisemaps, coverage</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.QskySim.Qubic_sky.smoothing">
+<span class="sig-name descname"><span class="pre">smoothing</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">maps</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FWHMdeg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nf</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">central_nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/QskySim.html#Qubic_sky.smoothing"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.QskySim.Qubic_sky.smoothing" title="Link to this definition"></a></dt>
+<dd><p>Convolve the maps to the FWHM at each sub-frequency or to a common beam if FWHMdeg is given.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.QskySim.Qubic_sky.theoretical_noise_maps">
+<span class="sig-name descname"><span class="pre">theoretical_noise_maps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sigma_sec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coverage</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nyears</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/QskySim.html#Qubic_sky.theoretical_noise_maps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.QskySim.Qubic_sky.theoretical_noise_maps" title="Link to this definition"></a></dt>
+<dd><p>This returns a map of the RMS noise (not an actual realization, just the expected RMS - No covariance)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sigma_sec</strong> (<em>float</em>) – Noise level.</p></li>
+<li><p><strong>coverage</strong> (<em>array</em>) – The coverage map.</p></li>
+<li><p><strong>Nyears</strong> (<em>int</em>)</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.QskySim.sky">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">sky</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">skyconfig</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instrument</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lmax</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/QskySim.html#sky"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.QskySim.sky" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Define a sky object as seen by an instrument.</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.QskySim.sky.get_simple_sky_map" title="lib.QskySim.sky.get_simple_sky_map"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_simple_sky_map</span></code></a>()</p></td>
+<td><p>Create as many skies as the number of input frequencies.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.QskySim.sky.get_simple_sky_map">
+<span class="sig-name descname"><span class="pre">get_simple_sky_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/QskySim.html#sky.get_simple_sky_map"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.QskySim.sky.get_simple_sky_map" title="Link to this definition"></a></dt>
+<dd><p>Create as many skies as the number of input frequencies.
+Instrumental effects are not considered.
+Return a vector of shape (number_of_input_subfrequencies, npix, 3)</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.Qscene.html" class="btn btn-neutral float-left" title="lib.Qscene module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.Qspectra.html" class="btn btn-neutral float-right" title="lib.Qspectra module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

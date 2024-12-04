@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Calibration.QtesEvaluation module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.Fitting package" href="lib.Fitting.html" />
+    <link rel="prev" title="lib.Calibration.Qselfcal module" href="lib.Calibration.Qselfcal.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="lib.Calibration.html">lib.Calibration package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="lib.Calibration.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.html">lib.Fitting package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.InstrumentModel.html">lib.InstrumentModel package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.html">lib.MapMaking package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.html">lib.obsolete package</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.html#submodules">Submodules</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+          <li class="breadcrumb-item"><a href="lib.Calibration.html">lib.Calibration package</a></li>
+      <li class="breadcrumb-item active">lib.Calibration.QtesEvaluation module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.Calibration.QtesEvaluation.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.Calibration.QtesEvaluation">
+<span id="lib-calibration-qtesevaluation-module"></span><h1>lib.Calibration.QtesEvaluation module<a class="headerlink" href="#module-lib.Calibration.QtesEvaluation" title="Link to this heading"></a></h1>
+<p>$Id: TES_evaluation.py
+$auth: Steve Torchinsky &lt;<a class="reference external" href="mailto:satorchi&#37;&#52;&#48;apc&#46;in2p3&#46;fr">satorchi<span>&#64;</span>apc<span>&#46;</span>in2p3<span>&#46;</span>fr</a>&gt;
+$created: Tue 17 May 2022 16:57:19 CEST
+$license: GPLv3 or later, see <a class="reference external" href="https://www.gnu.org/licenses/gpl-3.0.txt">https://www.gnu.org/licenses/gpl-3.0.txt</a></p>
+<blockquote>
+<div><p>This is free software: you are free to change and
+redistribute it.  There is NO WARRANTY, to the extent
+permitted by law.</p>
+</div></blockquote>
+<p>write a fits file with a boolean array for all TES good/bad
+The FITS header had info about how the determination was made including:</p>
+<blockquote>
+<div><p>dataset name
+analysis type (I-V, NEP, timeconstant, carbon fibre, linearity,…)
+analyser (person who did the analysis)
+elog entry (link to elog entry for the data set)
+wiki page (link to the wiki page with more information)</p>
+</div></blockquote>
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.QtesEvaluation.check_goodbad">
+<span class="sig-name descname"><span class="pre">check_goodbad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">goodbad</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/QtesEvaluation.html#check_goodbad"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.QtesEvaluation.check_goodbad" title="Link to this definition"></a></dt>
+<dd><p>check that the given array is an array of boolean</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.QtesEvaluation.get_header_values">
+<span class="sig-name descname"><span class="pre">get_header_values</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">analysis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">analyser</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">elog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wikipage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/QtesEvaluation.html#get_header_values"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.QtesEvaluation.get_header_values" title="Link to this definition"></a></dt>
+<dd><p>get the descriptive information</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.QtesEvaluation.list_goodbad">
+<span class="sig-name descname"><span class="pre">list_goodbad</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/QtesEvaluation.html#list_goodbad"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.QtesEvaluation.list_goodbad" title="Link to this definition"></a></dt>
+<dd><p>list all the available TES good/bad files</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.QtesEvaluation.read_goodbad">
+<span class="sig-name descname"><span class="pre">read_goodbad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbosity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/QtesEvaluation.html#read_goodbad"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.QtesEvaluation.read_goodbad" title="Link to this definition"></a></dt>
+<dd><p>read a FITS file with good/bad information</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Calibration.QtesEvaluation.write_goodbad">
+<span class="sig-name descname"><span class="pre">write_goodbad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">goodbad</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">analysis</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">analyser</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">elog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wikipage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Calibration/QtesEvaluation.html#write_goodbad"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Calibration.QtesEvaluation.write_goodbad" title="Link to this definition"></a></dt>
+<dd><p>write a FITS file with a good/bad info</p>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.Calibration.Qselfcal.html" class="btn btn-neutral float-left" title="lib.Calibration.Qselfcal module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.Fitting.html" class="btn btn-neutral float-right" title="lib.Fitting package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

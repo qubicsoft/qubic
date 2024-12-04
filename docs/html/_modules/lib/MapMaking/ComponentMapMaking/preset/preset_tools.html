@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.MapMaking.ComponentMapMaking.preset.preset_tools &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.MapMaking.ComponentMapMaking.preset.preset_tools</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.MapMaking.ComponentMapMaking.preset.preset_tools</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">yaml</span>
+<span class="kn">from</span> <span class="nn">....Qmpi_tools</span> <span class="kn">import</span> <span class="n">MpiTools</span>
+
+<div class="viewcode-block" id="PresetTools">
+<a class="viewcode-back" href="../../../../../lib.MapMaking.ComponentMapMaking.preset.preset_tools.html#lib.MapMaking.ComponentMapMaking.preset.preset_tools.PresetTools">[docs]</a>
+<span class="k">class</span> <span class="nc">PresetTools</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Preset Tools.</span>
+
+<span class="sd">    Instance to initialize the Components Map-Making. It contains tool functions used in all the different files and the simulation parameters.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    comm: MPI communicator</span>
+<span class="sd">        MPI common communicator define by MPI.COMM_WORLD.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    params: dict</span>
+<span class="sd">        Dictionary containing all the simulations parameters.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">parameters_file</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### MPI common arguments</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">comm</span> <span class="o">=</span> <span class="n">comm</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rank</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">Get_rank</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">comm</span><span class="o">.</span><span class="n">Get_size</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mpi</span> <span class="o">=</span> <span class="n">MpiTools</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">comm</span><span class="p">)</span>
+
+        <span class="c1">### Open parameters file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mpi</span><span class="o">.</span><span class="n">_print_message</span><span class="p">(</span><span class="s2">&quot;========= Initialization =========&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mpi</span><span class="o">.</span><span class="n">_print_message</span><span class="p">(</span><span class="s2">&quot;    =&gt; Reading parameters file&quot;</span><span class="p">)</span>
+        
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">parameters_file</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">tf</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">tf</span><span class="p">)</span>
+
+<div class="viewcode-block" id="PresetTools.check_for_errors">
+<a class="viewcode-back" href="../../../../../lib.MapMaking.ComponentMapMaking.preset.preset_tools.html#lib.MapMaking.ComponentMapMaking.preset.preset_tools.PresetTools.check_for_errors">[docs]</a>
+    <span class="k">def</span> <span class="nf">check_for_errors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Errors check.</span>
+
+<span class="sd">        Checks for various parameter errors in the &#39;params.yml&#39; file.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            TypeError: If any of the parameter checks fail.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Check if the instrument is either &#39;DB&#39; or &#39;UWB&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;instrument&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;DB&quot;</span><span class="p">,</span> <span class="s2">&quot;UWB&quot;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;You must choose DB or UWB instrument&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Check if bin_mixing_matrix is even</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;The argument bin_mixing_matrix should be even&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Check if nsub_in is even</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nsub_in&quot;</span><span class="p">]</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;The argument nsub_in should be even&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Check if nsub_out is even</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nsub_out&quot;</span><span class="p">]</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;The argument nsub_out should be even&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Check if blind_method is one of the allowed methods</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;blind_method&quot;</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span>
+            <span class="s2">&quot;alternate&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;minimize&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;PCG&quot;</span><span class="p">,</span>
+        <span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;You must choose alternate, minimize or PCG method&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Check if nsub_out is greater than or equal to bin_mixing_matrix</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nsub_out&quot;</span><span class="p">]</span>
+            <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;nsub_out should be higher than bin_mixing_matrix&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Check if bin_mixing_matrix is a multiple of nsub_out when either Dust or Synchrotron type is &#39;blind&#39;</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;blind&quot;</span>
+            <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Synchrotron&quot;</span><span class="p">][</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;blind&quot;</span>
+        <span class="p">):</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;nsub_out&quot;</span><span class="p">]</span>
+                <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]</span>
+                <span class="o">!=</span> <span class="mi">0</span>
+            <span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;bin_mixing_matrix should be a multiple of nsub_out&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Check if nside_beta is a multiple of 2 for d1 case</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;model_d&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;d1&quot;</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;nside_beta_in&quot;</span><span class="p">]</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">!=</span> <span class="mi">0</span>
+        <span class="p">):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;nside_beta_in&quot;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="s2">&quot;nside_beta should be a multiple of two &gt; 0 for d1 Dust model&quot;</span>
+                <span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;model_d&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;d1&quot;</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;Foregrounds&quot;</span><span class="p">][</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;blind&quot;</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Blind method is not implemented for d1 model&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PCG&quot;</span><span class="p">][</span><span class="s2">&quot;fixI&quot;</span><span class="p">]</span>
+            <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PCG&quot;</span><span class="p">][</span><span class="s2">&quot;fix_pixels_outside_patch&quot;</span><span class="p">]</span>
+        <span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="s2">&quot;fixI and fix_pixels_outside_patch can&#39;t be yet mixed together&quot;</span>
+            <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="PresetTools.display_simulation_configuration">
+<a class="viewcode-back" href="../../../../../lib.MapMaking.ComponentMapMaking.preset.preset_tools.html#lib.MapMaking.ComponentMapMaking.preset.preset_tools.PresetTools.display_simulation_configuration">[docs]</a>
+    <span class="k">def</span> <span class="nf">display_simulation_configuration</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Display the simulation configuration details.</span>
+
+<span class="sd">        This method prints out the configuration settings for the simulation, including</span>
+<span class="sd">        details about the sky input and output, QUBIC instrument settings, and MPI tasks.</span>
+<span class="sd">        The configuration is only displayed if the rank of the process is 0.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;******************** Configuration ********************</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;    - QUBIC :&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        Npointing : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;QUBIC&#39;</span><span class="p">][</span><span class="s1">&#39;npointings&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        Nsub : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;QUBIC&#39;</span><span class="p">][</span><span class="s1">&#39;nsub_in&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        Ndet : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;QUBIC&#39;</span><span class="p">][</span><span class="s1">&#39;NOISE&#39;</span><span class="p">][</span><span class="s1">&#39;ndet&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        Npho150 : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;QUBIC&#39;</span><span class="p">][</span><span class="s1">&#39;NOISE&#39;</span><span class="p">][</span><span class="s1">&#39;npho150&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        Npho220 : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;QUBIC&#39;</span><span class="p">][</span><span class="s1">&#39;NOISE&#39;</span><span class="p">][</span><span class="s1">&#39;npho220&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        RA : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;SKY&#39;</span><span class="p">][</span><span class="s1">&#39;RA_center&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        DEC : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;SKY&#39;</span><span class="p">][</span><span class="s1">&#39;DEC_center&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;QUBIC&quot;</span><span class="p">][</span><span class="s2">&quot;instrument&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;DB&quot;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        Type : Dual Bands&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        Type : Ultra Wide Band&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;    - Sky In :&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        CMB : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;CMB&#39;</span><span class="p">][</span><span class="s1">&#39;cmb&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;        Dust : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;Dust&#39;</span><span class="p">][</span><span class="s1">&#39;Dust_in&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;Dust&#39;</span><span class="p">][</span><span class="s1">&#39;model_d&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;        Synchrotron : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;Synchrotron&#39;</span><span class="p">][</span><span class="s1">&#39;Synchrotron_in&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;Synchrotron&#39;</span><span class="p">][</span><span class="s1">&#39;model_s&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        CO : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;CO&#39;</span><span class="p">][</span><span class="s1">&#39;CO_in&#39;</span><span class="p">]</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;    - Sky Out :&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        CMB : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;CMB&#39;</span><span class="p">][</span><span class="s1">&#39;cmb&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;        Dust : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;Dust&#39;</span><span class="p">][</span><span class="s1">&#39;Dust_out&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;Dust&#39;</span><span class="p">][</span><span class="s1">&#39;model_d&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;        Synchrotron : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;Synchrotron&#39;</span><span class="p">][</span><span class="s1">&#39;Synchrotron_out&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;Synchrotron&#39;</span><span class="p">][</span><span class="s1">&#39;model_s&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        CO : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s1">&#39;Foregrounds&#39;</span><span class="p">][</span><span class="s1">&#39;CO&#39;</span><span class="p">][</span><span class="s1">&#39;CO_out&#39;</span><span class="p">]</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;        MPI Tasks : </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_display_iter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">steps</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Display the number of a specific iteration k only for the first rank in an MPI multiprocessing environment.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            steps (int): Iteration number.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="s2">&quot;========== Iter </span><span class="si">{}</span><span class="s2">/</span><span class="si">{}</span><span class="s2"> ==========&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;PCG&quot;</span><span class="p">][</span><span class="s2">&quot;n_iter_loop&quot;</span><span class="p">]</span>
+                <span class="p">)</span>
+            <span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

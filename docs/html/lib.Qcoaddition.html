@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Qcoaddition module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.QdataHandling module" href="lib.QdataHandling.html" />
+    <link rel="prev" title="lib.Qbeams module" href="lib.Qbeams.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="lib.html#subpackages">Subpackages</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#submodules">Submodules</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="lib.Qbeams.html">lib.Qbeams module</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">lib.Qcoaddition module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qcoaddition.FocalPlane"><code class="docutils literal notranslate"><span class="pre">FocalPlane</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qcoaddition.MySplineFitting"><code class="docutils literal notranslate"><span class="pre">MySplineFitting</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qcoaddition.Pip1Tes"><code class="docutils literal notranslate"><span class="pre">Pip1Tes</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lib.Qcoaddition.PipAllTes"><code class="docutils literal notranslate"><span class="pre">PipAllTes</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QdataHandling.html">lib.QdataHandling module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qdictionary.html">lib.Qdictionary module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfit.html">lib.Qfit module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qfoldertools.html">lib.Qfoldertools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qforecast.html">lib.Qforecast module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qhorns.html">lib.Qhorns module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qmpi_tools.html">lib.Qmpi_tools module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qplotters.html">lib.Qplotters module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qripples.html">lib.Qripples module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qsamplings.html">lib.Qsamplings module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qscene.html">lib.Qscene module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.QskySim.html">lib.QskySim module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qspectra.html">lib.Qspectra module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Qutilities.html">lib.Qutilities module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+      <li class="breadcrumb-item active">lib.Qcoaddition module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.Qcoaddition.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.Qcoaddition">
+<span id="lib-qcoaddition-module"></span><h1>lib.Qcoaddition module<a class="headerlink" href="#module-lib.Qcoaddition" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Qcoaddition.FocalPlane">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">FocalPlane</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tod</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">az</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">el</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thk</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#FocalPlane"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.FocalPlane" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Instance to display data on the FP (assuming Technical Demonstrator)</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Qcoaddition.FocalPlane.create_subplots" title="lib.Qcoaddition.FocalPlane.create_subplots"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_subplots</span></code></a>(tes, asic, ax, **kwargs)</p></td>
+<td><p>Method to make many subplots for each TES.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.Qcoaddition.FocalPlane.create_subplots_healpix" title="lib.Qcoaddition.FocalPlane.create_subplots_healpix"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_subplots_healpix</span></code></a>(tes, asic, m, ...)</p></td>
+<td><p>Method to make many subplots for each TES with healpix projection.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.FocalPlane.create_subplots">
+<span class="sig-name descname"><span class="pre">create_subplots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">asic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#FocalPlane.create_subplots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.FocalPlane.create_subplots" title="Link to this definition"></a></dt>
+<dd><p>Method to make many subplots for each TES.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.FocalPlane.create_subplots_healpix">
+<span class="sig-name descname"><span class="pre">create_subplots_healpix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">asic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reso</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ax</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fig</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#FocalPlane.create_subplots_healpix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.FocalPlane.create_subplots_healpix" title="Link to this definition"></a></dt>
+<dd><p>Method to make many subplots for each TES with healpix projection.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Qcoaddition.MySplineFitting">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">MySplineFitting</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covarin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nbspl</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logspace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#MySplineFitting"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.MySplineFitting" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">__call__</span></code>(x)</p></td>
+<td><p>Call self as a function.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_spline_tofit</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>with_alpha</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.MySplineFitting.get_spline_tofit">
+<span class="sig-name descname"><span class="pre">get_spline_tofit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xspline</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#MySplineFitting.get_spline_tofit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.MySplineFitting.get_spline_tofit" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.MySplineFitting.with_alpha">
+<span class="sig-name descname"><span class="pre">with_alpha</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#MySplineFitting.with_alpha"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.MySplineFitting.with_alpha" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Qcoaddition.Pip1Tes">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Pip1Tes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tod</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">az</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">el</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thk</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#Pip1Tes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.Pip1Tes" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Instance to treat TES one by one.</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Qcoaddition.Pip1Tes.decorel_azel" title="lib.Qcoaddition.Pip1Tes.decorel_azel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">decorel_azel</span></code></a>([nbins, n_el, degree, nbspl])</p></td>
+<td><p>Method to remove correlation in azimuth.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.Qcoaddition.Pip1Tes.healpix_map_" title="lib.Qcoaddition.Pip1Tes.healpix_map_"><code class="xref py py-obj docutils literal notranslate"><span class="pre">healpix_map_</span></code></a>([nside, countcut, unseen_val])</p></td>
+<td><p>Method to project data on the sky using coaddition.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Qcoaddition.Pip1Tes.identify_scans" title="lib.Qcoaddition.Pip1Tes.identify_scans"><code class="xref py py-obj docutils literal notranslate"><span class="pre">identify_scans</span></code></a>(inthk, az, el[, tt, ...])</p></td>
+<td><p>This function identifies and assign numbers the various regions of a back-and-forth scanning using the housepkeeping time, az, el</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.Qcoaddition.Pip1Tes.run" title="lib.Qcoaddition.Pip1Tes.run"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run</span></code></a>([remove_drift, remove_offset, decorel, ...])</p></td>
+<td><p>Main method to run the pipeline.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_chunks</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>linear_rescale_chunks</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.Pip1Tes.decorel_azel">
+<span class="sig-name descname"><span class="pre">decorel_azel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nbins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_el</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">degree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nbspl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#Pip1Tes.decorel_azel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.Pip1Tes.decorel_azel" title="Link to this definition"></a></dt>
+<dd><p>Method to remove correlation in azimuth.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.Pip1Tes.get_chunks">
+<span class="sig-name descname"><span class="pre">get_chunks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#Pip1Tes.get_chunks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.Pip1Tes.get_chunks" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.Pip1Tes.healpix_map_">
+<span class="sig-name descname"><span class="pre">healpix_map_</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nside</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">countcut</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unseen_val</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1.6375e+30</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#Pip1Tes.healpix_map_"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.Pip1Tes.healpix_map_" title="Link to this definition"></a></dt>
+<dd><p>Method to project data on the sky using coaddition.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.Pip1Tes.identify_scans">
+<span class="sig-name descname"><span class="pre">identify_scans</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inthk</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">az</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">el</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">median_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">101</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thr_speedmin</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plotrange</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0,</span> <span class="pre">1000]</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#Pip1Tes.identify_scans"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.Pip1Tes.identify_scans" title="Link to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>This function identifies and assign numbers the various regions of a back-and-forth scanning using the housepkeeping time, az, el</dt><dd><ul class="simple">
+<li><p>a numbering for each back &amp; forth scan</p></li>
+<li><p>a region to remove at the end of each scan (bad data due to FLL reset, slowingg down of the moiunt, possibly HWP rotation</p></li>
+<li><p>is the scan back or forth ?</p></li>
+</ul>
+</dd>
+</dl>
+<p>It optionnaly iinterpolate this information to the TOD sampling iif provided.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input</strong></p></li>
+<li><p><strong>thk</strong> (<em>np.array</em><em>(</em><em>)</em>) – time samples (seconds) for az and el at the housekeeeping sampling rate</p></li>
+<li><p><strong>az</strong> (<em>np.array</em><em>(</em><em>)</em>) – azimuth in degrees at the housekeeping sampling rate</p></li>
+<li><p><strong>el</strong> (<em>np.array</em><em>(</em><em>)</em>) – elevation in degrees at the housekeeping sampling rate</p></li>
+<li><p><strong>tt</strong> (<em>Optional : np.array</em><em>(</em><em>)</em>) – None buy default, if not None:
+time samples (seconds) at the TOD sampling rate
+Then. the output will also containe az,el and scantype interpolated at TOD sampling rate</p></li>
+<li><p><strong>thr_speedmin</strong> (<em>Optional : float</em>) – Threshold for angular velocity to be considered as slow</p></li>
+<li><p><strong>doplot</strong> (<em>[</em><em>Optional</em><em>] </em><em>: Boolean</em>) – If True displays some useeful plot</p></li>
+<li><p><strong>output</strong></p></li>
+<li><p><strong>scantype_hk</strong> (<em>np.array</em><em>(</em><em>int</em><em>)</em>) – type of scan for each sample at housekeeping sampling rate:
+* 0 = speed to slow - Bad data
+* n = scanning towards positive azimuth
+* -n = scanning towards negative azimuth
+where n is the scan number (starting at 1)</p></li>
+<li><p><strong>azt</strong> (<em>[</em><em>optional</em><em>] </em><em>np.array</em><em>(</em><em>)</em>) – azimuth (degrees) at the TOD sampling rate</p></li>
+<li><p><strong>elt</strong> (<em>[</em><em>optional</em><em>] </em><em>np.array</em><em>(</em><em>)</em>) – elevation (degrees) at the TOD sampling rate</p></li>
+<li><p><strong>scantype</strong> (<em>[</em><em>optiona</em><em>] </em><em>np.array</em><em>(</em><em>)</em>) – same as scantype_hk, but interpolated at TOD sampling rate</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.Pip1Tes.linear_rescale_chunks">
+<span class="sig-name descname"><span class="pre">linear_rescale_chunks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chunks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sz</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#Pip1Tes.linear_rescale_chunks"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.Pip1Tes.linear_rescale_chunks" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.Pip1Tes.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">remove_drift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decorel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">healpix_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#Pip1Tes.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.Pip1Tes.run" title="Link to this definition"></a></dt>
+<dd><p>Main method to run the pipeline.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.Qcoaddition.PipAllTes">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">PipAllTes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tod</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">az</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">el</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thk</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#PipAllTes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.PipAllTes" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Instance to analyse and display all TES.</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.Qcoaddition.PipAllTes.run" title="lib.Qcoaddition.PipAllTes.run"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run</span></code></a>([remove_drift, remove_offset, decorel, ...])</p></td>
+<td><p>Method to run loop for all TES. You can add useful arguments using <a href="#id1"><span class="problematic" id="id2">**</span></a>kwargs keyword.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.Qcoaddition.PipAllTes.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">remove_drift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">decorel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_FP</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plot_FP_healpix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reso</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">color</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nside</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/Qcoaddition.html#PipAllTes.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.Qcoaddition.PipAllTes.run" title="Link to this definition"></a></dt>
+<dd><p>Method to run loop for all TES. You can add useful arguments using <a href="#id3"><span class="problematic" id="id4">**</span></a>kwargs keyword.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.Qbeams.html" class="btn btn-neutral float-left" title="lib.Qbeams module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.QdataHandling.html" class="btn btn-neutral float-right" title="lib.QdataHandling module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

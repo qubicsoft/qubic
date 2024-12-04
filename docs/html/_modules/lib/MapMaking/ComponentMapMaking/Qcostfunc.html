@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.MapMaking.ComponentMapMaking.Qcostfunc &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.MapMaking.ComponentMapMaking.Qcostfunc</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.MapMaking.ComponentMapMaking.Qcostfunc</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">pyoperators</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">fgbuster.mixingmatrix</span> <span class="k">as</span> <span class="nn">mm</span>
+<span class="kn">from</span> <span class="nn">...Qfoldertools</span> <span class="kn">import</span> <span class="o">*</span>
+
+
+<span class="k">def</span> <span class="nf">_dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">comm</span><span class="p">):</span>
+    <span class="n">d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">y</span><span class="o">.</span><span class="n">ravel</span><span class="p">()))</span>
+
+    <span class="k">if</span> <span class="n">comm</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">comm</span><span class="o">.</span><span class="n">Allreduce</span><span class="p">(</span><span class="n">MPI</span><span class="o">.</span><span class="n">IN_PLACE</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">d</span>
+
+
+<div class="viewcode-block" id="Chi2DualBand">
+<a class="viewcode-back" href="../../../../lib.MapMaking.ComponentMapMaking.Qcostfunc.html#lib.MapMaking.ComponentMapMaking.Qcostfunc.Chi2DualBand">[docs]</a>
+<span class="k">class</span> <span class="nc">Chi2DualBand</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Instance to compute chi^2 for a given simulated TOD.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">dsim</span><span class="p">,</span> <span class="n">parametric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">full_beta_map</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset</span> <span class="o">=</span> <span class="n">preset</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span> <span class="o">=</span> <span class="n">dsim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">allnus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span> <span class="o">=</span> <span class="n">parametric</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">full_beta_map</span> <span class="o">=</span> <span class="n">full_beta_map</span>
+
+        <span class="c1">### If parametric, we use the QUBIC + Planck data</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_obs_zero_outside</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_obs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="c1"># self.dobs = self.preset.acquisition.TOD_qubic.copy()</span>
+        <span class="c1">### If blind, we use the QUBIC data only</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_qubic</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="c1">### If constant spectral index</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">shape</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">dsim150</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="p">[:,</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dsim220</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="p">[:,</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">)]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)</span>
+            <span class="p">)</span>
+
+        <span class="c1">### If varying spectral indices</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">shape</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dsim150</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="p">[:,</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">),</span> <span class="p">:,</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dsim220</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="p">[:,</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">),</span> <span class="p">:,</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">seenpix_beta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">full_beta_map</span> <span class="o">==</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;dsim should have 3 or 4 dimensions.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_fill_A</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="n">fsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">))</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">):</span>
+                <span class="n">A</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">x</span><span class="p">[</span><span class="n">k</span><span class="p">]]</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">)</span>
+                <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">A</span>
+
+    <span class="k">def</span> <span class="nf">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="c1">### Compute mixing matrix</span>
+        <span class="n">mixingmatrix</span> <span class="o">=</span> <span class="n">mm</span><span class="o">.</span><span class="n">MixingMatrix</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_model_out</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mixingmatrix</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">nus</span><span class="p">,</span> <span class="o">*</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="c1">### If constant spectral index</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+
+            <span class="c1">### If parametric -&gt; we compute the mixing matrix element according to the spectral index</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span><span class="p">:</span>
+                <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+            <span class="c1">### If blind -&gt; we treat the mixing matrix element as free parameters</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1">### Fill mixing matrix for the FG components</span>
+                <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fill_A</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+            <span class="c1">### Separe the mixing matrix element for 150 and 220 GHz</span>
+            <span class="n">Aq150</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">]</span><span class="o">.</span><span class="n">T</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">))</span>
+            <span class="n">Aq220</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">]</span><span class="o">.</span><span class="n">T</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">))</span>
+
+            <span class="c1">### Create simulated TOD</span>
+            <span class="n">ysim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">Aq150</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim150</span><span class="p">,</span> <span class="n">Aq220</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim220</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span><span class="p">:</span>
+                <span class="c1">### Separe QUBIC and Planck</span>
+                <span class="n">Aext</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+                <span class="n">H_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">external</span><span class="o">.</span><span class="n">get_operator</span><span class="p">(</span>
+                    <span class="n">A</span><span class="o">=</span><span class="n">Aext</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span>
+
+                <span class="c1">### Compute Planck part of the chi^2</span>
+                <span class="n">mycomp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="c1"># seenpix_comp = np.tile(self.preset.sky.seenpix_qubic, (mycomp.shape[0], 3, 1)).reshape(mycomp.shape)</span>
+                <span class="n">mycomp</span><span class="p">[:,</span> <span class="o">~</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">seenpix_qubic</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">ysim_pl</span> <span class="o">=</span> <span class="n">H_planck</span><span class="p">(</span><span class="n">mycomp</span><span class="p">)</span>
+
+                <span class="c1">### Compute residuals in time domain</span>
+                <span class="c1"># _residuals = np.r_[ysim, ysim_pl] - self.preset.acquisition.TOD_obs_zero_outside #self.dobs</span>
+                <span class="c1"># _residuals = np.r_[ysim, ysim_pl] - self.preset.acquisition.TOD_obs_zero_outside</span>
+                <span class="n">_residuals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">ysim</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_qubic</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">Lqubic</span> <span class="o">=</span> <span class="n">_dot</span><span class="p">(</span>
+                    <span class="n">_residuals</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">0</span><span class="p">](</span><span class="n">_residuals</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span>
+                <span class="p">)</span>
+
+                <span class="n">_residuals</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">ysim_pl</span><span class="p">]</span>
+                    <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_external_zero_outside_patch</span>
+                <span class="p">)</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">Lplanck</span> <span class="o">=</span> <span class="n">_dot</span><span class="p">(</span>
+                    <span class="n">_residuals</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">1</span><span class="p">](</span><span class="n">_residuals</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">Lqubic</span>  <span class="c1"># + self.Lplanck</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1">### Compute residuals in time domain</span>
+                <span class="n">_residuals</span> <span class="o">=</span> <span class="n">ysim</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_qubic</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">Lplanck</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">Lqubic</span> <span class="o">=</span> <span class="n">_dot</span><span class="p">(</span>
+                    <span class="n">_residuals</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">0</span><span class="p">](</span><span class="n">_residuals</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">Lqubic</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="c1"># print(x, x.shape, self.nc-1, self.npix)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">))</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+
+            <span class="c1">### Separe the mixing matrix element for 150 and 220 GHz</span>
+            <span class="n">Aq150</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">))</span>
+            <span class="n">Aq220</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">)</span>
+            <span class="p">)</span>
+
+            <span class="c1">### Create simulated TOD</span>
+            <span class="n">ysim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">Aq150</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim150</span><span class="p">,</span> <span class="n">Aq220</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim220</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span><span class="p">:</span>
+
+                <span class="c1">### Fill the full sky map of beta with the unknowns</span>
+                <span class="n">full_map_beta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">full_beta_map</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">))</span>
+                <span class="n">full_map_beta</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">seenpix_beta</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
+
+                <span class="c1">### Compute the mixing matrix for the full sky</span>
+                <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">,</span> <span class="n">full_map_beta</span><span class="p">)</span>
+
+                <span class="c1">### Separe QUBIC and Planck and switch axes</span>
+                <span class="n">Aext</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">A</span><span class="p">[:,</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:,</span> <span class="p">:],</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+                <span class="n">H_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">external</span><span class="o">.</span><span class="n">get_operator</span><span class="p">(</span>
+                    <span class="n">A</span><span class="o">=</span><span class="n">Aext</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span>
+
+                <span class="c1">### Compute Planck part of the chi^2</span>
+                <span class="c1"># mycomp = self.preset.comp.components_iter.copy()</span>
+                <span class="c1"># seenpix_comp = np.tile(self.preset.sky.seenpix_qubic, (mycomp.shape[0], 3, 1)).reshape(mycomp.shape)</span>
+                <span class="n">ysim_pl</span> <span class="o">=</span> <span class="n">H_planck</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+
+                <span class="c1">### Compute residuals in time domain</span>
+                <span class="n">_residuals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">ysim</span><span class="p">,</span> <span class="n">ysim_pl</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span>
+
+                <span class="k">return</span> <span class="n">_dot</span><span class="p">(</span>
+                    <span class="n">_residuals</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="p">(</span><span class="n">_residuals</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="s2">&quot;Varying mixing matrix along the LOS is not yet implemented&quot;</span>
+                <span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;dsim should have 3 or 4 dimensions.&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="Chi2UltraWideBand">
+<a class="viewcode-back" href="../../../../lib.MapMaking.ComponentMapMaking.Qcostfunc.html#lib.MapMaking.ComponentMapMaking.Qcostfunc.Chi2UltraWideBand">[docs]</a>
+<span class="k">class</span> <span class="nc">Chi2UltraWideBand</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">dsim</span><span class="p">,</span> <span class="n">parametric</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">full_beta_map</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset</span> <span class="o">=</span> <span class="n">preset</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span> <span class="o">=</span> <span class="n">dsim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nus</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">allnus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span> <span class="o">=</span> <span class="n">parametric</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">full_beta_map</span> <span class="o">=</span> <span class="n">full_beta_map</span>
+
+        <span class="c1">### If parametric, we use the QUBIC + Planck data</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_obs_zero_outside</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_obs</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="c1"># self.dobs = self.preset.acquisition.TOD_qubic.copy()</span>
+        <span class="c1">### If blind, we use the QUBIC data only</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_qubic</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+        <span class="c1">### If constant spectral index</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">shape</span>
+            <span class="c1"># self.nsub = int(self.nf/2)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">dsim_i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">))</span>
+            <span class="c1"># self.dsim220 = self.dsim[:, int(self.nf/2):int(self.nf)].reshape((self.nc*self.nsub, self.nsnd))</span>
+
+        <span class="c1">### If varying spectral indices</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">shape</span>
+            <span class="c1"># self.nsub = int(self.nf/2)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dsim_i</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">))</span>
+            <span class="c1"># self.dsim220 = self.dsim[:, int(self.nf/2):int(self.nf), :, :].reshape((self.nc*self.nsub*self.npix, self.nsnd))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">seenpix_beta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">full_beta_map</span> <span class="o">==</span> <span class="n">hp</span><span class="o">.</span><span class="n">UNSEEN</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;dsim should have 3 or 4 dimensions.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_fill_A</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="n">fsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">])</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">))</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">):</span>
+                <span class="n">A</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">x</span><span class="p">[</span><span class="n">k</span><span class="p">]]</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">)</span>
+                <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">A</span>
+
+    <span class="k">def</span> <span class="nf">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="c1">### Compute mixing matrix</span>
+        <span class="n">mixingmatrix</span> <span class="o">=</span> <span class="n">mm</span><span class="o">.</span><span class="n">MixingMatrix</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_model_out</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mixingmatrix</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">nus</span><span class="p">,</span> <span class="o">*</span><span class="n">x</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="c1">### If constant spectral index</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+
+            <span class="c1">### If parametric -&gt; we compute the mixing matrix element according to the spectral index</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span><span class="p">:</span>
+                <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+            <span class="c1">### If blind -&gt; we treat the mixing matrix element as free parameters</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1">### Fill mixing matrix for the FG components</span>
+                <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fill_A</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="c1"># print(A.shape)</span>
+            <span class="c1"># stop</span>
+            <span class="c1">### Separe the mixing matrix element for 150 and 220 GHz</span>
+            <span class="n">Aq</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">]</span><span class="o">.</span><span class="n">T</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">))</span>
+
+            <span class="c1">### Create simulated TOD</span>
+            <span class="n">ysim</span> <span class="o">=</span> <span class="n">Aq</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim_i</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span><span class="p">:</span>
+                <span class="c1">### Separe QUBIC and Planck</span>
+                <span class="n">Aext</span> <span class="o">=</span> <span class="n">A</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+                <span class="n">H_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">external</span><span class="o">.</span><span class="n">get_operator</span><span class="p">(</span>
+                    <span class="n">A</span><span class="o">=</span><span class="n">Aext</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span>
+
+                <span class="c1">### Compute Planck part of the chi^2</span>
+                <span class="n">mycomp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">seenpix_comp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">tile</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">seenpix_qubic</span><span class="p">,</span> <span class="p">(</span><span class="n">mycomp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">mycomp</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+                <span class="n">ysim_pl</span> <span class="o">=</span> <span class="n">H_planck</span><span class="p">(</span><span class="n">mycomp</span> <span class="o">*</span> <span class="n">seenpix_comp</span><span class="p">)</span>
+
+                <span class="c1">### Compute residuals in time domain</span>
+                <span class="n">_residuals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">ysim</span><span class="p">,</span> <span class="n">ysim_pl</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span>
+                <span class="c1"># _residuals = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch</span>
+
+                <span class="k">return</span> <span class="n">_dot</span><span class="p">(</span>
+                    <span class="n">_residuals</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="p">(</span><span class="n">_residuals</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1">### Compute residuals in time domain</span>
+                <span class="n">_residuals</span> <span class="o">=</span> <span class="n">ysim</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span>
+
+                <span class="k">return</span> <span class="n">_dot</span><span class="p">(</span>
+                    <span class="n">_residuals</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">0</span><span class="p">](</span><span class="n">_residuals</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span>
+                <span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="c1"># print(x, x.shape, self.nc-1, self.npix)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">))</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+
+            <span class="c1">### Separe the mixing matrix element for 150 and 220 GHz</span>
+            <span class="n">Aq150</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">))</span>
+            <span class="n">Aq220</span> <span class="o">=</span> <span class="n">A</span><span class="p">[:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">)</span>
+            <span class="p">)</span>
+
+            <span class="c1">### Create simulated TOD</span>
+            <span class="n">ysim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">Aq150</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim150</span><span class="p">,</span> <span class="n">Aq220</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dsim220</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">parametric</span><span class="p">:</span>
+
+                <span class="c1">### Fill the full sky map of beta with the unknowns</span>
+                <span class="n">full_map_beta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">full_beta_map</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(((</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">npix</span><span class="p">))</span>
+                <span class="n">full_map_beta</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">seenpix_beta</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
+
+                <span class="c1">### Compute the mixing matrix for the full sky</span>
+                <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nus</span><span class="p">,</span> <span class="n">full_map_beta</span><span class="p">)</span>
+
+                <span class="c1">### Separe QUBIC and Planck and switch axes</span>
+                <span class="n">Aext</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="n">A</span><span class="p">[:,</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:,</span> <span class="p">:],</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+
+                <span class="n">H_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">external</span><span class="o">.</span><span class="n">get_operator</span><span class="p">(</span>
+                    <span class="n">A</span><span class="o">=</span><span class="n">Aext</span><span class="p">,</span> <span class="n">convolution</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span>
+
+                <span class="c1">### Compute Planck part of the chi^2</span>
+                <span class="c1"># mycomp = self.preset.comp.components_iter.copy()</span>
+                <span class="c1"># seenpix_comp = np.tile(self.preset.sky.seenpix_qubic, (mycomp.shape[0], 3, 1)).reshape(mycomp.shape)</span>
+                <span class="n">ysim_pl</span> <span class="o">=</span> <span class="n">H_planck</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+
+                <span class="c1">### Compute residuals in time domain</span>
+                <span class="n">_residuals</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">ysim</span><span class="p">,</span> <span class="n">ysim_pl</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">dobs</span>
+
+                <span class="k">return</span> <span class="n">_dot</span><span class="p">(</span>
+                    <span class="n">_residuals</span><span class="o">.</span><span class="n">T</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="p">(</span><span class="n">_residuals</span><span class="p">),</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                    <span class="s2">&quot;Varying mixing matrix along the LOS is not yet implemented&quot;</span>
+                <span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;dsim should have 3 or 4 dimensions.&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="Chi2Parametric">
+<a class="viewcode-back" href="../../../../lib.MapMaking.ComponentMapMaking.Qcostfunc.html#lib.MapMaking.ComponentMapMaking.Qcostfunc.Chi2Parametric">[docs]</a>
+<span class="k">class</span> <span class="nc">Chi2Parametric</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">betamap</span><span class="p">,</span> <span class="n">seenpix_wrap</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset</span> <span class="o">=</span> <span class="n">preset</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">d</span> <span class="o">=</span> <span class="n">d</span>  <span class="c1"># shape -&gt; (ncomp, Nsub, NsNd)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">betamap</span> <span class="o">=</span> <span class="n">betamap</span>
+
+        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">ndim</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="o">.</span><span class="n">shape</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">constant</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">else</span><span class="p">:</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;instrument&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;UWB&quot;</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">d150</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[:,</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">d220</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[:,</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">)]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">_sh</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d150</span><span class="o">.</span><span class="n">shape</span>
+                <span class="n">_rsh</span> <span class="o">=</span> <span class="n">ReshapeOperator</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">d150</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="p">(</span><span class="n">_sh</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">_sh</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">_sh</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">_sh</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">d150</span> <span class="o">=</span> <span class="n">_rsh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d150</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">d220</span> <span class="o">=</span> <span class="n">_rsh</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d220</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dcmb150</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d150</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dfg150</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d150</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dcmb220</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d220</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dfg220</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d220</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">npixnf</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d150</span><span class="o">.</span><span class="n">shape</span>
+
+            <span class="n">index_num</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">ud_grade</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">sky</span><span class="o">.</span><span class="n">seenpix_qubic</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;Dust&quot;</span><span class="p">][</span><span class="s2">&quot;nside_beta_out&quot;</span><span class="p">],</span>
+            <span class="p">)</span>  <span class="c1">#</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">index_num</span> <span class="o">==</span> <span class="kc">True</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_index</span> <span class="o">=</span> <span class="n">index</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">seenpix_wrap</span> <span class="o">=</span> <span class="n">seenpix_wrap</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">constant</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">mixingmatrix</span> <span class="o">=</span> <span class="n">mm</span><span class="o">.</span><span class="n">MixingMatrix</span><span class="p">(</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_model_out</span><span class="p">)</span>
+
+        <span class="c1"># if self.constant:</span>
+        <span class="k">return</span> <span class="n">mixingmatrix</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">nus</span><span class="p">,</span> <span class="o">*</span><span class="n">x</span><span class="p">)</span>
+        <span class="c1"># else:</span>
+        <span class="c1">#    return mixingmatrix.eval(nus, x)</span>
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">constant</span><span class="p">:</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">allnus</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">betamap</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;instrument&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;UWB&quot;</span><span class="p">:</span>
+                <span class="n">ysim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">ic</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">):</span>
+                    <span class="n">ysim</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[:,</span> <span class="n">ic</span><span class="p">]</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[</span><span class="n">ic</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">ysim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span>
+                <span class="c1"># print(A.shape)</span>
+                <span class="c1"># stop</span>
+                <span class="k">for</span> <span class="n">ic</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">):</span>
+                    <span class="n">ysim</span><span class="p">[:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)]</span> <span class="o">+=</span> <span class="p">(</span>
+                        <span class="n">A</span><span class="p">[:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">),</span> <span class="n">ic</span><span class="p">]</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[</span><span class="n">ic</span><span class="p">,</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)]</span>
+                    <span class="p">)</span>
+                    <span class="n">ysim</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)]</span> <span class="o">+=</span> <span class="p">(</span>
+                        <span class="n">A</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">),</span> <span class="n">ic</span><span class="p">]</span>
+<div class="viewcode-block" id="Chi2Parametric_alt">
+<a class="viewcode-back" href="../../../../lib.MapMaking.ComponentMapMaking.Qcostfunc.html#lib.MapMaking.ComponentMapMaking.Qcostfunc.Chi2Parametric_alt">[docs]</a>
+                        <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[</span><span class="n">ic</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">)]</span>
+                    <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">seenpix_wrap</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">betamap</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_index</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">betamap</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">seenpix_wrap</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;instrument&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;UWB&quot;</span><span class="p">:</span>
+                <span class="n">ysim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">ic</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span><span class="p">):</span>
+                    <span class="k">for</span> <span class="n">ip</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_index</span><span class="p">):</span>
+                        <span class="n">ysim</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">ip</span><span class="p">,</span> <span class="p">:,</span> <span class="n">ic</span><span class="p">]</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[</span><span class="n">ip</span><span class="p">,</span> <span class="p">:,</span> <span class="n">ic</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">ysim</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span>
+                <span class="n">Atot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">betamap</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_index</span><span class="p">])</span>
+                <span class="n">A150</span> <span class="o">=</span> <span class="n">Atot</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">),</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+                <span class="n">A220</span> <span class="o">=</span> <span class="n">Atot</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nf</span><span class="p">),</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+
+                <span class="n">ysim</span><span class="p">[:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)]</span> <span class="o">=</span> <span class="p">(</span><span class="n">A150</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dfg150</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">dcmb150</span>
+                <span class="n">ysim</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span><span class="p">)</span> <span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)]</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">A220</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">dfg220</span>
+                <span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">dcmb220</span>
+
+        <span class="n">_r</span> <span class="o">=</span> <span class="n">ysim</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_qubic</span>
+        <span class="n">H_planck</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">get_operator</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">betamap</span><span class="p">,</span>
+            <span class="n">gain</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">gain</span><span class="o">.</span><span class="n">gain_iter</span><span class="p">,</span>
+            <span class="n">fwhm</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">fwhm_mapmaking</span><span class="p">,</span>
+            <span class="n">nu_co</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">nu_co</span><span class="p">,</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">tod_pl_s</span> <span class="o">=</span> <span class="n">H_planck</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_iter</span><span class="p">)</span>
+
+        <span class="n">_r_pl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_external</span> <span class="o">-</span> <span class="n">tod_pl_s</span>
+
+        <span class="n">LLH</span> <span class="o">=</span> <span class="n">_dot</span><span class="p">(</span>
+            <span class="n">_r</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">0</span><span class="p">](</span><span class="n">_r</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span>
+        <span class="p">)</span> <span class="o">+</span> <span class="n">_r_pl</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">1</span><span class="p">](</span><span class="n">_r_pl</span><span class="p">)</span>
+        <span class="c1"># LLH = _r.T @ self.preset.acquisition.invN.operands[0](_r)</span>
+
+        <span class="c1"># return _dot(_r.T, self.preset.acquisition.invN.operands[0](_r), self.preset.comm) + _r_pl.T @ self.preset.acquisition.invN.operands[1](_r_pl)</span>
+        <span class="k">return</span> <span class="n">LLH</span></div>
+
+
+
+<span class="k">class</span> <span class="nc">Chi2Parametric_alt</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">preset</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">A_blind</span><span class="p">,</span> <span class="n">icomp</span><span class="p">,</span> <span class="n">seenpix_wrap</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset</span> <span class="o">=</span> <span class="n">preset</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">d</span> <span class="o">=</span> <span class="n">d</span>
+        <span class="c1"># self.betamap = betamap</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">A_blind</span> <span class="o">=</span> <span class="n">A_blind</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">icomp</span> <span class="o">=</span> <span class="n">icomp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">Nsub</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">constant</span> <span class="o">=</span> <span class="kc">True</span>
+
+        <span class="c1"># if np.ndim(self.d) == 3:</span>
+        <span class="c1">#     self.nc, self.nf, self.nsnd = self.d.shape</span>
+        <span class="c1">#     self.constant = True</span>
+        <span class="c1"># else:</span>
+
+        <span class="c1"># if self.preset.qubic.params_qubic[&#39;instrument&#39;] == &#39;UWB&#39;:</span>
+        <span class="c1">#     pass</span>
+        <span class="c1"># else:</span>
+        <span class="c1">#     self.nf = self.d.shape[1]</span>
+        <span class="c1">#     self.d150 = self.d[:, :int(self.nf/2)].copy()</span>
+        <span class="c1">#     self.d220 = self.d[:, int(self.nf/2):int(self.nf)].copy()</span>
+        <span class="c1">#     _sh = self.d150.shape</span>
+        <span class="c1">#     _rsh = ReshapeOperator(self.d150.shape, (_sh[0]*_sh[1], _sh[2], _sh[3]))</span>
+        <span class="c1">#     self.d150 = _rsh(self.d150)</span>
+        <span class="c1">#     self.d220 = _rsh(self.d220)</span>
+        <span class="c1">#     self.dcmb150 = np.sum(self.d150[:, 0, :], axis=0).copy()</span>
+        <span class="c1">#     self.dfg150 = self.d150[:, 1, :].copy()</span>
+        <span class="c1">#     self.dcmb220 = np.sum(self.d220[:, 0, :], axis=0).copy()</span>
+        <span class="c1">#     self.dfg220 = self.d220[:, 1, :].copy()</span>
+        <span class="c1">#     self.npixnf, self.nc, self.nsnd = self.d150.shape</span>
+
+        <span class="c1">#     index_num = hp.ud_grade(self.preset.sky.seenpix_qubic, self.preset.comp.params_foregrounds[&#39;Dust&#39;][&#39;nside_fit&#39;])    #</span>
+        <span class="c1">#     index = np.where(index_num == True)[0]</span>
+        <span class="c1">#     self._index = index</span>
+        <span class="c1">#     self.seenpix_wrap = seenpix_wrap</span>
+        <span class="c1">#     self.constant = False</span>
+
+    <span class="k">def</span> <span class="nf">_get_mixingmatrix</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">mixingmatrix</span> <span class="o">=</span> <span class="n">mm</span><span class="o">.</span><span class="n">MixingMatrix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">icomp</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">constant</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">mixingmatrix</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">allnus</span><span class="p">,</span> <span class="o">*</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">mixingmatrix</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">allnus</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+
+<div class="viewcode-block" id="Chi2Parametric_alt.get_mixingmatrix_comp">
+<a class="viewcode-back" href="../../../../lib.MapMaking.ComponentMapMaking.Qcostfunc.html#lib.MapMaking.ComponentMapMaking.Qcostfunc.Chi2Parametric_alt.get_mixingmatrix_comp">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_mixingmatrix_comp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">A_comp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_mixingmatrix</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">A_blind</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">A_blind</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">A_comp</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">A_blind</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">ii</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]):</span>
+            <span class="n">A_blind</span><span class="p">[</span><span class="n">ii</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">ii</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">icomp</span><span class="p">]</span> <span class="o">=</span> <span class="n">A_comp</span><span class="p">[</span>
+                <span class="n">ii</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">ii</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">fsub</span>
+            <span class="p">]</span>
+        <span class="k">return</span> <span class="n">A_blind</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">constant</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;instrument&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;DB&quot;</span><span class="p">:</span>
+                <span class="c1">### CMB contribution</span>
+                <span class="n">tod_cmb_150</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+                <span class="n">tod_cmb_220</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+                <span class="c1">###Â FG contributions</span>
+                <span class="n">tod_comp_150</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">tod_comp_220</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">d</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+                <span class="c1">### Describe the data as d = d_cmb + A . d_fg</span>
+                <span class="n">d_150</span> <span class="o">=</span> <span class="n">tod_cmb_150</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+                <span class="n">d_220</span> <span class="o">=</span> <span class="n">tod_cmb_220</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">A</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_mixingmatrix_comp</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">):</span>
+                    <span class="n">d_150</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)][</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">tod_comp_150</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                    <span class="n">d_220</span> <span class="o">+=</span> <span class="p">(</span>
+                        <span class="n">A</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)][</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">tod_comp_220</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                    <span class="p">)</span>
+
+            <span class="c1">### Residuals</span>
+            <span class="n">_r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">d_150</span><span class="p">,</span> <span class="n">d_220</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_qubic</span>
+
+            <span class="c1">### Chi^2</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">chi2</span> <span class="o">=</span> <span class="n">_dot</span><span class="p">(</span>
+                <span class="n">_r</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">0</span><span class="p">](</span><span class="n">_r</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span>
+            <span class="p">)</span>
+
+        <span class="c1"># else:</span>
+        <span class="c1">#     if self.seenpix_wrap is None:</span>
+        <span class="c1">#         self.betamap[self._index, 0] = x.copy()</span>
+        <span class="c1">#     else:</span>
+        <span class="c1">#         self.betamap[self.seenpix_wrap, 0] = x.copy()</span>
+
+        <span class="c1">#     if self.preset.qubic.params_qubic[&#39;instrument&#39;] == &#39;UWB&#39;:</span>
+        <span class="c1">#         ysim = np.zeros(self.nsnd)</span>
+        <span class="c1">#         for ic in range(self.nc):</span>
+        <span class="c1">#             for ip, p in enumerate(self._index):</span>
+        <span class="c1">#                 ysim += A[ip, :, ic] @ self.d[ip, :, ic]</span>
+        <span class="c1">#     else:</span>
+        <span class="c1">#         ysim = np.zeros(int(self.nsnd*2))</span>
+        <span class="c1">#         Atot = self._get_mixingmatrix(self.betamap[self._index])</span>
+        <span class="c1">#         A150 = Atot[:, 0, :int(self.nf/2), 1].ravel()</span>
+        <span class="c1">#         A220 = Atot[:, 0, int(self.nf/2):int(self.nf), 1].ravel()</span>
+
+        <span class="c1">#         ysim[:int(self.nsnd)] = (A150 @ self.dfg150) + self.dcmb150</span>
+        <span class="c1">#         ysim[int(self.nsnd):int(self.nsnd*2)] = (A220 @ self.dfg220) + self.dcmb220</span>
+
+        <span class="c1"># _r = ysim - self.preset.acquisition.TOD_qubic</span>
+        <span class="c1"># H_planck = self.preset.qubic.joint_out.get_operator(self.betamap,</span>
+        <span class="c1">#                                             gain=self.preset.gain.gain_iter,</span>
+        <span class="c1">#                                             fwhm=self.preset.acquisition.fwhm_mapmaking,</span>
+        <span class="c1">#                                             nu_co=self.preset.comp.nu_co).operands[1]</span>
+        <span class="c1"># tod_pl_s = H_planck(self.preset.comp.components_iter)</span>
+
+        <span class="c1"># _r_pl = self.preset.acquisition.TOD_external - tod_pl_s</span>
+        <span class="c1"># LLH = _dot(_r.T, self.preset.acquisition.invN.operands[0](_r), self.preset.comm) + _r_pl.T @ self.preset.acquisition.invN.operands[1](_r_pl)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">chi2</span></div>
+
+
+
+<div class="viewcode-block" id="Chi2Blind">
+<a class="viewcode-back" href="../../../../lib.MapMaking.ComponentMapMaking.Qcostfunc.html#lib.MapMaking.ComponentMapMaking.Qcostfunc.Chi2Blind">[docs]</a>
+<span class="k">class</span> <span class="nc">Chi2Blind</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">preset</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">preset</span> <span class="o">=</span> <span class="n">preset</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">components_out</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nsub</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nsnd</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">ndets</span>
+            <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nsamples</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">joint_out</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">nsub</span>
+
+    <span class="k">def</span> <span class="nf">_reshape_A</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">nf</span><span class="p">,</span> <span class="n">nc</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">x_reshape</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nc</span><span class="p">):</span>
+            <span class="n">x_reshape</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x_reshape</span><span class="p">,</span> <span class="n">x</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">ravel</span><span class="p">())</span>
+        <span class="k">return</span> <span class="n">x_reshape</span>
+
+    <span class="k">def</span> <span class="nf">_fill_A</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="n">fsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">A</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]):</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">A</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">x</span><span class="p">[</span><span class="n">k</span><span class="p">]]</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">)</span>
+                <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">A</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_reshape_A_transpose</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="n">fsub</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">x_reshape</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comp</span><span class="o">.</span><span class="n">params_foregrounds</span><span class="p">[</span><span class="s2">&quot;bin_mixing_matrix&quot;</span><span class="p">]):</span>
+            <span class="n">x_reshape</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">fsub</span> <span class="p">:</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">*</span> <span class="n">fsub</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x_reshape</span>
+
+    <span class="k">def</span> <span class="nf">_qu</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">tod_comp</span><span class="p">):</span>
+        <span class="c1">### Fill mixing matrix if fsub different to 1</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fill_A</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="c1">### CMB contribution</span>
+        <span class="n">tod_cmb_150</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tod_comp</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">tod_cmb_220</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tod_comp</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;instrument&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;DB&quot;</span><span class="p">:</span>
+
+            <span class="c1">### Mixing matrix element for each nus</span>
+            <span class="n">A150</span> <span class="o">=</span> <span class="n">x</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">A220</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="c1">###Â FG contributions</span>
+            <span class="n">tod_comp_150</span> <span class="o">=</span> <span class="n">tod_comp</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">tod_comp_220</span> <span class="o">=</span> <span class="n">tod_comp</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="c1">### Describe the data as d = d_cmb + A . d_fg</span>
+            <span class="n">d_150</span> <span class="o">=</span> <span class="n">tod_cmb_150</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>  <span class="c1"># + A150 @ tod_comp_150</span>
+            <span class="n">d_220</span> <span class="o">=</span> <span class="n">tod_cmb_220</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>  <span class="c1"># + A220 @ tod_comp_220</span>
+            <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+
+            <span class="c1">### Recombine data with MM amplitude</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">d_150</span> <span class="o">+=</span> <span class="n">A150</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">*</span> <span class="n">tod_comp_150</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span>
+                    <span class="n">d_220</span> <span class="o">+=</span> <span class="n">A220</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">*</span> <span class="n">tod_comp_220</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span>
+                    <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="c1">### Residuals</span>
+            <span class="n">_r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">d_150</span><span class="p">,</span> <span class="n">d_220</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_qubic</span>
+
+            <span class="c1">### Chi^2</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">chi2</span> <span class="o">=</span> <span class="n">_dot</span><span class="p">(</span>
+                <span class="n">_r</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">0</span><span class="p">](</span><span class="n">_r</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">chi2</span>
+
+    <span class="k">def</span> <span class="nf">_qu_alt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">tod_comp</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">icomp</span><span class="p">):</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reshape_A_transpose</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">qubic</span><span class="o">.</span><span class="n">params_qubic</span><span class="p">[</span><span class="s2">&quot;instrument&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;DB&quot;</span><span class="p">:</span>
+            <span class="c1">### CMB contribution</span>
+            <span class="n">tod_cmb_150</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tod_comp</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">tod_cmb_220</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">tod_comp</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+            <span class="c1">###Â FG contributions</span>
+            <span class="n">tod_comp_150</span> <span class="o">=</span> <span class="n">tod_comp</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">tod_comp_220</span> <span class="o">=</span> <span class="n">tod_comp</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="c1">### Describe the data as d = d_cmb + A . d_fg</span>
+            <span class="n">d_150</span> <span class="o">=</span> <span class="n">tod_cmb_150</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="n">d_220</span> <span class="o">=</span> <span class="n">tod_cmb_220</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nc</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">==</span> <span class="n">icomp</span><span class="p">:</span>
+                        <span class="n">d_150</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">tod_comp_150</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                        <span class="n">d_220</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">tod_comp_220</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">d_150</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)][</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">tod_comp_150</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                        <span class="n">d_220</span> <span class="o">+=</span> <span class="p">(</span>
+                            <span class="n">A</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nsub</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)][</span><span class="n">j</span><span class="p">]</span>
+                            <span class="o">*</span> <span class="n">tod_comp_220</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span>
+                        <span class="p">)</span>
+
+        <span class="c1">### Residuals</span>
+        <span class="n">_r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">d_150</span><span class="p">,</span> <span class="n">d_220</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">TOD_qubic</span>
+
+        <span class="c1">### Chi^2</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">chi2</span> <span class="o">=</span> <span class="n">_dot</span><span class="p">(</span>
+            <span class="n">_r</span><span class="o">.</span><span class="n">T</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">acquisition</span><span class="o">.</span><span class="n">invN</span><span class="o">.</span><span class="n">operands</span><span class="p">[</span><span class="mi">0</span><span class="p">](</span><span class="n">_r</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">preset</span><span class="o">.</span><span class="n">comm</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">chi2</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

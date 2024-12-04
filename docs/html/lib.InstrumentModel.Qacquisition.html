@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.InstrumentModel.Qacquisition module &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="_static/jquery.js?v=5d32c60e"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="_static/doctools.js?v=9a2dae69"></script>
+        <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="lib.InstrumentModel.Qinstrument module" href="lib.InstrumentModel.Qinstrument.html" />
+    <link rel="prev" title="lib.InstrumentModel package" href="lib.InstrumentModel.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="lib.html">lib package</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="lib.html#subpackages">Subpackages</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="lib.Calibration.html">lib.Calibration package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.Fitting.html">lib.Fitting package</a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="lib.InstrumentModel.html">lib.InstrumentModel package</a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="lib.InstrumentModel.html#submodules">Submodules</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="lib.MapMaking.html">lib.MapMaking package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="lib.obsolete.html">lib.obsolete package</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="lib.html#submodules">Submodules</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="lib.html">lib package</a></li>
+          <li class="breadcrumb-item"><a href="lib.InstrumentModel.html">lib.InstrumentModel package</a></li>
+      <li class="breadcrumb-item active">lib.InstrumentModel.Qacquisition module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/lib.InstrumentModel.Qacquisition.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-lib.InstrumentModel.Qacquisition">
+<span id="lib-instrumentmodel-qacquisition-module"></span><h1>lib.InstrumentModel.Qacquisition module<a class="headerlink" href="#module-lib.InstrumentModel.Qacquisition" title="Link to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.JointAcquisitionComponentsMapMaking">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">JointAcquisitionComponentsMapMaking</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nsub</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus_external</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nintegr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_co</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#JointAcquisitionComponentsMapMaking"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.JointAcquisitionComponentsMapMaking" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_invntt_operator</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_operator</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.JointAcquisitionComponentsMapMaking.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fact</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#JointAcquisitionComponentsMapMaking.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.JointAcquisitionComponentsMapMaking.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.JointAcquisitionComponentsMapMaking.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_co</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#JointAcquisitionComponentsMapMaking.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.JointAcquisitionComponentsMapMaking.get_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.JointAcquisitionFrequencyMapMaking">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">JointAcquisitionFrequencyMapMaking</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nrec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nsub</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#JointAcquisitionFrequencyMapMaking"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.JointAcquisitionFrequencyMapMaking" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_invntt_operator</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_operator</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.JointAcquisitionFrequencyMapMaking.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">weight_planck</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beam_correction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenpix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#JointAcquisitionFrequencyMapMaking.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.JointAcquisitionFrequencyMapMaking.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.JointAcquisitionFrequencyMapMaking.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenpix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#JointAcquisitionFrequencyMapMaking.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.JointAcquisitionFrequencyMapMaking.get_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.OtherDataParametric">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">OtherDataParametric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nside</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comps</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nintegr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#OtherDataParametric"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.OtherDataParametric" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_invntt_operator</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_noise</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_operator</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.OtherDataParametric.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fact</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#OtherDataParametric.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.OtherDataParametric.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.OtherDataParametric.get_noise">
+<span class="sig-name descname"><span class="pre">get_noise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fact</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenpix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#OtherDataParametric.get_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.OtherDataParametric.get_noise" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.OtherDataParametric.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convolution</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">myfwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_co</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#OtherDataParametric.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.OtherDataParametric.get_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.PlanckAcquisition">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">PlanckAcquisition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">band</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scene</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#PlanckAcquisition"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.PlanckAcquisition" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_invntt_operator</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_map</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_noise</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_operator</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.PlanckAcquisition.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beam_correction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenpix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#PlanckAcquisition.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.PlanckAcquisition.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.PlanckAcquisition.get_map">
+<span class="sig-name descname"><span class="pre">get_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nu_min</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_max</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nintegr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sky_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#PlanckAcquisition.get_map"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.PlanckAcquisition.get_map" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.PlanckAcquisition.get_noise">
+<span class="sig-name descname"><span class="pre">get_noise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#PlanckAcquisition.get_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.PlanckAcquisition.get_noise" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.PlanckAcquisition.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nintegr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#PlanckAcquisition.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.PlanckAcquisition.get_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">QubicAcquisition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">instrument</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scene</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Acquisition</span></code></p>
+<p>The QubicAcquisition class, which combines the instrument, sampling and
+scene models.</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_add_grids_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_add_grids_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_add_grids_operator</span></code></a>()</p></td>
+<td><p>Return operator to add signal from detector pairs.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_aperture_integration_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_aperture_integration_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_aperture_integration_operator</span></code></a>()</p></td>
+<td><p>Integrate flux density in the telescope aperture.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_convolution_peak_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_convolution_peak_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_convolution_peak_operator</span></code></a>(**keywords)</p></td>
+<td><p>Return an operator that convolves the Healpix sky by the gaussian kernel that, if used in conjonction with the peak sampling operator, best approximates the synthetic beam.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_coverage" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_coverage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_coverage</span></code></a>()</p></td>
+<td><p>Return the acquisition scene coverage as given by H.T(1), normalized so that its integral over the sky is the number of detectors times the duration of the acquisition.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_detector_integration_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_detector_integration_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_detector_integration_operator</span></code></a>()</p></td>
+<td><p>Integrate flux density in detector solid angles.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_detector_response_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_detector_response_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_detector_response_operator</span></code></a>()</p></td>
+<td><p>Return the operator for the bolometer responses.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_distribution_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_distribution_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_distribution_operator</span></code></a>()</p></td>
+<td><p>Return the MPI distribution operator.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_filter_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_filter_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_filter_operator</span></code></a>()</p></td>
+<td><p>Return the filter operator.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_hitmap" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_hitmap"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_hitmap</span></code></a>([nside])</p></td>
+<td><p>Return a healpy map whose values are the number of times a pointing hits the pixel.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_hwp_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_hwp_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_hwp_operator</span></code></a>()</p></td>
+<td><p>Return the operator for the bolometer responses.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_invntt_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_invntt_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_invntt_operator</span></code></a>(det_noise, photon_noise)</p></td>
+<td><p>Return the inverse time-time noise correlation matrix as an Operator.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_noise" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_noise"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_noise</span></code></a>(det_noise, photon_noise[, seed, out])</p></td>
+<td><p>Return the noise realization according the instrument's noise model.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_observation" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_observation"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_observation</span></code></a>(map[, convolution, noiseless])</p></td>
+<td><p>tod = map2tod(acquisition, map) tod, convolved_map = map2tod(acquisition, map, convolution=True) :type map:  :param map: Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)             with npix = 12 * nside**2 :type map: I, QU or IQU maps :type noiseless:  :param noiseless: If True, no noise is added to the observation. :type noiseless: boolean, optional :type convolution:  :param convolution: Set to True to convolve the input map by a gaussian and return it. :type convolution: boolean, optional.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator</span></code></a>()</p></td>
+<td><p>Return the operator of the acquisition.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator_nbytes</span></code>()</p></td>
+<td><p>Return the number of bytes required to store the acquisition model as an operator.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_polarizer_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_polarizer_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_polarizer_operator</span></code></a>()</p></td>
+<td><p>Return operator for the polarizer grid.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_projection_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_projection_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_projection_operator</span></code></a>([verbose])</p></td>
+<td><p>Return the projection operator for the peak sampling.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_subtract_grids_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_subtract_grids_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_subtract_grids_operator</span></code></a>()</p></td>
+<td><p>Return operator to subtract signal from detector pairs.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_unit_conversion_operator" title="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_unit_conversion_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_unit_conversion_operator</span></code></a>()</p></td>
+<td><p>Convert sky temperature into W / m^2 / Hz.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">pack</span></code>(x[, out, copy])</p></td>
+<td><p>Convert a multi-dimensional array into a 1-dimensional array which only includes the selected components, potentially ordered according to a given ordering.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot</span></code>([map, header, new_figure, percentile])</p></td>
+<td><p>map : ndarray of dim 2</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">unpack</span></code>(x[, out, missing_value, copy])</p></td>
+<td><p>Convert a 1-dimensional array into a multi-dimensional array which includes the non-selected components, mimicking the multi-dimensional layout.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_diag_invntt_operator</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_preconditioner</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_add_grids_operator">
+<span class="sig-name descname"><span class="pre">get_add_grids_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_add_grids_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_add_grids_operator" title="Link to this definition"></a></dt>
+<dd><p>Return operator to add signal from detector pairs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_aperture_integration_operator">
+<span class="sig-name descname"><span class="pre">get_aperture_integration_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_aperture_integration_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_aperture_integration_operator" title="Link to this definition"></a></dt>
+<dd><p>Integrate flux density in the telescope aperture.
+Convert signal from W / m^2 / Hz into W / Hz.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_convolution_peak_operator">
+<span class="sig-name descname"><span class="pre">get_convolution_peak_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">keywords</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_convolution_peak_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_convolution_peak_operator" title="Link to this definition"></a></dt>
+<dd><p>Return an operator that convolves the Healpix sky by the gaussian
+kernel that, if used in conjonction with the peak sampling operator,
+best approximates the synthetic beam.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_coverage">
+<span class="sig-name descname"><span class="pre">get_coverage</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_coverage"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_coverage" title="Link to this definition"></a></dt>
+<dd><p>Return the acquisition scene coverage as given by H.T(1), normalized
+so that its integral over the sky is the number of detectors times
+the duration of the acquisition.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_detector_integration_operator">
+<span class="sig-name descname"><span class="pre">get_detector_integration_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_detector_integration_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_detector_integration_operator" title="Link to this definition"></a></dt>
+<dd><p>Integrate flux density in detector solid angles.
+Convert W / sr into W.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_detector_response_operator">
+<span class="sig-name descname"><span class="pre">get_detector_response_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_detector_response_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_detector_response_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the operator for the bolometer responses.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_diag_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_diag_invntt_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_diag_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_diag_invntt_operator" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_distribution_operator">
+<span class="sig-name descname"><span class="pre">get_distribution_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_distribution_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_distribution_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the MPI distribution operator.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_filter_operator">
+<span class="sig-name descname"><span class="pre">get_filter_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_filter_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_filter_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the filter operator.
+Convert units from W/Hz to W.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_hitmap">
+<span class="sig-name descname"><span class="pre">get_hitmap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nside</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_hitmap"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_hitmap" title="Link to this definition"></a></dt>
+<dd><p>Return a healpy map whose values are the number of times a pointing
+hits the pixel.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_hwp_operator">
+<span class="sig-name descname"><span class="pre">get_hwp_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_hwp_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_hwp_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the operator for the bolometer responses.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">det_noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">photon_noise</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the inverse time-time noise correlation matrix as an Operator.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_noise">
+<span class="sig-name descname"><span class="pre">get_noise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">det_noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">photon_noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_noise" title="Link to this definition"></a></dt>
+<dd><p>Return the noise realization according the instrument’s noise model.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>out</strong> (<em>ndarray</em><em>, </em><em>optional</em>) – Placeholder for the output noise.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_observation">
+<span class="sig-name descname"><span class="pre">get_observation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">map</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convolution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noiseless</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_observation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_observation" title="Link to this definition"></a></dt>
+<dd><p>tod = map2tod(acquisition, map)
+tod, convolved_map = map2tod(acquisition, map, convolution=True)
+:type map: 
+:param map: Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)</p>
+<blockquote>
+<div><p>with npix = 12 * nside**2</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>noiseless</strong> (<em>boolean</em><em>, </em><em>optional</em>) – If True, no noise is added to the observation.</p></li>
+<li><p><strong>convolution</strong> (<em>boolean</em><em>, </em><em>optional</em>) – Set to True to convolve the input map by a gaussian and return it.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>tod</strong> (<em>array</em>) – The Time-Ordered-Data of shape (ndetectors, ntimes).</p></li>
+<li><p><strong>convolved_map</strong> (<em>array, optional</em>) – The convolved map, if the convolution keyword is set.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the operator of the acquisition. Note that the operator is only
+linear if the scene temperature is differential (absolute=False).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_polarizer_operator">
+<span class="sig-name descname"><span class="pre">get_polarizer_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_polarizer_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_polarizer_operator" title="Link to this definition"></a></dt>
+<dd><p>Return operator for the polarizer grid.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_preconditioner">
+<span class="sig-name descname"><span class="pre">get_preconditioner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cov</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_preconditioner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_preconditioner" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_projection_operator">
+<span class="sig-name descname"><span class="pre">get_projection_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_projection_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_projection_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the projection operator for the peak sampling.
+Convert units from W to W/sr.
+:type verbose: 
+:param verbose: If true, display information about the memory allocation.
+:type verbose: bool, optional</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_subtract_grids_operator">
+<span class="sig-name descname"><span class="pre">get_subtract_grids_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_subtract_grids_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_subtract_grids_operator" title="Link to this definition"></a></dt>
+<dd><p>Return operator to subtract signal from detector pairs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicAcquisition.get_unit_conversion_operator">
+<span class="sig-name descname"><span class="pre">get_unit_conversion_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicAcquisition.get_unit_conversion_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicAcquisition.get_unit_conversion_operator" title="Link to this definition"></a></dt>
+<dd><p>Convert sky temperature into W / m^2 / Hz.
+If the scene has been initialised with the ‘absolute’ keyword, the
+scene is assumed to include the CMB background and the fluctuations
+(in Kelvin) and the operator follows the non-linear Planck law.
+Otherwise, the scene only includes the fluctuations (in microKelvin)
+and the operator is linear (i.e. the output also corresponds to power
+fluctuations).</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicDualBand">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">QubicDualBand</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dictionary</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsub</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nrec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_co</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicDualBand"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicDualBand" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicMultiAcquisitions" title="lib.InstrumentModel.Qacquisition.QubicMultiAcquisitions"><code class="xref py py-class docutils literal notranslate"><span class="pre">QubicMultiAcquisitions</span></code></a></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicDualBand.get_invntt_operator" title="lib.InstrumentModel.Qacquisition.QubicDualBand.get_invntt_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_invntt_operator</span></code></a>()</p></td>
+<td><p>Method to compute the inverse noise covariance matrix in time-domain.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicDualBand.get_operator" title="lib.InstrumentModel.Qacquisition.QubicDualBand.get_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator</span></code></a>([A, gain, fwhm, seenpix])</p></td>
+<td><p>Method to generate the pointing matrix.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicDualBand.sum_over_band" title="lib.InstrumentModel.Qacquisition.QubicDualBand.sum_over_band"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sum_over_band</span></code></a>(h, algo[, gain])</p></td>
+<td><p>Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicDualBand.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicDualBand.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicDualBand.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd><p>Method to compute the inverse noise covariance matrix in time-domain.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicDualBand.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenpix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicDualBand.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicDualBand.get_operator" title="Link to this definition"></a></dt>
+<dd><p>Method to generate the pointing matrix.</p>
+<dl class="simple">
+<dt>mixing_matrix<span class="classifier">array like containing mixing matrix elements. If the elements of the mixing matrix are constant across the sky,</span></dt><dd><p>mixing_matrix.shape = (nfreq, ncomp)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicDualBand.sum_over_band">
+<span class="sig-name descname"><span class="pre">sum_over_band</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">algo</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicDualBand.sum_over_band"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicDualBand.sum_over_band" title="Link to this definition"></a></dt>
+<dd><p>Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">QubicFullBandSystematic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nsub</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nrec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'DB'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_co</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">effective_duration150</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">effective_duration220</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicFullBandSystematic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition" title="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition"><code class="xref py py-class docutils literal notranslate"><span class="pre">QubicPolyAcquisition</span></code></a></p>
+<p>Instance to compute QUBIC operator.</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_PySM_maps" title="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_PySM_maps"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_PySM_maps</span></code></a>(config[, r, Alens])</p></td>
+<td><p>Read configuration dictionary which contains every components adn the model.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_components_operator" title="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_components_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_components_operator</span></code></a>(beta, nu[, Amm, active])</p></td>
+<td><p>Create a mixing matrix operator for a given value of spectral index</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_coverage</span></code>()</p></td>
+<td><p>Return an array of monochromatic coverage maps, one for each of subacquisitions</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_coverage_mask</span></code>(coverages[, covlim])</p></td>
+<td><p>Return a healpix boolean map with True on the pixels where ALL the</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_hwp_operator" title="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_hwp_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_hwp_operator</span></code></a>(angle_hwp)</p></td>
+<td><p>Return the rotation matrix for the half-wave plate.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_invntt_operator" title="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_invntt_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_invntt_operator</span></code></a>()</p></td>
+<td><p>Method to compute the inverse noise covariance matrix in time-domain.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_operator" title="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator</span></code></a>([beta, Amm, angle_hwp, gain, fwhm])</p></td>
+<td><p>Return an sum of operators for subacquisitions</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator_to_make_TOD</span></code>()</p></td>
+<td><p>Return a BlockRowOperator of subacquisition operators In polychromatic mode it is only applied to produce the TOD To reconstruct maps one should use the get_operator function</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.sum_over_band" title="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.sum_over_band"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sum_over_band</span></code></a>(h[, gain])</p></td>
+<td><p>Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">warnings</span></code>(d)</p></td>
+<td><p>This method prevent to you that beam is not a good approximation in the 220 GHz band.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_noise</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_PySM_maps">
+<span class="sig-name descname"><span class="pre">get_PySM_maps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Alens</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicFullBandSystematic.get_PySM_maps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_PySM_maps" title="Link to this definition"></a></dt>
+<dd><p>Read configuration dictionary which contains every components adn the model.</p>
+<p>Example : d = {‘cmb’:42, ‘dust’:’d0’, ‘synchrotron’:’s0’}</p>
+<p>The CMB is randomly generated fram specific seed. Astrophysical foregrounds come from PySM 3.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_components_operator">
+<span class="sig-name descname"><span class="pre">get_components_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Amm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">active</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicFullBandSystematic.get_components_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_components_operator" title="Link to this definition"></a></dt>
+<dd><p>Create a mixing matrix operator for a given value of spectral index</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_hwp_operator">
+<span class="sig-name descname"><span class="pre">get_hwp_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">angle_hwp</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicFullBandSystematic.get_hwp_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_hwp_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the rotation matrix for the half-wave plate.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicFullBandSystematic.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd><p>Method to compute the inverse noise covariance matrix in time-domain.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Amm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angle_hwp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicFullBandSystematic.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.get_operator" title="Link to this definition"></a></dt>
+<dd><p>Return an sum of operators for subacquisitions</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.sum_over_band">
+<span class="sig-name descname"><span class="pre">sum_over_band</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicFullBandSystematic.sum_over_band"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicFullBandSystematic.sum_over_band" title="Link to this definition"></a></dt>
+<dd><p>Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicIntegrated">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">QubicIntegrated</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nsub</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nrec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicIntegrated"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition" title="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition"><code class="xref py py-class docutils literal notranslate"><span class="pre">QubicPolyAcquisition</span></code></a></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_TOD" title="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_TOD"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_TOD</span></code></a>(skyconfig, beta[, convolution, ...])</p></td>
+<td><p>Method which allow to compute QUBIC TOD for a given skyconfig according to a given beta.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_coverage" title="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_coverage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_coverage</span></code></a>()</p></td>
+<td><p>Return an array of monochromatic coverage maps, one for each of subacquisitions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_coverage_mask</span></code>(coverages[, covlim])</p></td>
+<td><p>Return a healpix boolean map with True on the pixels where ALL the</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_invntt_operator" title="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_invntt_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_invntt_operator</span></code></a>(det_noise, photon_noise)</p></td>
+<td><p>Return the inverse noise covariance matrix as operator</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_noise" title="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_noise"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_noise</span></code></a>(det_noise, photon_noise[, seed])</p></td>
+<td><p>Method which compute the noise of QUBIC.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_operator" title="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator</span></code></a>([convolution, myfwhm])</p></td>
+<td><p>Return an sum of operators for subacquisitions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator_to_make_TOD</span></code>()</p></td>
+<td><p>Return a BlockRowOperator of subacquisition operators In polychromatic mode it is only applied to produce the TOD To reconstruct maps one should use the get_operator function</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">warnings</span></code>(d)</p></td>
+<td><p>This method prevent to you that beam is not a good approximation in the 220 GHz band.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>bandpass_correction</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicIntegrated.bandpass_correction">
+<span class="sig-name descname"><span class="pre">bandpass_correction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">H</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tod</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">map_ref</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sed</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicIntegrated.bandpass_correction"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.bandpass_correction" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_TOD">
+<span class="sig-name descname"><span class="pre">get_TOD</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">skyconfig</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">convolution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">myfwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bandpass_correction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicIntegrated.get_TOD"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_TOD" title="Link to this definition"></a></dt>
+<dd><p>Method which allow to compute QUBIC TOD for a given skyconfig according to a given beta.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_coverage">
+<span class="sig-name descname"><span class="pre">get_coverage</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicIntegrated.get_coverage"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_coverage" title="Link to this definition"></a></dt>
+<dd><p>Return an array of monochromatic coverage maps, one for each of subacquisitions</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">det_noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">photon_noise</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicIntegrated.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the inverse noise covariance matrix as operator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_noise">
+<span class="sig-name descname"><span class="pre">get_noise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">det_noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">photon_noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicIntegrated.get_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_noise" title="Link to this definition"></a></dt>
+<dd><p>Method which compute the noise of QUBIC.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicIntegrated.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">convolution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">myfwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicIntegrated.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicIntegrated.get_operator" title="Link to this definition"></a></dt>
+<dd><p>Return an sum of operators for subacquisitions</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicMultiAcquisitions">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">QubicMultiAcquisitions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dictionary</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsub</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nrec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_co</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicMultiAcquisitions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicMultiAcquisitions" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Instance to define the multi-frequency instrument.</p>
+<dl class="simple">
+<dt>Input<span class="classifier">- dictionary</span><span class="classifier">contains QUBIC informations</span></dt><dd><ul class="simple">
+<li><p>Nsub : Number of sub-bands for integrating the physical bandwidth</p></li>
+<li><p>Nrec : Number of reconstructed maps (in the case of FMM)</p></li>
+<li><p>comps : List of astrophysical components (CMB, Dust, …)</p></li>
+<li><p>H : List of pointing matrix if not already computed</p></li>
+<li><p>nu_co : Frequency of a line emission</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">QubicPolyAcquisition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">multiinstrument</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scene</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicPolyAcquisition"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_coverage" title="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_coverage"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_coverage</span></code></a>()</p></td>
+<td><p>Return an array of monochromatic coverage maps, one for each of subacquisitions</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_coverage_mask" title="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_coverage_mask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_coverage_mask</span></code></a>(coverages[, covlim])</p></td>
+<td><p>Return a healpix boolean map with True on the pixels where ALL the</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_invntt_operator" title="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_invntt_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_invntt_operator</span></code></a>()</p></td>
+<td><p>Return the inverse noise covariance matrix as operator</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_operator" title="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator</span></code></a>()</p></td>
+<td><p>Return an sum of operators for subacquisitions</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_operator_to_make_TOD" title="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_operator_to_make_TOD"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator_to_make_TOD</span></code></a>()</p></td>
+<td><p>Return a BlockRowOperator of subacquisition operators In polychromatic mode it is only applied to produce the TOD To reconstruct maps one should use the get_operator function</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.warnings" title="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.warnings"><code class="xref py py-obj docutils literal notranslate"><span class="pre">warnings</span></code></a>(d)</p></td>
+<td><p>This method prevent to you that beam is not a good approximation in the 220 GHz band.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_noise</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_coverage">
+<span class="sig-name descname"><span class="pre">get_coverage</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicPolyAcquisition.get_coverage"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_coverage" title="Link to this definition"></a></dt>
+<dd><p>Return an array of monochromatic coverage maps, one for each of subacquisitions</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_coverage_mask">
+<span class="sig-name descname"><span class="pre">get_coverage_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coverages</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">covlim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicPolyAcquisition.get_coverage_mask"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_coverage_mask" title="Link to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Return a healpix boolean map with True on the pixels where ALL the</dt><dd><p>subcoverages are above covlim * subcoverage.max()</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicPolyAcquisition.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd><p>Return the inverse noise covariance matrix as operator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_noise">
+<span class="sig-name descname"><span class="pre">get_noise</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicPolyAcquisition.get_noise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_noise" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicPolyAcquisition.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_operator" title="Link to this definition"></a></dt>
+<dd><p>Return an sum of operators for subacquisitions</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_operator_to_make_TOD">
+<span class="sig-name descname"><span class="pre">get_operator_to_make_TOD</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicPolyAcquisition.get_operator_to_make_TOD"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.get_operator_to_make_TOD" title="Link to this definition"></a></dt>
+<dd><p>Return a BlockRowOperator of subacquisition operators
+In polychromatic mode it is only applied to produce the TOD
+To reconstruct maps one should use the get_operator function</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.warnings">
+<span class="sig-name descname"><span class="pre">warnings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicPolyAcquisition.warnings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicPolyAcquisition.warnings" title="Link to this definition"></a></dt>
+<dd><p>This method prevent to you that beam is not a good
+approximation in the 220 GHz band.
+Also can be used to add new warnings when acquisition is created in
+specific configuration.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicUltraWideBand">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">QubicUltraWideBand</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dictionary</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsub</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nrec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">comps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu_co</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicUltraWideBand"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicUltraWideBand" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicMultiAcquisitions" title="lib.InstrumentModel.Qacquisition.QubicMultiAcquisitions"><code class="xref py py-class docutils literal notranslate"><span class="pre">QubicMultiAcquisitions</span></code></a></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicUltraWideBand.get_invntt_operator" title="lib.InstrumentModel.Qacquisition.QubicUltraWideBand.get_invntt_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_invntt_operator</span></code></a>()</p></td>
+<td><p>Method to compute the inverse noise covariance matrix in time-domain.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicUltraWideBand.get_operator" title="lib.InstrumentModel.Qacquisition.QubicUltraWideBand.get_operator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_operator</span></code></a>([A, gain, fwhm])</p></td>
+<td><p>Method to generate the pointing matrix.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.InstrumentModel.Qacquisition.QubicUltraWideBand.sum_over_band" title="lib.InstrumentModel.Qacquisition.QubicUltraWideBand.sum_over_band"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sum_over_band</span></code></a>(h, algo[, gain])</p></td>
+<td><p>Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicUltraWideBand.get_invntt_operator">
+<span class="sig-name descname"><span class="pre">get_invntt_operator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicUltraWideBand.get_invntt_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicUltraWideBand.get_invntt_operator" title="Link to this definition"></a></dt>
+<dd><p>Method to compute the inverse noise covariance matrix in time-domain.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicUltraWideBand.get_operator">
+<span class="sig-name descname"><span class="pre">get_operator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicUltraWideBand.get_operator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicUltraWideBand.get_operator" title="Link to this definition"></a></dt>
+<dd><p>Method to generate the pointing matrix.</p>
+<dl class="simple">
+<dt>mixing_matrix<span class="classifier">array like containing mixing matrix elements. If the elements of the mixing matrix are constant across the sky,</span></dt><dd><p>mixing_matrix.shape = (nfreq, ncomp)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.QubicUltraWideBand.sum_over_band">
+<span class="sig-name descname"><span class="pre">sum_over_band</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">algo</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#QubicUltraWideBand.sum_over_band"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.QubicUltraWideBand.sum_over_band" title="Link to this definition"></a></dt>
+<dd><p>Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.arcmin2rad">
+<span class="sig-name descname"><span class="pre">arcmin2rad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arcmin</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#arcmin2rad"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.arcmin2rad" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.InstrumentModel.Qacquisition.create_array">
+<span class="sig-name descname"><span class="pre">create_array</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nside</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/lib/InstrumentModel/Qacquisition.html#create_array"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lib.InstrumentModel.Qacquisition.create_array" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="lib.InstrumentModel.html" class="btn btn-neutral float-left" title="lib.InstrumentModel package" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="lib.InstrumentModel.Qinstrument.html" class="btn btn-neutral float-right" title="lib.InstrumentModel.Qinstrument module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

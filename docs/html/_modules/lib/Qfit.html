@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Qfit &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+        <script src="../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.Qfit</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.Qfit</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">os</span>
+
+<span class="kn">import</span> <span class="nn">emcee</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">yaml</span>
+<span class="kn">from</span> <span class="nn">multiprocess</span> <span class="kn">import</span> <span class="n">Pool</span>
+<span class="kn">from</span> <span class="nn">schwimmbad</span> <span class="kn">import</span> <span class="n">MPIPool</span>
+
+<span class="n">__path__</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)))</span>
+
+
+<div class="viewcode-block" id="FitEllSpace">
+<a class="viewcode-back" href="../../lib.Qfit.html#lib.Qfit.FitEllSpace">[docs]</a>
+<span class="k">class</span> <span class="nc">FitEllSpace</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">yerr</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">yerr</span> <span class="o">=</span> <span class="n">yerr</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">__path__</span> <span class="o">+</span> <span class="s2">&quot;/FMM/fitting/fit_params.yaml&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">stream</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">stream</span><span class="p">)</span>
+
+        <span class="c1">### Check if the user is giving the right dimensions</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_check_shapein</span><span class="p">()</span>
+
+        <span class="c1">### Keep only the upper part of the matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reshape_spectra</span><span class="p">()</span>
+
+        <span class="c1">### Reshape data to have two dimensions maximum</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_reshape_data</span><span class="p">()</span>
+
+        <span class="c1">### Compute the noise covariance matrix</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_get_noise_covariance_matrix</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_reshape_spectra_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+
+        <span class="n">data_reshaped</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span><span class="p">))</span>
+
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">imap</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nmaps</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">jmap</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">imap</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nmaps</span><span class="p">):</span>
+                <span class="n">data_reshaped</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">imap</span><span class="p">,</span> <span class="n">jmap</span><span class="p">]</span>
+                <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="n">data_reshaped</span>
+
+    <span class="k">def</span> <span class="nf">_reshape_spectra</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">y_reshaped</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">yerr_reshaped</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nreals</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span><span class="p">))</span>
+
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">imap</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nmaps</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">jmap</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">imap</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nmaps</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">y_reshaped</span><span class="p">[</span><span class="n">k</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">[</span><span class="n">imap</span><span class="p">,</span> <span class="n">jmap</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">yerr_reshaped</span><span class="p">[:,</span> <span class="n">k</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">yerr</span><span class="p">[:,</span> <span class="n">imap</span><span class="p">,</span> <span class="n">jmap</span><span class="p">,</span> <span class="p">:]</span>
+                <span class="n">k</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">def</span> <span class="nf">_check_shapein</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;x should have 1 dimensions (Nbins)&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;y should have 3 dimensions (Nmaps, Nmaps, Nbins)&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">yerr</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+                <span class="s2">&quot;yerr should have 4 dimensions (Nreals, Nmaps, Nmaps, Nbins)&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1">### Get the shape (Nreals, Nmaps, Nmaps, Nbins)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nreals</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nmaps</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">yerr</span><span class="o">.</span><span class="n">shape</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nmaps</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nmaps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+
+    <span class="k">def</span> <span class="nf">_init_reshape_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">y_reshaped</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_reshaped</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">yerr_reshaped</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">yerr_reshaped</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nreals</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_noise_covariance_matrix</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">noise_covariance_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cov</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">yerr_reshaped</span><span class="p">,</span> <span class="n">rowvar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">noise_correlation_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">corrcoef</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">yerr_reshaped</span><span class="p">,</span> <span class="n">rowvar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">noise_covariance_matrix</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fill_sample_variance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">invN</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">pinv</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">noise_covariance_matrix</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_fill_sample_variance</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bandpower</span><span class="p">):</span>
+
+        <span class="n">indices_tr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">triu_indices</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nmaps</span><span class="p">)</span>
+        <span class="n">matrix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">)))</span>
+        <span class="n">factor_modecount</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">((</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.015</span> <span class="o">*</span> <span class="mi">30</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">ii</span><span class="p">,</span> <span class="p">(</span><span class="n">i1</span><span class="p">,</span> <span class="n">i2</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">indices_tr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">indices_tr</span><span class="p">[</span><span class="mi">1</span><span class="p">])):</span>
+            <span class="k">for</span> <span class="n">jj</span><span class="p">,</span> <span class="p">(</span><span class="n">j1</span><span class="p">,</span> <span class="n">j2</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">indices_tr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">indices_tr</span><span class="p">[</span><span class="mi">1</span><span class="p">])):</span>
+                <span class="n">covar</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="n">bandpower</span><span class="p">[</span><span class="n">i1</span><span class="p">,</span> <span class="n">j1</span><span class="p">,</span> <span class="p">:]</span> <span class="o">*</span> <span class="n">bandpower</span><span class="p">[</span><span class="n">i2</span><span class="p">,</span> <span class="n">j2</span><span class="p">,</span> <span class="p">:]</span>
+                    <span class="o">+</span> <span class="n">bandpower</span><span class="p">[</span><span class="n">i1</span><span class="p">,</span> <span class="n">j2</span><span class="p">,</span> <span class="p">:]</span> <span class="o">*</span> <span class="n">bandpower</span><span class="p">[</span><span class="n">i2</span><span class="p">,</span> <span class="n">j1</span><span class="p">,</span> <span class="p">:]</span>
+                <span class="p">)</span> <span class="o">*</span> <span class="n">factor_modecount</span>
+                <span class="n">matrix</span><span class="p">[</span><span class="n">ii</span><span class="p">,</span> <span class="p">:,</span> <span class="n">jj</span><span class="p">,</span> <span class="p">:]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">covar</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">matrix</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">nspecs</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">)))</span>
+
+    <span class="k">def</span> <span class="nf">_initial_conditions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nwalkers</span><span class="p">):</span>
+
+        <span class="n">x0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="n">nwalkers</span><span class="p">))</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+
+                <span class="c1">### Check if the user define the parameter as free and not fixed at given value</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">param</span><span class="p">][</span><span class="s2">&quot;fit&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span>
+                    <span class="ow">and</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">param</span><span class="p">][</span><span class="s2">&quot;fit&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="nb">bool</span>
+                <span class="p">):</span>
+                    <span class="n">x0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+                        <span class="p">(</span>
+                            <span class="n">x0</span><span class="p">,</span>
+                            <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">param</span><span class="p">][</span><span class="s2">&quot;init_average&quot;</span><span class="p">],</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">param</span><span class="p">][</span><span class="s2">&quot;init_std&quot;</span><span class="p">],</span>
+                                <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">nwalkers</span><span class="p">),</span>
+                            <span class="p">),</span>
+                        <span class="p">),</span>
+                        <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                    <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">=</span> <span class="n">x0</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">x0</span><span class="o">.</span><span class="n">T</span>
+
+<div class="viewcode-block" id="FitEllSpace.log_prior">
+<a class="viewcode-back" href="../../lib.Qfit.html#lib.Qfit.FitEllSpace.log_prior">[docs]</a>
+    <span class="k">def</span> <span class="nf">log_prior</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="n">keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+                <span class="k">if</span> <span class="p">(</span>
+                    <span class="n">x</span><span class="p">[</span><span class="n">count</span><span class="p">]</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">param</span><span class="p">][</span><span class="s2">&quot;bound_max&quot;</span><span class="p">]</span>
+                    <span class="ow">or</span> <span class="n">x</span><span class="p">[</span><span class="n">count</span><span class="p">]</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">param</span><span class="p">][</span><span class="s2">&quot;bound_min&quot;</span><span class="p">]</span>
+                <span class="p">):</span>
+                    <span class="k">return</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span>
+                <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="k">return</span> <span class="mi">0</span></div>
+
+
+    <span class="k">def</span> <span class="nf">_fill_params</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="n">xnew</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
+        <span class="n">keys</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">keys</span><span class="p">:</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+
+                <span class="c1">### Add values of the fixed parameters only if there is no True in the params.yaml file</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">param</span><span class="p">][</span><span class="s2">&quot;fit&quot;</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="n">xnew</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">xnew</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="n">count</span><span class="p">])</span>
+                    <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">xnew</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">xnew</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="n">key</span><span class="p">][</span><span class="n">param</span><span class="p">][</span><span class="s2">&quot;fit&quot;</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">xnew</span>
+
+<div class="viewcode-block" id="FitEllSpace.loglikelihood">
+<a class="viewcode-back" href="../../lib.Qfit.html#lib.Qfit.FitEllSpace.loglikelihood">[docs]</a>
+    <span class="k">def</span> <span class="nf">loglikelihood</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fill_params</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="n">lp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_prior</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">residuals</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_reshaped</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reshape_spectra_model</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="o">*</span><span class="n">x</span><span class="p">)</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">y_reshaped</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+        <span class="c1"># residuals = residuals.reshape(self.y_reshaped.shape)</span>
+
+        <span class="k">return</span> <span class="n">lp</span> <span class="o">-</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">((</span><span class="n">residuals</span><span class="p">)</span><span class="o">.</span><span class="n">T</span> <span class="o">@</span> <span class="bp">self</span><span class="o">.</span><span class="n">invN</span> <span class="o">@</span> <span class="p">(</span><span class="n">residuals</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="FitEllSpace.run">
+<a class="viewcode-back" href="../../lib.Qfit.html#lib.Qfit.FitEllSpace.run">[docs]</a>
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nsteps</span><span class="p">,</span> <span class="n">nwalkers</span><span class="p">,</span> <span class="n">discard</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">comm</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+
+        <span class="c1">### Initial condition for each parameters</span>
+        <span class="n">x0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_initial_conditions</span><span class="p">(</span><span class="n">nwalkers</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="n">Pool</span><span class="p">()</span> <span class="k">as</span> <span class="n">pool</span><span class="p">:</span>
+            <span class="n">sampler</span> <span class="o">=</span> <span class="n">emcee</span><span class="o">.</span><span class="n">EnsembleSampler</span><span class="p">(</span>
+                <span class="n">nwalkers</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="n">log_prob_fn</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">loglikelihood</span><span class="p">,</span> <span class="n">pool</span><span class="o">=</span><span class="n">pool</span>
+            <span class="p">)</span>
+            <span class="n">sampler</span><span class="o">.</span><span class="n">run_mcmc</span><span class="p">(</span><span class="n">x0</span><span class="p">,</span> <span class="n">nsteps</span><span class="p">,</span> <span class="n">progress</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">samples_flat</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">get_chain</span><span class="p">(</span><span class="n">flat</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">discard</span><span class="o">=</span><span class="n">discard</span><span class="p">,</span> <span class="n">thin</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+        <span class="n">samples</span> <span class="o">=</span> <span class="n">sampler</span><span class="o">.</span><span class="n">get_chain</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">samples</span><span class="p">,</span> <span class="n">samples_flat</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

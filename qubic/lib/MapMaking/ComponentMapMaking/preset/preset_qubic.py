@@ -1,5 +1,5 @@
-from fgbuster.component_model import Dust, CMB
-from .. QcomponentModel import Monochromatic
+from fgbuster import component_model as c
+from .. import Qcomponent_model as model_co
 from ....Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
 from ....Qdictionary import qubicDict
 
@@ -168,12 +168,12 @@ class PresetQubic:
         components_name = []
 
         if self.preset_tools.params["CMB"]["cmb"]:
-            components += [CMB()]
+            components += [c.CMB()]
             components_name += ["CMB"]
 
         if self.preset_tools.params["Foregrounds"]["Dust"][f"Dust_{key}"]:
             components += [
-                Dust(
+                c.Dust(
                     nu0=self.preset_tools.params["Foregrounds"]["Dust"]["nu0_d"],
                     temp=20,
                 )
@@ -194,7 +194,7 @@ class PresetQubic:
                 #    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
                 #    active=False,
                 #)
-                Monochromatic(
+                model_co.Monochromatic(
                     nu0=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
                 )
             ]

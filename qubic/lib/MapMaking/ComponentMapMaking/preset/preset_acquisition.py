@@ -2,8 +2,13 @@ import numpy as np
 from pyoperators import DiagonalOperator
 
 from ....Instrument.Qacquisition import *
-from ....Qnoise import *
+from ....Instrument.Qnoise import *
 from fgbuster import component_model as c
+
+#from qubic.lib.Instrument.Qacquisition import *
+#from qubic.lib.Instrument.Qnoise import *
+#import qubic.lib.MapMaking.ComponentMapMaking.Qcomponent_model as c
+
 
 class PresetAcquisition:
     r"""Preset Acquisition.
@@ -317,11 +322,10 @@ class PresetAcquisition:
                         scalar_acquisition_operators * fwhm_tod
                     ) / (np.sum(scalar_acquisition_operators))
                 if self.preset_comp.components_name_out[comp] == "Dust":
-                    f_dust = c.ModifiedBlackBody(
+                    f_dust = c.Dust(
                         nu0=self.preset_comp.params_foregrounds["Dust"]["nu0_d"],
-                        beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][
-                            0
-                        ],
+                        beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][0],
+                        temp=20
                     )
                     fwhm_rec[comp] = np.sum(
                         scalar_acquisition_operators
@@ -334,7 +338,7 @@ class PresetAcquisition:
                         )
                     )
                 if self.preset_comp.components_name_out[comp] == "Synchrotron":
-                    f_sync = c.PowerLaw(
+                    f_sync = c.Synchrotron(
                         nu0=self.preset_comp.params_foregrounds["Synchrotron"]["nu0_s"],
                         beta_pl=self.preset_comp.params_foregrounds["Synchrotron"][
                             "beta_s_init"
@@ -343,7 +347,7 @@ class PresetAcquisition:
                     fwhm_rec[comp] = np.sum(
                         scalar_acquisition_operators
                         * f_sync.eval(self.preset_qubic.joint_out.qubic.allnus)
-                        * self.fwhm_tod
+                        * fwhm_tod
                     ) / (
                         np.sum(
                             scalar_acquisition_operators
@@ -363,7 +367,7 @@ class PresetAcquisition:
         self.preset_tools.mpi._print_message(f"Reconstructed FWHM : {fwhm_rec}")
 
         return fwhm_tod, fwhm_mapmaking, fwhm_rec
-
+    
     def get_noise(self):
         """Noise.
 
@@ -535,10 +539,9 @@ class PresetAcquisition:
 
         # Build beta map for spatially varying spectral index
         self.allbeta = np.array([self.beta_iter])
-        C1 = HealpixConvolutionGaussianOperator(
-            fwhm=self.fwhm_rec,
-            lmax=3 * self.preset_tools.params["SKY"]["nside"],
-        )
+        C1 = [HealpixConvolutionGaussianOperator(
+            fwhm=self.fwhm_rec[i],
+            lmax=3 * self.preset_tools.params["SKY"]["nside"]) for i in range(len(self.preset_comp.components_model_out))]
         C2 = HealpixConvolutionGaussianOperator(
             fwhm=self.preset_tools.params["INITIAL"]["fwhm0"],
             lmax=3 * self.preset_tools.params["SKY"]["nside"],
@@ -549,7 +552,7 @@ class PresetAcquisition:
         for i in range(len(self.preset_comp.components_model_out)):
             if self.preset_comp.components_name_out[i] == "CMB":
                 self.preset_comp.components_iter[i] = C2(
-                    C1(self.preset_comp.components_iter[i])
+                    C1[i](self.preset_comp.components_iter[i])
                 )
                 for istk in range(3):
                     if istk == 0:
@@ -568,7 +571,7 @@ class PresetAcquisition:
                     )
             elif self.preset_comp.components_name_out[i] == "Dust":
                 self.preset_comp.components_iter[i] = C2(
-                    C1(self.preset_comp.components_iter[i])
+                    C1[i](self.preset_comp.components_iter[i])
                 )
                 for istk in range(3):
                     if istk == 0:
@@ -587,7 +590,7 @@ class PresetAcquisition:
                     )
             elif self.preset_comp.components_name_out[i] == "Synchrotron":
                 self.preset_comp.components_iter[i] = C2(
-                    C1(self.preset_comp.components_iter[i])
+                    C1[i](self.preset_comp.components_iter[i])
                 )
                 for istk in range(3):
                     if istk == 0:
@@ -607,7 +610,7 @@ class PresetAcquisition:
                     )
             elif self.preset_comp.components_name_out[i] == "CO":
                 self.preset_comp.components_iter[i] = C2(
-                    C1(self.preset_comp.components_iter[i])
+                    C1[i](self.preset_comp.components_iter[i])
                 )
                 
                 for istk in range(3):

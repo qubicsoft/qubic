@@ -13,14 +13,15 @@ from pyoperators import DiagonalOperator, ReshapeOperator
 from ...Qsamplings import equ2gal
 from ...Qdictionary import qubicDict
 from ...Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
-from ...Qnoise import QubicDualBandNoise, QubicWideBandNoise
+from ...Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
 from ..Qcg import pcg
-from ..ComponentMapMaking.Qcomponent_model import CMB, Dust, Synchrotron
 from ...Qfoldertools import create_folder_if_not_exists, do_gif
 from ..Qmap_plotter import PlotsFMM
 from ...Qspectra import Spectra
 from ...Qmpi_tools import MpiTools
 from ..Qmaps import PlanckMaps, InputMaps
+
+from fgbuster.component_model import CMB, Dust, Synchrotron
 
 __all__ = ["PipelineFrequencyMapMaking", 
            "PipelineEnd2End"]
@@ -452,11 +453,11 @@ class PipelineFrequencyMapMaking:
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
 
             if self.params["Foregrounds"]["Dust"]:
-                f_dust = c.ModifiedBlackBody(nu0=353, beta_d=1.54)
+                f_dust = Dust(nu0=353, beta_d=1.54, temp=20)
                 weight_factor = f_dust.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_dust.eval(nu))
             else:
-                f_cmb = c.CMB()
+                f_cmb = CMB()
                 weight_factor = f_cmb.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_cmb.eval(nu))
 
@@ -549,9 +550,9 @@ class PipelineFrequencyMapMaking:
                     if self.params["QUBIC"]["convolution_in"]:
                         C = HealpixConvolutionGaussianOperator(
                             fwhm=np.min(
-                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in], lmax = 2 * self.params["SKY"]["nside"],
+                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]), lmax = self.params['Spectrum']['lmax'],
                             )
-                        )
+                        
 
                     else:
                         C = HealpixConvolutionGaussianOperator(fwhm=0)
@@ -566,8 +567,8 @@ class PipelineFrequencyMapMaking:
                     if self.params["QUBIC"]["convolution_in"]:
                         C = HealpixConvolutionGaussianOperator(
                             fwhm=np.min(
-                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in], lmax = 2 * self.params["SKY"]["nside"]
-                            )
+                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]), lmax = self.params['Spectrum']['lmax']
+                            
                         )
 
                     else:
@@ -586,7 +587,7 @@ class PipelineFrequencyMapMaking:
                 )
 
                 if self.params["QUBIC"]["convolution_in"]:
-                    C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_in[-1], lmax = 2 * self.params["SKY"]["nside"])
+                    C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_in[-1], lmax = self.params['Spectrum']['lmax'])
                 else:
                     C = HealpixConvolutionGaussianOperator(fwhm=0)
 
@@ -633,7 +634,7 @@ class PipelineFrequencyMapMaking:
                         C = HealpixConvolutionGaussianOperator(
                             fwhm=np.min(
                                 self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]
-                            ), lmax = 2 * self.params["SKY"]["nside"]
+                            ), lmax = self.params['Spectrum']['lmax']
                         )
 
                     else:
@@ -654,7 +655,7 @@ class PipelineFrequencyMapMaking:
                         C = HealpixConvolutionGaussianOperator(
                             fwhm=np.min(
                                 self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]
-                            ), lmax = 2 * self.params["SKY"]["nside"]
+                            ), lmax = self.params['Spectrum']['lmax']
                         )
 
                     else:
@@ -762,7 +763,7 @@ class PipelineFrequencyMapMaking:
         true_maps = self.m_nu_in.copy()
         
         for irec in range(self.params["QUBIC"]["nrec"]):
-            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec], lmax = 2 * self.joint.qubic.scene.nside)
+            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec], lmax = self.params['Spectrum']['lmax'])
             true_maps[irec] = C(self.m_nu_in[irec])
             
         ### PCG
@@ -901,6 +902,7 @@ class PipelineFrequencyMapMaking:
                 "fwhm_out": self.fwhm_out,
                 "fwhm_rec": self.fwhm_rec,
                 "duration": mapmaking_time,
+                "qubic_dict": {k:v for k,v in self.dict_out.items() if k != 'comm'} # I have to remove the MPI communicator, which is not supported by pickle
             }
 
             self._save_data(self.file, dict_solution)
@@ -951,6 +953,10 @@ class PipelineEnd2End:
 
         ### Execute spectrum
         if self.params["Pipeline"]["spectrum"]:
+            
+            if self.params['Spectrum']['lmax'] > 2*self.params['SKY']['nside'] - 1:
+                raise ValueError("lmax should be lower than 2*nside - 1")
+            
             if self.comm.Get_rank() == 0:
                 create_folder_if_not_exists(
                     self.comm, "FMM/" + self.params["path_out"] + "spectrum/"

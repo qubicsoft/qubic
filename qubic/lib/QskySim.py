@@ -7,10 +7,10 @@ from pysm3 import utils
 from pylab import *
 from scipy.optimize import curve_fit
 
-from qubic.lib.Instrument.Qinstrument import compute_freq
-from qubic.lib.Fitting import Qcamb as qc
-from qubic.lib.Calibration import Qfiber as ft
-from qubic.lib.Qutilities import progress_bar
+from .Instrument.Qinstrument import compute_freq
+from .Qutilities import progress_bar
+from .Calibration import Qfiber as ft
+from .Fitting import Qcamb as qc
 from qubic.data import PATH as data_dir
 
 __all__ = ['sky', 'Qubic_sky']

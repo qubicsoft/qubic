@@ -141,7 +141,7 @@ class MultiFreqBeam(Beam):
         self.backward = bool(backward)
         self.sp = interpolate.RectBivariateSpline(parth, parfr, parbeam)
         omega = with_alpha(nu, self.alpha, self.xspl)
-        Beam.__init__(self, omega, nu=nu)
+        Beam.__init__(self, omega)#, nu=nu)
 
     def __call__(self, theta, phi):
         if self.backward:

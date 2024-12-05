@@ -13,7 +13,7 @@ from qubic.data import PATH as data_dir
 
 # from mapmaking.systematics import give_cl_cmb, arcmin2rad
 from ..Instrument.Qacquisition import arcmin2rad
-#from qubic.lib.Instrument.Qacquisition import *
+#from qubic.lib.InstrumentModel.Qacquisition import *
 #from .Qcmbmodel import CMBModel
 from .FrequencyMapMaking.Qspectra_component import CMBModel
 
@@ -146,7 +146,9 @@ class PlanckMaps(Maps):
 
         return mysky
     def _get_fwhm(self, nu):
-        fwhmi = self.read_pkl(data_dir + f"Planck{nu:.0f}GHz.pkl")[f"fwhm{nu:.0f}"]
+        with open(data_dir + f"Planck{nu:.0f}GHz.pkl", "rb") as f:
+            data = pickle.load(f)
+        fwhmi = data[f"fwhm{nu:.0f}"]
         return fwhmi
     def _get_noise(self, nu):
         

@@ -9,9 +9,8 @@ import qubic
 
 import pickle
 import warnings
-
 warnings.filterwarnings("ignore")
-import pyoperators
+
 import pysm3.units as u
 from pyoperators import (
     AdditionOperator,
@@ -31,7 +30,6 @@ from pyoperators import (
     IntegrationTrapezeOperator
 )
 
-# PyOperators stuff
 from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysm3 import utils
@@ -40,32 +38,9 @@ from qubic.data import PATH
 from .Qinstrument import compute_freq, QubicInstrument, QubicMultibandInstrument, QubicMultibandInstrumentTrapezoidalIntegration
 from ..Qsamplings import get_pointing
 from ..Qscene import QubicScene
-#import Qinstrument as instr
 
 # FG-Buster packages
 from fgbuster.mixingmatrix import MixingMatrix
-#from lib.Qmixing_matrix import MixingMatrix
-
-
-def arcmin2rad(arcmin):
-    return arcmin * 0.000290888
-
-
-def create_array(name, nus, nside):
-
-    if name == "noise":
-        shape = (2, 12 * nside**2, 3)
-    else:
-        shape = len(nus)
-    pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
-    dataset = pickle.load(pkl_file)
-
-    myarray = np.zeros(shape)
-
-    for ii, i in enumerate(nus):
-        myarray[ii] = dataset[name + str(i)]
-
-    return myarray
 
 
 class QubicAcquisition(Acquisition):
@@ -150,8 +125,6 @@ class QubicAcquisition(Acquisition):
         self.sigma = sigma
         self.forced_sigma = None
 
-        # print('Acq -> ', self.comm)
-
     def get_coverage(self):
         """
         Return the acquisition scene coverage as given by H.T(1), normalized
@@ -164,7 +137,6 @@ class QubicAcquisition(Acquisition):
             out = out[..., 0].copy()  # to avoid keeping QU in memory
         ndetectors = self.comm.allreduce(len(self.instrument))
         nsamplings = self.sampling.comm.allreduce(len(self.sampling))
-        # nsamplings = self.comm.allreduce(len(self.sampling))
         out *= ndetectors * nsamplings * self.sampling.period / np.sum(out)
         return out
 
@@ -178,7 +150,6 @@ class QubicAcquisition(Acquisition):
         ipixel = self.sampling.healpix(nside)
         npixel = 12 * nside**2
         hit = np.histogram(ipixel, bins=npixel, range=(0, npixel))[0]
-        # self.sampling.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         self.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
@@ -339,43 +310,35 @@ class QubicAcquisition(Acquisition):
             self.sigma = self.instrument.detector.nep / np.sqrt(
                 2 * self.sampling.period
             )
-        # print(self.sigma)
+
         if photon_noise:
             sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(
                 2 * self.sampling.period
             )
             self.sigma = np.sqrt(self.sigma**2 + sigma_photon**2)
-            # print(sigma_photon[0])
+
         else:
             pass
-            # sigma_photon = 0
 
         if self.bandwidth is None and self.psd is None and self.sigma is None:
             raise ValueError("The noise model is not specified.")
 
-        # print('In acquisition.py: self.forced_sigma={}'.format(self.forced_sigma))
-        # print('and self.sigma is:{}'.format(self.sigma))
         if self.forced_sigma is None:
-            pass  # print('Using theoretical TES noises')
+            pass 
         else:
-            # print('Using self.forced_sigma as TES noises')
             self.sigma = self.forced_sigma.copy()
 
         shapein = (len(self.instrument), len(self.sampling))
 
         if self.bandwidth is None and self.instrument.detector.fknee == 0:
-            # print('diagonal case')
 
             out = DiagonalOperator(
                 1 / self.sigma**2,
                 broadcast="rightward",
                 shapein=(len(self.instrument), len(self.sampling)),
             )
-            # print(out.shape)
-            # print(out)
 
             if self.effective_duration is not None:
-                # nsamplings = self.comm.allreduce(len(self.sampling))
                 nsamplings = self.sampling.comm.allreduce(len(self.sampling))
                 out /= (
                     nsamplings
@@ -746,7 +709,6 @@ class QubicMultiAcquisitions:
         )
 
         ### Joint 150 and 220 GHz band
-        #self.allnus = np.array(list(allnus_edges_150) + list(allnus_edges_220))
         self.allnus = np.array(list(nus_subbands_150) + list(nus_subbands_220))
         self.allnus_rec = np.array(list(nus150) + list(nus220))
 
@@ -777,10 +739,10 @@ class QubicMultiAcquisitions:
             w = IntegrationTrapezeOperator(allnus_edges_220)
             deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
 
-            dmono['filter_relative_bandwidth'] = 0.05#deltas_trap / nu_co
+            dmono['filter_relative_bandwidth'] = 0.05#
             print(nu_co, deltas_trap, deltas_trap / nu_co)
 
-            instrument_co = QubicInstrument(dmono, FRBW=0.25)#dmono['filter_relative_bandwidth'])
+            instrument_co = QubicInstrument(dmono, FRBW=0.25)
             self.multiinstrument.subinstruments += [instrument_co]
             self.subacqs += [QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)]
             
@@ -788,8 +750,7 @@ class QubicMultiAcquisitions:
         
         for acq in self.subacqs:
             acq.comm = self.subacqs[0].comm
-        #print(self.allnus)
-        #stop
+
         ### Angular resolution
         self.allfwhm = np.zeros(len(self.multiinstrument))
         for i in range(len(self.multiinstrument)):
@@ -1154,9 +1115,6 @@ class OtherDataParametric:
 
     def __init__(self, nus, nside, comps, nintegr=2):
 
-        # if nintegr == 1:
-        #    raise TypeError('The integration of external data should be greater than 1')
-
         self.nintegr = nintegr
         pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
         dataset = pickle.load(pkl_file)
@@ -1172,7 +1130,7 @@ class OtherDataParametric:
             else:
                 self.bw.append(self.dataset["bw{}".format(i)])
 
-        self.fwhm = arcmin2rad(create_array("fwhm", self.nus, self.nside))
+        self.fwhm = self.arcmin2rad(self.create_array("fwhm", self.nus, self.nside))
         self.comps = comps
         self.nc = len(self.comps)
 
@@ -1188,6 +1146,25 @@ class OtherDataParametric:
                 )
             self.allnus = np.array(self.allnus)
         ### Compute all external nus
+        
+    def arcmin2rad(self, arcmin):
+        return arcmin * 0.000290888
+
+    def create_array(self, name, nus, nside):
+
+        if name == "noise":
+            shape = (2, 12 * nside**2, 3)
+        else:
+            shape = len(nus)
+        pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
+        dataset = pickle.load(pkl_file)
+
+        myarray = np.zeros(shape)
+
+        for ii, i in enumerate(nus):
+            myarray[ii] = dataset[name + str(i)]
+
+        return myarray
 
     def _get_mixing_matrix(self, nus, beta):
         """
@@ -1315,7 +1292,6 @@ class OtherDataParametric:
                 else:
                     fwhm = 0
 
-                # fwhm = fwhm_max if convolution and fwhm_max is not None else (self.fwhm[ii] if convolution else 0)
                 C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=2 * self.nside)
 
                 D = self._get_mixing_operator(A=A[k])
@@ -1323,12 +1299,6 @@ class OtherDataParametric:
                 ope_i += [C * D]
 
                 k += 1
-
-            # if i == 217:
-            #    #print('co line')
-            #    if nu_co is not None:
-            #        Dco = get_mixing_operator(beta, np.array([nu_co]), comp=self.comp, nside=self.nside, active=True)
-            #        ope_i += [C * R * Dco]
 
             if comm is not None:
                 Operator.append(comm * R2tod(AdditionOperator(ope_i) / self.nintegr))
@@ -1365,7 +1335,6 @@ class JointAcquisitionFrequencyMapMaking:
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
-        # self.qubic = qubic
 
         ### Select the instrument model
         if self.kind == "DB":
@@ -1378,7 +1347,7 @@ class JointAcquisitionFrequencyMapMaking:
             )
         else:
             raise TypeError(f"{self.kind} is not implemented...")
-        # self.qubic = QubicFullBandSystematic(self.d, comp=[], Nsub=self.Nsub, Nrec=self.Nrec, kind=self.kind, H=H)
+
         self.scene = self.qubic.scene
         self.pl143 = PlanckAcquisition(143, self.scene)
         self.pl217 = PlanckAcquisition(217, self.scene)
@@ -1519,9 +1488,7 @@ class JointAcquisitionFrequencyMapMaking:
             invN_217 = R_planck(invntt_planck217(R_planck.T))
             invN = [R(invn_q_150(R.T))]
             for i in range(int(self.Nrec / 2)):
-                invN += [R_planck(invntt_planck143(R_planck.T))]  # ,
-                # R(invn_q_220(R.T)), R_planck(invntt_planck217(R_planck.T))]
-
+                invN += [R_planck(invntt_planck143(R_planck.T))]
             invN += [R(invn_q_220(R.T))]
 
             for i in range(int(self.Nrec / 2)):
@@ -1561,7 +1528,7 @@ class JointAcquisitionComponentsMapMaking:
         self.comp = comp
         self.nus_external = nus_external
         self.nintegr = nintegr
-        # self.qubic = qubic
+
         ### Select the instrument model
         if self.kind == "DB":
             self.qubic = QubicDualBand(
@@ -1573,7 +1540,7 @@ class JointAcquisitionComponentsMapMaking:
             )
         else:
             raise TypeError(f"{self.kind} is not implemented...")
-        # self.qubic = QubicFullBandSystematic(self.d, comp=self.comp, Nsub=self.Nsub, Nrec=1, kind=self.kind, nu_co=nu_co, H=H, effective_duration150=ef150, effective_duration220=ef220)
+
         self.scene = self.qubic.scene
         self.external = OtherDataParametric(
             self.nus_external, self.scene.nside, self.comp, self.nintegr

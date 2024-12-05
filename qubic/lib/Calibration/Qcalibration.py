@@ -1,7 +1,6 @@
 # coding: utf-8
 from astropy.io import fits
-import sys
-import glob
+
 from configparser import ConfigParser
 from os.path import join
 from pysimulators import Layout, LayoutGrid
@@ -9,7 +8,6 @@ from qubic.calfiles import PATH
 from qubic.lib.Qhorns import HornLayout
 import numpy as np
 import os
-import re
 
 __all__ = ['QubicCalibration']
 

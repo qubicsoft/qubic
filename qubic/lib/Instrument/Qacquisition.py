@@ -42,6 +42,8 @@ from ..Qscene import QubicScene
 # FG-Buster packages
 from fgbuster.mixingmatrix import MixingMatrix
 
+def arcmin2rad(arcmin):
+    return arcmin * 0.000290888
 
 class QubicAcquisition(Acquisition):
     """
@@ -1130,7 +1132,7 @@ class OtherDataParametric:
             else:
                 self.bw.append(self.dataset["bw{}".format(i)])
 
-        self.fwhm = self.arcmin2rad(self.create_array("fwhm", self.nus, self.nside))
+        self.fwhm = arcmin2rad(self.create_array("fwhm", self.nus, self.nside))
         self.comps = comps
         self.nc = len(self.comps)
 
@@ -1146,9 +1148,6 @@ class OtherDataParametric:
                 )
             self.allnus = np.array(self.allnus)
         ### Compute all external nus
-        
-    def arcmin2rad(self, arcmin):
-        return arcmin * 0.000290888
 
     def create_array(self, name, nus, nside):
 

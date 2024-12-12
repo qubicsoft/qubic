@@ -85,7 +85,7 @@ class Pipeline:
         )
         self._rms_noise_qubic_patch_per_ite[:] = np.nan
 
-    def call_pcg(self, max_iterations, seenpix):
+    def call_pcg(self, max_iterations, seenpix):  
         """Precontioned Conjugate Gradiant algorithm.
 
         Method to call the PCG from PyOperators package.

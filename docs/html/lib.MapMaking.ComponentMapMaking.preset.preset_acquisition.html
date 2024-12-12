@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>lib.MapMaking.ComponentMapMaking.preset.preset_acquisition module &#8212; qubicsoft  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-lib.MapMaking.ComponentMapMaking.preset.preset_acquisition">
+<span id="lib-mapmaking-componentmapmaking-preset-preset-acquisition-module"></span><h1>lib.MapMaking.ComponentMapMaking.preset.preset_acquisition module<a class="headerlink" href="#module-lib.MapMaking.ComponentMapMaking.preset.preset_acquisition" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.</span></span><span class="sig-name descname"><span class="pre">PresetAcquisition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed_noise</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_tools</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_external</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_qubic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_sky</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_comp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_mixing_matrix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset_gain</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Preset Acquisition.</p>
+<p>Instance to initialize the Components Map-Making. It defines the data acquisition variables and methods.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seed_noise</strong> (<em>int</em>) – Seed for random noise generation.</p></li>
+<li><p><strong>preset_tools</strong> (<em>object</em>) – Class containing tools and simulation parameters.</p></li>
+<li><p><strong>preset_external</strong> (<em>object</em>) – Class containing external variables and methods.</p></li>
+<li><p><strong>preset_qubic</strong> (<em>object</em>) – Class containing qubic operator and variables and methods.</p></li>
+<li><p><strong>preset_sky</strong> (<em>object</em>) – Class containing sky varaibles and methods.</p></li>
+<li><p><strong>preset_comp</strong> (<em>object</em>) – Class containing component variables and methods.</p></li>
+<li><p><strong>preset_mixing_matrix</strong> (<em>object</em>) – Class containing mixing-matrix variables and methods.</p></li>
+<li><p><strong>preset_gain</strong> (<em>object</em>) – Class containing detector gain variables and methods.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.seed_noise">
+<span class="sig-name descname"><span class="pre">seed_noise</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.seed_noise" title="Link to this definition">¶</a></dt>
+<dd><p>Seed for random noise realization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.params_foregrounds">
+<span class="sig-name descname"><span class="pre">params_foregrounds</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.params_foregrounds" title="Link to this definition">¶</a></dt>
+<dd><p>Dictionary containing the paramters associated with foregrounds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.rms_tolerance">
+<span class="sig-name descname"><span class="pre">rms_tolerance</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.rms_tolerance" title="Link to this definition">¶</a></dt>
+<dd><p>Tolerance for PCG algorithm.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.ites_to_converge">
+<span class="sig-name descname"><span class="pre">ites_to_converge</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.ites_to_converge" title="Link to this definition">¶</a></dt>
+<dd><p>Max iteration number for PCG algorithm.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.invN">
+<span class="sig-name descname"><span class="pre">invN</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.invN" title="Link to this definition">¶</a></dt>
+<dd><p>Inverse noise covariance matrix with input shape <span class="math notranslate nohighlight">\((N_{det}*N_{samples} + N_{pix}*N_{planck}*N_{stokes})\)</span> and output shape <span class="math notranslate nohighlight">\((N_{det}*N_{samples} + N_{pix}*N_{planck}*N_{stokes})\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>BlockDiagonalOperator</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.M">
+<span class="sig-name descname"><span class="pre">M</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.M" title="Link to this definition">¶</a></dt>
+<dd><p>Preconditioner for PCG algorithm.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>DiagonalOperator</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.fwhm_rec">
+<span class="sig-name descname"><span class="pre">fwhm_rec</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.fwhm_rec" title="Link to this definition">¶</a></dt>
+<dd><p>Resolution of the reconstructed maps.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.H">
+<span class="sig-name descname"><span class="pre">H</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.H" title="Link to this definition">¶</a></dt>
+<dd><p>Pointing matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>BlockColumnOperator</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.TOD_qubic">
+<span class="sig-name descname"><span class="pre">TOD_qubic</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.TOD_qubic" title="Link to this definition">¶</a></dt>
+<dd><p>QUBIC simulated TOD.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.TOD_external">
+<span class="sig-name descname"><span class="pre">TOD_external</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.TOD_external" title="Link to this definition">¶</a></dt>
+<dd><p>Planck simulated TOD.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.TOD_obs">
+<span class="sig-name descname"><span class="pre">TOD_obs</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.TOD_obs" title="Link to this definition">¶</a></dt>
+<dd><p>Simulated observed TOD.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.beta_iter">
+<span class="sig-name descname"><span class="pre">beta_iter</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.beta_iter" title="Link to this definition">¶</a></dt>
+<dd><p>Spectral indices, if d1 <span class="math notranslate nohighlight">\((12 \times Nside_{\beta}^2, N_{comp}-1)\)</span>, if not <span class="math notranslate nohighlight">\((N_{comp}-1)\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.allbeta">
+<span class="sig-name descname"><span class="pre">allbeta</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.allbeta" title="Link to this definition">¶</a></dt>
+<dd><p>Spectral indeices, if d1 <span class="math notranslate nohighlight">\((iter, 12 \times Nside_{\beta}^2, N_{comp}-1)\)</span>, if not <span class="math notranslate nohighlight">\((iter, N_{comp}-1)\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.Amm_iter">
+<span class="sig-name descname"><span class="pre">Amm_iter</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.Amm_iter" title="Link to this definition">¶</a></dt>
+<dd><p>Mixing matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_approx_hth" title="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_approx_hth"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_approx_hth</span></code></a>()</p></td>
+<td><p>Approx HTH.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_convolution" title="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_convolution"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_convolution</span></code></a>()</p></td>
+<td><p>Convolutions.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_noise" title="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_noise"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_noise</span></code></a>()</p></td>
+<td><p>Noise.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_preconditioner" title="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_preconditioner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_preconditioner</span></code></a>(seenpix, A_qubic, A_ext)</p></td>
+<td><p>Preconditioner for PCG algorithm.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_tod" title="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_tod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_tod</span></code></a>()</p></td>
+<td><p>TOD.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_x0" title="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_x0"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_x0</span></code></a>()</p></td>
+<td><p>PCG starting point.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_approx_hth">
+<span class="sig-name descname"><span class="pre">get_approx_hth</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_approx_hth" title="Link to this definition">¶</a></dt>
+<dd><p>Approx HTH.</p>
+<p>Calculates the approximation of <span class="math notranslate nohighlight">\(H^T.H\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>approx_hth</strong> (<em>array_like</em>) – The approximation of <span class="math notranslate nohighlight">\(H^T.H\)</span> with shape <span class="math notranslate nohighlight">\((N_{sub}^{in}, N_{pixel}, 3)\)</span>.</p></li>
+<li><p><strong>approx_hth_ext</strong> (<em>array_like</em>) – The approximation of <span class="math notranslate nohighlight">\(H^T.H\)</span> for Planck.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_convolution">
+<span class="sig-name descname"><span class="pre">get_convolution</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_convolution" title="Link to this definition">¶</a></dt>
+<dd><p>Convolutions.</p>
+<p>Method to define all angular resolutions of the instrument at each frequency.</p>
+<p>This method sets the Full Width at Half Maximum (FWHM) for Time-Ordered Data (TOD) and map-making processes.
+<cite>self.fwhm_tod</cite> represents the real angular resolution, and <cite>self.fwhm_mapmaking</cite> represents the beams used for reconstruction.</p>
+<p>The method checks the <cite>convolution_in</cite> and <cite>convolution_out</cite> parameters to determine the appropriate FWHM values.
+It also calculates the reconstructed FWHM based on these parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><strong>fwhm_tod</strong> (<em>array_like</em>) – Resolutions to create input TOD.</p></li>
+<li><p><strong>fwhm_mapmaking</strong> (<em>array_like</em>) – Resolutions for map-making.</p></li>
+<li><p><strong>fwhm_rec</strong> (<em>array_like</em>) – Resolutions of reconstructed maps.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_noise">
+<span class="sig-name descname"><span class="pre">get_noise</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_noise" title="Link to this definition">¶</a></dt>
+<dd><p>Noise.</p>
+<p>Method to define QUBIC noise, can generate Dual band or Wide Band noise by following:</p>
+<ul class="simple">
+<li><p>Dual Band: n = [Ndet + Npho_150, Ndet + Npho_220]</p></li>
+<li><p>Wide Band: n = [Ndet + Npho_150 + Npho_220]</p></li>
+</ul>
+<p>Depending on the instrument type specified in the preset_qubic parameters, this method will
+instantiate either QubicWideBandNoise or QubicDualBandNoise and return the total noise.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>noise</strong> – The total noise array, flattened.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_preconditioner">
+<span class="sig-name descname"><span class="pre">get_preconditioner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seenpix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">A_qubic</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">A_ext</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">precond</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_preconditioner" title="Link to this definition">¶</a></dt>
+<dd><p>Preconditioner for PCG algorithm.</p>
+<p>Calculates and returns the preconditioner matrix for the optimization process.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A_qubic</strong> (<em>array_like</em>) – QUBIC mixing matrix.</p></li>
+<li><p><strong>A_ext</strong> (<em>array_like</em>) – Planck mixing matrix.</p></li>
+<li><p><strong>precond</strong> (<em>bool</em><em>, </em><em>optional</em>) – Tells if you want a precontioner or not, by default True</p></li>
+<li><p><strong>thr</strong> (<em>int</em><em>, </em><em>optional</em>) – Threshold to define the pixels seen by QUBIC, by default 0</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>M</strong> – Preconditioner for PCG algorithm.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>DiagonalOperator</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_tod">
+<span class="sig-name descname"><span class="pre">get_tod</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_tod" title="Link to this definition">¶</a></dt>
+<dd><p>TOD.</p>
+<p>Generate fake observational data from QUBIC and external experiments.</p>
+<p>This method simulates observational data, including astrophysical foregrounds contamination using <cite>self.beta</cite> and systematics using <cite>self.g</cite>.
+The data generation follows the formula: <span class="math notranslate nohighlight">\(\vec{d} = H.A.\vec{c} + \vec{n}\)</span>.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">H</span></span><a class="headerlink" href="#id0" title="Link to this definition">¶</a></dt>
+<dd><p>Pointing matrix operator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Operator</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">TOD_qubic</span></span><a class="headerlink" href="#id1" title="Link to this definition">¶</a></dt>
+<dd><p>The simulated observational data for QUBIC.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id2">
+<span class="sig-name descname"><span class="pre">TOD_external</span></span><a class="headerlink" href="#id2" title="Link to this definition">¶</a></dt>
+<dd><p>The simulated observational data for external experiments.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id3">
+<span class="sig-name descname"><span class="pre">TOD_obs</span></span><a class="headerlink" href="#id3" title="Link to this definition">¶</a></dt>
+<dd><p>The combined observational data from QUBIC and external experiments.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>array_like</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.nsampling_x_ndetectors">
+<span class="sig-name descname"><span class="pre">nsampling_x_ndetectors</span></span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.nsampling_x_ndetectors" title="Link to this definition">¶</a></dt>
+<dd><p>The number of samples in <cite>self.TOD_qubic</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_x0">
+<span class="sig-name descname"><span class="pre">get_x0</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.PresetAcquisition.get_x0" title="Link to this definition">¶</a></dt>
+<dd><p>PCG starting point.</p>
+<p>Define starting point of the convergence.</p>
+<p>The argument ‘set_comp_to_0’ multiplies the pixel values by a given factor. You can decide
+to convolve the map by a beam with an FWHM in radians.</p>
+<p>This method initializes the beta_iter and Amm_iter attributes based on the foreground model parameters.
+It also applies convolution and noise to the components based on the preset parameters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>TypeError</strong> – If an unrecognized component name is encountered.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">qubicsoft</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, QUBIC Collaboration.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/lib.MapMaking.ComponentMapMaking.preset.preset_acquisition.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

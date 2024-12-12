@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>lib.MapMaking.Qmap_plotter module &#8212; qubicsoft  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-lib.MapMaking.Qmap_plotter">
+<span id="lib-mapmaking-qmap-plotter-module"></span><h1>lib.MapMaking.Qmap_plotter module<a class="headerlink" href="#module-lib.MapMaking.Qmap_plotter" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.Plots">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.MapMaking.Qmap_plotter.</span></span><span class="sig-name descname"><span class="pre">Plots</span></span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.Plots" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Instance for plotting results of Monte-Carlo Markov Chain (i.e emcee).</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.Qmap_plotter.Plots.get_convergence" title="lib.MapMaking.Qmap_plotter.Plots.get_convergence"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_convergence</span></code></a>(chain, job_id)</p></td>
+<td><p>chain assumed to be not flat with shape (nsamples, nwalkers, nparams)</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.Qmap_plotter.Plots.get_triangle" title="lib.MapMaking.Qmap_plotter.Plots.get_triangle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_triangle</span></code></a>(chain, names, labels, job_id)</p></td>
+<td><p>Make triangle plot of each estimated parameters</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.Qmap_plotter.Plots.make_list_free_parameter" title="lib.MapMaking.Qmap_plotter.Plots.make_list_free_parameter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">make_list_free_parameter</span></code></a>()</p></td>
+<td><p>Make few list :</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>get_Dl_plot</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.Plots.get_Dl_plot">
+<span class="sig-name descname"><span class="pre">get_Dl_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ell</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Dl</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Dl_err</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(10,</span> <span class="pre">10)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.Plots.get_Dl_plot" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.Plots.get_convergence">
+<span class="sig-name descname"><span class="pre">get_convergence</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.Plots.get_convergence" title="Link to this definition">¶</a></dt>
+<dd><p>chain assumed to be not flat with shape (nsamples, nwalkers, nparams)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.Plots.get_triangle">
+<span class="sig-name descname"><span class="pre">get_triangle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.Plots.get_triangle" title="Link to this definition">¶</a></dt>
+<dd><p>Make triangle plot of each estimated parameters</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.Plots.make_list_free_parameter">
+<span class="sig-name descname"><span class="pre">make_list_free_parameter</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.Plots.make_list_free_parameter" title="Link to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Make few list :</dt><dd><ul class="simple">
+<li><p>fp       : list of value of free parameters</p></li>
+<li><p>fp_name  : list of name for each values</p></li>
+<li><p>fp_latex : list of name in LateX for each values</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsCMM">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.MapMaking.Qmap_plotter.</span></span><span class="sig-name descname"><span class="pre">PlotsCMM</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">preset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dogif</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsCMM" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Instance to produce plots on the convergence.</p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.display_maps" title="lib.MapMaking.Qmap_plotter.PlotsCMM.display_maps"><code class="xref py py-obj docutils literal notranslate"><span class="pre">display_maps</span></code></a>(seenpix[, figsize, nsig, ki, view])</p></td>
+<td><p>Method to display maps at given iteration.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_beta_iteration" title="lib.MapMaking.Qmap_plotter.PlotsCMM.plot_beta_iteration"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot_beta_iteration</span></code></a>(beta[, figsize, truth, ki])</p></td>
+<td><p>Method to plot beta as a function of iteration.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_gain_iteration" title="lib.MapMaking.Qmap_plotter.PlotsCMM.plot_gain_iteration"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot_gain_iteration</span></code></a>(gain[, figsize, ki])</p></td>
+<td><p>Method to plot convergence of reconstructed gains.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_sed" title="lib.MapMaking.Qmap_plotter.PlotsCMM.plot_sed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plot_sed</span></code></a>(nus_in, A_in, nus_out, A_out[, ...])</p></td>
+<td><p>Plots the Spectral Energy Distribution (SED) and saves the plot as a PNG file.</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>plot_rms_iteration</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsCMM.display_maps">
+<span class="sig-name descname"><span class="pre">display_maps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seenpix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(14,</span> <span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsig</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">6</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ki</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">view</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gnomview'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.display_maps" title="Link to this definition">¶</a></dt>
+<dd><p>Method to display maps at given iteration.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsCMM.plot_beta_iteration">
+<span class="sig-name descname"><span class="pre">plot_beta_iteration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">beta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8,</span> <span class="pre">6)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">truth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ki</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_beta_iteration" title="Link to this definition">¶</a></dt>
+<dd><p>Method to plot beta as a function of iteration. Beta can have shape (niter) or (niter, nbeta).</p>
+<p>Parameters:
+beta : numpy.ndarray</p>
+<blockquote>
+<div><p>Array containing beta values for each iteration. Can be 1D or 2D.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>figsize<span class="classifier">tuple, optional</span></dt><dd><p>Size of the figure to be plotted. Default is (8, 6).</p>
+</dd>
+<dt>truth<span class="classifier">numpy.ndarray or float, optional</span></dt><dd><p>True value(s) of beta to be plotted as a reference line. Default is None.</p>
+</dd>
+<dt>ki<span class="classifier">int, optional</span></dt><dd><p>Iteration index for saving the plot. Default is 0.</p>
+</dd>
+</dl>
+<p>Returns:
+None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsCMM.plot_gain_iteration">
+<span class="sig-name descname"><span class="pre">plot_gain_iteration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8,</span> <span class="pre">6)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ki</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_gain_iteration" title="Link to this definition">¶</a></dt>
+<dd><p>Method to plot convergence of reconstructed gains.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsCMM.plot_rms_iteration">
+<span class="sig-name descname"><span class="pre">plot_rms_iteration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8,</span> <span class="pre">6)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ki</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_rms_iteration" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsCMM.plot_sed">
+<span class="sig-name descname"><span class="pre">plot_sed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nus_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">A_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">A_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8,</span> <span class="pre">6)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ki</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gif</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsCMM.plot_sed" title="Link to this definition">¶</a></dt>
+<dd><p>Plots the Spectral Energy Distribution (SED) and saves the plot as a PNG file.</p>
+<p>Parameters:
+nus (array-like): Array of frequency values.
+A (array-like): Array of amplitude values.
+figsize (tuple, optional): Size of the figure. Defaults to (8, 6).
+truth (array-like, optional): Array of true values for comparison. Defaults to None.
+ki (int, optional): Iteration index for file naming. Defaults to 0.</p>
+<p>Returns:
+None</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsFMM">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.MapMaking.Qmap_plotter.</span></span><span class="sig-name descname"><span class="pre">PlotsFMM</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seenpix</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsFMM" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>plot_FMM_mollview</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>plot_FMM_old</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>plot_frequency_maps</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsFMM.plot_FMM_mollview">
+<span class="sig-name descname"><span class="pre">plot_FMM_mollview</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(10,</span> <span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">istk</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsig</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fwhm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsFMM.plot_FMM_mollview" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsFMM.plot_FMM_old">
+<span class="sig-name descname"><span class="pre">plot_FMM_old</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenpix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(10,</span> <span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">istk</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsig</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'signal'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsFMM.plot_FMM_old" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.Qmap_plotter.PlotsFMM.plot_frequency_maps">
+<span class="sig-name descname"><span class="pre">plot_frequency_maps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">m_in</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reso</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nsig</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(10,</span> <span class="pre">8)</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.Qmap_plotter.PlotsFMM.plot_frequency_maps" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">qubicsoft</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, QUBIC Collaboration.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/lib.MapMaking.Qmap_plotter.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

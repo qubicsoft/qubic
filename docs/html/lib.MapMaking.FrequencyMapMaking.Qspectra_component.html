@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>lib.MapMaking.FrequencyMapMaking.Qspectra_component module &#8212; qubicsoft  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-lib.MapMaking.FrequencyMapMaking.Qspectra_component">
+<span id="lib-mapmaking-frequencymapmaking-qspectra-component-module"></span><h1>lib.MapMaking.FrequencyMapMaking.Qspectra_component module<a class="headerlink" href="#module-lib.MapMaking.FrequencyMapMaking.Qspectra_component" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.MapMaking.FrequencyMapMaking.Qspectra_component.</span></span><span class="sig-name descname"><span class="pre">CMBModel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ell</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>CMB description assuming parametrized emission law such as :</p>
+<blockquote>
+<div><p>Dl_CMB = r * Dl_tensor_r1 + Alens * Dl_lensed</p>
+</div></blockquote>
+<dl class="field-list">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><dl>
+<dt><strong>- params</strong><span class="classifier">Dictionary coming from <cite>params.yml</cite> file that define every parameters</span></dt><dd></dd>
+<dt><strong>- ell</strong><span class="classifier">Multipole used during the analysis</span></dt><dd></dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.cl2dl" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.cl2dl"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cl2dl</span></code></a>(ell, cl)</p></td>
+<td><p>Method to convert Cl to Dl which is Dl = ell * (ell + 1) * Cl / 2 * pi</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.get_Dl_cmb" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.get_Dl_cmb"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_Dl_cmb</span></code></a>()</p></td>
+<td><p>Method to interpolate theoretical BB power spectrum for effective multipoles.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.give_cl_cmb" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.give_cl_cmb"><code class="xref py py-obj docutils literal notranslate"><span class="pre">give_cl_cmb</span></code></a>(r, Alens)</p></td>
+<td><p>Method to get theoretical CMB BB power spectrum according to Alens and r.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.cl2dl">
+<span class="sig-name descname"><span class="pre">cl2dl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ell</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cl</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.cl2dl" title="Link to this definition">¶</a></dt>
+<dd><p>Method to convert Cl to Dl which is Dl = ell * (ell + 1) * Cl / 2 * pi</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.get_Dl_cmb">
+<span class="sig-name descname"><span class="pre">get_Dl_cmb</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.get_Dl_cmb" title="Link to this definition">¶</a></dt>
+<dd><p>Method to interpolate theoretical BB power spectrum for effective multipoles.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.give_cl_cmb">
+<span class="sig-name descname"><span class="pre">give_cl_cmb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Alens</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.CMBModel.give_cl_cmb" title="Link to this definition">¶</a></dt>
+<dd><p>Method to get theoretical CMB BB power spectrum according to Alens and r.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lib.MapMaking.FrequencyMapMaking.Qspectra_component.</span></span><span class="sig-name descname"><span class="pre">SkySpectra</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ell</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu0_d</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">353</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nu0_s</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.cl_to_dl" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.cl_to_dl"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cl_to_dl</span></code></a>(cl)</p></td>
+<td><p>Function to convert the cls into the dls</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.model_cmb" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.model_cmb"><code class="xref py py-obj docutils literal notranslate"><span class="pre">model_cmb</span></code></a>(r, Alens)</p></td>
+<td><p>Define the CMB model, depending on r and Alens</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_dust" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_dust"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scale_dust</span></code></a>(betad[, temp])</p></td>
+<td><p>Function to compute the dust mixing matrix element, depending on the frequency</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_sync" title="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_sync"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scale_sync</span></code></a>(betas)</p></td>
+<td><p>Function to compute the dust mixing matrix element, depending on the frequency</p></td>
+</tr>
+</tbody>
+</table>
+<table class="docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><strong>model</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>scale_dustsync</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.cl_to_dl">
+<span class="sig-name descname"><span class="pre">cl_to_dl</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cl</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.cl_to_dl" title="Link to this definition">¶</a></dt>
+<dd><p>Function to convert the cls into the dls</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.model">
+<span class="sig-name descname"><span class="pre">model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Alens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Ad</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alphad</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">betad</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">As</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alphas</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">betas</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.model" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.model_cmb">
+<span class="sig-name descname"><span class="pre">model_cmb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Alens</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.model_cmb" title="Link to this definition">¶</a></dt>
+<dd><p>Define the CMB model, depending on r and Alens</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_dust">
+<span class="sig-name descname"><span class="pre">scale_dust</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">betad</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_dust" title="Link to this definition">¶</a></dt>
+<dd><p>Function to compute the dust mixing matrix element, depending on the frequency</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_dustsync">
+<span class="sig-name descname"><span class="pre">scale_dustsync</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">betad</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">betas</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_dustsync" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_sync">
+<span class="sig-name descname"><span class="pre">scale_sync</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">betas</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.MapMaking.FrequencyMapMaking.Qspectra_component.SkySpectra.scale_sync" title="Link to this definition">¶</a></dt>
+<dd><p>Function to compute the dust mixing matrix element, depending on the frequency</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">qubicsoft</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, QUBIC Collaboration.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/lib.MapMaking.FrequencyMapMaking.Qspectra_component.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

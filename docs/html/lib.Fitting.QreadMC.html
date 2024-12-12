@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>lib.Fitting.QreadMC module &#8212; qubicsoft  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d1102ebc" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=686e5160" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-lib.Fitting.QreadMC">
+<span id="lib-fitting-qreadmc-module"></span><h1>lib.Fitting.QreadMC module<a class="headerlink" href="#module-lib.Fitting.QreadMC" title="Link to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Fitting.QreadMC.get_maps">
+<span class="sig-prename descclassname"><span class="pre">lib.Fitting.QreadMC.</span></span><span class="sig-name descname"><span class="pre">get_maps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.Fitting.QreadMC.get_maps" title="Link to this definition">¶</a></dt>
+<dd><p>Returns the full maps of a simulation.
+:type file: 
+:param file: A fits file saved from a simulation.
+:type file: str</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><em>Reconstructed maps, convolved maps and the difference between both,</em></p></li>
+<li><p><em>all with a shape (#subbands, #pixels, 3).</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Fitting.QreadMC.get_maps_many_files">
+<span class="sig-prename descclassname"><span class="pre">lib.Fitting.QreadMC.</span></span><span class="sig-name descname"><span class="pre">get_maps_many_files</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rep_simu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.Fitting.QreadMC.get_maps_many_files" title="Link to this definition">¶</a></dt>
+<dd><p>Get all the maps you want to analyze from many fits files.
+:type rep_simu: 
+:param rep_simu: Repository where the fits files are.
+:type rep_simu: str
+:type name: 
+:param name: Name of the files you are interested in.
+:type name: str
+:type verbose: 
+:param verbose:
+:type verbose: bool</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><em>A list with the names of all the files you took.</em></p></li>
+<li><p><em>Three arrays containing the reconstructed maps, the convolved maps</em></p></li>
+<li><p><em>and the difference between both.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Fitting.QreadMC.get_patch">
+<span class="sig-prename descclassname"><span class="pre">lib.Fitting.QreadMC.</span></span><span class="sig-name descname"><span class="pre">get_patch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenmap</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.Fitting.QreadMC.get_patch" title="Link to this definition">¶</a></dt>
+<dd><p>Returns the observed patch in the maps to save memory.
+:type file: 
+:param file: A fits file saved from a simulation.
+:type file: str
+:type seenmap: 
+:param seenmap: Array of booleans of shape #pixels,</p>
+<blockquote>
+<div><p>True inside the patch and False outside.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><em>Reconstructed patches, convolved patches and difference between both,</em></p></li>
+<li><p><em>all with a shape (#subbands, #pixels_seen, 3).</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Fitting.QreadMC.get_patch_many_files">
+<span class="sig-prename descclassname"><span class="pre">lib.Fitting.QreadMC.</span></span><span class="sig-name descname"><span class="pre">get_patch_many_files</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rep_simu</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">badval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1.6375e+30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-08</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.Fitting.QreadMC.get_patch_many_files" title="Link to this definition">¶</a></dt>
+<dd><p>Get all the patches you want to analyze from many fits files.
+:type rep_simu: 
+:param rep_simu: Repository where the fits files are.
+:type rep_simu: str
+:type name: 
+:param name: Name of the files you are interested in.
+:type name: str
+:type badval: 
+:param badval: The value of the pixel considered as UNSEEN
+:type badval: float
+:type rtol: 
+:param rtol: Relative tolerance for badval
+:type rtol: float
+:type atol: 
+:param atol: Absolute tolerance for badval
+:type atol: float
+:type verbose: 
+:param verbose:
+:type verbose: bool</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><em>A list with the names of all the files you took.</em></p></li>
+<li><p><em>Three arrays containing the reconstructed patches, the convolved patches</em></p></li>
+<li><p><em>and the difference between both.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Fitting.QreadMC.get_seenmap">
+<span class="sig-prename descclassname"><span class="pre">lib.Fitting.QreadMC.</span></span><span class="sig-name descname"><span class="pre">get_seenmap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">badval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1.6375e+30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-08</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.Fitting.QreadMC.get_seenmap" title="Link to this definition">¶</a></dt>
+<dd><p>Returns an array with the pixels seen or not.
+:type file: 
+:param file: A fits file saved from a simulation.
+:type file: str
+:type badval: 
+:param badval: The value of the pixel considered as UNSEEN
+:type badval: float
+:type rtol: 
+:param rtol: Relative tolerance for badval
+:type rtol: float
+:type atol: 
+:param atol: Absolute tolerance for badval
+:type atol: float</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>seenmap</strong> – Array of booleans of shape #pixels,
+True inside the patch and False outside.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>array</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Fitting.QreadMC.make_zones">
+<span class="sig-prename descclassname"><span class="pre">lib.Fitting.QreadMC.</span></span><span class="sig-name descname"><span class="pre">make_zones</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nzones</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nside</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenmap</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtheta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doplot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.Fitting.QreadMC.make_zones" title="Link to this definition">¶</a></dt>
+<dd><p>Mask a path to get different concentric zones.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>patch</strong> (<em>array</em>) – Patch you want to cut of shape (#subbands, #pix_seen, 3)</p></li>
+<li><p><strong>nzones</strong> (<em>int</em>) – Number of zones you want to make.</p></li>
+<li><p><strong>nside</strong> (<em>int</em>)</p></li>
+<li><p><strong>center</strong> (<em>array</em>) – Coordinates of the center of the patch in degree (lon, lat)</p></li>
+<li><p><strong>seenmap</strong> (<em>array</em>) – Array of booleans of shape #pixels,
+True inside the patch and False outside.</p></li>
+<li><p><strong>angle</strong> (<em>bool</em>) – If True, you make only 2 zones, inside and outside dtheta.</p></li>
+<li><p><strong>dtheta</strong> (<em>float</em>) – Size of the patch were the pointing was done (degree),
+by default it is 15°.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>)</p></li>
+<li><p><strong>doplot</strong> (<em>bool</em>) – If True, makes a plot with the different zones obtained.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>A list with the number of pixels in each zone.</em></p></li>
+<li><p><em>A list with the patch masked to get each zone.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Fitting.QreadMC.pix2ang">
+<span class="sig-prename descclassname"><span class="pre">lib.Fitting.QreadMC.</span></span><span class="sig-name descname"><span class="pre">pix2ang</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ns</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">center</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seenmap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.Fitting.QreadMC.pix2ang" title="Link to this definition">¶</a></dt>
+<dd><p>For each pixel observed, returns the angle between the pixel vector and
+the central pixel vector.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="lib.Fitting.QreadMC.save_simu_fits">
+<span class="sig-prename descclassname"><span class="pre">lib.Fitting.QreadMC.</span></span><span class="sig-name descname"><span class="pre">save_simu_fits</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">maps_recon</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cov</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nus_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maps_convolved</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">simu_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lib.Fitting.QreadMC.save_simu_fits" title="Link to this definition">¶</a></dt>
+<dd><p>Save a complete simulation in a .fits file for one number of reconstructed subbands.
+:type maps_recon: 
+:param maps_recon: Reconstructed maps in each subband.
+:type maps_recon: array
+:type cov: 
+:param cov: Coverage of the sky.
+:type cov: array
+:type nus: 
+:param nus: Central frequencies of each subband reconstructed.
+:type nus: array
+:type nus_edge: 
+:param nus_edge: Edge frequencies of each subband reconstructed.
+:type nus_edge: array
+:type maps_convolved: 
+:param maps_convolved: Maps convolved at the resolution of each subband.
+:type maps_convolved: array
+:type save_dir: 
+:param save_dir: Directory where the .fits is saved.
+:type save_dir: str
+:type simu_name: 
+:param simu_name: Name of the simulation.
+:type simu_name: str</p>
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">qubicsoft</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2024, QUBIC Collaboration.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.1.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/lib.Fitting.QreadMC.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

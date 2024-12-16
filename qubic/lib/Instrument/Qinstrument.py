@@ -1248,8 +1248,7 @@ class QubicInstrument(Instrument):
             func = "matrix_rot{0}d_i{1}_r{2}".format(
                 nstokes, dtype_index.itemsize, synthbeam.dtype.itemsize
             )
-            print("TEST func ", func)
-            
+
             getattr(flib.polarization, func)(
                 rotation.data.T, direction.T, s.data.ravel().view(np.int8), vals.T
             )

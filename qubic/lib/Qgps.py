@@ -196,9 +196,9 @@ class GPStools:
             date = observation_date
         else:
             raise TypeError('ERROR! Please choose a date in the form of a string or a datetime object.')
-
+        
         try:
-            return np.where(datetime == date)[0][0]
+            return int(np.where(datetime == date)[0][0])
         except :
             raise IndexError('ERROR! The date you chose is not in the data.')
         
@@ -229,7 +229,7 @@ class GPStools:
         
         ### If we give an unique observation date
         if len(observation_date.shape) == 1 and observation_date.shape[0] == 1:
-            return np.array([self.datetime_to_index(datetime, observation_date[0])])
+            return np.array([self.datetime_to_index(datetime, observation_date[0])], dtype=int)
         
         ### If we give a starting and stoping dates
         if len(observation_date.shape) == 1 and observation_date.shape[0] == 2:

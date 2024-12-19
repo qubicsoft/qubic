@@ -228,11 +228,11 @@ class GPStools:
         """        
         
         ### If we give an unique observation date
-        if len(observation_date.shape) == 1 and observation_date.shape[0] == 1:
+        if len(observation_date.shape) == 1 and observation_date.size == 1:
             return np.array([self.datetime_to_index(datetime, observation_date[0])], dtype=int)
         
         ### If we give a starting and stoping dates
-        if len(observation_date.shape) == 1 and observation_date.shape[0] == 2:
+        if len(observation_date.shape) == 1 and observation_date.size == 2:
             start_index = self.datetime_to_index(datetime, observation_date[0])
             end_index = self.datetime_to_index(datetime, observation_date[1])
             return np.arange(start_index, end_index, 1, dtype=int)
@@ -315,13 +315,13 @@ class GPStools:
         
         ax1.set_xlabel('Date')
         ax1.set_ylabel('Position Vector Components (m)', color = color_r)
-        ax1.plot(self._datetime[index_start:index_stop], self.rpN[index_start:index_stop], color = color_a, label = 'North component')
+        ax1.plot(self._datetime[index_start:index_stop], self.rpN[index_start:index_stop], color = color_r, label = 'North component')
         ax1.plot(self._datetime[index_start:index_stop], self.rpE[index_start:index_stop], color = color_b, label = 'East component')
         ax1.plot(self._datetime[index_start:index_stop], self.rpD[index_start:index_stop], color = color_d, label = 'Up component')
 
         ax2 = ax1.twinx()
 
-        ax2.plot(self._datetime[index_start:index_stop], self.roll[index_start:index_stop], color = color_r, label = 'Roll angle')
+        ax2.plot(self._datetime[index_start:index_stop], self.roll[index_start:index_stop], color = color_a, label = 'Roll angle')
         ax2.plot(self._datetime[index_start:index_stop], self.yaw[index_start:index_stop], color = color_c, label = 'Yaw angle')
         ax2.set_xlabel('Date')
         ax2.set_ylabel('Angles (rad)', color = color_a)
@@ -329,7 +329,7 @@ class GPStools:
 
         fig.tight_layout()
         ax1.set_title("Position vector components")
-        fig.legend()
+        fig.legend(bbox_to_anchor=(1, 1), loc='upper left')
         plt.show()
     
 class GPSAntenna(GPStools):

@@ -871,7 +871,6 @@ class PipelineFrequencyMapMaking:
                     list(self.nus_Q) + list(self.externaldata.experiments['Planck']['frequency'])
                 )
                 self.fwhm_rec = np.array(list(self.fwhm_rec) + list(fwhm_ext))
-            print(self.s_hat.shape)
             self.plots.plot_frequency_maps(
                 self.m_nu_in[: len(self.nus_Q)],
                 self.s_hat[: len(self.nus_Q)],

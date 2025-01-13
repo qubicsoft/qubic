@@ -63,6 +63,8 @@ class BeamGaussian(Beam):
         else:  # nu = 220
             self.fwhm = 0.1009 * np.sqrt(8 * np.log(2)) * 220 / self.nu
         self.sigma = self.fwhm / np.sqrt(8 * np.log(2))
+        print("nu", self.nu)
+        print('fwhm', self.fwhm)
         self.backward = bool(backward)
         Beam.__init__(self, 2 * np.pi * self.sigma ** 2)
 

@@ -336,13 +336,7 @@ class QubicInstrument(Instrument):
         self.horn.radeff = self.horn.radius
         # In the 150 GHz band, horns are one moded
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
-            kappa = (
-                np.pi
-                * self.horn.radius**2
-                * self.primary_beam.solid_angle
-                * filter_nu**2
-                / c**2
-            )
+            kappa = (np.pi * self.horn.radius**2 * self.primary_beam.solid_angle * filter_nu**2 / c**2)
             self.horn.radeff = self.horn.radius / np.sqrt(kappa)
 
     def _init_optics(self, polarizer, d):

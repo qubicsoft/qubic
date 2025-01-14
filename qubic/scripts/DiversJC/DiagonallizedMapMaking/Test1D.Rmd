@@ -143,9 +143,9 @@ maxth = 20
 nth = 2**15+1
 th = np.linspace(minth, maxth, nth)
 # kmax_build = 5
-# mytype = 'BI'
+mytype = 'BI'
 # mytype = 'BI-GPA'
-mytype = 'Imager'
+# mytype = 'Imager'
 
 plt.subplot(1,2,1)
 plt.plot(th, get_primbeam(th, lam), 'k--', label='Th. Prim. Beam at {0:3.0f} GHz'.format(nu/1e9))
@@ -170,6 +170,10 @@ plt.title('Pointings')
 
 
 ```
+
+- Alexandre: check the coverage: are there unseen pixels, or almost unseen ?
+- Steve: Try it on antoher computer (CC)
+- Alexandre: Increse number of pixels => blue point systemtically above red line
 
 ```{python}
 print(len(b))
@@ -197,7 +201,7 @@ for i in range(len(mydetpos)):
     # observed = scipy.signal.oaconvolve(truey, norm_filt(xpix, th, b), 
     #                                 mode='same')
     TOD[i,:] = np.interp(ptg_deg, xpix, observed) + np.random.randn(nptg)*noise_sigma
-    plt.plot(ptg_deg, TOD[i,:], ',', alpha=0.5, label='TOD Detector #{}'.format(i))
+    plt.plot(ptg_deg, TOD[i,:], '.', alpha=0.5, label='TOD Detector #{}'.format(i))
 plt.axhline(y=0,ls='--', color='k')
 plt.legend()
 
@@ -275,8 +279,10 @@ sig_conv = fwhmpeak/2.35/deltax
 # convy = scipy.ndimage.gaussian_filter1d(truey, sig_conv, mode='wrap')
 ### Full-Sky convolution as for TOD fabrication
 ### NB: here sigma needs to be in angles
-bgauss = np.exp(-0.5*(th/(sig_conv*deltax))**2)
+bgauss = np.exp(-0.5*(th/(fwhmpeak/2.35))**2)
+### Slow
 # convy=scipy.ndimage.convolve1d(truey, norm_filt(xpix, th, bgauss), mode='wrap')
+### Fast
 convy=conv_circ(truey, norm_filt(xpix, th, bgauss))
 
 
@@ -354,16 +360,6 @@ plt.tight_layout()
 ```
 
 ```{python}
-truc = HtHinv[0,:,:] @ HtH[0,:,:]
-diff = truc-np.diag(np.ones(npix))
-plt.plot(diff[0,:100])
-```
-
-```{python}
-plt.plot(HtH[0,:,0])
-```
-
-```{python}
 ## One problem solved
 # expressing the convolution applied to the input sky in order to produce convolved sky to be then resampled (pixel size) 
 # in order to calculate residuals was done differently w.r.t. TOD production (2pi convolution) and was required to be expressed 
@@ -388,30 +384,39 @@ deltax = xpix[1]-xpix[0]
 # in TOD fabrication the convolved sky is achieved using: [above inititally it's with xpix, not xpix-deltax/2
 i=0
 b, _, _, _, _ = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=mydetpos[i]/1000, kmax=kmax_build, type=mytype)
-observed = scipy.ndimage.convolve1d(truey, norm_filt(xpix, th, b), 
-                                mode='wrap')
+observed = conv_circ(truey, norm_filt(xpix, th, b))
+# observed = scipy.ndimage.convolve1d(truey, norm_filt(xpix, th, b), 
+#                                 mode='wrap')
 
 # but when we construct the convolved sky for residuals calculation we do:
-myconvy = scipy.ndimage.gaussian_filter1d(truey, sig_conv, mode='wrap')
+# myconvy = scipy.ndimage.gaussian_filter1d(truey, sig_conv, mode='wrap')
+### Let's replace the above by a full convolution
+gg = 1./np.sqrt(2*np.pi*(fwhmpeak/2.35)**2)*np.exp(-0.5*xpix**2/(fwhmpeak/2.35)**2)
+myconvy = conv_circ(truey, norm_filt(xpix, xpix, gg))
+
+####### THERE IS SOMETHING WEIRD HERE 13/01/25 18h00 before leaving
+### Is there a shift between convolve1d and conv_circ ? it does not affect much the residuals at the end apparently... strange...
+### Still to test the resample !
+
 newconvy = scipy.signal.resample(np.interp(xpix+delta_pix/2, xpix, myconvy), npix)
 
 
 nn0 = 3390
 nn1 = 3420
 deltax = xpix[1]-xpix[0]
-plt.plot(xpix[nn0:nn1], myconvy[nn0:nn1], label='filter1d', lw=3)
 plt.plot(xpix[nn0:nn1], observed[nn0:nn1], label='Full Conv', lw=3)
-
+plt.plot(xpix[nn0:nn1], myconvy[nn0:nn1], label='filter1d', lw=3)
 plt.plot(pix_center, newconvy, 'o', label='filter1d resampled', lw=3)
 plt.xlim(xpix[nn0], xpix[nn1])
+
 plt.plot(xpix[nn0:nn1]+deltax/2, observed[nn0:nn1], label='Full Conv shifted', color='r', lw=3, ls='--')
 plt.ylim(0.0, 0.1)
 plt.legend()
-stop
+
 
 ### Indeed with the imager, when replacing myconvy by oberved in the resolution cell, we get much smaller residuals !
 ### There is an issue with the convolution then...
-
+plt.figure()
 plt.plot(xpix, truey, label='True Sky')
 plt.plot(xpix, observed, label='Observed')
 plt.plot(xpix, myconvy, label='myconvy')

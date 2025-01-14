@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from scipy.signal import medfilt
+from scipy.signal import resample
 from scipy.interpolate import interp1d
 import glob
 from importlib import reload
@@ -33,6 +34,13 @@ import sys
 plt.rc('figure',figsize=(16,10))
 plt.rc('font',size=12)
 
+dirtemplibs = [os.environ['QUBIC_DATADIR']+'scripts/DiversJC/CalibSalta/']
+for rep in dirtemplibs:     
+    if rep not in sys.path:
+        sys.path.append(rep)
+
+#### Local files that will need to be installed in the Qubic Libs
+import fitting as fit
 
 ```
 
@@ -151,8 +159,9 @@ plt.show()
 #     return mymap[mypix_x, mypix_y]
 
 def get_signal_direct(ptgx, ptgy, windx, windy, mymap):
-    mypix_x = (np.round(windx+ptgx)).astype(int)
-    mypix_y = (np.round(windy+ptgy)).astype(int)
+    sh = np.shape(mymap)
+    mypix_x = (np.round(windx+ptgx)).astype(int) % sh[0]
+    mypix_y = (np.round(windy+ptgy)).astype(int) % sh[1]
     data = np.zeros(len(windx))
     for i in range(len(windx)):
         data[i] = mymap[mypix_x[i], mypix_y[i]]
@@ -225,6 +234,47 @@ plt.plot(signal, label='Direct')
 plt.plot(signal_shift,'--', label='Roll')
 plt.plot(signal_shift_indices,':', label='Roll Indices')
 plt.legend()
+```
+
+## Bruit en 1/f
+
+```{python}
+grid_size = 512
+seed = None
+
+x0, y0 = grid_size//2, grid_size//2
+
+realization = generate_gaussian_realization_2D(kolmogorov_power_spectrum, grid_size, seed, grid_scale=1)
+
+nptg = 2**13
+dx = 200
+dy = 200
+ptgx, ptgy = pointing(nptg, dx, dy, x0, y0, nscans=5)
+
+winds = [0, 10, 100, 1000]
+
+for i in np.arange(len(winds)):
+    wind_rms = winds[i]
+    windx = resample(realization[np.random.randint(grid_size),:], nptg)
+    windx = windx * (wind_rms / np.std(windx))
+    windy = resample(realization[np.random.randint(grid_size),:], nptg)
+    windy = windy * (wind_rms / np.std(windy))
+    
+    signal = get_signal_direct(ptgx, ptgy, windx, windy, realization)
+    plt.subplot(2,1,1)
+    plt.plot(signal, label='Direct')
+    plt.legend()
+    
+    ps = np.abs(np.fft.fft(signal))**2
+    ff = np.fft.fftfreq(len(signal))
+    
+    pos = ff>0
+    
+    plt.subplot(2,1,2)
+    plt.plot(ff[pos], ps[pos], '.', alpha=0.5, label='WInd = {:5.2g}'.format(wind_rms))
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.legend()
 ```
 
 ```{python}

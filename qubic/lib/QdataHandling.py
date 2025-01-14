@@ -3,6 +3,7 @@ import datetime as dt
 
 import numpy as np
 from matplotlib.pyplot import *
+import matplotlib.pyplot as plt
 
 import healpy as hp
 
@@ -182,6 +183,8 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
         aa=plt.colorbar()
         aa.ax.set_ylabel('Scan number')
         #plt.tight_layout()
+
+    vmean = 0.5 * (np.abs(np.mean(medaz_dt[cpos])) +  np.abs(np.mean(medaz_dt[cneg])))
     if tt is not None:
         ### We propagate these at TOD sampling rate  (this is an "step interpolation": we do not want intermediatee values")
         scantype = interp1d(thk, scantype_hk, kind='previous', fill_value='extrapolate')(tt)
@@ -194,7 +197,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
         azt = np.interp(tt, thk, az)
         elt = np.interp(tt, thk, el)
         ### Return evereything
-        return scantype_hk, azt, elt, scantype
+        return scantype_hk, azt, elt, scantype, vmean
     else:
         ### Return scantype at HK sampling only
         return scantype_hk
@@ -548,13 +551,20 @@ class BeamMapsAnalysis(object):
 
         FitsArray(mymap).save(repository+'/imgHealpix_TESNum_{}.fits'.format(TESNum))
 
-def display_healpix_map(maps, rot, q, reso=15, add_moon_traj=None, savepdf=None, radec=['G']):
+def display_healpix_map(maps, rot, q, reso=15, add_moon_traj=None, 
+                        savepdf=None, radec=['G'], good=None, **kwargs):
 
+    allTESnums = np.arange(256)+1
+    if good is None:
+        tesok = np.ones(256, dtype=bool)
+    else:
+        tesok = good.copy()
+        
     if add_moon_traj is not None:
         th, phi = add_moon_traj
 
-    figure(figsize=(30, 30))
-    #k=1
+    plt.figure(figsize=(30, 30))
+    
     bar=progress_bar(maps.shape[0], 'Display healpix maps')
 
     x=np.linspace(-0.0504, -0.0024, 17)
@@ -564,22 +574,38 @@ def display_healpix_map(maps, rot, q, reso=15, add_moon_traj=None, savepdf=None,
 
     allTES=np.arange(1, 129, 1)
     good_tes=np.delete(allTES, np.array([4,36,68,100])-1, axis=0)
+    good_tes = allTES
+    coord_thermo=np.array([17*11+1, 17*12+1, 17*13+1, 17*14+1, 275, 276, 277, 278])
     k=0
+    k_thermo=0
     for j in [1, 2]:
         for i in good_tes:
 
-            #print(i)
-            xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=i, ASIC=j, q=q, frame='ONAFP', verbose=False)
-            ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
-            place_graph=ind[0][0]*17+ind[1][0]+1
+            if np.sum(i == np.array([4,36,68,100])) != 0:
+                place_graph=coord_thermo[k_thermo]
+                k_thermo+=1
+            else:
+                xtes, ytes, FP_index, index_q= scal.TES_Instru2coord(TES=i, ASIC=j, q=q, frame='ONAFP', verbose=False)
+                ind=np.where((np.round(xtes, 4) == np.round(X, 4)) & (np.round(ytes, 4) == np.round(Y, 4)))
+                place_graph=ind[0][0]*17+ind[1][0]+1
             mytes=i
             if j == 2:
                 mytes+=128
-            hp.gnomview(maps[mytes-1], rot=rot, reso=reso, sub=(17, 17, place_graph), cmap='jet',
-                notext=True, cbar=False, title='', margins=(0.001, 0.001, 0.001, 0.001), coord=radec)
 
-            annotate('TES = {}'.format(mytes), xy=(0, 0),  xycoords='axes fraction', fontsize=15, color='black',
-                     fontstyle='italic', xytext=(0.2, 0.8))
+            # plt.subplot(17, 17, place_graph)
+            hp.gnomview(maps[mytes-1], rot=rot, reso=reso, sub=(17, 17, place_graph), cmap='jet',
+                notext=True, cbar=False, title='', margins=(0.001, 0.001, 0.001, 0.001), coord=radec, **kwargs)
+
+            if mytes in allTESnums[tesok]:
+                bgcol = 'lightgreen'
+            else:
+                bgcol = 'pink'
+
+            extra_str = ''
+            if mytes in [4, 36, 68, 100, 132, 164, 196, 228]:
+                extra_str = ' (Th)'
+            plt.annotate('{}'.format(mytes)+extra_str, xy=(0, 0),  xycoords='axes fraction', fontsize=12, color='black',
+                     fontstyle='italic', fontweight='bold', xytext=(0.05,0.88),backgroundcolor=bgcol)
             bar.update()
             if add_moon_traj is not None:
                 hp.projplot(th, phi, color='k', lonlat=False, alpha=0.8, lw=2)
@@ -587,8 +613,8 @@ def display_healpix_map(maps, rot, q, reso=15, add_moon_traj=None, savepdf=None,
 
             k+=1
     if savepdf != None:
-        savefig(savepdf, format="pdf", bbox_inches="tight")
-    show()
+        plt.savefig(savepdf, format="pdf", bbox_inches="tight")
+    plt.show()
 
 def plot_data_on_FP(datain, q, lim=None, savepdf=None, **kwargs):
 

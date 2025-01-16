@@ -302,9 +302,7 @@ class QubicInstrument(Instrument):
 
     def _init_beams(self, primary, secondary, filter_nu):
         # The beam shape is taken into account
-        nu = (
-            filter_nu / 1e9
-        )  ### NB: this has been corrected on Nov 17th by JCH before nu was cast into an integer for a mysterious reason
+        nu = (filter_nu / 1e9)  ### NB: this has been corrected on Nov 17th by JCH before nu was cast into an integer for a mysterious reason
         if primary == "gaussian":
             PrimBeam = BeamGaussian(np.radians(self.calibration.get("primbeam")), nu=nu)
         elif primary == "fitted_beam":
@@ -315,17 +313,13 @@ class QubicInstrument(Instrument):
             PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu)
         self.primary_beam = PrimBeam
         if secondary == "gaussian":
-            SecBeam = BeamGaussian(
-                np.radians(self.calibration.get("primbeam")), nu=nu, backward=True
-            )
+            SecBeam = BeamGaussian(np.radians(self.calibration.get("primbeam")), nu=nu, backward=True)
         elif secondary == "fitted_beam":
             par, omega = self.calibration.get("primbeam")
             SecBeam = BeamFitted(par, omega, nu=nu, backward=True)
         elif secondary == "multi_freq":
             parth, parfr, parbeam, alpha, xspl = self.calibration.get("primbeam")
-            SecBeam = MultiFreqBeam(
-                parth, parfr, parbeam, alpha, xspl, nu=nu, backward=True
-            )
+            SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu, backward=True)
         self.secondary_beam = SecBeam
 
     def _init_filter(self, nu, relative_bandwidth):
@@ -1178,7 +1172,7 @@ class QubicInstrument(Instrument):
         thetas, phis, vals = QubicInstrument._peak_angles(
             scene, nu, position, synthbeam, horn, primary_beam
         )
-        
+
         ### Compute normed peaks direction vector for each detectors in cartesian coordinates
         npeaks = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, npeaks, 2)
@@ -1282,9 +1276,8 @@ class QubicInstrument(Instrument):
         phi = phi[tuple(index)]
         val = val[tuple(index)]
         cumval = np.cumsum(val, axis=-1)
-        imaxs = (
-            np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None], axis=-1) + 1
-        )
+        imaxs = (np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None], axis=-1) + 1)
+        # Maximum index of the considered peaks
         imax = max(imaxs)
 
         # slice initial arrays to discard the non-significant peaks
@@ -1296,9 +1289,7 @@ class QubicInstrument(Instrument):
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
             val[idet, imax_:] = 0
-            theta[idet, imax_:] = (
-                np.pi / 2
-            )  # XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
+            theta[idet, imax_:] = (np.pi / 2)  # XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
             phi[idet, imax_:] = 0
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
         val *= solid_angle / scene.solid_angle * len(horn)
@@ -1326,10 +1317,12 @@ class QubicInstrument(Instrument):
         """
         lmbda = c / nu
         position = -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
+
         if angle != 0:
+            angle = np.deg2rad(angle)
             _kx, _ky = np.mgrid[-kmax : kmax + 1, -kmax : kmax + 1]
-            kx = _kx * np.cos(angle * np.pi / 180) - _ky * np.sin(angle * np.pi / 180)
-            ky = _kx * np.sin(angle * np.pi / 180) + _ky * np.cos(angle * np.pi / 180)
+            kx = _kx * np.cos(angle) - _ky * np.sin(angle)
+            ky = _kx * np.sin(angle) + _ky * np.cos(angle)
         else:
             kx, ky = np.mgrid[-kmax : kmax + 1, -kmax : kmax + 1]
 
@@ -1783,7 +1776,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                     )
                 # print(nus_edge150)
                 d1["filter_nu"] = filter_nus150[i] * 1e9
-                d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
+                d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]  
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
 
             for i in range(len(filter_nus220)):
@@ -1793,7 +1786,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                     )
                 # print(nus_edge220)
                 d1["filter_nu"] = filter_nus220[i] * 1e9
-                d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
+                d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i] 
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
         else:
 
@@ -1879,19 +1872,14 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
     def __len__(self):
         return len(self.subinstruments)
 
-    def get_synthbeam(
-        self, scene, idet=None, theta_max=45, detector_integrate=None, detpos=None
-    ):
-        sb = map(
-            lambda i: i.get_synthbeam(
-                scene,
-                idet,
-                theta_max,
-                detector_integrate=detector_integrate,
-                detpos=detpos,
-            ),
-            self.subinstruments,
-        )
+    def get_synthbeam(self, scene, idet=None, theta_max=45, detector_integrate=None, detpos=None):
+        sb = map(lambda i: i.get_synthbeam(scene,   
+                                           idet,  
+                                           theta_max,    
+                                           detector_integrate=detector_integrate,  
+                                           detpos=detpos),
+                        self.subinstruments)
+        
         sb = np.array(sb)
         bw = np.zeros(len(self))
         for i in range(len(self)):

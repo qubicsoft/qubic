@@ -23,7 +23,7 @@ h_grid: 1                         # Number of sqares for the altitude, i for 2d
 h_qubic: 4869                     # QUBIC altitude in m
 size_atm: 2500                    # Lenght of the atm in m
 nsub_in: 12                       # Number of sub-acquisitions used to integrate over the atm spectrum
-nrec: 2
+nrec: 4
 2d: True                          # Determine if you want to simulate a 2d atm
 nside: 128
 n_theta: 10000

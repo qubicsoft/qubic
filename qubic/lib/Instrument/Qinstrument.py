@@ -302,7 +302,7 @@ class QubicInstrument(Instrument):
 
     def _init_beams(self, primary, secondary, filter_nu):
         # The beam shape is taken into account
-        nu = (filter_nu / 1e9)  ### NB: this has been corrected on Nov 17th by JCH before nu was cast into an integer for a mysterious reason
+        nu = (filter_nu/1e9)  ### NB: this has been corrected on Nov 17th by JCH before nu was cast into an integer for a mysterious reason
         if primary == "gaussian":
             PrimBeam = BeamGaussian(np.radians(self.calibration.get("primbeam")), nu=nu)
         elif primary == "fitted_beam":
@@ -1269,12 +1269,15 @@ class QubicInstrument(Instrument):
         theta, phi = QubicInstrument._peak_angles_kmax(
             synthbeam.kmax, horn.spacing, horn.angle, nu, position
         )
+
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         index = _argsort_reverse(val)
         theta = theta[tuple(index)]
+        
         phi = phi[tuple(index)]
         val = val[tuple(index)]
+        
         cumval = np.cumsum(val, axis=-1)
         imaxs = (np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None], axis=-1) + 1)
         # Maximum index of the considered peaks
@@ -1291,6 +1294,7 @@ class QubicInstrument(Instrument):
             val[idet, imax_:] = 0
             theta[idet, imax_:] = (np.pi / 2)  # XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
             phi[idet, imax_:] = 0
+
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
         val *= solid_angle / scene.solid_angle * len(horn)
         return theta, phi, val

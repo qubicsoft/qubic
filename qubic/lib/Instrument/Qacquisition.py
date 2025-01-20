@@ -661,7 +661,6 @@ class PlanckAcquisition:
             m[i] = C(m[i])
 
         return np.mean(m, axis=0)
-
 class QubicMultiAcquisitions:
     """
 

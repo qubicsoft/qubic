@@ -206,7 +206,7 @@ def find_file(filename,verbosity=1):
     for var in os.environ.keys():
         match = re.search('QUBIC_.*DIR',var)
         if match:
-            dir_list.append(var)
+            dir_list.append(os.environ[var])
         
     dir_list += [dicts_dir,cal_dir,data_dir]
     

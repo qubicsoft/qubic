@@ -43,7 +43,7 @@ from ..Qscene import QubicScene
 from fgbuster.mixingmatrix import MixingMatrix
 
 def arcmin2rad(arcmin):
-    return arcmin * 0.000290888
+    return arcmin * 0.000290888 
 
 class QubicAcquisition(Acquisition):
     """
@@ -960,7 +960,7 @@ class QubicDualBand(QubicMultiAcquisitions):
                 convolution = IdentityOperator()
             else:
                 convolution = HealpixConvolutionGaussianOperator(
-                    fwhm=fwhm[isub], lmax=2 * self.scene.nside
+                    fwhm=fwhm[isub], lmax=2 * self.scene.nside - 1
                 )
 
             ### Compose operator as H = Proj * C * A
@@ -1029,7 +1029,7 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
                         * (self.allnus <= self.allnus[imax])
                     ].sum(axis=0)
                 ]
-
+                
             return BlockRowOperator(op_sum, new_axisin=0)
 
         ### Components Map-Making
@@ -1369,7 +1369,6 @@ class JointAcquisitionFrequencyMapMaking:
             R_qubic = ReshapeOperator(
                 H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0]
             )
-
             R_planck = ReshapeOperator(
                 (12 * self.qubic.scene.nside**2, 3),
                 (12 * self.qubic.scene.nside**2 * 3),

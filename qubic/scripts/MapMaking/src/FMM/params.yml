@@ -1,4 +1,4 @@
-path_out: 'test_Fastsimulator/'
+path_out: 'test_edge_effect/'
 datafilename: 'MC_CMB_wo_Planck'
 
 CMB:
@@ -18,8 +18,8 @@ QUBIC:
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
     npointings: 3000                        # Number of time samples
-    nsub_in: 12                             # Number of sub-acquisitions
-    nsub_out: 12
+    nsub_in: 8                             # Number of sub-acquisitions
+    nsub_out: 8
     nrec: 2                                # Number of reconstructed frequency maps
     convolution_in: True                   # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
@@ -39,8 +39,8 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 256                              # Nside of components
-    coverage_cut: 0.15                      # Define a cut where the coverage is too low
+    nside: 128                              # Nside of components
+    coverage_cut: 0.2                      # Define a cut where the coverage is too low
     RA_center: 0                   
     DEC_center: -57
 
@@ -48,9 +48,9 @@ PLANCK:
 
     ### This section define which external data are we using
 
-    external_data: False                        
-    weight_planck: 0                            # Weight of Planck data within the QUBIC patch
-    level_noise_planck: 0                       # Noise level for Planck data
+    external_data: True                        
+    weight_planck: 1                            # Weight of Planck data within the QUBIC patch
+    level_noise_planck: 1                       # Noise level for Planck data
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
 
@@ -62,7 +62,7 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 200                                   # Number of PCG iterations
+    n_iter_pcg: 35                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: False

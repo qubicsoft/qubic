@@ -289,7 +289,6 @@ class PipelineFrequencyMapMaking:
             dict_sky["cmb"] = seed
 
         for j in self.params["Foregrounds"]:
-            # print(j, self.params['Foregrounds'][j])
             if j == "Dust":
                 if self.params["Foregrounds"][j]:
                     dict_sky["dust"] = "d0"
@@ -589,7 +588,7 @@ class PipelineFrequencyMapMaking:
                     self.maps_input.maps[0] + self.noise143
                 )
                 TOD_PLANCK[1] = C(
-                    self.maps_input.maps[0] + self.noise217
+                    self.maps_input.maps[1] + self.noise217
                 )
 
             TOD_PLANCK = TOD_PLANCK.ravel()
@@ -736,8 +735,6 @@ class PipelineFrequencyMapMaking:
         """
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
-        print(self.invN.shapein, self.invN.shapeout)
-        print(self.H_out.shapein, self.H_out.shapeout)
         A = self.H_out.T * self.invN * self.H_out
 
         if self.params['PLANCK']['external_data']:
@@ -892,7 +889,6 @@ class PipelineFrequencyMapMaking:
                 "coverage": self.coverage,
                 "convergence": self.convergence_pcg,
                 "center": self.center,
-                "maps_in": self.m_nu_in,
                 "parameters": self.params,
                 "fwhm_in": self.fwhm_in,
                 "fwhm_out": self.fwhm_out,

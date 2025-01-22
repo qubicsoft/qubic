@@ -820,6 +820,7 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
     xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins, plot=False, rng=rng)
     xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:, 1], nbins=nbins, plot=False, rng=rng)
     xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:, 2], nbins=nbins, plot=False, rng=rng)
+    print(dyI.shape, dyQ.shape, dyU.shape)
     avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3)
     if doplot:
         plot(xx, avg, 'o', label=label)

@@ -823,7 +823,7 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
     print(dyI.shape, dyQ.shape, dyU.shape)
     avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3)
     if doplot:
-        plot(xx, avg, 'o', label=label)
+        plot(xx, avg, 'o', label=label + ' Average')
         if allstokes:
             plot(xx, dyI, label=label + ' I', alpha=0.3)
             plot(xx, dyQ / np.sqrt(2), label=label + ' Q/sqrt(2)', alpha=0.3)

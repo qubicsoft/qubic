@@ -1,5 +1,5 @@
 path_out: 'test_edge_effect/'
-datafilename: 'CMB_wo_convo_w_Planck'
+datafilename: 'CMB_w_convo_w_Planck_noiseless_test'
 
 CMB:
     cmb: True
@@ -21,13 +21,13 @@ QUBIC:
     nsub_in: 8                             # Number of sub-acquisitions
     nsub_out: 8
     nrec: 2                                # Number of reconstructed frequency maps
-    convolution_in: False               # Angular resolution in the input TOD
+    convolution_in: True               # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
-        ndet: 1                             # Level of detector noise
-        npho150: 1                          # Level of photon noise at 150 GHz
-        npho220: 1                          # Level of photon noise at 220 GHz
+        ndet: 0                             # Level of detector noise
+        npho150: 0                          # Level of photon noise at 150 GHz
+        npho220: 0                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise
         seed: -1
     SYNTHBEAM:
@@ -62,7 +62,7 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 100                                   # Number of PCG iterations
+    n_iter_pcg: 35                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: False

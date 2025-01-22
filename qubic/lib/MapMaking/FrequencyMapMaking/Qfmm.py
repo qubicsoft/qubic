@@ -80,7 +80,6 @@ class PipelineFrequencyMapMaking:
         ### Sky
         self.dict_in = self.get_dict(key="in")
         self.dict_out = self.get_dict(key="out")
-        
 
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
@@ -137,7 +136,11 @@ class PipelineFrequencyMapMaking:
             nside=self.params["SKY"]["nside"],
             corrected_bandpass=self.params["QUBIC"]["bandpass_correction"],
         )
-        
+
+        for i in range(len(self.fwhm_in)):
+            C = HealpixConvolutionGaussianOperator(self.fwhm_in[i])
+            self.maps_input.m_nu[i] = C(self.maps_input.m_nu[i])
+
         ### Initial maps
         self.m_nu_in = self.get_input_map(m_nu=self.maps_input.m_nu)
         
@@ -151,7 +154,6 @@ class PipelineFrequencyMapMaking:
             self.invN = self.joint.qubic.get_invntt_operator()
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
-        
         
         ### Noises
         seed_noise_planck = self.mpi.get_random_value()
@@ -222,7 +224,7 @@ class PipelineFrequencyMapMaking:
         """
         
         ### QUBIC Pointing matrix for TOD generation
-        self.H_in_qubic = self.joint_tod.qubic.get_operator(fwhm=self.fwhm_in)
+        self.H_in_qubic = self.joint_tod.qubic.get_operator(fwhm=self.fwhm_in*0)
 
         ### Pointing matrix for reconstruction
         if self.params['PLANCK']['external_data']:
@@ -411,14 +413,12 @@ class PipelineFrequencyMapMaking:
                     np.sqrt(
                         self.joint.qubic.allfwhm[
                             irec * self.fsub_out : (irec + 1) * self.fsub_out
-                        ]
-                        ** 2
+                        ] ** 2
                         - np.min(
                             self.joint.qubic.allfwhm[
                                 irec * self.fsub_out : (irec + 1) * self.fsub_out
                             ]
-                        )
-                        ** 2
+                        ) ** 2
                     ),
                 )
 
@@ -492,7 +492,7 @@ class PipelineFrequencyMapMaking:
             print(f"FWHM for TOD generation : {fwhm_in}")
             print(f"FWHM for reconstruction : {fwhm_out}")
             print(f"Final FWHM : {fwhm_rec}")
-
+   
         return fwhm_in, fwhm_out, fwhm_rec
 
     def get_input_map(self, m_nu):
@@ -608,6 +608,8 @@ class PipelineFrequencyMapMaking:
                 self.H_in_qubic(self.maps_input.m_nu).ravel()
                 + self.noiseq
             )
+
+
             if self.params["PLANCK"]["external_data"] == False:
                 TOD = TOD_QUBIC
             else:
@@ -742,7 +744,7 @@ class PipelineFrequencyMapMaking:
             b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck))
         else:
             b = self.H_out.T * self.invN * d
-            
+
         ### Preconditionning
         M = self.get_preconditioner()
 
@@ -752,9 +754,8 @@ class PipelineFrequencyMapMaking:
             gif_folder = None
         
         true_maps = self.m_nu_in.copy()
-        
         for irec in range(self.params["QUBIC"]["nrec"]):
-            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec], lmax = 2 * self.params['Spectrum']['lmax'])
+            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec]*0, lmax = 2 * self.params['Spectrum']['lmax'])
             true_maps[irec] = C(self.m_nu_in[irec])
             
         ### PCG
@@ -769,8 +770,8 @@ class PipelineFrequencyMapMaking:
             maxiter=self.params["PCG"]["n_iter_pcg"],
             gif_folder=gif_folder,
             job_id=self.job_id,
-            seenpix=self.seenpix,
-            seenpix_plot=self.seenpix,
+            seenpix=seenpix,
+            seenpix_plot=seenpix,
             center=self.center,
             reso=self.params["PCG"]["resolution_plot"],
             fwhm_plot=self.params["PCG"]["fwhm_plot"],
@@ -885,6 +886,7 @@ class PipelineFrequencyMapMaking:
                 "maps_in":self.m_nu_in,
                 "maps": self.s_hat,
                 "maps_noise": self.s_hat_noise,
+                "tod": self.TOD,
                 "nus": self.nus_rec,
                 "coverage": self.coverage,
                 "convergence": self.convergence_pcg,

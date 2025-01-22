@@ -971,7 +971,7 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         ### Do the sum over operators depending on the reconstruction model
         H = self.sum_over_band(self.operator, algo=algo, gain=gain)
-
+        
         return H
 
     def get_invntt_operator(self):

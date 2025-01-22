@@ -796,6 +796,7 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
 
     if doplot:
         xlabel('1./cov normed')
+        legend()
         if norm:
             add_yl = ' (Normalized to 1 at 1)'
         else:

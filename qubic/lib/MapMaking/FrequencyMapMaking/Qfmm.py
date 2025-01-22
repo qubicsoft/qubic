@@ -781,6 +781,8 @@ class PipelineFrequencyMapMaking:
             is_planck=self.params['PLANCK']['external_data'],
         )
 
+        self.convergence_pcg = solution_qubic_planck['x']["convergence"]
+
         if self.params["PCG"]["gif"]:
             do_gif(gif_folder, "iter_", output="animation.gif")
 
@@ -888,6 +890,7 @@ class PipelineFrequencyMapMaking:
                 "maps_noise": self.s_hat_noise,
                 "nus": self.nus_rec,
                 "coverage": self.coverage,
+                "convergence": self.convergence_pcg,
                 "center": self.center,
                 "maps_in": self.m_nu_in,
                 "parameters": self.params,

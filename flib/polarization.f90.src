@@ -68,8 +68,6 @@ contains
         real(real64), intent(out) :: etheta(3), ephi(2)
         real(real64) :: x, y, z, tmp
 
-        PRINT *, "Hello, world!"
-
         x = en(1)
         y = en(2)
         z = en(3)

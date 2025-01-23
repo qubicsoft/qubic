@@ -1,5 +1,5 @@
 path_out: 'test_edge_effect/'
-datafilename: 'CMB_w_convo_w_Planck_noiseless_test'
+datafilename: 'CMB_dust_w_convo_wo_Planck_wo_precond_from_zero_correction_test'
 
 CMB:
     cmb: True
@@ -9,7 +9,7 @@ CMB:
 
 Foregrounds:
 
-    Dust: False                              # Thermal Dust emission
+    Dust: True                              # Thermal Dust emission
     Synchrotron: False                      # Synchrotron emission
 
 QUBIC:
@@ -25,9 +25,9 @@ QUBIC:
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
-        ndet: 0                             # Level of detector noise
-        npho150: 0                          # Level of photon noise at 150 GHz
-        npho220: 0                          # Level of photon noise at 220 GHz
+        ndet: 1                             # Level of detector noise
+        npho150: 1                          # Level of photon noise at 150 GHz
+        npho220: 1                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise
         seed: -1
     SYNTHBEAM:
@@ -48,8 +48,8 @@ PLANCK:
 
     ### This section define which external data are we using
 
-    external_data: True                    
-    weight_planck: 0                            # Weight of Planck data within the QUBIC patch
+    external_data: False                    
+    weight_planck: 1                            # Weight of Planck data within the QUBIC patch
     level_noise_planck: 1                       # Noise level for Planck data
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
@@ -62,10 +62,10 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 35                                   # Number of PCG iterations
+    n_iter_pcg: 100                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
-    preconditioner: True
-    initial_guess_intensity_to_zero: False
+    preconditioner: False
+    initial_guess_intensity_to_zero: True
     gif: False
     resolution_plot: 15
     fwhm_plot: 0

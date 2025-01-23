@@ -129,6 +129,7 @@ class PipelineFrequencyMapMaking:
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()
         
+        ### Build the Input Maps
         self.maps_input = InputMaps(
             self.skyconfig,
             self.joint_tod.qubic.allnus,
@@ -137,6 +138,7 @@ class PipelineFrequencyMapMaking:
             corrected_bandpass=self.params["QUBIC"]["bandpass_correction"],
         )
 
+        ### Convolve the Nsub input maps at QUBIC resolution
         for i in range(len(self.fwhm_in)):
             C = HealpixConvolutionGaussianOperator(self.fwhm_in[i])
             self.maps_input.m_nu[i] = C(self.maps_input.m_nu[i])
@@ -224,14 +226,14 @@ class PipelineFrequencyMapMaking:
         """
         
         ### QUBIC Pointing matrix for TOD generation
-        self.H_in_qubic = self.joint_tod.qubic.get_operator(fwhm=self.fwhm_in*0)
+        self.H_in_qubic = self.joint_tod.qubic.get_operator()
 
         ### Pointing matrix for reconstruction
         if self.params['PLANCK']['external_data']:
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
             self.H_out = self.joint.get_operator(
                 fwhm=self.fwhm_out, seenpix=self.seenpix
-            )  # , external_data=self.params['PLANCK']['external_data'])
+            )  
         else:
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
             
@@ -492,7 +494,7 @@ class PipelineFrequencyMapMaking:
             print(f"FWHM for TOD generation : {fwhm_in}")
             print(f"FWHM for reconstruction : {fwhm_out}")
             print(f"Final FWHM : {fwhm_rec}")
-   
+        
         return fwhm_in, fwhm_out, fwhm_rec
 
     def get_input_map(self, m_nu):
@@ -755,7 +757,7 @@ class PipelineFrequencyMapMaking:
         
         true_maps = self.m_nu_in.copy()
         for irec in range(self.params["QUBIC"]["nrec"]):
-            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec]*0, lmax = 2 * self.params['Spectrum']['lmax'])
+            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec], lmax = 2 * self.params['Spectrum']['lmax'])
             true_maps[irec] = C(self.m_nu_in[irec])
             
         ### PCG

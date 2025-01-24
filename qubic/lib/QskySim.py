@@ -11,6 +11,10 @@ from .Instrument.Qinstrument import compute_freq
 from .Qutilities import progress_bar
 from .Calibration import Qfiber as ft
 from .Fitting import Qcamb as qc
+#from qubic.lib.Instrument.Qinstrument import compute_freq
+#from qubic.lib.Fitting import Qcamb as qc
+#from qubic.lib.Calibration import Qfiber as ft
+#from qubic.lib.Qutilities import progress_bar
 from qubic.data import PATH as data_dir
 
 __all__ = ['sky', 'Qubic_sky']
@@ -792,6 +796,7 @@ def get_noise_invcov_profile(maps, coverage, covcut=0.1, nbins=100, fit=True, la
 
     if doplot:
         xlabel('1./cov normed')
+        legend()
         if norm:
             add_yl = ' (Normalized to 1 at 1)'
         else:
@@ -815,9 +820,10 @@ def get_angular_profile(maps, thmax=25, nbins=20, label='', center=np.array([316
     xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins, plot=False, rng=rng)
     xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:, 1], nbins=nbins, plot=False, rng=rng)
     xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:, 2], nbins=nbins, plot=False, rng=rng)
+    print(dyI.shape, dyQ.shape, dyU.shape)
     avg = np.sqrt((dyI ** 2 + dyQ ** 2 / 2 + dyU ** 2 / 2) / 3)
     if doplot:
-        plot(xx, avg, 'o', label=label)
+        plot(xx, avg, 'o', label=label + ' Average')
         if allstokes:
             plot(xx, dyI, label=label + ' I', alpha=0.3)
             plot(xx, dyQ / np.sqrt(2), label=label + ' Q/sqrt(2)', alpha=0.3)

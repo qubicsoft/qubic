@@ -958,7 +958,7 @@ class PlanckAcquisition:
 
     def __init__(self, band, scene):
         if band not in (30, 44, 70, 143, 217, 353):
-            raise ValueError("Invalid band "{}".".format(band))
+            raise ValueError("Invalid band '{}'.".format(band))
         self.scene = scene
         self.band = band
         self.nside = self.scene.nside

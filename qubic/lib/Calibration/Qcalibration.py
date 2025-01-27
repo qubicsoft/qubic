@@ -49,7 +49,9 @@ class QubicCalibration(object):
             calfile = d[key].replace('_CC','_%s' % d['config']).replace('_FFF','_%03i' % self.nu)
             calfile_fullpath = find_file(os.path.join(self.path,calfile), verbosity=0)
             cmd = "self.%s = '%s'" % (key,calfile_fullpath)
+            print('executing: %s' % cmd)
             exec(cmd)
+        print('self.synthbeam = %s' % self.synthbeam)
 
         
 
@@ -188,6 +190,14 @@ class QubicCalibration(object):
             raise ValueError('Invalid primary beam calibration version')
 
         elif name == 'synthbeam':
+
+            if self.synthbeam is None:
+                print("synthbeam not defined")
+                return None
+
+            if not os.path.isfile(self.synthbeam):
+                print("File not found: %s" % self.synthbeam)
+                return None
             
             hdu =  fits.open(self.synthbeam)
             header = hdu[0].header

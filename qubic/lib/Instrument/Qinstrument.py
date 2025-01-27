@@ -247,6 +247,9 @@ class QubicInstrument(Instrument):
         self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
         self.synthbeam.fraction = synthbeam_fraction
         self.synthbeam.kmax = synthbeam_kmax
+        print('dictionary')
+        print(d)
+        print(d['synthbeam'])
         self.synthbeam_file(d)
 
         layout = self._get_detector_layout(

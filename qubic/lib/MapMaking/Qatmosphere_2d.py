@@ -358,6 +358,7 @@ class AtmosphereProperties:
             The frequencies at which the absorption spectrum is computed, in GHz.
             
         """
+        #! Verify if the integration is made properly !!!
         
         ### Verify the given band
         if band not in [150, 220]:

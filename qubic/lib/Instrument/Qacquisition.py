@@ -1546,7 +1546,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
             return invn150 + invn220
     def get_PySM_maps(self, config, r=0, Alens=1):
 
-        ""'
+        """
         
         Read configuration dictionary which contains every components adn the model. 
         
@@ -1554,7 +1554,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
 
         The CMB is randomly generated fram specific seed. Astrophysical foregrounds come from PySM 3.
         
-        ""'
+        """
 
         allmaps = np.zeros((len(config), 12*self.scene.nside**2, 3))
         ell=np.arange(2*self.scene.nside-1)
@@ -1884,7 +1884,7 @@ class JointAcquisitionFrequencyMapMaking:
             return BlockDiagonalOperator(invN, axisout=0)
 
             
-        ""'
+        """
         elif self.kind == "QubicIntegrated":
             if beam_correction is None :
                 beam_correction = [0]*self.Nrec
@@ -1905,7 +1905,7 @@ class JointAcquisitionFrequencyMapMaking:
                 Operator.append(R_planck(invntt_planck(R_planck.T)))
 
             return BlockDiagonalOperator(Operator, axisout=0)
-        ""'
+        """
 
 class JointAcquisitionComponentsMapMaking:
 
@@ -2121,12 +2121,12 @@ class QubicFullBand(QubicPolyAcquisition):
     def _get_array_operators(self, convolution=False, myfwhm=None):
 
 
-        ""'
+        """
         
         Compute all the Nsub sub-acquisition in one list. Each sub-acquisition contain the instrument specificities and describe the 
         synthetic beam for each frequencies.
 
-        ""'
+        """
 
         operator = []
         R = ReshapeOperator((1, 12*self.nside**2, 3), (12*self.nside**2, 3))

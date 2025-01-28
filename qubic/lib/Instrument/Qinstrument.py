@@ -1978,6 +1978,8 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                     )
                 # print(nus_edge150)
                 d1["filter_nu"] = filter_nus150[i] * 1e9
+                if d['debug']:
+                    print('setting filter_nu to ',d1["filter_nu"]
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
 

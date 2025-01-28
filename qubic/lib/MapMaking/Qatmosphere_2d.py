@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.constants as c
 import healpy as hp
-import scipy.special as sp
+import scipy.special as sp 
 from scipy.integrate import quad
 import camb.correlations as cc
 
@@ -13,17 +13,7 @@ from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Instrument.Qinstrument import compute_freq
 
 from pyoperators import *
-from pysimulators import (
-    CartesianEquatorial2GalacticOperator,
-    CartesianEquatorial2HorizontalOperator,
-    CartesianHorizontal2EquatorialOperator,
-    CartesianGalactic2EquatorialOperator,
-    SamplingHorizontal,
-    SphericalEquatorial2GalacticOperator,
-    SphericalGalactic2EquatorialOperator,
-    SphericalEquatorial2HorizontalOperator,
-    SphericalHorizontal2EquatorialOperator)
-from pysimulators.interfaces.healpy import Cartesian2HealpixOperator, Spherical2HealpixOperator
+from pysimulators.interfaces.healpy import Spherical2HealpixOperator
 
 #TODO : Adjust rho_0 with PWV
 #TODO : Verify conversion into µK_CMB

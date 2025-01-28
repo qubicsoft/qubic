@@ -8,9 +8,7 @@ import camb.correlations as cc
 from CoolProp import CoolProp as CP
 from astropy.cosmology import Planck18
 
-import qubic
 from qubic.lib.Qdictionary import qubicDict
-from qubic.lib.Qscene import QubicScene
 from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Instrument.Qinstrument import QubicInstrument, compute_freq
 

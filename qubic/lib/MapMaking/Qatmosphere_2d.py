@@ -10,7 +10,7 @@ from astropy.cosmology import Planck18
 
 from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qsamplings import equ2gal
-from qubic.lib.Instrument.Qinstrument import QubicInstrument, compute_freq
+from qubic.lib.Instrument.Qinstrument import compute_freq
 
 from pyoperators import *
 from pysimulators import (
@@ -888,7 +888,6 @@ class AtmosphereMaps(AtmosphereProperties):
         
         ### Build rotation operator
         longitude, latitude = equ2gal(self.qubic_dict['RA_center'], self.qubic_dict['DEC_center'])
-        print(longitude, latitude)
         rotation_above_qubic = Cartesian2SphericalOperator('azimuth,elevation')(Rotation3dOperator("ZY'", longitude, 90 - latitude, degrees=True)(Spherical2CartesianOperator('azimuth,elevation')))
         
         ### Build healpy projection operator

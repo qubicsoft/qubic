@@ -43,14 +43,25 @@ class QubicCalibration(object):
         self.path = os.path.abspath(path)
 
         # replace the wildcard with the configuration:  either TD or FI
+        epsilon = 1.0e-9 # one Hz of margin for comparisons
         self.nu = int(d['filter_nu']/1e9)
+        if self.nu>=130-epsilon and self.nu<=170+epsilon:
+            nu_str = "150"
+        elif self.nu>=190-epsilon and self.nu<=247.5+epsilon:
+            nu_str = "220"
+        else:
+            nu_str = '%03i' % self.nu
         for key in ['detarray','hornarray','optics','primbeam','synthbeam']:
-            calfile = d[key].replace('_CC','_%s' % d['config']).replace('_FFF','_%03i' % self.nu)
+            calfile = d[key].replace('_CC','_%s' % d['config']).replace('_FFF','_%s' % nu_str)
             calfile_fullpath = find_file(os.path.join(self.path,calfile), verbosity=1)
-            cmd = "self.%s = '%s'" % (key,calfile_fullpath)
+            if calfile_fullpath is None:
+                cmd = "self.%s = None" % key
+            else:
+                cmd = "self.%s = '%s'" % (key,calfile_fullpath)
             print('executing: %s' % cmd)
             exec(cmd)
-        print('self.synthbeam = %s' % self.synthbeam)
+        if d['debug']:
+            print('self.synthbeam = %s' % self.synthbeam)
 
         
 

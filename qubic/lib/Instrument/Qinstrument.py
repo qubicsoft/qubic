@@ -165,12 +165,13 @@ class QubicInstrument(Instrument):
             print("filter_nu = ",filter_nu,"FRBW = ", self.FRBW, "dnu = ", filter_relative_bandwidth)
 
         ## Choose the relevant Optics calibration file
+        epsilon = 1.0 # one Hz of margin for the comparisons
         self.nu1 = 150e9
-        self.nu1_up = 150e9 * (1 + self.FRBW / 2)
-        self.nu1_down = 150e9 * (1 - self.FRBW / 2)
+        self.nu1_up = 150e9 * (1 + self.FRBW / 2) + epsilon
+        self.nu1_down = 150e9 * (1 - self.FRBW / 2) - epsilon
         self.nu2 = 220e9
-        self.nu2_up = 220e9 * (1 + self.FRBW / 2)
-        self.nu2_down = 220e9 * (1 - self.FRBW / 2)
+        self.nu2_up = 220e9 * (1 + self.FRBW / 2) + epsilon
+        self.nu2_down = 220e9 * (1 - self.FRBW / 2) - epsilon
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
             d["optics"] = d["optics"].replace(d["optics"][-7:-4], "150")
         elif (filter_nu <= self.nu2_up) and (filter_nu >= self.nu2_down):
@@ -180,7 +181,7 @@ class QubicInstrument(Instrument):
                                  str(int(d["filter_nu"] / 1e9)) + " GHz")
         else:
             raise ValueError("frequency = " + str(int(d["filter_nu"] / 1e9)) +
-                             " out of bounds")
+                             " out of bounds: %.1f - %.1f")
         d["optics"] = d["optics"].replace(d["optics"][-10:-8], d["config"])
         d["detarray"] = d["detarray"].replace(d["detarray"][-7:-5], d["config"])
         d["hornarray"] = d["hornarray"].replace(d["hornarray"][-7:-5], d["config"])
@@ -1979,7 +1980,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                 # print(nus_edge150)
                 d1["filter_nu"] = filter_nus150[i] * 1e9
                 if d['debug']:
-                    print('setting filter_nu to ',d1["filter_nu"]
+                    print("setting filter_nu to ",d1["filter_nu"])
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
 

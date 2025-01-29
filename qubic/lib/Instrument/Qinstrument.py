@@ -1297,6 +1297,7 @@ class QubicInstrument(Instrument):
 
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
         val *= solid_angle / scene.solid_angle * len(horn)
+
         return theta, phi, val
 
     @staticmethod

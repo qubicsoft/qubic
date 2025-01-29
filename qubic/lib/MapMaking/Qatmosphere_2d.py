@@ -866,6 +866,7 @@ class AtmosphereMaps(AtmosphereProperties):
         """Healpy 2d atmosphere maps.
         
         Function to project the 2d atmosphere maps in cartesian coordinates, and then project them in spherical coordinates using healpy.
+        By default, the projection is centered on the QUBIC patch (RA=0, DEC=-57).
 
         Returns
         -------

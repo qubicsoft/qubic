@@ -4,8 +4,6 @@ import os
 # General stuff
 import healpy as hp
 import numpy as np
-import pysm3
-import qubic
 
 import pickle
 import warnings
@@ -32,10 +30,9 @@ from pyoperators import (
 
 from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
-from pysm3 import utils
 from qubic.data import PATH
 
-from .Qinstrument import compute_freq, QubicInstrument, QubicMultibandInstrument, QubicMultibandInstrumentTrapezoidalIntegration
+from .Qinstrument import compute_freq, QubicInstrument, QubicMultibandInstrumentTrapezoidalIntegration
 from ..Qsamplings import get_pointing
 from ..Qscene import QubicScene
 

@@ -30,6 +30,8 @@ class AtmosphereProperties:
         ### Import parameters files
         self.params = params
         self.qubic_dict = self.get_qubic_dict()
+
+        np.random.seed(self.params['seed'])
         
         ### Build atmsopheric coordinates
         # Cartesian coordinates

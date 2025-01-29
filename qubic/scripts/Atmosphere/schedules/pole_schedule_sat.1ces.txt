@@ -1,4 +1,0 @@
-#Site            Telescope        Latitude [deg] Longitude [deg]   Elevation [m]
- SOUTH_POLE      SAT                     -89.991         -44.650          2843.0
-#      Start time UTC        Stop time UTC      Start MJD       Stop MJD Rotation Patch name                            Az min   Az max       El   R/S  Sun el1  Sun az1  Sun el2  Sun az2 Moon el1 Moon az1 Moon el2 Moon az2 Phase  Pass Sub    CTime
- 2027-02-01 00:00:00  2027-02-01 01:24:00    61437.000000   61437.058333    90.00 POLE_DEEP                             268.15   338.84    52.37 S        17.26   228.01    17.24   207.01    26.13   161.68    26.21   141.40  0.26     0   0    0.058

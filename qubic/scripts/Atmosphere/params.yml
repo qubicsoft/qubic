@@ -31,6 +31,7 @@ normalization: 1
 flat: True
 coverage_cut: 0.1
 dtheta: 15
+seed: 1
 
 # Qubic parameters
 npointings: 5000

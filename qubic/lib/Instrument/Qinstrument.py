@@ -1406,7 +1406,8 @@ class QubicInstrument(Instrument):
 
         """
         horn = getattr(self, "horn", None)
-        primary_beam = getattr(self, "primary_beam", None)
+        primary_beam = self.primary_beam
+        #primary_beam = getattr(self, "primary_beam", None)
 
         if sampling.fix_az:
             rotation = sampling.cartesian_horizontal2instrument
@@ -1441,12 +1442,10 @@ class QubicInstrument(Instrument):
             if importshape[0] <= 2:
                 thetas,phis,vals = thetafits, phifits, valfits
             
-            
             else:
                 thetafits=thetafits[freqid].reshape((np.shape(thetafits)[1],np.shape(thetafits)[2]))
                 phifits=phifits[freqid].reshape((np.shape(phifits)[1],np.shape(phifits)[2]))
                 valfits=valfits[freqid].reshape((np.shape(valfits)[1],np.shape(valfits)[2]))
-
     
                 thetas, phis, vals, = thetafits, phifits, valfits
                 print("Getting Thetas from Fits File")
@@ -1455,7 +1454,7 @@ class QubicInstrument(Instrument):
         
         else:
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
-            
+
         ncolmax = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
@@ -1485,7 +1484,7 @@ class QubicInstrument(Instrument):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
             thetaphis = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
-            directions = Spherical2CartesianOperator("zenith,azimuth")(thetaphis)
+            direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphis)
             e_nf = direction[:, None, :, :]
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
@@ -1579,8 +1578,12 @@ class QubicInstrument(Instrument):
             val[idet, imax_:] = 0
             theta[idet, imax_:] = np.pi / 2  # XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
             phi[idet, imax_:] = 0
+
+        print('nu', np.round(nu/1e9, 2), "GHz")
+        print("val_primbeam", val[0, 0])
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
         val *= solid_angle / scene.solid_angle * len(horn)
+        print("val_synthbeam", val[0, 0]) 
         return theta, phi, val
 
     @staticmethod
@@ -1605,19 +1608,22 @@ class QubicInstrument(Instrument):
         """
         lmbda = c / nu
         position = -position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
+        
         if angle != 0:
+            angle = np.radians(angle)
             _kx, _ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
-            kx = _kx * np.cos(angle * np.pi / 180) - _ky * np.sin(angle * np.pi / 180)
-            ky = _kx * np.sin(angle * np.pi / 180) + _ky * np.cos(angle * np.pi / 180)
+            kx = _kx * np.cos(angle) - _ky * np.sin(angle)
+            ky = _kx * np.sin(angle) + _ky * np.cos(angle)
         else:
             kx, ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
-
+        
         nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
         ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
         local_dict = {"nx": nx, "ny": ny}
         theta = ne.evaluate("arcsin(sqrt(nx**2 + ny**2))",
                             local_dict=local_dict)
         phi = ne.evaluate("arctan2(ny, nx)", local_dict=local_dict)
+        #print("theta", np.degrees(theta[0, 0]), "phi", np.degrees(phi[0, 0]))
         return theta, phi
 
     @staticmethod

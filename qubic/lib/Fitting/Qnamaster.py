@@ -66,6 +66,12 @@ class Namaster(object):
         -------
         The binned monopoles and the NmtBin object
         """
+        b = nmt.NmtBin(bpws=self.bpws, ells=self.ells, weights=self.weights,lmax=self.lmax).from_lmax_linear(self.lmax, self.delta_ell, is_Dell=True)
+        ell_binned = b.get_effective_ells()
+        self.ell_binned = ell_binned[np.where(ell_binned >= self.lmin)]
+        
+        """Old version, only compatible with pymaster < 1.10
+
         b = nmt.NmtBin(nside,
                        bpws=self.bpws,
                        ells=self.ells,
@@ -74,7 +80,8 @@ class Namaster(object):
                        is_Dell=True)
         ell_binned = b.get_effective_ells()
         self.ell_binned = ell_binned
-
+        """
+        
         return ell_binned, b
 
     def bin_spectra(self, input_cls, nside):
@@ -152,10 +159,10 @@ class Namaster(object):
             if beam_correction is True:
                 # Default value for QUBIC at 150 GHz
                 beam = hp.gauss_beam(np.deg2rad(0.39268176),
-                                     lmax=3 * nside - 1)
+                                     lmax=3*nside-1)
             else:
                 beam = hp.gauss_beam(np.deg2rad(beam_correction),
-                                     lmax=3 * nside - 1)
+                                     lmax=3*nside-1)
         else:
             beam = None
 

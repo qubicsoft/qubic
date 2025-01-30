@@ -49,6 +49,7 @@ dependencies = [
     'healpy',
     'iminuit',
     'pandas',
+    'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
     'progressbar',
     'pyoperators[fft]>=0.13.18',
     'pysimulators>=1.2.3',
@@ -57,7 +58,9 @@ dependencies = [
     'satorchipy @ git+https://github.com/satorchi/mypy@master',
     'scipy',
     'bottleneck',
-    'scikit-learn'
+    'scikit-learn',
+    'schwimmbad',
+    'imageio'
 ]
 dynamic = ['version']
 

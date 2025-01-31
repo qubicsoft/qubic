@@ -1431,7 +1431,7 @@ class QubicInstrument(Instrument):
         ntimes = rotation.data.shape[0]
         nside = scene.nside
 
-        isfreq=int(np.floor(nu/1000000000))
+        isfreq=int(np.floor(nu/1e9))
         frq=len(str(freqs[0]))
         
         if (frq <= 4):
@@ -1462,6 +1462,7 @@ class QubicInstrument(Instrument):
         ncolmax = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
         direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
+        
         e_nf = direction[:, None, :, :]
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
@@ -1471,9 +1472,11 @@ class QubicInstrument(Instrument):
         cls = {"I": FSRMatrix,
                "QU": FSRRotation2dMatrix,
                "IQU": FSRRotation3dMatrix}[scene.kind]
+        
         ndims = len(scene.kind)
         nscene = len(scene)
         nscenetot = product(scene.shape[:scene.ndim])
+
         s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=ncolmax,
                 dtype=synthbeam.dtype, dtype_index=dtype_index,
                 verbose=verbose)
@@ -1487,18 +1490,15 @@ class QubicInstrument(Instrument):
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
-            thetaphis = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
-            direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphis)
-            e_nf = direction[:, None, :, :]
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
                 np.take(table, c2h(e_ni).astype(int), out=index[i])
             else:
                 index[i] = c2h(e_ni)
-
+        
         with pool_threading() as pool:
             pool.map(func_thread, range(ndetectors))
-
+        
         if scene.kind == "I":
             value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
             value[...] = vals[:, None, :]
@@ -1511,6 +1511,7 @@ class QubicInstrument(Instrument):
                     "nd {1}.".format(dtype_index, synthbeam.dtype))
             func = "matrix_rot{0}d_i{1}_r{2}".format(
                 ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
+
             getattr(flib.polarization, func)(
                 rotation.data.T, direction.T, s.data.ravel().view(np.int8),
                 vals.T)
@@ -1624,7 +1625,6 @@ class QubicInstrument(Instrument):
         theta = ne.evaluate("arcsin(sqrt(nx**2 + ny**2))",
                             local_dict=local_dict)
         phi = ne.evaluate("arctan2(ny, nx)", local_dict=local_dict)
-        #print("theta", np.degrees(theta[0, 0]), "phi", np.degrees(phi[0, 0]))
         return theta, phi
 
     @staticmethod

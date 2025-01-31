@@ -1,6 +1,6 @@
 import os, sys
 import string
-from qubic.dicts import PATH as dicts_dir
+from qubic.lib.Qutilities import find_file
 
 def ask_for(key):
     if sys.version_info.major == 2:
@@ -42,23 +42,12 @@ class qubicDict(dict):
         read a given dictionary file
         '''
 
-        # read from default location if the filename is not found
-        if not os.path.isfile(filename):
-            basename = os.path.basename(filename)
+        filename_fullpath = find_file(filename)
+        if filename_fullpath is None:
+            print('Could not read dictionary.  File not found: %s' % basename)
+            return False
 
-            if 'QUBIC_DICT' in os.environ.keys():
-                # read from the users QUBIC_DICT path if defined
-                filename = os.environ['QUBIC_DICT'] + os.sep + basename
-
-            if not os.path.isfile(filename):
-                # try to read from the package path
-                filename = dicts_dir + os.sep + basename
-
-            if not os.path.isfile(filename):
-                print('Could not read dictionary.  File not found: %s' % basename)
-                return False
-
-        f = open(filename)
+        f = open(filename_fullpath)
         old = ''
         for line in f:
             line = line.strip()

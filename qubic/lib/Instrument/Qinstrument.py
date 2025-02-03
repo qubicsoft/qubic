@@ -234,7 +234,7 @@ class QubicInstrument(Instrument):
             secondary_shape = "multi_freq"
         if self.debug:
             print("primary_shape", primary_shape)
-            print("d["primbeam"]", d["primbeam"])
+            print("d['primbeam']", d["primbeam"])
         self.config = d["config"]
         calibration = QubicCalibration(d)
         self.calibration = calibration

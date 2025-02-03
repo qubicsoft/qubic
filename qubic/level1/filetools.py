@@ -66,11 +66,13 @@ def write_level1(fpobject,todarray,flagarray):
     # HDU with the level-1 array and the flagarray
     # formats defined at https://docs.astropy.org/en/stable/io/fits/usage/table.html
     col1 = fits.Column(name='TODarray', format='D', unit='ADU', array=todarray)
-    col1 = fits.Column(name='flags', format='K', unit='UINT', array=flagarray)
+    col2 = fits.Column(name='flags', format='K', unit='UINT', array=flagarray)
     cols  = fits.ColDefs([col1,col2])
     tbhdu = fits.BinTableHDU.from_columns(cols)
     hdulist.append(tbhdu)
 
+    # HDU with dark TES "temperature" detectors
+    
     # make another HDU with the housekeeping data
     # 300mK stage Temperature
     # 1K stage Temperature

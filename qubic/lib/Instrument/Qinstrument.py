@@ -165,7 +165,7 @@ class QubicInstrument(Instrument):
             print("filter_nu = ",filter_nu,"FRBW = ", self.FRBW, "dnu = ", filter_relative_bandwidth)
 
         ## Choose the relevant Optics calibration file
-        epsilon = 1.0 # one Hz of margin for the comparisons
+        epsilon = 1.0e-3 # one mHz of margin for the comparisons to compensate for python roundoff error
         self.nu1 = 150e9
         self.nu1_up = 150e9 * (1 + self.FRBW / 2) + epsilon
         self.nu1_down = 150e9 * (1 - self.FRBW / 2) - epsilon

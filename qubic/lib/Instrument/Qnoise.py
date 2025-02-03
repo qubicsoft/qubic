@@ -43,7 +43,7 @@ class QubicNoise:
         self.dict["period"] = 1
         self.dict["type_instrument"] = ""
         self.dict["effective_duration"] = duration
-        self.acq = QubicIntegrated(self.dict, Nsub=1, Nrec=1)
+        self.acq = QubicAcquisition(self.dict, Nsub=1, Nrec=1)
         print(f"Duration at {band} GHz is {duration} yrs")
 
     def get_noise(self, det_noise, pho_noise):

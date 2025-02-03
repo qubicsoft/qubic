@@ -96,7 +96,7 @@ class QubicSampling(SamplingHorizontal):
 
         """
         time = self.date_obs + TimeDelta(self.time, format='sec')
-
+        print(self.azimuth, )
         with rule_manager(none=False):
             r = Rotation3dOperator("ZY'Z''", self.azimuth, 90 - self.elevation,
                                    self.pitch, degrees=True).T * \

@@ -1338,7 +1338,7 @@ class JointAcquisitionFrequencyMapMaking:
                 self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
             )
         else:
-            raise TypeError(f"{self.kind} is not implemented...")
+            raise TypeError(f"{self.kind} is not implemented. Choose DB or UWB")
 
         self.scene = self.qubic.scene
         self.pl143 = PlanckAcquisition(143, self.scene)

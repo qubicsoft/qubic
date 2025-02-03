@@ -57,9 +57,9 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 
 hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 
-random_pointing=False   
+random_pointing=True   
 
-repeat_pointing=True
+repeat_pointing=False
 npointings=3000
 dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing

@@ -114,8 +114,8 @@ contains
 
         call en2ephi(eni, ephii)
         call rot_ephi(rot, ephii, rot_ephii)
-        r23 = sum(ethetaf * rot_ephii)
-        r33 = sum(ephif * rot_ephii(1:2))
+        r23 = sum(rot_ephii * ethetaf)
+        r33 = sum(rot_ephii(1:2) * ephif)
 
     end subroutine eni2rotation
 
@@ -175,7 +175,7 @@ contains
         real(real64)   :: val, r23, r33
         real(<rkind>)  :: direct
 
-        direct = -1._<rkind>
+        direct = 1._<rkind>
 
         !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
         do idetector = 1, ndetectors
@@ -193,7 +193,7 @@ contains
                     val = vals(ipixel,idetector)
                     matrix(ipixel,itime,idetector)%r11 = real(val, <rkind>)
                     matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), <rkind>)
-                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, <rkind>)
+                    matrix(ipixel,itime,idetector)%r32 = real(val*2*r33*r23, <rkind>)
                 end do
             end do
         end do

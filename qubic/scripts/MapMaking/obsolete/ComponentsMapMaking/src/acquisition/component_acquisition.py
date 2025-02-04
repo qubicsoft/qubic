@@ -281,7 +281,6 @@ class QubicIntegratedComponentsMapMaking(QubicPolyAcquisition):
             elif kconf == 'dust':
 
                 nu0 = self.comp[k].__dict__['_fixed_params']['nu0']
-                print(nu0)
                 sky=pysm3.Sky(nside=self.nside, preset_strings=[config[kconf]], output_unit="uK_CMB")
                 #sky.components[0].mbb_index = hp.ud_grade(sky.components[0].mbb_index, 8)
                 sky.components[0].mbb_temperature = 20*sky.components[0].mbb_temperature.unit

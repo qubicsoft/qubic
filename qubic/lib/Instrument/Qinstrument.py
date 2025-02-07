@@ -1610,7 +1610,7 @@ class QubicInstrument(Instrument):
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         index = _argsort_reverse(val)
-        
+
         theta = theta[tuple(index)]
         phi = phi[tuple(index)]
         val = val[tuple(index)]
@@ -1634,7 +1634,6 @@ class QubicInstrument(Instrument):
 
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
         val *= solid_angle / scene.solid_angle * len(horn)
-        
         return theta, phi, val
 
     @staticmethod
@@ -2043,7 +2042,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
         else:
-            self.nsubbands = len(filter_nus150)
+
             self.subinstruments = []
             for i in range(self.nsubbands):
                 d1["filter_nu"] = filter_nus150[i] * 1e9

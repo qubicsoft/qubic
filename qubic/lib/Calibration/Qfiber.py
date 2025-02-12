@@ -386,6 +386,7 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
                                 fact = np.sqrt(len(y[ok]))
                         dy[i] = np.std(y[ok]) / fact
                         dx[i] = np.std(x[ok]) / fact
+        
         if plot:
                 if fmt is None:
                         fmt = 'ro'

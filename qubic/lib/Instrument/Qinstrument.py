@@ -2016,7 +2016,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         _, nus_edge220, filter_nus220, deltas220, _, _ = compute_freq(
             220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
         )
-
+        
         delta_nu_over_nu_150 = deltas150 / filter_nus150
         delta_nu_over_nu_220 = deltas220 / filter_nus220
 

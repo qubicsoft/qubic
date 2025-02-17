@@ -360,6 +360,7 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
         else:
                 others = None
         for i in np.arange(nbins):
+                xc[i] = (xmax[i] + xmin[i]) / 2
                 ok = (x > xmin[i]) & (x < xmax[i])
                 if ok.sum() > 0:
                         newy = y[ok]
@@ -376,7 +377,6 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
                                 yval[i] = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
                         else:
                                 yval[i] = np.mean(y[ok])
-                        xc[i] = (xmax[i] + xmin[i]) / 2
                         if rebin_as_well is not None:
                                 for o in range(nother):
                                         others[i, o] = np.mean(rebin_as_well[o][ok])
@@ -390,7 +390,7 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
                 if fmt is None:
                         fmt = 'ro'
                 errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
-        ok = (nn != 0) & (dy != 0)
+        ok = (nn != 0) #& (dy != 0) #commented by JCH on 21/01/2025: it is better to keep dy=0 cases
         if cutbad:
                 if others is None:
                         return xc[ok], yval[ok], dx[ok], dy[ok], others

@@ -1488,28 +1488,6 @@ class JointAcquisitionFrequencyMapMaking:
 
             return BlockDiagonalOperator(invN, axisout=0)
 
-        """
-        elif self.kind == 'QubicIntegrated':
-            if beam_correction is None :
-                beam_correction = [0]*self.Nrec
-            else:
-                if type(beam_correction) is not list:
-                    raise TypeError('Beam correction should be a list')
-                if len(beam_correction) != self.Nrec:
-                    raise TypeError('List of beam correction should have Nrec elements')
-
-
-            invntt_qubic = self.qubic.get_invntt_operator(det_noise, photon_noise)
-            R_qubic = ReshapeOperator(invntt_qubic.shapeout, invntt_qubic.shape[0])
-            Operator = [R_qubic(invntt_qubic(R_qubic.T))]
-
-            for i in range(self.Nrec):
-                invntt_planck = weight_planck*self.planck.get_invntt_operator(beam_correction=beam_correction[i], mask=mask, seenpix=seenpix)
-                R_planck = ReshapeOperator(invntt_planck.shapeout, invntt_planck.shape[0])
-                Operator.append(R_planck(invntt_planck(R_planck.T)))
-
-            return BlockDiagonalOperator(Operator, axisout=0)
-        """
 class JointAcquisitionComponentsMapMaking:
 
     def __init__(self, d, kind, comp, Nsub, nus_external, nintegr, nu_co=None, H=None):
@@ -1565,7 +1543,6 @@ class JointAcquisitionComponentsMapMaking:
         invNe = self.external.get_invntt_operator(fact=fact, mask=mask)
 
         return BlockDiagonalOperator([R(invNq(R.T)), invNe], axisout=0)
-
 
 ### Old version
 class QubicPolyAcquisition:

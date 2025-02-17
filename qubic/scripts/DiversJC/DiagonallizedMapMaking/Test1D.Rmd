@@ -18,44 +18,60 @@ jupyter:
 ### JCH Dec. 2024
 
 ```{python}
+# # %matplotlib inline
+# %matplotlib ipympl
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy
 import scipy.signal
 
-
-plt.rc('figure',figsize=(20,6))
-plt.rc('font',size=12)
-
+sz = 10.
+plt.rc('figure',figsize=(sz,sz/1.618))
+plt.rc('font',size=10)
 ```
 
 # 1. Simulate a simplistic sky on a ring (periodic 1D)
 
 ```{python}
-def spec_1_f(ff, pow=1.5):
+def spec_1_f(ff, pow):
     zz = ff != 0
     s = np.zeros_like(ff)
     s[zz] = np.nan_to_num(np.abs(ff[zz])**(-pow))
     s[~zz] = 0
     return s
 
-def rnd_sky_1d(xpix, spectra_function, pow=None):
+def rnd_sky_1d(xpix, args):
     ff = np.fft.fftfreq(len(xpix), xpix[1]-xpix[0])
     rndy = np.random.randn(len(xpix))
     ftyin = np.fft.fft(rndy)
-    fty = ftyin*spectra_function(ff, pow=pow)
+    fty = ftyin*spec_1_f(ff, args[0])
     y = np.real(np.fft.ifft(fty))
     return y
 
+def sinsky(th_deg, args):
+    return np.sin(np.radians(th_deg)*args[0])
+
+def create_1d_sky(npix, funct, args):
+    xpix = np.linspace(-180, 180, npix)
+    truey = funct(xpix, args)
+    truey = truey / np.std(truey)
+    return xpix, truey
+
 def get_primbeam(th, lam, fwhmprimbeam_150=14.):
-    fwhmprim = 14. * lam / (3e8/150e9)
-    primbeam = np.exp(-0.5 * th**2 / (fwhmprim/2.35)**2)
+    fwhmprim = fwhmprimbeam_150 * lam / (3e8/150e9)
+    primbeam = np.exp(-0.5 * th**2 / (fwhmprim/np.sqrt(8*np.log(2)))**2)
     return primbeam
 
 def give_sbcut(th, dx, lam, sqnh, Df=1., detpos=0., fwhmprimbeam_150=14., kmax=2, type='BI'):
     primbeam =  get_primbeam(th, lam, fwhmprimbeam_150=fwhmprimbeam_150)
     theth = th - np.degrees(detpos/Df)
-    sb = np.sin(sqnh * np.pi * dx / lam * np.radians(theth))**2 / np.sin(np.pi * dx / lam * np.radians(theth))**2
+    arg_to_sin = np.pi * dx / lam * np.radians(theth)
+    sb = np.zeros(len(arg_to_sin))
+    ok = np.sin(arg_to_sin) != 0
+    sb[ok] = np.sin(sqnh * arg_to_sin[ok])**2 / np.sin(arg_to_sin[ok])**2
+    sb[~ok] = 1
     sb = sb/sqnh**2*primbeam
     fwhmpeak = np.degrees(lam / sqnh / dx)
     thetapeaks = np.degrees(lam / dx)
@@ -65,7 +81,7 @@ def give_sbcut(th, dx, lam, sqnh, Df=1., detpos=0., fwhmprimbeam_150=14., kmax=2
     #### Calculate integral ratio w.r.t. Gaussian peak approximmation
     gauss = np.zeros_like(th)
     for i in range(len(allthetapeaks)):
-        gauss += allamppeaks[i]* np.exp(-0.5 * (th-allthetapeaks[i])**2 / (fwhmpeak/2.35)**2)
+        gauss += allamppeaks[i]* np.exp(-0.5 * (th-allthetapeaks[i])**2 / (fwhmpeak/np.sqrt(8*np.log(2)))**2)
     ratio = np.sum(sb * gauss)/np.sum(gauss * gauss)
     if type == 'BI-GPA':
         sb = gauss.copy()
@@ -74,7 +90,7 @@ def give_sbcut(th, dx, lam, sqnh, Df=1., detpos=0., fwhmprimbeam_150=14., kmax=2
         allthetapeaks = np.degrees(detpos)
         allamppeaks = np.interp(allthetapeaks, th, primbeam)
         ratio = 1.
-        gauss = allamppeaks* np.exp(-0.5 * (th-allthetapeaks)**2 / (fwhmpeak/2.35)**2)
+        gauss = allamppeaks* np.exp(-0.5 * (th-allthetapeaks)**2 / (fwhmpeak/np.sqrt(8*np.log(2)))**2)
         sb = gauss.copy()
     return sb, fwhmpeak, allthetapeaks, allamppeaks, ratio
 
@@ -89,615 +105,509 @@ def conv_circ( signal, ker ):
 def norm_filt(newx, xfilt, filt):
     interp_filter = np.interp(newx, xfilt, filt)
     norm = np.sum(interp_filter)
-    print(norm)
     return interp_filter/norm
 
-```
 
-## Sky Simulation
-
-```{python}
-#### Simulate input true "sky"
-npix = 2**15
-print("npix = ", npix)
-xpix = np.linspace(-180, 180, npix)
-dx = xpix[1]-xpix[0]
-
-truey = rnd_sky_1d(xpix, spec_1_f, pow=0.9)
-truey = truey / np.std(truey)
-# truey = np.sin(xpix*10)
-
-plt.plot(xpix, truey, label='True Sky')
-plt.xlabel('angle')
-plt.ylabel('sky')
-plt.legend()
-```
-
-## Pointings
-
-```{python}
-### Pointing
-nptg = 50000
-ptg_deg = np.random.random(nptg) * 360 - 180
-```
-
-## Instrument Synthesized Beam
-
-```{python}
-### Instrument characteristics
-fwhmprim_150 = 14. #deg
-nu = 150e9
-lam = 3e8/nu    #m
-dx = 14./1000  #m
-sqnh = 20
-Df = 1. #m
-# mydetpos = np.linspace(-5,5,3)
-mydetpos = np.array([0.])
-ndet = len(mydetpos)
-
-
-
-######## Synthesized Beam
-minth = -20.
-maxth = 20
-nth = 2**15+1
-th = np.linspace(minth, maxth, nth)
-# kmax_build = 5
-mytype = 'BI'
-# mytype = 'BI-GPA'
-# mytype = 'Imager'
-
-plt.subplot(1,2,1)
-plt.plot(th, get_primbeam(th, lam), 'k--', label='Th. Prim. Beam at {0:3.0f} GHz'.format(nu/1e9))
-for d in mydetpos:
-    b, fwhmpeak, thetapeaks, amppeaks, ratio = give_sbcut(th, dx, lam, sqnh, Df=Df, 
-                                                          detpos=d/1000,kmax=kmax_build, type=mytype)
-    p = plt.plot(th, b, lw=2, label='Th. Synth. Beam at {0:3.0f} GHz - detpos={1:3.1f} mm - Ratio G.P.A. = {2:5.2f}'.format(nu/1e9, d, ratio))
-    plt.plot(thetapeaks, amppeaks, 'o', color=p[0].get_color())   
-    plt.plot(ptg_deg, ptg_deg*0+1.1, 'r,', label='Pointings')
-    plt.xlabel(r'$\theta$ [deg.]')
-    plt.ylabel('Synthesized beam')
-    plt.legend(loc='upper left')
-plt.xlim(np.min(th), np.max(th))
-plt.ylim(-0.01, 1.4)
-plt.title('Synthesized Beam: '+mytype)
-
-plt.subplot(1,2,2)
-plt.hist(ptg_deg, range=[-180, 180], bins=720, label='Poinitngs')
-plt.legend()
-plt.xlabel(r'$\theta$ [deg.]')
-plt.title('Pointings')
-
-
-```
-
-- Alexandre: check the coverage: are there unseen pixels, or almost unseen ?
-- Steve: Try it on antoher computer (CC)
-- Alexandre: Increse number of pixels => blue point systemtically above red line
-
-```{python}
-print(len(b))
-np.isfinite(b).sum()
-print(np.sin(0)/np.sin(0))
-print(fwhmpeak)
-```
-
-## TOD Fabrication for all detectors
-
-```{python}
-### TOD Fabrication
-noise_sigma = 0
-
-TOD = np.zeros((ndet, nptg))
-
-plt.plot(xpix, truey, label='True Sky (unconvolved)')
-for i in range(len(mydetpos)):
-    ### SB for this detectors
-    b, _, _, _, _ = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=mydetpos[i]/1000, kmax=kmax_build, type=mytype)
-    ### Full sampled Sky convolved by detector SB
-    observed = conv_circ(truey, norm_filt(xpix, th, b))
-    # observed = scipy.ndimage.convolve1d(truey, norm_filt(xpix, th, b), 
-    #                                 mode='wrap')
-    # observed = scipy.signal.oaconvolve(truey, norm_filt(xpix, th, b), 
-    #                                 mode='same')
-    TOD[i,:] = np.interp(ptg_deg, xpix, observed) + np.random.randn(nptg)*noise_sigma
-    plt.plot(ptg_deg, TOD[i,:], '.', alpha=0.5, label='TOD Detector #{}'.format(i))
-plt.axhline(y=0,ls='--', color='k')
-plt.legend()
-
-```
-
-# H operator construction
-
-```{python}
-### Sky pixellization
-npix = 360*15
-pixels = np.linspace(-180, 180, npix+1)
-pix_center = 0.5*(pixels[0:-1] + pixels[1:])
-
-
-
-
-### Get angles (w.r.t. instrument pointing) and amplitude for all relevant SB peaks and for each detector
-kmax = kmax_build
-if mytype=='Imager':
-    npeaks = 1
-else:
-    npeaks = 2 * kmax + 1
-allthetapeaks = np.zeros((ndet, npeaks))
-allamppeaks = np.zeros((ndet, npeaks))
-for i in range(ndet):
-    _, _, allthetapeaks[i,:], allamppeaks[i,:], ratio = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=mydetpos[i]/1000, kmax=kmax, type=mytype)
-    allamppeaks[i,:] = allamppeaks[i,:] / np.sum(allamppeaks[i,:])
-
-print(allamppeaks)
-
-H = np.zeros((ndet, nptg, npix))
-HtH = np.zeros((ndet, npix, npix))
-HtHinv = np.zeros((ndet, npix, npix))
-solution = np.zeros((ndet, npix))
-for i in range(ndet):
-    print('Detector #{}'.format(i))
-    for j in range(npeaks):
-        peaks_ptg = (ptg_deg - allthetapeaks[i,j] + 180 + 360) % 360 - 180
-        peaks_indices = ((peaks_ptg - (-180)) * npix / 360).astype(int)
-        for k in range(nptg):
-            H[i, k, peaks_indices[k]] = allamppeaks[i,j]
-    HtH[i,:,:] = H[i,:,:].T @ H[i,:,:]
-    print('matrix size: ', np.shape(HtH[i,:,:]))
-    print('Determinant: ', np.linalg.det(HtH[i,:,:]))
-    HtHinv[i,:,:] = np.linalg.inv(HtH[i,:,:])
-    solution[i,:] = HtHinv[i,:,:] @ H[i,:,:].T @ TOD[i,:]
-solution_all = np.mean(solution, axis=0)
-
-# for i in range(ndet):
-#     print(i)
-#     plt.subplot(2, ndet, i+1)
-#     plt.imshow(HtH[i,:,:], aspect='equal')
-#     plt.xlabel('Pixels')
-#     plt.ylabel('pixels')
-#     plt.title('Ht.H detector #{}'.format(i))
-#     plt.colorbar()
-
-#     plt.subplot(2, ndet, ndet + i+1)
-#     plt.imshow(HtHinv[i,:,:], aspect='equal')
-#     plt.xlabel('Pixels')
-#     plt.ylabel('pixels')
-#     plt.title(r'(Ht.H)-1 detector #{}'.format(i))
-#     plt.colorbar()
-# plt.tight_layout()
-
-
-
-
-#### Not straightforward: we need to compare with the onput sky convolved to resolution, 
-#### but also resampled over the reconstructed pixels
-# 1/ convolving sky to FWHM (NB it has ot be expressed in pixel units)
-deltax = xpix[1]-xpix[0]
-sig_conv = fwhmpeak/2.35/deltax
-### Direct convolution using filter1d
-# convy = scipy.ndimage.gaussian_filter1d(truey, sig_conv, mode='wrap')
-### Full-Sky convolution as for TOD fabrication
-### NB: here sigma needs to be in angles
-bgauss = np.exp(-0.5*(th/(fwhmpeak/2.35))**2)
-### Slow
-# convy=scipy.ndimage.convolve1d(truey, norm_filt(xpix, th, bgauss), mode='wrap')
-### Fast
-convy=conv_circ(truey, norm_filt(xpix, th, bgauss))
-
-
-# Resampling it on the right recnstructed pixels location
-delta_pix = pix_center[1]-pix_center[0]
-newconvy = scipy.signal.resample(np.interp(xpix+delta_pix/2, xpix, convy), npix)
-newtruey = scipy.signal.resample(np.interp(xpix+delta_pix/2, xpix, truey), npix)
-
-#################################
-### Reconstructed and Expected
-#################################
-plt.figure()
-for i in range(ndet):
-    p = plt.plot(pix_center, solution[i,:], 'o', alpha=0.5, label='Reconstructed Detector #{}'.format(i))
-# plt.plot(xpix, truey, label='True Sky (unconvolved)')
-plt.plot(pix_center, newconvy, lw=2, color='r', alpha=0.8, label='Sky convolved to inst. resolution')
-plt.legend()
-plt.axhline(y=0,ls='--', color='k')
-plt.title('Instrument '+mytype)
-plt.xlabel('Angle')
-plt.ylabel('Sky Data')
-
-
-
-######################################
-### Reconstructed and Expected - Zoom
-######################################
-plt.figure()
-for i in range(ndet):
-    p = plt.plot(pix_center, solution[i,:], 'o', alpha=0.5, label='Reconstructed Detector #{}'.format(i))
-plt.plot(xpix, truey, label='True Sky (unconvolved)')
-plt.plot(pix_center, newconvy, lw=2, color='r', alpha=0.8, label='Sky convolved to inst. resolution')
-plt.legend()
-plt.axhline(y=0,ls='--', color='k')
-plt.title('Zoom: Instrument '+mytype)
-plt.xlabel('Angle')
-plt.ylabel('Sky Data')
-rng = [-10, 10]
-plt.xlim(rng[0],rng[1])
-myregion = (xpix > rng[0]) & (xpix < rng[1])
-plt.ylim(np.min(truey[myregion]),np.max(truey[myregion]))
-
-
-
-
-######################################
-### Residuals and Residuals Hist
-######################################
-plt.figure()
-plt.subplot(1,2,1)
-plt.title('Instrument '+mytype)
-res_all = solution_all - newconvy
-ss_all = np.std(res_all)
-print('Residual w.r.t. Convolved - All dets: {:5.3g}'.format(ss_all))
-p=plt.plot(pix_center, res_all, 'k-', label='Residual w.r.t. Convolved - All dets: {:5.3g}'.format(ss_all))
-
-res_all_wrt_true = solution_all - newtruey
-ss_all_wrt_true = np.std(res_all_wrt_true)
-print('Residual w.r.t. unconvolved - All dets: {:5.3g}'.format(ss_all_wrt_true))
-
-plt.subplot(1,2,1)
-plt.axhline(y=0,ls='--', color='k')
-plt.xlabel('Angle')
-plt.ylabel('Residuals')
-plt.legend()
-plt.subplot(1,2,2)
-plt.title('Instrument '+mytype)
-plt.hist(res_all, bins=21, range=[-5*ss_all, 5*ss_all], color=p[0].get_color(), alpha=0.5, 
-         label='Residual w.r.t. Convolved - All dets: {:5.3g}'.format(ss_all))
-plt.xlabel('Residuals')
-plt.ylabel('Counts')
-plt.legend()
-plt.tight_layout()
-
-```
-
-```{python}
-## One problem solved
-# expressing the convolution applied to the input sky in order to produce convolved sky to be then resampled (pixel size) 
-# in order to calculate residuals was done differently w.r.t. TOD production (2pi convolution) and was required to be expressed 
-# in pixel numbers, not in angles... => this solved a big part of the problem
-
-### RMS for different instrument models
-# BI:     0.00978   With a clear shape for the residuals
-# BI-GPA: 0.00832   With a very similar shape for the residuals
-# Im:     0.00290   With flat residuals
-
-# => there is still something fishy...
-# Also recall that there is zero noise here: the residuals should really go down to zero
-
-# Now that the convolution has been sorted out, maybe one should check the resampling...
-```
-
-```{python}
-# testng convolution and resanmpling:
-deltax = xpix[1]-xpix[0]
-
-# convolution
-# in TOD fabrication the convolved sky is achieved using: [above inititally it's with xpix, not xpix-deltax/2
-i=0
-b, _, _, _, _ = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=mydetpos[i]/1000, kmax=kmax_build, type=mytype)
-observed = conv_circ(truey, norm_filt(xpix, th, b))
-# observed = scipy.ndimage.convolve1d(truey, norm_filt(xpix, th, b), 
-#                                 mode='wrap')
-
-# but when we construct the convolved sky for residuals calculation we do:
-# myconvy = scipy.ndimage.gaussian_filter1d(truey, sig_conv, mode='wrap')
-### Let's replace the above by a full convolution
-gg = 1./np.sqrt(2*np.pi*(fwhmpeak/2.35)**2)*np.exp(-0.5*xpix**2/(fwhmpeak/2.35)**2)
-myconvy = conv_circ(truey, norm_filt(xpix, xpix, gg))
-
-####### THERE IS SOMETHING WEIRD HERE 13/01/25 18h00 before leaving
-### Is there a shift between convolve1d and conv_circ ? it does not affect much the residuals at the end apparently... strange...
-### Still to test the resample !
-
-newconvy = scipy.signal.resample(np.interp(xpix+delta_pix/2, xpix, myconvy), npix)
-
-
-nn0 = 3390
-nn1 = 3420
-deltax = xpix[1]-xpix[0]
-plt.plot(xpix[nn0:nn1], observed[nn0:nn1], label='Full Conv', lw=3)
-plt.plot(xpix[nn0:nn1], myconvy[nn0:nn1], label='filter1d', lw=3)
-plt.plot(pix_center, newconvy, 'o', label='filter1d resampled', lw=3)
-plt.xlim(xpix[nn0], xpix[nn1])
-
-plt.plot(xpix[nn0:nn1]+deltax/2, observed[nn0:nn1], label='Full Conv shifted', color='r', lw=3, ls='--')
-plt.ylim(0.0, 0.1)
-plt.legend()
-
-
-### Indeed with the imager, when replacing myconvy by oberved in the resolution cell, we get much smaller residuals !
-### There is an issue with the convolution then...
-plt.figure()
-plt.plot(xpix, truey, label='True Sky')
-plt.plot(xpix, observed, label='Observed')
-plt.plot(xpix, myconvy, label='myconvy')
-plt.plot(xpix, 100*(myconvy-observed), label='100*(myconvy-observed)')
-plt.xlim(-5,5)
-plt.legend()
-plt.title(mytype)
-
-print('RMS[myconv-observed] = ',np.std(myconvy-observed))
-
-### myconv - oberved should be exactly zero for an imager. It is not... so there is more issues about the convolutions obviously
-### However I don;t know if this dominates the issues, but surely it can explain why the imager residuals do not go to zero
-
-# Test 1: vary the truncate parameter from scipy.ndimage.gaussian_filter1d
-# no effect by incresing it beyond the nsig=4 that is default. If going below, we do see effects.
-# 2sig => RMS=0.0025
-# 3sig => RMS=0.0011
-# 4sig => RMS=0.00109407740244968 [this is the default]
-# 5sig => RMS=0.00109402928442325
-# 6sig => RMS=0.001094028983870464
-###=> so the truncation is not he issue
-
-# an easy test to see if it is the problem: replace the scipy.ndimage.gaussian_filter1d by the same as for 
-# TOD fabrication: scipy.ndimage.convolve1d(truey, norm_filt(xpix, th, b), mode='wrap')
-# => then the difference between observed and myconvy will necessarily be 0 and if there are still
-# issues then they come from elsewhere [the inversion]
-# doing that (for imager, which is the only case where b is the resolution - for Bi we'd have to put 
-# a gaussian instead of b) changes nothing: the RMS residuals goes from 0.0029 to 0.0030
-### => it is elsewehre :-(
-## [However, I should nevertheless try to build this convolution for all cases, 
-## it is likely to be more accurate]
-## NB: maybe too fast conclusion as the RMS of the difference between the two convs 
-## is half the RMS of the residuals... so maybe I should go deeper...
-
-```
-
-```{python}
-nn0 = 3400
-nn1 = 3420
-deltax = xpix[1]-xpix[0]
-plt.plot(xpix[nn0:nn1], myconvy[nn0:nn1], label='filter1d', lw=3)
-plt.plot(xpix[nn0:nn1], observed[nn0:nn1], label='Full Conv', lw=3)
-plt.plot(xpix[nn0:nn1]+deltax/2, observed[nn0:nn1], label='Full Conv shifted', color='r', lw=3, ls='--')
-plt.legend()
-```
-
-```{python}
-### So there is a half pixel shift somewhere apparently !
-
-myxx = np.linspace(-0.1,0.1, 1000)
-mygg = np.exp(-0.5*(myxx/(fwhmpeak/2.35))**2)
-
-
-#### Initial filter
-plt.figure()
-plt.subplot(1,3,1)
-b, _, _, _, _ = give_sbcut(th, dx, lam, sqnh, Df=Df, detpos=mydetpos[i]/1000, kmax=kmax_build, type='Imager')
-plt.plot(th,b,'o-')
-plt.plot(myxx, mygg, 'k-')
-plt.xlim(-0.01,0.01)
-plt.ylim(0.9999,1.0001)
-plt.axvline(x=0, color='k', ls='--')
-plt.axhline(y=1, color='k', ls='--')
-
-plt.subplot(1,3,2)
-plt.plot(xpix, norm_filt(xpix, th, b), 'o-')
-maxval = 1./np.sqrt(2*np.pi*sig_conv**2)
-plt.plot(myxx, mygg*maxval, 'k-')
-plt.xlim(-0.1,0.1)
-plt.ylim(0.99*maxval,1.01*maxval)
-plt.axvline(x=0, color='k', ls='--')
-plt.axhline(y=1*maxval, color='k', ls='--')
-
-```
-
-```{python}
-xpix[len(xpix)//2-2:len(xpix)//2+2]
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-
-```
-
-```{python}
-### Checking calibration => no significant gain
-mytitle = 'Checking Global Gain: '+mytype
-myxlabel = 'Relative Gain'
-
-fact = np.linspace(0.95,1.05, 100)
-resid = np.zeros(len(fact))
-for i in range(len(fact)):
-    resid[i] = np.std(fact[i]*solution_all - newconvy)
-
-### Best gain
-best = np.argmin(resid)
-best_res = fact[best]*solution_all-newconvy
-std_best = np.std(best_res)
-xbest = fact[best]
-xinit = 1.000
-
-plt.subplot(1,3,1)
-plt.title(mytitle)
-plt.plot(fact, resid)
-plt.axvline(x=xinit, ls=':', color='k', label='Init: x = {:5.3g} - Resid = {:5.3g}'.format(xinit, np.std(res_all)))
-plt.axhline(y=np.std(res_all), ls=':', color='k')
-plt.axvline(x=xbest, ls=':', color='r', label='Best: x = {:5.3g} - Resid = {:5.3g}'.format(xbest, std_best))
-plt.axhline(y=std_best, ls=':', color='r')
-plt.xlabel(myxlabel)
-plt.ylabel('Residuals RMS')
-plt.legend()
-
-plt.subplot(1,3,2)
-plt.title(mytitle)
-plt.plot(pix_center, res_all, label='Initial: RMS={:5.3g}'.format(np.std(res_all)))
-plt.plot(pix_center, best_res, label='Recal: RMS={:5.3g}'.format(np.std(best_res)))
-plt.xlabel('Angle [deg]')
-plt.ylabel('Residuals')
-plt.legend()
-
-plt.subplot(1,3,3)
-plt.title(mytitle)
-plt.hist(res_all, bins=21, range=[-5*ss_all, 5*ss_all], label='Initial: RMS={:5.3g}'.format(np.std(res_all)))
-plt.hist(best_res, bins=21, range=[-5*ss_all, 5*ss_all], label='Recal: RMS={:5.3g}'.format(np.std(best_res)))
-plt.xlabel('Residuals')
-plt.ylabel('Counts')
-plt.legend()
-
-plt.tight_layout()
-```
-
-```{python}
-#### Nptg = 10000
-# BI:     0.0282 -> 0.0281    # essentially no effect => not responsible
-# BI-GPA: 0.0254 -> 0.0247    # essentially no effect => not responsible
-# Im:     0.0170 -> 0.0170    # essentially no effect => not responsible
-```
-
-```{python}
-### Checking convolution of input signal
-mytitle = 'Checking Input Sky Convolution : '+mytype
-myxlabel = 'Sky Convolution $\sigma$ [pixels]'
-
-test_sig_conv = sig_conv * np.linspace(0.,3,100)
-resid = np.zeros(len(test_sig_conv))
-
-for i in range(len(test_sig_conv)):
-    if test_sig_conv[i]==0:
-        myconvy = truey
+### ChatGPT generated function
+def convolve_fourier_with_rectangular(time_stream, rect_width, sampling_interval=1):
+    """
+    Convolve a 1D time-stream with a rectangular function using Fourier space.
+    Parameters:
+        time_stream (np.array): Input time-stream to be convolved.
+        rect_width (float): Width of the rectangular function in time units.
+        sampling_interval (float): Time interval between samples in the time-stream.
+    Returns:
+        np.array: The convolved time-stream.
+    """
+    n = len(time_stream)
+    freqs = np.fft.fftfreq(n, d=sampling_interval)  # Frequency array
+    # Fourier Transform of the time-stream
+    time_stream_fft = np.fft.fft(time_stream)
+    # Kernel in Fourier space (sinc function)
+    sinc_kernel = rect_width * np.sinc(freqs * rect_width)
+    # Convolution in Fourier space
+    convolved_fft = time_stream_fft * sinc_kernel
+    # Inverse Fourier Transform to get the convolved signal
+    convolved_signal = np.fft.ifft(convolved_fft).real
+    # Normalize the result by the rectangular function width
+    # convolved_signal *= sampling_interval / rect_width
+    convolved_signal *= 1 / rect_width
+    return convolved_signal
+
+
+def create_sky(params):
+    np.random.seed(params['sky_seed'])     # Inititate corresponding seed
+    xpix, truey = create_1d_sky(params['npix_sky'], params['sky_model'][0],params['sky_model'][1:])
+    if params['plot_sky']:
+        plt.figure()
+        plt.plot(xpix, truey, label='True Sky')
+        plt.xlabel('angle')
+        plt.ylabel('sky')
+        plt.legend()
+    return xpix, truey
+
+def prepare_synthesized_beam(th, params):
+    ndet = len(params['detpos'])
+    if params['instrument_type'] not in ['Imager', 'BI', 'BI-GPA']:
+        print('Wrong instrument type')
+        stop
+    if params['plot_sb']:
+        plt.figure()
+        plt.plot(th, get_primbeam(th, 3e8/params['nu'], fwhmprimbeam_150=params['fwhmprim_150']), 'k--', 
+                 label='Th. Prim. Beam at {0:3.0f} GHz'.format(params['nu']/1e9))
+    for d in params['detpos']:
+        b, fwhmpeak, thetapeaks, amppeaks, ratio = give_sbcut(th, 
+                                                              params['dist_horns'], 
+                                                              3e8/params['nu'], 
+                                                              params['sqnh'], 
+                                                              Df=params['Df'], 
+                                                              detpos=d/1000,
+                                                              fwhmprimbeam_150=params['fwhmprim_150'],
+                                                              kmax=params['kmax_build'], 
+                                                              type=params['instrument_type'])
+        if params['plot_sb']:
+            p = plt.plot(th, b, lw=2, 
+                         label='Th. Synth. Beam at {0:3.0f} GHz \n detpos={1:3.1f} mm - Ratio G.P.A. = {2:5.2f}'.format(params['nu']/1e9, d, ratio))
+            plt.plot(thetapeaks, amppeaks, 'o', color=p[0].get_color())   
+    if params['plot_sb']:
+        plt.xlabel(r'$\theta$ [deg.]')
+        plt.ylabel('Synthesized beam')
+        plt.legend(loc='upper left', fontsize=8)
+        plt.xlim(np.min(th), np.max(th))
+        plt.ylim(-0.01, 1.4)
+        plt.title('Synthesized Beam: '+params['instrument_type'])
+        
+    return b, fwhmpeak, thetapeaks, amppeaks, ratio
+
+def build_TOD(params, xpix, truey, Ctruth, Ctruth_pix, pix_center, ptg_deg):
+    np.random.seed(params['noise_seed'])     # Inititate corresponding seed
+    ndet = len(params['detpos'])
+    dpix = pix_center[1]-pix_center[0]
+    TOD = np.zeros((ndet, params['npointings']))
+    if params['plot_TOD']:
+        plt.figure()
+        plt.title('TOD: '+params['instrument_type'])
+        plt.plot(xpix, truey, label='True Sky (unconvolved)')
+        plt.errorbar(pix_center, Ctruth_pix, xerr=dpix/2, fmt='.', label='Binned convolved sky')
+        
+    th = np.linspace(-params['minmaxtheta'], params['minmaxtheta'], params['ntheta'])    # theta values in degrees for synthesized beam
+    for i in range(len(params['detpos'])):
+        ### SB for this detectors
+        b, _, _, _, _ = give_sbcut(th, params['dist_horns'], 
+                                   3e8/params['nu'], 
+                                   params['sqnh'], 
+                                   Df=params['Df'], 
+                                   detpos=params['detpos'][i]/1000,
+                                   kmax=params['kmax_build'], 
+                                   type=params['instrument_type'])
+    
+        ### Full sampled Sky convolved by detector SB
+        observed = np.interp(pix_center, xpix, conv_circ(truey, norm_filt(xpix, th, b)))
+    
+        ########################################
+        ### Here various alternatives for TOD:
+        ########################################
+        # # 1: interpolation on observed == beam convolved sky (Bconv) at the ponting location
+        # TOD[i,:] = np.interp(ptg_deg, xpix, observed) + np.random.randn(params['npointings'])*params['noise_rms']
+        ######################################################################################
+        # # 2: Value of the convolved sky in the pixel correpsonding to pointing
+        # ptg_deg_index = np.floor((ptg_deg+180)/360 * len(xpix)).astype(int)
+        # TOD[i,:] = observed[ptg_deg_index] + np.random.randn(params['npointings'])*params['noise_rms']
+        ######################################################################################
+        # 3: Value of the BW convolved signal in the center of the reconstruction pixel
+        ptg_deg_index = np.floor((ptg_deg+180)/360 * len(pix_center)).astype(int)
+        TOD[i,:] = observed[ptg_deg_index] + np.random.randn(params['npointings'])*params['noise_rms'] 
+        if params['plot_TOD']:
+            plt.plot(ptg_deg, TOD[i,:], '.', alpha=0.5, label='TOD Detector #{}'.format(i))
+    return TOD
+
+
+
+def run_1d_simulation(params):
+    # plt.close()
+    ###################################
+    # Some parameters #################
+    ###################################
+    ndet = len(params['detpos'])
+    
+    ###################################
+    # Sky creation ####################
+    ###################################
+    xpix, truey = create_sky(params)
+    
+    ###################################
+    # Synthesized Beam  ###############
+    ###################################
+    th = np.linspace(-params['minmaxtheta'], params['minmaxtheta'], params['ntheta'])    # theta values in degrees for synthesized beam
+    b, fwhmpeak, thetapeaks, amppeaks, ratio = prepare_synthesized_beam(th, params)
+        
+    ###################################
+    # Sky Pixellization  ##############
+    ###################################
+    pixels = np.linspace(-180, 180, params['npix']+1)
+    pix_center = 0.5*(pixels[0:-1] + pixels[1:])
+    dpix = pix_center[1]-pix_center[0]
+    
+    
+    ###################################
+    # Theoretical predictions  ########
+    ###################################
+    # Beam convolution
+    bgauss = np.exp(-0.5*(th/(fwhmpeak/np.sqrt(8*np.log(2))))**2)
+    Bconvy=conv_circ(truey, norm_filt(xpix, th, bgauss))
+    # interpolate at rec pixels location
+    Bconvy_pix = np.interp(pix_center, xpix, Bconvy)
+    if params['sky_input'] == 'Bconv':
+        Ctruth = Bconvy.copy()
+        Ctruth_pix = Bconvy_pix.copy()
+    elif params['sky_input'] == 'BWconv':
+        ## Convolution by the reconstructed pixels window function  
+        BWconvy = convolve_fourier_with_rectangular(Bconvy, dpix, xpix[1]-xpix[0])
+        ## interpolate at rec pixels location
+        BWconvy_pix = np.interp(pix_center, xpix, BWconvy)
+        Ctruth = BWconvy.copy()
+        Ctruth_pix = BWconvy_pix.copy()
     else:
-        myconvy = scipy.ndimage.gaussian_filter1d(truey, test_sig_conv[i], mode='wrap')
-    # Resampling it on the right recnstructed pixels location
-    delta_pix = pix_center[1]-pix_center[0]
-    mynewconvy = scipy.signal.resample(np.interp(xpix+delta_pix/2, xpix, myconvy), npix)
-    resid[i] = np.std(solution_all - mynewconvy)
+        print('Incorrect <sky_input> in parameters')
+        stop
+        
+    if params['plot_expected']:
+        plt.figure()
+        plt.title('Expected signal: '+params['instrument_type'])
+        plt.plot(xpix, truey, label='True Sky')
+        plt.plot(xpix, Ctruth, label='Beam-convolved sky')
+        plt.errorbar(pix_center, Ctruth_pix, xerr=dpix/2, fmt='.', label='Pixellized convolved sky')
+        plt.legend()
+    
+    
+    ###################################
+    # Pointings    ####################
+    ###################################
+    np.random.seed(params['pointing_seed'])     # Inititate corresponding seed
+    ptg_deg = np.random.random(params['npointings']) * 360 - 180
+    if params['plot_pointings']:
+        plt.hist(ptg_deg, range=[-180, 180], bins=90, label='Pointings')
+        plt.xlim(-180,180)
+        plt.legend()
+        plt.xlabel(r'$\theta$ [deg.]')
+        plt.title('Pointings')
+    
+    
+    ###################################
+    # TOD Fabrication          ########
+    ###################################
+    TOD = build_TOD(params, xpix, truey, Ctruth, Ctruth_pix, pix_center, ptg_deg)    
+    
+    ###################################
+    # Map-Making solution      ########
+    ###################################
+    ### Get angles (w.r.t. instrument pointing) and amplitude for all relevant SB peaks and for each detector
+    kmax = params['kmax_rec']
+    if params['instrument_type'] == 'Imager':
+        npeaks = 1
+    else:
+        npeaks = 2 * kmax + 1
+    allthetapeaks = np.zeros((ndet, npeaks))
+    allamppeaks = np.zeros((ndet, npeaks))
+    for i in range(ndet):
+        _, _, allthetapeaks[i,:], allamppeaks[i,:], ratio = give_sbcut(th, 
+                                                                       params['dist_horns'], 
+                                                                       3e8/params['nu'], 
+                                                                       params['sqnh'], 
+                                                                       Df=params['Df'],
+                                                                       detpos=params['detpos'][i]/1000, 
+                                                                       kmax=params['kmax_rec'], 
+                                                                       type=params['instrument_type'])
+        print('Sum of all peaks: ', np.sum(allamppeaks[i,:]))
+        allamppeaks[i,:] = allamppeaks[i,:] / np.sum(allamppeaks[i,:])
 
-### Best convolution
-best = np.argmin(resid)
-bestconvy = scipy.ndimage.gaussian_filter1d(truey, test_sig_conv[best], mode='wrap')
-bestconvy = scipy.signal.resample(np.interp(xpix+delta_pix/2, xpix, bestconvy), npix)
-best_res = solution_all - bestconvy
-std_best = np.std(best_res)
-xbest = test_sig_conv[best]
-xinit = sig_conv
+    ### Construct operators and brute force calculate solution
+    nptg = params['npointings']
+    npix = params['npix']
+    H = np.zeros((ndet, nptg, npix))
+    HtH = np.zeros((ndet, npix, npix))
+    HtHinv = np.zeros((ndet, npix, npix))
+    solution = np.zeros((ndet, npix))
+    for i in range(ndet):
+        # print('Detector #{}'.format(i))
+        for j in range(npeaks):
+            peaks_ptg = (ptg_deg - allthetapeaks[i,j] + 180 + 360) % 360 - 180
+            peaks_indices = ((peaks_ptg - (-180)) * npix / 360).astype(int)
+            for k in range(nptg):
+                H[i, k, peaks_indices[k]] = allamppeaks[i,j]
+        HtH[i,:,:] = H[i,:,:].T @ H[i,:,:]
+        # print('matrix size: ', np.shape(HtH[i,:,:]))
+        # print('Log Determinant: ', np.linalg.slogdet(HtH[i,:,:])[1])
+        HtHinv[i,:,:] = np.linalg.inv(HtH[i,:,:])
+        solution[i,:] = HtHinv[i,:,:] @ H[i,:,:].T @ TOD[i,:]
+    solution_all = np.mean(solution, axis=0)
+    # print('Number of rec bins that are zero: {}'.format((solution_all==0).sum()))
+    
+    ### Calculate residuals
+    res_all = solution_all - Ctruth_pix
+    ss_all = np.std(res_all)
+
+    
+    ######################################
+    ### SOme Plots #######################
+    ######################################
+    if params['plot_reconstructed']:
+        ### Reconstructed and Expected
+        plt.figure()
+        for i in range(ndet):
+            p = plt.plot(pix_center, solution[i,:], 'o', alpha=0.5, label='Reconstructed Detector #{}'.format(i))
+        plt.plot(pix_center, Ctruth_pix, lw=2, color='r', alpha=0.8, label='Sky convolved')
+        plt.legend()
+        plt.axhline(y=0,ls='--', color='k')
+        plt.title('Instrument '+params['instrument_type'])
+        plt.xlabel('Angle')
+        plt.ylabel('Sky Data')
+    
+        ### Reconstructed and Expected - Zoom
+        plt.figure()
+        for i in range(ndet):
+            p = plt.plot(pix_center, solution[i,:], 'o', alpha=0.5, label='Reconstructed Detector #{}'.format(i))
+        plt.plot(xpix, truey, label='True Sky (unconvolved)')
+        plt.plot(pix_center, Ctruth_pix, lw=2, color='r', alpha=0.8, label='Sky convolved')
+        plt.legend()
+        plt.axhline(y=0,ls='--', color='k')
+        plt.title('Zoom: Instrument '+params['instrument_type'])
+        plt.xlabel('Angle')
+        plt.ylabel('Sky Data')
+        rng = [-10, 10]
+        plt.xlim(rng[0],rng[1])
+        myregion = (xpix > rng[0]) & (xpix < rng[1])
+        plt.ylim(np.min(truey[myregion]),np.max(truey[myregion]))
+    
+        ### Residuals and Residuals Hist
+        plt.figure()
+        plt.title('Instrument '+params['instrument_type'])
+        print('Residual w.r.t. Sky Convolved - All dets: {:5.3g}'.format(ss_all))
+        p=plt.plot(pix_center, res_all, 'ko-', label='Residual w.r.t. Sky Convolved - All dets: {:5.3g}'.format(ss_all))
+        plt.axhline(y=0,ls='--', color='k')
+        plt.xlabel('Angle')
+        plt.ylabel('Residuals')
+        plt.legend()
+        plt.xlim(-10,10)
+       
+        plt.figure()
+        plt.subplot(1,2,1)
+        plt.title('Instrument '+params['instrument_type'])
+        print('Residual w.r.t. Sky Convolved - All dets: {:5.3g}'.format(ss_all))
+        p=plt.plot(pix_center, res_all, 'k-', label='Residual w.r.t. Sky Convolved - All dets: {:5.3g}'.format(ss_all))
+        plt.subplot(1,2,1)
+        plt.axhline(y=0,ls='--', color='k')
+        plt.xlabel('Angle')
+        plt.ylabel('Residuals')
+        plt.legend()
+        
+        plt.subplot(1,2,2)
+        plt.title('Instrument '+params['instrument_type'])
+        plt.hist(res_all, bins=21, range=[-5*ss_all, 5*ss_all], color=p[0].get_color(), alpha=0.5, 
+                 label='Residual w.r.t. Convolved - All dets: {:5.3g}'.format(ss_all))
+        plt.xlabel('Residuals')
+        plt.ylabel('Counts')
+        plt.legend()
+        plt.tight_layout()
+
+    return pix_center, solution, solution_all, Ctruth_pix, xpix, truey, ss_all, [fwhmpeak, amppeaks, thetapeaks]
 
 
-plt.subplot(1,3,1)
-plt.title(mytitle)
-plt.plot(test_sig_conv, resid)
-plt.axvline(x=xinit, ls=':', color='k', label='Init: x = {:5.3g} - Resid = {:5.3g}'.format(xinit, np.std(res_all)))
-plt.axhline(y=np.std(res_all), ls=':', color='k')
-plt.axvline(x=xbest, ls=':', color='r', label='Best: x = {:5.3g} - Resid = {:5.3g}'.format(xbest, std_best))
-plt.axhline(y=std_best, ls=':', color='r')
-plt.xlabel(myxlabel)
-plt.ylabel('Residuals RMS')
+
+```
+
+# Integrated version
+
+```{python}
+# Parameters
+params = {}
+# Sky Description #####################################################################
+params['npix_sky']           = 2**15                # Number of pixels for the sky creation
+params['sky_model']          = [rnd_sky_1d, 1.8]    # Model to randomly draw the sky: here power law in fourier space with index
+# params['sky_model']          = [sinsky, 5.]         # Model to randomly draw the sky: here sinewave
+params['sky_input']          = 'Bconv'              # DO we account for pixel window in the input or not either 'Bconv' or 'BWconv'
+# Pointings ###########################################################################
+params['npointings']         = 50000                # Number of pointings (uniformly drawn over 360 deg)
+# Instrument ##########################################################################
+params['instrument_type']    = 'BI-GPA'             # Instrument type: among ['BI', 'BI-GPA', 'Imager']
+params['detpos']             = np.array([0.])       # Position of detectors
+params['fwhmprim_150']       = 14.                  # in degrees
+params['nu']                 = 150e9                # in Hz
+params['dist_horns']         = 14.e-3               # distance between horns in meters
+params['sqnh']               = 20                   # square root of the number of horns (square array of horns assumed)
+params['Df']                 = 1.                   # focal distance in meters
+params['kmax_build']         = 3                    # kmax for BI synthesized beam at the TOD fabrication stage
+params['ntheta']             = 2**15+1              # number of samples for synthesized beam
+params['minmaxtheta']        = 180                  # range for synthesized beam theta if set to X then it is [-X, X] in degrees
+# noise ################################################################################
+params['noise_rms']          = 0.                   # RMS noise per time sample
+# Sky Recnstruction ####################################################################
+params['npix']               = 360                  # Number of reconstructed pixels
+params['kmax_rec']           = params['kmax_build'] # kmax for BI synthesized beam at map-making stage
+# Seeds ################################################################################
+params['sky_seed']           = 1                    # Seed for the sky simulation
+params['pointing_seed']      = 1                    # Seed for the pointing
+params['noise_seed']         = None                 # Seed for the noise
+# Plottings ############################################################################
+params['plot_sky']           = False
+params['plot_sb']            = False
+params['plot_expected']      = False
+params['plot_pointings']     = False
+params['plot_TOD']           = False
+params['plot_reconstructed'] = False
+
+
+#### Show possible synthesized beam
+th = np.linspace(-params['minmaxtheta'], params['minmaxtheta'], params['ntheta'])    # theta values in degrees for synthesized beam
+params_temp = params.copy()
+params_temp['plot_sb'] = True
+_ = prepare_synthesized_beam(th, params_temp)
+
+
+#### Reconstruct one
+### Run all
+pix_center, solution, solution_all, Ctruth_pix, xpix, truey, RMSresall, sb_description = run_1d_simulation(params)
+print(RMSresall)
+```
+
+```{python}
+#### FFT Analysis
+params['plot_sb']            = False
+params['plot_reconstructed'] = False
+params['sky_seed']           = None                    # Seed for the sky simulation
+params['pointing_seed']      = None                 # Seed for the pointing
+
+nn = 10
+plotall = False
+
+all_ps_sky = np.zeros((nn, params['npix_sky']))
+all_ps_sky_pix = np.zeros((nn, params['npix']))
+all_ps_solution = np.zeros((nn, params['npix']))
+
+
+for i in range(nn):
+    pix_center, solution, solution_all, Ctruth_pix, xpix, truey, RMSresall, sb_description = run_1d_simulation(params)
+    print(i, RMSresall)
+    
+    freq_pix = np.abs(np.fft.fftfreq(len(pix_center), d=pix_center[1]-pix_center[0]))
+    all_ps_sky_pix[i,:] = np.abs(np.fft.fft(Ctruth_pix))**2 / len(Ctruth_pix)**2
+    all_ps_solution[i,:] = np.abs(np.fft.fft(solution_all))**2  / len(Ctruth_pix) **2
+
+    freq_sky = np.abs(np.fft.fftfreq(len(xpix), d=xpix[1]-xpix[0]))
+    all_ps_sky[i,:] = np.abs(np.fft.fft(truey))**2 / len(xpix)**2
+    
+    if plotall:
+        plt.figure()
+        plt.subplot(2,1,1)
+        plt.plot(freq_sky, all_ps_sky[i,:], label='Input Sky', alpha=0.3)
+        plt.plot(freq_pix, all_ps_sky_pix[i,:], alpha=0.5, label='Expected Pixelized Sky')
+        plt.plot(freq_pix, all_ps_solution[i,:], 'x', alpha=0.5, label='Solution')
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel('Freq [$deg^{-1}$]')
+        plt.ylabel('Power Spectrum')
+        plt.ylim(1e-15, 1e0)
+        plt.legend()
+        
+        plt.subplot(2,1,2)
+        plt.plot(freq_pix, ps_solution / ps_sky_pix, label='Transfer fuction')
+        plt.axhline(y=1, ls=':', color='k')
+        plt.xscale('log')
+        plt.xlabel('Freq [$deg^{-1}$]')
+        plt.ylabel('Power Spectrum')
+        plt.ylim(0.7,1.5)
+        plt.legend()
+        plt.tight_layout()
+
+
+```
+
+```{python}
+fwhmpeaks = sb_description[0]
+amppeaks = sb_description[1]
+thetapeaks = sb_description[2]
+
+
+known_freqs = []
+#known_freqs.append({'label':'Resolution', 'freq': 1./fwhmpeaks, 'color':'g'})
+known_freqs.append({'label':'Peak Distance x 2', 'freq': np.abs(1./(thetapeaks[1]-thetapeaks[0]))/2, 'color':'b' })
+# known_freqs.append({'label':'Diag Peak Distance', 'freq': np.abs(1./(thetapeaks[1]-thetapeaks[0]))/np.sqrt(2), 'color':'r' })
+#known_freqs.append({'label':'Primary Beam', 'freq': 1./params['fwhmprim_150'], 'color':'m' })
+
+# ftest = 1./params['fwhmprim_150']
+# mylabel = 'Primary beam'
+
+
+aa = 1
+harm_max=10
+
+plt.figure()
+plt.subplot(2,1,1)
+plt.plot(freq_sky, np.mean(all_ps_sky, axis=0), label='Input Sky', alpha=0.3)
+plt.plot(freq_pix, np.mean(all_ps_sky_pix, axis=0), alpha=0.5, label='Expected Pixelized Sky')
+plt.plot(freq_pix, np.mean(all_ps_solution, axis=0), '.', alpha=0.5, label='Solution')
+for fff in known_freqs:
+    p=plt.axvline(x = fff['freq'], ls='--', alpha=aa, label=fff['label'], color=fff['color'])
+    for i in range(2,harm_max):
+        plt.axvline(x = i * fff['freq'], ls='--', color=fff['color'], alpha=aa)
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Freq [$deg^{-1}$]')
+plt.ylabel('Power Spectrum')
+plt.ylim(1e-15, 1e0)
 plt.legend()
 
-plt.subplot(1,3,2)
-plt.title(mytitle)
-plt.plot(pix_center, res_all, label='Initial: RMS={:5.3g}'.format(np.std(res_all)))
-plt.plot(pix_center, best_res, label='Recal: RMS={:5.3g}'.format(np.std(best_res)))
-plt.xlabel('Angle [deg]')
-plt.ylabel('Residuals')
+plt.subplot(2,1,2)
+plt.plot(freq_pix, np.mean(all_ps_solution, axis=0) / np.mean(all_ps_sky_pix, axis=0), label='Transfer fuction')
+plt.axhline(y=1, ls=':', color='k')
+for fff in known_freqs:
+    p=plt.axvline(x = fff['freq'], ls='--', alpha=aa, label=fff['label'], color=fff['color'])
+    for i in range(2,harm_max):
+        plt.axvline(x = i * fff['freq'], ls='--', color=fff['color'], alpha=aa)
+plt.xscale('log')
+plt.xlabel('Freq [$deg^{-1}$]')
+plt.ylabel('Power Spectrum')
+plt.ylim(0.,2.)
 plt.legend()
-
-plt.subplot(1,3,3)
-plt.title(mytitle)
-plt.hist(res_all, bins=21, range=[-5*ss_all, 5*ss_all], label='Initial: RMS={:5.3g}'.format(np.std(res_all)))
-plt.hist(best_res, bins=21, range=[-5*ss_all, 5*ss_all], label='Recal: RMS={:5.3g}'.format(np.std(best_res)))
-plt.xlabel('Residuals')
-plt.ylabel('Counts')
-plt.legend()
-
 plt.tight_layout()
+
+
+
+```
+
+Ideas:
+
+- [Tom] effect of intercalibration / normalization of peaks
+- [Tom] check that peaks near the edge actually are well placed on the other side with the modulo
+
+Tested:
+- Extension of theta range for SB => it does improve a lot the situation but not completely
+  - for now I've set to 180 => the whole range...
+- [Alexandre] number of peaks in building / reconstructing (-180, 180 for SB).
+  - there was indeed an issue related to the extension in theta: some of the peaks were not accounted for at TOD pabrication but accouted for at reconstruction
+- [Tom] there are other factors in peak amplitude in the code, see message in Rocket Chat
+  - putting similar factor lead to significant differences in the peak normaliztion.
+  - Not fully checked, but seems a bit unlikely...
+
+```{python}
+
 ```
 
 ```{python}
-# BI:     0.0282 (12.4) -> 0.0196  (18.5)  But still significant residuals => likely not responsible
-# BI-GPA: 0.0254 (12.4) -> 0.0155  (18.1)  But still significant residuals => likely not responsible!
-# Ιm:     0.0170 (12.4) -> 0.0052  (16.6)  Weird ! Why not init ?
+
 ```
 
 ```{python}
-### Checking shift of the input signal
-mytitle = 'Checking Input Sky Shift : '+mytype
-myxlabel = 'Convolved sky pixel shift'
 
-test_shift = np.linspace(0.5, 1.5,1000)
-resid = np.zeros(len(test_shift))
-
-for i in range(len(test_shift)):
-    myconvy = scipy.ndimage.gaussian_filter1d(truey, sig_conv, mode='wrap')
-    # Resampling it on the right recnstructed pixels location
-    delta_pix = pix_center[1]-pix_center[0]
-    mynewconvy = scipy.signal.resample(np.interp(xpix+delta_pix/2*test_shift[i], xpix, myconvy), npix)
-    resid[i] = np.std(solution_all - mynewconvy)
-
-### Best convolution
-best = np.argmin(resid)
-bestconvy = scipy.ndimage.gaussian_filter1d(truey, sig_conv, mode='wrap')
-bestconvy = scipy.signal.resample(np.interp(xpix+delta_pix/2*test_shift[best], xpix, bestconvy), npix)
-best_res = solution_all - bestconvy
-std_best = np.std(best_res)
-xbest = test_shift[best]
-xinit = 1.
-
-
-plt.subplot(1,3,1)
-plt.title(mytitle)
-plt.plot(test_shift, resid)
-plt.axvline(x=xinit, ls=':', color='k', label='Init: x = {:5.3g} - Resid = {:5.3g}'.format(xinit, np.std(res_all)))
-plt.axhline(y=np.std(res_all), ls=':', color='k')
-plt.axvline(x=xbest, ls=':', color='r', label='Best: x = {:5.3g} - Resid = {:5.3g}'.format(xbest, std_best))
-plt.axhline(y=std_best, ls=':', color='r')
-plt.xlabel(myxlabel)
-plt.ylabel('Residuals RMS')
-plt.legend()
-
-plt.subplot(1,3,2)
-plt.title(mytitle)
-plt.plot(pix_center, res_all, label='Initial: RMS={:5.3g}'.format(np.std(res_all)))
-plt.plot(pix_center, best_res, label='Recal: RMS={:5.3g}'.format(np.std(best_res)))
-plt.xlabel('Angle [deg]')
-plt.ylabel('Residuals')
-plt.legend()
-
-plt.subplot(1,3,3)
-plt.title(mytitle)
-plt.hist(res_all, bins=21, range=[-5*ss_all, 5*ss_all], label='Initial: RMS={:5.3g}'.format(np.std(res_all)))
-plt.hist(best_res, bins=21, range=[-5*ss_all, 5*ss_all], label='Recal: RMS={:5.3g}'.format(np.std(best_res)))
-plt.xlabel('Residuals')
-plt.ylabel('Counts')
-plt.legend()
-
-plt.tight_layout()
 ```
 
 ```{python}
-# BI:     0.974 with no gain but a strange ResRMS shape... => why ?
-# BI-GPA: 0.974 with no gain but a strange ResRMS shape... => why ?
-# Im:         1 and no change in sigma (also this strange ResRMS shape) => no bug
+
 ```
 
-Clearly, angular shift or gain are not an issue while convolution seems to be an issue to some extent, although not solving everything.
+```{python}
 
-It appears the optimal convolution is always larger than the expected one, even in the case of a pure Gaussian Imager...
-
-Is it the pixel window function ??? the use of the resample() function ?
-
-When changing the number of input sky samples, we observe a systematic increase of the required convolution sigma with increasing number of input sample => this is the sign of some bug somewhere...
+```
 
 ```{python}
 

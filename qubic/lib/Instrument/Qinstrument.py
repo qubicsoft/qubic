@@ -1461,6 +1461,7 @@ class QubicInstrument(Instrument):
         direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
 
         e_nf = direction[:, None, :, :]
+        
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:
@@ -1487,9 +1488,7 @@ class QubicInstrument(Instrument):
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
-            thetaphis = _pack_vector(thetas, phis)  # (ndetectors, ncolmax, 2)
-            directions = Spherical2CartesianOperator("zenith,azimuth")(thetaphis)
-            e_nf = direction[:, None, :, :]
+
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
                 np.take(table, c2h(e_ni).astype(int), out=index[i])
@@ -1500,7 +1499,7 @@ class QubicInstrument(Instrument):
             pool.map(func_thread, range(ndetectors))
         
         if scene.kind == "I":
-            value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
+            value = s.data.value.reshape(ndetectors, ntimes, npeaks)
             value[...] = vals[:, None, :]
             shapeout = (ndetectors, ntimes)
         else:

@@ -827,4 +827,15 @@ def run_1d_simulation(params):
         plt.legend()
         plt.tight_layout()
 
-    return pix_center, solution, solution_all, Ctruth_pix, xpix, truey, ss_all, (fwhmpeak, amppeaks, thetapeaks)
+    return (
+        pix_center,
+        solution,
+        solution_all,
+        Ctruth_pix,
+        xpix,
+        truey,
+        ss_all,
+        (fwhmpeak, amppeaks, thetapeaks),
+        ptg_deg,
+        TOD,
+    )

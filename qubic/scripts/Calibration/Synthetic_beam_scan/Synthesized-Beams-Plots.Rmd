@@ -24,6 +24,8 @@ display(HTML("<style>.container { width:95% !important; }</style>"))
 import importlib
 import healpy as hp
 from importlib import reload
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 #### QUBIC IMPORT
@@ -34,8 +36,8 @@ from qubic.lib.Qutilities import progress_bar
 
 
 
-rc('figure',figsize=(20,10))
-rc('font',size=15)
+plt.rc('figure',figsize=(20,10))
+plt.rc('font',size=15)
 
 
 
@@ -97,45 +99,45 @@ for i in range(nbhorns):
 external_A = [xx, yy, allampX, allampY, allphiX, allphiY]
 
 horn_num = 0
-subplot(2,2,1)
-imshow(allampX[horn_num,:,:], 
+plt.subplot(2,2,1)
+plt.imshow(allampX[horn_num,:,:], 
        extent=[np.min(xx), np.max(xx), np.min(yy), np.max(yy)], 
        origin='lower', vmin=0, vmax=1)
-xlabel('Xgrf [m]')
-xlabel('Ygrf [m]')
-title('Amplitude X')
-colorbar()
+plt.xlabel('Xgrf [m]')
+plt.xlabel('Ygrf [m]')
+plt.title('Amplitude X')
+plt.colorbar()
 
-subplot(2,2,2)
-imshow(allampY[horn_num,:,:], 
+plt.subplot(2,2,2)
+plt.imshow(allampY[horn_num,:,:], 
        extent=[np.min(xx), np.max(xx), np.min(yy), np.max(yy)], 
        origin='lower', vmin=0, vmax=1)
-xlabel('Xgrf [m]')
-xlabel('Ygrf [m]')
-title('Amplitude Y')
-colorbar()
+plt.xlabel('Xgrf [m]')
+plt.xlabel('Ygrf [m]')
+plt.title('Amplitude Y')
+plt.colorbar()
 
 
-subplot(2,2,3)
-imshow(allphiX[horn_num,:,:], 
+plt.subplot(2,2,3)
+plt.imshow(allphiX[horn_num,:,:], 
        extent=[np.min(xx), np.max(xx), np.min(yy), np.max(yy)], 
        origin='lower', vmin=-np.pi, vmax=np.pi)
-xlabel('Xgrf [m]')
-xlabel('Ygrf [m]')
-title('Phase X')
-colorbar()
+plt.xlabel('Xgrf [m]')
+plt.xlabel('Ygrf [m]')
+plt.title('Phase X')
+plt.colorbar()
 
 
-subplot(2,2,4)
-imshow(allphiY[horn_num,:,:], 
+plt.subplot(2,2,4)
+plt.imshow(allphiY[horn_num,:,:], 
        extent=[np.min(xx), np.max(xx), np.min(yy), np.max(yy)], 
        origin='lower', vmin=-np.pi, vmax=np.pi)
-xlabel('Xgrf [m]')
-xlabel('Ygrf [m]')
-title('Phase Y')
-colorbar()
+plt.xlabel('Xgrf [m]')
+plt.xlabel('Ygrf [m]')
+plt.title('Phase Y')
+plt.colorbar()
 
-tight_layout()
+plt.tight_layout()
 ```
 
 We use the same `get_synthbeam()` function, but adding the `external_A` data from Maynooth.
@@ -143,7 +145,7 @@ We use the same `get_synthbeam()` function, but adding the `external_A` data fro
 ```{python}
 
 sb_nui = q.get_synthbeam(s, idet, external_A=external_A)
-figure()
+plt.figure()
 hp.gnomview(sb_nui/np.max(sb_nui), rot=[0,90], 
         reso=10, min=0, max=1, title='Nui Beam - Detector #{}'.format(idet), sub=(1,2,1))
 hp.gnomview(10*np.log10(sb_nui/np.max(sb_nui)), rot=[0,90], 
@@ -158,21 +160,21 @@ wf = hp.anafast(sb/np.max(sb), lmax=512)
 wf_nui = hp.anafast(sb_nui / np.max(sb_nui), lmax=512)
 ell = np.arange(len(wf))+2
 
-subplot(1,2,1)
-plot(ell, wf, label='Ideal beam')
-plot(ell, wf_nui, label='NUI Beam')
-#yscale('log')
-xlabel('$\ell$')
-ylabel('$W_\ell$')
-legend()
+plt.subplot(1,2,1)
+plt.plot(ell, wf, label='Ideal beam')
+plt.plot(ell, wf_nui, label='NUI Beam')
+#plt.yscale('log')
+plt.xlabel('$\ell$')
+plt.ylabel('$W_\ell$')
+plt.legend()
 
-subplot(1,2,2)
-plot(ell, wf/wf_nui, label=r'$\frac{W_\ell^{Ideal}}{W_\ell^{NUI}}$')
-xlabel('$\ell$')
-ylabel('Ratio')
-axhline(y=1, color='k', ls='--')
-legend()
-ylim(0,1.5)
+plt.subplot(1,2,2)
+plt.plot(ell, wf/wf_nui, label=r'$\frac{W_\ell^{Ideal}}{W_\ell^{NUI}}$')
+plt.xlabel('$\ell$')
+plt.ylabel('Ratio')
+plt.axhline(y=1, color='k', ls='--')
+plt.legend()
+plt.ylim(0,1.5)
 ```
 
 ```{python}

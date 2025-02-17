@@ -604,6 +604,7 @@ def build_TOD(params, input_sky, ptg_deg, rec_pix_centers, algo="exact"):
                 convolved = convolve_fourier_with_rectangular(convolved, output_pixels_width, sampling)
 
             # Step 3: Interpolate the convolved sky at the pointing locations
+            convolved_pix = np.interp(rec_pix_centers, xpix, convolved)
             TOD[i, :] = np.interp(ptg_deg, xpix, convolved)
         else:
             # Step 1: Convolve the true sky with the detector's angular resolution
@@ -636,7 +637,9 @@ def build_TOD(params, input_sky, ptg_deg, rec_pix_centers, algo="exact"):
             plt.figure()
             plt.plot(xpix, truey, label="True Sky")
             plt.plot(xpix, convolved, label="Convolved Sky")
-            plt.errorbar(rec_pix_centers, convolved_pix, xerr=(rec_pix_centers[1] - rec_pix_centers[0]), label="Pixellized convolved sky")
+            plt.errorbar(
+                rec_pix_centers, convolved_pix, xerr=(rec_pix_centers[1] - rec_pix_centers[0]), label="Pixellized convolved sky", fmt="o", capsize=3
+            )
             plt.plot(ptg_deg, TOD[i, :], ".", label="TOD")
             plt.xlabel(r"$\theta$ [deg.]")
             plt.ylabel("TOD")
@@ -644,7 +647,12 @@ def build_TOD(params, input_sky, ptg_deg, rec_pix_centers, algo="exact"):
             plt.legend()
 
     # Return the TOD array and the convolved sky
-    return TOD, convolved
+    return (
+        TOD,
+        convolved,
+        convolved_pix,
+        rec_pix_centers,
+    )
 
 
 ########################################################################################
@@ -778,7 +786,7 @@ def run_1d_simulation(params):
         plt.title("Pointings")
 
     # Generate Time-Ordered Data (TOD)
-    TOD, sky_convolved = build_TOD(params, [xpix, truey], ptg_deg, pix_center, algo=params["TOD_method"])
+    TOD, sky_convolved, sky_convolved_pix, _ = build_TOD(params, [xpix, truey], ptg_deg, pix_center, algo=params["TOD_method"])
 
     # Compute H operator
     H = get_H_operator(params, th, ptg_deg)
@@ -827,15 +835,15 @@ def run_1d_simulation(params):
         plt.legend()
         plt.tight_layout()
 
-    return (
-        pix_center,
-        solution,
-        solution_all,
-        Ctruth_pix,
-        xpix,
-        truey,
-        ss_all,
-        (fwhmpeak, amppeaks, thetapeaks),
-        ptg_deg,
-        TOD,
-    )
+    return {
+        "pix_center": pix_center,
+        "solution": solution,
+        "solution_all": solution_all,
+        "Ctruth_pix": Ctruth_pix,
+        "xpix": xpix,
+        "truey": truey,
+        "RMS_resall": ss_all,
+        "beam_params": (fwhmpeak, amppeaks, thetapeaks),
+        "ptg_deg": ptg_deg,
+        "TOD": TOD,
+    }

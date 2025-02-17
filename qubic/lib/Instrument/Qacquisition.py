@@ -116,6 +116,7 @@ class QubicAcquisition(Acquisition):
             nprocs_sampling=nprocs_sampling,
             comm=comm,
         )
+        
         self.photon_noise = bool(photon_noise)
         self.effective_duration = effective_duration
         self.bandwidth = bandwidth

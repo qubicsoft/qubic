@@ -94,9 +94,6 @@ class SyntheticBeam(object):
 class Noise(object):
     pass
 
-class Noise(object):
-    pass
-
 def funct(x, p, n):
     return x**p / (np.exp(x) - 1) ** n
 

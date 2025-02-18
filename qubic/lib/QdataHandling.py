@@ -1,29 +1,21 @@
-import os, glob, string, pprint
-import datetime as dt
+import os
 
 import numpy as np
-from matplotlib.pyplot import *
 import matplotlib.pyplot as plt
-
 import healpy as hp
 
-from scipy.signal import medfilt, chirp, find_peaks, peak_widths
+from scipy.signal import medfilt
 from scipy.interpolate import interp1d
 import scipy.ndimage.filters as f
 
 from pysimulators import FitsArray
 
-from qubicpack.qubicfp import qubicfp
 
 from qubic.lib.Qsamplings import hor2equ
 from qubic.lib.Calibration import Qselfcal as scal
 import qubic.lib.Calibration.Qfiber as ft
 import qubic.lib.Calibration.Qdemodulation as dl
 from qubic.lib.Qutilities import progress_bar
-import qubic.lib.Fitting.QsynthesizedBeam as sbfit
-from qubic.io import write_map
-
-
 
 def hf_noise_estimate(tt, dd):
     sh = np.shape(dd)

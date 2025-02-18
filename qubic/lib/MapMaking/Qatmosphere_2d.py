@@ -30,6 +30,8 @@ class AtmosphereProperties:
         ### Import parameters files
         self.params = params
         self.qubic_dict = self.get_qubic_dict()
+
+        np.random.seed(self.params['seed'])
         
         ### Build atmsopheric coordinates
         # Cartesian coordinates
@@ -866,6 +868,7 @@ class AtmosphereMaps(AtmosphereProperties):
         """Healpy 2d atmosphere maps.
         
         Function to project the 2d atmosphere maps in cartesian coordinates, and then project them in spherical coordinates using healpy.
+        By default, the projection is centered on the QUBIC patch (RA=0, DEC=-57).
 
         Returns
         -------

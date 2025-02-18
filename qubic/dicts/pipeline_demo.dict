@@ -57,9 +57,9 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 
 hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 
-random_pointing=False   
+random_pointing=True   
 
-repeat_pointing=True
+repeat_pointing=False
 npointings=3000
 dtheta=15.
 nhwp_angles=3 # use only for repeat_pointing
@@ -96,6 +96,6 @@ verbose=True
 ####################################### Synthetic Beam #####################################
 
 #if true, use imported fits. if false, use theoretical theta,phi,val calculated in instrument.py
-use_synthbeam_fits_file=True
+use_synthbeam_fits_file=False
 
 get_many_frequencies_analytically=False

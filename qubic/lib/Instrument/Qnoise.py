@@ -54,7 +54,7 @@ class QubicNoise:
         the QubicIntegrated is to be replaced by QubicAcquisition, but with the correct arguments
         self.acq = QubicAcquisition(instrument, sampling, scene, self.dict)
         '''
-        self.acq = QubicAcquisition(self.dict, Nsub=1, Nrec=1)
+        self.acq = QubicIntegrated(self.dict, Nsub=1, Nrec=1)
         print(f"Duration at {band} GHz is {duration} yrs")
 
     def get_noise(self, det_noise, pho_noise):

@@ -377,7 +377,7 @@ class QubicInstrument(Instrument):
 
     __repr__ = __str__
 
-    def get_noise(self, sampling, scene, det_noise=True, photon_noise=True, out=None,
+    def get_noise(self, sampling, scene, rng_noise, det_noise=True, photon_noise=True, out=None,
                   operation=operation_assignment):
         """
         Return a noisy timeline.
@@ -385,29 +385,29 @@ class QubicInstrument(Instrument):
         """
         if out is None:
             out = np.empty((len(self), len(sampling)))
-        self.get_noise_detector(sampling, out=out)
+        self.get_noise_detector(sampling, rng_noise, out=out)
         if det_noise is False:
             out *= 0
         if photon_noise:
-            out += self.get_noise_photon(sampling, scene)
+            out += self.get_noise_photon(sampling, scene, rng_noise)
         return out
 
-    def get_noise_detector(self, sampling, out=None):
+    def get_noise_detector(self, sampling, rng_noise, out=None):
         """
         Return the detector noise (#det, #sampling).
 
         """
         return Instrument.get_noise(
-            self, sampling, nep=self.detector.nep, fknee=self.detector.fknee,
+            self, sampling, rng_noise, nep=self.detector.nep, fknee=self.detector.fknee,
             fslope=self.detector.fslope, out=out)
 
-    def get_noise_photon(self, sampling, scene, out=None):
+    def get_noise_photon(self, sampling, scene, rng_noise, out=None):
         """
         Return the photon noise (#det, #sampling).
 
         """
         nep_photon = self._get_noise_photon_nep(scene)
-        return Instrument.get_noise(self, sampling, nep=nep_photon, out=out)
+        return Instrument.get_noise(self, sampling, rng_noise, nep=nep_photon, out=out)
 
     def _get_noise_photon_nep(self, scene):
         

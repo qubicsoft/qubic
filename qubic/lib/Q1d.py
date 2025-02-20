@@ -7,8 +7,8 @@ import scipy.signal
 class Q1D:
     def __init__(self, instrument_type="BI-GPA", params=None, plot_sb=True):
         """
-        Initialise les paramètres du télescope à partir d'un dictionnaire.
-        Si aucun dictionnaire n'est fourni, les valeurs par défaut sont utilisées.
+        Instanciation of the class with default parameters.
+        If a dictionnary param is given it replaces the default parameters.
         """
         if params is None:
             params = {}

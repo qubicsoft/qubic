@@ -4,6 +4,492 @@ import scipy
 import scipy.signal
 
 
+class Q1D:
+    def __init__(self, instrument_type="BI-GPA", params=None, plot_sb=True):
+        """
+        Initialise les paramètres du télescope à partir d'un dictionnaire.
+        Si aucun dictionnaire n'est fourni, les valeurs par défaut sont utilisées.
+        """
+        if params is None:
+            params = {}
+
+        # Sky Description
+        self.npix_sky = params.get("npix_sky", 2**15)
+        self.sky_model = params.get("sky_model", [rnd_sky_1d, 1.8])  # Modèle fictif
+        self.sky_input_method = params.get("sky_input_method", "BWconv")
+
+        # Pointings
+        self.npointings = params.get("npointings", 50000)
+
+        # Instrument
+        self.instrument_type = params.get("instrument_type", instrument_type)
+        self.detpos = params.get("detpos", np.array([0.0]))
+        self.fwhmprim_150 = params.get("fwhmprim_150", 14.0)
+        self.nu = params.get("nu", 150e9)
+        self.dist_horns = params.get("dist_horns", 14.0e-3)
+        self.sqnh = params.get("sqnh", 8)
+        self.Df = params.get("Df", 1.0)
+        self.kmax_build = params.get("kmax_build", 1)
+
+        # SB sampling
+        self.ntheta = params.get("ntheta", 2**15)
+        self.minmaxtheta = params.get("minmaxtheta", 30)
+        self.th = np.linspace(-self.minmaxtheta, self.minmaxtheta, self.ntheta)
+
+        # TOD fabrication method
+        self.TOD_method = params.get("TOD_method", "approx")
+
+        # Noise
+        self.noise_rms = params.get("noise_rms", 0.0)
+
+        # Sky Reconstruction
+        self.kmax_rec = params.get("kmax_rec", self.kmax_build)
+        self.npix = params.get("npix", 360 * 2)
+        pixels = np.linspace(-180, 180, self.npix + 1)
+        self.rec_pix_centers = 0.5 * (pixels[:-1] + pixels[1:])  # Compute pixel centers
+
+        # Seeds
+        self.sky_seed = params.get("sky_seed", 1)
+        self.pointing_seed = params.get("pointing_seed", 1)
+        self.noise_seed = params.get("noise_seed", None)
+
+        # Plottings
+        self.plot_sky = params.get("plot_sky", False)
+        self.plot_sb = params.get("plot_sb", plot_sb)
+        self.plot_expected = params.get("plot_expected", False)
+        self.plot_pointings = params.get("plot_pointings", False)
+        self.plot_TOD = params.get("plot_TOD", False)
+        self.plot_reconstructed = params.get("plot_reconstructed", True)
+        self.plot_H = params.get("plot_H", False)
+        self.plot_HtH = params.get("plot_HtH", False)
+
+        # Prepare the synthesized beam
+        self.prepare_synthesized_beam()
+
+        # Things that will be filled later
+        self.input_sky = None
+        self.ptg_deg = None
+        self.TOD = None
+        self.convolved_sky = None
+        self.convolved_sky_pix = None
+        self.SynthBeam_convolved = None
+        self.SynthBeam_convolved_pix = None
+        self.H = None
+
+    def create_sky(self):
+        """Create a synthetic sky realization based on input parameters.
+
+        This function generates a sky realization using a specified sky model and
+        optional plotting parameters. The generated sky is normalized to have unit
+        standard deviation.
+
+        Parameters
+        ----------
+        None : taken from the class attibutes
+
+        Returns
+        -------
+        None: updates the class attribute self.input_sky
+
+        """
+        np.random.seed(self.sky_seed)  # Set the random seed for reproducibility
+        xpix, truey = create_1d_sky(self.npix_sky, self.sky_model[0], self.sky_model[1:])
+        if self.plot_sky:
+            plt.figure()
+            plt.plot(xpix, truey, label="True Sky")
+            plt.xlabel("angle")
+            plt.ylabel("sky")
+            plt.legend()
+
+        self.input_sky = [xpix, truey]
+
+    def prepare_synthesized_beam(self):
+        """Prepare the synthesized beam and related quantities for an instrument.
+
+        This function computes the synthesized beam of an instrument based on the detector
+        positions and primary beam properties, and optionally plots the results.
+
+        Parameters
+        ----------
+        None : taken from the class attibutes
+
+        Returns
+        -------
+        sb : ndarray
+            The synthesized beam values at the specified angular positions `th`.
+        fwhmpeak : float
+            The FWHM of the synthesized beam.
+        thetapeaks : ndarray
+            The angular positions of the peaks in the synthesized beam.
+        amppeaks : ndarray
+            The amplitudes of the peaks in the synthesized beam.
+        ratio : float
+            The ratio of the synthesized beam to a Gaussian peak approximation.
+
+        """
+        ndet = len(self.detpos)
+        if self.instrument_type not in ["Imager", "BI", "BI-GPA"]:
+            print("Wrong instrument type")
+            stop
+
+        if self.plot_sb:
+            plt.figure()
+            plt.plot(
+                self.th,
+                get_primbeam(self.th, 3e8 / self.nu, fwhmprimbeam_150=self.fwhmprim_150),
+                "k--",
+                label="Th. Prim. Beam at {0:3.0f} GHz".format(self.nu / 1e9),
+            )
+
+        self.b = []
+        self.fwhmpeak = []
+        self.thetapeaks = []
+        self.amppeaks = []
+        self.ratio = []
+        for d in self.detpos:
+            b, fwhmpeak, thetapeaks, amppeaks, ratio = give_sbcut(
+                self.th,
+                self.dist_horns,
+                3e8 / self.nu,
+                self.sqnh,
+                Df=self.Df,
+                detpos=d / 1000,
+                fwhmprimbeam_150=self.fwhmprim_150,
+                kmax=self.kmax_build,
+                type=self.instrument_type,
+            )
+
+            self.b.append(b)
+            self.fwhmpeak.append(fwhmpeak)
+            self.thetapeaks.append(np.array(thetapeaks))
+            self.amppeaks.append(np.array(amppeaks))
+            self.ratio.append(ratio)
+
+            if self.plot_sb:
+                p = plt.plot(
+                    self.th,
+                    b,
+                    lw=2,
+                    label="Th. Synth. Beam at {0:3.0f} GHz \n detpos={1:3.1f} mm - Ratio G.P.A. = {2:5.2f} \n FWHM = {3:5.2f} deg".format(
+                        self.nu / 1e9, d, ratio, fwhmpeak
+                    ),
+                )
+                plt.plot(thetapeaks, amppeaks / np.max(amppeaks), "o", color=p[0].get_color())
+        if self.plot_sb:
+            plt.xlabel(r"$\theta$ [deg.]")
+            plt.ylabel("Synthesized beam")
+            plt.legend(loc="upper left", fontsize=8)
+            plt.xlim(np.min(self.th), np.max(self.th))
+            plt.ylim(-0.01, 1.4)
+            plt.title("Synthesized Beam: " + self.instrument_type)
+
+    def build_TOD(self):
+        """
+        Build Time-Ordered Data (TOD) from a sky model, instrument configuration, and pointing information.
+
+        This function generates TOD by either exactly convolving a given sky model with the detector's synthesized beam
+        and interpolating the result at the pointing locations, or by approximating the process using the "H operator" approach
+        with additional steps for angular resolution and pixel window functions.
+
+        Parameters
+        ----------
+        None : taken from the class attributes
+
+        Returns
+        -------
+        None : updates the class attributes `TOD` and `convolved_sky`
+        """
+
+        # Reform input sky and corresponding angles
+        xpix = self.input_sky[0]  # Sky pixel positions
+        truey = self.input_sky[1]  # True sky model values
+
+        # Calculate the number of peaks in the synthesized beam based on instrument type
+        if self.instrument_type == "Imager":
+            npeaks = 1
+        else:
+            npeaks = 2 * self.kmax_build + 1
+
+        # Initialize the TOD array with zeros (ndet x npointings)
+        ndet = len(self.detpos)
+        TOD = np.zeros((ndet, self.npointings))
+
+        # Calculate the sampling interval of the input sky
+        sampling = xpix[1] - xpix[0]
+
+        # Calculate the width of the reconstructed pixels
+        output_pixels_width = self.rec_pix_centers[1] - self.rec_pix_centers[0]
+
+        # Loop over each detector to build its TOD
+        for i in range(ndet):
+
+            # Get the synthesized beam for the current detector
+            b = self.b[i]
+            fwhmpeak = self.fwhmpeak[i]
+            thetapeaks = np.zeros(npeaks) + self.thetapeaks[i]
+            amppeaks = np.zeros(npeaks) + self.amppeaks[i]
+
+            # Normalize the peak amplitudes of the synthesized beam
+            amppeaks = amppeaks / np.sum(amppeaks)
+
+            # Choose the algorithm for TOD generation
+            if self.TOD_method == "exact":
+                # Step 1: Convolve the true sky with the full synthesized beam
+                convolved = conv_circ(truey, norm_filt(xpix, self.th, b))
+
+                # Step 2: If requested, reconvolve the sky with the reconstructed pixels' window function
+                if self.sky_input_method == "BWconv":
+                    convolved = convolve_fourier_with_rectangular(convolved, output_pixels_width, sampling)
+
+                # Step 3: Interpolate the convolved sky at the pointing locations
+                convolved_pix = np.interp(self.rec_pix_centers, xpix, convolved)
+                TOD[i, :] = np.interp(self.ptg_deg, xpix, convolved)
+            else:
+                # Step 1: Convolve the true sky with the detector's angular resolution
+                bgauss = np.exp(-0.5 * (self.th / (fwhmpeak / np.sqrt(8 * np.log(2)))) ** 2)
+                convolved = conv_circ(truey, norm_filt(xpix, self.th, bgauss))
+                # Step 2: If needed, reconvolve the resolution-convolved sky with the reconstructed pixels' window function
+                if self.sky_input_method == "BWconv":
+                    convolved = convolve_fourier_with_rectangular(convolved, output_pixels_width, sampling)
+                # Step 3: Interpolate the convolved sky at the reconstructed pixel center locations
+                convolved_pix = np.interp(self.rec_pix_centers, xpix, convolved)
+
+                if self.TOD_method == "approx":
+                    # Step 4: Sum the contributions from each peak in the synthesized beam
+                    for k in range(npeaks):
+                        indices = np.floor(((self.ptg_deg - thetapeaks[k] + 180) * self.npix / 360)).astype(int) % self.npix
+                        TOD[i, :] += convolved_pix[indices] * amppeaks[k]
+                elif self.TOD_method == "approx_Hd":
+                    self.build_H_operator(self.kmax_build)
+                    H = self.H
+                    for i in range(ndet):
+                        TOD[i, :] = np.dot(H[i, :, :], convolved_pix)
+                else:
+                    print("Wrong algorithm (TOD_method parameter to build_TOD())")
+                    stop
+
+            self.SynthBeam_convolved = convolved
+            self.SynthBeam_convolved_pix = convolved_pix
+
+            # Step 5: Add noise to the TOD for the current detector
+            np.random.seed(self.noise_seed)  # Initialize the random seed for reproducibility
+            TOD[i, :] += np.random.randn(self.npointings) * self.noise_rms
+
+            if self.plot_TOD:
+                plt.figure()
+                plt.plot(xpix, truey, label="True Sky")
+                plt.plot(xpix, convolved, label="Convolved Sky")
+                plt.errorbar(
+                    self.rec_pix_centers,
+                    convolved_pix,
+                    xerr=(self.rec_pix_centers[1] - self.rec_pix_centers[0]),
+                    label="Pixellized convolved sky",
+                    fmt="o",
+                    capsize=3,
+                )
+                plt.plot(self.ptg_deg, TOD[i, :], ".", label="TOD")
+                plt.xlabel(r"$\theta$ [deg.]")
+                plt.ylabel("TOD")
+                plt.title("TOD for Detector {0}".format(i))
+                plt.legend()
+
+        # We assign the TOD to the class corresponding class attribute
+        self.TOD = TOD
+
+    def build_H_operator(self, kmax):
+        nptg = self.npointings
+        npix = self.npix
+        ndet = len(self.detpos)  # Number of detectors
+        # Calculate the number of peaks in the synthesized beam based on instrument type
+        if self.instrument_type == "Imager":
+            npeaks = 1
+        else:
+            npeaks = 2 * kmax + 1
+
+        H = np.zeros((ndet, nptg, npix))
+        for i in range(ndet):
+            thetapeaks = np.zeros(npeaks) + self.thetapeaks[i]
+            amppeaks = np.zeros(npeaks) + self.amppeaks[i]
+            for j in range(npeaks):
+                peaks_ptg = (self.ptg_deg - thetapeaks[j] + 180 + 360) % 360 - 180
+                peaks_indices = np.floor(((peaks_ptg - (-180)) * npix / 360)).astype(int)
+                for k in range(nptg):
+                    H[i, k, peaks_indices[k]] = amppeaks[j] / np.sum(amppeaks)
+
+        if self.plot_H:
+            plt.figure()
+            plt.imshow(H[0], aspect="auto", interpolation="nearest", origin="lower")
+            plt.xlabel("Rec pixel")
+            plt.ylabel("Time Sample")
+            plt.title("H operator for detector 0")
+            plt.colorbar()
+
+        self.H = H
+
+    def compute_expected_sky(self):
+        # Reform input sky and corresponding angles
+        xpix = self.input_sky[0]  # Sky pixel positions
+        truey = self.input_sky[1]  # True sky model values
+
+        bgauss = np.exp(-0.5 * (self.th / (self.fwhmpeak / np.sqrt(8 * np.log(2)))) ** 2)
+        Bconvy = conv_circ(truey, norm_filt(xpix, self.th, bgauss))
+        Bconvy_pix = np.interp(self.rec_pix_centers, xpix, Bconvy)  # Interpolate at pixel centers
+
+        dpix = self.rec_pix_centers[1] - self.rec_pix_centers[0]  # Rec pixel width
+
+        if self.sky_input_method == "Bconv":
+            Ctruth, Ctruth_pix = Bconvy, Bconvy_pix
+        elif self.sky_input_method == "BWconv":
+            BWconvy = convolve_fourier_with_rectangular(Bconvy, dpix, xpix[1] - xpix[0])
+            BWconvy_pix = np.interp(self.rec_pix_centers, xpix, BWconvy)
+            Ctruth, Ctruth_pix = BWconvy, BWconvy_pix
+        else:
+            raise ValueError("Incorrect <sky_input_method> in parameters")
+
+        # Plot expected signal if required
+        if self.plot_expected:
+            plt.figure()
+            plt.title("Expected signal: " + self.instrument_type)
+            plt.plot(xpix, truey, label="True Sky")
+            plt.plot(xpix, Ctruth, label="Beam-convolved sky")
+            plt.errorbar(self.rec_pix_centers, Ctruth_pix, xerr=dpix / 2, fmt=".", label="Pixellized convolved sky")
+            plt.legend()
+
+        # No return value, we assign the relevant quantities to class attributes
+        self.convolved_sky = Ctruth
+        self.convolved_sky_pix = Ctruth_pix
+
+    def generate_pointings(self):
+        np.random.seed(self.pointing_seed)
+        self.ptg_deg = np.random.random(self.npointings) * 360 - 180
+
+        # Plot histogram of pointings if required
+        if self.plot_pointings:
+            plt.figure()
+            plt.hist(self.ptg_deg, range=[-180, 180], bins=90, label="Pointings")
+            plt.xlim(-180, 180)
+            plt.legend()
+            plt.xlabel(r"$\theta$ [deg.]")
+            plt.title("Pointings")
+
+    def mapmaking_solution(self, H, TOD):
+        npix = self.npix  # Pixels in the sky map
+        ndet = len(self.detpos)  # Number of detectors
+        # Compute inverse covariance matrix and reconstruct sky map
+        HtH = np.zeros((ndet, npix, npix))
+        HtHinv = np.zeros((ndet, npix, npix))
+        solution = np.zeros((ndet, npix))
+
+        for i in range(ndet):
+            HtH[i] = np.dot(H[i].T, H[i])
+            HtHinv[i] = np.linalg.inv(HtH[i])
+            solution[i] = np.dot(HtHinv[i], np.dot(H[i].T, TOD[i]))
+
+        if self.plot_HtH:
+            plt.figure()
+            plt.subplot(1, 2, 1)
+            plt.imshow(HtH[0, :, :], aspect="equal", interpolation="nearest", origin="lower")
+            plt.xlabel("Rec pixel")
+            plt.ylabel("Rec pixel")
+            plt.title("$H^t\cdot H$ for detector 0")
+            plt.colorbar()
+
+            plt.subplot(1, 2, 2)
+            plt.imshow(HtHinv[0, :, :], aspect="equal", interpolation="nearest", origin="lower")
+            plt.xlabel("Rec pixel")
+            plt.ylabel("Rec pixel")
+            plt.title("$(H^t\cdot H)^{-1}$" + " for detector 0")
+            plt.colorbar()
+            plt.tight_layout()
+
+        # Compute average solution across detectors
+        solution_all = np.mean(solution, axis=0)
+
+        if self.plot_reconstructed:
+            # Compute residuals
+            res_all = solution_all - self.convolved_sky_pix
+            ss_all = np.std(res_all)
+
+            # Plot reconstructed sky map and residuals if required
+            plt.figure()
+            plt.subplot(2, 1, 1)
+            for i in range(ndet):
+                plt.plot(self.rec_pix_centers, solution[i], "o", alpha=0.5, label=f"Reconstructed Detector #{i}")
+                plt.plot(self.rec_pix_centers, self.convolved_sky_pix, ".-", lw=2, color="r", alpha=0.8, label="Sky convolved")
+                plt.plot(self.input_sky[0], self.input_sky[1], alpha=0.8, label="Input sky")
+            plt.legend()
+            plt.axhline(y=0, ls="--", color="k")
+            plt.xlabel("Angle")
+            plt.ylabel("Sky Data")
+            plt.title(f"Instrument {self.instrument_type}")
+
+            plt.subplot(2, 2, 3)
+            plt.plot(self.rec_pix_centers, res_all, "k-", label=f"Residual w.r.t. Sky Convolved: {ss_all:.3g}")
+            plt.axhline(y=0, ls="--", color="k")
+            plt.xlabel("Angle")
+            plt.ylabel("Residuals")
+            plt.legend()
+
+            plt.subplot(2, 2, 4)
+            plt.hist(res_all, bins=21, range=[-5 * ss_all, 5 * ss_all], alpha=0.5, label=f"Residual: {ss_all:.3g}")
+            plt.xlabel("Residuals")
+            plt.ylabel("Counts")
+            plt.legend()
+            plt.tight_layout()
+
+        return solution, solution_all
+
+    def simulate(self):
+        """
+        Runs a 1D sky reconstruction simulation using a given instrument configuration.
+
+        This function simulates the observation of a 1D sky map with an instrument
+        characterized by a synthesized beam. It computes the expected signal, generates
+        pointing directions, constructs the Time-Ordered Data (TOD), applies the H operator,
+        and reconstructs the sky map. The function also calculates residuals and provides
+        visualization options.
+
+        Parameters:
+        -----------
+        None : taken from the class attributes
+
+        Returns:
+        --------
+        Only returns a few information, the rest is updated in the class attributes
+            - solution: Reconstructed sky maps for each detector
+            - solution_all: Averaged reconstructed sky map across detectors
+        """
+
+        # Number of pointings, pixels, and detectors
+        nptg = self.npointings  # Time steps
+        npix = self.npix  # Pixels in the sky map
+        ndet = len(self.detpos)  # Number of detectors
+
+        # Generate the input sky
+        self.create_sky()
+
+        # Compute theoretical predictions for the reconstructed sky
+        self.compute_expected_sky()
+
+        # Generate random pointing directions
+        self.generate_pointings()
+
+        # Generate Time-Ordered Data (TOD)
+        self.build_TOD()
+
+        # Compute H operator
+        self.build_H_operator(self.kmax_rec)
+
+        # Compute solution
+        solution, solution_all = self.mapmaking_solution(self.H, self.TOD)
+
+        # Compute residuals
+        res_all = solution_all - self.convolved_sky_pix
+        ss_all = np.std(res_all)
+
+        return {"solution": solution, "solution_all": solution_all, "RMS_resall": ss_all}
+
+
 ########################################################################################
 def rnd_sky_1d(xpix, args):
     """Generate a 1D random sky realization in Fourier space.
@@ -55,49 +541,6 @@ def rnd_sky_1d(xpix, args):
 
     # Return the generated random sky realization in real space
     return y
-
-
-# fmt: off
-########################################################################################
-# Default Parameters
-params = {}
-# Sky Description #####################################################################
-params['npix_sky']           = 2**15                # Number of pixels for the sky creation
-params['sky_model']          = [rnd_sky_1d, 1.8]    # Model to randomly draw the sky: here power law in fourier space with index
-# params['sky_model']          = [sinsky, 5.]         # Model to randomly draw the sky: here sinewave
-params['sky_input']          = 'BWconv'              # DO we account for pixel window in the input or not either 'Bconv' or 'BWconv'
-# Pointings ###########################################################################
-params['npointings']         = 50000                # Number of pointings (uniformly drawn over 360 deg)
-# Instrument ##########################################################################
-params['instrument_type']    = 'BI-GPA'             # Instrument type: among ['BI', 'BI-GPA', 'Imager']
-params['detpos']             = np.array([0.])       # Position of detectors
-params['fwhmprim_150']       = 14.                  # in degrees
-params['nu']                 = 150e9                # in Hz
-params['dist_horns']         = 14.e-3               # distance between horns in meters
-params['sqnh']               = 8                    # square root of the number of horns (square array of horns assumed)
-params['Df']                 = 1.                   # focal distance in meters
-params['kmax_build']         = 1                    # kmax for BI synthesized beam at the TOD fabrication stage
-params['ntheta']             = 2**15                # number of samples for synthesized beam
-params['minmaxtheta']        = 30                   # range for synthesized beam theta if set to X then it is [-X, X] in degrees
-# TOD fabrication method ###############################################################
-params['TOD_method']         = 'approx'             # Method to build the TOD among ['exact', 'approx', 'approx_Hd']
-# noise ################################################################################
-params['noise_rms']          = 0.                   # RMS noise per time sample
-# Sky Recnstruction ####################################################################
-params['npix']               = 360*2                # Number of reconstructed pixels
-params['kmax_rec']           = params['kmax_build'] # kmax for BI synthesized beam at map-making stage
-# Seeds ################################################################################
-params['sky_seed']           = 1                    # Seed for the sky simulation
-params['pointing_seed']      = 1                    # Seed for the pointing
-params['noise_seed']         = None                 # Seed for the noise
-# Plottings ############################################################################
-params['plot_sky']           = False
-params['plot_sb']            = True
-params['plot_expected']      = False
-params['plot_pointings']     = False
-params['plot_TOD']           = False
-params['plot_reconstructed'] = True
-# fmt: on
 
 
 ########################################################################################
@@ -398,9 +841,9 @@ def convolve_fourier_with_rectangular(time_stream, rect_width, sampling_interval
     convolved_signal *= 1 / rect_width  # Normalize by kernel width
     return convolved_signal
 
-
-########################################################################################
-def create_sky(params):
+    ############ TO REMOVE
+    ########################################################################################
+    # def create_sky(params):
     """Create a synthetic sky realization based on input parameters.
 
     This function generates a sky realization using a specified sky model and
@@ -431,9 +874,9 @@ def create_sky(params):
         plt.legend()
     return xpix, truey
 
-
-########################################################################################
-def prepare_synthesized_beam(th, params):
+    ########### TO REMOVE
+    ########################################################################################
+    # def prepare_synthesized_beam(th, params):
     """Prepare the synthesized beam and related quantities for an instrument.
 
     This function computes the synthesized beam of an instrument based on the detector
@@ -506,9 +949,9 @@ def prepare_synthesized_beam(th, params):
 
     return b, fwhmpeak, np.array(thetapeaks), np.array(amppeaks), ratio
 
-
-########################################################################################
-def build_TOD(params, input_sky, ptg_deg, rec_pix_centers, algo="exact"):
+    ######### TO REMOVE
+    ########################################################################################
+    # def build_TOD(params, input_sky, ptg_deg, rec_pix_centers, algo="exact"):
     """
     Build Time-Ordered Data (TOD) from a sky model, instrument configuration, and pointing information.
 
@@ -654,9 +1097,9 @@ def build_TOD(params, input_sky, ptg_deg, rec_pix_centers, algo="exact"):
         rec_pix_centers,
     )
 
-
-########################################################################################
-def get_H_operator(params, th, ptg_deg):
+    ######### TO REMOVE
+    ########################################################################################
+    # def get_H_operator(params, th, ptg_deg):
     nptg = params["npointings"]
     npix = params["npix"]
     ndet = len(params["detpos"])  # Number of detectors
@@ -679,7 +1122,6 @@ def get_H_operator(params, th, ptg_deg):
             kmax=params["kmax_rec"],
             type=params["instrument_type"],
         )
-        # print('Sum of all peaks: ', np.sum(allamppeaks[i,:]))
         allamppeaks[i, :] = allamppeaks[i, :] / np.sum(allamppeaks[i, :])
 
     H = np.zeros((ndet, nptg, npix))
@@ -691,9 +1133,9 @@ def get_H_operator(params, th, ptg_deg):
                 H[i, k, peaks_indices[k]] = allamppeaks[i, j]
     return H
 
-
-########################################################################################
-def run_1d_simulation(params):
+    ######### TO REMOVE
+    ########################################################################################
+    # def run_1d_simulation(params):
     """
     Runs a 1D sky reconstruction simulation using a given instrument configuration.
 

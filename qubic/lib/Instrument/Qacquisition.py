@@ -968,7 +968,7 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         ### Do the sum over operators depending on the reconstruction model
         H = self.sum_over_band(self.operator, algo=algo, gain=gain)
-        
+       
         return H
 
     def get_invntt_operator(self):
@@ -1487,7 +1487,6 @@ class JointAcquisitionFrequencyMapMaking:
                 invN += [R_planck(invntt_planck217(R_planck.T))]
 
             return BlockDiagonalOperator(invN, axisout=0)
-
 class JointAcquisitionComponentsMapMaking:
 
     def __init__(self, d, kind, comp, Nsub, nus_external, nintegr, nu_co=None, H=None):

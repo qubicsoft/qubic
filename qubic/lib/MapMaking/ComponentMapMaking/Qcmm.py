@@ -224,6 +224,7 @@ class Pipeline:
             * (self.preset.acquisition.TOD_obs - H_i(x_planck))
         )
 
+
         # TO BE REMOVE
         ### Update components when intensity maps are fixed
         # elif self.preset.tools.params['PCG']['fixI']:

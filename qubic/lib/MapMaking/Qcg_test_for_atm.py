@@ -163,7 +163,7 @@ class PCGAlgorithm(IterativeAlgorithm):
 
     def initialize(self):
         IterativeAlgorithm.initialize(self)
-
+                
         if self.b_norm == 0:
             self.error = 0
             self.x[...] = 0
@@ -177,24 +177,28 @@ class PCGAlgorithm(IterativeAlgorithm):
             raise StopIteration("Solver reached maximum tolerance.")
         self.M(self.r, self.d)
         self.delta = self.dot(self.r, self.d)
-
+        
     def iteration(self):
         self.t0 = time.time()
+        
         self.A(self.d, self.q)
+        
         alpha = self.delta / self.dot(self.d, self.q)
-
+        
         self.x += alpha * self.d
         
         map_i = self.x.copy()
+
         if self.is_planck:
             map_i = np.ones(self.input.shape) * hp.UNSEEN
             map_i[:, self.seenpix, :] = self.x.copy()
-        
 
         if len(map_i.shape) == 2:
             _r = map_i[self.seenpix, :] - self.input[self.seenpix, :]
         else :
-            _r = map_i[:, self.seenpix, :] - self.input[:, self.seenpix, :]
+            _r = np.zeros(self.input.shape)
+            for i in range(map_i.shape[0]):
+                _r[i, self.seenpix[i]] = map_i[i, self.seenpix[i], :] - self.input[i, self.seenpix[i], :]
         self.rms = np.std(_r, axis=1)
         
         if self.gif is not None:

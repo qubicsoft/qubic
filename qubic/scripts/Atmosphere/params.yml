@@ -36,3 +36,4 @@ seed: 1
 # Qubic parameters
 npointings: 5000
 kmax: 1
+synthbeam_fraction: 1

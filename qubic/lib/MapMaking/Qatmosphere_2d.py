@@ -107,7 +107,7 @@ class AtmosphereProperties:
             "EmissivityAtmosphere220": None,
             "detector_nep": 4.7e-17,
             "synthbeam_kmax": self.params['kmax'],
-            "synthbeam_fraction": 0.99,
+            "synthbeam_fraction": self.params['synthbeam_fraction'],
             "kind":'IQU'
         }
 

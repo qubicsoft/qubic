@@ -468,7 +468,12 @@ class PresetAcquisition:
             self.preset_comp.components_in
         ) + noise_qubic
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
-
+        print("len(H)", len(self.H.operands[0].operands))
+        print("H", self.H.operands[0].operands)
+        print('H shapein shapeout', self.H.operands[0].shapein, self.H.operands[0].shapeout)
+        print('input maps shape', self.preset_comp.components_in.shape)
+        print('TOD shape', self.TOD_qubic.shape)
+        stop
         ### Create external TOD
         self.TOD_external = (self.H.operands[1])(
             self.preset_comp.components_in[:, :, :]

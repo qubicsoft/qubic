@@ -847,10 +847,10 @@ class QubicMultiAcquisitions:
         return D
 class QubicDualBand(QubicMultiAcquisitions):
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
+    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None):
 
         QubicMultiAcquisitions.__init__(
-            self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
+            self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co, sampling=sampling
         )
 
     def sum_over_band(self, h, algo, gain=None):
@@ -971,7 +971,7 @@ class QubicDualBand(QubicMultiAcquisitions):
        
         return H
 
-    def get_invntt_operator(self):
+    def get_invntt_operator(self, det_noise=True, photon_noise=True):
         """
 
         Method to compute the inverse noise covariance matrix in time-domain.
@@ -992,8 +992,8 @@ class QubicDualBand(QubicMultiAcquisitions):
         subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
         subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)
 
-        self.invn150 = subacq150.get_invntt_operator(det_noise=True, photon_noise=True)
-        self.invn220 = subacq220.get_invntt_operator(det_noise=True, photon_noise=True)
+        self.invn150 = subacq150.get_invntt_operator(det_noise=det_noise, photon_noise=photon_noise)
+        self.invn220 = subacq220.get_invntt_operator(det_noise=det_noise, photon_noise=photon_noise)
 
         return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
 class QubicUltraWideBand(QubicMultiAcquisitions):

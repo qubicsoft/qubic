@@ -14,7 +14,7 @@ pressure_atm: 550                 # Atmopsheric pressure in hPa
 #! rho_0 should be computed using pwv in a more advanced version
 pwv: 1                             # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, mm
 sigma_pwv: 20.5                    # Variance of PWV in mm^-1
-sigma_rho: 1                    # Variance of water vapor density in g/m³
+sigma_rho: 0.0001                    # Variance of water vapor density in g/m³
 
 # Simulation parameters
 

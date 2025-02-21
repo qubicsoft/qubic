@@ -864,7 +864,7 @@ class AtmosphereMaps(AtmosphereProperties):
                 el_list.append(el) 
         return np.asarray([az_list, el_list]).T
     
-    def get_healpy_atm_maps_2d(self, maps):
+    def get_healpy_atm_maps_2d(self, maps, longitude, latitude):
         """Healpy 2d atmosphere maps.
         
         Function to project the 2d atmosphere maps in cartesian coordinates, and then project them in spherical coordinates using healpy.
@@ -881,7 +881,7 @@ class AtmosphereMaps(AtmosphereProperties):
         azel_coordinates = self.get_azel_coordinates()
         
         ### Build rotation operator
-        longitude, latitude = equ2gal(self.qubic_dict['RA_center'], self.qubic_dict['DEC_center'])
+    
         rotation_above_qubic = Cartesian2SphericalOperator('azimuth,elevation')(Rotation3dOperator("ZY'", longitude, 90 - latitude, degrees=True)(Spherical2CartesianOperator('azimuth,elevation')))
         
         ### Build healpy projection operator

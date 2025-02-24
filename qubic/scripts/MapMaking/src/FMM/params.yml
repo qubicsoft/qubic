@@ -1,5 +1,5 @@
-path_out: 'test_edge_effect/'
-datafilename: 'CMB_dust_w_convo_wo_Planck_wo_precond_from_zero_correction_test'
+path_out: 'test_merge/'
+datafilename: 'test'
 
 CMB:
     cmb: True
@@ -9,7 +9,7 @@ CMB:
 
 Foregrounds:
 
-    Dust: True                              # Thermal Dust emission
+    Dust: False                              # Thermal Dust emission
     Synchrotron: False                      # Synchrotron emission
 
 QUBIC:
@@ -17,7 +17,7 @@ QUBIC:
     ### This section control the parameters related to QUBIC
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
-    npointings: 5000                     # Number of time samples
+    npointings: 1000                     # Number of time samples
     nsub_in: 8                             # Number of sub-acquisitions
     nsub_out: 8
     nrec: 2                                # Number of reconstructed frequency maps
@@ -62,7 +62,7 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 100                                   # Number of PCG iterations
+    n_iter_pcg: 30                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: False
     initial_guess_intensity_to_zero: True

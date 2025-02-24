@@ -4,8 +4,6 @@ import os
 # General stuff
 import healpy as hp
 import numpy as np
-import pysm3
-import qubic
 
 import pickle
 import warnings
@@ -32,10 +30,9 @@ from pyoperators import (
 
 from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
-from pysm3 import utils
 from qubic.data import PATH
 
-from .Qinstrument import compute_freq, QubicInstrument, QubicMultibandInstrument, QubicMultibandInstrumentTrapezoidalIntegration
+from .Qinstrument import compute_freq, QubicInstrument, QubicMultibandInstrumentTrapezoidalIntegration, QubicMultibandInstrument
 from ..Qsamplings import get_pointing
 from ..Qscene import QubicScene
 
@@ -119,6 +116,7 @@ class QubicAcquisition(Acquisition):
             nprocs_sampling=nprocs_sampling,
             comm=comm,
         )
+        
         self.photon_noise = bool(photon_noise)
         self.effective_duration = effective_duration
         self.bandwidth = bandwidth
@@ -741,7 +739,6 @@ class QubicMultiAcquisitions:
             deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
 
             dmono['filter_relative_bandwidth'] = 0.05#
-            print(nu_co, deltas_trap, deltas_trap / nu_co)
 
             instrument_co = QubicInstrument(dmono, FRBW=0.25)
             self.multiinstrument.subinstruments += [instrument_co]
@@ -1342,7 +1339,7 @@ class JointAcquisitionFrequencyMapMaking:
                 self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
             )
         else:
-            raise TypeError(f"{self.kind} is not implemented...")
+            raise TypeError(f"{self.kind} is not implemented. Choose DB or UWB")
 
         self.scene = self.qubic.scene
         self.pl143 = PlanckAcquisition(143, self.scene)

@@ -13,7 +13,7 @@ from pyoperators import DiagonalOperator, ReshapeOperator
 from ...Qsamplings import equ2gal
 from ...Qdictionary import qubicDict
 from ...Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
-from ...Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
+from ...Instrument.Qnoise import QubicTotNoise
 from ..Qcg import pcg
 from ...Qfoldertools import create_folder_if_not_exists, do_gif
 from ..Qmap_plotter import PlotsFMM
@@ -169,18 +169,28 @@ class PipelineFrequencyMapMaking:
             * self.params["PLANCK"]["level_noise_planck"]
         )
 
-        if self.params["QUBIC"]["instrument"] == "DB":
-            qubic_noise = QubicDualBandNoise(
+        print("")
+        print("still here")
+        qubic_noise = QubicTotNoise(
+                self.params["QUBIC"]["instrument"],
                 self.dict_out,
-                self.params["QUBIC"]["npointings"],
+                self.joint.qubic.sampling,
+                self.joint.qubic.scene, # or equivalently (?) self.joint.scene
                 self.params["QUBIC"]["NOISE"]["detector_nep"],
             )
-        elif self.params["QUBIC"]["instrument"] == "UWB":
-            qubic_noise = QubicWideBandNoise(
-                self.dict_out,
-                self.params["QUBIC"]["npointings"],
-                self.params["QUBIC"]["NOISE"]["detector_nep"],
-            )
+
+        # if self.params["QUBIC"]["instrument"] == "DB":
+        #     qubic_noise = QubicDualBandNoise(
+        #         self.dict_out,
+        #         self.params["QUBIC"]["npointings"],
+        #         self.params["QUBIC"]["NOISE"]["detector_nep"],
+        #     )
+        # elif self.params["QUBIC"]["instrument"] == "UWB":
+        #     qubic_noise = QubicWideBandNoise(
+        #         self.dict_out,
+        #         self.params["QUBIC"]["npointings"],
+        #         self.params["QUBIC"]["NOISE"]["detector_nep"],
+        #     )
 
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],

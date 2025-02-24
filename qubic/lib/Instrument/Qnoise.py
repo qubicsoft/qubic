@@ -122,15 +122,15 @@ class QubicTotNoise:
             if self.type == "UWB":
                 print("UWB")
                 npho.append(wpho[i] * QnoiseBand.photon_noise())
-                print(np.shape(npho[i]))
-                sys.exit()
+                # print(np.shape(npho[i]))
+                # sys.exit()
                 ndet.append(wdet * QnoiseBand.detector_noise())
             elif self.type == "DB":
                 print("DB")
                 npho.append(wpho[i] * QnoiseBand.photon_noise().ravel())#?
                 ndet.append(wdet * QnoiseBand.detector_noise().ravel())#?
-                print(np.shape(npho[i]))
-                sys.exit()
+                # print(np.shape(npho[i]))
+                # sys.exit()
         if self.type == "UWB":
             return ndet[0] + npho[0] + npho[1]
         elif self.type == "DB":

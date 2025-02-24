@@ -100,6 +100,8 @@ class QubicTotNoise:
         if len(duration) == 1:
             self.duration = [duration[0], duration[0]]
         else:
+            if self.type == "UWB" and (duration[0] != duration[1]):
+                raise TypeError("The duration for bands 150 and 220 has to be the same for the UWB instruement.")
             self.duration = duration
 
     def total_noise(self, wdet, wpho150, wpho220, seed_noise=None):

@@ -391,15 +391,13 @@ class PresetAcquisition:
         noise = QubicTotNoise(
                 self.preset_qubic.params_qubic["instrument"],
                 self.preset_qubic.dict,
-                self.preset_qubic.sampling,
-                self.preset_qubic.scene,
+                self.preset_qubic.joint_out.qubic.sampling,
+                self.preset_qubic.joint_out.qubic.scene,
                 detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
-                duration=np.mean(
-                    [
-                        self.preset_qubic.params_qubic["NOISE"]["duration_150"],
+                duration=[
+                        self.preset_qubic.params_qubic["NOISE"]["duration_150"], # make sure that this is what you want (self.preset_qubic.params_qubic["NOISE"]["duration_150"] = self.preset_qubic.params_qubic["NOISE"]["duration_220"] for UWB)
                         self.preset_qubic.params_qubic["NOISE"]["duration_220"],
-                    ]
-                ),
+                        ],
             )
         
         # if self.preset_qubic.params_qubic["instrument"] == "UWB":

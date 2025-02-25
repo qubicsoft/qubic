@@ -749,7 +749,19 @@ class PipelineFrequencyMapMaking:
         """
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
+        print("")
+        print("About to compute A, will it work?")
+        print("")
+        print("self.H_out.T", np.shape(self.H_out.T))
+        print("self.invN", np.shape(self.invN))
+        print("self.H_out", np.shape(self.H_out))
+        # print("self.H_out.T * self.invN", np.shape(self.H_out.T * self.invN))
+        print("self.invN * self.H_out", np.shape(self.invN * self.H_out))
         A = self.H_out.T * self.invN * self.H_out
+        print("A", np.shape(A))
+
+        print("It did!")
+        sys.exit()
 
         if self.params['PLANCK']['external_data']:
             x_planck = self.m_nu_in * (1 - seenpix[None, :, None])

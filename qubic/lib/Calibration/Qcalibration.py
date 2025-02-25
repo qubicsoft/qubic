@@ -1,13 +1,12 @@
 # coding: utf-8
 from astropy.io import fits
-import sys,os,glob,re
+import sys,os
 from configparser import ConfigParser
-from os.path import join
 
 from pysimulators import Layout, LayoutGrid
 from qubic.lib.Qhorns import HornLayout
 from qubic.lib.Qutilities import find_file
-
+from qubic.calfiles import PATH as cal_dir
 import numpy as np
 
 __all__ = ['QubicCalibration']
@@ -20,7 +19,7 @@ class QubicCalibration(object):
     relatively to the working directory and if not found, in the calibration
     path.
     """
-    def __init__(self, d, path=None):
+    def __init__(self, d, path=cal_dir):
         """
         Parameters
         ----------
@@ -44,12 +43,25 @@ class QubicCalibration(object):
         self.path = os.path.abspath(path)
 
         # replace the wildcard with the configuration:  either TD or FI
+        epsilon = 1.0e-9 # one Hz of margin for comparisons
         self.nu = int(d['filter_nu']/1e9)
+        if self.nu>=130-epsilon and self.nu<=170+epsilon:
+            nu_str = "150"
+        elif self.nu>=190-epsilon and self.nu<=247.5+epsilon:
+            nu_str = "220"
+        else:
+            nu_str = '%03i' % self.nu
         for key in ['detarray','hornarray','optics','primbeam','synthbeam']:
-            calfile = d[key].replace('_CC','_%s' % d['config']).replace('_FFF','_%03i' % self.nu)
-            calfile_fullpath = find_file(os.path.join(self.path,calfile), verbosity=0)
-            cmd = "self.%s = '%s'" % (key,calfile_fullpath)
+            calfile = d[key].replace('_CC','_%s' % d['config']).replace('_FFF','_%s' % nu_str)
+            calfile_fullpath = find_file(os.path.join(self.path,calfile), verbosity=1)
+            if calfile_fullpath is None:
+                cmd = "self.%s = None" % key
+            else:
+                cmd = "self.%s = '%s'" % (key,calfile_fullpath)
+            print('executing: %s' % cmd)
             exec(cmd)
+        if d['debug']:
+            print('self.synthbeam = %s' % self.synthbeam)
 
         
 
@@ -188,6 +200,14 @@ class QubicCalibration(object):
             raise ValueError('Invalid primary beam calibration version')
 
         elif name == 'synthbeam':
+
+            if self.synthbeam is None:
+                print("synthbeam not defined")
+                return None
+
+            if not os.path.isfile(self.synthbeam):
+                print("File not found: %s" % self.synthbeam)
+                return None
             
             hdu =  fits.open(self.synthbeam)
             header = hdu[0].header
@@ -213,14 +233,14 @@ class QubicCalibration(object):
 # def _newest(self, filename):
 #        if '*' not in filename:
     #           if not os.path.exists(filename):
-    #              filename = join(self.path, filename)
+    #              filename = os.path.join(self.path, filename)
     #        if not os.path.exists(filename):
     #            raise ValueError("No calibration file '{}'.".format(filename))
     #        return os.path.abspath(filename)
 
 ##        filenames = glob(filename)
 #       if len(filenames) == 0:
-#            filename = join(self.path, filename)
+#            filename = os.path.join(self.path, filename)
 #            filenames = glob(filename)
 #            if len(filenames) == 0:
 #                raise ValueError("No calibration files '{}'.".format(filename))

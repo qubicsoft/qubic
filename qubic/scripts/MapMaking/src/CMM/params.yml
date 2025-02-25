@@ -4,7 +4,7 @@ CMB:
     r: 0
     Alens: 1
 
-Foregrounds:
+Foregrounds: 
 
     ### This section define the in/out foregrounds contribution
 
@@ -28,8 +28,8 @@ Foregrounds:
     
     # Synchrotron emission
     Synchrotron:
-        Synchrotron_in: False
-        Synchrotron_out: False
+        Synchrotron_in: True
+        Synchrotron_out: True
 
         type: 'parametric'                      # Reconstruction method
         model_s: 's0'                           # PySM model
@@ -48,17 +48,17 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
 
-    instrument: 'UWB'                       # Instrumental design (DB or UWB)
+    instrument: 'DB'                       # Instrumental design (DB or UWB)
     npointings: 1000                       # Number of time samples
     nsub_in: 6                             # Number of sub-acquisitions
     nsub_out: 6                            # Number of sub-acquisitions for the reconstruction
-    convolution_in: False                  # Angular resolution in the input TOD
+    convolution_in: True                  # Angular resolution in the input TOD
     convolution_out: False                 # Angular resolution in the reconstruction
     preconditioner: True
     NOISE:                          
-        ndet: 1                            # Level of detector noise
-        npho150: 1                         # Level of photon noise at 150 GHz
-        npho220: 1                         # Level of photon noise at 220 GHz
+        ndet: 0                            # Level of detector noise
+        npho150: 0                         # Level of photon noise at 150 GHz
+        npho220: 0                         # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17              # NEP of detector noise
         duration_150: 3                    # Effective duration at 150 GHz
         duration_220: 3                    # Effective duration at 220 GHz
@@ -102,7 +102,7 @@ PCG:
     n_init_iter_pcg: 5 
     n_iter_pcg: 5                                     # Number of PCG iterations
     tol_pcg: 1.0e-20                                # Tolerance for PCG
-    n_iter_loop: 1000                                  # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+    n_iter_loop: 10                                  # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
     ites_to_converge: 1                            # should be less than k
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True         # Fixing pixels outside QUBIC patch

@@ -1,11 +1,8 @@
 import pickle
-import qubic
 import healpy as hp
-import matplotlib.pyplot as plt
 import numpy as np
 import pysm3
 import pysm3.units as u
-import yaml
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysm3 import utils
 from qubic.data import PATH as data_dir

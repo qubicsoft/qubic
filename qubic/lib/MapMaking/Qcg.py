@@ -189,7 +189,7 @@ class PCGAlgorithm(IterativeAlgorithm):
             map_i = np.ones(self.input.shape) * hp.UNSEEN
             map_i[:, self.seenpix, :] = self.x.copy()
         
-        print(len(map_i.shape))
+
         if len(map_i.shape) == 2:
             _r = map_i[self.seenpix, :] - self.input[self.seenpix, :]
         else :

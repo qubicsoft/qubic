@@ -75,6 +75,8 @@ class PresetAcquisition:
     #     .operands[0].operands[0/1].operands[0] = 150 GHz focal plane , .operands[0].operands[0/1].operands[1] = 220 GHz focal plane\
     # H :
     #     .operands[0] = QUBIC / .operands[1] = Planck
+    #     .operands[0].operands = Frequency Sub-Bands
+    #     .operands[0].operands[0].operands[0] = 150 GHz / .operands[0].operands[0].operands[1] = 220 GHz\
 
     def __init__(
         self,

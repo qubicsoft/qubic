@@ -172,7 +172,7 @@ class MyChi2_nocov:
         Class defining the minimizer and the data
         """
 
-        def __init__(self, xin, yin, invcovarin, functname):
+        def __init__(self, xin, yin, functname):
                 self.x = xin
                 self.y = yin
                 self.functname = functname
@@ -216,7 +216,7 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         ndim = np.size(guess)
         parnames = []
         for i in range(ndim):
-                parnames.append('c' + np.str(i))
+                parnames.append('c' + str(i))
         # initial guess
         theguess = dict(zip(parnames, guess))
         # fixed parameters
@@ -386,6 +386,7 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
                                 fact = np.sqrt(len(y[ok]))
                         dy[i] = np.std(y[ok]) / fact
                         dx[i] = np.std(x[ok]) / fact
+        
         if plot:
                 if fmt is None:
                         fmt = 'ro'

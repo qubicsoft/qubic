@@ -1,7 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy
-import scipy.signal
 
 
 class Q1D:
@@ -29,7 +27,7 @@ class Q1D:
         self.dist_horns = params.get("dist_horns", 14.0e-3)
         self.sqnh = params.get("sqnh", 8)
         self.Df = params.get("Df", 1.0)
-        self.kmax_build = params.get("kmax_build", 1)
+        self.kmax_build = params.get("kmax_build", 2)
 
         # SB sampling
         self.ntheta = params.get("ntheta", 2**15)
@@ -440,6 +438,34 @@ class Q1D:
         return solution, solution_all
 
     def simulate(self):
+        # Generate the input sky
+        self.create_sky()
+
+        # Compute theoretical predictions for the reconstructed sky
+        self.compute_expected_sky()
+
+        # Generate random pointing directions
+        self.generate_pointings()
+
+        # Generate Time-Ordered Data (TOD)
+        self.build_TOD()
+
+        return self.TOD
+
+    def reconstruct(self):
+        # Compute H operator
+        self.build_H_operator(self.kmax_rec)
+
+        # Compute solution
+        solution, solution_all = self.mapmaking_solution(self.H, self.TOD)
+
+        # Compute residuals
+        res_all = solution_all - self.convolved_sky_pix
+        ss_all = np.std(res_all)
+
+        return {"solution": solution, "solution_all": solution_all, "RMS_resall": ss_all}
+
+    def simulate_and_reconstruct(self):
         """
         Runs a 1D sky reconstruction simulation using a given instrument configuration.
 
@@ -456,38 +482,15 @@ class Q1D:
         Returns:
         --------
         Only returns a few information, the rest is updated in the class attributes
-            - solution: Reconstructed sky maps for each detector
-            - solution_all: Averaged reconstructed sky map across detectors
+            - result: a dictionary conatining `solution` (for all detectors) and `solution_all` (the detector averaged solution)
         """
+        # simulate data
+        _ = self.simulate()
 
-        # Number of pointings, pixels, and detectors
-        nptg = self.npointings  # Time steps
-        npix = self.npix  # Pixels in the sky map
-        ndet = len(self.detpos)  # Number of detectors
+        # Reconstruct
+        result = self.reconstruct()
 
-        # Generate the input sky
-        self.create_sky()
-
-        # Compute theoretical predictions for the reconstructed sky
-        self.compute_expected_sky()
-
-        # Generate random pointing directions
-        self.generate_pointings()
-
-        # Generate Time-Ordered Data (TOD)
-        self.build_TOD()
-
-        # Compute H operator
-        self.build_H_operator(self.kmax_rec)
-
-        # Compute solution
-        solution, solution_all = self.mapmaking_solution(self.H, self.TOD)
-
-        # Compute residuals
-        res_all = solution_all - self.convolved_sky_pix
-        ss_all = np.std(res_all)
-
-        return {"solution": solution, "solution_all": solution_all, "RMS_resall": ss_all}
+        return result
 
 
 ########################################################################################

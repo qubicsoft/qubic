@@ -18,7 +18,7 @@ sigma_rho: 0.0001                    # Variance of water vapor density in g/m³
 
 # Simulation parameters
 
-n_grid: 500                       # Number of squares in the grid
+n_grid: 800                       # Number of squares in the grid
 h_grid: 1                         # Number of sqares for the altitude, i for 2d model
 h_qubic: 4869                     # QUBIC altitude in m
 size_atm: 7000                    # Lenght of the atm in m
@@ -29,11 +29,11 @@ nside: 128
 n_theta: 10000
 normalization: 1
 flat: True
-coverage_cut: 0.1
+coverage_cut: 0.2
 dtheta: 15
 seed: 1
 
 # Qubic parameters
-npointings: 500
+npointings: 5000
 kmax: 1
 synthbeam_fraction: 1

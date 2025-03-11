@@ -10,6 +10,22 @@ from qubic.dicts import PATH as dicts_dir
 _NLEVELS = 0
 _MAX_NLEVELS = 0
 
+def assign_default_parameters(d=None):
+    '''
+    assign default values to parameters which are missing
+    '''
+
+    default_parameters = qubicDict()
+    default_parameters.read_from_file('pipeline_demo.dict')
+
+    if d is None: return default_parameters
+    
+    for parm in default_parameters.keys():
+        if parm not in d.keys() or d[parm] is None:
+            d[parm] = default_parameters[parm]
+
+    return d
+
 def join_toward_rank(comm, data, target_rank):
     #print('enter', target_rank)
     gathered_data = comm.gather(data, root=target_rank)

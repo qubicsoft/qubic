@@ -694,6 +694,7 @@ class QubicMultiAcquisitions:
             Nfreq=int(self.nsub / 2) ,
             relative_bandwidth=self.dict["filter_relative_bandwidth"],
         )
+        # On fait cela aussi dans QubicMultibandInstrumentTrapezoidalIntegration mais à partir du dictionnaire (modifié juste au-dessus donc OK) cette fois. Pourquoi ?
 
         ### Compute the effective reconstructed frequencies if FMM is applied
         _, _, nus150, _, _, _ = compute_freq(

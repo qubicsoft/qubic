@@ -1892,7 +1892,8 @@ class QubicInstrument(Instrument):
             pos = self.detector.center
         else:
             pos = detpos
-
+        # print(len(self))
+        # sys.exit()
         if (idet is not None) and (detpos is None):
             return self[idet].get_synthbeam(scene, theta_max=theta_max, external_A=external_A,
                                             hwp_position=hwp_position, detector_integrate=detector_integrate)[0]
@@ -1960,6 +1961,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         self.d = d
         d1 = d.copy()
 
+        # On fait cela aussi dans QubicMultiAcquisitions. Pourquoi ?
         _, nus_edge150, filter_nus150, deltas150, _, _ = compute_freq(
             150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
         )

@@ -1,53 +1,29 @@
 import numpy as np
-import qubic
 
+from ..Qutilities import assign_default_parameters
 from .Qacquisition import *
 from ..Qdictionary import qubicDict
 
 class QubicNoise:
 
     def __init__(
-        self,
-        band,
-        npointings,
-        comm=None,
-        size=1,
-        detector_nep=4.7e-17,
-        seed_noise=None,
-        duration=3,
+            self,
+            band,
+            params=None
     ):
 
         if band != 150 and band != 220:
             raise TypeError("Please choose the QubicWideBandNoise method.")
 
-        '''
-        NOTE:  the following code should be revisited!
-        Why do we read the dictionary here?  It should be an input parameter.
-        This is forcing this object to *always* use the pipeline_demo.dict
-        '''
-        dictfilename = "dicts/pipeline_demo.dict"
-        d = qubicDict()
-        d.read_from_file(dictfilename)
-        self.seed_noise = seed_noise
+        self.params = assign_default_parameters(params)
+        self.seed_noise = d['seed']
+        self.npointings = d['npointings']
 
-        d["TemperatureAtmosphere150"] = None
-        d["TemperatureAtmosphere220"] = None
-        d["EmissivityAtmosphere150"] = None
-        d["EmissivityAtmosphere220"] = None
-        d["detector_nep"] = detector_nep
-        self.npointings = npointings
-        d["npointings"] = npointings
-        d["comm"] = comm
-        d["nprocs_instrument"] = size
-        d["nprocs_sampling"] = 1
+        for parm in ['nprocs_sampling','nf_sub','nf_recon','period']:            
+            if self.params[parm] is None:
+                self.params[parm] = 1
 
-        self.dict = d.copy()
-        self.dict["filter_nu"] = int(band)
-        self.dict["nf_sub"] = 1
-        self.dict["nf_recon"] = 1
-        self.dict["period"] = 1
-        self.dict["type_instrument"] = ""
-        self.dict["effective_duration"] = duration
+        self.params["type_instrument"] = ""
 
         '''
         NOTE: the following code must be modified

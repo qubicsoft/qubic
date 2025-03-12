@@ -1942,6 +1942,167 @@ def _pack_vector(*args):
         out[..., i] = arg
     return out
 
+class QubicMultibandInstrumentTest:
+    """
+    The QubicMultibandInstrument class
+    Represents the QUBIC multiband features
+    as an array of QubicInstrumet objects
+    """
+
+    def __init__(self, d):
+        """
+        filter_nus -- base frequencies array
+        filter_relative_bandwidths -- array of relative bandwidths
+        center_detector -- bolean, optional
+        if True, take only one detector at the centre of the focal plane
+            Needed to study the synthesised beam
+        """
+
+        self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
+        self.d = d
+        d1 = d.copy()
+
+        _, nus_edge150, filter_nus150, _, _, _ = compute_freq(
+            150, int(d["nf_sub"] / 2 - 1), relative_bandwidth=self.FRBW
+        )
+        _, nus_edge220, filter_nus220, _, _, _ = compute_freq(
+            220, int(d["nf_sub"] / 2 - 1), relative_bandwidth=self.FRBW
+        )
+        
+        _, _, filter_nus150, _, _, _ = compute_freq(
+            150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
+        )
+        _, _, filter_nus220, _, _, _ = compute_freq(
+            220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW)
+        
+        self.nsubbands = len(filter_nus150)
+        
+        W150 = IntegrationTrapezeOperator(nus_edge150)
+        deltas150_trap = np.array(
+            [W150.operands[i].todense(shapein=1)[0][0] for i in range(len(nus_edge150))]
+        )
+        W220 = IntegrationTrapezeOperator(nus_edge220)
+        deltas220_trap = np.array(
+            [W220.operands[i].todense(shapein=1)[0][0] for i in range(len(nus_edge220))]
+        )
+        print(deltas150_trap)
+        
+        def trapezoidal_interval_weights(x):
+            weights = np.zeros(len(x) - 1)
+            for i in range(weights.size):
+                if i == 0:
+                    weights[0] = (x[1] - x[0])
+                elif i == weights.size - 1:
+                        weights[-1] = (x[-1] - x[-2])
+                else:
+                    weights[i] = (x[i + 1] - x[i - 1]) / 2
+            return weights
+        
+        deltas150_trapz = trapezoidal_interval_weights(nus_edge150)
+        deltas220_trapz = trapezoidal_interval_weights(nus_edge220)
+        print(deltas150_trapz)
+        delta_nu_over_nu_150 = deltas150_trap / filter_nus150
+        delta_nu_over_nu_220 = deltas220_trap / filter_nus220
+
+        if not d["center_detector"]:
+            self.subinstruments = []
+            for i in range(self.nsubbands):
+                if self.d["debug"]:
+                    print(
+                        f"Integration done with nu = {filter_nus150[i]} GHz with weight {delta_nu_over_nu_150[i]}"
+                    )
+                # print(nus_edge150)
+                d1["filter_nu"] = filter_nus150[i] * 1e9
+                d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
+                self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
+
+            for i in range(self.nsubbands):
+                if self.d["debug"]:
+                    print(
+                        f"Integration done with nu = {filter_nus220[i]} GHz with weight {delta_nu_over_nu_220[i]}"
+                    )
+                # print(nus_edge220)
+                d1["filter_nu"] = filter_nus220[i] * 1e9
+                d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
+                self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
+        else:
+
+            self.subinstruments = []
+            for i in range(self.nsubbands):
+                d1["filter_nu"] = filter_nus150[i] * 1e9
+                d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
+                q = QubicInstrument(d1, FRBW=self.FRBW)[0]
+                q.detector.center = np.array([[0.0, 0.0, -0.3]])
+                self.subinstruments.append(q)
+
+            for i in range(self.nsubbands):
+                d1["filter_nu"] = filter_nus220[i] * 1e9
+                d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
+                q = QubicInstrument(d1, FRBW=self.FRBW)[0]
+                q.detector.center = np.array([[0.0, 0.0, -0.3]])
+                self.subinstruments.append(q)
+
+    def __getitem__(self, i):
+        return self.subinstruments[i]
+
+    def __len__(self):
+        return len(self.subinstruments)
+
+    def get_synthbeam(
+        self, scene, idet=None, theta_max=45, detector_integrate=None, detpos=None
+    ):
+        sb = map(
+            lambda i: i.get_synthbeam(
+                scene,
+                idet,
+                theta_max,
+                detector_integrate=detector_integrate,
+                detpos=detpos,
+            ),
+            self.subinstruments,
+        )
+        sb = np.array(sb)
+        bw = np.zeros(len(self))
+        for i in range(len(self)):
+            bw[i] = self[i].filter.bandwidth / 1e9
+            sb[i] *= bw[i]
+        sb = sb.sum(axis=0) / np.sum(bw)
+        return sb
+
+    def direct_convolution(self, scene, idet=None):
+        synthbeam = [q.synthbeam for q in self.subinstruments]
+        for i in range(len(synthbeam)):
+            synthbeam[i].kmax = 4
+        sb_peaks = map(
+            lambda i: QubicInstrument._peak_angles(
+                scene,
+                self[i].filter.nu,
+                self[i][idet].detector.center,
+                synthbeam[i],
+                self[i].horn,
+                self[i].primary_beam,
+            ),
+            range(len(self)),
+        )
+
+        def peaks_to_map(peaks):
+            m = np.zeros(hp.nside2npix(scene.nside))
+            m[hp.ang2pix(scene.nside, peaks[0], peaks[1])] = peaks[2]
+            return m
+
+        sb = map(peaks_to_map, sb_peaks)
+        C = [i.get_convolution_peak_operator() for i in self.subinstruments]
+        sb = [(C[i])(sb[i]) for i in range(len(self))]
+        sb = np.array(sb)
+        sb = sb.sum(axis=0)
+        return sb
+
+    def detector_subset(self, dets):
+        subset_inst = copy.deepcopy(self)
+        for i in range(len(subset_inst)):
+            subset_inst[i].detector = self[i].detector[dets]
+        return subset_inst
+
 class QubicMultibandInstrumentTrapezoidalIntegration:
     """
     The QubicMultibandInstrument class

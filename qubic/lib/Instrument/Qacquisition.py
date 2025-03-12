@@ -32,7 +32,7 @@ from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from qubic.data import PATH
 
-from .Qinstrument import compute_freq, QubicInstrument, QubicMultibandInstrumentTrapezoidalIntegration, QubicMultibandInstrument
+from .Qinstrument import compute_freq, QubicInstrument, QubicMultibandInstrumentTrapezoidalIntegration, QubicMultibandInstrument, QubicMultibandInstrumentTest
 from ..Qsamplings import get_pointing
 from ..Qscene import QubicScene
 
@@ -120,12 +120,7 @@ class QubicAcquisition(Acquisition):
             nprocs_sampling=nprocs_sampling,
             comm=comm,
         )
-        print("Acquisition")
-        print("nprocs_instrument", self.nprocs_instrument, d['nprocs_instrument'])
-        print("nprocs_sampling", self.nprocs_sampling, d['nprocs_sampling'])
-        d['comm'] = self.comm
-        d["nprocs_instrument"] = self.nprocs_instrument
-        d["nprocs_sampling"] = self.nprocs_sampling
+        
         self.photon_noise = bool(photon_noise)
         self.effective_duration = effective_duration
         self.bandwidth = bandwidth
@@ -721,7 +716,7 @@ class QubicMultiAcquisitions:
         self.allnus_rec = np.array(list(nus150) + list(nus220))
 
         ### Multi-frequency instrument
-        self.multiinstrument = QubicMultibandInstrument(self.dict)
+        self.multiinstrument = QubicMultibandInstrumentTest(self.dict)
         print(self.multiinstrument)
         
         if sampling is None:

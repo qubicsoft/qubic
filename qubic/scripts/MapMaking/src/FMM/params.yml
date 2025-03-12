@@ -1,4 +1,4 @@
-path_out: 'test_merge/'
+path_out: 'test_noise/'
 datafilename: 'test'
 
 CMB:
@@ -16,7 +16,7 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
     
-    instrument: 'DB'                        # Instrumental design (DB or UWB)
+    instrument: 'UWB'                        # Instrumental design (DB or UWB)
     npointings: 1000                     # Number of time samples
     nsub_in: 8                             # Number of sub-acquisitions
     nsub_out: 8

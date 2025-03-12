@@ -153,10 +153,10 @@ class QubicAcquisition(Acquisition):
         self.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
-    def get_noise(self, det_noise, photon_noise, seed=None, out=None):
-        np.random.seed(seed)
+    def get_noise(self, det_noise, photon_noise, rng_noise, out=None):
+        # np.random.seed(seed) # use rng instead
         out = self.instrument.get_noise(
-            self.sampling, self.scene, det_noise, photon_noise, out=out
+            self.sampling, self.scene, rng_noise, det_noise=det_noise, photon_noise=photon_noise, out=out
         )
         if self.effective_duration is not None:
             # nsamplings = self.comm.allreduce(len(self.sampling))
@@ -633,7 +633,7 @@ class PlanckAcquisition:
 
     def get_noise(self, seed):
         state = np.random.get_state()
-        np.random.seed(seed)
+        np.random.seed(seed) # use rng instead
         out = (
             np.random.standard_normal(np.ones((12 * self.nside**2, 3)).shape)
             * self.sigma
@@ -1113,7 +1113,7 @@ class OtherDataParametric:
     def __init__(self, nus, nside, comps, nintegr=2):
 
         self.nintegr = nintegr
-        pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
+        pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb") # not working
         dataset = pickle.load(pkl_file)
         self.dataset = dataset
 
@@ -1303,7 +1303,7 @@ class OtherDataParametric:
 
     def get_noise(self, seed=None, fact=None, seenpix=None):
         state = np.random.get_state()
-        np.random.seed(seed)
+        np.random.seed(seed) # use rng instead
         out = np.zeros((len(self.nus), self.npix, 3))
         R2tod = ReshapeOperator(
             (len(self.nus), 12 * self.nside**2, 3),
@@ -2293,7 +2293,7 @@ class QubicIntegrated(QubicPolyAcquisition):
         Method which compute the noise of QUBIC.
 
         """
-        np.random.seed(seed)
+        np.random.seed(seed) # use rng instead
         a, _ = self._get_average_instrument_acq(nu=self.d["filter_nu"])
         return a.get_noise(det_noise=det_noise, photon_noise=photon_noise, seed=seed)
 

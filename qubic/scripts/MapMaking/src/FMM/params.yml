@@ -16,11 +16,11 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
     
-    instrument: 'DB'                        # Instrumental design (DB or UWB)
+    instrument: 'UWB'                        # Instrumental design (DB or UWB)
     npointings: 1000                     # Number of time samples
-    nsub_in: 8                             # Number of sub-acquisitions
-    nsub_out: 8
-    nrec: 2                                # Number of reconstructed frequency maps
+    nsub_in: 16                             # Number of sub-acquisitions
+    nsub_out: 16
+    nrec: 4                                # Number of reconstructed frequency maps
     convolution_in: True               # Angular resolution in the input TOD
     convolution_out: True                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant

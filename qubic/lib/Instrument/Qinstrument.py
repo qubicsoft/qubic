@@ -2221,9 +2221,12 @@ class QubicMultibandInstrument:
             Nf, nus_edge150, filter_nus, deltas, Delta, Nbbands = compute_freq(150,
                                                                         d["nf_sub"]-1,
                                                                         0.25)
+                        
             Nf, nus_edge220, filter_nus, deltas, Delta, Nbbands = compute_freq(220,
                                                                         d["nf_sub"]-1,
                                                                         0.25)
+            
+            
 
             if d["type_instrument"] == "wide":
                 self.nsubbands = len(filter_nus)

@@ -100,6 +100,10 @@ class QubicAcquisition(Acquisition):
         nprocs_instrument = d["nprocs_instrument"]
         nprocs_sampling = d["nprocs_sampling"]
         comm = d["comm"]
+        print("Qacquisition")
+        print("comm", comm)
+        print("nprocs_instrument", nprocs_instrument)
+        print("nprocs_sampling", nprocs_sampling)
         psd = d["psd"]
         bandwidth = d["bandwidth"]
         twosided = d["twosided"]
@@ -116,7 +120,12 @@ class QubicAcquisition(Acquisition):
             nprocs_sampling=nprocs_sampling,
             comm=comm,
         )
-        
+        print("Acquisition")
+        print("nprocs_instrument", self.nprocs_instrument, d['nprocs_instrument'])
+        print("nprocs_sampling", self.nprocs_sampling, d['nprocs_sampling'])
+        d['comm'] = self.comm
+        d["nprocs_instrument"] = self.nprocs_instrument
+        d["nprocs_sampling"] = self.nprocs_sampling
         self.photon_noise = bool(photon_noise)
         self.effective_duration = effective_duration
         self.bandwidth = bandwidth
@@ -712,9 +721,9 @@ class QubicMultiAcquisitions:
         self.allnus_rec = np.array(list(nus150) + list(nus220))
 
         ### Multi-frequency instrument
-        self.multiinstrument = QubicMultibandInstrumentTrapezoidalIntegration(
-            self.dict
-        )
+        self.multiinstrument = QubicMultibandInstrument(self.dict)
+        print(self.multiinstrument)
+        
         if sampling is None:
             self.sampling = get_pointing(self.dict)
         else:

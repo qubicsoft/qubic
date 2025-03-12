@@ -180,6 +180,7 @@ class Q1D:
             plt.xlim(np.min(self.th), np.max(self.th))
             plt.ylim(-0.01, 1.4)
             plt.title("Synthesized Beam: " + self.instrument_type)
+            # plt.show()
 
     def build_TOD(self):
         """
@@ -494,7 +495,41 @@ class Q1D:
 
 
 ########################################################################################
-def rnd_sky_1d(xpix, args):
+def spec_1_f(ff, pow):
+    """Returns a power law.
+
+    This function takes frequencies and a power as an input and returns a power law
+
+    Parameters
+    ----------
+    ff : array_like
+        Input array of frequencies
+    pow : float
+        The exponent used in the power-law transformation. For each non-zero element `x`,
+        the transformation is `|x|^(-pow)`.
+
+    Returns
+    -------
+    s : ndarray
+        An array of the same shape as `ff`, where non-zero values are transformed
+        using the power law, and zero values are preserved as zeros.
+
+    Notes
+    -----
+    - If any element of `ff` is zero, it is preserved as zero in the output array `s`.
+    - The `np.nan_to_num()` function is used to handle any potential NaN values that may
+      result from dividing by zero (though the zero-check ensures this doesn't happen).
+    """
+
+    zz = ff != 0
+    s = np.zeros_like(ff)
+    s[zz] = np.nan_to_num(np.abs(ff[zz]) ** (-pow))
+    s[~zz] = 0
+    return s
+
+
+########################################################################################
+def rnd_sky_1d(xpix, args, fct=spec_1_f):
     """Generate a 1D random sky realization in Fourier space.
 
     This function generates a 1D random realization of a sky signal in Fourier space.
@@ -537,47 +572,13 @@ def rnd_sky_1d(xpix, args):
     ftyin = np.fft.fft(rndy)
 
     # Apply the spectral filter in Fourier space using the spec_1_f function
-    fty = ftyin * spec_1_f(ff, args[0])
+    fty = ftyin * fct(ff, args[0])
 
     # Perform the inverse Fourier transform to return to real space
     y = np.real(np.fft.ifft(fty))
 
     # Return the generated random sky realization in real space
     return y
-
-
-########################################################################################
-def spec_1_f(ff, pow):
-    """Returns a power law.
-
-    This function takes frequencies and a power as an input and returns a power law
-
-    Parameters
-    ----------
-    ff : array_like
-        Input array of frequencies
-    pow : float
-        The exponent used in the power-law transformation. For each non-zero element `x`,
-        the transformation is `|x|^(-pow)`.
-
-    Returns
-    -------
-    s : ndarray
-        An array of the same shape as `ff`, where non-zero values are transformed
-        using the power law, and zero values are preserved as zeros.
-
-    Notes
-    -----
-    - If any element of `ff` is zero, it is preserved as zero in the output array `s`.
-    - The `np.nan_to_num()` function is used to handle any potential NaN values that may
-      result from dividing by zero (though the zero-check ensures this doesn't happen).
-    """
-
-    zz = ff != 0
-    s = np.zeros_like(ff)
-    s[zz] = np.nan_to_num(np.abs(ff[zz]) ** (-pow))
-    s[~zz] = 0
-    return s
 
 
 ########################################################################################

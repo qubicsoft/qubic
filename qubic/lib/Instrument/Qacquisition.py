@@ -100,10 +100,6 @@ class QubicAcquisition(Acquisition):
         nprocs_instrument = d["nprocs_instrument"]
         nprocs_sampling = d["nprocs_sampling"]
         comm = d["comm"]
-        print("Qacquisition")
-        print("comm", comm)
-        print("nprocs_instrument", nprocs_instrument)
-        print("nprocs_sampling", nprocs_sampling)
         psd = d["psd"]
         bandwidth = d["bandwidth"]
         twosided = d["twosided"]
@@ -716,7 +712,7 @@ class QubicMultiAcquisitions:
         self.allnus_rec = np.array(list(nus150) + list(nus220))
 
         ### Multi-frequency instrument
-        self.multiinstrument = QubicMultibandInstrumentTest(self.dict)
+        self.multiinstrument = QubicMultibandInstrument(self.dict)
         print(self.multiinstrument)
         
         if sampling is None:

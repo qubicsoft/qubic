@@ -20,6 +20,7 @@ from pyoperators import (
     DenseOperator,
     DiagonalOperator,
     IdentityOperator,
+    MPI,
     MPIDistributionIdentityOperator,
     Operator,
     PackOperator,

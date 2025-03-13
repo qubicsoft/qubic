@@ -18,7 +18,7 @@ from pyoperators import (
     ReshapeOperator,
     Rotation2dOperator,
     Rotation3dOperator,
-    Spherical2CartesianOperator,
+    Spherical2CartesianOperator
 )
 from pyoperators.utils import operation_assignment, pool_threading, product, split
 from pyoperators.utils.ufuncs import abs2
@@ -1972,17 +1972,18 @@ class QubicMultibandInstrumentTest:
         self.nsubbands = len(filter_nus150)
         
         def trapezoidal_interval_weights(x):
-            x = np.asarray(x)
-            weights = np.zeros(len(x) - 1)
-            
-            weights[0] = x[1] - x[0]
-            weights[-1] = x[-1] - x[-2]
-            weights[1:-1] = (x[2:] - x[:-2]) / 2
-            
-            return weights        
+             weights = np.zeros(len(x) - 1)
+             for i in range(weights.size):
+                 if i == 0:
+                     weights[0] = (x[1] - x[0])
+                 elif i == weights.size - 1:
+                         weights[-1] = (x[-1] - x[-2])
+                 else:
+                     weights[i] = (x[i + 1] - x[i - 1]) / 2
+             return weights   
         
-        deltas150_trapz = trapezoidal_interval_weights(nus_edge150)
-        deltas220_trapz = trapezoidal_interval_weights(nus_edge220)
+        deltas150_trap = trapezoidal_interval_weights(nus_edge150)
+        deltas220_trap = trapezoidal_interval_weights(nus_edge220)
         
         delta_nu_over_nu_150 = deltas150_trap / filter_nus150
         delta_nu_over_nu_220 = deltas220_trap / filter_nus220

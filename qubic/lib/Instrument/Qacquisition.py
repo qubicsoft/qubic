@@ -97,13 +97,13 @@ class QubicAcquisition(Acquisition):
         effective_duration = d["effective_duration"]
         photon_noise = d["photon_noise"]
         max_nbytes = d["max_nbytes"]
-        nprocs_instrument = d["nprocs_instrument"]
-        nprocs_sampling = d["nprocs_sampling"]
-        comm = d["comm"]
         psd = d["psd"]
         bandwidth = d["bandwidth"]
         twosided = d["twosided"]
         sigma = d["sigma"]
+        comm = d["comm"]
+        nprocs_instrument = d["nprocs_instrument"]
+        nprocs_sampling = d["nprocs_sampling"] 
 
         Acquisition.__init__(
             self,
@@ -682,6 +682,37 @@ class QubicMultiAcquisitions:
         self.dict["nf_sub"] = self.nsub
         self.comps = comps
         self.fsub = int(self.nsub / self.nrec)
+        
+        ### Resolve issue when comm, nprocs_instrument, nprocs_sampling are None in the dictionary.
+        # It will define them using codes from Acquisition in pysimulators if they are not defined by the user.
+        # When dict["nprocs_instrument"] is None, the test to save MPI communicator at the end of __init__ is passing while it should not.
+        comm = self.dict["comm"]
+        nprocs_instrument = self.dict["nprocs_instrument"]
+        nprocs_sampling = self.dict["nprocs_sampling"]
+        
+        if comm is None:
+            comm = MPI.COMM_WORLD
+        if nprocs_instrument is None and nprocs_sampling is None:
+            nprocs_instrument = 1
+            nprocs_sampling = comm.size
+        elif nprocs_instrument is None:
+            if nprocs_sampling < 1 or nprocs_sampling > comm.size:
+                raise ValueError(
+                    f"Invalid value for nprocs_sampling '{nprocs_sampling}'."
+                )
+            nprocs_instrument = comm.size // nprocs_sampling
+        else:
+            if nprocs_instrument < 1 or nprocs_instrument > comm.size:
+                raise ValueError(
+                    f"Invalid value for nprocs_instrument '{nprocs_instrument}'."
+                )
+            nprocs_sampling = comm.size // nprocs_instrument
+        if nprocs_instrument * nprocs_sampling != comm.size:
+            raise ValueError('Invalid MPI distribution of the acquisition.')
+        
+        self.dict['comm'] = comm
+        self.dict['nprocs_instrument'] = nprocs_instrument
+        self.dict['nprocs_sampling'] = nprocs_sampling
 
         ### Compute frequencies on the edges
         _, _, nus_subbands_150, _, _, _ = compute_freq(

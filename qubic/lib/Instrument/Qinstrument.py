@@ -1958,9 +1958,10 @@ class QubicMultibandInstrumentTest:
             Needed to study the synthesised beam
         """
 
-        self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
+        self.FRBW = d["filter_relative_bandwidth"]
         self.d = d
         d1 = d.copy()
+        
         
         _, nus_edge150, filter_nus150, _, _, _ = compute_freq(
             150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
@@ -1970,41 +1971,30 @@ class QubicMultibandInstrumentTest:
         
         self.nsubbands = len(filter_nus150)
         
-        W150 = IntegrationTrapezeOperator(nus_edge150)
-        deltas150_trap = np.array(
-            [W150.operands[i].todense(shapein=1)[0][0] for i in range(len(nus_edge150))]
-        )
-        W220 = IntegrationTrapezeOperator(nus_edge220)
-        deltas220_trap = np.array(
-            [W220.operands[i].todense(shapein=1)[0][0] for i in range(len(nus_edge220))]
-        )
-        print(deltas150_trap)
-        
         def trapezoidal_interval_weights(x):
+            x = np.asarray(x)
             weights = np.zeros(len(x) - 1)
-            for i in range(weights.size):
-                if i == 0:
-                    weights[0] = (x[1] - x[0])
-                elif i == weights.size - 1:
-                        weights[-1] = (x[-1] - x[-2])
-                else:
-                    weights[i] = (x[i + 1] - x[i - 1]) / 2
-            return weights
+            
+            weights[0] = x[1] - x[0]
+            weights[-1] = x[-1] - x[-2]
+            weights[1:-1] = (x[2:] - x[:-2]) / 2
+            
+            return weights        
         
         deltas150_trapz = trapezoidal_interval_weights(nus_edge150)
         deltas220_trapz = trapezoidal_interval_weights(nus_edge220)
-        print(deltas150_trapz)
+        
         delta_nu_over_nu_150 = deltas150_trap / filter_nus150
         delta_nu_over_nu_220 = deltas220_trap / filter_nus220
+        
+        self.subinstruments = []
 
         if not d["center_detector"]:
-            self.subinstruments = []
             for i in range(self.nsubbands):
                 if self.d["debug"]:
                     print(
                         f"Integration done with nu = {filter_nus150[i]} GHz with weight {delta_nu_over_nu_150[i]}"
                     )
-                # print(nus_edge150)
                 d1["filter_nu"] = filter_nus150[i] * 1e9
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
@@ -2014,13 +2004,10 @@ class QubicMultibandInstrumentTest:
                     print(
                         f"Integration done with nu = {filter_nus220[i]} GHz with weight {delta_nu_over_nu_220[i]}"
                     )
-                # print(nus_edge220)
                 d1["filter_nu"] = filter_nus220[i] * 1e9
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
         else:
-
-            self.subinstruments = []
             for i in range(self.nsubbands):
                 d1["filter_nu"] = filter_nus150[i] * 1e9
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]

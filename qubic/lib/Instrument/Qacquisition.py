@@ -743,7 +743,7 @@ class QubicMultiAcquisitions:
         self.allnus_rec = np.array(list(nus150) + list(nus220))
 
         ### Multi-frequency instrument
-        self.multiinstrument = QubicMultibandInstrument(self.dict)
+        self.multiinstrument = QubicMultibandInstrumentTest(self.dict)
         print(self.multiinstrument)
         
         if sampling is None:

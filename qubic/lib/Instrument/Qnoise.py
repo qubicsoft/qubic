@@ -10,8 +10,12 @@ class QubicNoise:
 
     def __init__(
             self,
-            band,
-            params=None
+            params,
+            band=None,
+            seed_noise=None,
+            rng_noise=None,
+            scene=None,
+            sampling=None,
     ):
 
         if band != 150 and band != 220:
@@ -19,14 +23,14 @@ class QubicNoise:
             raise TypeError("Unknown band '{}'.".format(band))
 
         self.params = assign_default_parameters(params)
-        self.seed_noise = d['seed']
-        self.npointings = d['npointings']
+        self.seed_noise = seed_noise
+        self.npointings = self.params['npointings']
 
+        # these parameters are reset to a value of 1 (PLEASE CHECK)
         for parm in ['nprocs_sampling','nf_sub','nf_recon','period']:            
-            if self.params[parm] is None:
-                self.params[parm] = 1
+            self.params[parm] = 1
 
-        self.params["type_instrument"] = ""
+        self.params['type_instrument'] = ""
 
         # get_pointing(self.params) and QubicScene(self.params) do not depend on any parameters modified above
         # so we can calculate them separately

@@ -4,10 +4,10 @@ import struct
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 import datetime as dt
 from scipy.spatial.transform import Rotation as R
-
 
 class GPStools:
     
@@ -292,7 +292,7 @@ class GPStools:
         fig.legend()
         plt.show()
         
-    def plot_gps_data(self, index_start=0, index_stop=-1):
+    def plot_gps_data(self, index_start=0, index_stop=-1, position_limit=None, angle_limit=None):
         """Plot GPS data.
         
         Plot the position vector and the angles.
@@ -330,7 +330,102 @@ class GPStools:
         fig.tight_layout()
         ax1.set_title("Position vector components")
         fig.legend(bbox_to_anchor=(1, 1), loc='upper left')
+        if position_limit is not None:
+            ax1.set_ylim(position_limit)
+        if angle_limit is not None:
+            ax2.set_ylim(angle_limit)
         plt.show()
+        
+    def plot_gps_data_plotly(self, index_start=0, index_stop=-1, position_limit=None, angle_limit=None):
+        """
+        Plot GPS data using Plotly.
+
+        This function creates an interactive plot with two y-axes:
+        - Primary y-axis: Position vector components (North, East, Up).
+        - Secondary y-axis: Angles (Roll, Yaw).
+
+        Parameters
+        ----------
+        index_start : int, optional
+            First observation index (default is 0)
+        index_stop : int, optional
+            Last observation index (default is -1)
+        position_limit : tuple of float, optional
+            Y-axis limits for position components (min, max)
+        angle_limit : tuple of float, optional
+            Y-axis limits for angles (min, max)
+        """
+        # Slice data
+        x_data    = self._datetime[index_start:index_stop]
+        rpN_data  = self.rpN[index_start:index_stop]
+        rpE_data  = self.rpE[index_start:index_stop]
+        rpD_data  = self.rpD[index_start:index_stop]
+        roll_data = self.roll[index_start:index_stop]
+        yaw_data  = self.yaw[index_start:index_stop]
+
+        # Define colors
+        color_a = 'pink'
+        color_r = 'red'
+        color_b = 'blue'
+        color_d = 'green'
+        color_c = 'brown'
+
+        # Create a figure with a secondary y-axis
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # Add traces for position vector components on the primary y-axis
+        fig.add_trace(
+            go.Scatter(x=x_data, y=rpN_data, mode='lines',
+                    name='North component',
+                    line=dict(color=color_r)),
+            secondary_y=False
+        )
+        fig.add_trace(
+            go.Scatter(x=x_data, y=rpE_data, mode='lines',
+                    name='East component',
+                    line=dict(color=color_b)),
+            secondary_y=False
+        )
+        fig.add_trace(
+            go.Scatter(x=x_data, y=rpD_data, mode='lines',
+                    name='Up component',
+                    line=dict(color=color_d)),
+            secondary_y=False
+        )
+
+        # Add traces for angles on the secondary y-axis
+        fig.add_trace(
+            go.Scatter(x=x_data, y=roll_data, mode='lines',
+                    name='Roll angle',
+                    line=dict(color=color_a)),
+            secondary_y=True
+        )
+        fig.add_trace(
+            go.Scatter(x=x_data, y=yaw_data, mode='lines',
+                    name='Yaw angle',
+                    line=dict(color=color_c)),
+            secondary_y=True
+        )
+
+        # Update figure layout
+        fig.update_layout(
+            title="Position Vector Components and Angles",
+            xaxis_title="Date",
+            legend=dict(x=1.05, y=1),
+            width=900,
+            height=500,
+            template='plotly_white'
+        )
+        fig.update_yaxes(title_text="Position Vector Components (m)", secondary_y=False)
+        fig.update_yaxes(title_text="Angles (rad)", secondary_y=True)
+
+        # Set y-axis limits if provided
+        if position_limit is not None:
+            fig.update_yaxes(range=position_limit, secondary_y=False)
+        if angle_limit is not None:
+            fig.update_yaxes(range=angle_limit, secondary_y=True)
+
+        fig.show()
     
 class GPSAntenna(GPStools):
     

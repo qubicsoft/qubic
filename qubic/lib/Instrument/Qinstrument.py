@@ -44,7 +44,7 @@ from ..Qutilities import _compress_mask
 
 __all__ = ["QubicInstrument", "QubicMultibandInstrumentTrapezoidalIntegration","QubicMultibandInstrument"]
 
-def compute_freq(band, Nfreq=None, relative_bandwidth=0.25):
+def compute_freq(band, Nfreq=None, relative_bandwidth=0.25, frequency_spacing="log"):
     """
     Prepare frequency bands parameters
     band -- int,
@@ -66,11 +66,16 @@ def compute_freq(band, Nfreq=None, relative_bandwidth=0.25):
 
     nu_min = band * (1 - relative_bandwidth / 2)
     nu_max = band * (1 + relative_bandwidth / 2)
-
     Nfreq_edges = Nfreq + 1
-    base = (nu_max / nu_min) ** (1. / Nfreq)
-
-    nus_edge = nu_min * np.logspace(0, Nfreq, Nfreq_edges, endpoint=True, base=base)
+    
+    if frequency_spacing == "log":
+        base = (nu_max / nu_min) ** (1. / Nfreq)
+        nus_edge = nu_min * np.logspace(0, Nfreq, Nfreq_edges, endpoint=True, base=base)
+    elif frequency_spacing == "linear":
+        nus_edge = np.linspace(nu_min, nu_max, Nfreq_edges)
+    else:
+        ValueError("frequency_spacing must be 'log' or 'linear'")
+    
     nus = np.array([(nus_edge[i] + nus_edge[i - 1]) / 2 for i in range(1, Nfreq_edges)])
     deltas = np.array([(nus_edge[i] - nus_edge[i - 1]) for i in range(1, Nfreq_edges)])
     Delta = nu_max - nu_min
@@ -1934,7 +1939,6 @@ def _argsort_reverse(a, axis=-1):
     i[axis] = a.argsort(axis)[:, ::-1]
     return i
 
-
 def _pack_vector(*args):
     shape = np.broadcast(*args).shape
     out = np.empty(shape + (len(args),))
@@ -1962,12 +1966,10 @@ class QubicMultibandInstrumentTest:
         self.d = d
         d1 = d.copy()
         
-        
         _, nus_edge150, filter_nus150, _, _, _ = compute_freq(
-            150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
-        )
+            150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW, frequency_spacing="linear")
         _, nus_edge220, filter_nus220, _, _, _ = compute_freq(
-            220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW)
+            220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW, frequency_spacing="linear")
         
         self.nsubbands = len(filter_nus150)
         

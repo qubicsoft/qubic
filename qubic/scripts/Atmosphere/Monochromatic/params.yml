@@ -1,3 +1,5 @@
+path_am_files: "/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/"
+
 # Physical parameters
 
 correlation_length: 300           # Atmospheric correlation maximum lenght in m

@@ -232,18 +232,18 @@ class AtmosphereProperties:
         pwv = self.params['pwv']
         
         ### Import absorption coefficients from molecular absorption lines
-        with open(f'absorption_coefficient/h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out', 'r') as file:
+        with open(self.params["path_am_files"] + f'h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out', 'r') as file:
             for line in file:
                 frequencies.append(float(line.split()[0]))
                 mol_absorption_coeff.append(float(line.split()[1]) * (1e-2)**2)
                 
         ### Import absorption coefficients from self-induced collisions continuum
-        with open(f'absorption_coefficient/h2o_self_continuum.out', 'r') as file:
+        with open(self.params["path_am_files"] + f'h2o_self_continuum.out', 'r') as file:
             for line in file:
                 self_absorption_coeff.append(float(line.split()[1]) * (1e-2)**5)
                 
         ### Import absorption coefficients from air-induced collisions continuum
-        with open(f'absorption_coefficient/h2o_air_continuum.out', 'r') as file:
+        with open(self.params["path_am_files"] + f'h2o_air_continuum.out', 'r') as file:
             for line in file:
                 air_absorption_coeff.append(float(line.split()[1]) * (1e-2)**5)
                 

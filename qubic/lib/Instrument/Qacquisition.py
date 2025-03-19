@@ -405,6 +405,8 @@ class QubicAcquisition(Acquisition):
         Return the operator of the acquisition. Note that the operator is only
         linear if the scene temperature is differential (absolute=False).
         """
+        # Add the interpolation? How can it be coded with respect to pyoperators?
+        # interp_pixel = 
         distribution = self.get_distribution_operator()
         temp = self.get_unit_conversion_operator()
         aperture = self.get_aperture_integration_operator()
@@ -673,7 +675,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None):
 
         ### Define class arguments
         self.dict = dictionary
@@ -762,7 +764,7 @@ class QubicMultiAcquisitions:
 
         self.coverage = self.H[0].T(np.ones(self.H[0].T.shapein))[:, 0]
         ### Save MPI communicator
-        if self.dict["nprocs_instrument"] != 1:
+        if self.dict["nprocs_instrument"] > 1:
             self.mpidist = self.H[0].operands[-1]
             for i in range(1, len(self.H)):
                 self.H[i].operands[-1] = self.mpidist
@@ -847,7 +849,7 @@ class QubicMultiAcquisitions:
         return D
 class QubicDualBand(QubicMultiAcquisitions):
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
 
         QubicMultiAcquisitions.__init__(
             self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
@@ -865,6 +867,7 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         ### Frequency Map-Making
         if algo == "FMM":
+            print("I'm here")
             h = np.array(h)
             for irec in range(self.nrec):
                 imin = irec * f
@@ -958,7 +961,7 @@ class QubicDualBand(QubicMultiAcquisitions):
             else:
                 convolution = HealpixConvolutionGaussianOperator(
                     fwhm=fwhm[isub], lmax=2 * self.scene.nside - 1
-                )
+                ) # Different in UWB acquisition?
 
             ### Compose operator as H = Proj * C * A
             with rule_manager(inplace=True):
@@ -998,7 +1001,7 @@ class QubicDualBand(QubicMultiAcquisitions):
         return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
 class QubicUltraWideBand(QubicMultiAcquisitions):
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
 
         QubicMultiAcquisitions.__init__(
             self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
@@ -1071,6 +1074,10 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
                 convolution = HealpixConvolutionGaussianOperator(
                     fwhm=fwhm[isub], lmax=2 * self.dict["nside"]
                 )
+                # How it is done in DualBand, why is there a -1 ?
+                # convolution = HealpixConvolutionGaussianOperator(
+                #     fwhm=fwhm[isub], lmax=2 * self.scene.nside - 1
+                # )
 
             ### Compose operator as H = Proj * C * A
             with rule_manager(inplace=True):
@@ -1394,6 +1401,12 @@ class JointAcquisitionFrequencyMapMaking:
                 H_qubic = self.qubic.get_operator(fwhm=fwhm).operands[1]
             else:
                 H_qubic = self.qubic.get_operator(fwhm=fwhm)
+                print("")
+                print("")
+                print("shape 1", np.shape(H_qubic))
+                # Test
+                H_qubic = self.qubic.get_operator(fwhm=fwhm).operands[1]
+                print("shape 2", np.shape(H_qubic))
             R_qubic = ReshapeOperator(
                 H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0]
             )
@@ -1720,7 +1733,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         self,
         d,
         Nsub,
-        Nrec=1,
+        Nrec,
         comp=[],
         kind="DB",
         nu_co=None,
@@ -2174,7 +2187,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         return allmaps
 class QubicIntegrated(QubicPolyAcquisition):
 
-    def __init__(self, d, Nsub=1, Nrec=1):
+    def __init__(self, d, Nsub, Nrec):
         """
 
         The initialization method allows to compute basic parameters such as :

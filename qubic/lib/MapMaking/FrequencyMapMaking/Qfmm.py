@@ -128,6 +128,8 @@ class PipelineFrequencyMapMaking:
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()
+
+        print("self.fwhm_rec = {}".format(self.fwhm_rec))
         
         ### Build the Input Maps
         self.maps_input = InputMaps(
@@ -153,7 +155,7 @@ class PipelineFrequencyMapMaking:
         if self.params['PLANCK']['external_data']:
             self.invN = self.joint.get_invntt_operator(mask=self.mask)
         else:
-            self.invN = self.joint.qubic.get_invntt_operator()
+            self.invN = self.joint.qubic.get_invntt_operator() # here
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
         
@@ -240,12 +242,18 @@ class PipelineFrequencyMapMaking:
 
         ### Pointing matrix for reconstruction
         if self.params['PLANCK']['external_data']:
+            print("joint")
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
             self.H_out = self.joint.get_operator(
                 fwhm=self.fwhm_out, seenpix=self.seenpix
             )  
         else:
+            print("not joint")
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
+            # print("shape 1", np.shape(self.H_out))
+            # self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out).operands[1]
+            # print("shape 2", np.shape(self.H_out))
+        # sys.exit()
             
     def get_averaged_nus(self):
         """Average frequency
@@ -454,6 +462,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["convolution_in"]
             and self.params["QUBIC"]["convolution_out"] is False
         ):
+            print("convolution_out is False")
             fwhm_rec = np.array([])
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
 
@@ -462,6 +471,7 @@ class PipelineFrequencyMapMaking:
                 weight_factor = f_dust.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_dust.eval(nu))
             else:
+                print("no dust")
                 f_cmb = CMB()
                 weight_factor = f_cmb.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_cmb.eval(nu))
@@ -470,9 +480,11 @@ class PipelineFrequencyMapMaking:
             ### See FMM annexe B to understand the computations
 
             for irec in range(self.params["QUBIC"]["nrec"]):
+                # print("irec = {}".format(irec))
                 numerator_fwhm, denominator_fwhm = 0, 0
                 numerator_nus, denominator_nus = 0, 0
                 for jsub in range(irec * self.fsub_out, (irec + 1) * self.fsub_out):
+                    # print("jsub = {}".format(jsub))
                     # Compute the expected reconstructed resolution for sub-acquisition
                     numerator_fwhm += (
                         scalar_acquisition_operators[jsub]
@@ -755,8 +767,8 @@ class PipelineFrequencyMapMaking:
         print("self.H_out.T", np.shape(self.H_out.T))
         print("self.invN", np.shape(self.invN))
         print("self.H_out", np.shape(self.H_out))
-        # print("self.H_out.T * self.invN", np.shape(self.H_out.T * self.invN))
-        print("self.invN * self.H_out", np.shape(self.invN * self.H_out))
+        print("self.H_out.T * self.invN", np.shape(self.H_out.T * self.invN))
+        # print("self.invN * self.H_out", np.shape(self.invN * self.H_out))
         A = self.H_out.T * self.invN * self.H_out
         print("A", np.shape(A))
 

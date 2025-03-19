@@ -41,6 +41,8 @@ from ..Calibration.Qcalibration import QubicCalibration
 from ..Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
 from ..Qutilities import _compress_mask
 
+from ..bricolage import Cartesian2HealpixOperator_bricolage
+
 
 __all__ = ["QubicInstrument", "QubicMultibandInstrumentTrapezoidalIntegration","QubicMultibandInstrument"]
 
@@ -1409,15 +1411,176 @@ class QubicInstrument(Instrument):
         primary_beam = self.primary_beam
         #primary_beam = getattr(self, "primary_beam", None)
 
+        # print(sampling.azimuth)
+        # print(sampling.elevation)
+
         if sampling.fix_az:
             rotation = sampling.cartesian_horizontal2instrument
         else:
             rotation = sampling.cartesian_galactic2instrument
 
-        return QubicInstrument._get_projection_operator(
-            rotation, scene, self.filter.nu, self.detector.center,
-            self.synthbeam, horn, primary_beam,self.thetafits, self.phifits, 
-	    self.valfits,self.use_file,self.freqs, verbose=verbose)
+        mymethod = False
+
+        if mymethod:
+            return QubicInstrument.get_projection_operator_bricolage(
+                rotation, scene, self.filter.nu, self.detector.center,
+                self.synthbeam, horn, primary_beam, verbose=verbose)
+        else:
+            return QubicInstrument._get_projection_operator(
+                rotation, scene, self.filter.nu, self.detector.center,
+                self.synthbeam, horn, primary_beam, self.thetafits, self.phifits, 
+                self.valfits, self.use_file, self.freqs, verbose=verbose)
+
+    def get_projection_operator_bricolage(
+            rotation, scene, nu, position, synthbeam, horn, primary_beam,
+            verbose=True):
+        
+        ndetectors = position.shape[0]
+        ntimes = rotation.data.shape[0]
+        nside = scene.nside
+
+        # print(np.shape(rotation.data)) # (30, 3, 3)
+        
+        # We get info on synthbeam
+        thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+
+        # print(np.shape(vals))
+        # print(np.shape(thetas))
+        # sys.exit()
+
+        npeaks = thetas.shape[-1]
+        thetaphi = _pack_vector(thetas, phis)  # (ndetectors, npeaks, 2)
+        direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
+
+        e_nf = direction[:, None, :, :]
+        # print(e_nf[0])
+        if nside > 8192:
+            dtype_index = np.dtype(np.int64)
+        else:
+            dtype_index = np.dtype(np.int32)
+
+        cls = {"I": FSRMatrix,
+               "QU": FSRRotation2dMatrix,
+               "IQU": FSRRotation3dMatrix}[scene.kind]
+
+        ndims = len(scene.kind)
+        nscene = len(scene)
+
+        s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
+                dtype=synthbeam.dtype, dtype_index=dtype_index,
+                verbose=verbose)
+        
+        # s = cls((ndetectors * ntimes * ndims * 4, nscene * ndims), ncolmax=npeaks,
+        #         dtype=synthbeam.dtype, dtype_index=dtype_index,
+        #         verbose=verbose)
+        
+        # s.data is np.empty()?
+
+        index = s.data.index.reshape((ndetectors, ntimes, npeaks))
+        # index = s.data.index.reshape((ndetectors, ntimes, npeaks, 4))
+        # for each peak position we take the interpolation with the four neighbouring pixels
+
+        weights = np.zeros_like(index)
+        
+        # c2h = Cartesian2HealpixOperator(nside)
+        c2h = Cartesian2HealpixOperator_bricolage(nside)
+        # print("\n\n\nc2h", c2h)
+
+        # We use info on synthbeam + pointing position to get info on synthbeam pointing positions
+        def func_thread(i):
+            # e_nf[i] shape: (1, ncolmax, 3)
+            # e_ni shape: (ntimes, ncolmax, 3)
+
+            e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
+            # print(e_ni[0, 0])
+            # res = c2h(e_ni)
+            res = c2h.get_interpol(e_ni)
+            print(np.shape(res))
+            index[i] = res
+            # index[i], weights[i] = np.moveaxis(res[0], [0], [2]), np.moveaxis(res[1], [0], [2])
+            print(index[i])
+            # print(np.sum(weights[i]))
+            sys.exit()
+
+        with pool_threading() as pool:
+            pool.map(func_thread, range(ndetectors))
+
+        if scene.kind == "I":
+            # print("\n\n\nscene.kind == I")
+            value = s.data.value.reshape(ndetectors, ntimes, ncolmax) # not defined?
+            value[...] = vals[:, None, :]
+            shapeout = (ndetectors, ntimes)
+        else:
+            if str(dtype_index) not in ("int32", "int64") or \
+                    str(synthbeam.dtype) not in ("float32", "float64"):
+                raise TypeError(
+                    "The projection matrix cannot be created with types: {0} a"
+                    "nd {1}.".format(dtype_index, synthbeam.dtype))
+            func = "matrix_rot{0}d_i{1}_r{2}".format(
+                ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
+            print(np.shape(s.data))
+            sys.exit()
+            getattr(flib.polarization, func)(
+                rotation.data.T, direction.T, s.data.ravel().view(np.int8),
+                vals.T)
+
+            if scene.kind == "QU":
+                shapeout = (ndetectors, ntimes, 2)
+            else:
+                shapeout = (ndetectors, ntimes, 3)
+
+        print(np.shape(s.data))
+        print(np.shape(s.data.index))
+        print(np.shape(s))
+        print(s.data[0, 0])
+        print(s.data.index[0])
+        print(vars(s))
+        sys.exit()
+        # return ProjectionOperator(s, shapeout=shapeout)
+        P = ProjectionOperator(s, shapeout=shapeout)
+
+        e_nf = e_nf[:, 0]
+
+        P.matrix.data.r22 *= 0
+        P.matrix.data.r32 *= 0 
+        # rotinv_e
+        e_ni = np.zeros((ndetectors, npeaks, 3))
+        for i in range(ndetectors):
+            e_ni[i] = rotation.T(e_nf[i])
+
+        # en2etheta_ephi
+        etheta_det, ephi_det = np.zeros((e_nf.shape)), np.zeros((e_nf.shape))
+        etheta_det[..., 0] = e_nf[..., 0] * e_nf[..., 2] / np.sqrt(1 - e_nf[..., 2]**2)
+        etheta_det[..., 1] = e_nf[..., 1] * e_nf[..., 2] / np.sqrt(1 - e_nf[..., 2]**2)
+        etheta_det[..., 2] = - np.sqrt(1 - e_nf[..., 2]**2)
+        ephi_det[..., 0] = - e_nf[..., 1] / np.sqrt(1 - e_nf[..., 2]**2)
+        ephi_det[..., 1] = e_nf[..., 0] / np.sqrt(1 - e_nf[..., 2]**2)
+        # etheta_det[..., 0] = np.cos(thetas) * np.cos(phis)
+        # etheta_det[..., 1] = np.cos(thetas) * np.sin(phis)
+        # etheta_det[..., 2] = - np.sin(thetas)
+        # ephi_det[..., 0] = - np.sin(phis)
+        # ephi_det[..., 1] = np.cos(phis)
+
+        # eni2rotation
+        ### en2ephi
+        ephi_gal = np.zeros((ndetectors, npeaks, 3))
+        ephi_gal[..., 0] = - e_ni[..., 1] / np.sqrt(1 - e_ni[..., 2]**2)   
+        ephi_gal[..., 1] = e_ni[..., 0] / np.sqrt(1 - e_ni[..., 2]**2)
+
+        ### rot_ephi
+        ephi_det_rot = rotation(ephi_gal)
+
+        alpha = np.arctan2(np.sum(ephi_det_rot * etheta_det, axis=-1), np.sum(ephi_det_rot * ephi_det, axis=-1))
+        P.matrix.data.r22 = vals * np.cos(2*alpha)
+        P.matrix.data.r32 = - vals * np.sin(2*alpha)
+
+        # cos_alpha = np.sum(ephi_det_rot * ephi_det, axis=-1)
+        # sin_alpha = np.sum(ephi_det_rot * etheta_det, axis=-1)
+        # P.matrix.data.r22 = vals * (cos_alpha**2 - sin_alpha**2)
+        # P.matrix.data.r32 = vals * 2 * cos_alpha * sin_alpha
+
+        return P
+        
 
     @staticmethod
     def _get_projection_operator(
@@ -1428,7 +1591,11 @@ class QubicInstrument(Instrument):
         ntimes = rotation.data.shape[0]
         nside = scene.nside
 
+        # print(rotation.data[0])
+        # print(np.shape(rotation.data))
+
         if use_file == True:
+            # print("use_file == True")
             isfreq=int(np.floor(nu/1e9))
             frq=len(str(freqs[0]))
             
@@ -1453,13 +1620,15 @@ class QubicInstrument(Instrument):
             thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas, phis, vals, synthbeam)
         
         else:
+            # print("use_file == False")
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
-
+        # print("shape vals", np.shape(vals)) # (ndetectors, npeaks)
         npeaks = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, npeaks, 2)
         direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
 
         e_nf = direction[:, None, :, :]
+        # print(e_nf[0])
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:
@@ -1476,10 +1645,14 @@ class QubicInstrument(Instrument):
         s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
                 dtype=synthbeam.dtype, dtype_index=dtype_index,
                 verbose=verbose)
+        
+        # print(np.shape(s.data))
+        # sys.exit()
 
         index = s.data.index.reshape((ndetectors, ntimes, npeaks))
         c2h = Cartesian2HealpixOperator(nside)
         if nscene != nscenetot:
+            # print("\n\n\nnscene != nscenetot\n\n\n")
             table = np.full(nscenetot, -1, dtype_index)
             table[scene.index] = np.arange(len(scene), dtype=dtype_index)
 
@@ -1488,6 +1661,7 @@ class QubicInstrument(Instrument):
             # e_ni shape: (ntimes, ncolmax, 3)
 
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
+            # print(e_ni)
             if nscene != nscenetot:
                 np.take(table, c2h(e_ni).astype(int), out=index[i])
             else:
@@ -1495,9 +1669,13 @@ class QubicInstrument(Instrument):
 
         with pool_threading() as pool:
             pool.map(func_thread, range(ndetectors))
-        
+        # print(index[0])
+        # print(np.shape(index[0]))
+        # sys.exit()
+
         if scene.kind == "I":
-            value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
+            # print("\n\n\nscene.kind == I")
+            value = s.data.value.reshape(ndetectors, ntimes, ncolmax) # not defined?
             value[...] = vals[:, None, :]
             shapeout = (ndetectors, ntimes)
         else:
@@ -1506,6 +1684,9 @@ class QubicInstrument(Instrument):
                 raise TypeError(
                     "The projection matrix cannot be created with types: {0} a"
                     "nd {1}.".format(dtype_index, synthbeam.dtype))
+            # print(dtype_index)
+            # print(synthbeam)
+            # sys.exit()
             func = "matrix_rot{0}d_i{1}_r{2}".format(
                 ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
 
@@ -1518,7 +1699,54 @@ class QubicInstrument(Instrument):
             else:
                 shapeout = (ndetectors, ntimes, 3)
 
-        return ProjectionOperator(s, shapeout=shapeout)
+        # return ProjectionOperator(s, shapeout=shapeout)
+        P = ProjectionOperator(s, shapeout=shapeout)
+
+        # e_nf = e_nf[:, 0]
+        # print(np.shape(e_nf))
+        # i = 0
+        # print(np.shape(rotation.T(e_nf[i])))
+
+        P.matrix.data.r22 *= 0
+        P.matrix.data.r32 *= 0 
+        # rotinv_e
+        e_ni = np.zeros((ndetectors, ntimes, npeaks, 3))
+        for i in range(ndetectors):
+            # e_ni[i] = rotation.T(e_nf[i])
+            e_ni[i] = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
+
+        # en2etheta_ephi
+        etheta_det, ephi_det = np.zeros((e_nf.shape)), np.zeros((e_nf.shape))
+        etheta_det[..., 0] = e_nf[..., 0] * e_nf[..., 2] / np.sqrt(1 - e_nf[..., 2]**2)
+        etheta_det[..., 1] = e_nf[..., 1] * e_nf[..., 2] / np.sqrt(1 - e_nf[..., 2]**2)
+        etheta_det[..., 2] = - np.sqrt(1 - e_nf[..., 2]**2)
+        ephi_det[..., 0] = - e_nf[..., 1] / np.sqrt(1 - e_nf[..., 2]**2)
+        ephi_det[..., 1] = e_nf[..., 0] / np.sqrt(1 - e_nf[..., 2]**2)
+        # etheta_det[..., 0] = np.cos(thetas) * np.cos(phis)
+        # etheta_det[..., 1] = np.cos(thetas) * np.sin(phis)
+        # etheta_det[..., 2] = - np.sin(thetas)
+        # ephi_det[..., 0] = - np.sin(phis)
+        # ephi_det[..., 1] = np.cos(phis)
+
+        # eni2rotation
+        ### en2ephi
+        ephi_gal = np.zeros((ndetectors, ntimes, npeaks, 3))
+        ephi_gal[..., 0] = - e_ni[..., 1] / np.sqrt(1 - e_ni[..., 2]**2)   
+        ephi_gal[..., 1] = e_ni[..., 0] / np.sqrt(1 - e_ni[..., 2]**2)
+
+        ### rot_ephi
+        ephi_det_rot = rotation(ephi_gal)
+
+        alpha = np.arctan2(np.sum(ephi_det_rot * etheta_det, axis=-1), np.sum(ephi_det_rot * ephi_det, axis=-1))
+        P.matrix.data.r22 = vals * np.cos(2*alpha)
+        P.matrix.data.r32 = - vals * np.sin(2*alpha)
+
+        # cos_alpha = np.sum(ephi_det_rot * ephi_det, axis=-1)
+        # sin_alpha = np.sum(ephi_det_rot * etheta_det, axis=-1)
+        # P.matrix.data.r22 = vals * (cos_alpha**2 - sin_alpha**2)
+        # P.matrix.data.r32 = vals * 2 * cos_alpha * sin_alpha
+
+        return P
 
     def get_transmission_operator(self):
         """
@@ -1967,10 +2195,15 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
             220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
         )
         
+
         delta_nu_over_nu_150 = deltas150 / filter_nus150
         delta_nu_over_nu_220 = deltas220 / filter_nus220
+        # Weird fix to convergence issues
+        # delta_nu_over_nu_150 = deltas150 / nus_edge150[-1]
+        # delta_nu_over_nu_220 = deltas220 / nus_edge220[-1]
 
         if not d["center_detector"]:
+            print("AS PLANNED")
             self.subinstruments = []
             for i in range(len(filter_nus150)):
                 if self.d["debug"]:
@@ -1978,6 +2211,8 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                         f"Integration done with nu = {nus_edge150[i]} GHz with weight {delta_nu_over_nu_150[i]}"
                     )
                 d1["filter_nu"] = filter_nus150[i] * 1e9
+                # Weird fix to convergence issues
+                # d1["filter_nu"] = nus_edge150[i] * 1e9
 
                 if d['debug']:
                     print("setting filter_nu to ",d1["filter_nu"])
@@ -1991,10 +2226,12 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                         f"Integration done with nu = {nus_edge220[i]} GHz with weight {delta_nu_over_nu_220[i]}"
                     )
                 d1["filter_nu"] = filter_nus220[i] * 1e9
+                # # Weird fix to convergence issues
+                # d1["filter_nu"] = nus_edge220[i] * 1e9
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
         else:
-
+            print("WOWOWOWOW")
             self.subinstruments = []
             for i in range(self.nsubbands):
                 d1["filter_nu"] = filter_nus150[i] * 1e9

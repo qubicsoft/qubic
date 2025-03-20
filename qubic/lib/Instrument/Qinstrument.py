@@ -1967,9 +1967,9 @@ class QubicMultibandInstrumentTest:
         d1 = d.copy()
         
         _, nus_edge150, filter_nus150, _, _, _ = compute_freq(
-            150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW, frequency_spacing="linear")
+            150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW, frequency_spacing="log")
         _, nus_edge220, filter_nus220, _, _, _ = compute_freq(
-            220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW, frequency_spacing="linear")
+            220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW, frequency_spacing="log")
         
         self.nsubbands = len(filter_nus150)
         

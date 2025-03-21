@@ -58,7 +58,7 @@ class GPStools:
         else:
             return gps_data_path
 
-    def read_gps_bindat(self, gps_data_path):
+    def read_gps_bindat(self, gps_data_path, verbosity=0):
         """GPS binary data.
         
         Method to convert the binary data acquired from by RTK simple broadcast into readable format and store them in a dictionary.
@@ -78,37 +78,59 @@ class GPStools:
         ValueError
             If the file is not found.
         """   
-        
+
         if not os.path.isfile(gps_data_path):
             print('ERROR!  File not found: %s' % gps_data_path)
             return
 
-        ### read the data
+        # get date of the file.  We had a format change 2025-01-15 10:00 = 1736931600
+        file_date = os.path.getatime(gps_data_path)
+        if file_date < 1736931600:
+            fmt = '<Bdiiiiiiifi'
+            print('using old format with integer roll and yaw!')
+        else:
+            fmt = '<Bdiiiiifffi'
+
+
+        # read the data
         h = open(gps_data_path,'rb')
         bindat = h.read()
         h.close()
 
-        ### interpret the binary data
-        fmt = '<Bdiiiiiiifi'
+        # interpret the binary data
         nbytes = 45
         names = "STX,timestamp,rpN,rpE,rpD,roll,yaw,pitchIMU,rollIMU,temperature,checksum".split(',')
         data = {}
         for name in names:
             data[name] = []    
 
-        index = 0
-        while index+nbytes<len(bindat):
-            packet = bindat[index:index+nbytes]
+        idx = 0
+        while idx+nbytes<len(bindat):
+            packet = bindat[idx:idx+nbytes]
             dat_list = struct.unpack(fmt,packet)
 
             if len(dat_list)!=len(names):
-                raise ValueError('ERROR:  Incompatible data.')
+                print('ERROR:  Incompatible data at byte %i' % idx)
+                if verbosity>1: input('enter to continue ')
+                idx += 1
+                continue
 
-            for datindex,name in enumerate(names):
-                data[name].append(dat_list[datindex])
+            if dat_list[0]!=0xAA:
+                print('ERROR: Incorrect data at byte %i' % idx)
+                if verbosity>1: input('enter to continue ')
+                idx += 1
+                continue
+                
 
-            index += nbytes
+            for datidx,name in enumerate(names):
+                data[name].append(dat_list[datidx])
+                if verbosity>0: print(dat_list)
 
+            idx += nbytes
+
+        for name in data.keys():
+            data[name] = np.array(data[name])
+            
         return data
     
     def extract_gps_data(self, gps_data):

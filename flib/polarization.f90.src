@@ -201,8 +201,8 @@ contains
 
     end subroutine matrix_rot3d_i<isize>_r<rsize>
 
-    subroutine test_matrix_rot3d_i<isize>_r<rsize>(rot, enf, matrix, vals, npixels, &
-                                  ntimes, ndetectors)
+    subroutine biinterp_matrix_rot3d_i<isize>_r<rsize>(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors, weights)
         integer, parameter          :: s = <isize> + 3 * <rsize>
         integer(int64), intent(in)  :: npixels, ntimes, ndetectors
         real(real64), intent(in)    :: rot(3,3,ntimes)

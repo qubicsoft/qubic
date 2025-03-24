@@ -400,7 +400,7 @@ class QubicAcquisition(Acquisition):
         nu = self.instrument.filter.nu
         return self.scene.get_unit_conversion_operator(nu)
 
-    def get_operator(self):
+    def get_operator(self, bilinear_interp=False):
         """
         Return the operator of the acquisition. Note that the operator is only
         linear if the scene temperature is differential (absolute=False).
@@ -411,7 +411,7 @@ class QubicAcquisition(Acquisition):
         temp = self.get_unit_conversion_operator()
         aperture = self.get_aperture_integration_operator()
         filter = self.get_filter_operator()
-        projection = self.get_projection_operator()
+        projection = self.get_projection_operator(bilinear_interp=bilinear_interp)
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
         integ = self.get_detector_integration_operator()
@@ -450,7 +450,7 @@ class QubicAcquisition(Acquisition):
             axisin=1,
         )
 
-    def get_projection_operator(self, verbose=True):
+    def get_projection_operator(self, verbose=True, bilinear_interp=False):
         """
         Return the projection operator for the peak sampling.
         Convert units from W to W/sr.
@@ -462,7 +462,7 @@ class QubicAcquisition(Acquisition):
         f = self.instrument.get_projection_operator
         if len(self.block) == 1:
             return BlockColumnOperator(
-                [f(self.sampling[b], self.scene, verbose=verbose) for b in self.block],
+                [f(self.sampling[b], self.scene, verbose=verbose, bilinear_interp=bilinear_interp) for b in self.block],
                 axisout=1,
             )
 
@@ -675,7 +675,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None, bilinear_interp=False):
 
         ### Define class arguments
         self.dict = dictionary
@@ -684,6 +684,8 @@ class QubicMultiAcquisitions:
         self.dict["nf_sub"] = self.nsub
         self.comps = comps
         self.fsub = int(self.nsub / self.nrec)
+
+        self.bilinear_interp = bilinear_interp
 
         ### Compute frequencies on the edges
         _, _, nus_subbands_150, _, _, _ = compute_freq(
@@ -758,7 +760,7 @@ class QubicMultiAcquisitions:
 
         ### Compute the pointing matrix if not already done
         if H is None:
-            self.H = [self.subacqs[i].get_operator() for i in range(len(self.subacqs))]
+            self.H = [self.subacqs[i].get_operator(bilinear_interp=self.bilinear_interp) for i in range(len(self.subacqs))]
         else:
             self.H = H
 

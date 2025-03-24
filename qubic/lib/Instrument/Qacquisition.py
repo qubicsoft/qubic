@@ -400,14 +400,14 @@ class QubicAcquisition(Acquisition):
         nu = self.instrument.filter.nu
         return self.scene.get_unit_conversion_operator(nu)
 
-    def get_operator(self, bilinear_interp=False):
+    def get_operator(self, bilinear_interp=False, convolution_in=False):
         """
         Return the operator of the acquisition. Note that the operator is only
         linear if the scene temperature is differential (absolute=False).
         """
-        # Add the interpolation? How can it be coded with respect to pyoperators?
-        # interp_pixel = 
         distribution = self.get_distribution_operator()
+        if convolution_in: # we want to add the convolution at this step to allow the use of only one CMB map per Stoke parameter
+            convolution = self.instrument.get_convolution_peak_operator()
         temp = self.get_unit_conversion_operator()
         aperture = self.get_aperture_integration_operator()
         filter = self.get_filter_operator()
@@ -420,19 +420,36 @@ class QubicAcquisition(Acquisition):
         response = self.get_detector_response_operator()
 
         with rule_manager(inplace=True):
-            H = CompositionOperator(
-                [
-                    response,
-                    trans_inst,
-                    integ,
-                    polarizer,
-                    hwp * projection,
-                    filter,
-                    aperture,
-                    trans_atm,
-                    temp,
-                    distribution,
-                ]
+            if convolution_in:
+                H = CompositionOperator(
+                    [
+                        response,
+                        trans_inst,
+                        integ,
+                        polarizer,
+                        hwp * projection,
+                        filter,
+                        aperture,
+                        trans_atm,
+                        temp,
+                        convolution,
+                        distribution,
+                    ]
+                )
+            else:
+                H = CompositionOperator(
+                    [
+                        response,
+                        trans_inst,
+                        integ,
+                        polarizer,
+                        hwp * projection,
+                        filter,
+                        aperture,
+                        trans_atm,
+                        temp,
+                        distribution,
+                    ]
             )
         if self.scene == "QU":
             H = self.get_subtract_grid_operator()(H)
@@ -675,7 +692,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None, bilinear_interp=False):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None, bilinear_interp=False, convolution_in=False):
 
         ### Define class arguments
         self.dict = dictionary
@@ -760,7 +777,7 @@ class QubicMultiAcquisitions:
 
         ### Compute the pointing matrix if not already done
         if H is None:
-            self.H = [self.subacqs[i].get_operator(bilinear_interp=self.bilinear_interp) for i in range(len(self.subacqs))]
+            self.H = [self.subacqs[i].get_operator(bilinear_interp=self.bilinear_interp, convolution_in=convolution_in) for i in range(len(self.subacqs))]
         else:
             self.H = H
 

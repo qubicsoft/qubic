@@ -1596,6 +1596,20 @@ class QubicInstrument(Instrument):
             r22 = list_P[k].matrix.data.r22.copy().reshape(ndetectors, ntimes, npeaks) * 0
             r32 = list_P[k].matrix.data.r32.copy().reshape(ndetectors, ntimes, npeaks) * 0
 
+            # print(np.shape(weights[:, :, :, k].T))
+            # sys.exit()
+
+            func = "weighted_matrix_rot{0}d_i{1}_r{2}".format(
+                ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
+            
+            getattr(flib.polarization, func)(
+                rotation.data.T, direction.T, list_P[k].matrix.data.ravel().view(np.int8),
+                vals.T, weights[:, :, :, k].T)
+            
+            list_P[k].matrix.data.index = index[..., k].reshape(ndetectors * ntimes, npeaks)
+            
+            continue
+
             # rotinv_e
             e_ni = np.zeros((ndetectors, ntimes, npeaks, 3))
             for i in range(ndetectors):

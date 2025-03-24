@@ -201,12 +201,13 @@ contains
 
     end subroutine matrix_rot3d_i<isize>_r<rsize>
 
-    subroutine biinterp_matrix_rot3d_i<isize>_r<rsize>(rot, enf, matrix, vals, npixels, &
-                                  ntimes, ndetectors, weights)
+    subroutine weighted_matrix_rot3d_i<isize>_r<rsize>(rot, enf, matrix, vals, weights, npixels, &
+                                  ntimes, ndetectors)
         integer, parameter          :: s = <isize> + 3 * <rsize>
         integer(int64), intent(in)  :: npixels, ntimes, ndetectors
         real(real64), intent(in)    :: rot(3,3,ntimes)
         real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: weights(npixels,ntimes,ndetectors)
         real(real64), intent(in)    :: enf(3,npixels,ndetectors)
         !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
         type(PointingElementRot3d_i<isize>_r<rsize>), intent(inout) ::         &
@@ -231,7 +232,7 @@ contains
                     call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
                                       ephif(:,ipixel), eni, r23, r33)
                     r33 = direct * r33
-                    val = vals(ipixel,idetector)
+                    val = vals(ipixel,idetector)*weights(ipixel,itime,idetector)
                     matrix(ipixel,itime,idetector)%r11 = real(val, <rkind>)
                     matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), <rkind>)
                     matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, <rkind>)
@@ -240,7 +241,7 @@ contains
         end do
         !$omp end parallel do
 
-    end test_subroutine matrix_rot3d_i<isize>_r<rsize>
+    end subroutine weighted_matrix_rot3d_i<isize>_r<rsize>
 
 
 end module polarization

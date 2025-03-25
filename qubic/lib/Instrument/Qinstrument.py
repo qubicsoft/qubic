@@ -1437,21 +1437,17 @@ class QubicInstrument(Instrument):
         ntimes = rotation.data.shape[0]
         nside = scene.nside
 
-        # print(np.shape(rotation.data)) # (30, 3, 3)
-        
         # We get info on synthbeam
         thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
 
-        # print(np.shape(vals)) # (ndetectors, npeaks)
-        # print(np.shape(thetas)) # (ndetectors, npeaks)
-        # sys.exit()
+        # shape(vals)   : (ndetectors, npeaks)
+        # shape(thetas) : (ndetectors, npeaks)
 
         npeaks = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, npeaks, 2)
         direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
 
         e_nf = direction[:, None, :, :]
-        # print(e_nf[0])
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:
@@ -1464,286 +1460,62 @@ class QubicInstrument(Instrument):
         ndims = len(scene.kind)
         nscene = len(scene)
 
-        s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
-                verbose=verbose)
-        
-        # s = cls((ndetectors * ntimes * ndims * 4, nscene * ndims), ncolmax=npeaks,
-        #         dtype=synthbeam.dtype, dtype_index=dtype_index,
-        #         verbose=verbose)
-        
-        # s.data is np.empty()?
-
-        index = s.data.index.reshape((ndetectors, ntimes, npeaks))
-        # index = s.data.index.reshape((ndetectors, ntimes, npeaks, 4))
+        index = np.zeros((ndetectors, ntimes, npeaks, 4))
         # for each peak position we take the interpolation with the four neighbouring pixels
+        weights = np.zeros_like(index)
 
-        # weights = np.zeros_like(index)
-        
-        c2h = Cartesian2HealpixOperator(nside)
-        # c2h = Cartesian2HealpixOperator_bricolage(nside)
-        # print("\n\n\nc2h", c2h)
+        c2h = Cartesian2HealpixOperator_bricolage(nside)
 
         # We use info on synthbeam + pointing position to get info on synthbeam pointing positions
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
-            res = c2h(e_ni)
-            index[i] = res
+            res = c2h.get_interpol(e_ni)
+            index[i], weights[i] = np.moveaxis(res[0], [0], [2]), np.moveaxis(res[1], [0], [2])
 
         with pool_threading() as pool:
             pool.map(func_thread, range(ndetectors))
 
-        if scene.kind == "I":
-            # print("\n\n\nscene.kind == I")
-            value = s.data.value.reshape(ndetectors, ntimes, ncolmax) # not defined?
-            value[...] = vals[:, None, :]
-            shapeout = (ndetectors, ntimes)
-        else:
-            if str(dtype_index) not in ("int32", "int64") or \
-                    str(synthbeam.dtype) not in ("float32", "float64"):
-                raise TypeError(
-                    "The projection matrix cannot be created with types: {0} a"
-                    "nd {1}.".format(dtype_index, synthbeam.dtype))
-            func = "matrix_rot{0}d_i{1}_r{2}".format(
-                ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
-            # print(np.shape(s.data))
-            # sys.exit()
-            getattr(flib.polarization, func)(
-                rotation.data.T, direction.T, s.data.ravel().view(np.int8),
-                vals.T)
+        for k in range(4):
 
-            if scene.kind == "QU":
-                shapeout = (ndetectors, ntimes, 2)
+            # Add the extra dimensions: from 1 healpy pixel to 4, weighing the vals with the weights from the bilinear interpolation
+            s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
+                    dtype=synthbeam.dtype, dtype_index=dtype_index,
+                    verbose=verbose)
+            
+            if scene.kind == "I":
+                value = s.data.value.reshape(ndetectors, ntimes, npeaks) # replaces ncolmax by npeaks
+                print("The method got_projection_operator_bilinear_interp is not yet verified for scene.kind = 'I'.")
+                value[...] = vals[:, None, :] * weights[:, :, :, k]      # to be checked one day
+                shapeout = (ndetectors, ntimes)
             else:
-                shapeout = (ndetectors, ntimes, 3)
-
-        index_old = index.copy()
-
-        # print(np.shape(s.data))
-        # print(np.shape(s.data.index))
-        # print(np.shape(s))
-        # print(s.data[0, 0])
-        # print(s.data.index[0])
-        # print(vars(s))
-        # sys.exit()
-        # return ProjectionOperator(s, shapeout=shapeout)
-        
-        # Add the extra dimensions: from 1 healpy pixel to 4, weighing the vals with the weights from the bilinear interpolation
-        # P_old = ProjectionOperator(s, shapeout=shapeout)
-        s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
-                verbose=verbose)
-        P0 = ProjectionOperator(s, shapeout=shapeout)
-        s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
-                verbose=verbose)
-        P1 = ProjectionOperator(s, shapeout=shapeout)
-        s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
-                verbose=verbose)
-        P2 = ProjectionOperator(s, shapeout=shapeout)
-        s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
-                verbose=verbose)
-        P3 = ProjectionOperator(s, shapeout=shapeout)
-
-        test = False
-
-        if test:
-            # print("test")
-            # list_P = [P0]
-            # index = index[..., None]
-            # weights = np.ones((ndetectors, ntimes, npeaks, 1))
-            list_P = [P0, P1, P2, P3]
-            index = np.tile(index[..., None], (1, 1, 1, 4))
-            weights = np.ones_like(index) * 0.25
-
-        else:
-            list_P = [P0, P1, P2, P3]
-            index = np.zeros((ndetectors, ntimes, npeaks, 4))
-            # for each peak position we take the interpolation with the four neighbouring pixels
-            weights = np.zeros_like(index)
-            thetas = np.zeros((ndetectors, ntimes, npeaks))
-            phis = np.zeros_like(thetas)
-
-            other_index = np.zeros((ndetectors, ntimes, npeaks))
+                if str(dtype_index) not in ("int32", "int64") or \
+                        str(synthbeam.dtype) not in ("float32", "float64"):
+                    raise TypeError(
+                        "The projection matrix cannot be created with types: {0} a"
+                        "nd {1}.".format(dtype_index, synthbeam.dtype))
+                func = "weighted_matrix_rot{0}d_i{1}_r{2}".format(
+                    ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
             
-            c2h = Cartesian2HealpixOperator_bricolage(nside)
+                getattr(flib.polarization, func)(
+                    rotation.data.T, direction.T, s.data.ravel().view(np.int8),
+                    vals.T, weights[:, :, :, k].T)
 
-            # We use info on synthbeam + pointing position to get info on synthbeam pointing positions
-            def func_thread(i):
-                # e_nf[i] shape: (1, ncolmax, 3)
-                # e_ni shape: (ntimes, ncolmax, 3)
-                e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
-                res = c2h.get_interpol(e_ni)
-                index[i], weights[i], other_index[i], thetas[i], phis[i] = np.moveaxis(res[0], [0], [2]), np.moveaxis(res[1], [0], [2]), res[2], res[3], res[4]
-
-            with pool_threading() as pool:
-                pool.map(func_thread, range(ndetectors))
-
-        # keep_peaks = np.zeros((ndetectors, ntimes, npeaks, 4))
-        # for k, P in enumerate(list_P):
-        for k in range(len(list_P)):
-
-            # P = ProjectionOperator(s, shapeout=shapeout)
-            list_P[k].matrix.data.r11 *= 0 # TODO
-            list_P[k].matrix.data.r22 *= 0
-            list_P[k].matrix.data.r32 *= 0
-            list_P[k].matrix.data.index *= 0
-            r11 = list_P[k].matrix.data.r11.copy().reshape(ndetectors, ntimes, npeaks) * 0
-            r22 = list_P[k].matrix.data.r22.copy().reshape(ndetectors, ntimes, npeaks) * 0
-            r32 = list_P[k].matrix.data.r32.copy().reshape(ndetectors, ntimes, npeaks) * 0
-
-            # print(np.shape(weights[:, :, :, k].T))
-            # sys.exit()
-
-            func = "weighted_matrix_rot{0}d_i{1}_r{2}".format(
-                ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
+                if scene.kind == "QU":
+                    shapeout = (ndetectors, ntimes, 2)
+                else:
+                    shapeout = (ndetectors, ntimes, 3)
             
-            getattr(flib.polarization, func)(
-                rotation.data.T, direction.T, list_P[k].matrix.data.ravel().view(np.int8),
-                vals.T, weights[:, :, :, k].T)
+            P = 0
+            P = ProjectionOperator(s, shapeout=shapeout)
+            P.matrix.data.index = index[..., k].reshape(ndetectors * ntimes, npeaks)
+            if k == 0:
+                total_P = P.copy()
+            else:
+                total_P = (total_P.__add__(P)).copy()
             
-            list_P[k].matrix.data.index = index[..., k].reshape(ndetectors * ntimes, npeaks)
-            
-            continue
-
-            # rotinv_e
-            e_ni = np.zeros((ndetectors, ntimes, npeaks, 3))
-            for i in range(ndetectors):
-                e_ni[i] = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
-
-            # en2etheta_ephi
-            etheta_det, ephi_det = np.zeros((e_nf.shape)), np.zeros((e_nf.shape))
-            etheta_det[..., 0] = e_nf[..., 0] * e_nf[..., 2] / np.sqrt(1 - e_nf[..., 2]**2)
-            etheta_det[..., 1] = e_nf[..., 1] * e_nf[..., 2] / np.sqrt(1 - e_nf[..., 2]**2)
-            etheta_det[..., 2] = - np.sqrt(1 - e_nf[..., 2]**2)
-            ephi_det[..., 0] = - e_nf[..., 1] / np.sqrt(1 - e_nf[..., 2]**2)
-            ephi_det[..., 1] = e_nf[..., 0] / np.sqrt(1 - e_nf[..., 2]**2)
-
-            # eni2rotation
-            ### en2ephi
-            ephi_gal = np.zeros((ndetectors, ntimes, npeaks, 3))
-            ephi_gal[..., 0] = - e_ni[..., 1] / np.sqrt(1 - e_ni[..., 2]**2)   
-            ephi_gal[..., 1] = e_ni[..., 0] / np.sqrt(1 - e_ni[..., 2]**2)
-
-            ### rot_ephi
-            ephi_det_rot = np.zeros((ndetectors, ntimes, npeaks, 3))
-            for i in range(ndetectors):
-                for j in range(npeaks):
-                    ephi_det_rot[i, :, j] = rotation(ephi_gal[i, :, j])
-            alpha = np.arctan2(np.sum(ephi_det_rot * etheta_det, axis=-1), np.sum(ephi_det_rot * ephi_det, axis=-1))
-
-            # shape vals : (ndetectors, npeaks)
-            # shape weights : (ndetectors, ntimes, npeaks, 4)
-            for i in range(ntimes):
-                r11[:, i, :] = vals * weights[:, i, :, k]
-                # keep_peaks[:, i, :, k] = vals * weights[:, i, :, k]
-                r22[:, i, :] = vals * weights[:, i, :, k] * np.cos(2*alpha[:, i, :])
-                # r32[:, i, :] = - vals * weights[:, i, :, k] * np.sin(2*alpha[:, i, :]) # * (-1) ?
-                r32[:, i, :] = vals * weights[:, i, :, k] * np.sin(2*alpha[:, i, :]) # * (-1) ?
-
-
-            # weights_bool = weights.copy().astype(bool)
-            # index_new_ = np.where(weights_bool, index, np.zeros_like(index))
-            # index_new = np.sum(index_new_, axis=-1)
-            # print(weights[0, 0, 1])
-            # print(index[0, 0, 1])
-            # print(other_index[0, 0, 1])
-            # print(index_old[0, 0, 1])
-            # print(index_new[0, 0, 1])
-            # print(np.all(index_old == index_new))
-            # index_old_flat = index_old.reshape(-1)
-            # index_flat = index.reshape(-1, 4)
-            # print(index_old_flat[0])
-            # print(index_flat[0])
-            # print(np.shape(index_old_flat))
-            # print(np.shape(index_flat))
-            # print(np.all([index_old_flat[num_pix] in index_flat[num_pix] for num_pix in range(len(index_flat))])) # True --> the pixel from old method is always in the list of pixels of new method
-
-            # print(np.sum(weights, axis=-1))
-            # print(np.all(np.isclose(np.ones(np.shape(weights[..., 0])), np.sum(weights, axis=-1), atol=1e-10, rtol=0))) # True --> the sum of weights is always one for one direction
-            # sys.exit()
-
-            # import matplotlib.pyplot as plt
-            # import matplotlib as mpl
-            # from matplotlib.colors import LinearSegmentedColormap, ListedColormap
-            # def thetaphi2lonlat(theta, phi):
-            #     """Transform co-latitude and longitude (rad) into longitude and latitude (deg)
-
-            #     Parameters
-            #     ----------
-            #     theta : int or array-like
-            #     Co-latitude in radians
-            #     phi : int or array-like
-            #     Longitude in radians
-
-            #     Returns
-            #     -------
-            #     lon, lat : float, scalar or array-like
-            #     The longitude and latitude in degrees
-            #     """
-            #     return np.degrees(phi), 90.0 - np.degrees(theta)
-
-            # m = np.full(12 * nside**2, hp.UNSEEN) #* hp.UNSEEN
-            # for j in range(4):
-            #     m[int(index[0, 0, 1, j])] = weights[0, 0, 1, j]
-            # lon, lat = thetaphi2lonlat(thetas[0, 0, 1], phis[0, 0, 1])
-            # print(lon, lat)
-            # print(hp.UNSEEN)
-            # hp.gnomview(m, rot=(lon, lat), nest=False, reso=0.5, coord="C")
-            # hp.gnomview(m, rot=(lon, lat), nest=False, reso=200, coord="C")
-            # plt.scatter(0, 0, marker="x")
-            # plt.show()
-            # sys.exit()
-
-            # nsample = 9
-            # viridis = mpl.colormaps['viridis'].resampled(nsample) # pixel - 3 (pixel in [3, 11])
-            # # marker_style = mpl.marker.markerstyle("o", fillstyle="left")
-            # colors = [viridis(ipixel/(nsample)) for ipixel in index_old[0, 0, :]]
-            # # print(np.shape(index_old))
-            # # print(np.shape(colors))
-            # # print(colors[0])
-            # # marker_style = dict(linestyle=':', markersize=10,
-            # #         markerfacecolor=colors, markeredgecolor="k")
-            # # marker_style = mpl.markers.MarkerStyle("o", fillstyle="left")
-            # marker_style = dict(marker='o', linestyle='', markersize=10, 
-            #                    markeredgewidth=0.4, 
-            #                    markeredgecolor='black', 
-            #                    fillstyle="full")
-
-            # idet = 0
-            # itime = 0
-            # lon, lat = thetaphi2lonlat(thetas[idet, itime, :], phis[idet, itime, :])
-            # proj = hp.projector.GnomonicProj(rot=(lon[0], lat[0]))
-            # xs, ys = proj.ang2xy(thetas[idet, itime, :], phis[idet, itime, :], lonlat=False)
-            # # print(lon, lat)
-            # m = np.arange(12 * nside**2)
-            # # hp.gnomview(m, rot=(lon, lat), nest=False, reso=0.5, coord="C")
-            # hp.gnomview(m, rot=(lon[0], lat[0]), nest=False, reso=50, coord="C")
-
-            # for ipeak in range(npeaks):
-            #     # print(mpl.colors.rgb2hex(colors[ipeak], keep_alpha=True))
-            #     plt.plot(xs[ipeak], ys[ipeak], color=colors[ipeak], **marker_style)
-            # # plt.scatter(xs, ys, c=colors, marker=marker_style)
-            # plt.show()
-            # sys.exit()
-
-            list_P[k].matrix.data.r11 = r11.copy().reshape(ndetectors * ntimes, npeaks)
-            list_P[k].matrix.data.r22 = r22.copy().reshape(ndetectors * ntimes, npeaks)
-            list_P[k].matrix.data.r32 = r32.copy().reshape(ndetectors * ntimes, npeaks)
-
-            list_P[k].matrix.data.index = index[..., k].reshape(ndetectors * ntimes, npeaks)
-
-        # print(P0.matrix.data.index[0, 0])
-        # print(P1.matrix.data.index[0, 0])
-        # sys.exit()
-
-        # return P_old, P0, P1, P2, P3, (thetas, phis, keep_peaks, index, weights, index_old)
-        # return P0, P1, P2, P3
-        return P0.__add__(P1).__add__(P2).__add__(P3)
+        return total_P
         
 
     @staticmethod
@@ -1759,7 +1531,6 @@ class QubicInstrument(Instrument):
         # print(np.shape(rotation.data))
 
         if use_file == True:
-            # print("use_file == True")
             isfreq=int(np.floor(nu/1e9))
             frq=len(str(freqs[0]))
             
@@ -1784,15 +1555,13 @@ class QubicInstrument(Instrument):
             thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas, phis, vals, synthbeam)
         
         else:
-            # print("use_file == False")
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
-        # print("shape vals", np.shape(vals)) # (ndetectors, npeaks)
+        # shape(vals) : (ndetectors, npeaks)
         npeaks = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, npeaks, 2)
         direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
 
         e_nf = direction[:, None, :, :]
-        # print(e_nf[0])
         if nside > 8192:
             dtype_index = np.dtype(np.int64)
         else:
@@ -1863,59 +1632,8 @@ class QubicInstrument(Instrument):
             else:
                 shapeout = (ndetectors, ntimes, 3)
 
-        # return ProjectionOperator(s, shapeout=shapeout)
-
-        P = ProjectionOperator(s, shapeout=shapeout)
-
-        # print(P.matrix.data.r11[0, 0])
-        # sys.exit()
-
-        P.matrix.data.r11 *= 0 # TODO
-        P.matrix.data.r22 *= 0
-        P.matrix.data.r32 *= 0
-
-        r11 = P.matrix.data.r11.copy().reshape(ndetectors, ntimes, npeaks) * 0
-        r22 = P.matrix.data.r22.copy().reshape(ndetectors, ntimes, npeaks) * 0
-        r32 = P.matrix.data.r32.copy().reshape(ndetectors, ntimes, npeaks) * 0
-
-        # rotinv_e
-        e_ni = np.zeros((ndetectors, ntimes, npeaks, 3))
-        for i in range(ndetectors):
-            # e_ni[i] = rotation.T(e_nf[i])
-            e_ni[i] = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
-
-        # en2etheta_ephi
-        etheta_det, ephi_det = np.zeros((e_nf.shape)), np.zeros((e_nf.shape))
-        etheta_det[..., 0] = e_nf[..., 0] * e_nf[..., 2] / np.sqrt(1 - e_nf[..., 2]**2)
-        etheta_det[..., 1] = e_nf[..., 1] * e_nf[..., 2] / np.sqrt(1 - e_nf[..., 2]**2)
-        etheta_det[..., 2] = - np.sqrt(1 - e_nf[..., 2]**2)
-        ephi_det[..., 0] = - e_nf[..., 1] / np.sqrt(1 - e_nf[..., 2]**2)
-        ephi_det[..., 1] = e_nf[..., 0] / np.sqrt(1 - e_nf[..., 2]**2)
-
-        # eni2rotation
-        ### en2ephi
-        ephi_gal = np.zeros((ndetectors, ntimes, npeaks, 3))
-        ephi_gal[..., 0] = - e_ni[..., 1] / np.sqrt(1 - e_ni[..., 2]**2)   
-        ephi_gal[..., 1] = e_ni[..., 0] / np.sqrt(1 - e_ni[..., 2]**2)
-
-        ### rot_ephi
-        ephi_det_rot = np.zeros((ndetectors, ntimes, npeaks, 3))
-        for i in range(ndetectors):
-            for j in range(npeaks):
-                ephi_det_rot[i, :, j] = rotation(ephi_gal[i, :, j])
-        alpha = np.arctan2(np.sum(ephi_det_rot * etheta_det, axis=-1), np.sum(ephi_det_rot * ephi_det, axis=-1))
-
-        for i in range(ntimes):
-            r11[:, i, :] = vals
-            r22[:, i, :] = vals * np.cos(2*alpha[:, i, :])
-            # r32[:, i, :] = - vals * np.sin(2*alpha[:, i, :])
-            r32[:, i, :] = vals * np.sin(2*alpha[:, i, :])
-
-        P.matrix.data.r11 = r11.reshape(ndetectors * ntimes, npeaks)
-        P.matrix.data.r22 = r22.reshape(ndetectors * ntimes, npeaks)
-        P.matrix.data.r32 = r32.reshape(ndetectors * ntimes, npeaks)
-
-        return P
+        return ProjectionOperator(s, shapeout=shapeout)
+    
 
     def get_transmission_operator(self):
         """
@@ -2363,16 +2081,11 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         _, nus_edge220, filter_nus220, deltas220, _, _ = compute_freq(
             220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
         )
-        
 
         delta_nu_over_nu_150 = deltas150 / filter_nus150
         delta_nu_over_nu_220 = deltas220 / filter_nus220
-        # Weird fix to convergence issues
-        # delta_nu_over_nu_150 = deltas150 / nus_edge150[-1]
-        # delta_nu_over_nu_220 = deltas220 / nus_edge220[-1]
 
         if not d["center_detector"]:
-            print("AS PLANNED")
             self.subinstruments = []
             for i in range(len(filter_nus150)):
                 if self.d["debug"]:
@@ -2380,8 +2093,6 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                         f"Integration done with nu = {nus_edge150[i]} GHz with weight {delta_nu_over_nu_150[i]}"
                     )
                 d1["filter_nu"] = filter_nus150[i] * 1e9
-                # Weird fix to convergence issues
-                # d1["filter_nu"] = nus_edge150[i] * 1e9
 
                 if d['debug']:
                     print("setting filter_nu to ",d1["filter_nu"])
@@ -2395,12 +2106,9 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                         f"Integration done with nu = {nus_edge220[i]} GHz with weight {delta_nu_over_nu_220[i]}"
                     )
                 d1["filter_nu"] = filter_nus220[i] * 1e9
-                # # Weird fix to convergence issues
-                # d1["filter_nu"] = nus_edge220[i] * 1e9
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
                 self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
         else:
-            print("WOWOWOWOW")
             self.subinstruments = []
             for i in range(self.nsubbands):
                 d1["filter_nu"] = filter_nus150[i] * 1e9

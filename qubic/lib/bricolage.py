@@ -74,63 +74,39 @@ class Cartesian2HealpixOperator_bricolage(_HealPixCartesian):
         )
 
     def get_theta_phi(self, input):
-        # convention = "zenith,azimuth"
-        # output = Cartesian2SphericalOperator(convention)(input)
-        # theta, phi = output[:, :, 0], output[:, :, 1]
-        # print(np.shape(input))
-        # sys.exit()
-        # input = np.moveaxis(input, [0], [2])
+        """
+        input : (ntimes, ncolmax, 3) array
+            Cartesian vectors pointing on a position on the sphere.
+
+        theta : (ntimes, ncolmax) array
+            Colatitude in radians.
+        phi   : (ntimes, ncolmax) array
+            Longitude in radians.
+        """
         shape_input = np.shape(input)
         output = hp.vec2ang(input) # radians
         theta, phi = output[0].reshape((shape_input[0], shape_input[1])), output[1].reshape((shape_input[0], shape_input[1]))
-        # print(np.shape(output))
-        
-        # print("\n\n\n\ntheta", theta)
         return theta, phi
 
-    def direct(self, input, output): #get_interp_weights(nside, theta, phi=None, nest=False, lonlat=False)
-        theta, phi = self.get_theta_phi(input)
-        # print("theta, phi")
-        func = pixlib._get_interpol_nest if self.nest else pixlib._get_interpol_ring
-        # print(np.shape(func(self.nside, theta, phi)))
-        # print(func(self.nside, theta, phi)[4][0, 0])
-        func(self.nside, theta, phi, output)
+    def direct(self, input, output):
+        raise ValueError("This method is not implemented. Use the method get_interpol instead.")
 
     def get_interpol(self, input): #get_interp_weights(nside, theta, phi=None, nest=False, lonlat=False)
+        """
+        input : (ntimes, ncolmax, 3) array
+            Cartesian vectors pointing on a position on the sphere.
+
+        pix : (4, ntimes, ncolmax) array
+            The four HEALPix pixels closest to the direction.
+        wei : (4, ntimes, ncolmax) array
+            Their associated weights to compute a bilinear interpolation.
+        """
         theta, phi = self.get_theta_phi(input) # radians
-        # print(np.shape(theta), np.shape(phi))
-        # print(theta[0, 0], phi[0, 0])
-        # sys.exit()
-        # print("theta, phi")
         func = pixlib._get_interpol_nest if self.nest else pixlib._get_interpol_ring
-        # print(np.shape(func(self.nside, theta, phi)))
-        # print(func(self.nside, theta, phi)[4][0, 0])
         res = func(self.nside, theta, phi)
-        # print(np.shape(res))
         pix = np.array(res[0:4])#.astype(int)
         wei = np.array(res[4:8])
-
-        func_2 = pixlib._ang2pix_nest if self.nest else pixlib._ang2pix_ring
-        ipix = func_2(self.nside, theta, phi)
-
-        # print(ipix[0, 0])
-
-        # # print(wei[:, 0, 0])
-        # argmax_wei = np.argmax(wei, axis=0)
-        # for i in range(len(argmax_wei)):
-        #     for j in range(len(argmax_wei[0])):
-        #         wei[:, i, j] = 0
-        #         wei[argmax_wei[i, j], i, j] = 1
-        # # print(wei[:, 0, 0])
-        # # sys.exit()
-
-        # shape pix : (4, ntimes, npeaks)
-        # shape wei : (4, ntimes, npeaks)
-        # print(pix[:, 0, 0], wei[:, 0, 0])
-        # sys.exit()
-        # print(wei)
-        # sys.exit()
-        return pix, wei, ipix, theta, phi
+        return pix, wei
 
 
 

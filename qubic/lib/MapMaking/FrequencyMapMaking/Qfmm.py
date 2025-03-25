@@ -13,7 +13,7 @@ from pyoperators import DiagonalOperator, ReshapeOperator
 from ...Qsamplings import equ2gal
 from ...Qdictionary import qubicDict
 from ...Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
-from ...Instrument.Qnoise import QubicTotNoise
+from ...Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
 from ..Qcg import pcg
 from ...Qfoldertools import create_folder_if_not_exists, do_gif
 from ..Qmap_plotter import PlotsFMM
@@ -128,8 +128,6 @@ class PipelineFrequencyMapMaking:
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()
-
-        print("self.fwhm_rec = {}".format(self.fwhm_rec))
         
         ### Build the Input Maps
         self.maps_input = InputMaps(
@@ -155,7 +153,7 @@ class PipelineFrequencyMapMaking:
         if self.params['PLANCK']['external_data']:
             self.invN = self.joint.get_invntt_operator(mask=self.mask)
         else:
-            self.invN = self.joint.qubic.get_invntt_operator() # here
+            self.invN = self.joint.qubic.get_invntt_operator()
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
         
@@ -171,28 +169,18 @@ class PipelineFrequencyMapMaking:
             * self.params["PLANCK"]["level_noise_planck"]
         )
 
-        print("")
-        print("still here")
-        qubic_noise = QubicTotNoise(
-                self.params["QUBIC"]["instrument"],
+        if self.params["QUBIC"]["instrument"] == "DB":
+            qubic_noise = QubicDualBandNoise(
                 self.dict_out,
-                self.joint.qubic.sampling,
-                self.joint.qubic.scene, # or equivalently (?) self.joint.scene
+                self.params["QUBIC"]["npointings"],
                 self.params["QUBIC"]["NOISE"]["detector_nep"],
             )
-
-        # if self.params["QUBIC"]["instrument"] == "DB":
-        #     qubic_noise = QubicDualBandNoise(
-        #         self.dict_out,
-        #         self.params["QUBIC"]["npointings"],
-        #         self.params["QUBIC"]["NOISE"]["detector_nep"],
-        #     )
-        # elif self.params["QUBIC"]["instrument"] == "UWB":
-        #     qubic_noise = QubicWideBandNoise(
-        #         self.dict_out,
-        #         self.params["QUBIC"]["npointings"],
-        #         self.params["QUBIC"]["NOISE"]["detector_nep"],
-        #     )
+        elif self.params["QUBIC"]["instrument"] == "UWB":
+            qubic_noise = QubicWideBandNoise(
+                self.dict_out,
+                self.params["QUBIC"]["npointings"],
+                self.params["QUBIC"]["NOISE"]["detector_nep"],
+            )
 
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],
@@ -242,18 +230,12 @@ class PipelineFrequencyMapMaking:
 
         ### Pointing matrix for reconstruction
         if self.params['PLANCK']['external_data']:
-            print("joint")
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
             self.H_out = self.joint.get_operator(
                 fwhm=self.fwhm_out, seenpix=self.seenpix
             )  
         else:
-            print("not joint")
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
-            # print("shape 1", np.shape(self.H_out))
-            # self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out).operands[1]
-            # print("shape 2", np.shape(self.H_out))
-        # sys.exit()
             
     def get_averaged_nus(self):
         """Average frequency
@@ -462,7 +444,6 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["convolution_in"]
             and self.params["QUBIC"]["convolution_out"] is False
         ):
-            print("convolution_out is False")
             fwhm_rec = np.array([])
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
 
@@ -471,7 +452,6 @@ class PipelineFrequencyMapMaking:
                 weight_factor = f_dust.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_dust.eval(nu))
             else:
-                print("no dust")
                 f_cmb = CMB()
                 weight_factor = f_cmb.eval(self.joint.qubic.allnus)
                 fun = lambda nu: np.abs(fraction - f_cmb.eval(nu))
@@ -480,11 +460,9 @@ class PipelineFrequencyMapMaking:
             ### See FMM annexe B to understand the computations
 
             for irec in range(self.params["QUBIC"]["nrec"]):
-                # print("irec = {}".format(irec))
                 numerator_fwhm, denominator_fwhm = 0, 0
                 numerator_nus, denominator_nus = 0, 0
                 for jsub in range(irec * self.fsub_out, (irec + 1) * self.fsub_out):
-                    # print("jsub = {}".format(jsub))
                     # Compute the expected reconstructed resolution for sub-acquisition
                     numerator_fwhm += (
                         scalar_acquisition_operators[jsub]
@@ -761,19 +739,7 @@ class PipelineFrequencyMapMaking:
         """
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
-        print("")
-        print("About to compute A, will it work?")
-        print("")
-        print("self.H_out.T", np.shape(self.H_out.T))
-        print("self.invN", np.shape(self.invN))
-        print("self.H_out", np.shape(self.H_out))
-        print("self.H_out.T * self.invN", np.shape(self.H_out.T * self.invN))
-        # print("self.invN * self.H_out", np.shape(self.invN * self.H_out))
         A = self.H_out.T * self.invN * self.H_out
-        print("A", np.shape(A))
-
-        print("It did!")
-        sys.exit()
 
         if self.params['PLANCK']['external_data']:
             x_planck = self.m_nu_in * (1 - seenpix[None, :, None])

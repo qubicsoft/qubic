@@ -1,4 +1,4 @@
-path_out: 'test_noise/'
+path_out: 'test_merge/'
 datafilename: 'test'
 
 CMB:

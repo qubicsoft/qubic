@@ -379,7 +379,7 @@ class PresetAcquisition:
         - Wide Band: n = [Ndet + Npho_150 + Npho_220]
 
         Depending on the instrument type specified in the preset_qubic parameters, this method will
-        instantiate either QubicWideBandNoise or QubicDualBandNoise and return the total noise.
+        instantiate QubicTotNoise and return the appropriate total noise.
 
         Returns
         -------
@@ -388,28 +388,40 @@ class PresetAcquisition:
 
         """
 
-        if self.preset_qubic.params_qubic["instrument"] == "UWB":
-            noise = QubicWideBandNoise(
+        noise = QubicTotNoise(
+                self.preset_qubic.params_qubic["instrument"],
                 self.preset_qubic.dict,
-                self.preset_qubic.params_qubic["npointings"],
-                detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
-                duration=np.mean(
-                    [
-                        self.preset_qubic.params_qubic["NOISE"]["duration_150"],
-                        self.preset_qubic.params_qubic["NOISE"]["duration_220"],
-                    ]
-                ),
-            )
-        else:
-            noise = QubicDualBandNoise(
-                self.preset_qubic.dict,
-                self.preset_qubic.params_qubic["npointings"],
+                self.preset_qubic.joint_out.qubic.sampling,
+                self.preset_qubic.joint_out.qubic.scene,
                 detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
                 duration=[
-                    self.preset_qubic.params_qubic["NOISE"]["duration_150"],
-                    self.preset_qubic.params_qubic["NOISE"]["duration_220"],
-                ],
+                        self.preset_qubic.params_qubic["NOISE"]["duration_150"], # make sure that this is what you want (self.preset_qubic.params_qubic["NOISE"]["duration_150"] = self.preset_qubic.params_qubic["NOISE"]["duration_220"] for UWB)
+                        self.preset_qubic.params_qubic["NOISE"]["duration_220"],
+                        ],
             )
+        
+        # if self.preset_qubic.params_qubic["instrument"] == "UWB":
+        #     noise = QubicWideBandNoise(
+        #         self.preset_qubic.dict,
+        #         self.preset_qubic.params_qubic["npointings"],
+        #         detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
+        #         duration=np.mean(
+        #             [
+        #                 self.preset_qubic.params_qubic["NOISE"]["duration_150"],
+        #                 self.preset_qubic.params_qubic["NOISE"]["duration_220"],
+        #             ]
+        #         ),
+        #     )
+        # else:
+        #     noise = QubicDualBandNoise(
+        #         self.preset_qubic.dict,
+        #         self.preset_qubic.params_qubic["npointings"],
+        #         detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
+        #         duration=[
+        #             self.preset_qubic.params_qubic["NOISE"]["duration_150"],
+        #             self.preset_qubic.params_qubic["NOISE"]["duration_220"],
+        #         ],
+        #     )
 
         return noise.total_noise(
             self.preset_qubic.params_qubic["NOISE"]["ndet"],

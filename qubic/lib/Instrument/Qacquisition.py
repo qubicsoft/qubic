@@ -153,10 +153,10 @@ class QubicAcquisition(Acquisition):
         self.comm.Allreduce(MPI.IN_PLACE, as_mpi(hit), op=MPI.SUM)
         return hit
 
-    def get_noise(self, det_noise, photon_noise, seed=None, out=None):
-        np.random.seed(seed)
+    def get_noise(self, det_noise, photon_noise, rng_noise, out=None):
+        # np.random.seed(seed) # use rng instead
         out = self.instrument.get_noise(
-            self.sampling, self.scene, det_noise, photon_noise, out=out
+            self.sampling, self.scene, rng_noise, det_noise=det_noise, photon_noise=photon_noise, out=out
         )
         if self.effective_duration is not None:
             # nsamplings = self.comm.allreduce(len(self.sampling))
@@ -400,16 +400,18 @@ class QubicAcquisition(Acquisition):
         nu = self.instrument.filter.nu
         return self.scene.get_unit_conversion_operator(nu)
 
-    def get_operator(self):
+    def get_operator(self, bilinear_interp=False, convolution_in=False):
         """
         Return the operator of the acquisition. Note that the operator is only
         linear if the scene temperature is differential (absolute=False).
         """
         distribution = self.get_distribution_operator()
+        if convolution_in: # we want to add the convolution at this step to allow the use of only one CMB map per Stoke parameter
+            convolution = self.instrument.get_convolution_peak_operator()
         temp = self.get_unit_conversion_operator()
         aperture = self.get_aperture_integration_operator()
         filter = self.get_filter_operator()
-        projection = self.get_projection_operator()
+        projection = self.get_projection_operator(bilinear_interp=bilinear_interp)
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
         integ = self.get_detector_integration_operator()
@@ -418,19 +420,36 @@ class QubicAcquisition(Acquisition):
         response = self.get_detector_response_operator()
 
         with rule_manager(inplace=True):
-            H = CompositionOperator(
-                [
-                    response,
-                    trans_inst,
-                    integ,
-                    polarizer,
-                    hwp * projection,
-                    filter,
-                    aperture,
-                    trans_atm,
-                    temp,
-                    distribution,
-                ]
+            if convolution_in:
+                H = CompositionOperator(
+                    [
+                        response,
+                        trans_inst,
+                        integ,
+                        polarizer,
+                        hwp * projection,
+                        filter,
+                        aperture,
+                        trans_atm,
+                        temp,
+                        convolution,
+                        distribution,
+                    ]
+                )
+            else:
+                H = CompositionOperator(
+                    [
+                        response,
+                        trans_inst,
+                        integ,
+                        polarizer,
+                        hwp * projection,
+                        filter,
+                        aperture,
+                        trans_atm,
+                        temp,
+                        distribution,
+                    ]
             )
         if self.scene == "QU":
             H = self.get_subtract_grid_operator()(H)
@@ -448,7 +467,7 @@ class QubicAcquisition(Acquisition):
             axisin=1,
         )
 
-    def get_projection_operator(self, verbose=True):
+    def get_projection_operator(self, verbose=True, bilinear_interp=False):
         """
         Return the projection operator for the peak sampling.
         Convert units from W to W/sr.
@@ -460,7 +479,7 @@ class QubicAcquisition(Acquisition):
         f = self.instrument.get_projection_operator
         if len(self.block) == 1:
             return BlockColumnOperator(
-                [f(self.sampling[b], self.scene, verbose=verbose) for b in self.block],
+                [f(self.sampling[b], self.scene, verbose=verbose, bilinear_interp=bilinear_interp) for b in self.block],
                 axisout=1,
             )
 
@@ -633,7 +652,7 @@ class PlanckAcquisition:
 
     def get_noise(self, seed):
         state = np.random.get_state()
-        np.random.seed(seed)
+        np.random.seed(seed) # use rng instead
         out = (
             np.random.standard_normal(np.ones((12 * self.nside**2, 3)).shape)
             * self.sigma
@@ -673,7 +692,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None, bilinear_interp=False, convolution_in=False):
 
         ### Define class arguments
         self.dict = dictionary
@@ -682,6 +701,8 @@ class QubicMultiAcquisitions:
         self.dict["nf_sub"] = self.nsub
         self.comps = comps
         self.fsub = int(self.nsub / self.nrec)
+
+        self.bilinear_interp = bilinear_interp
 
         ### Compute frequencies on the edges
         _, _, nus_subbands_150, _, _, _ = compute_freq(
@@ -756,13 +777,13 @@ class QubicMultiAcquisitions:
 
         ### Compute the pointing matrix if not already done
         if H is None:
-            self.H = [self.subacqs[i].get_operator() for i in range(len(self.subacqs))]
+            self.H = [self.subacqs[i].get_operator(bilinear_interp=self.bilinear_interp, convolution_in=convolution_in) for i in range(len(self.subacqs))]
         else:
             self.H = H
 
         self.coverage = self.H[0].T(np.ones(self.H[0].T.shapein))[:, 0]
         ### Save MPI communicator
-        if self.dict["nprocs_instrument"] != 1:
+        if self.dict["nprocs_instrument"] > 1:
             self.mpidist = self.H[0].operands[-1]
             for i in range(1, len(self.H)):
                 self.H[i].operands[-1] = self.mpidist
@@ -847,7 +868,7 @@ class QubicMultiAcquisitions:
         return D
 class QubicDualBand(QubicMultiAcquisitions):
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
 
         QubicMultiAcquisitions.__init__(
             self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
@@ -865,6 +886,7 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         ### Frequency Map-Making
         if algo == "FMM":
+            print("I'm here")
             h = np.array(h)
             for irec in range(self.nrec):
                 imin = irec * f
@@ -958,7 +980,7 @@ class QubicDualBand(QubicMultiAcquisitions):
             else:
                 convolution = HealpixConvolutionGaussianOperator(
                     fwhm=fwhm[isub], lmax=2 * self.scene.nside - 1
-                )
+                ) # Different in UWB acquisition?
 
             ### Compose operator as H = Proj * C * A
             with rule_manager(inplace=True):
@@ -998,7 +1020,7 @@ class QubicDualBand(QubicMultiAcquisitions):
         return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
 class QubicUltraWideBand(QubicMultiAcquisitions):
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
 
         QubicMultiAcquisitions.__init__(
             self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
@@ -1071,6 +1093,10 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
                 convolution = HealpixConvolutionGaussianOperator(
                     fwhm=fwhm[isub], lmax=2 * self.dict["nside"]
                 )
+                # How it is done in DualBand, why is there a -1 ?
+                # convolution = HealpixConvolutionGaussianOperator(
+                #     fwhm=fwhm[isub], lmax=2 * self.scene.nside - 1
+                # )
 
             ### Compose operator as H = Proj * C * A
             with rule_manager(inplace=True):
@@ -1113,7 +1139,7 @@ class OtherDataParametric:
     def __init__(self, nus, nside, comps, nintegr=2):
 
         self.nintegr = nintegr
-        pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
+        pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb") # not working
         dataset = pickle.load(pkl_file)
         self.dataset = dataset
 
@@ -1303,7 +1329,7 @@ class OtherDataParametric:
 
     def get_noise(self, seed=None, fact=None, seenpix=None):
         state = np.random.get_state()
-        np.random.seed(seed)
+        np.random.seed(seed) # use rng instead
         out = np.zeros((len(self.nus), self.npix, 3))
         R2tod = ReshapeOperator(
             (len(self.nus), 12 * self.nside**2, 3),
@@ -1394,6 +1420,12 @@ class JointAcquisitionFrequencyMapMaking:
                 H_qubic = self.qubic.get_operator(fwhm=fwhm).operands[1]
             else:
                 H_qubic = self.qubic.get_operator(fwhm=fwhm)
+                print("")
+                print("")
+                print("shape 1", np.shape(H_qubic))
+                # Test
+                H_qubic = self.qubic.get_operator(fwhm=fwhm).operands[1]
+                print("shape 2", np.shape(H_qubic))
             R_qubic = ReshapeOperator(
                 H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0]
             )
@@ -1720,7 +1752,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         self,
         d,
         Nsub,
-        Nrec=1,
+        Nrec,
         comp=[],
         kind="DB",
         nu_co=None,
@@ -2174,7 +2206,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         return allmaps
 class QubicIntegrated(QubicPolyAcquisition):
 
-    def __init__(self, d, Nsub=1, Nrec=1):
+    def __init__(self, d, Nsub, Nrec):
         """
 
         The initialization method allows to compute basic parameters such as :
@@ -2293,7 +2325,7 @@ class QubicIntegrated(QubicPolyAcquisition):
         Method which compute the noise of QUBIC.
 
         """
-        np.random.seed(seed)
+        np.random.seed(seed) # use rng instead
         a, _ = self._get_average_instrument_acq(nu=self.d["filter_nu"])
         return a.get_noise(det_noise=det_noise, photon_noise=photon_noise, seed=seed)
 

@@ -104,6 +104,7 @@ class QubicAcquisition(Acquisition):
         bandwidth = d["bandwidth"]
         twosided = d["twosided"]
         sigma = d["sigma"]
+        self.interp_projection = d["interp_projection"]
 
         Acquisition.__init__(
             self,
@@ -460,7 +461,7 @@ class QubicAcquisition(Acquisition):
         f = self.instrument.get_projection_operator
         if len(self.block) == 1:
             return BlockColumnOperator(
-                [f(self.sampling[b], self.scene, verbose=verbose) for b in self.block],
+                [f(self.sampling[b], self.scene, verbose=verbose, interp_projection=self.interp_projection) for b in self.block],
                 axisout=1,
             )
 

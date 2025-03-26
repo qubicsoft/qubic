@@ -1,20 +1,13 @@
 import numpy as np
 from scipy.interpolate import interp1d, RegularGridInterpolator
 import matplotlib.pyplot as plt
-import scipy
-# import pandas as pd
-from scipy.fft import fft, ifft, fftfreq, fft2, ifft2
+from scipy.fft import fftfreq, fft2, ifft2
 import sys
 import healpy as hp
 import time
 from scipy.signal import butter, filtfilt, bessel
 
 import fitting as fit
-# import tkinter as tk
-# import ipywidgets as widgets
-# from matplotlib.figure import Figure
-# from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.widgets import Button
 import pickle
 from datetime import datetime
 
@@ -26,28 +19,21 @@ from iminuit.cost import LeastSquares
 ### General imports
 from joblib import Parallel, delayed
 from multiprocessing import Manager, Lock
-from scipy.signal import medfilt#, find_peaks
-# from scipy.interpolate import interp1d, make_smoothing_spline, make_splrep, CubicSpline, BarycentricInterpolator
+from scipy.signal import medfilt
 
 ### Astropy configuration
-from astropy.visualization import quantity_support#, astropy_mpl_style
+from astropy.visualization import quantity_support
 quantity_support()
 import astropy.units as u
 from astropy.time import Time
-from astropy.coordinates import EarthLocation, AltAz, get_moon#, SkyCoord, get_sun
+from astropy.coordinates import EarthLocation, AltAz, get_moon
 
 #### QUBIC IMPORT
-# from qubicpack.utilities import Qubic_DataDir
 from qubicpack.qubicfp import qubicfp
-# from qubicpack.pix2tes import pix2tes, tes2pix
 import qubic.lib.Calibration.Qfiber as ft
 
-from qubic.lib.Calibration import Qfiber
-# from qubic.lib.Calibration import Qselfcal
-# from qubic.lib.Qutilities import progress_bar
-# from qubic.lib.QdataHandling import display_healpix_map, identify_scans
-from qubic.lib import Qdictionary#, Qscene
-from qubic.lib.Instrument import Qacquisition#, Qinstrument
+from qubic.lib import Qdictionary
+from qubic.lib.Instrument import Qacquisition
 
 import pipeline_moon_plotting as pmp
 

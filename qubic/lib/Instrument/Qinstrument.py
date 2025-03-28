@@ -1417,7 +1417,7 @@ class QubicInstrument(Instrument):
         return QubicInstrument._get_projection_operator(
             rotation, scene, self.filter.nu, self.detector.center,
             self.synthbeam, horn, primary_beam,self.thetafits, self.phifits, 
-	    self.valfits,self.use_file,self.freqs, verbose=verbose)
+	        self.valfits, self.use_file, self.freqs, verbose=verbose)
 
     @staticmethod
     def _get_projection_operator(

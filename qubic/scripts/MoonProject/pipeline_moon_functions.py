@@ -358,8 +358,9 @@ def get_synthbeam_fit(nsub=16, nside=340, xs=401, reso=10):
     idet = 67
     # sampling = get_pointing(dict_qubic)
     acq = Qacquisition.QubicMultiAcquisitions(qubic_dict, nsub=qubic_dict['nf_sub'], nrec=2)
-    sb = acq.subacqs[0].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0]
-    for ifreq in range(1, nsub//2):
+    # sb = acq.subacqs[0].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0]
+    sb = acq.subacqs[0].instrument[idet].get_synthbeam(acq.subacqs[0].scene, detector_integrate=None)[0]
+    for ifreq in range(1, nsub//2): # We just take the 150 GHz sub bands
         sb += acq.subacqs[ifreq].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0]
     # hp.gnomview(np.log10(sb/np.max(sb)), rot=[0,90], reso=10, min=-3, title="Synthesized Beam - log scale")
     sb_map = hp.gnomview(np.log10(sb/np.max(sb)), rot=[0, 95], reso=4, min=-3, xsize=401, title="Synthesized Beam - log scale", return_projected_map=True, no_plot=True).data

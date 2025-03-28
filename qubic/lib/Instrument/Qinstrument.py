@@ -1487,14 +1487,15 @@ class QubicInstrument(Instrument):
             ValueError("'nscene != nscenetot' case not implemented for the interpolated projection operator.")
 
         if interp_projection:
-            # Add the extra dimensions: from 1 healpy pixel to 4, weighing the vals with the weights from the bilinear interpolation
+            # For each peak position we take the interpolation with the four neighbouring pixels
             nb_interp = 4
         else:
+            # Or we just take the pixel pointed at
             nb_interp = 1
 
         index = np.zeros((ndetectors, ntimes, npeaks, nb_interp))
         if interp_projection:
-            # for each peak position we take the interpolation with the four neighbouring pixels
+            # Weights to compute the bilinear interpolation
             weights = np.zeros_like(index)
             # New operator to handle the interpolation
             c2h = Cartesian2HealpixOperator_bilin_interp(nside)
@@ -1531,7 +1532,7 @@ class QubicInstrument(Instrument):
             if scene.kind == "I":
                 value = s.data.value.reshape(ndetectors, ntimes, npeaks)
                 if interp_projection:
-                    print("The method got_projection_operator_bilinear_interp is not yet verified for scene.kind = 'I'.")
+                    print("The method 'got_projection_operator' with 'interp_projeciton=True' is not yet checked for scene.kind = 'I'.")
                     value[...] = vals[:, None, :] * weights[:, :, :, k]      # to be checked one day
                 else:
                     value[...] = vals[:, None, :]

@@ -192,7 +192,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         if self.is_planck:
             map_i = np.ones(self.input.shape) * hp.UNSEEN
             map_i[:, self.seenpix, :] = self.x.copy()
-
+        
         if len(map_i.shape) == 2:
             _r = map_i[self.seenpix, :] - self.input[self.seenpix, :]
         else :

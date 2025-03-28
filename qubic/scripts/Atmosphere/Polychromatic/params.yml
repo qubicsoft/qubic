@@ -15,7 +15,7 @@ pressure_atm: 550                 # Atmopsheric pressure in hPa
 #! rho_0 should be computed using pwv in a more advanced version
 pwv: 1                             # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, mm
 sigma_pwv: 20.5                    # Variance of PWV in mm^-1
-sigma_rho: 0.00001                    # Variance of water vapor density in g/m³
+sigma_rho: 0.000001                    # Variance of water vapor density in g/m³
 
 # Simulation parameters
 
@@ -23,7 +23,7 @@ n_grid: 1000                       # Number of squares in the grid
 h_grid: 1                         # Number of sqares for the altitude, i for 2d model
 h_qubic: 4869                     # QUBIC altitude in m
 size_atm: 8000                    # Lenght of the atm in m
-nsub_in: 10                       # Number of sub-acquisitions used to integrate over the atm spectrum
+nsub_in: 8                       # Number of sub-acquisitions used to integrate over the atm spectrum
 nrec: 2
 2d: True                          # Determine if you want to simulate a 2d atm
 nside: 128
@@ -35,6 +35,6 @@ dtheta: 15
 seed: 1
 
 # Qubic parameters
-npointings: 500
+npointings: 100
 kmax: 1
 synthbeam_fraction: 1

@@ -838,7 +838,7 @@ class QubicMultiAcquisitions:
         The type of operator depends on the shape of input A.
 
         """
-
+        
         if A.ndim == 1:  ### If constant beta across the sky
 
             r = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
@@ -1000,7 +1000,7 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         ### Do the sum over operators depending on the reconstruction model
         H = self.sum_over_band(self.operator, algo=algo, gain=gain)
-       
+        
         return H
 
     def get_invntt_operator(self, det_noise=True, photon_noise=True):

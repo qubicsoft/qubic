@@ -228,12 +228,13 @@ class filtgauss2dfit:
         amp, xc, yc, sig = pars
         mygauss = amp * np.exp(-0.5*((self.xx - xc)**2+(self.yy - yc)**2)/sig**2)
         mygauss_flat = np.ravel(mygauss)
-        lowcut = 4/107.5 # 4/107.5, i.e. half a forth (or back) scan
+        # lowcut = 4/107.5 # 4/107.5, i.e. half a forth (or back) scan
         # highcut = 2/107.5*100*5 # 2/107.5*100/4, i.e. approx. 4 % of a forth (or back) scan --> passer à 2% parce que 4% est trop proche de la taille de la Lune (2/107.5*100/6 makes the Moon round but it's fine-tuned for it...)
         # myfiltgauss = butter_bandpass_filter(mygauss_flat, lowcut=lowcut, highcut=highcut, fs=150, order=2) # Hz
         # myfiltgauss = butter_highpass_filter(mygauss_flat, lowcut=lowcut, fs=150, order=2) # Hz
 
-        # Not working yet, has to be TOD and not just a flat map! Anyway, this will be done with the synthesized beam, not a gaussian
+        # Not working yet, has to be TOD and not just a flat map! Anyway, this will be done with the
+        # synthesized beam, not a gaussian
         myfiltgauss = my_filt(mygauss_flat)
 
         # filtgauss2d = np.reshape(myfiltgauss, np.shape(self.xx))
@@ -334,6 +335,44 @@ def get_synthbeam(nside=340, xs=401, reso=10):
     hp.gnomview(np.log10(sb/np.max(sb)), rot=[0,90], reso=20, min=-3, title="Synthesized Beam - log scale")
     sys.exit()
     return synthbeam
+
+
+def get_synthbeam_fit(nsub=16, nside=340, xs=401, reso=10):
+    # Not finished but the aim is to fit a synthesized beam on the Moon maps
+    # It means it should be fake TOD with synthesized beam
+    dictfilename = "pipeline_demo.dict"
+    qubic_dict = Qdictionary.qubicDict()
+    qubic_dict.read_from_file(dictfilename)
+
+    qubic_dict["nside"] = nside
+    qubic_dict["nf_sub"] = nsub
+    qubic_dict["MultiBand"] = True
+    qubic_dict["filter_nu"] = 150 * 1e9
+    qubic_dict["synthbeam_kmax"] = 1
+    qubic_dict["noiseless"] = True
+    qubic_dict["npointings"] = 2
+
+    # print(qubic_dict["synthbeam_fraction"])
+
+    from qubic.lib.Qsamplings import get_pointing
+    idet = 67
+    # sampling = get_pointing(dict_qubic)
+    acq = Qacquisition.QubicMultiAcquisitions(qubic_dict, nsub=qubic_dict['nf_sub'], nrec=2)
+    sb = acq.subacqs[0].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0]
+    for ifreq in range(1, nsub//2):
+        sb += acq.subacqs[ifreq].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0]
+    # hp.gnomview(np.log10(sb/np.max(sb)), rot=[0,90], reso=10, min=-3, title="Synthesized Beam - log scale")
+    sb_map = hp.gnomview(np.log10(sb/np.max(sb)), rot=[0, 95], reso=4, min=-3, xsize=401, title="Synthesized Beam - log scale", return_projected_map=True, no_plot=True).data
+    # hp.gnomview(mm, reso=4, rot=center_map, min=-5e3, max=1.2e4, return_projected_map=True, xsize=xs, no_plot=True).data
+    # plt.figure()
+    fig, (ax, cax) = plt.subplots(1, 2, width_ratios=(1, 0.05))
+    img = ax.imshow(sb_map, vmin=-3, origin="lower")
+    fig.colorbar(img, cax=cax)
+    # fig.subplots_adjust(hspace=.0)
+    plt.show()
+    sys.exit()
+    return synthbeam
+
 
 # def img_to_TOD(img, center, pixsize, newazt, newelt):
 def img_to_TOD(img, amp_azt, amp_elt, newazt, newelt):
@@ -459,20 +498,7 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
     # sys.exit()
 
     if xycreid_corr is not None:
-        # xx, yy = np.meshgrid(x, y)
-        # dist_tol = 5 # degrees
-        # mask = np.sqrt((xx - xycreid_corr[1])**2 + (yy - xycreid_corr[0])**2) <= dist_tol # xx is el and yy is az
         try:
-            # guessii = np.logical_and(mapxy == np.nanmax(mapxy[mask]), mask)
-            # plt.figure()
-            # plt.scatter(xx, yy, c="blue")
-            # plt.scatter(xx[mask], yy[mask], c="red")
-            # plt.show()
-            # sys.exit()
-            # guessx = np.mean(xx[np.isclose(xx, xycreid_corr[0], atol=1e-1)])
-            # guessy = np.mean(yy[np.isclose(yy, xycreid_corr[1], atol=1e-1)])
-            # guess = np.array([mapxy[int(guessx), int(guessy)], xycreid_corr[0], xycreid_corr[1], 0.92])
-            # guess = np.array([np.mean(mapxy[guessii]), xycreid_corr[0], xycreid_corr[1], 0.92])
             guess = np.array([1e4, xycreid_corr[0], xycreid_corr[1], 0.92])
             if verbose:
                 print(guess)
@@ -615,59 +641,6 @@ class Data:
 
         return m, ch2, ndf
     
-
-# def get_filtmapsn(tod, nKbin, Kx, Kbin, Kcent, ft_shape, ft_phase):
-#     fttod = fft(tod)
-#     result = np.zeros(nKbin)
-#     modu2 = fttod*np.conj(fttod)
-#     for i in range(nKbin):
-#         iKbin = np.logical_and(Kx >= Kbin[i], Kx < Kbin[i + 1])
-#         if len(K[iKbin])>0:
-#             result[i] = np.abs(np.mean(modu2[iKbin]))
-#         else:
-#             print("Kbin [{}, {}] is empty.".format(Kbin[i], Kbin[i + 1]))
-#     gp = np.interp(Kx, Kcent, result)   # Pk bins interpolated
-
-#     ftfilt = np.conj(ft_shape)/gp
-#     normfilt = np.sum(np.abs(ft_shape)**2/gp)
-#     filtmapsn = np.real(ifft(ftfilt*fttod*ft_phase)/np.sqrt(normfilt))  # M convol T / sigma
-#     return filtmapsn
-
-# def get_ft_phase(lobe_pos, Nx):
-#     '''
-#     Parameters
-#     ----------
-#     lobe_pos : int tuple (2)
-#         x position and y position of the lobe.
-#     hd : map header
-
-#     Returns
-#     -------
-#     ft_phase : double
-#         corrective ft_phase of beam.
-#     '''
-#     px = lobe_pos
-#     x = np.arange(Nx)
-#     ft_phase = np.exp(-2*np.pi*1j*x*round(-px)/Nx)
-#     return ft_phase
-
-# def get_K(Nx):
-#     '''
-#     Parameters
-#     ----------
-#     hd : map header
-
-#     Returns
-#     -------
-#     Kx : 2D numpy array (Nx,Ny)
-#         K values for x dimension for the map.
-#     Ky : 2D numpy array (Nx,Ny)
-#         K values for y dimension for the map.
-#     K : 2D numpy array (Nx,Ny)
-#         K values for the map.
-#     '''
-#     Kx = fftfreq(Nx, d=1/Nx)
-#     return Kx
 
 def get_K(Nx, Ny):
     '''

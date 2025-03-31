@@ -35,6 +35,6 @@ dtheta: 15
 seed: 1
 
 # Qubic parameters
-npointings: 100
+npointings: 10000
 kmax: 1
 synthbeam_fraction: 1

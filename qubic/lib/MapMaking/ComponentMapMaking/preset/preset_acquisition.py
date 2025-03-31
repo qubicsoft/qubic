@@ -306,7 +306,7 @@ class PresetAcquisition:
             self.preset_qubic.params_qubic["convolution_in"]
             and self.preset_qubic.params_qubic["convolution_out"]
         ):
-            fwhm_rec = np.min(self.preset_qubic.joint_in.qubic.allfwhm)
+            fwhm_rec = np.ones(len(self.preset_comp.components_model_out)) * np.min(self.preset_qubic.joint_in.qubic.allfwhm)
         elif (
             not self.preset_qubic.params_qubic["convolution_in"]
             and not self.preset_qubic.params_qubic["convolution_out"]
@@ -318,6 +318,7 @@ class PresetAcquisition:
         ):
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
             fwhm_rec = np.zeros(len(self.preset_comp.components_model_out))
+            
             for comp in range(len(self.preset_comp.components_model_out)):
                 if self.preset_comp.components_name_out[comp] == "CMB":
                     fwhm_rec[comp] = np.sum(
@@ -468,12 +469,7 @@ class PresetAcquisition:
             self.preset_comp.components_in
         ) + noise_qubic
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
-        print("len(H)", len(self.H.operands[0].operands))
-        print("H", self.H.operands[0].operands)
-        print('H shapein shapeout', self.H.operands[0].shapein, self.H.operands[0].shapeout)
-        print('input maps shape', self.preset_comp.components_in.shape)
-        print('TOD shape', self.TOD_qubic.shape)
-        stop
+        
         ### Create external TOD
         self.TOD_external = (self.H.operands[1])(
             self.preset_comp.components_in[:, :, :]

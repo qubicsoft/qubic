@@ -473,19 +473,12 @@ class Pipeline:
         Method that perform step 3) of the pipeline for 2 possible designs : Two Bands and Ultra Wide Band
 
         """
-        method_0 = self.preset.comp.params_foregrounds[
-            self.preset.comp.components_name_out[1]
-        ]["type"]
+        method_0 = self.preset.comp.params_foregrounds[self.preset.comp.components_name_out[1]]["type"]
         if len(self.preset.comp.components_name_out) > 1:
             cpt = 2
             while cpt < len(self.preset.comp.components_name_out):
-                if (
-                    self.preset.comp.components_name_out[cpt] != "CO"
-                    and self.preset.comp.params_foregrounds[
-                        self.preset.comp.components_name_out[cpt]
-                    ]["type"]
-                    != method_0
-                ):
+                if (self.preset.comp.components_name_out[cpt] != "CO"
+                    and self.preset.comp.params_foregrounds[self.preset.comp.components_name_out[cpt]]["type"] != method_0):
                     method = "parametric_blind"
                 cpt += 1
         try:
@@ -970,8 +963,8 @@ class Pipeline:
         """
 
         self.H_i = self.preset.qubic.joint_out.get_operator(
-            self.preset.acquisition.beta_iter,
-            Amm=self.preset.acquisition.Amm_iter,
+            #self.preset.acquisition.beta_iter,
+            A=self.preset.acquisition.Amm_iter,
             gain=np.ones(self.preset.gain.gain_iter.shape),
             fwhm=self.preset.acquisition.fwhm_mapmaking,
             nu_co=self.preset.comp.nu_co,
@@ -982,8 +975,8 @@ class Pipeline:
         if self.preset.qubic.params_qubic["instrument"] == "UWB":
             _r = ReshapeOperator(
                 self.preset.qubic.joint_out.qubic.ndets
-                * self.preset.joint.qubic.nsamples,
-                (self.preset.joint.qubic.ndets, self.preset.joint.qubic.nsamples),
+                * self.preset.qubic.joint_out.qubic.nsamples,
+                (self.preset.qubic.joint_out.qubic.ndets, self.preset.qubic.joint_out.qubic.nsamples),
             )
 
             TODi_Q = self.preset.acquisition.invN.operands[0](
@@ -991,12 +984,16 @@ class Pipeline:
                     : self.ndets * self.nsampling
                 ]
             )
+            print("invN", self.preset.acquisition.invN.operands[0].operands[1])
+            print("reshape", _r.shapein, _r.shapeout)
+            print("invN shape", self.preset.acquisition.invN.operands[0].operands[1].shapein, self.preset.acquisition.invN.operands[0].operands[1].shapeout)
+            print("TODi_Q", TODi_Q.shape)
             self.preset.gain.gain_iter = self.give_intercal(
-                TODi_Q, _r(self.preset.TOD_Q)
+                TODi_Q, _r(self.preset.acquisition.TOD_qubic), self.preset.acquisition.invN.operands[0].operands[1]
             )
             self.preset.gain.gain_iter /= self.preset.gain.gain_iter[0]
-            self.preset.allg = np.concatenate(
-                (self.preset.allg, np.array([self.preset.gain.gain_iter])), axis=0
+            self.preset.gain.all_gain = np.concatenate(
+                (self.preset.gain.all_gain, np.array([self.preset.gain.gain_iter])), axis=0
             )
 
         elif self.preset.qubic.params_qubic["instrument"] == "DB":
@@ -1010,12 +1007,12 @@ class Pipeline:
 
             g150 = self.give_intercal(
                 TODi_Q_150,
-                self.preset.TOD_Q[: self.ndets * self.nsampling],
+                self.preset.acquisition.TOD_qubic[: self.ndets * self.nsampling],
                 self.preset.acquisition.invN.operands[0].operands[1].operands[0],
             )
             g220 = self.give_intercal(
                 TODi_Q_220,
-                self.preset.TOD_Q[
+                self.preset.acquisition.TOD_qubic[
                     self.ndets * self.nsampling : 2 * self.ndets * self.nsampling
                 ],
                 self.preset.acquisition.invN.operands[0].operands[1].operands[1],
@@ -1025,17 +1022,20 @@ class Pipeline:
             self.preset.Gi = join_data(
                 self.preset.tools.comm, self.preset.gain.gain_iter
             )
-            self.preset.allg = np.concatenate(
-                (self.preset.allg, np.array([self.preset.gain.gain_iter])), axis=0
-            )
-
+            print("gain_iter", self.preset.gain.gain_iter.shape, self.preset.Gi.shape)
+            print("all_gain", self.preset.gain.all_gain.shape)
+            print("all_gain_in", self.preset.gain.all_gain_in.shape)
+            self.preset.gain.all_gain = np.concatenate(
+                (self.preset.gain.all_gain, np.array(self.preset.gain.gain_iter)), axis=0)
+            
+            print("all_gain", self.preset.gain.all_gain.shape)
             if self.preset.tools.rank == 0:
-                print(np.mean(self.preset.gain.gain_iter - self.preset.g, axis=0))
-                print(np.std(self.preset.gain.gain_iter - self.preset.g, axis=0))
+                print(np.mean(self.preset.gain.gain_iter - self.preset.gain.gain_in, axis=0))
+                print(np.std(self.preset.gain.gain_iter - self.preset.gain.gain_in, axis=0))
 
-        self.plots.plot_gain_iteration(
-            self.preset.allg - self.preset.g, alpha=0.03, ki=self._steps
-        )
+        # self.plots.plot_gain_iteration(
+        #     self.preset.gain.all_gain - self.preset.gain.all_gain_in, alpha=0.03, ki=self._steps
+        # )
 
     def save_data(self, step):
         f"""Save data.
@@ -1082,7 +1082,7 @@ class Pipeline:
                                 "index_beta": self.preset.mixingmatrix._index_seenpix_beta,
                                 "g": self.preset.gain.all_gain_in,
                                 "gi": self.preset.gain.all_gain,
-                                "allg": self.preset.gain.all_gain_iter,
+                                "all_gain": self.preset.gain.all_gain_iter,
                                 "A": self.preset.acquisition.Amm_iter,
                                 "Atrue": self.preset.mixingmatrix.Amm_in,
                                 "G": self.preset.gain.all_gain_in,

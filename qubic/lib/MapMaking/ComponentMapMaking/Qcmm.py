@@ -104,6 +104,8 @@ class Pipeline:
 
         ### Initialize PCG starting point
         initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
+        print(self.preset.comp.components_iter.shape)
+        strop
 
         ### Update the precondtionner M
         #if self._steps == 0:

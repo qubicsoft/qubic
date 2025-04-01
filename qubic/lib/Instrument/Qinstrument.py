@@ -41,6 +41,8 @@ from ..Calibration.Qcalibration import QubicCalibration
 from ..Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
 from ..Qutilities import _compress_mask
 
+from ..Qbilin_interp import Cartesian2HealpixOperator_bilin_interp
+
 
 __all__ = ["QubicInstrument", "QubicMultibandInstrumentTrapezoidalIntegration","QubicMultibandInstrument"]
 
@@ -1390,7 +1392,7 @@ class QubicInstrument(Instrument):
         return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
                DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
 
-    def get_projection_operator(self, sampling, scene, verbose=True):
+    def get_projection_operator(self, sampling, scene, verbose=True, interp_projection=False):
         """
         Return the peak sampling operator.
         Convert units from W to W/sr.
@@ -1416,13 +1418,18 @@ class QubicInstrument(Instrument):
 
         return QubicInstrument._get_projection_operator(
             rotation, scene, self.filter.nu, self.detector.center,
-            self.synthbeam, horn, primary_beam,self.thetafits, self.phifits, 
-	    self.valfits,self.use_file,self.freqs, verbose=verbose)
+            self.synthbeam, horn, primary_beam, self.thetafits, self.phifits, 
+            self.valfits, self.use_file, self.freqs, interp_projection=interp_projection, verbose=verbose)
 
+    
     @staticmethod
     def _get_projection_operator(
             rotation, scene, nu, position, synthbeam, horn, primary_beam,
-            thetafits, phifits, valfits, use_file, freqs, verbose=True):
+            thetafits, phifits, valfits, use_file, freqs, interp_projection=False, verbose=True):
+
+        if use_file == True and interp_projection:
+            # Fuse
+            ValueError("'use_file == True' case not implemented for the interpolated projection operator.")
 
         ndetectors = position.shape[0]
         ntimes = rotation.data.shape[0]
@@ -1453,7 +1460,10 @@ class QubicInstrument(Instrument):
             thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas, phis, vals, synthbeam)
         
         else:
+            # We get info on synthbeam
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+        # shape(vals)   : (ndetectors, npeaks)
+        # shape(thetas) : (ndetectors, npeaks)
 
         npeaks = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, npeaks, 2)
@@ -1472,53 +1482,97 @@ class QubicInstrument(Instrument):
         ndims = len(scene.kind)
         nscene = len(scene)
         nscenetot = product(scene.shape[:scene.ndim])
+        if nscene != nscenetot and interp_projection:
+            # Fuse
+            ValueError("'nscene != nscenetot' case not implemented for the interpolated projection operator.")
 
-        s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
-                verbose=verbose)
+        if interp_projection:
+            # For each peak position we take the interpolation with the four neighbouring pixels
+            nb_interp = 4
+        else:
+            # Or we just take the pixel pointed at
+            nb_interp = 1
 
-        index = s.data.index.reshape((ndetectors, ntimes, npeaks))
-        c2h = Cartesian2HealpixOperator(nside)
+        index = np.zeros((ndetectors, ntimes, npeaks, nb_interp))
+        if interp_projection:
+            # Weights to compute the bilinear interpolation
+            weights = np.zeros_like(index)
+            # New operator to handle the interpolation
+            c2h = Cartesian2HealpixOperator_bilin_interp(nside)
+        else:
+            c2h = Cartesian2HealpixOperator(nside)
+
         if nscene != nscenetot:
             table = np.full(nscenetot, -1, dtype_index)
             table[scene.index] = np.arange(len(scene), dtype=dtype_index)
 
+        # We use info on synthbeam + general pointing position to get info on synthbeam pointing positions
         def func_thread(i):
             # e_nf[i] shape: (1, ncolmax, 3)
             # e_ni shape: (ntimes, ncolmax, 3)
-
             e_ni = rotation.T(e_nf[i].swapaxes(0, 1)).swapaxes(0, 1)
             if nscene != nscenetot:
                 np.take(table, c2h(e_ni).astype(int), out=index[i])
             else:
-                index[i] = c2h(e_ni)
+                if interp_projection:
+                    res = c2h.get_interpol(e_ni)
+                    index[i], weights[i] = np.moveaxis(res[0], [0], [2]), np.moveaxis(res[1], [0], [2])
+                else:
+                    index[i, ..., 0] = c2h(e_ni)
 
         with pool_threading() as pool:
             pool.map(func_thread, range(ndetectors))
-        
-        if scene.kind == "I":
-            value = s.data.value.reshape(ndetectors, ntimes, ncolmax)
-            value[...] = vals[:, None, :]
-            shapeout = (ndetectors, ntimes)
-        else:
-            if str(dtype_index) not in ("int32", "int64") or \
-                    str(synthbeam.dtype) not in ("float32", "float64"):
-                raise TypeError(
-                    "The projection matrix cannot be created with types: {0} a"
-                    "nd {1}.".format(dtype_index, synthbeam.dtype))
-            func = "matrix_rot{0}d_i{1}_r{2}".format(
-                ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
 
-            getattr(flib.polarization, func)(
-                rotation.data.T, direction.T, s.data.ravel().view(np.int8),
-                vals.T)
+        for k in range(nb_interp):
 
-            if scene.kind == "QU":
-                shapeout = (ndetectors, ntimes, 2)
+            s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
+                dtype=synthbeam.dtype, dtype_index=dtype_index,
+                verbose=verbose)
+            
+            if scene.kind == "I":
+                value = s.data.value.reshape(ndetectors, ntimes, npeaks)
+                if interp_projection:
+                    print("The method 'got_projection_operator' with 'interp_projeciton=True' is not yet checked for scene.kind = 'I'.")
+                    value[...] = vals[:, None, :] * weights[:, :, :, k]      # to be checked one day
+                else:
+                    value[...] = vals[:, None, :]
+                shapeout = (ndetectors, ntimes)
             else:
-                shapeout = (ndetectors, ntimes, 3)
+                if str(dtype_index) not in ("int32", "int64") or \
+                        str(synthbeam.dtype) not in ("float32", "float64"):
+                    raise TypeError(
+                        "The projection matrix cannot be created with types: {0} a"
+                        "nd {1}.".format(dtype_index, synthbeam.dtype))
+                
+                if interp_projection:
+                    func = "weighted_matrix_rot{0}d_i{1}_r{2}".format(
+                        ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
+                
+                    getattr(flib.polarization, func)(
+                        rotation.data.T, direction.T, s.data.ravel().view(np.int8),
+                        vals.T, weights[:, :, :, k].T)
+                else:
+                    func = "matrix_rot{0}d_i{1}_r{2}".format(
+                        ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
 
-        return ProjectionOperator(s, shapeout=shapeout)
+                    getattr(flib.polarization, func)(
+                        rotation.data.T, direction.T, s.data.ravel().view(np.int8),
+                        vals.T)
+
+                if scene.kind == "QU":
+                    shapeout = (ndetectors, ntimes, 2)
+                else:
+                    shapeout = (ndetectors, ntimes, 3)
+
+            P = 0
+            P = ProjectionOperator(s, shapeout=shapeout)
+            P.matrix.data.index = index[..., k].reshape(ndetectors * ntimes, npeaks)
+            if k == 0:
+                total_P = P.copy()
+            else:
+                total_P = (total_P.__add__(P)).copy()
+            
+        return total_P
 
     def get_transmission_operator(self):
         """

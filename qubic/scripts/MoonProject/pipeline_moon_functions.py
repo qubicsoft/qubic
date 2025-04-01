@@ -39,6 +39,14 @@ import pipeline_moon_plotting as pmp
 
 #########################
 
+from qubic.lib.Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
+from qubic.lib.Calibration.Qcalibration import QubicCalibration
+from qubic.lib.Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
+from qubic.lib.Qutilities import _compress_mask
+from qubic.lib.Instrument.Qinstrument import SyntheticBeam
+
+#########################
+
 conv_reso_fwhm = 2.35482
 
 #########################
@@ -100,7 +108,7 @@ def get_new_azel(azt, elt, azmoon, elmoon):
     return newazt, newelt
 
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, azmoon, elmoon, nside=256, doplot=True, check_back_forth=False):
+def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256, doplot=True, check_back_forth=False):
 
     # Inversion in signal
     mytod = -tod.copy()
@@ -120,8 +128,6 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, azmoon, elmoon, nside=256
         plt.show()
         
     # Map-making
-
-    newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
 
     # newelt = -newelt
     # Calculate center of maps from pointing w.r.t. Moon
@@ -307,86 +313,11 @@ def get_dict(params):
         qubic_dict[str(i)] = args[i]
     return qubic_dict
 
-def get_synthbeam(nside=340, xs=401, reso=10):
-    # Not finished but the aim is to fit a synthesized beam on the Moon maps
-    #### Here we read QUBIC + Planck maps
-    # data_both = pickle.load(open(dirFast + 'MC_planck_None.pkl', 'rb'))
-    file_both = "MC_CMB_w_Planck_FMM.pkl"
-    dirFast_2 = "/Users/huchet/qubic/qubic/scripts/MapMaking/src/FMM/test_Fastsimulator/maps/"
-    data_both = pickle.load(open(dirFast_2 + file_both, 'rb'))
-    params = data_both["parameters"]
-    dict_qubic = get_dict(params)
-    dict_qubic["nside"] = nside
-    # # qubic = Qacquisition.QubicUltraWideBand(
-    # #             dict_out, Nsub=1, Nrec=1
-    # #         )
-    # qubic_inst = Qinstrument.QubicInstrument(dict_qubic, FRBW=0.25)
-    # scene = Qscene.QubicScene(dict_qubic)
-    # sb = qubic_inst.get_synthbeam(scene, idet=0)
-    # print(np.shape(sb))
-    # print(np.sum(sb))
-    # synthbeam =  hp.gnomview(sb, reso=reso, return_projected_map=True, xsize=xs, no_plot=True).data
-    # print(np.sum(synthbeam))
-    from qubic.lib.Qsamplings import get_pointing
-    idet = 0
-    # sampling = get_pointing(dict_qubic)
-    acq = Qacquisition.QubicMultiAcquisitions(dict_qubic, dict_qubic['nf_sub'], 2)
-    sb = acq.subacqs[0].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0]
-    hp.gnomview(np.log10(sb/np.max(sb)), rot=[0,90], reso=20, min=-3, title="Synthesized Beam - log scale")
-    sys.exit()
-    return synthbeam
 
-
-def get_synthbeam_fit(nsub=16, nside=340, xs=401, reso=10):
-    # Not finished but the aim is to fit a synthesized beam on the Moon maps
-    # It means it should be fake TOD with synthesized beam
-    dictfilename = "pipeline_demo.dict"
-    qubic_dict = Qdictionary.qubicDict()
-    qubic_dict.read_from_file(dictfilename)
-
-    qubic_dict["nside"] = nside
-    qubic_dict["nf_sub"] = nsub
-    qubic_dict["MultiBand"] = True
-    qubic_dict["filter_nu"] = 150 * 1e9
-    qubic_dict["synthbeam_kmax"] = 1
-    qubic_dict["noiseless"] = True
-    qubic_dict["npointings"] = 2
-
-    # print(qubic_dict["synthbeam_fraction"])
-
-    from qubic.lib.Qsamplings import get_pointing
-    idet = 67
-    # sampling = get_pointing(dict_qubic)
-    acq = Qacquisition.QubicMultiAcquisitions(qubic_dict, nsub=qubic_dict['nf_sub'], nrec=2)
-    # sb = acq.subacqs[0].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0]
-    sb = acq.subacqs[0].instrument[idet].get_synthbeam(acq.subacqs[0].scene, detector_integrate=None)[0]
-    for ifreq in range(1, nsub//2): # We just take the 150 GHz sub bands
-        sb += acq.subacqs[ifreq].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0]
-    # hp.gnomview(np.log10(sb/np.max(sb)), rot=[0,90], reso=10, min=-3, title="Synthesized Beam - log scale")
-    sb_map = hp.gnomview(np.log10(sb/np.max(sb)), rot=[0, 95], reso=4, min=-3, xsize=401, title="Synthesized Beam - log scale", return_projected_map=True, no_plot=True).data
-    # hp.gnomview(mm, reso=4, rot=center_map, min=-5e3, max=1.2e4, return_projected_map=True, xsize=xs, no_plot=True).data
-    # plt.figure()
-    fig, (ax, cax) = plt.subplots(1, 2, width_ratios=(1, 0.05))
-    img = ax.imshow(sb_map, vmin=-3, origin="lower")
-    fig.colorbar(img, cax=cax)
-    # fig.subplots_adjust(hspace=.0)
-    plt.show()
-    sys.exit()
-    return synthbeam
-
-
-# def img_to_TOD(img, center, pixsize, newazt, newelt):
 def img_to_TOD(img, amp_azt, amp_elt, newazt, newelt):
-    # To create fake TOD quickly from an input image (not finished)
+    # To create fake TOD quickly from an input image
     Npix = np.shape(img) # vérifier ordre lignes colonnes (lignes = azimuth ou elevation ?)
     azel_arr = []
-    # for i, coord in enumerate(["az", "el"]):
-    #     imsize = Npix[i] * pixsize[i]
-    #     min_coord = center[i] - imsize / 2
-    #     max_coord = center[i] + imsize / 2
-    #     print(Npix[i], flush=True)
-    #     print(pixsize[i])
-    #     azel_arr.append(np.linspace(min_coord, max_coord - pixsize[i], Npix[i]) + pixsize[i]/2)
     amplitude = np.array([amp_azt, amp_elt]) # Here amplitude contains the intervals in azimuth and elevation for the pixels' centers
     for i, coord in enumerate(["az", "el"]):
         azel_arr.append(np.linspace(amplitude[i, 0], amplitude[i, 1], Npix[i]))
@@ -839,12 +770,16 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
 
     ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
     azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+
     
     ### Identify scan types and numbers
     scantype_hk, azt, elt, scantype, vmean = identify_scans(thk, az, el, 
                                                                 tt=tt, doplot=False, 
                                                                 plotrange=[0, 2000], 
                                                                 thr_speedmin=speedmin)
+
+    # New coordinates centered on the Moon
+    newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
 
     ### Loop over TES to do the maps
     print('\nLooping coaddition mapmaking over selected TES')
@@ -858,20 +793,20 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             print('TES# {}'.format(TESNum), end=" ")
             tod = alltod[TESNum-1,:]
             
-            allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, azmoon, elmoon,
+            allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                              nside=nside, 
                                                              doplot=doplot, check_back_forth=check_back_forth)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
         ### Note that this code has been generated using ChatGPT
-        def process_TES(i, TESNum, allmaps, alltod, tt, azt, elt, scantype, azmoon, elmoon, nside, doplot):
+        def process_TES(i, TESNum, allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot):
             # Create a lock for each process to ensure safe access to shared memory
             lock = Lock()
             
             tod = alltod[TESNum - 1, :]
 
-            map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, azmoon, elmoon,
+            map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                            nside=nside, doplot=doplot)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
@@ -904,9 +839,9 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
         
 
     # Get central Az and El from pointing
-    newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
+    # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
     center = [np.mean(newazt), np.mean(newelt)]
-    return allmaps, data, center
+    return allmaps, data, center, newazt, newelt
 
 # from QdataHandling
 def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, doplot=False, plotrange=[0,1000]):
@@ -1069,3 +1004,252 @@ def rotate_translate_scale_2d(xin, theta, center, scale):
 def rot_trans_scale_pts(x, pars):
     pts = np.reshape(x, (len(x)//2, 2))
     return np.ravel(rotate_translate_scale_2d(pts, np.radians(pars[0]), np.array([pars[1],pars[2]]), pars[3]))
+
+
+def get_synthbeam_freqs(nsub=16, nside=512):
+    # Not finished but the aim is to fit a synthesized beam on the Moon maps
+    # It means it should be fake TOD with synthesized beam
+
+    # I can try to change the pointing direction maybe
+    dictfilename = "pipeline_demo.dict"
+    qubic_dict = Qdictionary.qubicDict()
+    qubic_dict.read_from_file(dictfilename)
+
+    qubic_dict["nside"] = nside
+    qubic_dict["nf_sub"] = nsub
+    qubic_dict["MultiBand"] = True
+    qubic_dict["filter_nu"] = 150 * 1e9
+    qubic_dict["synthbeam_kmax"] = 1
+    qubic_dict["noiseless"] = True
+    qubic_dict["npointings"] = 2
+
+    idet = 67
+    acq = Qacquisition.QubicMultiAcquisitions(qubic_dict, nsub=qubic_dict['nf_sub'], nrec=2)
+    synthbeam_list = [acq.subacqs[ifreq].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0] for ifreq in range(nsub//2)] # only first band sub bands
+
+    return synthbeam_list, qubic_dict
+
+
+def moon_with_synthbeam(synthbeam_list, moon_spectrum, rot, reso=4, xs=401):
+    tot_signal = np.sum([synthbeam_list[i] * moon_spectrum[i] for i in range(len(synthbeam_list))])
+    # sb_img = hp.gnomview(np.log10(sb/np.max(sb)), rot=[0, 95], reso=reso, min=-3, xsize=xs, title="Synthesized Beam - log scale", return_projected_map=True, no_plot=True).data
+    sb_img = hp.gnomview(tot_signal, reso=reso, rot=rot, min=-5e3, max=1.2e4, return_projected_map=True, xsize=xs, no_plot=True).data
+    # fig, (ax, cax) = plt.subplots(1, 2, width_ratios=(1, 0.05))
+    # img = ax.imshow(sb_map, vmin=-3, origin="lower")
+    # fig.colorbar(img, cax=cax)
+    # plt.show()
+    # sys.exit()
+    return sb_img
+
+
+def get_synthbeam_fit_tod(newazt, newelt, moon_pos, reso, amp):
+    # On donne les coord des tod et on calcule des faux tod à partir du lobe synthétique centré en
+    # la position de la Lune
+    if np.any(np.isnan(moon_pos)):
+        return np.zeros_like(newazt), np.zeros_like(newazt)
+    Nx = 10000
+    Ny = Nx
+    min_azt = np.min(newazt)
+    max_azt = np.max(newazt)
+    min_elt = np.min(newelt)
+    max_elt = np.max(newelt)
+    pixsize = np.array([(max_azt - min_azt) / (Nx - 1), (max_elt - min_elt) / (Ny - 1)])
+    azt_pix = np.linspace(min_azt, max_azt, Nx)
+    elt_pix = np.linspace(min_elt, max_elt, Ny)
+    if not ((min_azt <= moon_pos[0] <= max_azt) and (min_elt <= moon_pos[1] <= max_elt)):
+        print("moon_pos = ({}, {})".format(moon_pos[0], moon_pos[1]), flush=True)
+        print("azimuth in [{}, {}], elevation in [{}, {}]".format(min_azt, max_azt, min_elt, max_elt))
+        raise TypeError("Position of the Moon outside of map... Aborting.")
+    # Moon position in pixel space
+    moon_pos_pix = [np.argmin((azt_pix - moon_pos[0])**2), np.argmin((elt_pix - moon_pos[1])**2)]
+    print("moon_pos_pix = {}".format(moon_pos_pix), flush=True)
+
+    # Do it with the synthesized beam instead of a simple gaussian
+    # synthbeam = get_synthbeam()
+    # print("np.shape(synthbeam)", np.shape(synthbeam))
+    # plt.figure()
+    # plt.imshow(synthbeam, vmin=-1e3, vmax=1e4)
+    # plt.show()
+    # sys.exit()
+
+    synthbeam_list, qubic_dict = get_synthbeam_freqs(nsub=16, nside=256) # array of the synthesized beams from the instrument for nsub//2 freqs
+    # Fixed values, not to be in the fit loop
+
+    # First thing is to fit an possible rotation
+    # Then fit the Moon spectrum
+
+    # The Moon spectrum is the changing parameter
+    moon_spectrum = np.zeros(len(synthbeam_list))
+
+    rot=[]
+    moon_with_synthbeam(synthbeam_list, moon_spectrum, rot, reso=4, xs=401)
+
+    # Gaussian centred on the position of the Moon in pixel space
+    gauss = gauss2D(Nx, Ny, moon_pos_pix[0], moon_pos_pix[1], reso=reso/pixsize, amp=amp, normal=False)
+    print("old azt in ({}, {}), old elt in ({}, {})".format(np.min(azt_pix), np.max(azt_pix), np.min(elt_pix), np.max(elt_pix)))
+    print(np.min(newazt), np.max(newazt), np.min(newelt), np.max(newelt))
+    # Create tod from this with a better version of the computing of the Moon position (much faster)
+    # grid_interp = RegularGridInterpolator( (azt_pix, elt_pix), gauss, method='nearest' ) 
+    # gauss_tod = grid_interp((newazt, newelt))
+    # mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
+    # gauss_tod = img_to_TOD(gauss, ((min_azt + max_azt)/2, (min_elt + max_elt)/2), pixsize, newazt, newelt)
+    gauss_tod = img_to_TOD(gauss, [min_azt, max_azt], [min_elt, max_elt], newazt, newelt)
+    # img, center, pixsize, newazt, newelt
+    filt_tod = my_filt(gauss_tod)
+    return gauss_tod - filt_tod, gauss_tod
+
+
+
+def fitsb_img(mapxy, x, y, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None):
+    xx, yy = np.meshgrid(x, y, indexing="xy")
+    
+    ### Displays the image as an array
+    mm, ss = ft.meancut(mapxy, 3)
+    if mini is None:
+        mini = mm-nsig*ss
+    if maxi is None:
+        maxi = np.max(mapxy)
+
+    ### Guess where the maximum is and the other parameters with a matched filter
+    if guess is None:
+        Nx = len(mapxy)
+        Ny = len(mapxy[0])
+        lobe_pos = (Nx//2, Ny//2)
+        Kx, Ky, K = get_K(Nx, Ny)
+        ft_phase = get_ft_phase(lobe_pos, Nx, Ny)
+        cos_win = cos_window(Nx, Ny, lx=20, ly=20)
+        deltaK = 1
+        Kbin = get_Kbin(deltaK, K)
+        nKbin = len(Kbin) - 1  # nb of bins
+        Kcent = (Kbin[:-1] + Kbin[1:])/2
+        size_pix = reso/60 # degree
+        reso_instr = 0.92
+        # ft_shape = fft2(gauss2D(Nx, Ny, x0=lobe_pos[0], y0=lobe_pos[1], reso=[reso_instr/size_pix], normal=True))
+        synthbeam_list, qubic_dict = get_synthbeam_freqs(nsub=16, nside=256) # array of the synthesized beams from the instrument for nsub//2 freqs
+        tot_sb = np.sum(synthbeam_list, axis=0)
+        sb_img = hp.gnomview(tot_sb, reso=reso, rot=[0, 90], min=-5e2, max=1e6, return_projected_map=True, xsize=xs, no_plot=True).data
+        sb_img = np.flip(np.swapaxes(sb_img, 0, 1), 1)
+        ft_shape = fft2(sb_img)
+        
+        
+        filtmapsn = get_filtmapsn(mapxy * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
+
+        plt.figure()
+        plt.imshow(sb_img, origin="lower")
+        plt.show()
+    
+        plt.figure()
+        plt.imshow(mapxy)
+        plt.show()
+
+        plt.figure()
+        plt.imshow(filtmapsn)
+        plt.show()
+        maxii = filtmapsn == np.nanmax(filtmapsn)
+        maxx = np.mean(xx[maxii])
+        maxy = np.mean(yy[maxii])
+        guess = np.array([1e4, maxx, maxy, reso_instr])
+        if verbose:
+            print(guess)
+    else:
+        maxx = guess[1]
+        maxy = guess[2]
+        
+    ### Do the fit putting the UNSEEN to a very low weight
+    errpix = xx*0+ss
+    errpix[mapxy==0] *= 1e5
+    g2d = gauss2dfit(xx, yy)
+    # g2d = filtgauss2dfit(xx, yy)
+    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), g2d)
+    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, maxx - distok, maxx + distok], [2, maxy - distok, maxy + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
+
+    ### Image of the fitted Gaussian
+    fitted = np.reshape(g2d(x, m.values), (xs, xs))
+
+    if doplot:
+        origin = "upper" #"lower" swaps the y-axis and the guess doesn't match 
+        if axs is None:
+            fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(16, 5))
+            axs[1].imshow(fitted, origin=origin, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+            im = axs[2].imshow(mapxy - fitted, origin=origin, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+            axs[0].set_ylabel('Degrees')
+            for i in range(3):
+                axs[i].set_xlabel('Degrees')
+            axs[2].set_title('Residuals')
+    
+    if doplot:
+        axs = pmp.plot_fit_img(mapxy, axs, x, y, xguess=guess[1], yguess=guess[2], xfit=m.values[1], yfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
+        return m, fitted, axs
+    return m, fitted
+    
+    
+
+def fit_one_tes_sb(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, xycreid_corr=None, axs=None):
+    ### get the gnomview back into a np.array in order to fit it
+    mm = mymap.copy()
+    badpix = mm == hp.UNSEEN
+    mm[badpix] = 0          ### Set bad pixels to zero before returning the np.array()
+    mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
+
+    ### np.array coordinates
+    # Doesn't work with the fit plot but is ok with final gnomview plot of the Moon map corrected
+    # But in order to stack the maps I now have to use (azt, -elt) position fitted here (why??)
+    x = -(np.arange(xs) - (xs - 1)/2)*reso/60
+    y = x.copy()
+    x += rot[0]
+    y -= rot[1]
+
+    # Works on fit plot but then azt and elt are with the wrong sign on the final gnomview plot. Weird!!
+    # x = (np.arange(xs) - (xs - 1)/2)*reso/60
+    # y = x.copy()
+    # x -= rot[0]
+    # y += rot[1]
+
+    # Other tests
+    # x = (np.arange(xs) - (xs - 1)/2)*reso/60
+    # y = x.copy()
+    # x -= rot[0]
+    # y += rot[1]
+
+
+    # print(np.min(y), np.max(y))
+    # sys.exit()
+
+    if xycreid_corr is not None:
+        try:
+            guess = np.array([1e4, xycreid_corr[0], xycreid_corr[1], 0.92])
+            if verbose:
+                print(guess)
+        except:
+            guess = None
+            if verbose:
+                print("TES has no position on sky")
+                print(guess)
+        
+        
+    if doplot:
+        m, fitted, fig_axs = fitsb_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso)
+        if verbose:
+            print(m.values)
+    else:
+        m, fitted = fitsb_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso)
+    # try:
+    #     m, fitted = fitgauss_img(mapxy, x, y, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm)
+    # except:
+    #     m = None
+    #     fitted = None
+    
+    if return_images:
+        return m, mapxy, fitted, [np.min(x), np.max(x), np.min(y), np.max(y)], fig_axs
+    return m
+    
+
+
+class gauss2dfit:
+    def __init__(self, xx, yy):
+        self.xx = xx
+        self.yy = yy
+    def __call__(self, x, pars):
+        amp, xc, yc, sig = pars
+        mygauss = amp * np.exp(-0.5*((self.xx-xc)**2+(self.yy-yc)**2)/sig**2)
+        return np.ravel(mygauss)

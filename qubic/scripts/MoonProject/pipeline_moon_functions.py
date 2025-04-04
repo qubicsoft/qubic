@@ -64,7 +64,7 @@ conv_reso_fwhm = 2.35482
 def mean_bin_data_nd(pos, values, bins): # data and bins have shape (ndims, ...)
     # left limit of bins is excluded
     # shape of pos has to be (ndims, npoints), with npoints in the TOD
-    print(np.shape(values))
+    # print(np.shape(values))
     ndims = len(pos)
     bin_df = []
     for i in range(ndims):
@@ -122,21 +122,7 @@ def TOD_to_flat_map(ipos, jpos, vals, ipos_img, jpos_img):
         Positions of image Nj points in j direction
     """
 
-    # test_indexing = True
-    # if test_indexing == True:
-    #     ipos = elt
-    #     jpos = azt
-    #     ipos_img = img_elt
-    #     jpos_img = img_azt
-    # else:
-    #     ipos = azt
-    #     jpos = elt
-    #     ipos_img = img_azt
-    #     jpos_img = img_elt
-
     coord = [ipos, jpos]
-    # min_coord = np.min(coord)
-    # max_coord = np.max(coord)
     Ni = len(ipos_img)
     Nj = len(jpos_img)
     img_coord = [ipos_img, jpos_img]
@@ -146,20 +132,12 @@ def TOD_to_flat_map(ipos, jpos, vals, ipos_img, jpos_img):
     azel_pixsize = []
     azel_bin = []
     for k in range(len(coord)):
-        # azel_pixsize.append((np.max(coord[i]) - np.min(coord[i]))/(Npix[i] - 1)) # There are Npix - 1 pixels between the center of the left-most and the center of the right-most pixels
         azel_pixsize.append((min_coord - max_coord)/(Npix[k] - 1)) # There are Npix - 1 pixels between the center of the left-most and the center of the right-most pixels
-        # azel_bin.append(np.linspace(np.min(coord[i]) - azel_pixsize[i]/2, np.max(coord[i]) + azel_pixsize[i]/2, Npix[i] + 1)) # Edges of pixels
-        # azel_bin.append(np.linspace(np.min(img_coord[i]) - azel_pixsize[i]/2, np.max(img_coord[i]) + azel_pixsize[i]/2, Npix[i] + 1)) # Edges of pixels
         azel_bin.append(np.linspace(min_coord - azel_pixsize[k]/2, max_coord + azel_pixsize[k]/2, Npix[k] + 1)) # Edges of pixels
         
-
-    # print(np.shape(azel_pixsize))
-    # print(np.shape(azel_bin))
-    # print(np.shape(coord))
     mymap = mean_bin_data_nd(pos=coord, values=vals, bins=azel_bin)#.reshape(Ni, Nj)
     mymap_OK = np.isfinite(mymap)
-
-    print(np.sum(mymap_OK))
+    # print(np.sum(mymap_OK))
 
     # plt.figure()
     # plt.imshow(mymap.reshape(Ni, Nj))
@@ -170,17 +148,12 @@ def TOD_to_flat_map(ipos, jpos, vals, ipos_img, jpos_img):
     # sys.exit()
     # print(mymap)
 
-    # azt_range = np.linspace(np.min(azt), np.max(azt), Ni)
-    # elt_range = np.linspace(np.min(elt), np.max(elt), Nj)
-    # i_range = np.linspace(np.min(ipos_img), np.max(ipos_img), Ni)
-    # j_range = np.linspace(np.min(jpos_img), np.max(jpos_img), Nj)
     i_range = np.linspace(min_coord, max_coord, Ni)
     j_range = np.linspace(min_coord, max_coord, Nj)
     ipos_grid, jpos_grid = np.meshgrid(i_range, j_range, indexing="ij")
 
     # 2D interpolation
-    # interp = LinearNDInterpolator(list(zip(azt, elt)), vals) # too long
-    interp = LinearNDInterpolator(list(zip(np.ravel(ipos_grid)[mymap_OK], np.ravel(jpos_grid)[mymap_OK])), mymap[mymap_OK])#, fill_value=0)
+    interp = LinearNDInterpolator(list(zip(np.ravel(ipos_grid)[mymap_OK], np.ravel(jpos_grid)[mymap_OK])), mymap[mymap_OK], fill_value=0)
 
     mymap_interp = interp(ipos_grid, jpos_grid)
     # plt.figure()
@@ -359,39 +332,6 @@ class filtgauss2dfit:
         # mygauss = amp * np.exp(-0.5*((self.xx - xc)**2+(self.yy - yc)**2)/sig**2)
         mygauss = amp * np.exp(-0.5*((self.iipos_large - xc)**2+(self.jjpos_large - yc)**2)/sig**2)
 
-
-        # To have an overview of the choice of indexing
-
-        # ipos_range = np.linspace(np.min(self.allipos), np.max(self.allipos), self.Npix)
-        # jpos_range = np.linspace(np.min(self.alljpos), np.max(self.alljpos), self.Npix)
-
-        # min_pos = np.min([self.allipos, self.alljpos])
-        # max_pos = np.max([self.allipos, self.alljpos])
-        # extre_pos = max(np.abs(min_pos), np.abs(max_pos))
-        # min_pos = - extre_pos
-        # max_pos = extre_pos
-        # ipos_range = np.linspace(min_pos, max_pos, self.Npix)
-        # jpos_range = np.linspace(min_pos, max_pos, self.Npix)
-        # xs = 201
-        # rot = 0 # [0, 0, 0]
-        # reso = 5
-        # range_deg = xs * reso /60
-        # min_coord = rot - range_deg/2
-        # max_coord = rot + range_deg/2
-        # ipos_range = np.linspace(min_coord, max_coord, xs)
-        # jpos_range = ipos_range.copy()
-        # img_test = TOD_to_flat_map(self.allipos, self.alljpos, np.ones(len(self.allipos)), ipos_range, jpos_range)
-        # plt.figure()
-        # plt.imshow(img_test)
-        # plt.show()
-
-        # mygauss[len(mygauss)//2, :] = 100000 # ligne horizontale (parce que imshow montre comme matrice)
-
-        # plt.figure()
-        # plt.imshow(mygauss)
-        # plt.show()
-        # sys.exit()
-
         my_gauss_tod = img_to_TOD(mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
         my_gauss_tod = my_filt(my_gauss_tod)
 
@@ -404,6 +344,16 @@ class filtgauss2dfit:
 
         # Get a flat map from the TOD without passing through Healpy
         myfiltgauss = TOD_to_flat_map(self.allipos, self.alljpos, my_gauss_tod, self.ipos, self.jpos)
+
+        # xs = 201
+        # rot = 0 # [0, 0, 0]
+        # reso = 5
+        # range_deg = xs * reso /60
+        # min_coord = rot - range_deg/2
+        # max_coord = rot + range_deg/2
+        # ipos_range = np.linspace(min_coord, max_coord, xs)
+        # jpos_range = ipos_range.copy()
+        # myfiltgauss = TOD_to_flat_map(self.allipos, self.alljpos, my_gauss_tod, ipos_range, jpos_range)
 
         return np.ravel(myfiltgauss)
     
@@ -517,23 +467,23 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         
         filtmapsn = get_filtmapsn(mapxy * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
         maxii = filtmapsn == np.nanmax(filtmapsn)
-        maxx = np.mean(iipos[maxii])
-        maxy = np.mean(jjpos[maxii])
-        guess = np.array([1e4, maxx, maxy, reso_instr])
+        max_i = np.mean(iipos[maxii])
+        max_j = np.mean(jjpos[maxii])
+        guess = np.array([1e4, max_i, max_j, reso_instr/conv_reso_fwhm])
         if verbose:
             print(guess)
     else:
-        maxx = guess[1]
-        maxy = guess[2]
+        max_i = guess[1]
+        max_j = guess[2]
         
     ### Do the fit putting the UNSEEN to a very low weight
     errpix = iipos*0 + ss
     errpix[mapxy==0] *= 1e5
     # g2d = gauss2dfit(iipos, jjpos)
     scantype, newazt, newelt, nside = pack
-    g2d = filtgauss2dfit(ipos, -jpos, scantype, newelt, -newazt, nside)                                                                                                   
+    g2d = filtgauss2dfit(ipos, jpos, scantype, newelt, newazt, nside) # not working anymore!!
     data = fit.Data(np.ravel(iipos), np.ravel(mapxy), np.ravel(errpix), g2d)
-    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, maxx - distok, maxx + distok], [2, maxy - distok, maxy + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
+    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
 
     ### Image of the fitted Gaussian
     fitted = np.reshape(g2d(ipos, m.values), (xs, xs))
@@ -550,7 +500,7 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
             axs[2].set_title('Residuals')
     
     if doplot:
-        axs = pmp.plot_fit_img(mapxy, axs, ipos, jpos, xguess=guess[1], yguess=guess[2], xfit=m.values[1], yfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
+        axs = pmp.plot_fit_img(mapxy, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=m.values[1], jfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
         return m, fitted, axs
     return m, fitted
     
@@ -579,9 +529,9 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
 
     # Other tests
     x = (np.arange(xs) - (xs - 1)/2)*reso/60
-    y = x.copy()
+    y = -x.copy()
     x += rot[1]
-    y += rot[0]
+    y -= rot[0]
 
 
     # print(np.min(y), np.max(y))

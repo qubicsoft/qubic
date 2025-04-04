@@ -1,11 +1,12 @@
 import numpy as np
-from scipy.interpolate import interp1d, RegularGridInterpolator
+from scipy.interpolate import interp1d, RegularGridInterpolator, LinearNDInterpolator
 import matplotlib.pyplot as plt
 from scipy.fft import fftfreq, fft2, ifft2
 import sys
 import healpy as hp
 import time
 from scipy.signal import butter, filtfilt, bessel
+import pandas as pd
 
 import fitting as fit
 import pickle
@@ -59,6 +60,32 @@ conv_reso_fwhm = 2.35482
 
 #########################
 
+    
+def mean_bin_data_nd(pos, values, bins): # data and bins have shape (ndims, ...)
+    # left limit of bins is excluded
+    # shape of pos has to be (ndims, npoints), with npoints in the TOD
+    print(np.shape(values))
+    ndims = len(pos)
+    bin_df = []
+    for i in range(ndims):
+        # print("in loop")
+        # print(np.shape(pos[i]))
+        ipos_df = pd.DataFrame(pos[i])
+        # print(ipos_df[0])
+        # test = pd.cut(ipos_df[0], bins=bins[i])
+        bin_df.append(pd.cut(ipos_df[0], bins=bins[i]))
+        # print("")
+        # print("cut")
+        # print(np.shape(test))
+    
+    values_df = pd.DataFrame(values)
+    values_binned = values_df.groupby([bin_df[i] for i in range(ndims)])
+
+    return  np.array(values_binned[0].mean())
+
+
+#########################
+
 def healpix_map(azt, elt, tod, flags=None, flaglimit=0, nside=128, countcut=0, unseen_val=hp.UNSEEN):
     if flags is None:
         flags = np.zeros(len(azt))
@@ -79,6 +106,89 @@ def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
     mapcount[unseen] = unseen_val
     mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
     return mymap, mapcount
+
+# def TOD_to_flat_map(azt, elt, vals, img_azt, img_elt):
+def TOD_to_flat_map(ipos, jpos, vals, ipos_img, jpos_img):
+    """
+    Create a flat (Ni, Nj) map from fake TOD created from a flat map (in order to skip the HEALPix stage).
+    It is the invert of img_to_TOD.
+    ipos, jpos: arrays (n)
+        Positions of TOD n points in i and j directions
+    vals: array (n)
+        Values of TOD n points
+    ipos_img: array (Ni)
+        Positions of image Ni points in i direction
+    jpos_img: array (Nj)
+        Positions of image Nj points in j direction
+    """
+
+    # test_indexing = True
+    # if test_indexing == True:
+    #     ipos = elt
+    #     jpos = azt
+    #     ipos_img = img_elt
+    #     jpos_img = img_azt
+    # else:
+    #     ipos = azt
+    #     jpos = elt
+    #     ipos_img = img_azt
+    #     jpos_img = img_elt
+
+    coord = [ipos, jpos]
+    # min_coord = np.min(coord)
+    # max_coord = np.max(coord)
+    Ni = len(ipos_img)
+    Nj = len(jpos_img)
+    img_coord = [ipos_img, jpos_img]
+    min_coord = np.min(img_coord)
+    max_coord = np.max(img_coord)
+    Npix = [Ni, Nj]
+    azel_pixsize = []
+    azel_bin = []
+    for k in range(len(coord)):
+        # azel_pixsize.append((np.max(coord[i]) - np.min(coord[i]))/(Npix[i] - 1)) # There are Npix - 1 pixels between the center of the left-most and the center of the right-most pixels
+        azel_pixsize.append((min_coord - max_coord)/(Npix[k] - 1)) # There are Npix - 1 pixels between the center of the left-most and the center of the right-most pixels
+        # azel_bin.append(np.linspace(np.min(coord[i]) - azel_pixsize[i]/2, np.max(coord[i]) + azel_pixsize[i]/2, Npix[i] + 1)) # Edges of pixels
+        # azel_bin.append(np.linspace(np.min(img_coord[i]) - azel_pixsize[i]/2, np.max(img_coord[i]) + azel_pixsize[i]/2, Npix[i] + 1)) # Edges of pixels
+        azel_bin.append(np.linspace(min_coord - azel_pixsize[k]/2, max_coord + azel_pixsize[k]/2, Npix[k] + 1)) # Edges of pixels
+        
+
+    # print(np.shape(azel_pixsize))
+    # print(np.shape(azel_bin))
+    # print(np.shape(coord))
+    mymap = mean_bin_data_nd(pos=coord, values=vals, bins=azel_bin)#.reshape(Ni, Nj)
+    mymap_OK = np.isfinite(mymap)
+
+    print(np.sum(mymap_OK))
+
+    # plt.figure()
+    # plt.imshow(mymap.reshape(Ni, Nj))
+    # plt.show()
+
+    # print(np.shape(mymap))
+    # print(Ni * Nj)
+    # sys.exit()
+    # print(mymap)
+
+    # azt_range = np.linspace(np.min(azt), np.max(azt), Ni)
+    # elt_range = np.linspace(np.min(elt), np.max(elt), Nj)
+    # i_range = np.linspace(np.min(ipos_img), np.max(ipos_img), Ni)
+    # j_range = np.linspace(np.min(jpos_img), np.max(jpos_img), Nj)
+    i_range = np.linspace(min_coord, max_coord, Ni)
+    j_range = np.linspace(min_coord, max_coord, Nj)
+    ipos_grid, jpos_grid = np.meshgrid(i_range, j_range, indexing="ij")
+
+    # 2D interpolation
+    # interp = LinearNDInterpolator(list(zip(azt, elt)), vals) # too long
+    interp = LinearNDInterpolator(list(zip(np.ravel(ipos_grid)[mymap_OK], np.ravel(jpos_grid)[mymap_OK])), mymap[mymap_OK])#, fill_value=0)
+
+    mymap_interp = interp(ipos_grid, jpos_grid)
+    # plt.figure()
+    # plt.imshow(mymap_interp)
+    # plt.show()
+    # sys.exit()
+
+    return mymap_interp
 
 
 #######################
@@ -103,8 +213,8 @@ def gauss2D(Nx, Ny, x0, y0, reso, amp=None, normal=True):
 
 def get_new_azel(azt, elt, azmoon, elmoon):
     newazt = (azt - azmoon) * np.cos(np.radians(elt))
-    newelt = -(elt - elmoon) # so the Moon is higher than trees in maps (?)
-    # newelt = (elt - elmoon)
+    # newelt = -(elt - elmoon) # so the Moon is higher than trees in maps (?)
+    newelt = (elt - elmoon)
     return newazt, newelt
 
 
@@ -226,31 +336,76 @@ class gauss2dfit:
         return np.ravel(mygauss)
 
 class filtgauss2dfit:
-    def __init__(self, xx, yy):
-        self.xx = xx
-        self.yy = yy
-        # self.i = 0
+    def __init__(self, ipos, jpos, scantype, allipos, alljpos, nside): # it seems that I should use ipos = elt and jpos = -azt
+        # self.xx = xx
+        # self.yy = yy
+        self.ipos = ipos
+        self.jpos = jpos
+        self.scantype = scantype
+        # We can cut newazt and newelt to the values of xx and yy?
+        self.allipos = allipos
+        self.alljpos = alljpos
+        self.nside = nside
+        # self.amp_azt = np.array([np.min(self.xx), np.max(self.xx)])
+        # self.amp_elt = np.array([np.min(self.yy), np.max(self.yy)])
+        self.Npix = 1000
+        self.allipos_range = np.linspace(np.min(allipos), np.max(allipos), self.Npix)
+        self.alljpos_range = np.linspace(np.min(alljpos), np.max(alljpos), self.Npix)
+        self.iipos_large, self.jjpos_large = np.meshgrid(self.allipos_range, self.alljpos_range, indexing="ij")
+        self.amp_ipos = np.array([np.min(self.iipos_large), np.max(self.iipos_large)])
+        self.amp_jpos = np.array([np.min(self.jjpos_large), np.max(self.jjpos_large)])
     def __call__(self, x, pars):
         amp, xc, yc, sig = pars
-        mygauss = amp * np.exp(-0.5*((self.xx - xc)**2+(self.yy - yc)**2)/sig**2)
-        mygauss_flat = np.ravel(mygauss)
-        # lowcut = 4/107.5 # 4/107.5, i.e. half a forth (or back) scan
-        # highcut = 2/107.5*100*5 # 2/107.5*100/4, i.e. approx. 4 % of a forth (or back) scan --> passer à 2% parce que 4% est trop proche de la taille de la Lune (2/107.5*100/6 makes the Moon round but it's fine-tuned for it...)
-        # myfiltgauss = butter_bandpass_filter(mygauss_flat, lowcut=lowcut, highcut=highcut, fs=150, order=2) # Hz
-        # myfiltgauss = butter_highpass_filter(mygauss_flat, lowcut=lowcut, fs=150, order=2) # Hz
+        # mygauss = amp * np.exp(-0.5*((self.xx - xc)**2+(self.yy - yc)**2)/sig**2)
+        mygauss = amp * np.exp(-0.5*((self.iipos_large - xc)**2+(self.jjpos_large - yc)**2)/sig**2)
 
-        # Not working yet, has to be TOD and not just a flat map! Anyway, this will be done with the
-        # synthesized beam, not a gaussian
-        myfiltgauss = my_filt(mygauss_flat)
 
-        # filtgauss2d = np.reshape(myfiltgauss, np.shape(self.xx))
-        # if self.i == 0:
-        #     plt.figure()
-        #     plt.imshow(filtgauss2d)
-        #     plt.show()
-        #     self.i += 1
-        #     sys.exit()
-        return myfiltgauss
+        # To have an overview of the choice of indexing
+
+        # ipos_range = np.linspace(np.min(self.allipos), np.max(self.allipos), self.Npix)
+        # jpos_range = np.linspace(np.min(self.alljpos), np.max(self.alljpos), self.Npix)
+
+        # min_pos = np.min([self.allipos, self.alljpos])
+        # max_pos = np.max([self.allipos, self.alljpos])
+        # extre_pos = max(np.abs(min_pos), np.abs(max_pos))
+        # min_pos = - extre_pos
+        # max_pos = extre_pos
+        # ipos_range = np.linspace(min_pos, max_pos, self.Npix)
+        # jpos_range = np.linspace(min_pos, max_pos, self.Npix)
+        # xs = 201
+        # rot = 0 # [0, 0, 0]
+        # reso = 5
+        # range_deg = xs * reso /60
+        # min_coord = rot - range_deg/2
+        # max_coord = rot + range_deg/2
+        # ipos_range = np.linspace(min_coord, max_coord, xs)
+        # jpos_range = ipos_range.copy()
+        # img_test = TOD_to_flat_map(self.allipos, self.alljpos, np.ones(len(self.allipos)), ipos_range, jpos_range)
+        # plt.figure()
+        # plt.imshow(img_test)
+        # plt.show()
+
+        # mygauss[len(mygauss)//2, :] = 100000 # ligne horizontale (parce que imshow montre comme matrice)
+
+        # plt.figure()
+        # plt.imshow(mygauss)
+        # plt.show()
+        # sys.exit()
+
+        my_gauss_tod = img_to_TOD(mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
+        my_gauss_tod = my_filt(my_gauss_tod)
+
+        # myfiltgauss_hp, _ = healpix_map(self.allipos[self.scantype > 0], self.alljpos[self.scantype > 0], my_gauss_tod[self.scantype > 0], nside=self.nside)
+        # rot = np.array([0, 0, 0])
+        # reso = 5
+        # xs = 201
+        # myfiltgauss = hp.gnomview(myfiltgauss_hp, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
+        # # sys.exit()
+
+        # Get a flat map from the TOD without passing through Healpy
+        myfiltgauss = TOD_to_flat_map(self.allipos, self.alljpos, my_gauss_tod, self.ipos, self.jpos)
+
+        return np.ravel(myfiltgauss)
     
 
 def get_dict(params):
@@ -321,19 +476,21 @@ def img_to_TOD(img, amp_azt, amp_elt, newazt, newelt):
     amplitude = np.array([amp_azt, amp_elt]) # Here amplitude contains the intervals in azimuth and elevation for the pixels' centers
     for i, coord in enumerate(["az", "el"]):
         azel_arr.append(np.linspace(amplitude[i, 0], amplitude[i, 1], Npix[i]))
-    print("new azt in ({}, {}), new elt in ({}, {})".format(np.min(azel_arr[0]), np.max(azel_arr[0]), np.min(azel_arr[1]), np.max(azel_arr[1])))
-    print(np.min(newazt), np.max(newazt), np.min(newelt), np.max(newelt))
+    # print("new azt in ({}, {}), new elt in ({}, {})".format(np.min(azel_arr[0]), np.max(azel_arr[0]), np.min(azel_arr[1]), np.max(azel_arr[1])))
+    # print(np.min(newazt), np.max(newazt), np.min(newelt), np.max(newelt))
     grid_interp = RegularGridInterpolator( (azel_arr[0], azel_arr[1]), img, method='nearest' ) 
     img_tod = grid_interp((newazt, newelt))
     return img_tod
 
-def map_to_TOD(hp_map, nside):
-    # To create fake TOD quickly from an input HEALPix map (not finished)
-    theta, phi = hp.pix2ang(nside, np.arange(len(hp_map)), lonlat=True) # longitute and latitude in degrees, need to convert to azimuth elevation
-    return None
+def map_to_TOD(hp_map, newazt, newelt):
+    # To create fake TOD quickly from an input HEALPix map
+    # Use azimuth, elevation as latitude and longitude in degrees
+    map_tod = hp.get_interp_val(hp_map, newazt, newelt, lonlat=True)
+    return map_tod
 
-def fitgauss_img(mapxy, x, y, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None):
-    xx, yy = np.meshgrid(x, y, indexing="xy")
+def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None):
+    # xx, yy = np.meshgrid(x, y, indexing="xy")
+    iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     
     ### Displays the image as an array
     mm, ss = ft.meancut(mapxy, 3)
@@ -360,8 +517,8 @@ def fitgauss_img(mapxy, x, y, xs, guess=None, doplot=False, distok=3, mytit='', 
         
         filtmapsn = get_filtmapsn(mapxy * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
         maxii = filtmapsn == np.nanmax(filtmapsn)
-        maxx = np.mean(xx[maxii])
-        maxy = np.mean(yy[maxii])
+        maxx = np.mean(iipos[maxii])
+        maxy = np.mean(jjpos[maxii])
         guess = np.array([1e4, maxx, maxy, reso_instr])
         if verbose:
             print(guess)
@@ -370,35 +527,36 @@ def fitgauss_img(mapxy, x, y, xs, guess=None, doplot=False, distok=3, mytit='', 
         maxy = guess[2]
         
     ### Do the fit putting the UNSEEN to a very low weight
-    errpix = xx*0+ss
+    errpix = iipos*0 + ss
     errpix[mapxy==0] *= 1e5
-    g2d = gauss2dfit(xx, yy)
-    # g2d = filtgauss2dfit(xx, yy)
-    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), g2d)
+    # g2d = gauss2dfit(iipos, jjpos)
+    scantype, newazt, newelt, nside = pack
+    g2d = filtgauss2dfit(ipos, -jpos, scantype, newelt, -newazt, nside)                                                                                                   
+    data = fit.Data(np.ravel(iipos), np.ravel(mapxy), np.ravel(errpix), g2d)
     m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, maxx - distok, maxx + distok], [2, maxy - distok, maxy + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
 
     ### Image of the fitted Gaussian
-    fitted = np.reshape(g2d(x, m.values), (xs, xs))
+    fitted = np.reshape(g2d(ipos, m.values), (xs, xs))
 
     if doplot:
-        origin = "upper" #"lower" swaps the y-axis and the guess doesn't match 
+        origin = "upper" #"lower" swaps the y-axis and the guess doesn't match, default is "upper"
         if axs is None:
             fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(16, 5))
-            axs[1].imshow(fitted, origin=origin, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
-            im = axs[2].imshow(mapxy - fitted, origin=origin, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
+            axs[1].imshow(fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
+            im = axs[2].imshow(mapxy - fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
             axs[0].set_ylabel('Degrees')
             for i in range(3):
                 axs[i].set_xlabel('Degrees')
             axs[2].set_title('Residuals')
     
     if doplot:
-        axs = pmp.plot_fit_img(mapxy, axs, x, y, xguess=guess[1], yguess=guess[2], xfit=m.values[1], yfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
+        axs = pmp.plot_fit_img(mapxy, axs, ipos, jpos, xguess=guess[1], yguess=guess[2], xfit=m.values[1], yfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
         return m, fitted, axs
     return m, fitted
     
     
 
-def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, xycreid_corr=None, axs=None):
+def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, xycreid_corr=None, axs=None, pack=None):
     ### get the gnomview back into a np.array in order to fit it
     mm = mymap.copy()
     badpix = mm == hp.UNSEEN
@@ -408,10 +566,10 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
     ### np.array coordinates
     # Doesn't work with the fit plot but is ok with final gnomview plot of the Moon map corrected
     # But in order to stack the maps I now have to use (azt, -elt) position fitted here (why??)
-    x = -(np.arange(xs) - (xs - 1)/2)*reso/60
-    y = x.copy()
-    x += rot[0]
-    y -= rot[1]
+    # x = -(np.arange(xs) - (xs - 1)/2)*reso/60
+    # y = x.copy()
+    # x += rot[0]
+    # y -= rot[1]
 
     # Works on fit plot but then azt and elt are with the wrong sign on the final gnomview plot. Weird!!
     # x = (np.arange(xs) - (xs - 1)/2)*reso/60
@@ -420,10 +578,10 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
     # y += rot[1]
 
     # Other tests
-    # x = (np.arange(xs) - (xs - 1)/2)*reso/60
-    # y = x.copy()
-    # x -= rot[0]
-    # y += rot[1]
+    x = (np.arange(xs) - (xs - 1)/2)*reso/60
+    y = x.copy()
+    x += rot[1]
+    y += rot[0]
 
 
     # print(np.min(y), np.max(y))
@@ -442,11 +600,11 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
         
         
     if doplot:
-        m, fitted, fig_axs = fitgauss_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso)
+        m, fitted, fig_axs = fitgauss_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso, pack=pack)
         if verbose:
             print(m.values)
     else:
-        m, fitted = fitgauss_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso)
+        m, fitted = fitgauss_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack)
     # try:
     #     m, fitted = fitgauss_img(mapxy, x, y, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm)
     # except:
@@ -841,7 +999,8 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
     # Get central Az and El from pointing
     # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
     center = [np.mean(newazt), np.mean(newelt)]
-    return allmaps, data, center, newazt, newelt
+    return allmaps, data, center, newazt, newelt, scantype
+
 
 # from QdataHandling
 def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, doplot=False, plotrange=[0,1000]):
@@ -1023,6 +1182,8 @@ def get_synthbeam_freqs(nsub=16, nside=512):
     qubic_dict["noiseless"] = True
     qubic_dict["npointings"] = 2
 
+    # print(qubic_dict)
+
     idet = 67
     acq = Qacquisition.QubicMultiAcquisitions(qubic_dict, nsub=qubic_dict['nf_sub'], nrec=2)
     synthbeam_list = [acq.subacqs[ifreq].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0] for ifreq in range(nsub//2)] # only first band sub bands
@@ -1131,20 +1292,19 @@ def fitsb_img(mapxy, x, y, xs, guess=None, doplot=False, distok=3, mytit='', nsi
         sb_img = np.flip(np.swapaxes(sb_img, 0, 1), 1)
         ft_shape = fft2(sb_img)
         
-        
         filtmapsn = get_filtmapsn(mapxy * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
 
-        plt.figure()
-        plt.imshow(sb_img, origin="lower")
-        plt.show()
+        # plt.figure()
+        # plt.imshow(sb_img, origin="lower")
+        # plt.show()
     
-        plt.figure()
-        plt.imshow(mapxy)
-        plt.show()
+        # plt.figure()
+        # plt.imshow(mapxy)
+        # plt.show()
 
-        plt.figure()
-        plt.imshow(filtmapsn)
-        plt.show()
+        # plt.figure()
+        # plt.imshow(filtmapsn)
+        # plt.show()
         maxii = filtmapsn == np.nanmax(filtmapsn)
         maxx = np.mean(xx[maxii])
         maxy = np.mean(yy[maxii])
@@ -1159,9 +1319,11 @@ def fitsb_img(mapxy, x, y, xs, guess=None, doplot=False, distok=3, mytit='', nsi
     errpix = xx*0+ss
     errpix[mapxy==0] *= 1e5
     g2d = gauss2dfit(xx, yy)
-    # g2d = filtgauss2dfit(xx, yy)
-    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), g2d)
+    sb2d = synthbeam2dfit(sb_hp_map)
+    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), sb2d)
     m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, maxx - distok, maxx + distok], [2, maxy - distok, maxy + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
+
+    limits=[[0, -180, 180], [1, -180, 180], [2, -180, 180], [3, -180, 180]]
 
     ### Image of the fitted Gaussian
     fitted = np.reshape(g2d(x, m.values), (xs, xs))
@@ -1243,13 +1405,22 @@ def fit_one_tes_sb(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, ve
         return m, mapxy, fitted, [np.min(x), np.max(x), np.min(y), np.max(y)], fig_axs
     return m
     
-
-
-class gauss2dfit:
-    def __init__(self, xx, yy):
+class synthbeam2dfit:
+    def __init__(self, sb_hp_map, newazt, newelt, scantype, xx, yy):
         self.xx = xx
         self.yy = yy
+        self.sb_hp_map = sb_hp_map
+        self.newazt = newazt
+        self.newelt = newelt
+        self.scantype = scantype
+        self.nside = np.sqrt(len(self.sb_hp_map)/12)
     def __call__(self, x, pars):
-        amp, xc, yc, sig = pars
-        mygauss = amp * np.exp(-0.5*((self.xx-xc)**2+(self.yy-yc)**2)/sig**2)
-        return np.ravel(mygauss)
+        rot1, rot2, rot3 = pars
+        rotator = hp.rotator.Rotator(rot=(rot1, rot2, rot3), eulertype="X", deg=True)
+        self.synthbeam_rot = rotator.rotate_map_alms(self.synthbeam) * self.amp_slider.val
+        fake_TOD = map_to_TOD(self.synthbeam_rot, self.newazt, self.newelt)
+        fake_TOD = my_filt(fake_TOD)
+        synthbeam_rot_filt, _ = healpix_map(self.newazt[self.scantype != 0], self.newelt[self.scantype != 0], fake_TOD[self.scantype != 0], nside=self.nside)
+        sb_map = hp.gnomview(synthbeam_rot_filt, reso=self.reso, rot=[0, 0, 0], min=-5e2, max=1e6, return_projected_map=True, xsize=self.xs, no_plot=True).data
+
+        return np.ravel(sb_map)

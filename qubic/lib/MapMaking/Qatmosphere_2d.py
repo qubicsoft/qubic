@@ -459,13 +459,13 @@ class AtmosphereMaps(AtmosphereProperties):
         
         return kx, ky, k_norm
     
-    def kolmogorov_spectrum_2d(self, k, r0):
-        r"""Kolmogorov 2d spectrum.
+    def kolmogorov_spectrum(self, k, r0):
+        r"""Kolmogorov spectrum.
         
-        Compute the Kolmogorov 2d spectrum, which simulate the power spectrum of the spatial fluctuations of the water vapor density, following the equation :
+        Compute the Kolmogorov spectrum, which simulate the power spectrum of the spatial fluctuations of the water vapor density, following the equation :
         
         .. math::
-            P(\textbf{k}) = (r_0^{-2} + \lvert \textbf{k} \rvert ^{2})^{-8/6} .
+            P(\textbf{k}) = (r_0^{-2} + \lvert \textbf{k} \rvert ^{2})^{-11/6} .
         
 
         Parameters
@@ -477,16 +477,19 @@ class AtmosphereMaps(AtmosphereProperties):
 
         Returns
         -------
-        kolmogorov_spectrum_2d : array_like
-            Kolmogorov 2d spectrum.
+        kolmogorov_spectrum : array_like
+            Kolmogorov spectrum.
         """        
         
-        return (r0**(-2) + np.abs(k)**2)**(-8/6)
+        if self.params["2d"]:
+            return (r0**(-2) + np.abs(k)**2)**(-8/6)
+        else:
+            return (r0**(-2) + np.abs(k)**2)**(-11/6)
     
-    def normalized_kolmogorov_spectrum_2d(self, k, r0):
-        r"""Normalized Kolmogorov 2d spectrum.
+    def normalized_kolmogorov_spectrum(self, k, r0):
+        r"""Normalized Kolmogorov spectrum.
         
-        Compute the normalized Kolmogorov 2d spectrum, to ensure :
+        Compute the normalized Kolmogorov spectrum, to ensure :
         
         .. math::
             \int_\textbf{k} P(\textbf{k}) d\textbf{k} = 1 .
@@ -494,21 +497,21 @@ class AtmosphereMaps(AtmosphereProperties):
         Parameters
         ----------
         k : array_like
-            Array containing the spatial frequencies at which we want to compute the normalized Kolmogorov 2d spectrum.
+            Array containing the spatial frequencies at which we want to compute the normalized Kolmogorov spectrum.
         r0 : float
             Maximum spatial coherence length of the water vapor density, in m.
 
         Returns
         -------
-        normalized_kolmogorov_spectrum_2d : array_like
-            Normalized Kolmogorov 2d spectrum.
+        normalized_kolmogorov_spectrum : array_like
+            Normalized Kolmogorov spectrum.
             
         """        
         
         ### Compute the normalization constant
-        res, _ = quad(self.kolmogorov_spectrum_2d, np.min(k), np.max(k), args=(r0))
+        res, _ = quad(self.kolmogorov_spectrum, np.min(k), np.max(k), args=(r0))
         
-        return self.kolmogorov_spectrum_2d(k, r0) / res
+        return self.kolmogorov_spectrum(k, r0) / res
     
     def generate_spatial_fluctuations_fourier(self, n_grid, size_atm, r0):
         """Spatial 2d fluctuations.
@@ -533,8 +536,8 @@ class AtmosphereMaps(AtmosphereProperties):
         #! At some point, we will need to normalize these fluctuations using real data. We can maybe use :math:`\sigma_{PWV}` that can be estimated with figure 4 in Morris 2021.
         
         ### Compute the spatial frequencies & power spectrum.
-        _, _, k = self.get_fourier_grid_2d(n_grid, size_atm)
-        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum_2d(k, r0)
+        _, _, k = self.get_fourier_grid(n_grid, size_atm)
+        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(k, r0)
 
         ### Generate spatial fluctuations through random phases in Fourier space
         phi = np.random.uniform(0, 2*np.pi, size=(self.params['n_grid'], self.params['n_grid']))

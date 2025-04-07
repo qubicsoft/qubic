@@ -59,7 +59,7 @@ class AtmosphereProperties:
                 
         ### Compute absorption spectrum
         self.abs_spectrum = self.absorption_spectrum()
-        self.integrated_abs_spectrum, self.frequencies = self.integrated_absorption_spectrum()
+        self.integrated_abs_spectrum, self.frequencies, self.bandwidths = self.integrated_absorption_spectrum()
         
     def get_qubic_dict(self, key="in"):
         """QUBIC dictionary.
@@ -371,7 +371,7 @@ class AtmosphereProperties:
         freq_step = (freq_max - freq_min) / (len(self.integration_frequencies) - 1)
 
         ### Compute the frequency sub-bands within the QUBIC band and their associated indexes
-        _, nus_edges, nus, _, _, N_bands = compute_freq(
+        _, nus_edges, nus, bandwidths, _, N_bands = compute_freq(
             band=band, 
             Nfreq=int(self.params['nsub_in']/2), 
             relative_bandwidth=self.qubic_dict['filter_relative_bandwidth']
@@ -379,15 +379,16 @@ class AtmosphereProperties:
         nus_edge_index = np.round((nus_edges - freq_min) / freq_step).astype(int)
 
         ### Integrate the absorption spectrum over the frequency sub-bands using the trapezoidal method
+        # Need to normalize by the bandwidth to get average absorption coefficient
         integrated_abs_spectrum = np.array([
             np.trapz(
                 self.abs_spectrum[nus_edge_index[i]:nus_edge_index[i+1]], 
                 x=self.integration_frequencies[nus_edge_index[i]:nus_edge_index[i+1]]
-            )
+            ) / (nus_edges[i+1] - nus_edges[i])
             for i in range(N_bands)
         ])
         
-        return integrated_abs_spectrum, nus
+        return integrated_abs_spectrum, nus, bandwidths
     
     def integrated_absorption_spectrum(self):
         """Integrated absorption spectrum.
@@ -404,10 +405,10 @@ class AtmosphereProperties:
         """        
         
         ### Get the integrated absorption spectrum in the two QUBIC bands : 150 and 220 GHz
-        int_abs_spectrum_150, nus_150 = self.get_integrated_absorption_spectrum(band=150)
-        int_abs_spectrum_220, nus_220 = self.get_integrated_absorption_spectrum(band=220)
+        int_abs_spectrum_150, nus_150, bandwidths_150 = self.get_integrated_absorption_spectrum(band=150)
+        int_abs_spectrum_220, nus_220, bandwidths_220 = self.get_integrated_absorption_spectrum(band=220)
         
-        return np.append(int_abs_spectrum_150, int_abs_spectrum_220), np.append(nus_150, nus_220)
+        return np.append(int_abs_spectrum_150, int_abs_spectrum_220), np.append(nus_150, nus_220), np.append(bandwidths_150, bandwidths_220)
     
 class AtmosphereMaps(AtmosphereProperties):
     

@@ -421,10 +421,10 @@ class AtmosphereMaps(AtmosphereProperties):
         self.lmax = 3*self.params['nside']-1
         
         ### Build water vapor density map
-        self.rho_map = self.get_water_vapor_density_2d_map(self.mean_water_vapor_density, flat=self.params['flat'])
+        self.delta_rho_map = self.get_water_vapor_density_fluctuation_2d_map(flat=self.params['flat'])
         
         ### Build the temperature maps of the atmosphere
-        self.atm_temp_maps = self.get_temp_maps(self.rho_map)
+        self.atm_temp_maps = self.get_temp_maps(self.delta_rho_map)
         
     def get_fourier_grid_2d(self, n_grid, size_atm):
         """Fourier 2d grid.
@@ -454,12 +454,12 @@ class AtmosphereMaps(AtmosphereProperties):
         k_distrib_x = np.fft.fftfreq(n_grid, d=2*size_atm/n_grid) * 2*np.pi
         
         ### Build 2d grid and compute the norm of the spatial frequencies
-        kx, ky = np.meshgrid(k_distrib_x, k_distrib_y)
+        kx, ky = np.meshgrid(k_distrib_x, k_distrib_y, indexing='ij')
         k_norm = np.sqrt(kx**2 + ky**2)
         
         return kx, ky, k_norm
     
-    def kolmogorov_spectrum(self, k, r0):
+    def kolmogorov_spectrum(self, k, r0, sigma_wv=None, atm_size=None):
         r"""Kolmogorov spectrum.
         
         Compute the Kolmogorov spectrum, which simulate the power spectrum of the spatial fluctuations of the water vapor density, following the equation :
@@ -482,11 +482,22 @@ class AtmosphereMaps(AtmosphereProperties):
         """        
         
         if self.params["2d"]:
-            return (r0**(-2) + np.abs(k)**2)**(-8/6)
+            exposant = -8/6
         else:
-            return (r0**(-2) + np.abs(k)**2)**(-11/6)
-    
-    def normalized_kolmogorov_spectrum(self, k, r0):
+            exposant = -11/6
+        
+        k_r0 = 2 * np.pi / r0
+        P = (k_r0**2 + k**2) ** exposant
+        
+        if self.params["adjust"] and sigma_wv is not None and atm_size is not None:
+            # Compute normalization constant C
+            sum_kk = np.sum(P)
+            C = sigma_wv * (atm_size ** 2) / sum_kk
+            P *= C
+
+        return P
+
+    def normalized_kolmogorov_spectrum(self, k, r0, sigma_wv=None, atm_size=None):
         r"""Normalized Kolmogorov spectrum.
         
         Compute the normalized Kolmogorov spectrum, to ensure :
@@ -509,11 +520,11 @@ class AtmosphereMaps(AtmosphereProperties):
         """        
         
         ### Compute the normalization constant
-        res, _ = quad(self.kolmogorov_spectrum, np.min(k), np.max(k), args=(r0))
+        res, _ = quad(lambda x: self.kolmogorov_spectrum(x, r0, sigma_wv, atm_size), np.min(k), np.max(k))
         
-        return self.kolmogorov_spectrum(k, r0) / res
+        return self.kolmogorov_spectrum(k, r0, sigma_wv, atm_size) / res    
     
-    def generate_spatial_fluctuations_fourier(self, n_grid, size_atm, r0):
+    def generate_spatial_fluctuations_fourier(self, n_grid, size_atm, r0, sigma_wv=None, atm_size=None):
         """Spatial 2d fluctuations.
         
         Produce the spatial fluctuations of the water vapor density, by generating random phases in Fourier space, and then computing the inverse Fourier transform.
@@ -536,8 +547,8 @@ class AtmosphereMaps(AtmosphereProperties):
         #! At some point, we will need to normalize these fluctuations using real data. We can maybe use :math:`\sigma_{PWV}` that can be estimated with figure 4 in Morris 2021.
         
         ### Compute the spatial frequencies & power spectrum.
-        _, _, k = self.get_fourier_grid(n_grid, size_atm)
-        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(k, r0)
+        _, _, k = self.get_fourier_grid_2d(n_grid, size_atm)
+        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(k, r0, sigma_wv, atm_size)
 
         ### Generate spatial fluctuations through random phases in Fourier space
         phi = np.random.uniform(0, 2*np.pi, size=(self.params['n_grid'], self.params['n_grid']))
@@ -545,6 +556,9 @@ class AtmosphereMaps(AtmosphereProperties):
 
         ### Apply inverse Fourier transform to obtain spatial fluctuations in real space
         delta_rho = np.fft.ifft2(delta_rho_k, s=(self.params['n_grid'], self.params['n_grid'])).real
+        
+        ### Normalize to ensure correct variance
+        delta_rho *= np.sqrt(sigma_wv / np.var(delta_rho))
         
         return delta_rho  
     
@@ -739,7 +753,7 @@ class AtmosphereMaps(AtmosphereProperties):
         
         return ell, clth
     
-    def generate_spatial_fluctuation_sphercial_harmonics(self):
+    def generate_spatial_fluctuation_sphercial_harmonics(self, sigma_wv=None, atm_size=None):
         """Spatial fluctuation map from angular correlation function.
         
         Compute the spatial fluctuation HEALPix map from the angular correlation function, using the function 'ctheta_2_cell'.
@@ -757,12 +771,20 @@ class AtmosphereMaps(AtmosphereProperties):
         ### Compute spherical harmonics from angular correlation function
         _, clth = self.ctheta_2_cell(theta, ctheta, self.lmax, normalization=self.params['normalization'])
         
+        if self.params['adjust']:
+            sum_cl = np.sum(clth)
+            C = sigma_wv * (atm_size ** 2) / sum_cl
+            clth *= C
+        
         ### Build fluctuations map
         delta_rho = hp.synfast(clth, nside=self.params['nside'], lmax=self.lmax)
         
+        ### Normalize the map to ensure correct variance
+        delta_rho *= np.sqrt(sigma_wv / np.var(delta_rho))
+        
         return delta_rho
         
-    def get_water_vapor_density_2d_map(self, mean_rho, flat=True):
+    def get_water_vapor_density_fluctuation_2d_map(self, flat=True):
         """Water vapor density 2d map.
         
         Get the water vapor density 2d map with simulated fluctuations.
@@ -784,14 +806,11 @@ class AtmosphereMaps(AtmosphereProperties):
         
         ### Build water vapor density fluctuations
         if flat:
-            delta_rho = self.generate_spatial_fluctuations_fourier(self.params['n_grid'], self.params['size_atm'], self.params['correlation_length'])
+            delta_rho = self.generate_spatial_fluctuations_fourier(self.params['n_grid'], self.params['size_atm'], self.params['correlation_length'], sigma_wv=self.params['sigma_rho'], atm_size=self.params['size_atm'])
         else:
-            delta_rho = self.generate_spatial_fluctuation_sphercial_harmonics()
-            
-        ### Normalize fluctuations
-        normalized_delta_rho = delta_rho * np.sqrt(self.params['sigma_rho'] / np.var(delta_rho))  
+            delta_rho = self.generate_spatial_fluctuation_sphercial_harmonics(sigma_wv=self.params['sigma_rho'], atm_size=self.params['size_atm'])
 
-        return mean_rho + normalized_delta_rho
+        return delta_rho
         
     def get_temp_maps(self, maps):
         r"""Atmosphere maps.
@@ -816,14 +835,13 @@ class AtmosphereMaps(AtmosphereProperties):
         """
         
         ### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021
-        ###! I assume that the multiplication by the beam profile is done when applying the acquisition operator.
         if len(maps.shape) == 1:
             temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.temperature * maps
         else:
             temp_maps = self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.temperature * maps
             
         ### Convert them into micro Kelvin CMB
-        temp_maps -= Planck18.Tcmb0.value
+        #temp_maps -= Planck18.Tcmb0.value
         temp_maps *= 1e6
         
         return temp_maps

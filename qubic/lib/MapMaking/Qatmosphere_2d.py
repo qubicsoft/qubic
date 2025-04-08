@@ -837,9 +837,9 @@ class AtmosphereMaps(AtmosphereProperties):
         
         ### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021
         if len(maps.shape) == 1:
-            temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.temperature * maps
+            temp_maps = self.integrated_abs_spectrum[:, np.newaxis] * self.mean_water_vapor_density * self.temperature * maps
         else:
-            temp_maps = self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.temperature * maps
+            temp_maps = self.integrated_abs_spectrum[:, np.newaxis, np.newaxis] * self.mean_water_vapor_density * self.temperature * maps
             
         ### Convert them into micro Kelvin CMB
         #temp_maps -= Planck18.Tcmb0.value

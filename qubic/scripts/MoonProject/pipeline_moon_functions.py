@@ -7,6 +7,9 @@ import healpy as hp
 import time
 from scipy.signal import butter, filtfilt, bessel
 import pandas as pd
+import jax
+import jax.numpy as jnp
+from fast_histogram import histogram2d
 
 import fitting as fit
 import pickle
@@ -60,6 +63,33 @@ conv_reso_fwhm = 2.35482
 
 #########################
 
+# def timer(f, *args):
+#     starttime = time.time()
+#     result = f(*args)
+#     result = jax.block_until_ready(result) # ensure the result is done running for timing purposes
+#     endtime = time.time()
+#     return endtime - starttime
+
+def timer(f, *args):
+    """
+    wrap a function to monitor its runtime and compile time:
+    result = timer(f, inputs)
+    """
+    # running the function twice
+    starttime = time.time()
+    result1 = f(*args)
+    result1 = jax.block_until_ready(result1) # ensure the result is done running for timing purposes
+    midtime = time.time()
+    result2 = f(*args)
+    result2 = jax.block_until_ready(result2) # ensure the result is done running for timing purposes
+    endtime = time.time()
+    # deducing runtime and compile time
+    runtime1 = midtime - starttime
+    runtime2 = endtime - midtime
+    compiletime = runtime1 - runtime2
+    print(f"runtime: {runtime2} compiletime: {compiletime}")
+    # returning the result
+    return result2
     
 def mean_bin_data_nd(pos, values, bins): # data and bins have shape (ndims, ...)
     # left limit of bins is excluded
@@ -84,6 +114,163 @@ def mean_bin_data_nd(pos, values, bins): # data and bins have shape (ndims, ...)
     return  np.array(values_binned[0].mean())
 
 
+def cond(pred, true_fun, false_fun, operand):
+  if pred:
+    return true_fun(operand)
+  else:
+    return false_fun(operand)
+
+
+# def mean_2d_bin_data(pos, values, bins): # pos and bins have shape (2, ...)
+#     # left limit of bins is excluded
+#     # shape of pos has to be (2, npoints), with npoints in the TOD
+#     n_i = len(bins[0]) - 1
+#     n_j = len(bins[1]) - 1
+#     res = jnp.zeros((n_i, n_j))
+#     # res = jnp.arange(n_i*n_j).reshape(n_i, n_j)
+#     tot_n_count = 0
+#     def n_count_not_zero(operand):
+#         values, mask_values_ij, n_count = operand
+#         # res.at[i, j].set(jnp.sum(values*mask_values_ij)/n_count)
+#         # print("here we are")
+#         return jnp.sum(values*mask_values_ij)/n_count
+#     def n_count_zero(operand):
+#         values, mask_values_ij, n_count = operand
+#         return jnp.sum(values*jnp.nan)
+#     def loop_j(j, val):
+#         res_i, i, mask_values_i, tot_n_count = val
+#         # i, mask_values_i, tot_n_count = val
+#         mask_values_j = (bins[1][j] < pos[1]) & (pos[1] <= bins[1][j + 1])
+#         mask_values_ij = mask_values_i * mask_values_j
+#         n_count = jnp.sum(mask_values_ij)
+#         operand = values, mask_values_ij, n_count
+#         new_res_ij = jax.lax.cond(n_count > 0, 
+#                     n_count_not_zero, 
+#                     n_count_zero,
+#                     operand)
+#         # res.at[i, j].set(new_res_ij)
+#         # tot_n_count = tot_n_count + n_count
+#         tot_n_count = tot_n_count + new_res_ij
+#         res_i = res_i.at[j].set(new_res_ij)
+#         return res_i, i, mask_values_i, tot_n_count
+#     def loop_i(i, val):
+#         res, tot_n_count = val
+#         res_i = res[i]
+#         mask_values_i = (bins[0][i] < pos[0]) & (pos[0] <= bins[0][i + 1])
+#         res_i, i, mask_values_i, tot_n_count = jax.lax.fori_loop(0, n_j, loop_j, init_val=(res_i, i, mask_values_i, tot_n_count))
+#         res = res.at[i].set(res_i)
+#         return res, tot_n_count
+#     res, tot_n_count = jax.lax.fori_loop(0, n_i, loop_i, init_val=(res, tot_n_count))
+#     return res#, tot_n_count
+
+# def mean_2d_bin_data(pos, values, bins): # pos and bins have shape (2, ...)
+#     # left limit of bins is excluded
+#     # shape of pos has to be (2, npoints), with npoints in the TOD
+#     n_i = len(bins[0]) - 1
+#     n_j = len(bins[1]) - 1
+#     res = jnp.zeros((n_i, n_j))
+#     # res = jnp.arange(n_i*n_j).reshape(n_i, n_j)
+#     tot_n_count = 0
+#     def n_count_not_zero(operand):
+#         values, mask_values_ij, n_count = operand
+#         # res.at[i, j].set(jnp.sum(values*mask_values_ij)/n_count)
+#         # print("here we are")
+#         return jnp.sum(values*mask_values_ij)/n_count
+#     def n_count_zero(operand):
+#         values, mask_values_ij, n_count = operand
+#         return jnp.sum(values*jnp.nan)
+#     def loop_j(j, val):
+#         res, i, mask_values_i, tot_n_count = val
+#         # i, mask_values_i, tot_n_count = val
+#         mask_values_j = (bins[1][j] < pos[1]) & (pos[1] <= bins[1][j + 1])
+#         mask_values_ij = mask_values_i * mask_values_j
+#         n_count = jnp.sum(mask_values_ij)
+#         operand = values, mask_values_ij, n_count
+#         new_res_ij = jax.lax.cond(n_count > 0, 
+#                     n_count_not_zero, 
+#                     n_count_zero,
+#                     operand)
+#         # res.at[i, j].set(new_res_ij)
+#         # tot_n_count = tot_n_count + n_count
+#         tot_n_count = tot_n_count + new_res_ij
+#         res = res.at[i, j].set(new_res_ij)
+#         return res, i, mask_values_i, tot_n_count
+#     def loop_i(i, val):
+#         res, tot_n_count = val
+#         mask_values_i = (bins[0][i] < pos[0]) & (pos[0] <= bins[0][i + 1])
+#         res, i, mask_values_i, tot_n_count = jax.lax.fori_loop(0, n_j, loop_j, init_val=(res, i, mask_values_i, tot_n_count))
+#         # res = res.at[i].set(res.at[i])
+#         return res, tot_n_count
+#     res, tot_n_count = jax.lax.fori_loop(0, n_i, loop_i, init_val=(res, tot_n_count))
+#     return res#, tot_n_count
+
+# def mean_2d_bin_data(pos, values, bins): # pos and bins have shape (2, ...)
+#     # left limit of bins is excluded
+#     # shape of pos has to be (2, npoints), with npoints in the TOD
+#     n_i = len(bins[0]) - 1
+#     n_j = len(bins[1]) - 1
+#     # res = jnp.zeros((n_i, n_j))
+#     # res = jnp.arange(n_i*n_j).reshape(n_i, n_j)
+#     tot_n_count = 0
+#     def n_count_not_zero(operand):
+#         values, mask_values_ij, n_count = operand
+#         # res.at[i, j].set(jnp.sum(values*mask_values_ij)/n_count)
+#         # print("here we are")
+#         return jnp.sum(values*mask_values_ij)/n_count
+#     def n_count_zero(operand):
+#         values, mask_values_ij, n_count = operand
+#         return jnp.sum(values*0)
+
+#     def loop_j(pos, values, bin_j, in_bin_i):
+#         # pos (2, npoints)
+#         # bin_i (2)
+#         # bin_j (2)
+#         # values (npoints,)
+#         # print(np.shape(bin_j))
+#         in_bin_j = (bin_j[0] < pos[1]) & (pos[1] <= bin_j[1])
+#         in_bin_ij = in_bin_i * in_bin_j
+#         n_count = jnp.sum(in_bin_ij)
+#         operand = values, in_bin_ij, n_count
+#         new_res_ij = jax.lax.cond(n_count > 0, 
+#                     n_count_not_zero, 
+#                     n_count_zero,
+#                     operand)
+#         return new_res_ij
+    
+#     loopj_vmap = jax.vmap(loop_j, (None, None, 1, None), 0)
+    
+#     def loop_i(pos, values, bin_i, bin_j):
+#         # pos (2, npoints)
+#         # bin_i (2)
+#         # bin_j (2)
+#         # values (npoints,)
+#         # print(np.shape(bin_i))
+#         in_bin_i = (bin_i[0] < pos[0]) & (pos[0] <= bin_i[1])
+#         res_i = loopj_vmap(pos, values, jnp.array([bin_j[:-1], bin_j[1:]]), in_bin_i)
+#         return res_i
+
+#     loopi_vmap = jax.vmap(loop_i, (None, None, 1, None), 0)
+#     # utiliser vmap
+#     # print(np.shape(pos))
+#     # print(np.shape(values))
+#     # print(np.shape((bins[0][:-1], bins[1][:-1])))
+#     # print(np.shape((bins[0][1:], bins[1][1:])))
+#     res = loopi_vmap(pos, values, jnp.array([bins[0][:-1], bins[0][1:]]), bins[1])
+#     return res
+
+def mean_2d_bin_data(pos, values, bins): # pos and bins have shape (2, ...)
+    # left limit of bins is excluded
+    # shape of pos has to be (2, npoints), with npoints in the TOD
+
+    # values_bini = jnp.digitize(pos[0], bins[0]) # right edge of each bin excluded, left edges included
+    # values_binj = jnp.digitize(pos[1], bins[1])
+    # res, _, _ = jnp.histogram2d(pos[0], pos[1], bins=bins, weights=values)
+    res = histogram2d(pos[0], pos[1], range=((bins[0][0], bins[0][-1]), (bins[1][0], bins[1][-1])), bins=(len(bins[0]) - 1, len(bins[1]) - 1), weights=values)
+    return res
+# mean_2d_bin_data_jitted = jax.jit(mean_2d_bin_data)
+mean_2d_bin_data_jitted = mean_2d_bin_data
+# mean_2d_bin_data_jitted = mean_bin_data_nd
+
 #########################
 
 def healpix_map(azt, elt, tod, flags=None, flaglimit=0, nside=128, countcut=0, unseen_val=hp.UNSEEN):
@@ -95,6 +282,7 @@ def healpix_map(azt, elt, tod, flags=None, flaglimit=0, nside=128, countcut=0, u
 
 
 def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
+# def healpix_map_(elt, azt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
     ips = hp.ang2pix(nside, azt, elt, lonlat=True)
     mymap = np.zeros(12*nside**2)
     mapcount = np.zeros(12*nside**2)
@@ -106,6 +294,42 @@ def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
     mapcount[unseen] = unseen_val
     mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
     return mymap, mapcount
+
+def sparse_2d_to_fullmap(mymap, ipos_grid, jpos_grid):
+    # time_0 = time.time()
+    mymap_2 = mymap**2
+    # mymap_OK = (np.isfinite(mymap)) & (mymap_2 > 1e-5*np.max(np.isfinite(mymap_2)))
+    mymap_OK = np.isfinite(mymap)
+    # mymap_OK = mymap != 0
+    # mymap_OK = np.ascontiguousarray(mymap_OK_[:])
+    # mymap_OK = jax.block_until_ready(mymap_OK) # ensure the result is done running for timing purposes
+    # time_1 = time.time()
+    # print("elated time in = {}".format(time_1 - time_0))
+
+    # Ni, Nj = np.shape(ipos_grid)
+    # plt.figure()
+    # plt.imshow(mymap.reshape(Ni, Nj))
+    # plt.show()
+
+    # 2D interpolation
+    # interp = LinearNDInterpolator(list(zip(np.ravel(ipos_grid)[mymap_OK], np.ravel(jpos_grid)[mymap_OK])), mymap[mymap_OK], fill_value=0)
+    interp = LinearNDInterpolator(list(zip((ipos_grid).reshape(-1)[mymap_OK], (jpos_grid).reshape(-1)[mymap_OK])), mymap[mymap_OK], fill_value=0)
+    # time_2 = time.time()
+    # print("elated time in = {}".format(time_2 - time_1))
+    mymap_interp = interp(ipos_grid, jpos_grid)
+    # time_3 = time.time()
+    # print("elated time in = {}".format(time_3 - time_2))
+    # hp.gnomview result puts a decreasing azt as j coord
+    mymap_interp = np.flip(mymap_interp, axis=1)
+    # time_4 = time.time()
+    # print("elated time in = {}".format(time_4 - time_3))
+
+    # plt.figure()
+    # img = plt.imshow(mymap_interp)
+    # plt.colorbar(img)
+    # plt.show()
+    # sys.exit()
+    return mymap_interp
 
 # def TOD_to_flat_map(azt, elt, vals, img_azt, img_elt):
 def TOD_to_flat_map(ipos, jpos, vals, ipos_img, jpos_img):
@@ -129,36 +353,52 @@ def TOD_to_flat_map(ipos, jpos, vals, ipos_img, jpos_img):
     min_coord = np.min(img_coord)
     max_coord = np.max(img_coord)
     Npix = [Ni, Nj]
-    azel_pixsize = []
-    azel_bin = []
-    for k in range(len(coord)):
-        azel_pixsize.append((min_coord - max_coord)/(Npix[k] - 1)) # There are Npix - 1 pixels between the center of the left-most and the center of the right-most pixels
-        azel_bin.append(np.linspace(min_coord - azel_pixsize[k]/2, max_coord + azel_pixsize[k]/2, Npix[k] + 1)) # Edges of pixels
-        
-    mymap = mean_bin_data_nd(pos=coord, values=vals, bins=azel_bin)#.reshape(Ni, Nj)
-    mymap_OK = np.isfinite(mymap)
-    # print(np.sum(mymap_OK))
-
-    # plt.figure()
-    # plt.imshow(mymap.reshape(Ni, Nj))
-    # plt.show()
-
-    # print(np.shape(mymap))
-    # print(Ni * Nj)
-    # sys.exit()
-    # print(mymap)
 
     i_range = np.linspace(min_coord, max_coord, Ni)
     j_range = np.linspace(min_coord, max_coord, Nj)
     ipos_grid, jpos_grid = np.meshgrid(i_range, j_range, indexing="ij")
 
-    # 2D interpolation
-    interp = LinearNDInterpolator(list(zip(np.ravel(ipos_grid)[mymap_OK], np.ravel(jpos_grid)[mymap_OK])), mymap[mymap_OK], fill_value=0)
+    azel_pixsize = []
+    azel_bin = []
+    for k in range(len(coord)):
+        azel_pixsize.append((min_coord - max_coord)/(Npix[k] - 1)) # There are Npix - 1 pixels between the center of the left-most and the center of the right-most pixels
+        azel_bin.append(np.linspace(min_coord - azel_pixsize[k]/2, max_coord + azel_pixsize[k]/2, Npix[k] + 1)) # Edges of pixels
+    
+    # Le code prend plus de temps qu'avant ??
 
-    mymap_interp = interp(ipos_grid, jpos_grid)
+    # time_0 = time.time()
+    # timer(mean_bin_data_nd, coord, vals, azel_bin)
+    # # timer(mean_2d_bin_data, coord, vals, azel_bin)
+    # timer(mean_2d_bin_data_jitted, coord, vals, azel_bin)
+    # sys.exit()
+    mymap = mean_bin_data_nd(pos=coord, values=vals, bins=azel_bin)#.reshape(Ni, Nj)
+    # mymap = np.ravel(mean_2d_bin_data(pos=coord, values=vals, bins=azel_bin))#.reshape(Ni, Nj)
+    # mymap = mean_2d_bin_data_jitted(pos=coord, values=vals, bins=azel_bin).reshape(-1)
+    # mymap = jax.block_until_ready(mymap) # ensure the result is done running for timing purposes
+    # time_0_0 = time.time()
+    # print("elated time = {}".format(time_0_0 - time_0))
+    # mymap = mean_2d_bin_data_jitted(pos=coord, values=vals, bins=azel_bin)
+    # mymap = mean_2d_bin_data(pos=coord, values=vals, bins=azel_bin)
+    # mymap = mymap.reshape(-1)
+    # mymap_ = np.ravel(mymap_)
+    # mymap = jax.block_until_ready(mymap) # ensure the result is done running for timing purposes
+    # time_1 = time.time()
+    # print("elated time = {}".format(time_1 - time_0_0))
+    # sys.exit()
+
+    # mymap_interp_test = sparse_2d_to_fullmap(mymap_test, ipos_grid, jpos_grid)
+    mymap_interp = sparse_2d_to_fullmap(mymap, ipos_grid, jpos_grid)
+
+    # time_2 = time.time()
+    # print("elated time = {}".format(time_2 - time_1))
+
+    # print("total time = {}".format(time_2 - time_0))
+
     # plt.figure()
-    # plt.imshow(mymap_interp)
+    # img = plt.imshow(mymap_interp - mymap_interp_test)
+    # plt.colorbar(img)
     # plt.show()
+
     # sys.exit()
 
     return mymap_interp
@@ -332,28 +572,39 @@ class filtgauss2dfit:
         # mygauss = amp * np.exp(-0.5*((self.xx - xc)**2+(self.yy - yc)**2)/sig**2)
         mygauss = amp * np.exp(-0.5*((self.iipos_large - xc)**2+(self.jjpos_large - yc)**2)/sig**2)
 
+        # mygauss = jax.block_until_ready(mygauss)
+        # timer(img_to_TOD, mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
+        # sys.exit()
         my_gauss_tod = img_to_TOD(mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
+        # timer(img_to_TOD, mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
+        # timer(img_to_TOD_jitted, mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
+        # sys.exit()
+        # my_gauss_tod = np.array(img_to_TOD_jitted(mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos))
+
+        # my_gauss_tod = jax.block_until_ready(my_gauss_tod)
+        # timer(my_filt, my_gauss_tod)
+        # sys.exit()
         my_gauss_tod = my_filt(my_gauss_tod)
 
-        # myfiltgauss_hp, _ = healpix_map(self.allipos[self.scantype > 0], self.alljpos[self.scantype > 0], my_gauss_tod[self.scantype > 0], nside=self.nside)
+        # myfiltgauss_hp, _ = healpix_map(azt=self.alljpos[self.scantype > 0], elt=self.allipos[self.scantype > 0], tod=my_gauss_tod[self.scantype > 0], nside=self.nside)
         # rot = np.array([0, 0, 0])
         # reso = 5
         # xs = 201
         # myfiltgauss = hp.gnomview(myfiltgauss_hp, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
-        # # sys.exit()
+        # myfiltgauss[myfiltgauss == hp.UNSEEN] = 0
 
-        # Get a flat map from the TOD without passing through Healpy
-        myfiltgauss = TOD_to_flat_map(self.allipos, self.alljpos, my_gauss_tod, self.ipos, self.jpos)
+        # plt.figure()
+        # plt.imshow(myfiltgauss)
+        # plt.show()
+        # sys.exit()
 
-        # xs = 201
-        # rot = 0 # [0, 0, 0]
-        # reso = 5
-        # range_deg = xs * reso /60
-        # min_coord = rot - range_deg/2
-        # max_coord = rot + range_deg/2
-        # ipos_range = np.linspace(min_coord, max_coord, xs)
-        # jpos_range = ipos_range.copy()
-        # myfiltgauss = TOD_to_flat_map(self.allipos, self.alljpos, my_gauss_tod, ipos_range, jpos_range)
+        # Get a flat map from the TOD without passing through Healpy --> it actually takes more time...
+        myfiltgauss = TOD_to_flat_map(self.allipos[self.scantype > 0], self.alljpos[self.scantype > 0], my_gauss_tod[self.scantype > 0], self.ipos, self.jpos)
+
+        # plt.figure()
+        # plt.imshow(myfiltgauss)
+        # plt.show()
+        # sys.exit()
 
         return np.ravel(myfiltgauss)
     
@@ -428,9 +679,22 @@ def img_to_TOD(img, amp_azt, amp_elt, newazt, newelt):
         azel_arr.append(np.linspace(amplitude[i, 0], amplitude[i, 1], Npix[i]))
     # print("new azt in ({}, {}), new elt in ({}, {})".format(np.min(azel_arr[0]), np.max(azel_arr[0]), np.min(azel_arr[1]), np.max(azel_arr[1])))
     # print(np.min(newazt), np.max(newazt), np.min(newelt), np.max(newelt))
-    grid_interp = RegularGridInterpolator( (azel_arr[0], azel_arr[1]), img, method='nearest' ) 
+    grid_interp = RegularGridInterpolator( (azel_arr[0], azel_arr[1]), img, method='linear' ) # linear is faster than nearest??
     img_tod = grid_interp((newazt, newelt))
     return img_tod
+def img_to_TOD_(img, amp_azt, amp_elt, newazt, newelt):
+    # To create fake TOD quickly from an input image
+    Npix = jnp.shape(img) # vérifier ordre lignes colonnes (lignes = azimuth ou elevation ?)
+    azel_arr = []
+    amplitude = jnp.array([amp_azt, amp_elt]) # Here amplitude contains the intervals in azimuth and elevation for the pixels' centers
+    for i, coord in enumerate(["az", "el"]):
+        azel_arr.append(jnp.linspace(amplitude[i, 0], amplitude[i, 1], Npix[i]))
+    # print("new azt in ({}, {}), new elt in ({}, {})".format(jnp.min(azel_arr[0]), jnp.max(azel_arr[0]), jnp.min(azel_arr[1]), jnp.max(azel_arr[1])))
+    # print(jnp.min(newazt), jnp.max(newazt), jnp.min(newelt), jnp.max(newelt))
+    grid_interp = jax.scipy.interpolate.RegularGridInterpolator( (azel_arr[0], azel_arr[1]), img, method='nearest' ) 
+    img_tod = grid_interp((newazt, newelt))
+    return img_tod
+img_to_TOD_jitted = jax.jit(img_to_TOD_)
 
 def map_to_TOD(hp_map, newazt, newelt):
     # To create fake TOD quickly from an input HEALPix map
@@ -462,14 +726,15 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         nKbin = len(Kbin) - 1  # nb of bins
         Kcent = (Kbin[:-1] + Kbin[1:])/2
         size_pix = reso/60 # degree
-        reso_instr = 0.92
-        ft_shape = fft2(gauss2D(Nx, Ny, x0=lobe_pos[0], y0=lobe_pos[1], reso=[reso_instr/size_pix], normal=True))
+        # reso_instr = 0.92 # degree
+        reso_img = 1.036 # degree # test
+        ft_shape = fft2(gauss2D(Nx, Ny, x0=lobe_pos[0], y0=lobe_pos[1], reso=[reso_img/size_pix], normal=True))
         
         filtmapsn = get_filtmapsn(mapxy * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
         maxii = filtmapsn == np.nanmax(filtmapsn)
         max_i = np.mean(iipos[maxii])
         max_j = np.mean(jjpos[maxii])
-        guess = np.array([1e4, max_i, max_j, reso_instr/conv_reso_fwhm])
+        guess = np.array([1e4, max_i, max_j, reso_img/conv_reso_fwhm])
         if verbose:
             print(guess)
     else:
@@ -481,7 +746,7 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     errpix[mapxy==0] *= 1e5
     # g2d = gauss2dfit(iipos, jjpos)
     scantype, newazt, newelt, nside = pack
-    g2d = filtgauss2dfit(ipos, jpos, scantype, newelt, newazt, nside) # not working anymore!!
+    g2d = filtgauss2dfit(ipos, jpos, scantype, newelt, newazt, nside)
     data = fit.Data(np.ravel(iipos), np.ravel(mapxy), np.ravel(errpix), g2d)
     m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
 
@@ -1115,7 +1380,7 @@ def rot_trans_scale_pts(x, pars):
     return np.ravel(rotate_translate_scale_2d(pts, np.radians(pars[0]), np.array([pars[1],pars[2]]), pars[3]))
 
 
-def get_synthbeam_freqs(nsub=16, nside=512):
+def get_synthbeam_freqs(idet, nsub=16, nside=512):
     # Not finished but the aim is to fit a synthesized beam on the Moon maps
     # It means it should be fake TOD with synthesized beam
 
@@ -1134,7 +1399,7 @@ def get_synthbeam_freqs(nsub=16, nside=512):
 
     # print(qubic_dict)
 
-    idet = 67
+    # idet = 67
     acq = Qacquisition.QubicMultiAcquisitions(qubic_dict, nsub=qubic_dict['nf_sub'], nrec=2)
     synthbeam_list = [acq.subacqs[ifreq].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0] for ifreq in range(nsub//2)] # only first band sub bands
 

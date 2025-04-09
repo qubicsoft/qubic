@@ -186,7 +186,6 @@ class PCGAlgorithm(IterativeAlgorithm):
         alpha = self.delta / self.dot(self.d, self.q)
         
         self.x += alpha * self.d
-        
         map_i = self.x.copy()
 
         if self.is_planck:

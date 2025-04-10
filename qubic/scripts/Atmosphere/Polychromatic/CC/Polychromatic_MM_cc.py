@@ -207,7 +207,7 @@ algo = PCGAlgorithm(
     comm,
     x0=x0,
     tol=1e-10,
-    maxiter=2000,
+    maxiter=5000,
     disp=True,
     M=None,
     center=[0, -57],

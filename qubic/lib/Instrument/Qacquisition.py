@@ -7,6 +7,7 @@ import numpy as np
 
 import pickle
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import pysm3.units as u
@@ -26,22 +27,29 @@ from pyoperators import (
     PackOperator,
     ReshapeOperator,
     rule_manager,
-    IntegrationTrapezeOperator
+    IntegrationTrapezeOperator,
 )
 
 from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from qubic.data import PATH
 
-from .Qinstrument import compute_freq, QubicInstrument, QubicMultibandInstrumentTrapezoidalIntegration, QubicMultibandInstrument, QubicMultibandInstrumentTest
+from .Qinstrument import (
+    compute_freq,
+    QubicInstrument,
+    QubicMultibandInstrumentTrapezoidalIntegration,
+    QubicMultibandInstrument,
+)
 from ..Qsamplings import get_pointing
 from ..Qscene import QubicScene
 
 # FG-Buster packages
 from fgbuster.mixingmatrix import MixingMatrix
 
+
 def arcmin2rad(arcmin):
-    return arcmin * 0.000290888 
+    return arcmin * 0.000290888
+
 
 class QubicAcquisition(Acquisition):
     """
@@ -104,7 +112,7 @@ class QubicAcquisition(Acquisition):
         sigma = d["sigma"]
         comm = d["comm"]
         nprocs_instrument = d["nprocs_instrument"]
-        nprocs_sampling = d["nprocs_sampling"] 
+        nprocs_sampling = d["nprocs_sampling"]
 
         Acquisition.__init__(
             self,
@@ -117,7 +125,7 @@ class QubicAcquisition(Acquisition):
             nprocs_sampling=nprocs_sampling,
             comm=comm,
         )
-        
+
         self.photon_noise = bool(photon_noise)
         self.effective_duration = effective_duration
         self.bandwidth = bandwidth
@@ -230,7 +238,6 @@ class QubicAcquisition(Acquisition):
         )
 
     def get_diag_invntt_operator(self):
-
         print("Use diagonal noise covariance matrix")
 
         sigma_detector = self.instrument.detector.nep / np.sqrt(
@@ -325,14 +332,13 @@ class QubicAcquisition(Acquisition):
             raise ValueError("The noise model is not specified.")
 
         if self.forced_sigma is None:
-            pass 
+            pass
         else:
             self.sigma = self.forced_sigma.copy()
 
         shapein = (len(self.instrument), len(self.sampling))
 
         if self.bandwidth is None and self.instrument.detector.fknee == 0:
-
             out = DiagonalOperator(
                 1 / self.sigma**2,
                 broadcast="rightward",
@@ -536,8 +542,9 @@ class QubicAcquisition(Acquisition):
         else:
             preconditioner = None
         return preconditioner
-class PlanckAcquisition:
 
+
+class PlanckAcquisition:
     def __init__(self, band, scene):
         if band not in (30, 44, 70, 143, 217, 353):
             raise ValueError("Invalid band '{}'.".format(band))
@@ -606,7 +613,6 @@ class PlanckAcquisition:
             return Hp
 
     def get_invntt_operator(self, beam_correction=0, mask=None, seenpix=None):
-
         if beam_correction != 0:
             factor = (
                 4
@@ -643,7 +649,6 @@ class PlanckAcquisition:
         return out
 
     def get_map(self, nu_min, nu_max, Nintegr, sky_config, d, fwhm=None):
-
         print(f"Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps")
         obj = QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
         if Nintegr == 1:
@@ -660,6 +665,8 @@ class PlanckAcquisition:
             m[i] = C(m[i])
 
         return np.mean(m, axis=0)
+
+
 class QubicMultiAcquisitions:
     """
 
@@ -674,8 +681,9 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None):
-
+    def __init__(
+        self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None
+    ):
         ### Define class arguments
         self.dict = dictionary
         self.nsub = nsub
@@ -683,14 +691,14 @@ class QubicMultiAcquisitions:
         self.dict["nf_sub"] = self.nsub
         self.comps = comps
         self.fsub = int(self.nsub / self.nrec)
-        
+
         ### Resolve issue when comm, nprocs_instrument, nprocs_sampling are None in the dictionary.
         # It will define them using codes from Acquisition in pysimulators if they are not defined by the user.
         # When dict["nprocs_instrument"] is None, the test to save MPI communicator at the end of __init__ is passing while it should not.
         comm = self.dict["comm"]
         nprocs_instrument = self.dict["nprocs_instrument"]
         nprocs_sampling = self.dict["nprocs_sampling"]
-        
+
         if comm is None:
             comm = MPI.COMM_WORLD
         if nprocs_instrument is None and nprocs_sampling is None:
@@ -709,21 +717,21 @@ class QubicMultiAcquisitions:
                 )
             nprocs_sampling = comm.size // nprocs_instrument
         if nprocs_instrument * nprocs_sampling != comm.size:
-            raise ValueError('Invalid MPI distribution of the acquisition.')
-        
-        self.dict['comm'] = comm
-        self.dict['nprocs_instrument'] = nprocs_instrument
-        self.dict['nprocs_sampling'] = nprocs_sampling
+            raise ValueError("Invalid MPI distribution of the acquisition.")
+
+        self.dict["comm"] = comm
+        self.dict["nprocs_instrument"] = nprocs_instrument
+        self.dict["nprocs_sampling"] = nprocs_sampling
 
         ### Compute frequencies on the edges
         _, _, nus_subbands_150, _, _, _ = compute_freq(
             150,
-            Nfreq=int(self.nsub / 2) ,
+            Nfreq=int(self.nsub / 2),
             relative_bandwidth=self.dict["filter_relative_bandwidth"],
         )
         _, _, nus_subbands_220, _, _, _ = compute_freq(
             220,
-            Nfreq=int(self.nsub / 2) ,
+            Nfreq=int(self.nsub / 2),
             relative_bandwidth=self.dict["filter_relative_bandwidth"],
         )
 
@@ -744,9 +752,9 @@ class QubicMultiAcquisitions:
         self.allnus_rec = np.array(list(nus150) + list(nus220))
 
         ### Multi-frequency instrument
-        self.multiinstrument = QubicMultibandInstrumentTest(self.dict)
+        self.multiinstrument = QubicMultibandInstrumentTrapezoidalIntegration(self.dict)
         print(self.multiinstrument)
-        
+
         if sampling is None:
             self.sampling = get_pointing(self.dict)
         else:
@@ -765,19 +773,26 @@ class QubicMultiAcquisitions:
         ### CO line emission
         if nu_co is not None:
             dmono = self.dict.copy()
-            dmono['filter_nu'] = nu_co * 1e9
+            dmono["filter_nu"] = nu_co * 1e9
 
             w = IntegrationTrapezeOperator(allnus_edges_220)
-            deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
+            deltas_trap = np.array(
+                [
+                    w.operands[i].todense(shapein=1)[0][0]
+                    for i in range(len(allnus_edges_220))
+                ]
+            ).max()
 
-            dmono['filter_relative_bandwidth'] = 0.05#
+            dmono["filter_relative_bandwidth"] = 0.05  #
 
             instrument_co = QubicInstrument(dmono, FRBW=0.25)
             self.multiinstrument.subinstruments += [instrument_co]
-            self.subacqs += [QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)]
-            
+            self.subacqs += [
+                QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)
+            ]
+
             self.allnus = np.append(self.allnus, nu_co)
-        
+
         for acq in self.subacqs:
             acq.comm = self.subacqs[0].comm
 
@@ -792,7 +807,6 @@ class QubicMultiAcquisitions:
         else:
             self.H = H
 
-        self.coverage = self.H[0].T(np.ones(self.H[0].T.shapein))[:, 0]
         ### Save MPI communicator
         if self.dict["nprocs_instrument"] != 1:
             self.mpidist = self.H[0].operands[-1]
@@ -802,6 +816,14 @@ class QubicMultiAcquisitions:
         ### Define the number of detector and sampling (for each processors)
         self.ndets = len(self.subacqs[0].instrument)
         self.nsamples = len(self.sampling)
+        self.coverage = self._get_coverage()
+
+    def _get_coverage(self):
+        out = self.H[0].T(np.ones(self.H[0].T.shapein))
+        if self.scene.kind != "I":
+            out = out[..., 0].copy()
+        out *= self.ndets * self.nsamples * self.sampling.period / np.sum(out)
+        return out
 
     def _get_mixing_matrix(self, nus, beta):
         """
@@ -821,7 +843,6 @@ class QubicMultiAcquisitions:
 
         _sh = mixing_matrix_elements.shape
         if _sh[0] != 1:
-
             beta = hp.ud_grade(beta, self.scene.nside)
             mixing_matrix_elements = mm.eval(nus, *beta)
 
@@ -838,9 +859,8 @@ class QubicMultiAcquisitions:
         The type of operator depends on the shape of input A.
 
         """
-        
-        if A.ndim == 1:  ### If constant beta across the sky
 
+        if A.ndim == 1:  ### If constant beta across the sky
             r = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
             D = r * DenseOperator(
                 A,
@@ -850,7 +870,6 @@ class QubicMultiAcquisitions:
             )
 
         else:  ### If varying beta across the sky
-
             r = ReshapeOperator((self.npix, 1, 3), (self.npix, 3))
             _, nc = A.shape
 
@@ -877,12 +896,21 @@ class QubicMultiAcquisitions:
             D = r * BlockDiagonalOperator([d] * 3, new_axisin=0, new_axisout=2) * R
 
         return D
+
+
 class QubicDualBand(QubicMultiAcquisitions):
-
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None):
-
+    def __init__(
+        self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None
+    ):
         QubicMultiAcquisitions.__init__(
-            self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co, sampling=sampling
+            self,
+            dictionary,
+            nsub=nsub,
+            nrec=nrec,
+            comps=comps,
+            H=H,
+            nu_co=nu_co,
+            sampling=sampling,
         )
 
     def sum_over_band(self, h, algo, gain=None):
@@ -975,7 +1003,6 @@ class QubicDualBand(QubicMultiAcquisitions):
         self.operator = []
 
         for isub in range(self.nsub):
-
             ### Compute mixing matrix operator if mixing matrix is provided
             if A is None:
                 Acomp = IdentityOperator()
@@ -1000,7 +1027,7 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         ### Do the sum over operators depending on the reconstruction model
         H = self.sum_over_band(self.operator, algo=algo, gain=gain)
-        
+
         return H
 
     def get_invntt_operator(self, det_noise=True, photon_noise=True):
@@ -1024,14 +1051,18 @@ class QubicDualBand(QubicMultiAcquisitions):
         subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
         subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)
 
-        self.invn150 = subacq150.get_invntt_operator(det_noise=det_noise, photon_noise=photon_noise)
-        self.invn220 = subacq220.get_invntt_operator(det_noise=det_noise, photon_noise=photon_noise)
+        self.invn150 = subacq150.get_invntt_operator(
+            det_noise=det_noise, photon_noise=photon_noise
+        )
+        self.invn220 = subacq220.get_invntt_operator(
+            det_noise=det_noise, photon_noise=photon_noise
+        )
 
         return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
+
+
 class QubicUltraWideBand(QubicMultiAcquisitions):
-
     def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
-
         QubicMultiAcquisitions.__init__(
             self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
         )
@@ -1058,7 +1089,7 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
                         * (self.allnus <= self.allnus[imax])
                     ].sum(axis=0)
                 ]
-                
+
             return BlockRowOperator(op_sum, new_axisin=0)
 
         ### Components Map-Making
@@ -1087,7 +1118,6 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
         self.operator = []
 
         for isub in range(self.nsub):
-
             ### Compute mixing matrix operator if mixing matrix is provided
             if A is None:
                 Acomp = IdentityOperator()
@@ -1138,12 +1168,12 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
 
         self.invn150 = subacq150.get_invntt_operator(det_noise=True, photon_noise=True)
         self.invn220 = subacq220.get_invntt_operator(det_noise=False, photon_noise=True)
-        
+
         return self.invn150 + self.invn220
+
+
 class OtherDataParametric:
-
     def __init__(self, nus, nside, comps, nintegr=2):
-
         self.nintegr = nintegr
         pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
         dataset = pickle.load(pkl_file)
@@ -1177,7 +1207,6 @@ class OtherDataParametric:
         ### Compute all external nus
 
     def create_array(self, name, nus, nside):
-
         if name == "noise":
             shape = (2, 12 * nside**2, 3)
         else:
@@ -1210,7 +1239,6 @@ class OtherDataParametric:
 
         _sh = mixing_matrix_elements.shape
         if _sh[0] != 1:
-
             beta = hp.ud_grade(beta, self.nside)
             mixing_matrix_elements = mm.eval(nus, *beta)
 
@@ -1229,7 +1257,6 @@ class OtherDataParametric:
         """
 
         if A.ndim == 1:  ### If constant beta across the sky
-
             r = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
             D = r * DenseOperator(
                 A,
@@ -1239,7 +1266,6 @@ class OtherDataParametric:
             )
 
         else:  ### If varying beta across the sky
-
             r = ReshapeOperator((self.npix, 1, 3), (self.npix, 3))
             _, nc = A.shape
 
@@ -1309,7 +1335,6 @@ class OtherDataParametric:
         for ii, i in enumerate(self.nus):
             ope_i = []
             for j in range(self.nintegr):
-
                 if convolution:
                     if myfwhm is not None:
                         fwhm = myfwhm[ii]
@@ -1352,10 +1377,10 @@ class OtherDataParametric:
             out[:, seenpix, :] = 0
         np.random.set_state(state)
         return R2tod(out)
+
+
 class JointAcquisitionFrequencyMapMaking:
-
     def __init__(self, d, kind, Nrec, Nsub, H=None):
-
         self.kind = kind
         self.d = d
         self.Nrec = Nrec
@@ -1378,7 +1403,6 @@ class JointAcquisitionFrequencyMapMaking:
         self.pl217 = PlanckAcquisition(217, self.scene)
 
     def get_operator(self, fwhm=None, seenpix=None):
-
         if seenpix is not None:
             U = (
                 ReshapeOperator((sum(seenpix) * 3), (sum(seenpix), 3))
@@ -1390,7 +1414,6 @@ class JointAcquisitionFrequencyMapMaking:
             U = IdentityOperator()
 
         if self.kind == "UWB":  # WideBand intrument
-
             # Get QUBIC operator
             H_qubic = self.qubic.get_operator(fwhm=fwhm)
             R_qubic = ReshapeOperator(
@@ -1406,7 +1429,6 @@ class JointAcquisitionFrequencyMapMaking:
                 return BlockColumnOperator(operator, axisout=0)
 
             else:
-
                 full_operator = []
                 for irec in range(self.Nrec):
                     operator = [R_qubic(H_qubic.operands[irec])]
@@ -1420,7 +1442,6 @@ class JointAcquisitionFrequencyMapMaking:
                 return BlockRowOperator(full_operator, new_axisin=0)
 
         elif self.kind == "DB":
-
             # Get QUBIC operator
             if self.Nrec == 2:
                 H_qubic = self.qubic.get_operator(fwhm=fwhm).operands[1]
@@ -1463,12 +1484,10 @@ class JointAcquisitionFrequencyMapMaking:
     def get_invntt_operator(
         self, weight_planck=1, beam_correction=None, seenpix=None, mask=None
     ):
-
         if beam_correction is None:
             beam_correction = [0] * self.Nrec
 
         if self.kind == "UWB":
-
             invn_q = self.qubic.get_invntt_operator()
             R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
             invn_q = [R(invn_q(R.T))]
@@ -1494,7 +1513,6 @@ class JointAcquisitionFrequencyMapMaking:
             return BlockDiagonalOperator(invN, axisout=0)
 
         elif self.kind == "DB":
-
             invn_q_150 = self.qubic.get_invntt_operator().operands[0]
             invn_q_220 = self.qubic.get_invntt_operator().operands[1]
             R = ReshapeOperator(invn_q_150.shapeout, invn_q_150.shape[0])
@@ -1519,10 +1537,10 @@ class JointAcquisitionFrequencyMapMaking:
                 invN += [R_planck(invntt_planck217(R_planck.T))]
 
             return BlockDiagonalOperator(invN, axisout=0)
+
+
 class JointAcquisitionComponentsMapMaking:
-
     def __init__(self, d, kind, comp, Nsub, nus_external, nintegr, nu_co=None, H=None):
-
         self.kind = kind
         self.d = d
         self.Nsub = Nsub
@@ -1549,7 +1567,6 @@ class JointAcquisitionComponentsMapMaking:
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):
-
         Aq = A[: self.Nsub]
         Ap = A[self.Nsub :]
 
@@ -1568,12 +1585,12 @@ class JointAcquisitionComponentsMapMaking:
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 
     def get_invntt_operator(self, fact=None, mask=None):
-
         invNq = self.qubic.get_invntt_operator()
         R = ReshapeOperator(invNq.shapeout, invNq.shape[0])
         invNe = self.external.get_invntt_operator(fact=fact, mask=mask)
 
         return BlockDiagonalOperator([R(invNq(R.T)), invNe], axisout=0)
+
 
 ### Old version
 class QubicPolyAcquisition:
@@ -1740,6 +1757,8 @@ class QubicPolyAcquisition:
         Return the inverse noise covariance matrix as operator
         """
         return self[0].get_invntt_operator()
+
+
 class QubicFullBandSystematic(QubicPolyAcquisition):
     """
 
@@ -2000,7 +2019,6 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
                 )
 
     def get_operator(self, beta=None, Amm=None, angle_hwp=None, gain=None, fwhm=None):
-
         self.operator = []
 
         if angle_hwp is None:
@@ -2009,7 +2027,6 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
             angle_hwp = fill_hwp_position(self.Proj[0].shapeout[1], angle_hwp)
 
         for isub in range(self.Nsub * 2):
-
             if beta is None:
                 Acomp = IdentityOperator()
             else:
@@ -2034,7 +2051,6 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
             self.operator.append(hi)
 
         if self.nu_co is not None:
-
             if beta is None:
                 Acomp = IdentityOperator()
             else:
@@ -2104,7 +2120,6 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
         subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)
         if self.kind == "DB":
-
             self.invn150 = subacq150.get_invntt_operator(
                 det_noise=True, photon_noise=True
             )
@@ -2115,7 +2130,6 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
             return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
 
         elif self.kind == "UWB":
-
             self.invn150 = subacq150.get_invntt_operator(
                 det_noise=True, photon_noise=True
             )
@@ -2142,14 +2156,12 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
 
         for k, kconf in enumerate(config.keys()):
             if kconf == "cmb":
-
                 np.random.seed(config[kconf])
                 cmb = hp.synfast(mycls, self.scene.nside, verbose=False, new=True).T
 
                 allmaps[k] = cmb.copy()
 
             elif kconf == "dust":
-
                 nu0 = self.comp[k].__dict__["_fixed_params"]["nu0"]
                 sky = pysm3.Sky(
                     nside=self.scene.nside,
@@ -2180,7 +2192,6 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
                 )
                 allmaps[k] = mysync.copy()
             elif kconf == "coline":
-
                 # sky = pysm3.Sky(nside=self.nside, preset_strings=['co2'], output_unit="uK_CMB")
                 # nu0 = sky.components[0].line_frequency['21'].value
 
@@ -2203,8 +2214,9 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         #    allmaps = allmaps[0].copy()
 
         return allmaps
-class QubicIntegrated(QubicPolyAcquisition):
 
+
+class QubicIntegrated(QubicPolyAcquisition):
     def __init__(self, d, Nsub=1, Nrec=1):
         """
 
@@ -2374,7 +2386,6 @@ class QubicIntegrated(QubicPolyAcquisition):
         return tod
 
     def bandpass_correction(self, H, tod, map_ref, sed):
-
         fact = int(self.Nsub / self.Nrec)
         k = 0
         modelsky = np.zeros((len(self.allnus), 12 * self.nside**2, 3))
@@ -2394,13 +2405,11 @@ class QubicIntegrated(QubicPolyAcquisition):
         return tod
 
     def _get_array_of_operators(self, convolution=False, myfwhm=None):
-
         op = []
 
         # Loop through each acquisition in subacqs
         k = 0
         for ia, a in enumerate(self.subacqs):
-
             ###################
             ### Convolution ###
             ###################
@@ -2423,7 +2432,6 @@ class QubicIntegrated(QubicPolyAcquisition):
         return op
 
     def get_operator(self, convolution=False, myfwhm=None):
-
         # Initialize an empty list to store the sum of operators for each frequency band
         op_sum = []
 

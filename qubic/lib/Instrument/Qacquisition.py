@@ -1,17 +1,20 @@
 # QUBIC stuff
 import os
+import pickle
+import warnings
 
 # General stuff
 import healpy as hp
 import numpy as np
 
-import pickle
-import warnings
-
 warnings.filterwarnings("ignore")
 
 import pysm3.units as u
+
+# FG-Buster packages
+from fgbuster.mixingmatrix import MixingMatrix
 from pyoperators import (
+    MPI,
     AdditionOperator,
     BlockColumnOperator,
     BlockDiagonalOperator,
@@ -21,30 +24,26 @@ from pyoperators import (
     DenseOperator,
     DiagonalOperator,
     IdentityOperator,
-    MPI,
+    IntegrationTrapezeOperator,
     MPIDistributionIdentityOperator,
     Operator,
     PackOperator,
     ReshapeOperator,
     rule_manager,
-    IntegrationTrapezeOperator,
 )
-
 from pysimulators import *
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
 from qubic.data import PATH
 
-from .Qinstrument import (
-    compute_freq,
-    QubicInstrument,
-    QubicMultibandInstrumentTrapezoidalIntegration,
-    QubicMultibandInstrument,
-)
 from ..Qsamplings import get_pointing
 from ..Qscene import QubicScene
-
-# FG-Buster packages
-from fgbuster.mixingmatrix import MixingMatrix
+from .Qinstrument import (
+    QubicInstrument,
+    QubicMultibandInstrument,
+    QubicMultibandInstrumentTrapezoidalIntegration,
+    compute_freq,
+)
 
 
 def arcmin2rad(arcmin):
@@ -752,7 +751,7 @@ class QubicMultiAcquisitions:
         self.allnus_rec = np.array(list(nus150) + list(nus220))
 
         ### Multi-frequency instrument
-        self.multiinstrument = QubicMultibandInstrumentTrapezoidalIntegration(self.dict)
+        self.multiinstrument = QubicMultibandInstrument(self.dict)
         print(self.multiinstrument)
 
         if sampling is None:
@@ -1001,6 +1000,7 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         """
         self.operator = []
+        print(len(self.H))
 
         for isub in range(self.nsub):
             ### Compute mixing matrix operator if mixing matrix is provided

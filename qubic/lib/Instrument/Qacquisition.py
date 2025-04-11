@@ -104,6 +104,7 @@ class QubicAcquisition(Acquisition):
         bandwidth = d["bandwidth"]
         twosided = d["twosided"]
         sigma = d["sigma"]
+        self.interp_projection = d["interp_projection"]
 
         Acquisition.__init__(
             self,
@@ -460,7 +461,7 @@ class QubicAcquisition(Acquisition):
         f = self.instrument.get_projection_operator
         if len(self.block) == 1:
             return BlockColumnOperator(
-                [f(self.sampling[b], self.scene, verbose=verbose) for b in self.block],
+                [f(self.sampling[b], self.scene, verbose=verbose, interp_projection=self.interp_projection) for b in self.block],
                 axisout=1,
             )
 
@@ -694,7 +695,6 @@ class QubicMultiAcquisitions:
             Nfreq=int(self.nsub / 2) ,
             relative_bandwidth=self.dict["filter_relative_bandwidth"],
         )
-        # On fait cela aussi dans QubicMultibandInstrumentTrapezoidalIntegration mais à partir du dictionnaire (modifié juste au-dessus donc OK) cette fois. Pourquoi ?
 
         ### Compute the effective reconstructed frequencies if FMM is applied
         _, _, nus150, _, _, _ = compute_freq(
@@ -761,7 +761,11 @@ class QubicMultiAcquisitions:
         else:
             self.H = H
 
-        self.coverage = self.H[0].T(np.ones(self.H[0].T.shapein))[:, 0]
+        print(np.shape(self.H[0].T(np.ones(self.H[0].T.shapein))))
+        if self.multiinstrument[0].config == "TD":
+            self.coverage = self.H[0].T(np.ones(self.H[0].T.shapein))
+        else:
+            self.coverage = self.H[0].T(np.ones(self.H[0].T.shapein))[:, 0]
         ### Save MPI communicator
         if self.dict["nprocs_instrument"] != 1:
             self.mpidist = self.H[0].operands[-1]

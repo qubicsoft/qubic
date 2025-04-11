@@ -351,6 +351,7 @@ class PipelineFrequencyMapMaking:
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
+            "interp_projection" : False,                # Use a bilinear interpolation during TOD generation
         }
 
         ### Get the default dictionary

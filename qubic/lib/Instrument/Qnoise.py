@@ -1,7 +1,6 @@
 import numpy as np
-import qubic
 
-from .Qacquisition import *
+from .Qacquisition import QubicIntegrated
 from ..Qdictionary import qubicDict
 
 class QubicNoise:

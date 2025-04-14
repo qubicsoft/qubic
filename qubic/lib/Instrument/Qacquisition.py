@@ -1,5 +1,4 @@
 # QUBIC stuff
-import os
 import pickle
 import warnings
 

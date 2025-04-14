@@ -674,7 +674,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None, sampling=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None, kind=None):
 
         ### Define class arguments
         self.dict = dictionary
@@ -683,34 +683,38 @@ class QubicMultiAcquisitions:
         self.dict["nf_sub"] = self.nsub
         self.comps = comps
         self.fsub = int(self.nsub / self.nrec)
+        self.dict["kind"] = kind
 
-        ### Compute frequencies on the edges
-        _, _, nus_subbands_150, _, _, _ = compute_freq(
-            150,
-            Nfreq=int(self.nsub / 2) ,
-            relative_bandwidth=self.dict["filter_relative_bandwidth"],
-        )
-        _, _, nus_subbands_220, _, _, _ = compute_freq(
-            220,
-            Nfreq=int(self.nsub / 2) ,
-            relative_bandwidth=self.dict["filter_relative_bandwidth"],
-        )
+        # There was code dupliocation in the previous version
+        self.allnus = []
+        self.allnus_rec = []
+        if kind == "TD":
+            f_bands = [150]
+        else:
+            f_bands = [150, 220]
+        for i, f_band in enumerate(f_bands):
+            ### Compute frequencies on the edges
 
-        ### Compute the effective reconstructed frequencies if FMM is applied
-        _, _, nus150, _, _, _ = compute_freq(
-            150,
-            Nfreq=int(self.nrec / 2),
-            relative_bandwidth=self.dict["filter_relative_bandwidth"],
-        )
-        _, _, nus220, _, _, _ = compute_freq(
-            220,
-            Nfreq=int(self.nrec / 2),
-            relative_bandwidth=self.dict["filter_relative_bandwidth"],
-        )
+            _, _, nus_subbands_i, _, _, _ = compute_freq(
+                f_band,
+                Nfreq=int(self.nsub / 2) ,
+                relative_bandwidth=self.dict["filter_relative_bandwidth"],
+            )
 
-        ### Joint 150 and 220 GHz band
-        self.allnus = np.array(list(nus_subbands_150) + list(nus_subbands_220))
-        self.allnus_rec = np.array(list(nus150) + list(nus220))
+            ### Compute the effective reconstructed frequencies if FMM is applied
+            _, _, nus_i, _, _, _ = compute_freq(
+                f_band,
+                Nfreq=int(self.nrec / 2),
+                relative_bandwidth=self.dict["filter_relative_bandwidth"],
+            )
+
+            ### Joint 150 and 220 GHz band if needed
+            self.allnus += list(nus_subbands_i)
+            self.allnus_rec += list(nus_i)
+
+        ### Convert lists to numpy arrays
+        self.allnus = np.array(self.allnus)
+        self.allnus_rec = np.array(self.allnus_rec)
 
         ### Multi-frequency instrument
         self.multiinstrument = QubicMultibandInstrumentTrapezoidalIntegration(
@@ -736,8 +740,9 @@ class QubicMultiAcquisitions:
             dmono = self.dict.copy()
             dmono['filter_nu'] = nu_co * 1e9
 
-            w = IntegrationTrapezeOperator(allnus_edges_220)
-            deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
+            # Not used?
+            # w = IntegrationTrapezeOperator(allnus_edges_220)
+            # deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
 
             dmono['filter_relative_bandwidth'] = 0.05#
 
@@ -848,7 +853,7 @@ class QubicMultiAcquisitions:
         return D
 class QubicDualBand(QubicMultiAcquisitions):
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
 
         QubicMultiAcquisitions.__init__(
             self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
@@ -999,7 +1004,7 @@ class QubicDualBand(QubicMultiAcquisitions):
         return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
 class QubicUltraWideBand(QubicMultiAcquisitions):
 
-    def __init__(self, dictionary, nsub, nrec=1, comps=[], H=None, nu_co=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
 
         QubicMultiAcquisitions.__init__(
             self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
@@ -1109,6 +1114,162 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
         self.invn220 = subacq220.get_invntt_operator(det_noise=False, photon_noise=True)
         
         return self.invn150 + self.invn220
+    
+
+class QubicTechnicalDemonstrator(QubicMultiAcquisitions):
+    # used if self.params["QUBIC"]["instrument"] == "TD"
+    # config not used?
+
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
+
+        QubicMultiAcquisitions.__init__(
+            self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co, kind="TD"
+        )
+
+    def sum_over_band(self, h, algo, gain=None):
+        """
+
+        Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)
+
+        """
+
+        op_sum = []
+        f = int(self.nsub / self.nrec)
+
+        ### Frequency Map-Making
+        if algo == "FMM":
+            h = np.array(h)
+            for irec in range(self.nrec):
+                imin = irec * f
+                imax = (irec + 1) * f - 1
+                op_sum += [
+                    h[
+                        (self.allnus >= self.allnus[imin])
+                        * (self.allnus <= self.allnus[imax])
+                    ].sum(axis=0)
+                ]
+
+            if self.nrec > 2:
+                return BlockDiagonalOperator(
+                    [
+                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
+                        BlockRowOperator(
+                            op_sum[int(self.nrec / 2) : int(self.nrec)], new_axisin=0
+                        ),
+                    ],
+                    axisout=0,
+                )
+            else:
+                return ReshapeOperator(
+                    (2, self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
+                ) * BlockDiagonalOperator(
+                    [
+                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
+                        BlockRowOperator(
+                            op_sum[int(self.nrec / 2) : int(self.nrec)], new_axisin=0
+                        ),
+                    ],
+                    new_axisin=0,
+                )
+
+        ### Components Map-Making
+        else:
+            if gain is None:
+                G150 = DiagonalOperator(
+                    np.ones(self.ndets),
+                    broadcast="rightward",
+                    shapein=(self.ndets, self.nsamples),
+                )
+                G220 = DiagonalOperator(
+                    np.ones(self.ndets),
+                    broadcast="rightward",
+                    shapein=(self.ndets, self.nsamples),
+                )
+            else:
+                G150 = DiagonalOperator(
+                    gain[:, 0],
+                    broadcast="rightward",
+                    shapein=(self.ndets, self.nsamples),
+                )
+                G220 = DiagonalOperator(
+                    gain[:, 1],
+                    broadcast="rightward",
+                    shapein=(self.ndets, self.nsamples),
+                )
+            return BlockColumnOperator(
+                [
+                    G150 * AdditionOperator(h[: int(self.nsub / 2)]),
+                    G220 * AdditionOperator(h[int(self.nsub / 2) :]),
+                ],
+                axisout=0,
+            )
+
+    def get_operator(self, A=None, gain=None, fwhm=None, seenpix=None):
+        """
+
+        Method to generate the pointing matrix.
+
+        mixing_matrix : array like containing mixing matrix elements. If the elements of the mixing matrix are constant across the sky,
+                        mixing_matrix.shape = (nfreq, ncomp)
+
+        """
+        self.operator = []
+
+        for isub in range(self.nsub):
+
+            ### Compute mixing matrix operator if mixing matrix is provided
+            if A is None:
+                Acomp = IdentityOperator()
+                algo = "FMM"
+            else:
+                Acomp = self._get_mixing_operator(A=A[isub])
+                algo = "CMM"
+
+            ### Compute gaussian kernel to account for angular resolution
+            if fwhm is None:
+                convolution = IdentityOperator()
+            else:
+                convolution = HealpixConvolutionGaussianOperator(
+                    fwhm=fwhm[isub], lmax=2 * self.scene.nside - 1
+                )
+
+            ### Compose operator as H = Proj * C * A
+            with rule_manager(inplace=True):
+                hi = CompositionOperator([self.H[isub], convolution, Acomp])
+
+            self.operator.append(hi)
+
+        ### Do the sum over operators depending on the reconstruction model
+        H = self.sum_over_band(self.operator, algo=algo, gain=gain)
+        
+        return H
+
+    def get_invntt_operator(self):
+        """
+
+        Method to compute the inverse noise covariance matrix in time-domain.
+
+        """
+
+        d150 = self.dict.copy()
+        d150["filter_nu"] = 150 * 1e9
+        d150["effective_duration"] = self.dict["effective_duration150"]
+        ins150 = QubicInstrument(d150)
+
+        d220 = self.dict.copy()
+        d220["effective_duration"] = self.dict["effective_duration220"]
+        d220["filter_nu"] = 220 * 1e9
+
+        ins220 = QubicInstrument(d220)
+
+        subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
+        subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)
+
+        self.invn150 = subacq150.get_invntt_operator(det_noise=True, photon_noise=True)
+        self.invn220 = subacq220.get_invntt_operator(det_noise=True, photon_noise=True)
+
+        return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
+
 class OtherDataParametric:
 
     def __init__(self, nus, nside, comps, nintegr=2):
@@ -1339,8 +1500,12 @@ class JointAcquisitionFrequencyMapMaking:
             self.qubic = QubicUltraWideBand(
                 self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
             )
+        elif self.kind == "TD":
+            self.qubic = QubicTechnicalDemonstrator(
+                self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
+            )
         else:
-            raise TypeError(f"{self.kind} is not implemented. Choose DB or UWB")
+            raise TypeError(f"{self.kind} is not implemented. Choose DB, UWB or TD")
 
         self.scene = self.qubic.scene
         self.pl143 = PlanckAcquisition(143, self.scene)
@@ -1721,7 +1886,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
         self,
         d,
         Nsub,
-        Nrec=1,
+        Nrec,
         comp=[],
         kind="DB",
         nu_co=None,

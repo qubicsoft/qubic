@@ -1,38 +1,28 @@
-### General packages
 import gc
 import os
-import sys
 import pickle
 from functools import partial
 
+import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
-from pyoperators import MPI
+from pyoperators import MPI, PackOperator, ReshapeOperator
+from pyoperators import pcg as pcg_op
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import fmin_l_bfgs_b, minimize
 
-import fgbuster.mixingmatrix as mm
-
-### Local packages
-from ...Instrument.Qacquisition import *
 from ...MapMaking.Qcg import pcg
-from pyoperators import pcg as pcg_op
-from ...Qfoldertools import *
-from ...MapMaking.Qmap_plotter import *
-from ...Qmpi_tools import MpiTools
-
-# from simtools.mpi_tools import *
-from ...Instrument.Qnoise import *
-
+from ...MapMaking.Qmap_plotter import PlotsCMM
+from ...Qfoldertools import do_gif
+from ...Qmpi_tools import MpiTools, join_data
+from ...QskySim import get_angular_profile
+from .preset.preset import PresetInitialisation
 from .Qcostfunc import (
     Chi2Blind,
     Chi2DualBand,
     Chi2Parametric_alt,
     Chi2UltraWideBand,
 )
-
-# from simtools.analysis import *
-from .preset.preset import *
 
 
 class Pipeline:
@@ -104,8 +94,7 @@ class Pipeline:
 
         ### Initialize PCG starting point
         initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
-        print(self.preset.comp.components_iter.shape)
-        strop
+
 
         ### Update the precondtionner M
         #if self._steps == 0:
@@ -475,35 +464,37 @@ class Pipeline:
         Method that perform step 3) of the pipeline for 2 possible designs : Two Bands and Ultra Wide Band
 
         """
-        method_0 = self.preset.comp.params_foregrounds[self.preset.comp.components_name_out[1]]["type"]
+        
+        ### Fitting method for the first component which is not CMB (always index 0)
+        method = method_0 = self.preset.comp.params_foregrounds[self.preset.comp.components_name_out[1]]["type"]
+        
+        ### Loop over the mixing matrix fitting method for the different component
+        ### If they are different, we assume that we want to run an alternate parametric/blind estimation
         if len(self.preset.comp.components_name_out) > 1:
-            cpt = 2
-            while cpt < len(self.preset.comp.components_name_out):
-                if (self.preset.comp.components_name_out[cpt] != "CO"
-                    and self.preset.comp.params_foregrounds[self.preset.comp.components_name_out[cpt]]["type"] != method_0):
+            for component in self.preset.comp.components_name_out[2:]:
+                if component != "CO" and self.preset.comp.params_foregrounds[component]["type"] != method_0:
                     method = "parametric_blind"
-                cpt += 1
-        try:
-            method == "parametric_blind"
-        except:
-            method = method_0
+                    break
 
         tod_comp = self.get_tod_comp()
         self.nfev = 0
         self.preset.mixingmatrix._index_seenpix_beta = 0
 
         if method == "parametric":
+            ### Model without spatial variation of spectral index
             if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] == 0:
 
                 previous_beta = self.preset.acquisition.beta_iter.copy()
 
                 if self.preset.qubic.params_qubic["instrument"] == "DB":
                     self.chi2 = Chi2DualBand(self.preset, tod_comp, parametric=True)
+                    
                 elif self.preset.qubic.params_qubic["instrument"] == "UWB":
                     self.chi2 = Chi2UltraWideBand(
                         self.preset, tod_comp, parametric=True
                     )
 
+                ### Fit using scipy.optimize.minimize
                 self.preset.acquisition.beta_iter = minimize(
                     self.chi2,
                     x0=self.preset.acquisition.beta_iter,
@@ -516,10 +507,6 @@ class Pipeline:
                     nus=self.preset.qubic.joint_out.allnus,
                     x=self.preset.acquisition.beta_iter,
                 )
-                # print(Ai.shape, Ai)
-                # for inu in range(self.preset.qubic.joint_out.qubic.nsub):
-                #    for icomp in range(1, len(self.preset.comp.components_name_out)):
-                #        self.preset.acquisition.Amm_iter[inu, icomp] = Ai[inu, icomp]
 
                 del tod_comp
                 gc.collect()
@@ -537,11 +524,6 @@ class Pipeline:
                         f"Residuals       : {self.preset.mixingmatrix.beta_in - self.preset.acquisition.beta_iter}"
                     )
 
-                    # if len(self.preset.comp.components_name_out) > 2:
-                    #    self.plots.plot_beta_iteration(self.preset.acquisition.allbeta[:, 0], truth=self.preset.mixingmatrix.beta_in[0], ki=self._steps)
-                    # else:
-                    #    self.plots.plot_beta_iteration(self.preset.acquisition.allbeta, truth=self.preset.mixingmatrix.beta_in, ki=self._steps)
-
                 self.preset.tools.comm.Barrier()
 
                 self.preset.acquisition.allbeta = np.concatenate(
@@ -552,6 +534,7 @@ class Pipeline:
                     axis=0,
                 )
 
+            ### Model with spatial variation of spectral index
             else:
 
                 index_num = hp.ud_grade(
@@ -559,7 +542,7 @@ class Pipeline:
                     self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"],
                 )  #
                 self.preset.mixingmatrix._index_seenpix_beta = np.where(
-                    index_num == True
+                    index_num
                 )[0]
 
                 ### Simulated TOD for each components, nsub, npix with shape (npix, nsub, ncomp, nsnd)
@@ -624,11 +607,14 @@ class Pipeline:
                         ],
                         ki=self._steps,
                     )
+        
         elif method == "blind":
             previous_step = self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, 1:].copy()
+            
             if self._steps == 0:
                 self.allAmm_iter = np.array([self.preset.acquisition.Amm_iter])
 
+            ### Blind using scipy.optimize.minimize
             if self.preset.comp.params_foregrounds["blind_method"] == "minimize":
 
                 if self.preset.qubic.params_qubic["instrument"] == "DB":
@@ -669,6 +655,8 @@ class Pipeline:
                 for inu in range(self.preset.qubic.joint_out.qubic.nsub):
                     for icomp in range(1, len(self.preset.comp.components_name_out)):
                         self.preset.acquisition.Amm_iter[inu, icomp] = Ai[inu, icomp]
+            
+            ### Blind using PCG
             elif self.preset.comp.params_foregrounds["blind_method"] == "PCG":
                 
                 tod_comp_binned = np.zeros((tod_comp.shape[0], self.preset.comp.params_foregrounds["bin_mixing_matrix"], tod_comp.shape[-1],))
@@ -718,6 +706,8 @@ class Pipeline:
                         self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
                         self.preset.acquisition.Amm_iter[ii * self.fsub : (ii + 1) * self.fsub, i] = s["x"][k]  # Ai[k]
                         k += 1
+                        
+            ### Blind using scipy.optimize.minimize in an alternate manner, with a loop over components
             elif self.preset.comp.params_foregrounds["blind_method"] == "alternate":
                 for i in range(len(self.preset.comp.components_name_out)):
                     if self.preset.comp.components_name_out[i] != "CMB":
@@ -790,11 +780,10 @@ class Pipeline:
                         "A_iter",
                         output="animation_A_iter.gif",
                     )
-                    # do_gif(f'jobs/{self.preset.job_id}/allcomps/', 'iter_', output='animation.gif')
+
             del tod_comp
             gc.collect()
-            
-            
+               
         elif method == "parametric_blind":
             previous_step = self.preset.acquisition.Amm_iter[
                 : self.preset.qubic.joint_out.qubic.nsub * 2, 1:
@@ -813,8 +802,6 @@ class Pipeline:
                             "I am fitting ", self.preset.comp.components_name_out[i], i
                         )
 
-                        # if self._steps==0:
-                        #    self.preset.acquisition.beta_iter = self.preset.acquisition.beta_iter
                         previous_beta = self.preset.acquisition.beta_iter.copy()
 
                         chi2 = Chi2Parametric_alt(
@@ -1040,7 +1027,7 @@ class Pipeline:
         # )
 
     def save_data(self, step):
-        f"""Save data.
+        """Save data.
         
         Method that save data for each iterations. 
         It saves components, gains, spectral index, coverage, seen pixels.
@@ -1130,7 +1117,7 @@ class Pipeline:
         rms_maxpercomp = np.zeros(len(self.preset.comp.components_name_out))
 
         for i in range(len(self.preset.comp.components_name_out)):
-            angs, I, Q, U, dI, dQ, dU = get_angular_profile(
+            _, _, _, _, dI, dQ, dU = get_angular_profile(
                 residual[i],
                 thmax=self.preset.angmax,
                 nbins=nbins,

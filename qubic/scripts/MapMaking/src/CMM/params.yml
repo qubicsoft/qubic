@@ -31,7 +31,7 @@ Foregrounds:
         Synchrotron_in: True
         Synchrotron_out: True
 
-        type: 'parametric'                      # Reconstruction method
+        type: 'blind'                      # Reconstruction method
         model_s: 's0'                           # PySM model
         beta_s_init: [-3, 0]
         nu0_s: 150                             # Reference frequency (nu0_s)

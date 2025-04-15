@@ -40,6 +40,7 @@ class QubicNoise:
         d["comm"] = comm
         d["nprocs_instrument"] = size
         d["nprocs_sampling"] = 1
+        d["interp_projection"] = False
 
         self.dict = d.copy()
         self.dict["filter_nu"] = int(band)

@@ -2035,13 +2035,14 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                         )
                     d1["filter_nu"] = filter_nus[i] * 1e9
 
-                    if d['debug']:
-                        print("setting filter_nu to ",d1["filter_nu"])
+                    if d['debug']: # This was only in the first loop, why?
+                        print("setting filter_nu to ", d1["filter_nu"])
 
                     d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
             else:
-                for i in range(self.nsubbands):
+                # for i in range(self.nsubbands): # self.subbands not defined
+                for i in range(len(filter_nus)):
                     d1["filter_nu"] = filter_nus[i] * 1e9
                     d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)[0]

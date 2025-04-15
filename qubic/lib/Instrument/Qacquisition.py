@@ -104,7 +104,7 @@ class QubicAcquisition(Acquisition):
         bandwidth = d["bandwidth"]
         twosided = d["twosided"]
         sigma = d["sigma"]
-        self.interp_projection = d["interp_projection"]
+        self.interp_projection = d["interp_projection"] # Should be None if not initialised but doesn't seem to work
 
         Acquisition.__init__(
             self,
@@ -674,7 +674,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None, kind=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None):
 
         ### Define class arguments
         self.dict = dictionary
@@ -683,12 +683,12 @@ class QubicMultiAcquisitions:
         self.dict["nf_sub"] = self.nsub
         self.comps = comps
         self.fsub = int(self.nsub / self.nrec)
-        self.dict["kind"] = kind
+        # self.dict["kind"] = kind
 
-        # There was code dupliocation in the previous version
+        # There was code duplication in the previous version
         self.allnus = []
         self.allnus_rec = []
-        if kind == "TD":
+        if self.dict["kind"] == "TD":
             f_bands = [150]
         else:
             f_bands = [150, 220]
@@ -866,11 +866,10 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         """
 
-        op_sum = []
-        f = int(self.nsub / self.nrec)
-
         ### Frequency Map-Making
         if algo == "FMM":
+            op_sum = []
+            f = int(self.nsub / self.nrec)
             h = np.array(h)
             for irec in range(self.nrec):
                 imin = irec * f
@@ -879,63 +878,78 @@ class QubicDualBand(QubicMultiAcquisitions):
                     h[
                         (self.allnus >= self.allnus[imin])
                         * (self.allnus <= self.allnus[imax])
-                    ].sum(axis=0)
+                    ].sum(axis=0) # shouldn't it be weighted by the value of frec wrt fsub?
                 ]
 
-            if self.nrec > 2:
-                return BlockDiagonalOperator(
+            if self.nrec > 2: # That shouldn't be here: the shape should be working the same way for any nrec
+                print("")
+                print(self.ndets)
+                print(self.nsamples)
+                print(np.shape(op_sum))
+                print(np.shape(BlockRowOperator(op_sum[: int(self.nrec / 2)], axisin=0)))
+                return ReshapeOperator(
+                    (2, self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
+                ) * BlockDiagonalOperator(
                     [
-                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
+                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0), # code duplication
                         BlockRowOperator(
                             op_sum[int(self.nrec / 2) : int(self.nrec)], new_axisin=0
                         ),
                     ],
-                    axisout=0,
+                    new_axisin=0, # the main difference might be here? to be understood
                 )
+            
+                # return ReshapeOperator(
+                #     (2, self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
+                # ) * BlockDiagonalOperator(
+                #     [
+                #         BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0), # code duplication
+                #         BlockRowOperator(
+                #             op_sum[int(self.nrec / 2) : int(self.nrec)], new_axisin=0
+                #         ),
+                #     ],
+                #     new_axisout=0, # the main difference might be here? to be understood
+                # )
+
+                # return BlockDiagonalOperator(
+                #     [
+                #         BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
+                #         BlockRowOperator(
+                #             op_sum[int(self.nrec / 2) : int(self.nrec)], new_axisin=0
+                #         ),
+                #     ],
+                #     axisout=0,
+                # )
             else:
                 return ReshapeOperator(
                     (2, self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
                 ) * BlockDiagonalOperator(
                     [
-                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
+                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0), # code duplication
                         BlockRowOperator(
                             op_sum[int(self.nrec / 2) : int(self.nrec)], new_axisin=0
                         ),
                     ],
-                    new_axisin=0,
+                    new_axisin=0, # the main difference might be here? to be understood
                 )
 
         ### Components Map-Making
-        else:
+        else: # there was code duplication
             if gain is None:
-                G150 = DiagonalOperator(
-                    np.ones(self.ndets),
+                gain = np.ones((self.ndets, 2))
+            Operator_band = []
+            Edges_band = [0, self.nsub//2, self.nsub - 1]
+            for iband in range(2):
+                G_band = DiagonalOperator(
+                    gain[:, iband],
                     broadcast="rightward",
                     shapein=(self.ndets, self.nsamples),
                 )
-                G220 = DiagonalOperator(
-                    np.ones(self.ndets),
-                    broadcast="rightward",
-                    shapein=(self.ndets, self.nsamples),
-                )
-            else:
-                G150 = DiagonalOperator(
-                    gain[:, 0],
-                    broadcast="rightward",
-                    shapein=(self.ndets, self.nsamples),
-                )
-                G220 = DiagonalOperator(
-                    gain[:, 1],
-                    broadcast="rightward",
-                    shapein=(self.ndets, self.nsamples),
-                )
-            return BlockColumnOperator(
-                [
-                    G150 * AdditionOperator(h[: int(self.nsub / 2)]),
-                    G220 * AdditionOperator(h[int(self.nsub / 2) :]),
-                ],
+                Operator_band.append(G_band * AdditionOperator(h[Edges_band[iband] : Edges_band[iband + 1]]))
+            return BlockColumnOperator( # check if working as expected
+                Operator_band,
                 axisout=0,
-            )
+                )
 
     def get_operator(self, A=None, gain=None, fwhm=None, seenpix=None):
         """
@@ -946,6 +960,9 @@ class QubicDualBand(QubicMultiAcquisitions):
                         mixing_matrix.shape = (nfreq, ncomp)
 
         """
+
+        print("\nget_operator of QubicDualBand")
+
         self.operator = []
 
         for isub in range(self.nsub):
@@ -974,7 +991,7 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         ### Do the sum over operators depending on the reconstruction model
         H = self.sum_over_band(self.operator, algo=algo, gain=gain)
-        
+
         return H
 
     def get_invntt_operator(self):
@@ -1032,8 +1049,16 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
                         * (self.allnus <= self.allnus[imax])
                     ].sum(axis=0)
                 ]
+
+            # Trying to fix shape issue for UWB
+            if self.nrec > 2: # That shouldn't be here: the shape should be working the same way for any nrec
+                return BlockRowOperator(op_sum, new_axisin=0) # not working
+            else:
+                return ReshapeOperator(
+                    (self.ndets, self.nsamples), (self.ndets * self.nsamples) # shapein and shapeout are the same anyway?
+                ) * BlockRowOperator(op_sum, new_axisin=0)
                 
-            return BlockRowOperator(op_sum, new_axisin=0)
+            # return BlockRowOperator(op_sum, new_axisin=0)
 
         ### Components Map-Making
         else:
@@ -1123,9 +1148,11 @@ class QubicTechnicalDemonstrator(QubicMultiAcquisitions):
     def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
 
         QubicMultiAcquisitions.__init__(
-            self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co, kind="TD"
+            self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co#, kind="TD" # already in dictionary?
         )
 
+    # Do I need to redefine the three following methods? Or should there be one method with 'if' conditions?
+    # I guess so, but maybe there is a core that is common to all three 'kind' of intrument
     def sum_over_band(self, h, algo, gain=None):
         """
 
@@ -1486,6 +1513,8 @@ class JointAcquisitionFrequencyMapMaking:
 
     def __init__(self, d, kind, Nrec, Nsub, H=None):
 
+        print("\n__init__ of JointAcquisitionFrequencyMapMaking")
+
         self.kind = kind
         self.d = d
         self.Nrec = Nrec
@@ -1512,6 +1541,8 @@ class JointAcquisitionFrequencyMapMaking:
         self.pl217 = PlanckAcquisition(217, self.scene)
 
     def get_operator(self, fwhm=None, seenpix=None):
+
+        print("\nget_operator of JointAcquisitionFrequencyMapMaking")
 
         if seenpix is not None:
             U = (
@@ -1556,9 +1587,11 @@ class JointAcquisitionFrequencyMapMaking:
         elif self.kind == "DB":
 
             # Get QUBIC operator
-            if self.Nrec == 2:
+            if self.Nrec == 2: # Why two different cases?
+                print("shape H operands:", np.shape(self.qubic.get_operator(fwhm=fwhm).operands))
                 H_qubic = self.qubic.get_operator(fwhm=fwhm).operands[1]
             else:
+                print("shape H operands:", np.shape(self.qubic.get_operator(fwhm=fwhm).operands))
                 H_qubic = self.qubic.get_operator(fwhm=fwhm)
             R_qubic = ReshapeOperator(
                 H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0]

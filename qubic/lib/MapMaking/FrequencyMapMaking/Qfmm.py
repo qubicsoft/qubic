@@ -148,6 +148,7 @@ class PipelineFrequencyMapMaking:
         
         ### Define reconstructed and TOD operator
         self.get_H()
+        print("OK 3")
 
         ### Inverse noise covariance matrix
         if self.params['PLANCK']['external_data']:
@@ -227,7 +228,7 @@ class PipelineFrequencyMapMaking:
         
         ### QUBIC Pointing matrix for TOD generation
         self.H_in_qubic = self.joint_tod.qubic.get_operator()
-
+        print("OK 2")
         ### Pointing matrix for reconstruction
         if self.params['PLANCK']['external_data']:
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
@@ -351,6 +352,7 @@ class PipelineFrequencyMapMaking:
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
+            "interp_projection" : False,
         }
 
         ### Get the default dictionary
@@ -603,13 +605,24 @@ class PipelineFrequencyMapMaking:
             else:
                 TOD = TOD_QUBIC
 
-        else:
-
+        else: # change this if I add the "TD" instrument
+            
             sh_q = self.joint.qubic.ndets * self.joint.qubic.nsamples
+            # print(np.shape(self.maps_input.m_nu))
+            # n_maps = len(self.maps_input.m_nu)
+            # print(np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
+            # print(np.shape(self.noiseq))
+            print("shape maps:", np.shape(self.maps_input.m_nu))
             TOD_QUBIC = (
                 self.H_in_qubic(self.maps_input.m_nu).ravel()
                 + self.noiseq
             )
+            # n_maps = len(self.maps_input.m_nu)
+            # print("shape maps:", np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
+            # TOD_QUBIC = (
+            #     self.H_in_qubic(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])).ravel()
+            #     + self.noiseq
+            # )
 
 
             if self.params["PLANCK"]["external_data"] == False:
@@ -821,6 +834,7 @@ class PipelineFrequencyMapMaking:
 
         ### Get simulated data
         self.TOD = self.get_tod()
+        print("Still OK?")
 
         ### Wait for all processes
         self.mpi._barrier()

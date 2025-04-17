@@ -80,6 +80,10 @@ class PipelineFrequencyMapMaking:
         ### Sky
         self.dict_in = self.get_dict(key="in")
         self.dict_out = self.get_dict(key="out")
+        # change config and detector_nep
+
+        # print("in nf_sub = {}".format(self.dict_in["nf_sub"]))
+        # print("out nf_sub = {}".format(self.dict_out["nf_sub"]))
 
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
@@ -157,6 +161,8 @@ class PipelineFrequencyMapMaking:
             self.invN = self.joint.qubic.get_invntt_operator()
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
+            print("self.invN computed")
+            print("shape self.invN = {}".format(np.shape(self.invN)))
         
         ### Noises
         seed_noise_planck = self.mpi.get_random_value()
@@ -228,7 +234,7 @@ class PipelineFrequencyMapMaking:
         
         ### QUBIC Pointing matrix for TOD generation
         self.H_in_qubic = self.joint_tod.qubic.get_operator()
-        print("OK 2")
+        print("self.H_in_qubic computed")
         ### Pointing matrix for reconstruction
         if self.params['PLANCK']['external_data']:
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
@@ -237,6 +243,7 @@ class PipelineFrequencyMapMaking:
             )  
         else:
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
+            print("self.H_out computed")
             
     def get_averaged_nus(self):
         """Average frequency
@@ -325,7 +332,7 @@ class PipelineFrequencyMapMaking:
         args = {
             "npointings": self.params["QUBIC"]["npointings"],
             "nf_recon": self.params["QUBIC"]["nrec"],
-            "nf_sub": self.params["QUBIC"][f"nsub_{key}"],
+            "nf_sub": self.params["QUBIC"][f"nsub_{key}"], # here is the difference between in and out dictionaries
             "nside": self.params["SKY"]["nside"],
             "MultiBand": True,
             "period": 1,
@@ -349,6 +356,7 @@ class PipelineFrequencyMapMaking:
             "TemperatureAtmosphere220": None,
             "EmissivityAtmosphere150": None,
             "EmissivityAtmosphere220": None,
+            # mettre if ici pour fixer detector_nep
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
@@ -612,17 +620,17 @@ class PipelineFrequencyMapMaking:
             # n_maps = len(self.maps_input.m_nu)
             # print(np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
             # print(np.shape(self.noiseq))
-            print("shape maps:", np.shape(self.maps_input.m_nu))
-            TOD_QUBIC = (
-                self.H_in_qubic(self.maps_input.m_nu).ravel()
-                + self.noiseq
-            )
-            # n_maps = len(self.maps_input.m_nu)
-            # print("shape maps:", np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
+            # print("shape maps:", np.shape(self.maps_input.m_nu))
             # TOD_QUBIC = (
-            #     self.H_in_qubic(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])).ravel()
+            #     self.H_in_qubic(self.maps_input.m_nu).ravel()
             #     + self.noiseq
             # )
+            n_maps = len(self.maps_input.m_nu)
+            print("shape maps:", np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
+            TOD_QUBIC = (
+                self.H_in_qubic(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])).ravel()
+                + self.noiseq
+            )
 
 
             if self.params["PLANCK"]["external_data"] == False:
@@ -752,7 +760,33 @@ class PipelineFrequencyMapMaking:
         """
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
+
+        print("\nshapes in the computation of A")
+        print(np.shape(self.H_out))
+        print(np.shape(self.invN))
+        print(np.shape(self.H_out.T))
+
+        ### Testing
+        print(self.H_out.operands)
+        print(self.invN.operands)
+        test = self.invN * self.H_out
+
+        print("\ntests ok")
+
+        
+        print(np.shape(self.H_out.T * self.H_out))  # working
+        print(np.shape(self.H_out.T * self.invN))   # not working
+        print(np.shape(self.invN * self.H_out))     # not working
+
+
         A = self.H_out.T * self.invN * self.H_out
+        # if self.params["QUBIC"]["instrument"] == "DB":
+        #     shape_in_A = 
+        # A = ReshapeOperator(
+        #     (nbands, self.params["QUBIC"]["nrec"], npix, stokes), (nbands * self.params["QUBIC"]["nrec"], npix, stokes)
+        #     ) * self.H_out.T * self.invN * self.H_out
+
+        print("A computed")
 
         if self.params['PLANCK']['external_data']:
             x_planck = self.m_nu_in * (1 - seenpix[None, :, None])

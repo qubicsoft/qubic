@@ -16,7 +16,8 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
     
-    instrument: 'DB'                        # Instrumental design (DB or UWB)
+    instrument: 'UWB'                        # Instrumental design (MB, DB or UWB)
+    configuration: 'TD'                     # Instrumental configuration (TD or FI) # to be implemented in the code # create a dictionary for TD and one for FI
     npointings: 1000                     # Number of time samples
     nsub_in: 8                             # Number of sub-acquisitions
     nsub_out: 8
@@ -28,7 +29,7 @@ QUBIC:
         ndet: 1                             # Level of detector noise
         npho150: 1                          # Level of photon noise at 150 GHz
         npho220: 1                          # Level of photon noise at 220 GHz
-        detector_nep: 4.7e-17                 # NEP of detector noise
+        detector_nep: 4.7e-17                 # NEP of detector noise # do two different parameters?
         seed: -1
     SYNTHBEAM:
         synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)

@@ -2016,7 +2016,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
 
         # there was code duplication in the previous version
         self.subinstruments = []
-        if d["kind"] == "TD":
+        if d["config"] == "TD": ### For now, the Technical Demonstrator only has one band # might have to be modified so that there is no condition in this class
             f_bands = [150]
         else:
             f_bands = [150, 220]

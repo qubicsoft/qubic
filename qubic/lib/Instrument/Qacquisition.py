@@ -881,42 +881,14 @@ class QubicDualBand(QubicMultiAcquisitions):
                     ].sum(axis=0) # shouldn't it be weighted by the value of frec wrt fsub?
                 ]
             
-            ### We retrieve the number of Stokes parameters to include in H
-            nstokes = self.H[0].shapein[1]
-
-            # best philosophy here might be to put the reshape in the rest of the code? instead of overloading H
-
-            reshaped_operator = ReshapeOperator(
+            return ReshapeOperator(
                 (2 * self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
                 ) * BlockDiagonalOperator(
                     [
                         BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
                         BlockRowOperator(op_sum[int(self.nrec / 2) :], new_axisin=0),
                     ],
-                    axisout=0, #new_axisin=0,
-                )
-            
-            return reshaped_operator * ReshapeOperator(
-                (self.nrec, self.npix, nstokes), (reshaped_operator.shapein) # doesn't solve all problems, there still is a different shape for Nrec=2
-                )
-
-            if self.nrec > 2:
-                return BlockDiagonalOperator(
-                    [
-                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
-                        BlockRowOperator(op_sum[int(self.nrec / 2) :], new_axisin=0),
-                    ],
                     axisout=0,
-                )
-            else:
-                return ReshapeOperator(
-                    (2, self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
-                ) * BlockDiagonalOperator(
-                    [
-                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
-                        BlockRowOperator(op_sum[int(self.nrec / 2) :], new_axisin=0),
-                    ],
-                    new_axisin=0,
                 )
 
         ### Components Map-Making
@@ -932,10 +904,7 @@ class QubicDualBand(QubicMultiAcquisitions):
                     shapein=(self.ndets, self.nsamples),
                 )
                 Operator_band.append(G_band * AdditionOperator(h[Edges_band[iband] : Edges_band[iband + 1]]))
-            return BlockColumnOperator( # check if working as expected
-                Operator_band,
-                axisout=0,
-                )
+            return BlockColumnOperator(Operator_band, axisout=0,)
 
     def get_operator(self, A=None, gain=None, fwhm=None, seenpix=None):
         """
@@ -1004,11 +973,6 @@ class QubicDualBand(QubicMultiAcquisitions):
         self.invn150 = subacq150.get_invntt_operator(det_noise=True, photon_noise=True)
         self.invn220 = subacq220.get_invntt_operator(det_noise=True, photon_noise=True)
 
-        # print("\nshapes in the computation of self.invN")
-        # print(np.shape(self.invn150))
-        # print(np.shape(self.invn220))
-        print(np.shape(BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)))
-
         return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
 class QubicUltraWideBand(QubicMultiAcquisitions):
 
@@ -1041,18 +1005,9 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
                     ].sum(axis=0)
                 ]
 
-            # Trying to fix shape issue for UWB
-            # if self.nrec > 2: # That shouldn't be here: the shape should be working the same way for any nrec
-            #     return BlockRowOperator(op_sum, new_axisin=0) # not working
-            # else:
-            #     return ReshapeOperator(
-            #         (self.ndets, self.nsamples), (self.ndets * self.nsamples)
-            #     ) * BlockRowOperator(op_sum, new_axisin=0)
-                
-            return BlockRowOperator(op_sum, new_axisin=0) # original version
-            # return ReshapeOperator( # working for FMM
-            #         (self.ndets, self.nsamples), (self.ndets * self.nsamples)
-            #     ) * BlockRowOperator(op_sum, new_axisin=0)
+            return ReshapeOperator( # working for FMM
+                    (self.ndets, self.nsamples), (self.ndets * self.nsamples)
+                ) * BlockRowOperator(op_sum, new_axisin=0)
 
         ### Components Map-Making
         else:
@@ -1108,7 +1063,7 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
 
         return H
 
-    def get_invntt_operator(self):
+    def get_invntt_operator(self): # exactly the same as DB.get_invntt_operator except from the return
         """
 
         Method to compute the inverse noise covariance matrix in time-domain.
@@ -1538,8 +1493,6 @@ class JointAcquisitionFrequencyMapMaking:
     def get_operator(self, fwhm=None, seenpix=None):
 
         print("\nget_operator of JointAcquisitionFrequencyMapMaking")
-        test_new = True # just a test to see if it works
-        print("test_new = {}".format(test_new))
 
         if seenpix is not None:
             U = (
@@ -1551,29 +1504,12 @@ class JointAcquisitionFrequencyMapMaking:
         else:
             U = IdentityOperator()
 
+        ### Get QUBIC H operator
         H_qubic = self.qubic.get_operator(fwhm=fwhm)
 
-        if test_new:
-            R_qubic = ReshapeOperator( # if reshape in H definition
-                H_qubic.operands[1].operands[0].shapeout, H_qubic.operands[1].operands[0].shape[0] # just a way to get the shape, could be more straightforward?
-            )
-            print("\nshapeshapy")
-            print(R_qubic.shapein)
-            print(R_qubic.shapeout)
-            print("\nshapeshapy2")
-            print(H_qubic.operands[1].shapein)
-            print(H_qubic.operands[1].shapeout)
-        else:
-            R_qubic = ReshapeOperator(
-                H_qubic.operands[0].shapeout, H_qubic.operands[0].shape[0]
-            )
-            print("\nshapeshapy")
-            print(R_qubic.shapein)
-            print(R_qubic.shapeout)
-            print("\nshapeshapy2")
-            print(H_qubic.operands[0].shapein)
-            print(H_qubic.operands[0].shapeout)
-        # efa
+        R_qubic = ReshapeOperator( # if reshape in H definition
+            H_qubic.operands[1].operands[0].shapeout, H_qubic.operands[1].operands[0].shape[0] # just a way to get the shape, could be more straightforward?
+        )
         R_planck = ReshapeOperator(
             (12 * self.qubic.scene.nside**2, 3),
             (12 * self.qubic.scene.nside**2 * 3),
@@ -1581,12 +1517,6 @@ class JointAcquisitionFrequencyMapMaking:
 
         if self.kind == "UWB":  # WideBand intrument
 
-            # # Get QUBIC operator
-            # H_qubic = self.qubic.get_operator(fwhm=fwhm)
-            # # print("\nshapes in out H_qubic")
-            # # print(H_qubic.shapein)
-            # # print(H_qubic.shapeout)
-            
             if self.Nrec == 1: # why do different cases?
                 operator = [R_qubic(H_qubic), R_planck, R_planck]
                 return BlockColumnOperator(operator, axisout=0)
@@ -1594,12 +1524,7 @@ class JointAcquisitionFrequencyMapMaking:
             else:
                 full_operator = []
                 for irec in range(self.Nrec):
-                    if test_new:
-                        operator = [R_qubic(H_qubic.operands[1].operands[irec])] # if reshape in H definition...
-                    else:
-                        operator = [R_qubic(H_qubic.operands[irec])]
-                    # print(H_qubic.operands)
-                    # 
+                    operator = [R_qubic(H_qubic.operands[1].operands[irec])] # if reshape in H definition...
                     for jrec in range(self.Nrec):
                         if irec == jrec:
                             operator += [R_planck]
@@ -1611,33 +1536,11 @@ class JointAcquisitionFrequencyMapMaking:
 
         elif self.kind == "DB":
 
-            # # Get QUBIC operator
-            # if self.Nrec == 2: # two different cases because of rehape operator added in self.qubic.get_operator
-            #     print("shape H operands:", np.shape(self.qubic.get_operator(fwhm=fwhm).operands))
-            #     print("shape H operands 1:", self.qubic.get_operator(fwhm=fwhm).operands[1].shapein, self.qubic.get_operator(fwhm=fwhm).operands[1].shapeout)
-            #     H_qubic = self.qubic.get_operator(fwhm=fwhm).operands[1]
-            # else:
-            #     print("shape H operands:", np.shape(self.qubic.get_operator(fwhm=fwhm).operands))
-            #     print("shape H operands 1:", np.shape(self.qubic.get_operator(fwhm=fwhm).operands[1]))
-            #     H_qubic = self.qubic.get_operator(fwhm=fwhm)
-
-            # H_qubic = self.qubic.get_operator(fwhm=fwhm)
-
             opefull = []
             for ifp in range(2):
                 ope_per_fp = []
                 for irec in range(int(self.Nrec / 2)):
-                    if test_new:
-                        print("\shapes in loop")
-                        print(H_qubic.operands[1].operands[ifp].operands[irec].shapein)
-                        print(H_qubic.operands[1].operands[ifp].shapeout)
-                        print(R_qubic.shapein)
-                        operator = [R_qubic * H_qubic.operands[1].operands[ifp].operands[irec]]
-                    else:
-                        if self.Nrec > 2:
-                            operator = [R_qubic * H_qubic.operands[ifp].operands[irec]]
-                        else:
-                            operator = [R_qubic * H_qubic.operands[ifp]]
+                    operator = [R_qubic * H_qubic.operands[1].operands[ifp].operands[irec]]
                     for jrec in range(int(self.Nrec / 2)):
                         if irec == jrec:
                             operator += [R_planck]

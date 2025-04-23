@@ -88,7 +88,7 @@ class PipelineFrequencyMapMaking:
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
             self.dict_in,
-            self.params["QUBIC"]["instrument"],
+            # self.params["QUBIC"]["instrument"],
             self.params["QUBIC"]["nsub_in"],
             self.params["QUBIC"]["nsub_in"],
             H=None,
@@ -102,7 +102,7 @@ class PipelineFrequencyMapMaking:
 
         self.joint = JointAcquisitionFrequencyMapMaking(
             self.dict_out,
-            self.params["QUBIC"]["instrument"],
+            # self.params["QUBIC"]["instrument"],
             self.params["QUBIC"]["nrec"],
             self.params["QUBIC"]["nsub_out"],
             H=H,
@@ -360,7 +360,8 @@ class PipelineFrequencyMapMaking:
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
-            "interp_projection" : False,
+            "interp_projection": False,
+            "instrument_type": self.params["QUBIC"]["instrument"]
         }
 
         ### Get the default dictionary

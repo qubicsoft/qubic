@@ -688,8 +688,8 @@ class QubicMultiAcquisitions:
         # There was code duplication in the previous version
         self.allnus = []
         self.allnus_rec = []
-        if self.dict["kind"] == "TD": # change that to intrument_type == "MB"
-            f_bands = [150]
+        if self.dict["intrument_type"] == "MB":
+            f_bands = [150] # this is for the TD MonoBand instrument
         else:
             f_bands = [150, 220]
         for i, f_band in enumerate(f_bands):
@@ -697,14 +697,16 @@ class QubicMultiAcquisitions:
 
             _, _, nus_subbands_i, _, _, _ = compute_freq(
                 f_band,
-                Nfreq=int(self.nsub / 2) ,
+                # Nfreq=int(self.nsub / 2),
+                Nfreq=int(self.nsub / len(f_bands)),
                 relative_bandwidth=self.dict["filter_relative_bandwidth"],
             )
 
             ### Compute the effective reconstructed frequencies if FMM is applied
             _, _, nus_i, _, _, _ = compute_freq(
                 f_band,
-                Nfreq=int(self.nrec / 2),
+                # Nfreq=int(self.nrec / 2),
+                Nfreq=int(self.nrec / len(f_bands)),
                 relative_bandwidth=self.dict["filter_relative_bandwidth"],
             )
 
@@ -852,7 +854,7 @@ class QubicMultiAcquisitions:
 
         return D
     
-class QubicOneBand(QubicMultiAcquisitions):
+class QubicInstrumentType(QubicMultiAcquisitions):
     """
     Class providing methods necessary for all instrument types.
     
@@ -865,11 +867,15 @@ class QubicOneBand(QubicMultiAcquisitions):
         )
 
         if self.dict["instrument_type"] == "DB":
-            self.nbands = 2
-            self.edges_band = [0, self.nsub//2, self.nsub]
+            self.used_bands = [150, 220]
+            self.final_nbands = 2
         elif self.dict["instrument_type"] == "UWB":
-            self.nbands = 1
-            self.edges_band = [0, self.nsub]
+            self.used_bands = [150, 220]
+            self.final_nbands = 1
+        elif self.dict["instrument_type"] == "MB":
+            self.used_bands = [150] # this is the TD MonoBand instrument
+            self.final_nbands = 1
+    
         
     def sum_over_band(self, h, algo, gain=None): # same as QDB.sum_over_band for FMM except for the return,
                                                     #similar for CMM, with one band instead of two
@@ -898,11 +904,12 @@ class QubicOneBand(QubicMultiAcquisitions):
             # return op_list
 
             block_list = []
-            for iband in range(self.nbands):
-                block_list.append(BlockRowOperator(op_list[self.edges_band[iband] : self.edges_band[iband + 1]], new_axisin=0))
+            for iband in range(self.final_nbands):
+                edges_band = [iband * int(self.nrec//self.final_nbands), (iband + 1) * int(self.nrec//self.final_nbands)] # splitting nrec op
+                block_list.append(BlockRowOperator(op_list[edges_band[0] : edges_band[1]], new_axisin=0))
 
             return ReshapeOperator(
-                (self.nbands * self.ndets, self.nsamples), (self.nbands * self.ndets * self.nsamples)
+                (self.final_nbands * self.ndets, self.nsamples), (self.final_nbands * self.ndets * self.nsamples)
                 ) * BlockDiagonalOperator(block_list, axisout=0,)
         
             # return ReshapeOperator(
@@ -928,7 +935,7 @@ class QubicOneBand(QubicMultiAcquisitions):
             # )
             # return G * AdditionOperator(h)
             Operator_list = []
-            for iband in range(self.nbands):
+            for iband in range(self.final_nbands):
                 if gain is None:
                     gain_ = np.ones(self.ndets)
                 else:
@@ -938,7 +945,8 @@ class QubicOneBand(QubicMultiAcquisitions):
                     broadcast="rightward",
                     shapein=(self.ndets, self.nsamples),
                 )
-                Operator_list.append(G_band * AdditionOperator(h[self.edges_band[iband] : self.edges_band[iband + 1]]))
+                edges_band = [iband * int(self.nsub//self.final_nbands), (iband + 1) * int(self.nsub//self.final_nbands)] # splitting nsub h
+                Operator_list.append(G_band * AdditionOperator(h[edges_band[0] : edges_band[1]]))
             return BlockColumnOperator(Operator_list, axisout=0,)
             # if gain is None:
             #     gain = np.ones((self.ndets, 2)) # doesn't change value of gain outside of function
@@ -994,31 +1002,29 @@ class QubicOneBand(QubicMultiAcquisitions):
 
         return H
     
-    def get_invntt_operator(self): # exactly the same as QDB.get_invntt_operator except from the return
+    def get_invntt_operator(self): # same as QDB.get_invntt_operator except from the return and the det_noise=False in 220 band
         """
 
         Method to compute the inverse noise covariance matrix in time-domain.
 
         """
 
-        d150 = self.dict.copy()
-        d150["filter_nu"] = 150 * 1e9
-        d150["effective_duration"] = self.dict["effective_duration150"]
-        ins150 = QubicInstrument(d150)
-
-        d220 = self.dict.copy()
-        d220["effective_duration"] = self.dict["effective_duration220"]
-        d220["filter_nu"] = 220 * 1e9
-
-        ins220 = QubicInstrument(d220)
-
-        subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
-        subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)
-
-        self.invn150 = subacq150.get_invntt_operator(det_noise=True, photon_noise=True)
-        self.invn220 = subacq220.get_invntt_operator(det_noise=False, photon_noise=True)
-        
-        return self.invn150 + self.invn220
+        if self.dict["instrument_type"] == "UWB":
+            det_noise = [True, False]
+        else: # doesn't matter for MB, because only the first is used anyway
+            det_noise = [True, True]
+        invn_list = []
+        for iband, band in enumerate(self.used_bands):
+            d = self.dict.copy()
+            d["filter_nu"] = band * 1e9
+            d["effective_duration"] = self.dict["effective_duration{}".format(band)]
+            inst = QubicInstrument(d)
+            subacq = QubicAcquisition(inst, self.sampling, self.scene, d)
+            invn_list.append(subacq.get_invntt_operator(det_noise=det_noise[iband], photon_noise=True))
+        if self.dict["instrument_type"] == "UWB":
+            return np.sum(invn_list)
+        else:
+            return BlockDiagonalOperator(invn_list, axisout=0)
 
 class QubicDualBand(QubicMultiAcquisitions):
 
@@ -1478,21 +1484,26 @@ class OtherDataParametric:
         return R2tod(out)
 class JointAcquisitionFrequencyMapMaking:
 
-    def __init__(self, d, kind, Nrec, Nsub, H=None):
+    def __init__(self, d, Nrec, Nsub, H=None):
 
         print("\n__init__ of JointAcquisitionFrequencyMapMaking")
         print("Nrec = {}, Nsub = {}".format(Nrec, Nsub))
 
-        self.kind = kind
+        # self.kind = kind
+        self.kind = d["instrument_type"] # remember change
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
 
         ### Select the instrument model
         if self.kind == "DB":
+            print("\n\nDB!")
             self.qubic = QubicDualBand(
                 self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
             )
+            # self.qubic = QubicInstrumentType(
+            #     self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
+            # )
         elif self.kind == "UWB":
             self.qubic = QubicUltraWideBand(
                 self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None

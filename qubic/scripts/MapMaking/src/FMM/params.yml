@@ -16,12 +16,12 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
     
-    instrument: 'UWB'                        # Instrumental design (MB, DB or UWB)
+    instrument: 'DB'                        # Instrumental design (MB, DB or UWB)
     configuration: 'TD'                     # Instrumental configuration (TD or FI) # to be implemented in the code # create a dictionary for TD and one for FI
     npointings: 1000                     # Number of time samples
     nsub_in: 8                             # Number of sub-acquisitions
     nsub_out: 8
-    nrec: 2                                # Number of reconstructed frequency maps
+    nrec: 4                                # Number of reconstructed frequency maps
     convolution_in: True               # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
@@ -40,8 +40,8 @@ SKY:
 
     ### This section control the reconstructed sky
 
-    nside: 128                            # Nside of components
-    coverage_cut: 0.1                      # Define a cut where the coverage is too low
+    nside: 128                              # Nside of components
+    coverage_cut: 0.1                       # Define a cut where the coverage is too low #0.1
     RA_center: 0                   
     DEC_center: -57
 
@@ -49,8 +49,8 @@ PLANCK:
 
     ### This section define which external data are we using
 
-    external_data: False                    
-    weight_planck: 1                            # Weight of Planck data within the QUBIC patch
+    external_data: True                    
+    weight_planck: 0                            # Weight of Planck data within the QUBIC patch
     level_noise_planck: 1                       # Noise level for Planck data
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
@@ -63,7 +63,7 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 30                                   # Number of PCG iterations
+    n_iter_pcg: 100                                   # Number of PCG iterations
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: False
     initial_guess_intensity_to_zero: True

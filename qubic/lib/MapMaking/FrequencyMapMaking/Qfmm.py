@@ -620,17 +620,21 @@ class PipelineFrequencyMapMaking:
             # n_maps = len(self.maps_input.m_nu)
             # print(np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
             # print(np.shape(self.noiseq))
-            # print("shape maps:", np.shape(self.maps_input.m_nu))
-            # TOD_QUBIC = (
-            #     self.H_in_qubic(self.maps_input.m_nu).ravel()
-            #     + self.noiseq
-            # )
-            n_maps = len(self.maps_input.m_nu)
-            print("shape maps:", np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
+            print("shape maps:", np.shape(self.maps_input.m_nu))
+            print("shape in out H_Qubic")
+            print(self.H_in_qubic.shapein)
+            print(self.H_in_qubic.shapeout)
+            
             TOD_QUBIC = (
-                self.H_in_qubic(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])).ravel()
+                self.H_in_qubic(self.maps_input.m_nu).ravel()
                 + self.noiseq
             )
+            # n_maps = len(self.maps_input.m_nu)
+            # print("shape maps:", np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
+            # TOD_QUBIC = (
+            #     self.H_in_qubic(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])).ravel()
+            #     + self.noiseq
+            # )
 
 
             if self.params["PLANCK"]["external_data"] == False:
@@ -767,11 +771,11 @@ class PipelineFrequencyMapMaking:
         print(np.shape(self.H_out.T))
 
         ### Testing
-        print(self.H_out.operands)
-        print(self.invN.operands)
-        test = self.invN * self.H_out
+        # print(self.H_out.operands)
+        # print(self.invN.operands)
+        # test = self.invN * self.H_out
 
-        print("\ntests ok")
+        # print("\ntests ok")
 
         
         print(np.shape(self.H_out.T * self.H_out))  # working

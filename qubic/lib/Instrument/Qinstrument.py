@@ -186,6 +186,7 @@ class QubicInstrument(Instrument):
         d["optics"] = d["optics"].replace(d["optics"][-10:-8], d["config"])
         d["detarray"] = d["detarray"].replace(d["detarray"][-7:-5], d["config"])
         d["hornarray"] = d["hornarray"].replace(d["hornarray"][-7:-5], d["config"])
+        ### synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits' is usde even for TD, to be modified ('CalQubic_Synthbeam_Analytical_150_TD.fits' has to be created)
 
         if d["nf_sub"] is None and d["MultiBand"] is True:
             raise ValueError("Error: number of subband not specified")
@@ -218,6 +219,9 @@ class QubicInstrument(Instrument):
             use_file=False
         else:
             self.sbeam_fits = d["synthbeam"]
+        
+        # Is self.sbeam_fits used anywhere in the code?
+        # If not, Michael Wright synthbeam might not be implemented
 
 
         # Choose the primary beam calibration file

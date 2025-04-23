@@ -169,9 +169,9 @@ class PCGAlgorithm(IterativeAlgorithm):
             self.x[...] = 0
             self.convergence = np.array([])
             raise StopIteration("RHS is zero.")
-        print(np.shape(self.x))
-        print(np.shape(self.A))
-        print(self.A.operands)
+        # print(np.shape(self.x))
+        # print(np.shape(self.A))
+        # print(self.A.operands)
         self.r[...] = self.b
         self.r -= self.A(self.x)
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)

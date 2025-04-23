@@ -48,7 +48,7 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
 
-    instrument: 'DB'                        # Instrumental design (DB or UWB)
+    instrument: 'UWB'                        # Instrumental design (DB or UWB)
     configuration: 'TD'                     # Instrumental configuration (TD or FI) # to be implemented in the code
     npointings: 1000                        # Number of time samples
     nsub_in: 6                              # Number of sub-acquisitions

@@ -851,6 +851,175 @@ class QubicMultiAcquisitions:
             D = r * BlockDiagonalOperator([d] * 3, new_axisin=0, new_axisout=2) * R
 
         return D
+    
+class QubicOneBand(QubicMultiAcquisitions):
+    """
+    Class providing methods necessary for all instrument types.
+    
+    """
+
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
+
+        QubicMultiAcquisitions.__init__(
+            self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
+        )
+
+        if self.dict["instrument_type"] == "DB":
+            self.nbands = 2
+            self.edges_band = [0, self.nsub//2, self.nsub]
+        elif self.dict["instrument_type"] == "UWB":
+            self.nbands = 1
+            self.edges_band = [0, self.nsub]
+        
+    def sum_over_band(self, h, algo, gain=None): # same as QDB.sum_over_band for FMM except for the return,
+                                                    #similar for CMM, with one band instead of two
+        """
+
+        Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)
+
+        """
+
+        op_list = []
+        f = int(self.nsub / self.nrec)
+
+        ### Frequency Map-Making
+        if algo == "FMM":
+            h = np.array(h)
+            for irec in range(self.nrec):
+                imin = irec * f
+                imax = (irec + 1) * f - 1
+                op_list += [
+                    h[
+                        (self.allnus >= self.allnus[imin])
+                        * (self.allnus <= self.allnus[imax])
+                    ].sum(axis=0)
+                ]
+
+            # return op_list
+
+            block_list = []
+            for iband in range(self.nbands):
+                block_list.append(BlockRowOperator(op_list[self.edges_band[iband] : self.edges_band[iband + 1]], new_axisin=0))
+
+            return ReshapeOperator(
+                (self.nbands * self.ndets, self.nsamples), (self.nbands * self.ndets * self.nsamples)
+                ) * BlockDiagonalOperator(block_list, axisout=0,)
+        
+            # return ReshapeOperator(
+            #         (self.ndets, self.nsamples), (self.ndets * self.nsamples)
+            #     ) * BlockRowOperator(op_list, new_axisin=0)
+
+            # return ReshapeOperator(
+            #     (2 * self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
+            #     ) * BlockDiagonalOperator(
+            #         [
+            #             BlockRowOperator(op_list[: int(self.nrec / 2)], new_axisin=0),
+            #             BlockRowOperator(op_list[int(self.nrec / 2) :], new_axisin=0),
+            #         ],
+            #         axisout=0,
+            #     )
+
+        ### Components Map-Making
+        else:
+            # if gain is None:
+            #     gain = np.ones(self.ndets) # doesn't change value of gain outside of function
+            # G = DiagonalOperator(
+            #     gain, broadcast="rightward", shapein=(self.ndets, self.nsamples)
+            # )
+            # return G * AdditionOperator(h)
+            Operator_list = []
+            for iband in range(self.nbands):
+                if gain is None:
+                    gain_ = np.ones(self.ndets)
+                else:
+                    gain_ = gain[:, iband]
+                G_band = DiagonalOperator(
+                    gain_,
+                    broadcast="rightward",
+                    shapein=(self.ndets, self.nsamples),
+                )
+                Operator_list.append(G_band * AdditionOperator(h[self.edges_band[iband] : self.edges_band[iband + 1]]))
+            return BlockColumnOperator(Operator_list, axisout=0,)
+            # if gain is None:
+            #     gain = np.ones((self.ndets, 2)) # doesn't change value of gain outside of function
+            # Operator_band = []
+            # Edges_band = [0, self.nsub//2, self.nsub]
+            # for iband in range(2):
+            #     G_band = DiagonalOperator(
+            #         gain[:, iband],
+            #         broadcast="rightward",
+            #         shapein=(self.ndets, self.nsamples),
+            #     )
+            #     Operator_band.append(G_band * AdditionOperator(h[Edges_band[iband] : Edges_band[iband + 1]]))
+            # return BlockColumnOperator(Operator_band, axisout=0,)
+
+
+    def get_operator(self, A=None, gain=None, fwhm=None): # exactly the same as QDB.get_operator except for lmax=2 * self.dict["nside"] (which should be the same anyway?)
+        """
+
+        Method to generate the pointing matrix.
+
+        mixing_matrix : array like containing mixing matrix elements. If the elements of the mixing matrix are constant across the sky,
+                        mixing_matrix.shape = (nfreq, ncomp)
+
+        """
+        self.operator = []
+
+        for isub in range(self.nsub):
+
+            ### Compute mixing matrix operator if mixing matrix is provided
+            if A is None:
+                Acomp = IdentityOperator()
+                algo = "FMM"
+            else:
+                Acomp = self._get_mixing_operator(A=A[isub])
+                algo = "CMM"
+
+            ### Compute gaussian kernel to account for angular resolution
+            if fwhm is None:
+                convolution = IdentityOperator()
+            else:
+                convolution = HealpixConvolutionGaussianOperator(
+                    fwhm=fwhm[isub], lmax=2 * self.scene.nside # -1 ?
+                )
+
+            ### Compose operator as H = Proj * C * A
+            with rule_manager(inplace=True):
+                hi = CompositionOperator([self.H[isub], convolution, Acomp])
+
+            self.operator.append(hi)
+
+        ### Do the sum over operators depending on the reconstruction model
+        H = self.sum_over_band(self.operator, gain=gain, algo=algo)
+
+        return H
+    
+    def get_invntt_operator(self): # exactly the same as QDB.get_invntt_operator except from the return
+        """
+
+        Method to compute the inverse noise covariance matrix in time-domain.
+
+        """
+
+        d150 = self.dict.copy()
+        d150["filter_nu"] = 150 * 1e9
+        d150["effective_duration"] = self.dict["effective_duration150"]
+        ins150 = QubicInstrument(d150)
+
+        d220 = self.dict.copy()
+        d220["effective_duration"] = self.dict["effective_duration220"]
+        d220["filter_nu"] = 220 * 1e9
+
+        ins220 = QubicInstrument(d220)
+
+        subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
+        subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)
+
+        self.invn150 = subacq150.get_invntt_operator(det_noise=True, photon_noise=True)
+        self.invn220 = subacq220.get_invntt_operator(det_noise=False, photon_noise=True)
+        
+        return self.invn150 + self.invn220
+
 class QubicDualBand(QubicMultiAcquisitions):
 
     def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
@@ -894,9 +1063,9 @@ class QubicDualBand(QubicMultiAcquisitions):
         ### Components Map-Making
         else: # there was code duplication
             if gain is None:
-                gain = np.ones((self.ndets, 2))
+                gain = np.ones((self.ndets, 2)) # doesn't change value of gain outside of function
             Operator_band = []
-            Edges_band = [0, self.nsub//2, self.nsub - 1]
+            Edges_band = [0, self.nsub//2, self.nsub]
             for iband in range(2):
                 G_band = DiagonalOperator(
                     gain[:, iband],
@@ -906,7 +1075,7 @@ class QubicDualBand(QubicMultiAcquisitions):
                 Operator_band.append(G_band * AdditionOperator(h[Edges_band[iband] : Edges_band[iband + 1]]))
             return BlockColumnOperator(Operator_band, axisout=0,)
 
-    def get_operator(self, A=None, gain=None, fwhm=None, seenpix=None):
+    def get_operator(self, A=None, gain=None, fwhm=None):
         """
 
         Method to generate the pointing matrix.
@@ -982,7 +1151,8 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
             self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co
         )
 
-    def sum_over_band(self, h, algo, gain=None):
+    def sum_over_band(self, h, algo, gain=None): # same as QDB.sum_over_band for FMM except for the return,
+                                                    #similar for CMM, with one band instead of two
         """
 
         Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)
@@ -1004,26 +1174,31 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
                         * (self.allnus <= self.allnus[imax])
                     ].sum(axis=0)
                 ]
+            # return ReshapeOperator(
+            #     (1 * self.ndets, self.nsamples), (1 * self.ndets * self.nsamples)
+            #     ) * BlockDiagonalOperator(
+            #         [
+            #             BlockRowOperator(op_sum, new_axisin=0),
+            #         ],
+            #         axisout=0,
+            #     )
 
-            return ReshapeOperator( # working for FMM
+            return ReshapeOperator(
                     (self.ndets, self.nsamples), (self.ndets * self.nsamples)
                 ) * BlockRowOperator(op_sum, new_axisin=0)
 
         ### Components Map-Making
         else:
             if gain is None:
-                G = DiagonalOperator(
-                    np.ones(self.ndets),
-                    broadcast="rightward",
-                    shapein=(self.ndets, self.nsamples),
-                )
-            else:
-                G = DiagonalOperator(
-                    gain, broadcast="rightward", shapein=(self.ndets, self.nsamples)
-                )
+                gain = np.ones(self.ndets) # doesn't change value of gain outside of function
+            G = DiagonalOperator(
+                gain, broadcast="rightward", shapein=(self.ndets, self.nsamples)
+            )
             return G * AdditionOperator(h)
+            # return BlockColumnOperator([G * AdditionOperator(h)], axisout=0,)
 
-    def get_operator(self, A=None, gain=None, fwhm=None):
+
+    def get_operator(self, A=None, gain=None, fwhm=None): # exactly the same as QDB.get_operator except for lmax=2 * self.dict["nside"] (which should be the same anyway?)
         """
 
         Method to generate the pointing matrix.
@@ -1062,8 +1237,8 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
         H = self.sum_over_band(self.operator, gain=gain, algo=algo)
 
         return H
-
-    def get_invntt_operator(self): # exactly the same as DB.get_invntt_operator except from the return
+    
+    def get_invntt_operator(self): # exactly the same as QDB.get_invntt_operator except from the return
         """
 
         Method to compute the inverse noise covariance matrix in time-domain.
@@ -1089,163 +1264,6 @@ class QubicUltraWideBand(QubicMultiAcquisitions):
         
         return self.invn150 + self.invn220
     
-
-class QubicMonoBand(QubicMultiAcquisitions):
-    # used if self.params["QUBIC"]["instrument"] == "TD"
-    # config not used?
-
-    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
-
-        QubicMultiAcquisitions.__init__(
-            self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co#, kind="TD" # already in dictionary?
-        )
-
-    # Do I need to redefine the three following methods? Or should there be one method with 'if' conditions?
-    # I guess so, but maybe there is a core that is common to all three 'kind' of intrument
-    def sum_over_band(self, h, algo, gain=None):
-        """
-
-        Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)
-
-        """
-
-        op_sum = []
-        f = int(self.nsub / self.nrec)
-
-        ### Frequency Map-Making
-        if algo == "FMM":
-            h = np.array(h)
-            for irec in range(self.nrec):
-                imin = irec * f
-                imax = (irec + 1) * f - 1
-                op_sum += [
-                    h[
-                        (self.allnus >= self.allnus[imin])
-                        * (self.allnus <= self.allnus[imax])
-                    ].sum(axis=0)
-                ]
-
-            if self.nrec > 2:
-                return BlockDiagonalOperator(
-                    [
-                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
-                        BlockRowOperator(
-                            op_sum[int(self.nrec / 2) : int(self.nrec)], new_axisin=0
-                        ),
-                    ],
-                    axisout=0,
-                )
-            else:
-                return ReshapeOperator(
-                    (2, self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
-                ) * BlockDiagonalOperator(
-                    [
-                        BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
-                        BlockRowOperator(
-                            op_sum[int(self.nrec / 2) : int(self.nrec)], new_axisin=0
-                        ),
-                    ],
-                    new_axisin=0,
-                )
-
-        ### Components Map-Making
-        else:
-            if gain is None:
-                G150 = DiagonalOperator(
-                    np.ones(self.ndets),
-                    broadcast="rightward",
-                    shapein=(self.ndets, self.nsamples),
-                )
-                G220 = DiagonalOperator(
-                    np.ones(self.ndets),
-                    broadcast="rightward",
-                    shapein=(self.ndets, self.nsamples),
-                )
-            else:
-                G150 = DiagonalOperator(
-                    gain[:, 0],
-                    broadcast="rightward",
-                    shapein=(self.ndets, self.nsamples),
-                )
-                G220 = DiagonalOperator(
-                    gain[:, 1],
-                    broadcast="rightward",
-                    shapein=(self.ndets, self.nsamples),
-                )
-            return BlockColumnOperator(
-                [
-                    G150 * AdditionOperator(h[: int(self.nsub / 2)]),
-                    G220 * AdditionOperator(h[int(self.nsub / 2) :]),
-                ],
-                axisout=0,
-            )
-
-    def get_operator(self, A=None, gain=None, fwhm=None, seenpix=None):
-        """
-
-        Method to generate the pointing matrix.
-
-        mixing_matrix : array like containing mixing matrix elements. If the elements of the mixing matrix are constant across the sky,
-                        mixing_matrix.shape = (nfreq, ncomp)
-
-        """
-        self.operator = []
-
-        for isub in range(self.nsub):
-
-            ### Compute mixing matrix operator if mixing matrix is provided
-            if A is None:
-                Acomp = IdentityOperator()
-                algo = "FMM"
-            else:
-                Acomp = self._get_mixing_operator(A=A[isub])
-                algo = "CMM"
-
-            ### Compute gaussian kernel to account for angular resolution
-            if fwhm is None:
-                convolution = IdentityOperator()
-            else:
-                convolution = HealpixConvolutionGaussianOperator(
-                    fwhm=fwhm[isub], lmax=2 * self.scene.nside - 1
-                )
-
-            ### Compose operator as H = Proj * C * A
-            with rule_manager(inplace=True):
-                hi = CompositionOperator([self.H[isub], convolution, Acomp])
-
-            self.operator.append(hi)
-
-        ### Do the sum over operators depending on the reconstruction model
-        H = self.sum_over_band(self.operator, algo=algo, gain=gain)
-        
-        return H
-
-    def get_invntt_operator(self):
-        """
-
-        Method to compute the inverse noise covariance matrix in time-domain.
-
-        """
-
-        d150 = self.dict.copy()
-        d150["filter_nu"] = 150 * 1e9
-        d150["effective_duration"] = self.dict["effective_duration150"]
-        ins150 = QubicInstrument(d150)
-
-        d220 = self.dict.copy()
-        d220["effective_duration"] = self.dict["effective_duration220"]
-        d220["filter_nu"] = 220 * 1e9
-
-        ins220 = QubicInstrument(d220)
-
-        subacq150 = QubicAcquisition(ins150, self.sampling, self.scene, d150)
-        subacq220 = QubicAcquisition(ins220, self.sampling, self.scene, d220)
-
-        self.invn150 = subacq150.get_invntt_operator(det_noise=True, photon_noise=True)
-        self.invn220 = subacq220.get_invntt_operator(det_noise=True, photon_noise=True)
-
-        return BlockDiagonalOperator([self.invn150, self.invn220], axisout=0)
-
 class OtherDataParametric:
 
     def __init__(self, nus, nside, comps, nintegr=2):

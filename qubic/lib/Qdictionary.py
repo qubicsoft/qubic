@@ -105,33 +105,33 @@ class qubicDict(dict):
         return otherDict
 
 def rewrite_dict(args=None, dict_filename="dicts/pipeline_demo.dict"):
-        """QUBIC dictionary.
+    """QUBIC dictionary.
 
-        This method modifies the QUBIC dictionary based on the provided arguments.
+    This method modifies the QUBIC dictionary based on the provided arguments.
 
-        Parameters
-        ----------
-        args : dict, optional
-            A dictionary of key-value pairs to update or add to the QUBIC dictionary, by default None.
-        dict_filename : str, optional
-            The path to the default dictionary file to load, by default "dicts/pipeline_demo.dict".
+    Parameters
+    ----------
+    args : dict, optional
+        A dictionary of key-value pairs to update or add to the QUBIC dictionary, by default None.
+    dict_filename : str, optional
+        The path to the default dictionary file to load, by default "dicts/pipeline_demo.dict".
 
-        Returns
-        -------
-        dict_qubic : qubicDict
-            The updated QUBIC dictionary instance.
+    Returns
+    -------
+    dict_qubic : qubicDict
+        The updated QUBIC dictionary instance.
 
-        """
+    """
 
-        ### Get the default dictionary
-        dict_qubic = qubicDict()
-        dict_qubic.read_from_file(dict_filename)
+    ### Get the default dictionary
+    dict_qubic = qubicDict()
+    dict_qubic.read_from_file(dict_filename)
 
-        if args is not None:
-            for i in args.keys():
-                dict_qubic[str(i)] = args[i]
+    if args is not None:
+        for i in args.keys():
+            dict_qubic[str(i)] = args[i]
     
-        return dict_qubic
+    return dict_qubic
 #    def prefix_OutputName(self):
 #
 #        import datetime

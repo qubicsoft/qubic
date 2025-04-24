@@ -11,7 +11,7 @@ from pyoperators import DiagonalOperator, ReshapeOperator
 
 ### Lib directory
 from ...Qsamplings import equ2gal
-from ...Qdictionary import qubicDict
+from ...Qdictionary import qubicDict, rewrite_dict
 from ...Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
 from ...Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
 from ..Qcg import pcg
@@ -76,10 +76,30 @@ class PipelineFrequencyMapMaking:
 
         ### Center of the QUBIC patch
         self.center = equ2gal(self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"])
-
+        
+        args = {"npointings": self.params["QUBIC"]["npointings"],
+            "nf_recon": self.params["QUBIC"]["nrec"],
+            "nf_sub": self.params["QUBIC"][f"nsub_in"],
+            "nside": self.params["SKY"]["nside"],
+            "RA_center": self.params["SKY"]["RA_center"],
+            "DEC_center": self.params["SKY"]["DEC_center"],
+            "filter_nu": 220 * 1e9,
+            "comm": self.comm,
+            "dtheta": self.params["QUBIC"]["dtheta"],
+            "nprocs_instrument": self.size,
+            "effective_duration150": 3,
+            "effective_duration220": 3,
+            "type_instrument": "wide",
+            "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
+            "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
+            "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
+        }
         ### Sky
-        self.dict_in = self.get_dict(key="in")
-        self.dict_out = self.get_dict(key="out")
+        self.dict_in = rewrite_dict(args, dict_filename='dicts/pipeline_fmm.dict')#self.get_dict(key="in")
+        
+        ### Rewrite the dictionary for the output
+        args["nf_sub"] = self.params["QUBIC"][f"nsub_out"]
+        self.dict_out = rewrite_dict(args, dict_filename='dicts/pipeline_fmm.dict')#self.get_dict(key="out")
 
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
@@ -321,37 +341,7 @@ class PipelineFrequencyMapMaking:
 
         """
 
-        args = {
-            "npointings": self.params["QUBIC"]["npointings"],
-            "nf_recon": self.params["QUBIC"]["nrec"],
-            "nf_sub": self.params["QUBIC"][f"nsub_{key}"],
-            "nside": self.params["SKY"]["nside"],
-            "MultiBand": True,
-            "period": 1,
-            "RA_center": self.params["SKY"]["RA_center"],
-            "DEC_center": self.params["SKY"]["DEC_center"],
-            "filter_nu": 220 * 1e9,
-            "noiseless": False,
-            "beam_shape": 'gaussian',
-            "comm": self.comm,
-            "dtheta": self.params["QUBIC"]["dtheta"],
-            "nprocs_sampling": 1,
-            "nprocs_instrument": self.size,
-            "photon_noise": True,
-            "nhwp_angles": 3,
-            #'effective_duration':3,
-            "effective_duration150": 3,
-            "effective_duration220": 3,
-            "filter_relative_bandwidth": 0.25,
-            "type_instrument": "wide",
-            "TemperatureAtmosphere150": None,
-            "TemperatureAtmosphere220": None,
-            "EmissivityAtmosphere150": None,
-            "EmissivityAtmosphere220": None,
-            "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
-            "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
-            "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
-        }
+        
 
         ### Get the default dictionary
         dictfilename = "dicts/pipeline_demo.dict"

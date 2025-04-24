@@ -689,6 +689,7 @@ class QubicMultiAcquisitions:
         self.allnus = []
         self.allnus_rec = []
         if self.dict["intrument_type"] == "MB":
+            print("Only the 150 GHz band will be used.")
             f_bands = [150] # this is for the TD MonoBand instrument
         else:
             f_bands = [150, 220]
@@ -885,28 +886,25 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
         """
 
-        op_list = []
-        f = int(self.nsub / self.nrec)
-
         ### Frequency Map-Making
         if algo == "FMM":
+            op_sum = []
+            f = int(self.nsub / self.nrec)
             h = np.array(h)
             for irec in range(self.nrec):
                 imin = irec * f
                 imax = (irec + 1) * f - 1
-                op_list += [
+                op_sum += [
                     h[
                         (self.allnus >= self.allnus[imin])
                         * (self.allnus <= self.allnus[imax])
                     ].sum(axis=0)
                 ]
 
-            # return op_list
-
             block_list = []
             for iband in range(self.final_nbands):
                 edges_band = [iband * int(self.nrec//self.final_nbands), (iband + 1) * int(self.nrec//self.final_nbands)] # splitting nrec op
-                block_list.append(BlockRowOperator(op_list[edges_band[0] : edges_band[1]], new_axisin=0))
+                block_list.append(BlockRowOperator(op_sum[edges_band[0] : edges_band[1]], new_axisin=0))
 
             return ReshapeOperator(
                 (self.final_nbands * self.ndets, self.nsamples), (self.final_nbands * self.ndets * self.nsamples)
@@ -914,14 +912,14 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         
             # return ReshapeOperator(
             #         (self.ndets, self.nsamples), (self.ndets * self.nsamples)
-            #     ) * BlockRowOperator(op_list, new_axisin=0)
+            #     ) * BlockRowOperator(op_sum, new_axisin=0)
 
             # return ReshapeOperator(
             #     (2 * self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
             #     ) * BlockDiagonalOperator(
             #         [
-            #             BlockRowOperator(op_list[: int(self.nrec / 2)], new_axisin=0),
-            #             BlockRowOperator(op_list[int(self.nrec / 2) :], new_axisin=0),
+            #             BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
+            #             BlockRowOperator(op_sum[int(self.nrec / 2) :], new_axisin=0),
             #         ],
             #         axisout=0,
             #     )
@@ -1043,19 +1041,54 @@ class QubicDualBand(QubicMultiAcquisitions):
 
         ### Frequency Map-Making
         if algo == "FMM":
-            op_sum = [] # there is no sum?
+            print("\nReminder: nsub = {} and nrec = {}".format(self.nsub, self.nrec))
+            op_sum = []
             f = int(self.nsub / self.nrec)
             h = np.array(h)
             for irec in range(self.nrec):
                 imin = irec * f
                 imax = (irec + 1) * f - 1
+                # if self.nrec == 4 or self.nrec == 2:
+                #     print("Operand h[0]")
+                #     print(h[0])
+                #     print("Operand h.sum")
+                #     print(h[
+                #         (self.allnus >= self.allnus[imin])
+                #         * (self.allnus <= self.allnus[imax])
+                #     ].sum(axis=0))
+                #     azefrnn
                 op_sum += [
                     h[
                         (self.allnus >= self.allnus[imin])
                         * (self.allnus <= self.allnus[imax])
                     ].sum(axis=0) # shouldn't it be weighted by the value of frec wrt fsub?
                 ]
-            
+
+            # if self.nrec == 4 or self.nrec == 2:
+            #     print("Operands BlockRowOperator")
+            #     oper = BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0)
+            #     print(oper)
+            #     print("Operands BlockDiagonalOperator")
+            #     oper = BlockDiagonalOperator(
+            #         [
+            #             BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
+            #             BlockRowOperator(op_sum[int(self.nrec / 2) :], new_axisin=0),
+            #         ],
+            #         axisout=0,
+            #     )
+            #     print(oper)
+            #     azefrnn
+            # oper = BlockDiagonalOperator(
+            #         [
+            #             BlockRowOperator(op_sum[: int(self.nrec / 2)], new_axisin=0),
+            #             BlockRowOperator(op_sum[int(self.nrec / 2) :], new_axisin=0),
+            #         ],
+            #         axisout=0,
+            #     )
+            # print(oper.operands[0].operands)
+            # # H_qubic.operands[1].operands[ifp].operands[irec]
+            # print("operands plotted")
+            # # zrre
             return ReshapeOperator(
                 (2 * self.ndets, self.nsamples), (2 * self.ndets * self.nsamples)
                 ) * BlockDiagonalOperator(
@@ -1505,10 +1538,13 @@ class JointAcquisitionFrequencyMapMaking:
             #     self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
             # )
         elif self.kind == "UWB":
-            self.qubic = QubicUltraWideBand(
+            # self.qubic = QubicUltraWideBand(
+            #     self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
+            # )
+            self.qubic = QubicInstrumentType(
                 self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
             )
-        elif self.kind == "TD":
+        elif self.kind == "MB":
             self.qubic = QubicMonoBand(
                 self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
             )
@@ -1519,32 +1555,69 @@ class JointAcquisitionFrequencyMapMaking:
         self.pl143 = PlanckAcquisition(143, self.scene)
         self.pl217 = PlanckAcquisition(217, self.scene)
 
-    def get_operator(self, fwhm=None, seenpix=None):
+    def get_operator(self, fwhm=None, seenpix=None): # nstokes is hardcoded to nstokes = 3
+
+        # réécrire la façon dont QUBIC et Planck sont combinés --> par exemple avec un simple BlockColumnOperator?
 
         print("\nget_operator of JointAcquisitionFrequencyMapMaking")
 
         if seenpix is not None:
+            # U = (
+            #     ReshapeOperator((sum(seenpix) * 3), (sum(seenpix), 3))
+            #     * PackOperator(
+            #         np.broadcast_to(seenpix[:, None], (seenpix.size, 3)).copy()
+            #     )
+            # ).T
             U = (
-                ReshapeOperator((sum(seenpix) * 3), (sum(seenpix), 3))
+                ReshapeOperator((self.Nrec * sum(seenpix) * 3), (self.Nrec, sum(seenpix), 3))
                 * PackOperator(
-                    np.broadcast_to(seenpix[:, None], (seenpix.size, 3)).copy()
+                    np.broadcast_to(seenpix[None, :, None], (self.Nrec, seenpix.size, 3)).copy()
                 )
             ).T
+            print("\nShape U")
+            print(U.shapein)
+            print(U.shapeout)
+            # ezfojn
         else:
             U = IdentityOperator()
 
         ### Get QUBIC H operator
         H_qubic = self.qubic.get_operator(fwhm=fwhm)
 
+        # print("\ntesting shapes")
+        # print(H_qubic.shapein)
+        # print(H_qubic.shapeout)
+        # print(H_qubic.operands[1].shapeout)
+        # print(H_qubic.operands[1].operands[0].shapeout)
+        if seenpix is not None:
+            print("\nShape H_qubic")
+            print(H_qubic.shapein)
+            print(H_qubic.shapeout)
+            # azrfre
         R_qubic = ReshapeOperator( # if reshape in H definition
             H_qubic.operands[1].operands[0].shapeout, H_qubic.operands[1].operands[0].shape[0] # just a way to get the shape, could be more straightforward?
         )
-        R_planck = ReshapeOperator(
+        # print(R_qubic.shapein)
+        # print(R_qubic.shapeout)
+        # azegrjsq
+        # R_qubic = ReshapeOperator( # if reshape in H definition
+        #     H_qubic.shapeout, (1, H_qubic.shapeout[0]) # just a way to get the shape, could be more straightforward?
+        # )
+        R_planck = ReshapeOperator( # what are the input maps? why is H_planck only a ReshapeOperator?
             (12 * self.qubic.scene.nside**2, 3),
             (12 * self.qubic.scene.nside**2 * 3),
         )
 
         if self.kind == "UWB":  # WideBand intrument
+
+            H_list = [H_qubic]
+            # H_list = BlockDiagonalOperator([R_planck for _ in range(self.Nrec)], new_axisout=0)
+            H_list += [BlockRowOperator([R_planck * i for i in np.arange(self.Nrec) == j], new_axisin=0) for j in range(self.Nrec)] # doing the BlockDiagonal line by line in order to stack them
+            # print(H_planck.shapein)
+            # print(H_planck.shapeout)
+            # azrzaz
+
+            return BlockColumnOperator(H_list, axisout=0) * U  # need to include U too!
 
             if self.Nrec == 1: # why do different cases?
                 operator = [R_qubic(H_qubic), R_planck, R_planck]
@@ -1560,6 +1633,11 @@ class JointAcquisitionFrequencyMapMaking:
                         else:
                             operator += [R_planck * 0]
                     full_operator += [BlockColumnOperator(operator, axisout=0) * U]
+                    # if seenpix is not None:
+                    #     print("\nShape BlockColumnOperator")
+                    #     print(BlockColumnOperator(operator, axisout=0).shapein)
+                    #     print(BlockColumnOperator(operator, axisout=0).shapeout)
+                    #     azrfre
                 # sys.exit()
                 return BlockRowOperator(full_operator, new_axisin=0)
 
@@ -1569,7 +1647,11 @@ class JointAcquisitionFrequencyMapMaking:
             for ifp in range(2):
                 ope_per_fp = []
                 for irec in range(int(self.Nrec / 2)):
-                    operator = [R_qubic * H_qubic.operands[1].operands[ifp].operands[irec]]
+                    if self.Nrec > 2:
+                        operator = [R_qubic * H_qubic.operands[1].operands[ifp].operands[irec]]
+                    else:
+                        operator = [R_qubic * H_qubic.operands[1].operands[ifp]]
+                    # operator = [R_qubic * H_qubic.operands[1].operands[ifp].operands[irec]]
                     for jrec in range(int(self.Nrec / 2)):
                         if irec == jrec:
                             operator += [R_planck]

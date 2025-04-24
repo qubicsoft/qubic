@@ -766,10 +766,10 @@ class PipelineFrequencyMapMaking:
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
 
-        print("\nshapes in the computation of A")
-        print(np.shape(self.H_out))
-        print(np.shape(self.invN))
-        print(np.shape(self.H_out.T))
+        # print("\nshapes in the computation of A")
+        # print(np.shape(self.H_out))
+        # print(np.shape(self.invN))
+        # print(np.shape(self.H_out.T))
 
         ### Testing
         # print(self.H_out.operands)
@@ -779,9 +779,9 @@ class PipelineFrequencyMapMaking:
         # print("\ntests ok")
 
         
-        print(np.shape(self.H_out.T * self.H_out))  # working
-        print(np.shape(self.H_out.T * self.invN))   # not working
-        print(np.shape(self.invN * self.H_out))     # not working
+        # print(np.shape(self.H_out.T * self.H_out))  # working
+        # print(np.shape(self.H_out.T * self.invN))   # not working
+        # print(np.shape(self.invN * self.H_out))     # not working
 
 
         A = self.H_out.T * self.invN * self.H_out

@@ -2,7 +2,7 @@ import numpy as np
 import qubic
 
 from .Qacquisition import *
-from ..Qdictionary import qubicDict
+from ..Qdictionary import qubicDict, rewrite_dict
 
 class QubicNoise:
 
@@ -25,29 +25,21 @@ class QubicNoise:
         Why do we read the dictionary here?  It should be an input parameter.
         This is forcing this object to *always* use the pipeline_demo.dict
         '''
-        dictfilename = "dicts/pipeline_demo.dict"
-        d = qubicDict()
-        d.read_from_file(dictfilename)
+        
+        args = {"detector_nep": detector_nep,
+                "npointings": npointings,
+                "comm": comm,
+                "nprocs_instrument": size,
+                "filter_nu": int(band),
+                "nf_sub": 1,
+                "nf_recon": 1,
+                "type_instrument": "",
+                "effective_duration": duration}
+        
+        self.dict = rewrite_dict(args=args, dict_filename="dicts/pipeline_fmm.dict")
+        
         self.seed_noise = seed_noise
-
-        d["TemperatureAtmosphere150"] = None
-        d["TemperatureAtmosphere220"] = None
-        d["EmissivityAtmosphere150"] = None
-        d["EmissivityAtmosphere220"] = None
-        d["detector_nep"] = detector_nep
         self.npointings = npointings
-        d["npointings"] = npointings
-        d["comm"] = comm
-        d["nprocs_instrument"] = size
-        d["nprocs_sampling"] = 1
-
-        self.dict = d.copy()
-        self.dict["filter_nu"] = int(band)
-        self.dict["nf_sub"] = 1
-        self.dict["nf_recon"] = 1
-        self.dict["period"] = 1
-        self.dict["type_instrument"] = ""
-        self.dict["effective_duration"] = duration
 
         '''
         NOTE: the following code must be modified

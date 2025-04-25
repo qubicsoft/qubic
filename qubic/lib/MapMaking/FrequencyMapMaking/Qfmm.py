@@ -94,12 +94,13 @@ class PipelineFrequencyMapMaking:
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
         }
-        ### Sky
-        self.dict_in = rewrite_dict(args, dict_filename='dicts/pipeline_fmm.dict')#self.get_dict(key="in")
+        
+        ### Rewrite the dictionary for the input
+        self.dict_in = rewrite_dict(args, dict_filename='dicts/pipeline_fmm.dict')
         
         ### Rewrite the dictionary for the output
         args["nf_sub"] = self.params["QUBIC"][f"nsub_out"]
-        self.dict_out = rewrite_dict(args, dict_filename='dicts/pipeline_fmm.dict')#self.get_dict(key="out")
+        self.dict_out = rewrite_dict(args, dict_filename='dicts/pipeline_fmm.dict')
 
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
@@ -321,39 +322,6 @@ class PipelineFrequencyMapMaking:
                     dict_sky["synchrotron"] = "s0"
 
         return dict_sky
-
-    def get_dict(self, key="in"):
-        """QUBIC dictionary.
-
-        Method to modify the qubic dictionary.
-
-        Parameters
-        ----------
-        key : str, optional
-            Can be "in" or "out".
-            It is used to build respectively the instances to generate the TODs or to reconstruct the sky maps,
-            by default "in".
-
-        Returns
-        -------
-        dict_qubic: dict
-            Modified QUBIC dictionary.
-
-        """
-
-        
-
-        ### Get the default dictionary
-        dictfilename = "dicts/pipeline_demo.dict"
-        dict_qubic = qubicDict()
-        dict_qubic.read_from_file(dictfilename)
-
-        for i in args.keys():
-
-            dict_qubic[str(i)] = args[i]
-    
-        return dict_qubic
-
     def _get_scalar_acquisition_operator(self):
         """
         Function that will compute "scalar acquisition operatord" by applying the acquisition operators to a vector full of ones.

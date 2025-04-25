@@ -58,7 +58,8 @@ class QubicCalibration(object):
                 cmd = "self.%s = None" % key
             else:
                 cmd = "self.%s = '%s'" % (key,calfile_fullpath)
-            print('executing: %s' % cmd)
+            if d['debug']:
+                print('executing: %s' % cmd)
             exec(cmd)
         if d['debug']:
             print('self.synthbeam = %s' % self.synthbeam)

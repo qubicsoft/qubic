@@ -1,5 +1,5 @@
 ############################################# Instrument ################################
-debug = False #False/True # Boolean
+debug = False  # Boolean
 
 config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150e9 # 150e9 or 220e9 Hz
@@ -89,6 +89,7 @@ nprocs_instrument=None
 nprocs_sampling=1
 comm=None
 weights=None
+interp_projection=True
 
 ####################################### Map making #####################################
 tol=1e-5

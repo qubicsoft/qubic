@@ -1555,23 +1555,28 @@ class JointAcquisitionFrequencyMapMaking:
         self.pl143 = PlanckAcquisition(143, self.scene)
         self.pl217 = PlanckAcquisition(217, self.scene)
 
-    def get_operator(self, fwhm=None, seenpix=None): # nstokes is hardcoded to nstokes = 3
-
-        # réécrire la façon dont QUBIC et Planck sont combinés --> par exemple avec un simple BlockColumnOperator?
+    def get_operator(self, fwhm=None, seenpix=None):
 
         print("\nget_operator of JointAcquisitionFrequencyMapMaking")
 
+        ### nstokes is hardcoded to nstokes = 3
+        ### We could retrieve it in the shape of H if we want to implement a different nstoeks case
+        nstokes = 3
+
+        ### The operator that allows the focus on seenpix:
+        ### shapein : (self.Nrec, sum(seenpix), nstokes)
+        ### shapeout: (self.Nrec, npix, nstokes)
         if seenpix is not None:
             # U = (
-            #     ReshapeOperator((sum(seenpix) * 3), (sum(seenpix), 3))
+            #     ReshapeOperator((sum(seenpix) * nstokes), (sum(seenpix), nstokes))
             #     * PackOperator(
-            #         np.broadcast_to(seenpix[:, None], (seenpix.size, 3)).copy()
+            #         np.broadcast_to(seenpix[:, None], (seenpix.size, nstokes)).copy()
             #     )
             # ).T
             U = (
-                ReshapeOperator((self.Nrec * sum(seenpix) * 3), (self.Nrec, sum(seenpix), 3))
+                ReshapeOperator((self.Nrec * sum(seenpix) * nstokes), (self.Nrec, sum(seenpix), nstokes))
                 * PackOperator(
-                    np.broadcast_to(seenpix[None, :, None], (self.Nrec, seenpix.size, 3)).copy()
+                    np.broadcast_to(seenpix[None, :, None], (self.Nrec, seenpix.size, nstokes)).copy()
                 )
             ).T
             print("\nShape U")
@@ -1590,13 +1595,13 @@ class JointAcquisitionFrequencyMapMaking:
         # print(H_qubic.operands[1].shapeout)
         # print(H_qubic.operands[1].operands[0].shapeout)
         if seenpix is not None:
-            print("\nShape H_qubic")
-            print(H_qubic.shapein)
-            print(H_qubic.shapeout)
+            print("\nShape H_qubic.operands[1]")
+            print(H_qubic.operands[1].shapein)
+            print(H_qubic.operands[1].shapeout)
             # azrfre
-        R_qubic = ReshapeOperator( # if reshape in H definition
-            H_qubic.operands[1].operands[0].shapeout, H_qubic.operands[1].operands[0].shape[0] # just a way to get the shape, could be more straightforward?
-        )
+        # R_qubic = ReshapeOperator( # if reshape in H definition
+        #     H_qubic.operands[1].operands[0].shapeout, H_qubic.operands[1].operands[0].shape[0] # just a way to get the shape, could be more straightforward?
+        # )
         # print(R_qubic.shapein)
         # print(R_qubic.shapeout)
         # azegrjsq
@@ -1604,45 +1609,41 @@ class JointAcquisitionFrequencyMapMaking:
         #     H_qubic.shapeout, (1, H_qubic.shapeout[0]) # just a way to get the shape, could be more straightforward?
         # )
         R_planck = ReshapeOperator( # what are the input maps? why is H_planck only a ReshapeOperator?
-            (12 * self.qubic.scene.nside**2, 3),
-            (12 * self.qubic.scene.nside**2 * 3),
+            (12 * self.qubic.scene.nside**2, nstokes),
+            (12 * self.qubic.scene.nside**2 * nstokes),
         )
 
         if self.kind == "UWB":  # WideBand intrument
-
             H_list = [H_qubic]
-            # H_list = BlockDiagonalOperator([R_planck for _ in range(self.Nrec)], new_axisout=0)
-            H_list += [BlockRowOperator([R_planck * i for i in np.arange(self.Nrec) == j], new_axisin=0) for j in range(self.Nrec)] # doing the BlockDiagonal line by line in order to stack them
-            # print(H_planck.shapein)
-            # print(H_planck.shapeout)
-            # azrzaz
-
-            return BlockColumnOperator(H_list, axisout=0) * U  # need to include U too!
-
-            if self.Nrec == 1: # why do different cases?
-                operator = [R_qubic(H_qubic), R_planck, R_planck]
-                return BlockColumnOperator(operator, axisout=0)
-
-            else:
-                full_operator = []
-                for irec in range(self.Nrec):
-                    operator = [R_qubic(H_qubic.operands[1].operands[irec])] # if reshape in H definition...
-                    for jrec in range(self.Nrec):
-                        if irec == jrec:
-                            operator += [R_planck]
-                        else:
-                            operator += [R_planck * 0]
-                    full_operator += [BlockColumnOperator(operator, axisout=0) * U]
-                    # if seenpix is not None:
-                    #     print("\nShape BlockColumnOperator")
-                    #     print(BlockColumnOperator(operator, axisout=0).shapein)
-                    #     print(BlockColumnOperator(operator, axisout=0).shapeout)
-                    #     azrfre
-                # sys.exit()
-                return BlockRowOperator(full_operator, new_axisin=0)
+            ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
+            H_list += [BlockRowOperator([R_planck * i for i in np.arange(self.Nrec) == j], new_axisin=0) for j in range(self.Nrec)]
+            return BlockColumnOperator(H_list, axisout=0) * U
 
         elif self.kind == "DB":
+            R_qubic = ReshapeOperator( # if reshape in H definition
+                H_qubic.operands[1].operands[0].shapeout, H_qubic.operands[1].operands[0].shape[0] # just a way to get the shape, could be more straightforward?
+            )
+            nbands = 2 # DualBand
+            H_list_full = []
+            for ifp in range(nbands):
+                H_list = [R_qubic(H_qubic.operands[1].operands[ifp])]
+                ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
+                H_list += [BlockRowOperator([R_planck * i for i in np.arange(self.Nrec//nbands) == j], new_axisin=0) for j in range(self.Nrec//nbands)]
+                H_list_full += [BlockColumnOperator(H_list, axisout=0)]
+                print("\nShape H_list_full[-1]")
+                print(H_list_full[-1].shapein)
+                print(H_list_full[-1].shapeout)
+            oper = BlockDiagonalOperator(H_list_full, axisout=0)
+            print("\nShape oper")
+            print(oper.shapein)
+            print(oper.shapeout)
 
+            # test_oper = ReshapeOperator(oper.shapein, oper.shape[1]) * U
+            # print("\nShape test_oper")
+            # print(test_oper.shapein)
+            # print(test_oper.shapeout)
+            
+            return BlockDiagonalOperator(H_list_full, new_axisout=0) * U
             opefull = []
             for ifp in range(2):
                 ope_per_fp = []

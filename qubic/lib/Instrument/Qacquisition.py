@@ -1560,7 +1560,8 @@ class JointAcquisitionFrequencyMapMaking:
         print("\nget_operator of JointAcquisitionFrequencyMapMaking")
 
         ### nstokes is hardcoded to nstokes = 3
-        ### We could retrieve it in the shape of H if we want to implement a different nstoeks case
+        ### We could retrieve it in the shape of H if we want to implement a different nstokes case
+        # nstokes = H_qubic.shapein[-1] # might not work for nstokes = 1
         nstokes = 3
 
         ### The operator that allows the focus on seenpix:
@@ -1612,14 +1613,27 @@ class JointAcquisitionFrequencyMapMaking:
             (12 * self.qubic.scene.nside**2, nstokes),
             (12 * self.qubic.scene.nside**2 * nstokes),
         )
+        H_planck_ = BlockDiagonalOperator([R_planck for _ in range(self.Nrec)], new_axisout=0)
+        # It is necessary to change the shape of H_planck_ in order to stack it with H_qubic
+        R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
+        H_planck = R_diag(H_planck_)
+
 
         if self.kind == "UWB":  # WideBand intrument
             H_list = [H_qubic]
             ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
-            H_list += [BlockRowOperator([R_planck * i for i in np.arange(self.Nrec) == j], new_axisin=0) for j in range(self.Nrec)]
+            # I will have to rewrite that in a better way
+            # H_list += [BlockRowOperator([R_planck * i for i in np.arange(self.Nrec) == j], new_axisin=0) for j in range(self.Nrec)]
+            H_list += [H_planck]
             return BlockColumnOperator(H_list, axisout=0) * U
 
-        elif self.kind == "DB":
+        elif self.kind == "DB": # Not working yet! Have to change the way N and TOD are built
+            H_list = [H_qubic]
+            H_list += [H_planck]
+            return BlockColumnOperator(H_list, axisout=0) * U
+            # R_U = ReshapeOperator(
+            #     U.shapeout, (2, U.shapeout[0]//2, U.shapeout[1], U.shapeout[2])
+            # )
             R_qubic = ReshapeOperator( # if reshape in H definition
                 H_qubic.operands[1].operands[0].shapeout, H_qubic.operands[1].operands[0].shape[0] # just a way to get the shape, could be more straightforward?
             )
@@ -1633,15 +1647,16 @@ class JointAcquisitionFrequencyMapMaking:
                 print("\nShape H_list_full[-1]")
                 print(H_list_full[-1].shapein)
                 print(H_list_full[-1].shapeout)
-            oper = BlockDiagonalOperator(H_list_full, axisout=0)
+            oper = BlockDiagonalOperator(H_list_full, new_axisout=0)
             print("\nShape oper")
             print(oper.shapein)
             print(oper.shapeout)
 
-            # test_oper = ReshapeOperator(oper.shapein, oper.shape[1]) * U
-            # print("\nShape test_oper")
-            # print(test_oper.shapein)
-            # print(test_oper.shapeout)
+            test_oper = ReshapeOperator(oper.shapein, oper.shape[1]) * R_U(U)
+            print("\nShape test_oper")
+            print(test_oper.shapein)
+            print(test_oper.shapeout)
+            ezare
             
             return BlockDiagonalOperator(H_list_full, new_axisout=0) * U
             opefull = []

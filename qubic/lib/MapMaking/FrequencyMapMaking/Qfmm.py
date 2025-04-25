@@ -543,6 +543,9 @@ class PipelineFrequencyMapMaking:
 
         """
 
+        # I have to rewrite this too
+        # If I build Htot  as BlockColumn([H_q, H_p]), it might make this funciton easier too?
+
         if self.params["QUBIC"]["instrument"] == "UWB":
             if self.params["QUBIC"]["nrec"] != 1:
                 TOD_PLANCK = np.zeros(

@@ -21,12 +21,12 @@ QUBIC:
     npointings: 1000                        # Number of time samples
     nsub_in: 8                              # Number of sub-acquisitions
     nsub_out: 8
-    nrec: 2                                 # Number of reconstructed frequency maps
+    nrec: 4                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
     convolution_in: True                    # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
-        ndet: 1                             # Level of detector noise
+        ndet: 1                             # Level of detector noise            # randomness not fixed for det and photon noise, to be checked
         npho150: 1                          # Level of photon noise at 150 GHz
         npho220: 1                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise # do two different parameters?

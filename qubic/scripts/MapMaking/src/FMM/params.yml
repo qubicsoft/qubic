@@ -49,7 +49,7 @@ PLANCK:
 
     ### This section define which external data are we using
 
-    external_data: True                    
+    external_data: False                    
     weight_planck: 0                            # Weight of Planck data within the QUBIC patch
     level_noise_planck: 1                       # Noise level for Planck data
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data

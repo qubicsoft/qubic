@@ -159,6 +159,9 @@ class PipelineFrequencyMapMaking:
             self.invN = self.joint.get_invntt_operator(mask=self.mask)
         else:
             self.invN = self.joint.qubic.get_invntt_operator()
+            print("\nOriginal shape invN")
+            print(self.invN.shapein)
+            print(self.invN.shapeout)
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
             print("self.invN computed")
@@ -193,7 +196,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["NOISE"]["ndet"],
             self.params["QUBIC"]["NOISE"]["npho150"],
             self.params["QUBIC"]["NOISE"]["npho220"],
-            seed_noise=seed_noise_planck,
+            seed_noise=seed_noise_planck,  # randomness not fixed, to be checked
         ).ravel()
 
         ### Initialize plot instance
@@ -617,7 +620,7 @@ class PipelineFrequencyMapMaking:
             else:
                 TOD = TOD_QUBIC
 
-        else: # change this if I add the "TD" instrument
+        if self.params["QUBIC"]["instrument"] == "DB":
             
             sh_q = self.joint.qubic.ndets * self.joint.qubic.nsamples
             # print(np.shape(self.maps_input.m_nu))
@@ -786,13 +789,15 @@ class PipelineFrequencyMapMaking:
         # print(np.shape(self.H_out.T * self.invN))   # not working
         # print(np.shape(self.invN * self.H_out))     # not working
 
-
         A = self.H_out.T * self.invN * self.H_out
+        print("\Shape A")
+        print(A.shapein)
+        print(A.shapeout)
         # if self.params["QUBIC"]["instrument"] == "DB":
         #     shape_in_A = 
-        # A = ReshapeOperator(
-        #     (nbands, self.params["QUBIC"]["nrec"], npix, stokes), (nbands * self.params["QUBIC"]["nrec"], npix, stokes)
-        #     ) * self.H_out.T * self.invN * self.H_out
+        # A = A * ReshapeOperator(
+        #     (self.params["QUBIC"]["nrec"], A.shapein[0]//self.params["QUBIC"]["nrec"], A.shapein[1]), (A.shapein)
+        #     )
 
         print("A computed")
 

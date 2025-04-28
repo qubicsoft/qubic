@@ -169,16 +169,8 @@ class PCGAlgorithm(IterativeAlgorithm):
             self.x[...] = 0
             self.convergence = np.array([])
             raise StopIteration("RHS is zero.")
-        print("\nShape x")
-        print(self.x.shape)
-        print("\nShape A")
-        print(self.A.shapein)
-        # print(self.A.shapeout)
-        # print(self.A.operands)
         self.r[...] = self.b
         self.r -= self.A(self.x)
-        # R_pcg = ReshapeOperator(self.x.shape, self.A.shapein) # probably not the best way to do it
-        # self.r -= self.A(R_pcg(self.x))
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)
         if self.error < self.tol:
             raise StopIteration("Solver reached maximum tolerance.")
@@ -190,8 +182,6 @@ class PCGAlgorithm(IterativeAlgorithm):
         self.A(self.d, self.q)
         alpha = self.delta / self.dot(self.d, self.q)
         self.x += alpha * self.d
-        # R_pcg_inv = ReshapeOperator(self.d.shape, self.x.shape) # probably not the best way to do it
-        # self.x += alpha * R_pcg_inv(self.d)
         
         map_i = self.x.copy()
         if self.is_planck:

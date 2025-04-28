@@ -139,6 +139,7 @@ class PresetQubic:
             "synthbeam_kmax": self.params_qubic["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params_qubic["SYNTHBEAM"]["synthbeam_fraction"],
             "interp_projection" : False,
+            "instrument_type": self.params_qubic["instrument"],
         }
 
         ### Get the default dictionary

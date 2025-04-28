@@ -7,7 +7,7 @@ import healpy as hp
 import yaml
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
-from pyoperators import DiagonalOperator, ReshapeOperator
+from pyoperators import DiagonalOperator, ReshapeOperator, IdentityOperator
 
 ### Lib directory
 from ...Qsamplings import equ2gal
@@ -157,6 +157,9 @@ class PipelineFrequencyMapMaking:
         ### Inverse noise covariance matrix
         if self.params['PLANCK']['external_data']:
             self.invN = self.joint.get_invntt_operator(mask=self.mask)
+            print("\nShape invN")
+            print(self.invN.shapein)
+            print(self.invN.shapeout)
         else:
             self.invN = self.joint.qubic.get_invntt_operator()
             print("\nOriginal shape invN")
@@ -547,9 +550,55 @@ class PipelineFrequencyMapMaking:
         """
 
         # I have to rewrite this too
-        # If I build Htot  as BlockColumn([H_q, H_p]), it might make this funciton easier too?
+        # If I build Htot as BlockColumn([H_q, H_p]), it might make this function easier too?
 
+        TOD_QUBIC = (
+            self.H_in_qubic(self.maps_input.m_nu).ravel()
+            + self.noiseq
+        )
+
+        if self.params["PLANCK"]["external_data"] == False:
+            return TOD_QUBIC
+        
+        TOD_PLANCK = np.zeros(
+                    (
+                        max(self.params["QUBIC"]["nrec"], 2), # To handle the case nrec == 1, even if it is broken because of the way compute_freq is used in QubicMultiAcquisitions
+                        12 * self.params["SKY"]["nside"] ** 2,
+                        3,
+                    )
+                )
+        
+        
+        for irec in range(self.params["QUBIC"]["nrec"]):
+            fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]) # why then take the max for the case nrec = 1?
+            if self.params["QUBIC"]["convolution_in"]:
+                C = HealpixConvolutionGaussianOperator(
+                    fwhm=fwhm_irec,
+                    lmax = 2 * self.params['Spectrum']['lmax'],
+                )
+            else:
+                # C = HealpixConvolutionGaussianOperator(fwhm=0)
+                C = IdentityOperator() # Isn't it better?
+            if fwhm_irec < (150 + 220)/2:
+                noise = self.noise143
+            else:
+                noise = self.noise217
+            TOD_PLANCK[irec] = C(
+                self.maps_input.maps[irec] + noise
+            )
+        
+        if self.params["QUBIC"]["nrec"] == 1: # To handle the case nrec == 1, TOD_PLANCK[0] alreay computed above
+            TOD_PLANCK[1] = C(
+                self.maps_input.maps[1] + self.noise217
+            )
+
+        TOD_PLANCK = TOD_PLANCK.ravel()
+            
+        TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
+        return TOD
+    
         if self.params["QUBIC"]["instrument"] == "UWB":
+            
             if self.params["QUBIC"]["nrec"] != 1:
                 TOD_PLANCK = np.zeros(
                     (
@@ -611,14 +660,8 @@ class PipelineFrequencyMapMaking:
                 )
 
             TOD_PLANCK = TOD_PLANCK.ravel()
-            TOD_QUBIC = (
-                self.H_in_qubic(self.maps_input.m_nu).ravel()
-                + self.noiseq
-            )
-            if self.params["PLANCK"]["external_data"]:
-                TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
-            else:
-                TOD = TOD_QUBIC
+            
+            TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
 
         if self.params["QUBIC"]["instrument"] == "DB":
             
@@ -632,70 +675,55 @@ class PipelineFrequencyMapMaking:
             print(self.H_in_qubic.shapein)
             print(self.H_in_qubic.shapeout)
             
-            TOD_QUBIC = (
-                self.H_in_qubic(self.maps_input.m_nu).ravel()
-                + self.noiseq
-            )
-            # n_maps = len(self.maps_input.m_nu)
-            # print("shape maps:", np.shape(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])))
-            # TOD_QUBIC = (
-            #     self.H_in_qubic(np.array([self.maps_input.m_nu[:n_maps//2], self.maps_input.m_nu[n_maps//2:]])).ravel()
-            #     + self.noiseq
-            # )
+            TOD_QUBIC150 = TOD_QUBIC[:sh_q].copy()
+            TOD_QUBIC220 = TOD_QUBIC[sh_q:].copy()
 
-
-            if self.params["PLANCK"]["external_data"] == False:
-                TOD = TOD_QUBIC
-            else:
-                TOD_QUBIC150 = TOD_QUBIC[:sh_q].copy()
-                TOD_QUBIC220 = TOD_QUBIC[sh_q:].copy()
-
-                TOD = TOD_QUBIC150.copy()
-                TOD_PLANCK = np.zeros(
-                    (
-                        self.params["QUBIC"]["nrec"],
-                        12 * self.params["SKY"]["nside"] ** 2,
-                        3,
-                    )
+            TOD = TOD_QUBIC150.copy()
+            TOD_PLANCK = np.zeros(
+                (
+                    self.params["QUBIC"]["nrec"],
+                    12 * self.params["SKY"]["nside"] ** 2,
+                    3,
                 )
-                for irec in range(int(self.params["QUBIC"]["nrec"] / 2)):
-                    if self.params["QUBIC"]["convolution_in"]:
-                        C = HealpixConvolutionGaussianOperator(
-                            fwhm=np.min(
-                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]
-                            ), lmax = 2 * self.params['Spectrum']['lmax']
-                        )
+            )
+            for irec in range(int(self.params["QUBIC"]["nrec"] / 2)):
+                if self.params["QUBIC"]["convolution_in"]:
+                    C = HealpixConvolutionGaussianOperator(
+                        fwhm=np.min(
+                            self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]
+                        ), lmax = 2 * self.params['Spectrum']['lmax']
+                    )
 
-                    else:
-                        C = HealpixConvolutionGaussianOperator(fwhm=0)
+                else:
+                    C = HealpixConvolutionGaussianOperator(fwhm=0)
 
-                    TOD = np.r_[
-                        TOD,
-                        C(
-                            self.maps_input.maps[irec] + self.noise143
-                        ).ravel(),
-                    ]
+                TOD = np.r_[
+                    TOD,
+                    C(
+                        self.maps_input.maps[irec] + self.noise143
+                    ).ravel(),
+                ]
 
-                TOD = np.r_[TOD, TOD_QUBIC220.copy()]
-                for irec in range(
-                    int(self.params["QUBIC"]["nrec"] / 2), self.params["QUBIC"]["nrec"]
-                ):
-                    if self.params["QUBIC"]["convolution_in"]:
-                        C = HealpixConvolutionGaussianOperator(
-                            fwhm=np.min(
-                                self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]
-                            ), lmax = 2 * self.params['Spectrum']['lmax']
-                        )
+            TOD = np.r_[TOD, TOD_QUBIC220.copy()]
+            for irec in range(
+                int(self.params["QUBIC"]["nrec"] / 2), self.params["QUBIC"]["nrec"]
+            ):
+                if self.params["QUBIC"]["convolution_in"]:
+                    C = HealpixConvolutionGaussianOperator(
+                        fwhm=np.min(
+                            self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]
+                        ), lmax = 2 * self.params['Spectrum']['lmax']
+                    )
 
-                    else:
-                        C = HealpixConvolutionGaussianOperator(fwhm=0)
+                else:
+                    C = HealpixConvolutionGaussianOperator(fwhm=0)
 
-                    TOD = np.r_[
-                        TOD,
-                        C(
-                            self.maps_input.maps[irec] + self.noise217
-                        ).ravel(),
-                    ]
+                TOD = np.r_[
+                    TOD,
+                    C(
+                        self.maps_input.maps[irec] + self.noise217
+                    ).ravel(),
+                ]
 
         return TOD
     def get_preconditioner(self):
@@ -881,7 +909,6 @@ class PipelineFrequencyMapMaking:
 
         ### Get simulated data
         self.TOD = self.get_tod()
-        print("Still OK?")
 
         ### Wait for all processes
         self.mpi._barrier()

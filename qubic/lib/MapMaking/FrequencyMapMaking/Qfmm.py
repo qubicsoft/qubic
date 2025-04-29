@@ -154,18 +154,10 @@ class PipelineFrequencyMapMaking:
         ### Inverse noise covariance matrix
         if self.params['PLANCK']['external_data']:
             self.invN = self.joint.get_invntt_operator(mask=self.mask)
-            print("\nShape invN")
-            print(self.invN.shapein)
-            print(self.invN.shapeout)
         else:
             self.invN = self.joint.qubic.get_invntt_operator()
-            print("\nOriginal shape invN")
-            print(self.invN.shapein)
-            print(self.invN.shapeout)
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
-            print("self.invN computed")
-            print("shape self.invN = {}".format(np.shape(self.invN)))
         
         ### Noises
         seed_noise_planck = self.mpi.get_random_value()

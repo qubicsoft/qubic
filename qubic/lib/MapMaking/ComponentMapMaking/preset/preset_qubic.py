@@ -64,27 +64,20 @@ class PresetQubic:
         )
 
         if self.params_qubic["nsub_in"] == self.params_qubic["nsub_out"]:
-            self.joint_out = JointAcquisitionComponentsMapMaking(
-                self.dict,
-                self.params_qubic["instrument"],
-                components_fgb_out,
-                self.params_qubic["nsub_in"],
-                preset_external.external_nus,
-                preset_external.params_external["nintegr_planck"],
-                nu_co=nu_co,
-                H=self.joint_in.qubic.H,
-            )
+            H_tojoint = self.joint_in.qubic.H
         else:
-            self.joint_out = JointAcquisitionComponentsMapMaking(
-                self.dict,
-                self.params_qubic["instrument"],
-                components_fgb_out,
-                self.params_qubic["nsub_out"],
-                preset_external.external_nus,
-                preset_external.params_external["nintegr_planck"],
-                nu_co=nu_co,
-                H=None,
-            )
+            H_tojoint = None
+
+        self.joint_out = JointAcquisitionComponentsMapMaking(
+            self.dict,
+            self.params_qubic["instrument"],
+            components_fgb_out,
+            self.params_qubic["nsub_out"],
+            preset_external.external_nus,
+            preset_external.params_external["nintegr_planck"],
+            nu_co=nu_co,
+            H=H_tojoint,
+        )
 
     def get_dict(self):
         """QUBIC dictionary.

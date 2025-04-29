@@ -167,7 +167,7 @@ class PresetAcquisition:
         for index in range(self.preset_qubic.params_qubic["nsub_out"]):
             approx_hth[index] = (
                 self.preset_qubic.joint_out.qubic.H[index].T
-                * self.preset_qubic.joint_out.qubic.invn150
+                * self.preset_qubic.joint_out.qubic.invN # why invn150?
                 * self.preset_qubic.joint_out.qubic.H[index](vector)
             )
 

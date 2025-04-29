@@ -920,7 +920,10 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 if gain is None:
                     gain_ = np.ones(self.ndets)
                 else:
-                    gain_ = gain[:, iband]
+                    if len(gain.shape) < 2:
+                        gain_ = gain[:]
+                    else:
+                        gain_ = gain[:, iband]
                 G_band = DiagonalOperator(
                     gain_,
                     broadcast="rightward",
@@ -929,7 +932,6 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 edges_band = [iband * int(self.nsub//self.final_nbands), (iband + 1) * int(self.nsub//self.final_nbands)] # splitting nsub h
                 Operator_list.append(G_band * AdditionOperator(h[edges_band[0] : edges_band[1]]))
             return BlockColumnOperator(Operator_list, axisout=0,)
-
 
     def get_operator(self, A=None, gain=None, fwhm=None): # exactly the same for DB and UWB get_operator except for lmax=2 * self.dict["nside"] (which should be the same anyway?)
         """
@@ -991,9 +993,10 @@ class QubicInstrumentType(QubicMultiAcquisitions):
             subacq = QubicAcquisition(inst, self.sampling, self.scene, d)
             invn_list.append(subacq.get_invntt_operator(det_noise=det_noise[iband], photon_noise=True))
         if self.dict["instrument_type"] == "UWB":
-            return np.sum(invn_list)
+            self.invN = np.sum(invn_list)
         else:
-            return BlockDiagonalOperator(invn_list, axisout=0)
+            self.invN = BlockDiagonalOperator(invn_list, axisout=0)
+        return self.invN
 
 class OtherDataParametric:
 
@@ -1289,7 +1292,7 @@ class JointAcquisitionFrequencyMapMaking:
         else:
             raise TypeError(f"Instrument type {self.kind} is not recognize")
 
-    def get_invntt_operator(
+    def get_invntt_operator( # We stack the invN_qubic and invN_planck on top of eachother
         self, weight_planck=1, beam_correction=None, seenpix=None, mask=None
     ):
 
@@ -1319,60 +1322,6 @@ class JointAcquisitionFrequencyMapMaking:
             )
         invN = invn_q + invNe
         return BlockDiagonalOperator(invN, axisout=0)
-
-
-        if self.kind == "UWB":
-
-            invn_q = self.qubic.get_invntt_operator()
-            R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
-            invn_q = [R(invn_q(R.T))]
-
-            invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(
-                beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
-            )
-            invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(
-                beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
-            )
-            R_planck = ReshapeOperator(
-                invntt_planck143.shapeout, invntt_planck143.shape[0]
-            )
-            invN_143 = R_planck(invntt_planck143(R_planck.T))
-            invN_217 = R_planck(invntt_planck217(R_planck.T))
-            if self.Nrec == 1:
-                invNe = [invN_143, invN_217]
-            else:
-                invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(
-                    self.Nrec / 2
-                )
-            invN = invn_q + invNe
-            return BlockDiagonalOperator(invN, axisout=0)
-
-        elif self.kind == "DB":
-
-            invn_q_150 = self.qubic.get_invntt_operator().operands[0]
-            invn_q_220 = self.qubic.get_invntt_operator().operands[1]
-            R = ReshapeOperator(invn_q_150.shapeout, invn_q_150.shape[0])
-
-            invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(
-                beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
-            )
-            invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(
-                beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
-            )
-            R_planck = ReshapeOperator(
-                invntt_planck143.shapeout, invntt_planck143.shape[0]
-            )
-            invN_143 = R_planck(invntt_planck143(R_planck.T))
-            invN_217 = R_planck(invntt_planck217(R_planck.T))
-            invN = [R(invn_q_150(R.T))]
-            for i in range(int(self.Nrec / 2)):
-                invN += [R_planck(invntt_planck143(R_planck.T))]
-            invN += [R(invn_q_220(R.T))]
-
-            for i in range(int(self.Nrec / 2)):
-                invN += [R_planck(invntt_planck217(R_planck.T))]
-
-            return BlockDiagonalOperator(invN, axisout=0)
 
 class JointAcquisitionComponentsMapMaking:
 

@@ -35,26 +35,27 @@ class MpiTools:
             pass
         else:
             self.comm.Barrier()      
-    def get_random_value(self, init_seed=None):
-            """Random value
+    def get_random_value(self, init_seed=None): # Why do we want the same seed for all communicators?
+        """Random value
 
-            Method to build a random seed.
+        Method to build a random seed.
 
-            Returns
-            -------
-            seed: int
-                Random seed.
+        Returns
+        -------
+        seed: int
+            Random seed.
 
-            """
+        """
 
-            np.random.seed(init_seed)
-            if self.comm.Get_rank() == 0:
-                seed = np.random.randint(10000000)
-            else:
-                seed = None
+        np.random.seed(init_seed)
+        if self.comm.Get_rank() == 0:
+            seed = np.random.randint(10000000)
+        else:
+            seed = None
 
-            seed = self.comm.bcast(seed, root=0)
-            return seed
+        seed = self.comm.bcast(seed, root=0)
+        return seed
+    
     def bcast(self, arr):
         
         if self.comm.Get_rank() == 0:

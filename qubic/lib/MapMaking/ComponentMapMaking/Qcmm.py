@@ -507,6 +507,12 @@ class Pipeline:
                     self.chi2 = Chi2UltraWideBand(
                         self.preset, tod_comp, parametric=True
                     )
+                elif self.preset.qubic.params_qubic["instrument"] == "UWB":
+                    self.chi2 = Chi2UltraWideBand(
+                        self.preset, tod_comp, parametric=True
+                    )
+                else:
+                    raise ValueError("{} intrument chi2 not impemented.".format(self.preset.qubic.params_qubic["instrument"]))
 
                 self.preset.acquisition.beta_iter = minimize(
                     self.chi2,

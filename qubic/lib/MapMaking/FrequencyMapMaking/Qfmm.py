@@ -13,7 +13,7 @@ from pyoperators import DiagonalOperator, ReshapeOperator, IdentityOperator
 from ...Qsamplings import equ2gal
 from ...Qdictionary import qubicDict
 from ...Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
-from ...Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
+from ...Instrument.Qnoise import QubicTotNoise
 from ..Qcg import pcg
 from ...Qfoldertools import create_folder_if_not_exists, do_gif
 from ..Qmap_plotter import PlotsFMM
@@ -160,36 +160,41 @@ class PipelineFrequencyMapMaking:
             self.invN = R(self.invN(R.T))
         
         ### Noises
-        seed_noise_planck = self.mpi.get_random_value()
+        # seed_noise_planck = self.mpi.get_random_value()
 
         self.noise143 = (
-            self.planck_acquisition143.get_noise(seed_noise_planck)
+            self.planck_acquisition143.get_noise(self.params["PLANCK"]["seed"])
             * self.params["PLANCK"]["level_noise_planck"]
         )
         self.noise217 = (
-            self.planck_acquisition217.get_noise(seed_noise_planck + 1)
+            self.planck_acquisition217.get_noise(self.params["PLANCK"]["seed"] + 1) # not the best
             * self.params["PLANCK"]["level_noise_planck"]
         )
 
-        if self.params["QUBIC"]["instrument"] == "DB":
-            qubic_noise = QubicDualBandNoise(
-                self.dict_out,
-                self.params["QUBIC"]["npointings"],
-                self.params["QUBIC"]["NOISE"]["detector_nep"],
-            )
-        elif self.params["QUBIC"]["instrument"] == "UWB":
-            qubic_noise = QubicWideBandNoise(
-                self.dict_out,
-                self.params["QUBIC"]["npointings"],
-                self.params["QUBIC"]["NOISE"]["detector_nep"],
-            )
+        qubic_noise = QubicTotNoise(
+        self.dict_out,
+        self.joint.qubic.sampling,
+        self.joint.qubic.scene, # or equivalently (?) self.joint.scene
+        )
 
-        # randomness not fixed, to be checked!
+        # if self.params["QUBIC"]["instrument"] == "DB":
+        #     qubic_noise = QubicDualBandNoise(
+        #         self.dict_out,
+        #         self.params["QUBIC"]["npointings"],
+        #         self.params["QUBIC"]["NOISE"]["detector_nep"],
+        #     )
+        # elif self.params["QUBIC"]["instrument"] == "UWB":
+        #     qubic_noise = QubicWideBandNoise(
+        #         self.dict_out,
+        #         self.params["QUBIC"]["npointings"],
+        #         self.params["QUBIC"]["NOISE"]["detector_nep"],
+        #     )
+
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],
             self.params["QUBIC"]["NOISE"]["npho150"],
             self.params["QUBIC"]["NOISE"]["npho220"],
-            seed_noise=seed_noise_planck,
+            seed_noise=self.params["QUBIC"]["NOISE"]["seed"],
         ).ravel()
 
         ### Initialize plot instance

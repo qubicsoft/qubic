@@ -2,7 +2,7 @@ import numpy as np
 from pyoperators import DiagonalOperator
 
 from ....Instrument.Qacquisition import *
-from ....Instrument.Qnoise import *
+from ....Instrument.Qnoise import QubicTotNoise
 from fgbuster import component_model as c
 
 #from qubic.lib.Instrument.Qacquisition import *
@@ -388,27 +388,14 @@ class PresetAcquisition:
 
         """
 
-        if self.preset_qubic.params_qubic["instrument"] == "UWB":
-            noise = QubicWideBandNoise(
+        noise = QubicTotNoise(
                 self.preset_qubic.dict,
-                self.preset_qubic.params_qubic["npointings"],
-                detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
-                duration=np.mean(
-                    [
+                self.preset_qubic.joint_out.qubic.sampling,
+                self.preset_qubic.joint_out.qubic.scene,
+                duration=[
                         self.preset_qubic.params_qubic["NOISE"]["duration_150"],
                         self.preset_qubic.params_qubic["NOISE"]["duration_220"],
-                    ]
-                ),
-            )
-        else:
-            noise = QubicDualBandNoise(
-                self.preset_qubic.dict,
-                self.preset_qubic.params_qubic["npointings"],
-                detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
-                duration=[
-                    self.preset_qubic.params_qubic["NOISE"]["duration_150"],
-                    self.preset_qubic.params_qubic["NOISE"]["duration_220"],
-                ],
+                    ],
             )
 
         return noise.total_noise(

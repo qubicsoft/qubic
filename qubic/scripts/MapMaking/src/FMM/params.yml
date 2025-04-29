@@ -16,12 +16,12 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
     
-    instrument: 'UWB'                       # Instrumental design (MB, DB or UWB)
-    configuration: 'TD'                     # Instrumental configuration (TD or FI) # to be implemented in the code # create a dictionary for TD and one for FI
+    instrument: 'MB'                       # Instrumental design (MB, DB or UWB)
+    configuration: 'FI'                     # Instrumental configuration (TD or FI) # to be implemented in the code # create a dictionary for TD and one for FI
     npointings: 1000                        # Number of time samples
-    nsub_in: 8                              # Number of sub-acquisitions
-    nsub_out: 8
-    nrec: 4                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
+    nsub_in: 4                              # Number of sub-acquisitions
+    nsub_out: 4
+    nrec: 2                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
     convolution_in: True                    # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant

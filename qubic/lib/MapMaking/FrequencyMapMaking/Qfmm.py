@@ -357,7 +357,8 @@ class PipelineFrequencyMapMaking:
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
             "interp_projection": False,
-            "instrument_type": self.params["QUBIC"]["instrument"]
+            "instrument_type": self.params["QUBIC"]["instrument"],
+            "config": self.params["QUBIC"]["configuration"],
         }
 
         ### Get the default dictionary

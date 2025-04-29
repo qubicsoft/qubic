@@ -869,13 +869,15 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
         if self.dict["instrument_type"] == "DB":
             self.used_bands = [150, 220]
-            self.final_nbands = 2
+            self.nFocalPlanes = 2
         elif self.dict["instrument_type"] == "UWB":
             self.used_bands = [150, 220]
-            self.final_nbands = 1
+            self.nFocalPlanes = 1
         elif self.dict["instrument_type"] == "MB":
             self.used_bands = [150] # this is the TD MonoBand instrument
-            self.final_nbands = 1
+            self.nFocalPlanes = 1
+        else:
+            raise TypeError(f"{self.dict['instrument_type']} is not implemented...")
     
         
     def sum_over_band(self, h, algo, gain=None): # same for DB and UWB sum_over_band for FMM except for the return,
@@ -902,13 +904,13 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 ]
 
             block_list = []
-            for iband in range(self.final_nbands):
-                edges_band = [iband * int(self.nrec//self.final_nbands), (iband + 1) * int(self.nrec//self.final_nbands)] # splitting nrec op
+            for iband in range(self.nFocalPlanes):
+                edges_band = [iband * int(self.nrec//self.nFocalPlanes), (iband + 1) * int(self.nrec//self.nFocalPlanes)] # splitting nrec op
                 block_list.append(BlockRowOperator(op_sum[edges_band[0] : edges_band[1]], new_axisin=0))
 
             operator_H = BlockDiagonalOperator(block_list, new_axisout=0,)
             return ReshapeOperator(
-                operator_H.shapeout, (self.final_nbands * self.ndets * self.nsamples)
+                operator_H.shapeout, (self.nFocalPlanes * self.ndets * self.nsamples)
             ) * operator_H * ReshapeOperator(
                 (self.nrec, self.npix, h[0].shapein[-1]), (operator_H.shapein) # this reshape ensures that it works even for nrec=2
             )
@@ -916,7 +918,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         ### Components Map-Making
         else:
             Operator_list = []
-            for iband in range(self.final_nbands):
+            for iband in range(self.nFocalPlanes):
                 if gain is None:
                     gain_ = np.ones(self.ndets)
                 else:
@@ -929,7 +931,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                     broadcast="rightward",
                     shapein=(self.ndets, self.nsamples),
                 )
-                edges_band = [iband * int(self.nsub//self.final_nbands), (iband + 1) * int(self.nsub//self.final_nbands)] # splitting nsub h
+                edges_band = [iband * int(self.nsub//self.nFocalPlanes), (iband + 1) * int(self.nsub//self.nFocalPlanes)] # splitting nsub h
                 Operator_list.append(G_band * AdditionOperator(h[edges_band[0] : edges_band[1]]))
             return BlockColumnOperator(Operator_list, axisout=0,)
 
@@ -1277,20 +1279,10 @@ class JointAcquisitionFrequencyMapMaking:
         R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
         H_planck = R_diag(H_planck_)
 
-
-        if self.kind == "UWB":  # WideBand instrument
-            H_list = [H_qubic]
-            ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
-            H_list += [H_planck]
-            return BlockColumnOperator(H_list, axisout=0) * U
-
-        elif self.kind == "DB": # Not working yet! Have to change the way N and TOD are built
-            H_list = [H_qubic]
-            H_list += [H_planck]
-            return BlockColumnOperator(H_list, axisout=0) * U
-
-        else:
-            raise TypeError(f"Instrument type {self.kind} is not recognize")
+        H_list = [H_qubic]
+        ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
+        H_list += [H_planck]
+        return BlockColumnOperator(H_list, axisout=0) * U
 
     def get_invntt_operator( # We stack the invN_qubic and invN_planck on top of eachother
         self, weight_planck=1, beam_correction=None, seenpix=None, mask=None
@@ -1335,20 +1327,10 @@ class JointAcquisitionComponentsMapMaking:
         self.nintegr = nintegr
 
         ### Select the instrument model
-        if self.kind == "DB":
-            self.qubic = QubicInstrumentType(
-                self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co
-            )
-        elif self.kind == "UWB":
-            self.qubic = QubicInstrumentType(
-                self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co
-            )
-        elif self.kind == "MB":
-            self.qubic = QubicInstrumentType( # Not checked yet!
-                self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co
-            )
-        else:
-            raise TypeError(f"{self.kind} is not implemented...")
+        self.qubic = QubicInstrumentType(
+            self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co
+        )
+
 
         self.scene = self.qubic.scene
         self.external = OtherDataParametric(

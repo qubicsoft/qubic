@@ -133,6 +133,7 @@ class PresetQubic:
             "synthbeam_fraction": self.params_qubic["SYNTHBEAM"]["synthbeam_fraction"],
             "interp_projection" : False,
             "instrument_type": self.params_qubic["instrument"],
+            "config": self.params_qubic["configuration"],
         }
 
         ### Get the default dictionary

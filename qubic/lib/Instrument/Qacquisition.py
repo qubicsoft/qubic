@@ -716,17 +716,6 @@ class QubicMultiAcquisitions:
         self.allnus = np.array(self.allnus)
         self.allnus_rec = np.array(self.allnus_rec)
 
-        # print(self.dict["intrument_type"])
-        # print(self.nsub)
-        # print(len(f_bands))
-        # print(int(self.nsub / len(f_bands)))
-        # print(len(self.allnus))
-        # print(self.nrec)
-        # print(len(f_bands))
-        # print(int(self.nrec / len(f_bands)))
-        # print(len(self.allnus_rec))
-        # poireng
-
         ### Multi-frequency instrument
         self.multiinstrument = QubicMultibandInstrumentTrapezoidalIntegration(
             self.dict
@@ -1528,7 +1517,7 @@ class QubicPolyAcquisition:
         Return the inverse noise covariance matrix as operator
         """
         return self[0].get_invntt_operator()
-class QubicFullBandSystematic(QubicPolyAcquisition): # CMM?
+class QubicFullBandSystematic(QubicPolyAcquisition): # unused?
     """
 
     Instance to compute QUBIC operator.

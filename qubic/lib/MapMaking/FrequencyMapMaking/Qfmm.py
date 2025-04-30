@@ -177,19 +177,6 @@ class PipelineFrequencyMapMaking:
         self.joint.qubic.scene, # or equivalently (?) self.joint.scene
         )
 
-        # if self.params["QUBIC"]["instrument"] == "DB":
-        #     qubic_noise = QubicDualBandNoise(
-        #         self.dict_out,
-        #         self.params["QUBIC"]["npointings"],
-        #         self.params["QUBIC"]["NOISE"]["detector_nep"],
-        #     )
-        # elif self.params["QUBIC"]["instrument"] == "UWB":
-        #     qubic_noise = QubicWideBandNoise(
-        #         self.dict_out,
-        #         self.params["QUBIC"]["npointings"],
-        #         self.params["QUBIC"]["NOISE"]["detector_nep"],
-        #     )
-
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],
             self.params["QUBIC"]["NOISE"]["npho150"],

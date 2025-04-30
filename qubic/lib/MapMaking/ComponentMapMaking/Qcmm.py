@@ -225,7 +225,7 @@ class Pipeline:
             * (self.preset.acquisition.TOD_obs - H_i(x_planck))
         )
 
-        # TO BE REMOVE
+        # TO BE REMOVED
         ### Update components when intensity maps are fixed
         # elif self.preset.tools.params['PCG']['fixI']:
         #    mask = np.ones((len(self.preset.comp.components_name_out), 12*self.preset.sky.params_sky['nside']**2, 3))
@@ -634,17 +634,12 @@ class Pipeline:
 
             if self.preset.comp.params_foregrounds["blind_method"] == "minimize":
 
-                if self.preset.qubic.params_qubic["instrument"] == "DB": # Neveer used?
-                    self.chi2 = Chi2DualBand(self.preset, tod_comp, parametric=False)
-                elif self.preset.qubic.params_qubic["instrument"] == "UWB":
-                    self.chi2 = Chi2UltraWideBand(
-                        self.preset, tod_comp, parametric=False
-                    )
-                # self.chi2 = Chi2InstrumentType(
-                #     self.preset, tod_comp,
-                #     instr_type=self.preset.qubic.params_qubic["instrument"],
-                #     parametric=False,
-                # )
+                # Neveer used? It won't work as it is for now
+                self.chi2 = Chi2InstrumentType(
+                    self.preset, tod_comp,
+                    instr_type=self.preset.qubic.params_qubic["instrument"],
+                    parametric=False,
+                )
                 x0 = []
                 bnds = []
                 for inu in range(
@@ -981,7 +976,7 @@ class Pipeline:
         self.nsampling = self.preset.qubic.joint_out.qubic.nsamples
         self.ndets = self.preset.qubic.joint_out.qubic.ndets
 
-        if self.preset.qubic.params_qubic["instrument"] == "UWB":
+        if self.preset.qubic.params_qubic["instrument"] == "UWB": # rewrite this?
             _r = ReshapeOperator(
                 self.preset.qubic.joint_out.qubic.ndets
                 * self.preset.joint.qubic.nsamples,

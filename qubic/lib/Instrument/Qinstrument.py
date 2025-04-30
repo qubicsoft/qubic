@@ -2176,7 +2176,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         return subset_inst
     
 
-class QubicMultibandInstrument:
+class QubicMultibandInstrument: # This class has to be rewritten, it seems not to be used the way it was intended to be
     """
     The QubicMultibandInstrument class
     Represents the QUBIC multiband features 

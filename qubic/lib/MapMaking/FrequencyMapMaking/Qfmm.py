@@ -235,7 +235,6 @@ class PipelineFrequencyMapMaking:
         
         ### QUBIC Pointing matrix for TOD generation
         self.H_in_qubic = self.joint_tod.qubic.get_operator()
-        print("self.H_in_qubic computed")
         ### Pointing matrix for reconstruction
         if self.params['PLANCK']['external_data']:
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
@@ -244,7 +243,6 @@ class PipelineFrequencyMapMaking:
             )  
         else:
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
-            print("self.H_out computed")
             
     def get_averaged_nus(self):
         """Average frequency
@@ -352,7 +350,7 @@ class PipelineFrequencyMapMaking:
             "effective_duration150": 3,
             "effective_duration220": 3,
             "filter_relative_bandwidth": 0.25,
-            "type_instrument": "wide",
+            "type_instrument": "wide", #?
             "TemperatureAtmosphere150": None,
             "TemperatureAtmosphere220": None,
             "EmissivityAtmosphere150": None,

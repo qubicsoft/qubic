@@ -645,7 +645,7 @@ class PlanckAcquisition:
     def get_map(self, nu_min, nu_max, Nintegr, sky_config, d, fwhm=None):
 
         print(f"Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps")
-        obj = QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
+        obj = QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr) # we use QubicIntegrated here?
         if Nintegr == 1:
             allnus = np.array([np.mean([nu_min, nu_max])])
         else:
@@ -683,12 +683,11 @@ class QubicMultiAcquisitions:
         self.dict["nf_sub"] = self.nsub
         self.comps = comps
         self.fsub = int(self.nsub / self.nrec)
-        # self.dict["kind"] = kind
 
         # There was code duplication in the previous version
         self.allnus = []
         self.allnus_rec = []
-        if self.dict["intrument_type"] == "MB":
+        if self.dict["instrument_type"] == "MB": # to be implemented on dictionary level
             print("Only the 150 GHz band will be used.")
             f_bands = [150] # this is for the TD MonoBand instrument
         else:
@@ -698,7 +697,6 @@ class QubicMultiAcquisitions:
 
             _, _, nus_subbands_i, _, _, _ = compute_freq(
                 f_band,
-                # Nfreq=int(self.nsub / 2),
                 Nfreq=int(self.nsub / len(f_bands)),
                 relative_bandwidth=self.dict["filter_relative_bandwidth"],
             )
@@ -706,7 +704,6 @@ class QubicMultiAcquisitions:
             ### Compute the effective reconstructed frequencies if FMM is applied
             _, _, nus_i, _, _, _ = compute_freq(
                 f_band,
-                # Nfreq=int(self.nrec / 2),
                 Nfreq=int(self.nrec / len(f_bands)),
                 relative_bandwidth=self.dict["filter_relative_bandwidth"],
             )
@@ -718,6 +715,17 @@ class QubicMultiAcquisitions:
         ### Convert lists to numpy arrays
         self.allnus = np.array(self.allnus)
         self.allnus_rec = np.array(self.allnus_rec)
+
+        # print(self.dict["intrument_type"])
+        # print(self.nsub)
+        # print(len(f_bands))
+        # print(int(self.nsub / len(f_bands)))
+        # print(len(self.allnus))
+        # print(self.nrec)
+        # print(len(f_bands))
+        # print(int(self.nrec / len(f_bands)))
+        # print(len(self.allnus_rec))
+        # poireng
 
         ### Multi-frequency instrument
         self.multiinstrument = QubicMultibandInstrumentTrapezoidalIntegration(
@@ -1221,26 +1229,15 @@ class JointAcquisitionFrequencyMapMaking:
         print("Nrec = {}, Nsub = {}".format(Nrec, Nsub))
 
         # self.kind = kind
-        self.kind = d["instrument_type"] # remember change
+        # self.kind = d["instrument_type"] # remember change
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
 
         ### Select the instrument model
-        if self.kind == "DB":
-            self.qubic = QubicInstrumentType(
-                self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
-            )
-        elif self.kind == "UWB":
-            self.qubic = QubicInstrumentType(
-                self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
-            )
-        elif self.kind == "MB":
-            self.qubic = QubicInstrumentType( # Not checked yet!
-                self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
-            )
-        else:
-            raise TypeError(f"{self.kind} is not implemented. Choose DB, UWB or TD")
+        self.qubic = QubicInstrumentType(
+            self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None
+        )
 
         self.scene = self.qubic.scene
         self.pl143 = PlanckAcquisition(143, self.scene)
@@ -1318,9 +1315,9 @@ class JointAcquisitionFrequencyMapMaking:
 
 class JointAcquisitionComponentsMapMaking:
 
-    def __init__(self, d, kind, comp, Nsub, nus_external, nintegr, nu_co=None, H=None):
+    def __init__(self, d, comp, Nsub, nus_external, nintegr, nu_co=None, H=None):
 
-        self.kind = kind
+        # self.kind = d["instrument_type"]
         self.d = d
         self.Nsub = Nsub
         self.comp = comp

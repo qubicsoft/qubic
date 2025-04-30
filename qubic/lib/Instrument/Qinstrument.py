@@ -2020,14 +2020,14 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
 
         # there was code duplication in the previous version
         self.subinstruments = []
-        if d["config"] == "TD": ### For now, the Technical Demonstrator only has one band # might have to be modified so that there is no condition in this class
+        if d["instrument_type"] == "MB": # to be implemented on dictionary level
             f_bands = [150]
         else:
             f_bands = [150, 220]
 
         for f_band in f_bands:
             _, nus_edge, filter_nus, deltas, _, _ = compute_freq(
-                f_band, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
+                f_band, int(d["nf_sub"] / len(f_bands)), relative_bandwidth=self.FRBW
             )
             delta_nu_over_nu = deltas / filter_nus
 
@@ -2039,7 +2039,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                         )
                     d1["filter_nu"] = filter_nus[i] * 1e9
 
-                    if d['debug']: # This was only in the first loop, why?
+                    if d['debug']:
                         print("setting filter_nu to ", d1["filter_nu"])
 
                     d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
@@ -2050,7 +2050,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                     d1["filter_nu"] = filter_nus[i] * 1e9
                     d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)[0]
-                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]]) #hardcoded here?
                     self.subinstruments.append(q)
 
             """
@@ -2176,7 +2176,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         return subset_inst
     
 
-class QubicMultibandInstrument: # This class has to be rewritten, it seems not to be used the way it was intended to be
+class QubicMultibandInstrument: # Is this class still used?
     """
     The QubicMultibandInstrument class
     Represents the QUBIC multiband features 

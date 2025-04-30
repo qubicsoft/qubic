@@ -254,6 +254,9 @@ class PresetAcquisition:
         ### Create the vector full of ones which will be used to compute the scalar operators
         vector_ones = np.ones(acquisition_operators[0].shapein)
 
+        # print(len(self.preset_qubic.joint_out.qubic.allnus))
+        # okzeg
+        
         ### Apply each sub_operator on the vector
         scalar_acquisition_operators = np.empty(
             len(self.preset_qubic.joint_out.qubic.allnus)

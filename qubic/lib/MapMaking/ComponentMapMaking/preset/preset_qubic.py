@@ -55,7 +55,6 @@ class PresetQubic:
         self.preset_tools.mpi._print_message("    => Building QUBIC operator")
         self.joint_in = JointAcquisitionComponentsMapMaking(
             self.dict,
-            self.params_qubic["instrument"],
             components_fgb_in,
             self.params_qubic["nsub_in"],
             preset_external.external_nus,
@@ -70,7 +69,6 @@ class PresetQubic:
 
         self.joint_out = JointAcquisitionComponentsMapMaking(
             self.dict,
-            self.params_qubic["instrument"],
             components_fgb_out,
             self.params_qubic["nsub_out"],
             preset_external.external_nus,

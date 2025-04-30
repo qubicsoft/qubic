@@ -29,6 +29,7 @@ from .Qcostfunc import (
     Chi2DualBand,
     Chi2Parametric_alt,
     Chi2UltraWideBand,
+    Chi2InstrumentType,
 )
 
 # from simtools.analysis import *
@@ -500,19 +501,11 @@ class Pipeline:
             if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] == 0:
 
                 previous_beta = self.preset.acquisition.beta_iter.copy()
-
-                if self.preset.qubic.params_qubic["instrument"] == "DB":
-                    self.chi2 = Chi2DualBand(self.preset, tod_comp, parametric=True)
-                elif self.preset.qubic.params_qubic["instrument"] == "UWB":
-                    self.chi2 = Chi2UltraWideBand(
-                        self.preset, tod_comp, parametric=True
+                self.chi2 = Chi2InstrumentType(
+                        self.preset, tod_comp,
+                        instr_type=self.preset.qubic.params_qubic["instrument"],
+                        parametric=True,
                     )
-                elif self.preset.qubic.params_qubic["instrument"] == "UWB":
-                    self.chi2 = Chi2UltraWideBand(
-                        self.preset, tod_comp, parametric=True
-                    )
-                else:
-                    raise ValueError("{} intrument chi2 not impemented.".format(self.preset.qubic.params_qubic["instrument"]))
 
                 self.preset.acquisition.beta_iter = minimize(
                     self.chi2,
@@ -641,13 +634,17 @@ class Pipeline:
 
             if self.preset.comp.params_foregrounds["blind_method"] == "minimize":
 
-                if self.preset.qubic.params_qubic["instrument"] == "DB":
+                if self.preset.qubic.params_qubic["instrument"] == "DB": # Neveer used?
                     self.chi2 = Chi2DualBand(self.preset, tod_comp, parametric=False)
                 elif self.preset.qubic.params_qubic["instrument"] == "UWB":
                     self.chi2 = Chi2UltraWideBand(
                         self.preset, tod_comp, parametric=False
                     )
-
+                # self.chi2 = Chi2InstrumentType(
+                #     self.preset, tod_comp,
+                #     instr_type=self.preset.qubic.params_qubic["instrument"],
+                #     parametric=False,
+                # )
                 x0 = []
                 bnds = []
                 for inu in range(

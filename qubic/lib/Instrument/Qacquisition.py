@@ -994,6 +994,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
             inst = QubicInstrument(d)
             subacq = QubicAcquisition(inst, self.sampling, self.scene, d)
             invn_list.append(subacq.get_invntt_operator(det_noise=det_noise[iband], photon_noise=True))
+        self.invn150 = invn_list[0] # used in PresetAcquisition.get_approx_hth
         if self.dict["instrument_type"] == "UWB":
             self.invN = np.sum(invn_list)
         else:

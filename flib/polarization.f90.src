@@ -201,5 +201,47 @@ contains
 
     end subroutine matrix_rot3d_i<isize>_r<rsize>
 
+    subroutine weighted_matrix_rot3d_i<isize>_r<rsize>(rot, enf, matrix, vals, weights, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = <isize> + 3 * <rsize>
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: weights(npixels,ntimes,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i<isize>_r<rsize>), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(<rkind>)  :: direct
+
+        direct = -1._<rkind>
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)*weights(ipixel,itime,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, <rkind>)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), <rkind>)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, <rkind>)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine weighted_matrix_rot3d_i<isize>_r<rsize>
+
 
 end module polarization

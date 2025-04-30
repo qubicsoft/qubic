@@ -1,6 +1,6 @@
 import emcee
 from scipy.optimize import curve_fit
-from scipy.integrate import  cumulative_trapezoid as cumtrapz
+from scipy.integrate import cumulative_trapezoid
 from pylab import *
 from qubic.lib.Calibration import Qfiber as ft
 
@@ -87,9 +87,9 @@ class LogLikelihood:
     def compute_sigma68(self, logLLH, rvalues):
         LLH = [np.exp(logLLH([rvalues[i]])) for i in range(len(rvalues))]
 
-        cumint = cumtrapz(LLH, x=rvalues)  # Cumulative integral
-        cumint /= np.max(cumint)
-        sigma68 = np.interp(0.68, cumint, rvalues[1:])
+        ct_integral = cumulative_trapezoid(LLH, x=rvalues)  # Cumulative integral
+        ct_integral /= np.max(ct_integral)
+        sigma68 = np.interp(0.68, ct_integral, rvalues[1:])
 
         return LLH, sigma68
 

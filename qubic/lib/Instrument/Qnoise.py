@@ -19,6 +19,11 @@ class QubicNoise:
         if band != 150 and band != 220:
             raise TypeError("Please choose the QubicWideBandNoise method.")
 
+        '''
+        NOTE:  the following code should be revisited!
+        Why do we read the dictionary here?  It should be an input parameter.
+        This is forcing this object to *always* use the pipeline_demo.dict
+        '''
         dictfilename = "dicts/pipeline_demo.dict"
         d = qubicDict()
         d.read_from_file(dictfilename)
@@ -42,6 +47,12 @@ class QubicNoise:
         self.dict["period"] = 1
         self.dict["type_instrument"] = ""
         self.dict["effective_duration"] = duration
+
+        '''
+        NOTE: the following code must be modified
+        the QubicIntegrated is to be replaced by QubicAcquisition, but with the correct arguments
+        self.acq = QubicAcquisition(instrument, sampling, scene, self.dict)
+        '''
         self.acq = QubicIntegrated(self.dict, Nsub=1, Nrec=1)
         print(f"Duration at {band} GHz is {duration} yrs")
 

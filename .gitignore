@@ -16,3 +16,4 @@ flib/polarization.f90
 .pydevproject
 .pytest_cache/
 *.egg-info/
+ruff.toml

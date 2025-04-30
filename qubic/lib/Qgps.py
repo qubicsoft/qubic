@@ -350,7 +350,7 @@ class GPStools:
 
 
         fig.tight_layout()
-        ax1.set_title("Position vector components")
+        ax1.set_title("GPS Data")
         fig.legend(bbox_to_anchor=(1, 1), loc='upper left')
         if position_limit is not None:
             ax1.set_ylim(position_limit)
@@ -431,7 +431,7 @@ class GPStools:
 
         # Update figure layout
         fig.update_layout(
-            title="Position Vector Components and Angles",
+            title="GPS Data",
             xaxis_title="Date",
             legend=dict(x=1.05, y=1),
             width=900,

@@ -140,6 +140,6 @@ Plots:
     thr_plot: 0.2             # Threashold for maps plot
 
 save_iter: 1                                    # Save every 'save_iter' iteration
-foldername: 'test'          # Name of the saved folder
+foldername: 'test_parametric_blind'          # Name of the saved folder
 filename: 'file'                                # Name of the saved file
 lastite: True                                   # Keep only the last iteration 

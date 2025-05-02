@@ -26,9 +26,7 @@ from ...Instrument.Qnoise import *
 
 from .Qcostfunc import (
     Chi2Blind,
-    Chi2DualBand,
     Chi2Parametric_alt,
-    Chi2UltraWideBand,
     Chi2InstrumentType,
 )
 
@@ -467,7 +465,7 @@ class Pipeline:
 
         return updated_mixingmatrix
 
-    def update_spectral_index(self):
+    def update_spectral_index(self): # this function is too complex and has code duplication
         """Update spectral index.
 
         Method that perform step 3) of the pipeline for 2 possible designs : Two Bands and Ultra Wide Band
@@ -573,10 +571,16 @@ class Pipeline:
                 ### Store fixed beta (those denoted with hp.UNSEEN are variable)
                 beta_fixed = self.preset.acquisition.beta_iter.copy()
                 beta_fixed[:, self.preset.mixingmatrix._index_seenpix_beta] = hp.UNSEEN
-                chi2 = Chi2DualBand(
-                    self.preset, tod_comp, parametric=True, full_beta_map=beta_fixed
-                )
+                # chi2 = Chi2DualBand(
+                #     self.preset, tod_comp, parametric=True, full_beta_map=beta_fixed
+                # )
                 # chi2 = Chi2Parametric(self.preset, tod_comp, self.preset.acquisition.beta_iter, seenpix_wrap=None)
+                self.chi2 = Chi2InstrumentType(
+                    self.preset, tod_comp,
+                    instr_type=self.preset.qubic.params_qubic["instrument"],
+                    parametric=True,
+                    full_beta_map=beta_fixed,
+                )
 
                 previous_beta = self.preset.acquisition.beta_iter[
                     :, self.preset.mixingmatrix._index_seenpix_beta
@@ -966,7 +970,10 @@ class Pipeline:
 
         """
 
-        self.H_i = self.preset.qubic.joint_out.get_operator(
+        
+        raise ValueError("The method Pipeline.update_gain is broken.")
+
+        self.H_i = self.preset.qubic.joint_out.get_operator( # Amm is now called A
             self.preset.acquisition.beta_iter,
             Amm=self.preset.acquisition.Amm_iter,
             gain=np.ones(self.preset.gain.gain_iter.shape),
@@ -975,6 +982,9 @@ class Pipeline:
         )
         self.nsampling = self.preset.qubic.joint_out.qubic.nsamples
         self.ndets = self.preset.qubic.joint_out.qubic.ndets
+
+        # When (if) rewritten, the code will not have conditions on self.preset.qubic.params_qubic["instrument"] value
+        # Also, the shapes of inv, H_i and TOD were modified
 
         if self.preset.qubic.params_qubic["instrument"] == "UWB": # rewrite this?
             _r = ReshapeOperator(

@@ -214,7 +214,7 @@ class Chi2Parametric:
             self.constant = True
         else:
 
-            if self.preset.qubic.params_qubic["instrument"] == "UWB":
+            if self.preset.qubic.params_qubic["instrument"] == "UWB": #?
                 pass
             else:
                 self.nf = self.d.shape[1]

@@ -1,12 +1,14 @@
-from .preset_acquisition import *
-from .preset_external_data import *
-from .preset_components import *
-from .preset_gain import *
-from .preset_mixingmatrix import *
-from .preset_qubic import *
-from .preset_sky import *
-from .preset_tools import *
-from ....Qfoldertools import create_folder_if_not_exists
+import os
+
+from lib.MapMaking.ComponentMapMaking.preset.preset_acquisition import PresetAcquisition
+from lib.MapMaking.ComponentMapMaking.preset.preset_components import PresetComponents
+from lib.MapMaking.ComponentMapMaking.preset.preset_external_data import PresetExternal
+from lib.MapMaking.ComponentMapMaking.preset.preset_gain import PresetGain
+from lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix import PresetMixingMatrix
+from lib.MapMaking.ComponentMapMaking.preset.preset_qubic import PresetQubic
+from lib.MapMaking.ComponentMapMaking.preset.preset_sky import PresetSky
+from lib.MapMaking.ComponentMapMaking.preset.preset_tools import PresetTools
+from lib.Qfoldertools import create_folder_if_not_exists
 
 
 class PresetInitialisation:
@@ -34,7 +36,7 @@ class PresetInitialisation:
         ### MPI common arguments
         self.comm = comm
         self.seed_noise = seed_noise
-        
+
         self.tools = None
         self.qubic = None
         self.fg = None
@@ -65,10 +67,7 @@ class PresetInitialisation:
                     + self.tools.params["foldername"]
                 )
                 create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/maps/")
-            if (
-                self.tools.params["Plots"]["maps"] == True
-                or self.tools.params["Plots"]["conv_beta"] == True
-            ):
+            if self.tools.params["Plots"]["maps"] or self.tools.params["Plots"]["conv_beta"]:
                 create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/I")
                 create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/Q")
                 create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/U")

@@ -1,16 +1,17 @@
 import emcee
-from scipy.optimize import curve_fit
+from numpy import np
 from scipy.integrate import cumulative_trapezoid
-from pylab import *
+from scipy.optimize import curve_fit
+
 from qubic.lib.Calibration import Qfiber as ft
 
-__all__ = ['LogLikelihood']
+__all__ = ["LogLikelihood"]
 
 
 class LogLikelihood:
-    def __init__(self, xvals=None, yvals=None, errors=None, model=None, nbins=None,
-                 nsiginit=10, nsigprior=20, flatprior=None, fixedpars=None,
-                 covariance_model_funct=None, p0=None, nwalkers=32, chi2=None):
+    def __init__(
+        self, xvals=None, yvals=None, errors=None, model=None, nbins=None, nsiginit=10, nsigprior=20, flatprior=None, fixedpars=None, covariance_model_funct=None, p0=None, nwalkers=32, chi2=None
+    ):
         self.prior = None
         self.model = model
         self.xvals = xvals
@@ -42,11 +43,11 @@ class LogLikelihood:
         if self.fixedpars is not None:
             theta = self.p0.copy()
             theta[self.fixedpars == 0] = mytheta
-            #theta[self.fixedpars == 0] = mytheta[self.fixedpars == 0]
+            # theta[self.fixedpars == 0] = mytheta[self.fixedpars == 0]
         else:
             theta = mytheta
         # theta = mytheta
-        self.modelval = self.model(self.xvals[:self.nbins], theta)
+        self.modelval = self.model(self.xvals[: self.nbins], theta)
 
         if self.covariance_model_funct is None:
             self.invcov = np.linalg.inv(self.covar)
@@ -54,21 +55,20 @@ class LogLikelihood:
             cov_repeat = self.make_covariance_matrix()
             self.invcov = np.linalg.inv(cov_repeat + self.covar)
 
-
         lp = self.log_priors(theta)
         if verbose:
-            print('Pars')
+            print("Pars")
             print(theta)
-            print('Y')
+            print("Y")
             print(np.shape(self.yvals))
             print(self.yvals[0:10])
-            print('Model')
+            print("Model")
             print(np.shape(self.modelval))
             print(self.modelval[:10])
-            print('Diff')
+            print("Diff")
             print(np.shape((self.yvals - self.modelval)))
             print((self.yvals - self.modelval)[0:10])
-            print('Diff x invcov')
+            print("Diff x invcov")
             print(np.shape((self.yvals - self.modelval).T @ self.invcov))
             print(((self.yvals - self.modelval).T @ self.invcov)[0:10])
         logLLH = lp - 0.5 * (((self.yvals - self.modelval).T @ self.invcov) @ (self.yvals - self.modelval))
@@ -78,10 +78,10 @@ class LogLikelihood:
             return logLLH
 
     def make_covariance_matrix(self):
-        cov = self.covariance_model_funct(self.modelval[:self.nbins])
+        cov = self.covariance_model_funct(self.modelval[: self.nbins])
         cov_repeat = np.zeros_like(self.covar)
         for i in range(0, len(self.xvals), self.nbins):
-            cov_repeat[i:i + self.nbins, i:i + self.nbins] = cov
+            cov_repeat[i : i + self.nbins, i : i + self.nbins] = cov
         return cov_repeat
 
     def compute_sigma68(self, logLLH, rvalues):
@@ -113,32 +113,30 @@ class LogLikelihood:
             ndim = len(self.flatprior)
             pos = np.zeros((nwalkers, ndim))
             for d in range(ndim):
-                pos[:, d] = np.random.rand(nwalkers) * (self.flatprior[d][1] - self.flatprior[d][0]) + \
-                            self.flatprior[d][0]
+                pos[:, d] = np.random.rand(nwalkers) * (self.flatprior[d][1] - self.flatprior[d][0]) + self.flatprior[d][0]
         else:
             nsigmas = self.nsiginit
             ndim = len(self.fitresult[0])
             pos = np.zeros((nwalkers, ndim))
             for d in range(ndim):
-                pos[:, d] = np.random.randn(nwalkers) * np.sqrt(self.fitresult[1][d, d]) * nsigmas + self.fitresult[0][
-                    d]
-        #print('Ndim init:', ndim)
+                pos[:, d] = np.random.randn(nwalkers) * np.sqrt(self.fitresult[1][d, d]) * nsigmas + self.fitresult[0][d]
+        # print('Ndim init:', ndim)
         if self.fixedpars is not None:
             ndim = int(np.sum(self.fixedpars == 0))
-        #print('New ndim:', ndim)
+        # print('New ndim:', ndim)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, self.__call__)
         if self.fixedpars is not None:
-            #print('Len(pos):', np.shape(pos))
-            #print('len(fixedpars):', len(self.fixedpars))
+            # print('Len(pos):', np.shape(pos))
+            # print('len(fixedpars):', len(self.fixedpars))
             pos = pos[:, self.fixedpars == 0]
-            #print('New len(pos):', np.shape(pos))
+            # print('New len(pos):', np.shape(pos))
         sampler.run_mcmc(pos, nbmc, progress=True)
         return sampler
 
     def fisher_analysis(self, delta_r=1e-7):
         # Model
-        modelval_r0 = self.model(self.xvals[:self.nbins], r=0.)
-        modelval_deltar = self.model(self.xvals[:self.nbins], r=delta_r)
+        modelval_r0 = self.model(self.xvals[: self.nbins], r=0.0)
+        modelval_deltar = self.model(self.xvals[: self.nbins], r=delta_r)
 
         # Jacobian, Numerical derivative
         J = (modelval_deltar - modelval_r0) / delta_r
@@ -157,30 +155,34 @@ class LogLikelihood:
     def curve_fit(self, p0=None):
         if p0 is None:
             p0 = self.p0
-        self.fitresult_curvefit = curve_fit(self.call4curvefit, self.xvals, self.yvals,
-                                            sigma=np.sqrt(np.diag(self.covar)),
-                                            maxfev=1000000, ftol=1e-5, p0=p0)
+        self.fitresult_curvefit = curve_fit(self.call4curvefit, self.xvals, self.yvals, sigma=np.sqrt(np.diag(self.covar)), maxfev=1000000, ftol=1e-5, p0=p0)
         return self.fitresult_curvefit[0], self.fitresult_curvefit[1]
 
     ### This should be modified in order to call the current likelihood instead, not an external one...
-    def minuit(self, p0=None, chi2=None, verbose=True, print_level=0, ncallmax=10000, extra_args=None, nsplit=1,
-               return_chi2fct=False):
+    def minuit(self, p0=None, chi2=None, verbose=True, print_level=0, ncallmax=10000, extra_args=None, nsplit=1, return_chi2fct=False):
         if p0 is None:
             p0 = self.p0
         if verbose & (print_level > 1):
-            print('About to call Minuit with chi2:')
+            print("About to call Minuit with chi2:")
             print(chi2)
-            print('Initial parameters, fixed and bounds:')
+            print("Initial parameters, fixed and bounds:")
             for i in range(len(p0)):
-                print('Param {0:}: init={1:6.2f} Fixed={2:} Range=[{3:6.3f}, {4:6.3f}]'.format(i, p0[i],
-                                                                                               self.fixedpars[i],
-                                                                                               self.flatprior[i][0],
-                                                                                               self.flatprior[i][1]))
-        self.fitresult_minuit = ft.do_minuit(self.xvals, self.yvals, self.covar, p0,
-                                             functname=self.model,
-                                             fixpars=self.fixedpars, rangepars=self.flatprior,
-                                             verbose=verbose, chi2=self.chi2, print_level=print_level,
-                                             ncallmax=ncallmax, extra_args=extra_args, nsplit=nsplit)
+                print("Param {0:}: init={1:6.2f} Fixed={2:} Range=[{3:6.3f}, {4:6.3f}]".format(i, p0[i], self.fixedpars[i], self.flatprior[i][0], self.flatprior[i][1]))
+        self.fitresult_minuit = ft.do_minuit(
+            self.xvals,
+            self.yvals,
+            self.covar,
+            p0,
+            functname=self.model,
+            fixpars=self.fixedpars,
+            rangepars=self.flatprior,
+            verbose=verbose,
+            chi2=self.chi2,
+            print_level=print_level,
+            ncallmax=ncallmax,
+            extra_args=extra_args,
+            nsplit=nsplit,
+        )
         if len(self.fitresult_minuit[3]) == 0:
             cov = np.diag(self.fitresult_minuit[2])
         else:

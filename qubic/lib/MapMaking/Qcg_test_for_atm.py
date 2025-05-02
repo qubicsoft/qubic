@@ -3,15 +3,13 @@ import time
 
 import healpy as hp
 import numpy as np
+from lib.MapMaking.Qmap_plotter import _plot_reconstructed_maps
+from lib.Qfoldertools import create_folder_if_not_exists
 from pyoperators.core import IdentityOperator, asoperator
 from pyoperators.iterative.core import AbnormalStopIteration, IterativeAlgorithm
 from pyoperators.iterative.stopconditions import MaxIterationStopCondition
 from pyoperators.memory import empty, zeros
 from pyoperators.utils.mpi import MPI
-
-from ..Qfoldertools import *
-from .Qmap_plotter import _plot_reconstructed_maps
-from ..Qfoldertools import create_folder_if_not_exists
 
 __all__ = ["pcg"]
 
@@ -114,8 +112,7 @@ class PCGAlgorithm(IterativeAlgorithm):
 
         abnormal_stop_condition = MaxIterationStopCondition(
             maxiter,
-            "Solver reached maximum number of iterations without reac"
-            "hing specified tolerance.",
+            "Solver reached maximum number of iterations without reaching specified tolerance.",
         )
 
         IterativeAlgorithm.__init__(
@@ -134,10 +131,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         if A.shapein is None:
             raise ValueError("The operator input shape is not explicit.")
         if A.shapein != b.shape:
-            raise ValueError(
-                f"The operator input shape '{A.shapein}' is incompatible with that of "
-                f"the RHS '{b.shape}'."
-            )
+            raise ValueError(f"The operator input shape '{A.shapein}' is incompatible with that of the RHS '{b.shape}'.")
         self.A = A
         self.b = b
         self.comm = comm
@@ -148,7 +142,7 @@ class PCGAlgorithm(IterativeAlgorithm):
 
         if self.gif is not None:
             if not os.path.isdir(self.gif):
-                create_folder_if_not_exists(self.comm, self.gif)#os.makedirs(self.gif)
+                create_folder_if_not_exists(self.comm, self.gif)  # os.makedirs(self.gif)
 
         if M is None:
             M = IdentityOperator()
@@ -163,7 +157,7 @@ class PCGAlgorithm(IterativeAlgorithm):
 
     def initialize(self):
         IterativeAlgorithm.initialize(self)
-                
+
         if self.b_norm == 0:
             self.error = 0
             self.x[...] = 0
@@ -177,45 +171,42 @@ class PCGAlgorithm(IterativeAlgorithm):
             raise StopIteration("Solver reached maximum tolerance.")
         self.M(self.r, self.d)
         self.delta = self.dot(self.r, self.d)
-        
+
     def iteration(self):
         self.t0 = time.time()
-        
+
         self.A(self.d, self.q)
-        
+
         alpha = self.delta / self.dot(self.d, self.q)
-        
+
         self.x += alpha * self.d
         map_i = self.x.copy()
 
         if self.is_planck:
             map_i = np.ones(self.input.shape) * hp.UNSEEN
             map_i[:, self.seenpix, :] = self.x.copy()
-        
+
         if len(map_i.shape) == 2:
             _r = map_i[self.seenpix, :] - self.input[self.seenpix, :]
-        else :
+        else:
             _r = np.zeros(self.input.shape)
             for i in range(map_i.shape[0]):
                 _r[i, self.seenpix[i]] = map_i[i, self.seenpix[i], :] - self.input[i, self.seenpix[i], :]
         self.rms = np.std(_r, axis=1)
-        
+
         if self.gif is not None:
             if self.comm.Get_rank() == 0:
-
                 nsig = 2
-                min, max = -nsig * np.std(
-                    self.input[0, self.seenpix], axis=0
-                ), nsig * np.std(self.input[0, self.seenpix], axis=0)
+                min, max = -nsig * np.std(self.input[0, self.seenpix], axis=0), nsig * np.std(self.input[0, self.seenpix], axis=0)
 
                 _plot_reconstructed_maps(
                     map_i,
                     self.input,
                     self.seenpix,
-                    self.gif + f"iter_{self.niterations+self.iter_init}.png",
+                    self.gif + f"iter_{self.niterations + self.iter_init}.png",
                     self.center,
                     reso=self.reso,
-                    figsize=(12, 2.7*map_i.shape[0]),
+                    figsize=(12, 2.7 * map_i.shape[0]),
                     min=min,
                     max=max,
                     fwhm=self.fwhm,
@@ -238,9 +229,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         if self.disp:
             if self.niterations == 1:
                 print(" Iter     Tol      time")
-            print(
-                f"{self.niterations+self.iter_init:4}: {self.error:.4e} {time.time() - self.t0:.5f} {self.rms.ravel()}"
-            )
+            print(f"{self.niterations + self.iter_init:4}: {self.error:.4e} {time.time() - self.t0:.5f} {self.rms.ravel()}")
 
 
 def pcg(

@@ -1,7 +1,7 @@
 from fgbuster import component_model as c
-from .. import Qcomponent_model as model_co
-from ....Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
-from ....Qdictionary import qubicDict
+from lib.Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
+from lib.MapMaking.ComponentMapMaking import Qcomponent_model as model_co
+from lib.Qdictionary import qubicDict
 
 
 class PresetQubic:
@@ -181,19 +181,15 @@ class PresetQubic:
             components_name += ["Dust"]
 
         if self.preset_tools.params["Foregrounds"]["Synchrotron"][f"Synchrotron_{key}"]:
-            components += [
-                c.Synchrotron(
-                    nu0=self.preset_tools.params["Foregrounds"]["Synchrotron"]["nu0_s"]
-                )
-            ]
+            components += [c.Synchrotron(nu0=self.preset_tools.params["Foregrounds"]["Synchrotron"]["nu0_s"])]
             components_name += ["Synchrotron"]
 
         if self.preset_tools.params["Foregrounds"]["CO"][f"CO_{key}"]:
             components += [
-                #c.COLine(
+                # c.COLine(
                 #    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
                 #    active=False,
-                #)
+                # )
                 model_co.Monochromatic(
                     nu0=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
                 )

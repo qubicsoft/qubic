@@ -1,7 +1,6 @@
 import numpy as np
 import pysm3
 import pysm3.units as u
-
 from fgbuster.mixingmatrix import MixingMatrix
 
 
@@ -43,14 +42,8 @@ class PresetMixingMatrix:
         self.preset_comp = preset_comp
 
         ### Store frequencies
-        self.nus_eff_in = np.array(
-            list(self.preset_qubic.joint_in.qubic.allnus)
-            + list(self.preset_qubic.joint_in.external.allnus)
-        )
-        self.nus_eff_out = np.array(
-            list(self.preset_qubic.joint_out.qubic.allnus)
-            + list(self.preset_qubic.joint_out.external.allnus)
-        )
+        self.nus_eff_in = np.array(list(self.preset_qubic.joint_in.qubic.allnus) + list(self.preset_qubic.joint_in.external.allnus))
+        self.nus_eff_out = np.array(list(self.preset_qubic.joint_out.qubic.allnus) + list(self.preset_qubic.joint_out.external.allnus))
 
         ### Get input spectral index
         self.preset_tools.mpi._print_message("    => Building Mixing Matrix")
@@ -278,9 +271,7 @@ class PresetMixingMatrix:
         return mixingmatrix.eval(nus, *beta)
 
     def _get_beta_iter(self):
-
         if self.preset_comp.params_foregrounds["Dust"]["model_d"] in ["d0", "d6"]:
-
             beta_iter = np.array([])
             if self.preset_comp.params_foregrounds["Dust"]["Dust_out"]:
                 beta_iter = np.append(
@@ -295,12 +286,8 @@ class PresetMixingMatrix:
                 beta_iter = np.append(
                     beta_iter,
                     np.random.normal(
-                        self.preset_comp.params_foregrounds["Synchrotron"][
-                            "beta_s_init"
-                        ][0],
-                        self.preset_comp.params_foregrounds["Synchrotron"][
-                            "beta_s_init"
-                        ][1],
+                        self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][0],
+                        self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][1],
                         1,
                     ),
                 )
@@ -310,10 +297,7 @@ class PresetMixingMatrix:
                 seed=42,
                 key="out",
             )
-            A_iter = (
-                self.get_mixingmatrix(self.nus_eff_out, beta_iter, key="out")
-                * Adeco_iter
-            )
+            A_iter = self.get_mixingmatrix(self.nus_eff_out, beta_iter, key="out") * Adeco_iter
 
             return beta_iter, A_iter
 
@@ -321,42 +305,22 @@ class PresetMixingMatrix:
             beta_iter = np.zeros(
                 (
                     len(self.preset_comp.components_out) - 1,
-                    12
-                    * self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"]
-                    ** 2,
+                    12 * self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"] ** 2,
                 )
             )
             for iname, name in enumerate(self.preset_comp.components_name_out):
                 if name == "CMB":
                     pass
                 elif name == "Dust":
-                    beta_iter[iname - 1] = (
-                        self.spectral_index_modifiedblackbody(
-                            self.preset_comp.params_foregrounds["Dust"][
-                                "nside_beta_out"
-                            ]
-                        )
-                        * 0
-                        + 1.54
-                    )
+                    beta_iter[iname - 1] = self.spectral_index_modifiedblackbody(self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"]) * 0 + 1.54
                 elif name == "Synchrotron":
-                    beta_iter[iname - 1] = (
-                        self.spectral_index_powerlaw(
-                            self.preset_comp.params_foregrounds["Dust"][
-                                "nside_beta_out"
-                            ]
-                        )
-                        * 0
-                        - 3
-                    )
+                    beta_iter[iname - 1] = self.spectral_index_powerlaw(self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"]) * 0 - 3
 
             Amm_iter = self.get_mixingmatrix(self.nus_eff_out, beta_iter)
             Amm_iter = np.transpose(Amm_iter, (1, 0, 2))
             return beta_iter, Amm_iter
         else:
-            raise TypeError(
-                f"{self.preset_comp.params_foregrounds['Dust']['model_d']} is not yet implemented..."
-            )
+            raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model_d']} is not yet implemented...")
 
     def get_beta_input(self):
         """Spectral index.
@@ -386,27 +350,16 @@ class PresetMixingMatrix:
         """
 
         if self.preset_comp.params_foregrounds["Dust"]["model_d"] in ["d0", "d6"]:
-
             # self.Amm_in = self._get_Amm(self.preset_comp.components_model_in, self.preset_comp.components_name_in, self.nus_eff_in, init=False)
 
             # self.Amm_in[len(self.preset_qubic.joint_in.qubic.allnus):] = self._get_Amm(self.preset_comp.components_model_in, self.preset_comp.components_name_in, self.nus_eff_in, init=True)[len(self.preset_qubic.joint_in.qubic.allnus):]
             if self.preset_comp.params_foregrounds["CO"]["CO_in"]:
-                self.beta_in = np.array(
-                    [
-                        float(i._REF_BETA)
-                        for i in self.preset_comp.components_model_in[1:-1]
-                    ]
-                )
+                self.beta_in = np.array([float(i._REF_BETA) for i in self.preset_comp.components_model_in[1:-1]])
             else:
-                self.beta_in = np.array(
-                    [
-                        float(i._REF_BETA)
-                        for i in self.preset_comp.components_model_in[1:]
-                    ]
-                )
+                self.beta_in = np.array([float(i._REF_BETA) for i in self.preset_comp.components_model_in[1:]])
 
             self.Amm_in = self.get_mixingmatrix(self.nus_eff_in, self.beta_in, key="in")
-            
+
             if self.preset_comp.params_foregrounds["Dust"]["Dust_in"]:
                 if self.preset_comp.params_foregrounds["Dust"]["model_d"] in [
                     "d0",
@@ -433,30 +386,16 @@ class PresetMixingMatrix:
                     self.beta_in = np.zeros(
                         (
                             len(self.preset_comp.components_in) - 1,
-                            12
-                            * self.preset_comp.params_foregrounds["Dust"][
-                                "nside_beta_in"
-                            ]
-                            ** 2,
+                            12 * self.preset_comp.params_foregrounds["Dust"]["nside_beta_in"] ** 2,
                         )
                     )
                     for iname, name in enumerate(self.preset_comp.components_name_in):
                         if name == "CMB":
                             pass
                         elif name == "Dust":
-                            self.beta_in[iname - 1] = (
-                                self.spectral_index_modifiedblackbody(
-                                    self.preset_comp.params_foregrounds["Dust"][
-                                        "nside_beta_in"
-                                    ]
-                                )
-                            )
+                            self.beta_in[iname - 1] = self.spectral_index_modifiedblackbody(self.preset_comp.params_foregrounds["Dust"]["nside_beta_in"])
                         elif name == "Synchrotron":
-                            self.beta_in[iname - 1] = self.spectral_index_powerlaw(
-                                self.preset_comp.params_foregrounds["Dust"][
-                                    "nside_beta_in"
-                                ]
-                            )
+                            self.beta_in[iname - 1] = self.spectral_index_powerlaw(self.preset_comp.params_foregrounds["Dust"]["nside_beta_in"])
 
                     self.Amm_in = self.get_mixingmatrix(self.nus_eff_in, self.beta_in)
                     self.Amm_in = np.transpose(self.Amm_in, (1, 0, 2))
@@ -464,9 +403,7 @@ class PresetMixingMatrix:
                     # stop
 
                 else:
-                    raise TypeError(
-                        f"{self.preset_comp.params_foregrounds['Dust']['model_d']} is not yet implemented..."
-                    )
+                    raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model_d']} is not yet implemented...")
 
     def get_index_seenpix_beta(self):
         """Spatially varying spectral index.

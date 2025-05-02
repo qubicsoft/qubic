@@ -6,23 +6,22 @@ from functools import partial
 import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
-from pyoperators import MPI, PackOperator, ReshapeOperator
-from pyoperators import pcg as pcg_op
-from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
-from scipy.optimize import fmin_l_bfgs_b, minimize
-
-from ...MapMaking.Qcg import pcg
-from ...MapMaking.Qmap_plotter import PlotsCMM
-from ...Qfoldertools import do_gif
-from ...Qmpi_tools import MpiTools, join_data
-from ...QskySim import get_angular_profile
-from .preset.preset import PresetInitialisation
-from .Qcostfunc import (
+from lib.MapMaking.ComponentMapMaking.preset.preset import PresetInitialisation
+from lib.MapMaking.ComponentMapMaking.Qcostfunc import (
     Chi2Blind,
     Chi2DualBand,
     Chi2Parametric_alt,
     Chi2UltraWideBand,
 )
+from lib.MapMaking.Qcg import pcg
+from lib.MapMaking.Qmap_plotter import PlotsCMM
+from lib.Qfoldertools import do_gif
+from lib.Qmpi_tools import MpiTools, join_data
+from lib.QskySim import get_angular_profile
+from pyoperators import MPI, PackOperator, ReshapeOperator
+from pyoperators import pcg as pcg_op
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+from scipy.optimize import fmin_l_bfgs_b, minimize
 
 
 class Pipeline:
@@ -61,12 +60,7 @@ class Pipeline:
         self.fsub = int(self.preset.qubic.joint_out.qubic.nsub / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
 
         ### Create variables for stopping condition
-        self._rms_noise_qubic_patch_per_ite = np.empty(
-            (
-                self.preset.tools.params["PCG"]["ites_to_converge"],
-                len(self.preset.comp.components_name_out),
-            )
-        )
+        self._rms_noise_qubic_patch_per_ite = np.empty((self.preset.tools.params["PCG"]["ites_to_converge"], len(self.preset.comp.components_name_out)))
         self._rms_noise_qubic_patch_per_ite[:] = np.nan
 
     def call_pcg(self, max_iterations, seenpix):
@@ -153,7 +147,6 @@ class Pipeline:
                 gif=self.preset.tools.params["PCG"]["do_gif"],
                 reso=self.preset.tools.params["PCG"]["reso_plot"],
             )
-            # self.plots._display_allresiduals(self.preset.comp.components_iter[:, self.preset.sky.seenpix, :], self.preset.sky.seenpix, ki=self._steps)
             self.plots.plot_rms_iteration(self.preset.acquisition.rms_plot, ki=self._steps)
 
     def update_components(self, seenpix):

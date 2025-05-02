@@ -486,7 +486,7 @@ class Pipeline:
                 ):
                     method = "parametric_blind"
                 cpt += 1
-        try:
+        try: # weird?
             method == "parametric_blind"
         except:
             method = method_0
@@ -588,7 +588,7 @@ class Pipeline:
                 self.nfev = 0
 
                 beta_i = fmin_l_bfgs_b(
-                    chi2,
+                    self.chi2,
                     x0=previous_beta,
                     callback=self.callback,
                     approx_grad=True,
@@ -597,7 +597,7 @@ class Pipeline:
                     maxiter=20,
                 )[0]
 
-                self.preset.acquisition.beta_iter[chi2.seenpix_beta] = beta_i
+                self.preset.acquisition.beta_iter[self.chi2.seenpix_beta] = beta_i
 
                 del tod_comp
                 gc.collect()

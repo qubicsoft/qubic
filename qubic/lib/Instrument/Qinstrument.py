@@ -390,8 +390,9 @@ class QubicInstrument(Instrument):
         """
         if out is None:
             out = np.empty((len(self), len(sampling)))
-        self.get_noise_detector(sampling, out=out)
-        if det_noise is False:
+        if det_noise:
+            self.get_noise_detector(sampling, out=out)
+        else:
             out *= 0
         if photon_noise:
             out += self.get_noise_photon(sampling, scene)
@@ -2031,24 +2032,19 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
             )
             delta_nu_over_nu = deltas / filter_nus
 
-            if not d["center_detector"]:
-                for i in range(len(filter_nus)):
+            for i in range(len(filter_nus)):
+                d1["filter_nu"] = filter_nus[i] * 1e9
+                d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
+                if d['debug']:
+                    print("setting filter_nu to ", d1["filter_nu"])
+                if not d["center_detector"]:
                     if self.d["debug"]:
                         print(
                             f"Integration done with nu = {nus_edge[i]} GHz with weight {delta_nu_over_nu[i]}"
                         )
-                    d1["filter_nu"] = filter_nus[i] * 1e9
-
-                    if d['debug']:
-                        print("setting filter_nu to ", d1["filter_nu"])
-
-                    d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
                     self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
-            else:
+                else:
                 # for i in range(self.nsubbands): # self.subbands not defined
-                for i in range(len(filter_nus)):
-                    d1["filter_nu"] = filter_nus[i] * 1e9
-                    d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)[0]
                     q.detector.center = np.array([[0.0, 0.0, -0.3]]) #hardcoded here?
                     self.subinstruments.append(q)
@@ -2072,7 +2068,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
 
             if not d["center_detector"]:
                 self.subinstruments = []
-                W = IntegrationTrapezeOperator(nus_edge150)
+                W = IntegrationTrapezeOperator(nus_edge150) # never used?
                 for i in range(len(nus_edge150)):
                     if self.d["debug"]:
                         print(

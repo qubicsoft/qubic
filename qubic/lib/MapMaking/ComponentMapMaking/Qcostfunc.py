@@ -143,7 +143,7 @@ class Chi2InstrumentType:
                     self.preset.acquisition.invN.operands[0](_residuals),
                     self.preset.comm,
                 )
-                # Why so muchdifferent for DB?
+                # Why so much different for DB?
                 _residuals = ysim - self.preset.acquisition.TOD_qubic
                 self.Lplanck = 0
                 self.Lqubic = _dot( _residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
@@ -312,7 +312,7 @@ class Chi2Parametric:
         return LLH
 
 
-class Chi2Parametric_alt:
+class Chi2Parametric_alt: # work in progress?
 
     def __init__(self, preset, d, A_blind, icomp, seenpix_wrap=None):
 

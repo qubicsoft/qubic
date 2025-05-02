@@ -49,23 +49,29 @@ class QubicNoise:
         print(f"Duration at {band} GHz is {duration} yrs")
 
     def get_noise(self, det_noise, pho_noise):
-        n = self.detector_noise() * 0
-
         if det_noise:
-            n += self.detector_noise()
+            n = self.detector_noise()
+        else:
+            n = np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
         if pho_noise:
             n += self.photon_noise()
         return n
 
-    def photon_noise(self):
-        return self.acq.get_noise(
-            det_noise=False, photon_noise=True, seed=self.seed_photon
-        )
+    def photon_noise(self, wpho=1):
+        if wpho == 0:
+            return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
+        else:
+            return wpho * self.acq.get_noise(
+                det_noise=False, photon_noise=True, seed=self.seed_photon
+            )
 
-    def detector_noise(self):
-        return self.acq.get_noise(
-            det_noise=True, photon_noise=False, seed=self.seed_detector
-        )
+    def detector_noise(self, wdet=1):
+        if wdet == 0:
+            return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
+        else:
+            return wdet * self.acq.get_noise(
+                det_noise=True, photon_noise=False, seed=self.seed_detector
+            )
 
 
 class QubicTotNoise:
@@ -113,8 +119,9 @@ class QubicTotNoise:
             comm=self.d["comm"],
             size=self.d["nprocs_instrument"],
             )
-            npho.append(wpho[i] * QnoiseBand.photon_noise())
-            ndet.append(wdet * QnoiseBand.detector_noise())
+            npho.append(QnoiseBand.photon_noise(wpho[i]))
+            ndet.append(QnoiseBand.detector_noise(wdet))
+
         if self.type == "UWB":
             return ndet[0] + npho[0] + npho[1]
         elif self.type == "DB":

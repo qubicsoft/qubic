@@ -4,10 +4,11 @@ import copy
 import healpy as hp
 import numexpr as ne
 import numpy as np
-
-from scipy.constants import c, h, k, sigma
-from scipy.integrate import quad
-
+from lib.Calibration.Qcalibration import QubicCalibration
+from lib.Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
+from lib.Qbilin_interp import Cartesian2HealpixOperator_bilin_interp
+from lib.Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
+from lib.Qutilities import _compress_mask
 from pyoperators import (
     Cartesian2SphericalOperator,
     DenseBlockDiagonalOperator,
@@ -18,10 +19,9 @@ from pyoperators import (
     ReshapeOperator,
     Rotation2dOperator,
     Rotation3dOperator,
-    Spherical2CartesianOperator
+    Spherical2CartesianOperator,
 )
 from pyoperators.utils import operation_assignment, pool_threading, product, split
-from pyoperators.utils.ufuncs import abs2
 from pysimulators import (
     ConvolutionTruncatedExponentialOperator,
     Instrument,
@@ -34,17 +34,13 @@ from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator,
 )
 from pysimulators.sparse import FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix
+from scipy.constants import c, h, k, sigma
+from scipy.integrate import quad
+
 from qubic import _flib as flib
 
-from ..Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
-from ..Calibration.Qcalibration import QubicCalibration
-from ..Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
-from ..Qutilities import _compress_mask
+__all__ = ["QubicInstrument", "QubicMultibandInstrumentTrapezoidalIntegration", "QubicMultibandInstrument"]
 
-from ..Qbilin_interp import Cartesian2HealpixOperator_bilin_interp
-
-
-__all__ = ["QubicInstrument", "QubicMultibandInstrumentTrapezoidalIntegration","QubicMultibandInstrument"]
 
 def compute_freq(band, Nfreq=None, relative_bandwidth=0.25, frequency_spacing="log"):
     """
@@ -69,20 +65,21 @@ def compute_freq(band, Nfreq=None, relative_bandwidth=0.25, frequency_spacing="l
     nu_min = band * (1 - relative_bandwidth / 2)
     nu_max = band * (1 + relative_bandwidth / 2)
     Nfreq_edges = Nfreq + 1
-    
+
     if frequency_spacing == "log":
-        base = (nu_max / nu_min) ** (1. / Nfreq)
+        base = (nu_max / nu_min) ** (1.0 / Nfreq)
         nus_edge = nu_min * np.logspace(0, Nfreq, Nfreq_edges, endpoint=True, base=base)
     elif frequency_spacing == "linear":
         nus_edge = np.linspace(nu_min, nu_max, Nfreq_edges)
     else:
         ValueError("frequency_spacing must be 'log' or 'linear'")
-    
+
     nus = np.array([(nus_edge[i] + nus_edge[i - 1]) / 2 for i in range(1, Nfreq_edges)])
     deltas = np.array([(nus_edge[i] - nus_edge[i - 1]) for i in range(1, Nfreq_edges)])
     Delta = nu_max - nu_min
     Nbbands = len(nus)
     return Nfreq_edges, nus_edge, nus, deltas, Delta, Nbbands
+
 
 class Filter(object):
     def __init__(self, nu, relative_bandwidth):
@@ -98,8 +95,10 @@ class Optics(object):
 class SyntheticBeam(object):
     pass
 
+
 class Noise(object):
     pass
+
 
 def funct(x, p, n):
     return x**p / (np.exp(x) - 1) ** n
@@ -116,7 +115,7 @@ class QubicInstrument(Instrument):
         d : Input dictionary, from which the following Parameters are read
         FRBW: float, optional
             keeps the Full Relative Band Width when building subinstruments
-            Needed to compute the photon noise        
+            Needed to compute the photon noise
         Parameters
         ----------
         calibration : QubicCalibration
@@ -168,10 +167,10 @@ class QubicInstrument(Instrument):
         else:
             self.FRBW = filter_relative_bandwidth
         if self.debug:
-            print("filter_nu = ",filter_nu,"FRBW = ", self.FRBW, "dnu = ", filter_relative_bandwidth)
+            print("filter_nu = ", filter_nu, "FRBW = ", self.FRBW, "dnu = ", filter_relative_bandwidth)
 
         ## Choose the relevant Optics calibration file
-        epsilon = 1.0e-3 # one mHz of margin for the comparisons to compensate for python roundoff error
+        epsilon = 1.0e-3  # one mHz of margin for the comparisons to compensate for python roundoff error
         self.nu1 = 150e9
         self.nu1_up = self.nu1 * (1 + self.FRBW / 2) + epsilon
         self.nu1_down = self.nu1 * (1 - self.FRBW / 2) - epsilon
@@ -183,8 +182,7 @@ class QubicInstrument(Instrument):
         elif (filter_nu <= self.nu2_up) and (filter_nu >= self.nu2_down):
             d["optics"] = d["optics"].replace(d["optics"][-7:-4], "220")
             if d["config"] == "TD":
-                raise ValueError("TD Not used at frequency " +
-                                 str(int(d["filter_nu"] / 1e9)) + " GHz")
+                raise ValueError("TD Not used at frequency " + str(int(d["filter_nu"] / 1e9)) + " GHz")
         else:
             raise ValueError("frequency = " + str(int(d["filter_nu"] / 1e9)) + " out of bounds: %.1f - %.1f")
 
@@ -210,20 +208,19 @@ class QubicInstrument(Instrument):
         ripples = d["ripples"]
         nripples = d["nripples"]
 
-        #check if synthetic beam peaks are from file or calculated in peak_angles
-        use_file=d.get(("use_synthbeam_fits_file"))
-        self.use_file=bool(use_file)
-        sbeam=bool(d.get("synthbeam"))
-        
-        if sbeam == False:
-            #Put in a dummy synthetic beam
+        # check if synthetic beam peaks are from file or calculated in peak_angles
+        use_file = d.get(("use_synthbeam_fits_file"))
+        self.use_file = bool(use_file)
+        sbeam = bool(d.get("synthbeam"))
+
+        if not sbeam:
+            # Put in a dummy synthetic beam
             self.sbeam_fits = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
             d["synthbeam"] = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
             print("There is no fits file given in this dictionary. Using analytical model of beam parameters")
-            use_file=False
+            use_file = False
         else:
             self.sbeam_fits = d["synthbeam"]
-
 
         # Choose the primary beam calibration file
         if d["beam_shape"] == "gaussian":
@@ -256,19 +253,11 @@ class QubicInstrument(Instrument):
         self.synthbeam.kmax = synthbeam_kmax
         self.synthbeam_file(d)
 
-        layout = self._get_detector_layout(
-            detector_ngrids,
-            detector_nep,
-            detector_fknee,
-            detector_fslope,
-            detector_ncorr,
-            detector_tau
-        )
+        layout = self._get_detector_layout(detector_ngrids, detector_nep, detector_fknee, detector_fslope, detector_ncorr, detector_tau)
         Instrument.__init__(self, layout)
 
     def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
-        shape, vertex, removed, ordering, quadrant, efficiency = \
-            self.calibration.get("detarray")
+        shape, vertex, removed, ordering, quadrant, efficiency = self.calibration.get("detarray")
         if ngrids == 2:
             shape = (2,) + shape
             vertex = np.array([vertex, vertex])
@@ -276,21 +265,15 @@ class QubicInstrument(Instrument):
             ordering = np.array([ordering, ordering + np.max(ordering) + 1], ordering.dtype)
             quadrant = np.array([quadrant, quadrant + 4], quadrant.dtype)
             efficiency = np.array([efficiency, efficiency])
-        vertex = np.concatenate([vertex, np.full_like(vertex[..., :1],
-                                                      -self.optics.focal_length)], -1)
+        vertex = np.concatenate([vertex, np.full_like(vertex[..., :1], -self.optics.focal_length)], -1)
 
         def theta(self):
-            return np.arctan2(
-                np.sqrt(np.sum(self.center[..., :2] ** 2, axis=-1)),
-                self.center[..., 2])
+            return np.arctan2(np.sqrt(np.sum(self.center[..., :2] ** 2, axis=-1)), self.center[..., 2])
 
         def phi(self):
             return np.arctan2(self.center[..., 1], self.center[..., 0])
 
-        layout = Layout(
-            shape, vertex=vertex, selection=~removed, ordering=ordering,
-            quadrant=quadrant, nep=nep, fknee=fknee, fslope=fslope,
-            tau=tau, theta=theta, phi=phi, efficiency=efficiency)
+        layout = Layout(shape, vertex=vertex, selection=~removed, ordering=ordering, quadrant=quadrant, nep=nep, fknee=fknee, fslope=fslope, tau=tau, theta=theta, phi=phi, efficiency=efficiency)
 
         # assume all detectors have the same area
         layout.area = surface_simple_polygon(layout.vertex[0, :, :2])
@@ -300,29 +283,24 @@ class QubicInstrument(Instrument):
 
     def _init_beams(self, primary, secondary, filter_nu):
         # The beam shape is taken into account
-        nu = filter_nu / 1e9   ### NB: this has been corrected on Nov 17th by JCH before nu was cast into an integer for a mysterious reason
+        nu = filter_nu / 1e9  ### NB: this has been corrected on Nov 17th by JCH before nu was cast into an integer for a mysterious reason
         if primary == "gaussian":
-            PrimBeam = BeamGaussian(
-                np.radians(self.calibration.get("primbeam")), nu=nu)
+            PrimBeam = BeamGaussian(np.radians(self.calibration.get("primbeam")), nu=nu)
         elif primary == "fitted_beam":
             par, omega = self.calibration.get("primbeam")
             PrimBeam = BeamFitted(par, omega, nu=nu)
         elif primary == "multi_freq":
             parth, parfr, parbeam, alpha, xspl = self.calibration.get("primbeam")
-            PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl,
-                                     nu=nu)
+            PrimBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu)
         self.primary_beam = PrimBeam
         if secondary == "gaussian":
-            SecBeam = BeamGaussian(
-                np.radians(self.calibration.get("primbeam")), nu=nu,
-                backward=True)
+            SecBeam = BeamGaussian(np.radians(self.calibration.get("primbeam")), nu=nu, backward=True)
         elif secondary == "fitted_beam":
             par, omega = self.calibration.get("primbeam")
             SecBeam = BeamFitted(par, omega, nu=nu, backward=True)
         elif secondary == "multi_freq":
             parth, parfr, parbeam, alpha, xspl = self.calibration.get("primbeam")
-            SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu,
-                                    backward=True)
+            SecBeam = MultiFreqBeam(parth, parfr, parbeam, alpha, xspl, nu=nu, backward=True)
         self.secondary_beam = SecBeam
 
     def _init_filter(self, nu, relative_bandwidth):
@@ -331,15 +309,9 @@ class QubicInstrument(Instrument):
     def _init_horns(self, filter_nu):
         self.horn = self.calibration.get("hornarray")
         self.horn.radeff = self.horn.radius
-        # In the 150 GHz band, horns are one moded 
+        # In the 150 GHz band, horns are one moded
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
-            kappa = (
-                np.pi
-                * self.horn.radius**2
-                * self.primary_beam.solid_angle
-                * filter_nu**2
-                / c**2
-            )
+            kappa = np.pi * self.horn.radius**2 * self.primary_beam.solid_angle * filter_nu**2 / c**2
             self.horn.radeff = self.horn.radius / np.sqrt(kappa)
 
     def _init_optics(self, polarizer, d):
@@ -351,13 +323,13 @@ class QubicInstrument(Instrument):
         self.optics = optics
 
     def synthbeam_file(self, d):
-        #read in beam peak locations from a fits file
-        thetafits,phifits,valfits,freqs, mheader = self.calibration.get("synthbeam")
+        # read in beam peak locations from a fits file
+        thetafits, phifits, valfits, freqs, mheader = self.calibration.get("synthbeam")
         self.thetafits = thetafits
         self.phifits = phifits
         self.valfits = valfits
         self.freqs = freqs
-        self.numpeaks=np.zeros(10)
+        self.numpeaks = np.zeros(10)
 
     def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
         sb = SyntheticBeam()
@@ -365,26 +337,22 @@ class QubicInstrument(Instrument):
         if not self.ripples:
             sb.peak150 = BeamGaussian(synthbeam_peak150_fwhm)
         else:
-            sb.peak150 = BeamGaussianRippled(synthbeam_peak150_fwhm,
-                                             nripples=self.nripples)
+            sb.peak150 = BeamGaussianRippled(synthbeam_peak150_fwhm, nripples=self.nripples)
         self.synthbeam = sb
 
     def __str__(self):
-        state = [("ngrids", self.detector.ngrids),
-                 ("selection", _compress_mask(~self.detector.all.removed)),
-                 ("synthbeam_fraction", self.synthbeam.fraction),
-                 ("synthbeam_peak150_fwhm_deg",
-                  np.degrees(self.synthbeam.peak150.fwhm)),
-                 ("synthbeam_kmax", self.synthbeam.kmax)]
-        return "Instrument:\n" + \
-               "\n".join(["    " + a + ": " + repr(v) for a, v in state]) + \
-               "\n\nCalibration:\n" + "\n". \
-                   join("    " + l for l in str(self.calibration).splitlines())
+        state = [
+            ("ngrids", self.detector.ngrids),
+            ("selection", _compress_mask(~self.detector.all.removed)),
+            ("synthbeam_fraction", self.synthbeam.fraction),
+            ("synthbeam_peak150_fwhm_deg", np.degrees(self.synthbeam.peak150.fwhm)),
+            ("synthbeam_kmax", self.synthbeam.kmax),
+        ]
+        return "Instrument:\n" + "\n".join(["    " + a + ": " + repr(v) for a, v in state]) + "\n\nCalibration:\n" + "\n".join("    " + letter for letter in str(self.calibration).splitlines())
 
     __repr__ = __str__
 
-    def get_noise(self, sampling, scene, det_noise=True, photon_noise=True, out=None,
-                  operation=operation_assignment):
+    def get_noise(self, sampling, scene, det_noise=True, photon_noise=True, out=None, operation=operation_assignment):
         """
         Return a noisy timeline.
 
@@ -403,9 +371,7 @@ class QubicInstrument(Instrument):
         Return the detector noise (#det, #sampling).
 
         """
-        return Instrument.get_noise(
-            self, sampling, nep=self.detector.nep, fknee=self.detector.fknee,
-            fslope=self.detector.fslope, out=out)
+        return Instrument.get_noise(self, sampling, nep=self.detector.nep, fknee=self.detector.fknee, fslope=self.detector.fslope, out=out)
 
     def get_noise_photon(self, sampling, scene, out=None):
         """
@@ -416,9 +382,8 @@ class QubicInstrument(Instrument):
         return Instrument.get_noise(self, sampling, nep=nep_photon, out=out)
 
     def _get_noise_photon_nep(self, scene):
-        
         """
-        This method computes the NEP photon noise. 
+        This method computes the NEP photon noise.
         It works as follow:
             1st) Load the noise attributes in an object called noise using load_NEP_parameters
                 Some of them are:   . photon power, NEP (empty arrays to be filled)  (P_phot, NEP_phot2)
@@ -454,9 +419,9 @@ class QubicInstrument(Instrument):
 
         # bifurcation for the whole 150 GHz
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            #noise.nu_up = 168e9
+            # noise.nu_up = 168e9
 
-            #Compute NEP contribution from horn array
+            # Compute NEP contribution from horn array
             self.NEP_horns(noise)
 
             ## Environment NEP
@@ -470,17 +435,17 @@ class QubicInstrument(Instrument):
 
             # Dichroic
             if self.config == "FI":
-                #Compute
+                # Compute
                 self.NEP_dichroic(noise)
 
             if noise.emissivities[noise.indf] == 0.0:
                 noise.P_phot[noise.indf] = 0.0
                 noise.NEP_phot2[noise.indf] = 0.0
             else:
-                #Compute NEP neutral density filter
+                # Compute NEP neutral density filter
 
                 self.NEP_neutraldensityfilter(noise)
-            
+
             # The two before last low pass Edges - compute
             self.NEP_lowpassedge(noise, noise.lpe1)
 
@@ -509,23 +474,21 @@ class QubicInstrument(Instrument):
 
             self.NEP_lpefilter_220(noise, noise.lpe2)
 
-            #self.NEP_lastfilters_220(noise) #Old
+            # self.NEP_lastfilters_220(noise) #Old
         # 5.6 cm EDGE (150 GHz) or Band Defining Filter (220 GHZ)
-        
+
         self.NEP_lastfilter(noise)
-        
+
         # Total NEP
         noise.P_phot_tot = np.sum(noise.P_phot, axis=0)
         noise.NEP_tot = np.sqrt(np.sum(noise.NEP_phot2, axis=0) + noise.NEP_phot2_env)
-        
+
         if self.debug:
-            print("Total photon power =  {0:.2e} W".format(noise.P_phot_tot.max()) +
-                  ", Total photon NEP = " + "{0:.2e}".format(noise.NEP_tot.max()) + " W/sqrt(Hz)")
-        
+            print("Total photon power =  {0:.2e} W".format(noise.P_phot_tot.max()) + ", Total photon NEP = " + "{0:.2e}".format(noise.NEP_tot.max()) + " W/sqrt(Hz)")
+
         return noise.NEP_tot
 
     def load_NEP_parameters(self, scene):
-        
         """
         This method loads the parameters for the photon noise (NEP) computation.
         The attributes are loaded into a Noise() class. The attributes are:
@@ -539,7 +502,7 @@ class QubicInstrument(Instrument):
         S_horns: physical horn area,
         S_horns_eff: effective horn area,
         sec_beam: secondary beam QubicInstrument.secondary_beam,
-        
+
         P_phot, NEP_phot: empty arrays to be loaded by NEP-like methods (below),
         indexes for each component,
 
@@ -553,42 +516,37 @@ class QubicInstrument(Instrument):
         T_cmb = scene.temperature
         # to avoid atmospheric emission in room testing
         if T_cmb > 100:
-            em_atm = 0.
+            em_atm = 0.0
         cc = self.optics.components
 
         # Create an object to load and then move the attributes
-        # for photon noise computation 
+        # for photon noise computation
         noise = Noise()
 
         # adding sky components to the photon power and noise sources
         noise.temperatures = np.r_[T_cmb, T_atm, cc["temperature"]]
         noise.transmissions = np.r_[1, tr_atm, cc["transmission"]]
         noise.emissivities = np.r_[1, em_atm, cc["emissivity"]]
-        noise.gp = np.r_[1, 1, cc["nstates_pol"]] # polarization of each component
+        noise.gp = np.r_[1, 1, cc["nstates_pol"]]  # polarization of each component
 
-        n = len(noise.temperatures) # MARTIN: number of optical elements + cmb + atm
-        ndet = len(self.detector) # MARTIN: number of detectors
+        n = len(noise.temperatures)  # MARTIN: number of optical elements + cmb + atm
+        ndet = len(self.detector)  # MARTIN: number of detectors
         # tr_prod : product of transmissions of all components lying
-        # after the present one        
-        noise.tr_prod = np.r_[[np.prod(noise.transmissions[j + 1:]) for j in range(n - 1)], 1]
+        # after the present one
+        noise.tr_prod = np.r_[[np.prod(noise.transmissions[j + 1 :]) for j in range(n - 1)], 1]
         # insures that the noise is comuted for the full bandwidth.
-        if (self.filter.nu <= self.nu1_up) \
-                and (self.filter.nu >= self.nu1_down):
+        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             noise.nu = self.nu1
-        elif (self.filter.nu <= self.nu2_up) \
-                and (self.filter.nu >= self.nu2_down):
+        elif (self.filter.nu <= self.nu2_up) and (self.filter.nu >= self.nu2_down):
             noise.nu = self.nu2
         noise.dnu = noise.nu * self.FRBW
         noise.S_det = self.detector.area
-        noise.omega_det = -self.detector.area / \
-                    self.optics.focal_length ** 2 * \
-                    np.cos(self.detector.theta) ** 3
-        # Physical horn area   
-        noise.S_horns = np.pi * self.horn.radius ** 2 * len(self.horn)
-        # Effective horn area, taking the number of modes into account 
-        noise.S_horns_eff = np.pi * self.horn.radeff ** 2 * len(self.horn)
-        noise.sec_beam = self.secondary_beam(self.detector.theta,
-                                       self.detector.phi)
+        noise.omega_det = -self.detector.area / self.optics.focal_length**2 * np.cos(self.detector.theta) ** 3
+        # Physical horn area
+        noise.S_horns = np.pi * self.horn.radius**2 * len(self.horn)
+        # Effective horn area, taking the number of modes into account
+        noise.S_horns_eff = np.pi * self.horn.radeff**2 * len(self.horn)
+        noise.sec_beam = self.secondary_beam(self.detector.theta, self.detector.phi)
         alpha = np.arctan(0.5)  # half oppening angle of the combiner
         noise.omega_comb = np.pi * (1 - np.cos(alpha) ** 2)  # to be revisited,
         # depends on the detector position
@@ -604,43 +562,48 @@ class QubicInstrument(Instrument):
         for i in range(len(cc)):
             names.append(cc[i][0])
 
-        # Upper frequency for 150GHz channel computation of 
+        # Upper frequency for 150GHz channel computation of
         noise.nu_up = 168e9
-        # Load indexes  
+        # Load indexes
         # components before the horn plane
         noise.ib2b = names.index(b"ba2ba")
-        # Combiner 
+        # Combiner
         # the combiner is the component just after the horns
-        noise.icomb = noise.ib2b + 1  
+        noise.icomb = noise.ib2b + 1
         # Cold stop
         noise.ics = noise.icomb + 1
         # Dichroic
         if self.config == "FI":
             noise.idic = noise.ics + 1
-            #Neutral Density Filter
+            # Neutral Density Filter
             noise.indf = noise.idic + 1
         else:
             noise.indf = noise.ics + 1
-        #Low pass edges
+        # Low pass edges
         noise.lpe1 = noise.indf + 1
         noise.lpe2 = noise.lpe1 + 1
         noise.ilast = noise.lpe2 + 1
 
         noise.names = names
-        
+
         if self.debug:
-            print(self.config, ", central frequency:", int(noise.nu / 1e9), "+-",
-                  int(noise.dnu / 2e9), "GHz, subband:", int(self.filter.nu / 1e9),
-                  "GHz, n_modes =", np.pi * self.horn.radeff ** 2 * \
-                  self.primary_beam.solid_angle * \
-                  self.filter.nu ** 2 / c ** 2)
+            print(
+                self.config,
+                ", central frequency:",
+                int(noise.nu / 1e9),
+                "+-",
+                int(noise.dnu / 2e9),
+                "GHz, subband:",
+                int(self.filter.nu / 1e9),
+                "GHz, n_modes =",
+                np.pi * self.horn.radeff**2 * self.primary_beam.solid_angle * self.filter.nu**2 / c**2,
+            )
             indf = names.index(b"ndf") - 2
             if cc[noise.indf][2] != 1.0:
-                print("Neutral density filter present, trans = ",
-                      cc[indf][2])
+                print("Neutral density filter present, trans = ", cc[indf][2])
             else:
                 print("No neutral density filter")
-        
+
         return noise
 
     def _raise_sampling_error(self, return_only, sampling):
@@ -649,54 +612,60 @@ class QubicInstrument(Instrument):
         but you did not give the sampling.
         """
         if return_only:
-            if sampling == None:
+            if sampling is None:
                 raise ValueError("If you want only a component of the photon noise, I need a qubic sampling to map it (qubic.get_sampling(dictionary)) ")
         else:
             return
 
-    def _raise_debug(self, noisepar, indx,
-                    before_b2b = False,
-                    environment = False):
+    def _raise_debug(self, noisepar, indx, before_b2b=False, environment=False):
         """
         Print information for each component of the noise to easily debug.
 
         Arguments:
             noisepar: parameters for the computation of the noise. It is loaded from
                 load_NEP_parameters method
-            indx: 
+            indx:
                 noise.[index] where "index" correspond to the index of the component
-            before_b2b: 
+            before_b2b:
                 if True, it return the data for all the components before back-to-back horns
             environment:
-                if True, return the NEP environment data    
+                if True, return the NEP environment data
         ===========
-        Return: 
+        Return:
             print statements.
         """
 
         if before_b2b:
             for j in range(noisepar.ib2b):
-                print(noisepar.names[j], ", T=", noisepar.temperatures[j],
-                      "K, P = {0:.2e} W".format(noisepar.P_phot[j].max()),
-                      ", NEP = {0:.2e}".format(np.sqrt(noisepar.NEP_phot2[j]).max()) + "  W/sqrt(Hz)")
+                print(
+                    noisepar.names[j],
+                    ", T=",
+                    noisepar.temperatures[j],
+                    "K, P = {0:.2e} W".format(noisepar.P_phot[j].max()),
+                    ", NEP = {0:.2e}".format(np.sqrt(noisepar.NEP_phot2[j]).max()) + "  W/sqrt(Hz)",
+                )
         else:
             if not environment:
-                print(noisepar.names[indx], ", T=", noisepar.temperatures[indx],
-                      "K, P = {0:.2e} W".format(noisepar.P_phot[indx].max()),
-                      ", NEP = {0:.2e}".format(np.sqrt(noisepar.NEP_phot2[indx]).max()) + "  W/sqrt(Hz)")
+                print(
+                    noisepar.names[indx],
+                    ", T=",
+                    noisepar.temperatures[indx],
+                    "K, P = {0:.2e} W".format(noisepar.P_phot[indx].max()),
+                    ", NEP = {0:.2e}".format(np.sqrt(noisepar.NEP_phot2[indx]).max()) + "  W/sqrt(Hz)",
+                )
             else:
                 # Temperature is the same as the one for back-to-back horns
-                print("Environment T =", noisepar.temperatures[indx],
-                      "K, P = {0:.2e} W".format(noisepar.P_phot_env.max()),
-                      ", NEP = {0:.2e}".format(np.sqrt(noisepar.NEP_phot2_env).max()) + "  W/sqrt(Hz)")
+                print(
+                    "Environment T =",
+                    noisepar.temperatures[indx],
+                    "K, P = {0:.2e} W".format(noisepar.P_phot_env.max()),
+                    ", NEP = {0:.2e}".format(np.sqrt(noisepar.NEP_phot2_env).max()) + "  W/sqrt(Hz)",
+                )
         return
 
-
-
-    def NEP_before_horns(self, noise, nu, 
-                        return_only = False, sampling = None):
+    def NEP_before_horns(self, noise, nu, return_only=False, sampling=None):
         """
-        This method computes the noise for all the components before 
+        This method computes the noise for all the components before
         back-to-back array.
 
         Arguments:
@@ -710,47 +679,38 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot_nobunch"
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
 
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         ib2b = noise.ib2b
-        noise.g[:ib2b] = noise.gp[:ib2b, None] * noise.S_horns_eff * noise.omega_det * (nu / c) ** 2 \
-                   * noise.sec_beam * noise.dnu
-        noise.P_phot[:ib2b] = (noise.emissivities * noise.tr_prod * h * nu /
-                         (np.exp(h * nu / k / noise.temperatures) - 1))[:ib2b, None] * \
-                        noise.g[:ib2b]
+        noise.g[:ib2b] = noise.gp[:ib2b, None] * noise.S_horns_eff * noise.omega_det * (nu / c) ** 2 * noise.sec_beam * noise.dnu
+        noise.P_phot[:ib2b] = (noise.emissivities * noise.tr_prod * h * nu / (np.exp(h * nu / k / noise.temperatures) - 1))[:ib2b, None] * noise.g[:ib2b]
 
         noise.P_phot[:ib2b] = noise.P_phot[:ib2b] * self.detector.efficiency
         noise.NEP_phot2_nobunch[:ib2b] = h * nu * noise.P_phot[:ib2b] * 2
         # note the factor 2 in the definition of the NEP^2
-        noise.NEP_phot2[:ib2b] = noise.NEP_phot2_nobunch[:ib2b] * (1 + noise.P_phot[:ib2b] /
-                                                       (h * nu * noise.g[:ib2b]))
+        noise.NEP_phot2[:ib2b] = noise.NEP_phot2_nobunch[:ib2b] * (1 + noise.P_phot[:ib2b] / (h * nu * noise.g[:ib2b]))
 
-        if self.debug: self._raise_debug(noise, noise.ib2b, 
-                                        before_b2b = True)
+        if self.debug:
+            self._raise_debug(noise, noise.ib2b, before_b2b=True)
 
         if return_only:
-            nep_intern = np.sqrt(np.mean(noise.NEP_phot2[:ib2b], axis = 1))
+            nep_intern = np.sqrt(np.mean(noise.NEP_phot2[:ib2b], axis=1))
             loadsampling = []
             for inep in nep_intern:
-                loadsampling.append(Instrument.get_noise(self, sampling, 
-                                                        nep = inep))
-            return {"power": noise.P_phot[:ib2b],
-                    "NEP_phot2_nobunch": noise.NEP_phot2_nobunch[:ib2b],
-                    "NEP_phot2": noise.NEP_phot2[:ib2b],
-                    "NEP_array": np.array(loadsampling)}
+                loadsampling.append(Instrument.get_noise(self, sampling, nep=inep))
+            return {"power": noise.P_phot[:ib2b], "NEP_phot2_nobunch": noise.NEP_phot2_nobunch[:ib2b], "NEP_phot2": noise.NEP_phot2[:ib2b], "NEP_array": np.array(loadsampling)}
         else:
             return
 
-    def NEP_horns(self, noise, 
-                  return_only = False, sampling = None):
+    def NEP_horns(self, noise, return_only=False, sampling=None):
         """
         This method calculates the noise of the array of horns.
 
@@ -764,60 +724,49 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2" --> NEP squared. shape = (#det,)
-                "NEP_array" --> NEP array sampled. shape = (#det,#samples)                
+                "NEP_array" --> NEP array sampled. shape = (#det,#samples)
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         ib2b = noise.ib2b
-        #150GHz band
+        # 150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            #print("======== 150GHz band horns NEP")
+            # print("======== 150GHz band horns NEP")
             # back to back horns, as seen by the detectors through the combiner
             T = noise.temperatures[ib2b]
             b = h * noise.nu_up / k / T
             I1 = quad(funct, 0, b, (4, 1))[0]
             I2 = quad(funct, 0, b, (4, 2))[0]
             K1 = quad(funct, 0, b, (3, 1))[0]
-            eta = (noise.emissivities * noise.tr_prod)[ib2b] * \
-                                    self.detector.efficiency
+            eta = (noise.emissivities * noise.tr_prod)[ib2b] * self.detector.efficiency
             # Here the physical horn area S_horns must be used
-            noise.NEP_phot2[ib2b] = 2 * noise.gp[ib2b] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
-                              (I1 + eta * I2) * noise.S_horns * noise.omega_det * noise.sec_beam
-            noise.P_phot[ib2b] = noise.gp[ib2b] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * K1 * \
-                           noise.S_horns * noise.omega_det * noise.sec_beam
-        else: #220GHz band
-            # back to back horns, as seen by the detectors through the combiner   
+            noise.NEP_phot2[ib2b] = 2 * noise.gp[ib2b] * eta * (k * T) ** 5 / c**2 / h**3 * (I1 + eta * I2) * noise.S_horns * noise.omega_det * noise.sec_beam
+            noise.P_phot[ib2b] = noise.gp[ib2b] * eta * (k * T) ** 4 / c**2 / h**3 * K1 * noise.S_horns * noise.omega_det * noise.sec_beam
+        else:  # 220GHz band
+            # back to back horns, as seen by the detectors through the combiner
             # Here the physical horn area S_horns must be used
-            noise.g[ib2b] = noise.gp[ib2b, None] * noise.S_horns * noise.omega_det * (self.filter.nu / c) ** 2 * \
-                      noise.sec_beam * noise.dnu
-            #[MARTIN note: tr_prod has the proper indexes? (see eta computation for 150GHz band) ]
-            noise.P_phot[ib2b] = (noise.emissivities * noise.tr_prod * h * self.filter.nu /
-                            (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * \
-                           noise.g[ib2b]
+            noise.g[ib2b] = noise.gp[ib2b, None] * noise.S_horns * noise.omega_det * (self.filter.nu / c) ** 2 * noise.sec_beam * noise.dnu
+            # [MARTIN note: tr_prod has the proper indexes? (see eta computation for 150GHz band) ]
+            noise.P_phot[ib2b] = (noise.emissivities * noise.tr_prod * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * noise.g[ib2b]
             noise.P_phot[ib2b] = noise.P_phot[ib2b] * self.detector.efficiency
             noise.NEP_phot2_nobunch[ib2b] = h * self.filter.nu * noise.P_phot[ib2b] * 2
             # note the factor 2 in the definition of the NEP^2
-            noise.NEP_phot2[ib2b] = noise.NEP_phot2_nobunch[ib2b] * (1 + noise.P_phot[ib2b] /
-                                                         (h * self.filter.nu * noise.g[ib2b]))
-            
-        if self.debug: self._raise_debug(noise, noise.ib2b)
+            noise.NEP_phot2[ib2b] = noise.NEP_phot2_nobunch[ib2b] * (1 + noise.P_phot[ib2b] / (h * self.filter.nu * noise.g[ib2b]))
+
+        if self.debug:
+            self._raise_debug(noise, noise.ib2b)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[ib2b]))
-            return {"power": noise.P_phot[ib2b],
-                    "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[ib2b],
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+            return {"power": noise.P_phot[ib2b], "NEP_phot2_nobunch": None, "NEP_phot2": noise.NEP_phot2[ib2b], "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern)}
         else:
-            return               
+            return
 
-    def NEP_environment(self, noise, names, 
-                        return_only = False, sampling = None):
-
+    def NEP_environment(self, noise, names, return_only=False, sampling=None):
         """
         This method calculates the environment noise.
 
@@ -825,7 +774,7 @@ class QubicInstrument(Instrument):
             noise: parameters for the computation of the noise. It is loaded from
                 load_NEP_parameters method
             names: (noise.names attribute)
-                names of the components considered in the instrument model for the noise.  
+                names of the components considered in the instrument model for the noise.
             return_only:
                 if True, the method returns a dictionary with the components of the noise
                 sampled using sampling in Instrument.get_noise() method from pysimulators
@@ -833,14 +782,14 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2_env" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
-                
+
         """
 
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         ib2b = noise.ib2b
@@ -851,52 +800,42 @@ class QubicInstrument(Instrument):
             I2 = quad(funct, 0, b, (4, 2))[0]
             K1 = quad(funct, 0, b, (3, 1))[0]
 
-            eff_factor = np.prod(noise.transmissions[(len(names) - 4):]) * \
-                         self.detector.efficiency
-            noise.P_phot_env = noise.gp[ib2b] * eff_factor * noise.omega_coldstop * noise.S_det * \
-                         (k * noise.temperatures[ib2b]) ** 4 / c ** 2 / h ** 3 * K1
-            noise.NEP_phot2_env = 4 * noise.omega_coldstop * noise.S_det * \
-                            (k * noise.temperatures[ib2b]) ** 5 / c ** 2 / h ** 3 * \
-                            eff_factor * (I1 + I2 * eff_factor)
+            eff_factor = np.prod(noise.transmissions[(len(names) - 4) :]) * self.detector.efficiency
+            noise.P_phot_env = noise.gp[ib2b] * eff_factor * noise.omega_coldstop * noise.S_det * (k * noise.temperatures[ib2b]) ** 4 / c**2 / h**3 * K1
+            noise.NEP_phot2_env = 4 * noise.omega_coldstop * noise.S_det * (k * noise.temperatures[ib2b]) ** 5 / c**2 / h**3 * eff_factor * (I1 + I2 * eff_factor)
             NEP_phot2_env_nobunch = None
- 
-        else:##220GHz:
-            eff_factor = np.prod(noise.transmissions[(len(names) - 4):]) * \
-                         self.detector.efficiency
-            g_env = noise.gp[ib2b, None] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * \
-                    noise.sec_beam * noise.dnu
-            noise.P_phot_env = (eff_factor * h * self.filter.nu /
-                          (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * \
-                         g_env
+
+        else:  ##220GHz:
+            eff_factor = np.prod(noise.transmissions[(len(names) - 4) :]) * self.detector.efficiency
+            g_env = noise.gp[ib2b, None] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.sec_beam * noise.dnu
+            noise.P_phot_env = (eff_factor * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * g_env
             NEP_phot2_env_nobunch = h * self.filter.nu * noise.P_phot_env * 2
             # note the factor 2 in the definition of the NEP^2
-            noise.NEP_phot2_env = NEP_phot2_env_nobunch * (1 + noise.P_phot_env /
-                                                           (h * self.filter.nu * g_env))
+            noise.NEP_phot2_env = NEP_phot2_env_nobunch * (1 + noise.P_phot_env / (h * self.filter.nu * g_env))
             if self.debug:
-                print("==========================")        
+                print("==========================")
                 print("Shape of NEP_phot2_env_nobunch = ", np.shape(NEP_phot2_env_nobunch))
                 print("Shape of NEP_phot2_env_nobunch = ", np.shape(noise.P_phot_env))
                 print("ib2b", ib2b)
                 print("Value used in current version of qubicsoft", NEP_phot2_env_nobunch[ib2b])
                 print("==========================")
 
-        if self.debug: self._raise_debug(noise, noise.ib2b,
-                                        environment = True)     
+        if self.debug:
+            self._raise_debug(noise, noise.ib2b, environment=True)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2_env[ib2b]))
-            return {"power": noise.P_phot_env,
-                    "NEP_phot2_nobunch": NEP_phot2_env_nobunch,
-                    "NEP_phot2_env": noise.NEP_phot2_env,
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern),
-                    }#"debug_current": NEP_phot2_env_nobunch[ib2b] * (1 + noise.P_phot_env /(h * self.filter.nu * g_env)),
-                    #"debug_new": NEP_phot2_env_nobunch * (1 + noise.P_phot_env / (h * self.filter.nu * g_env))}
+            return {
+                "power": noise.P_phot_env,
+                "NEP_phot2_nobunch": NEP_phot2_env_nobunch,
+                "NEP_phot2_env": noise.NEP_phot2_env,
+                "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern),
+            }  # "debug_current": NEP_phot2_env_nobunch[ib2b] * (1 + noise.P_phot_env /(h * self.filter.nu * g_env)),
+        # "debug_new": NEP_phot2_env_nobunch * (1 + noise.P_phot_env / (h * self.filter.nu * g_env))}
         else:
             return
 
-    def NEP_combiner(self, noise, 
-                    return_only = False, sampling = None):
-
+    def NEP_combiner(self, noise, return_only=False, sampling=None):
         """
         This method calculates the noise of the optical combiner (consider 2 mirrors).
 
@@ -910,56 +849,46 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
-                
+
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         icomb = noise.icomb
-        #150GHz band
+        # 150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             T = noise.temperatures[icomb]
             b = h * noise.nu_up / k / T
             J1 = quad(funct, 0, b, (4, 1))[0]
             J2 = quad(funct, 0, b, (4, 2))[0]
             L1 = quad(funct, 0, b, (3, 1))[0]
-            eta = (noise.emissivities * noise.tr_prod)[icomb] * \
-                                        self.detector.efficiency
-            noise.P_phot[icomb] = noise.gp[icomb] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
-                            noise.S_det * noise.omega_comb * noise.sec_beam
-            noise.NEP_phot2[icomb] = 2 * noise.gp[icomb] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
-                               (J1 + eta * J2) * noise.S_det * noise.omega_comb * noise.sec_beam
+            eta = (noise.emissivities * noise.tr_prod)[icomb] * self.detector.efficiency
+            noise.P_phot[icomb] = noise.gp[icomb] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.S_det * noise.omega_comb * noise.sec_beam
+            noise.NEP_phot2[icomb] = 2 * noise.gp[icomb] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.S_det * noise.omega_comb * noise.sec_beam
 
-        else: #220GHz band
+        else:  # 220GHz band
             noise.g[icomb] = noise.gp[icomb] * noise.S_det * noise.omega_comb * (self.filter.nu / c) ** 2 * noise.dnu
             # The combiner emissivity includes the fact that there are 2
             # mirrors
-            eta = (noise.emissivities * noise.tr_prod)[icomb] * \
-                                        self.detector.efficiency
-            noise.P_phot[icomb] = eta * h * self.filter.nu / \
-                            (np.exp(h * self.filter.nu / k / noise.temperatures[icomb]) - 1) * noise.g[icomb] 
+            eta = (noise.emissivities * noise.tr_prod)[icomb] * self.detector.efficiency
+            noise.P_phot[icomb] = eta * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[icomb]) - 1) * noise.g[icomb]
             noise.NEP_phot2_nobunch[icomb] = h * self.filter.nu * noise.P_phot[icomb] * 2
-            noise.NEP_phot2[icomb] = noise.NEP_phot2_nobunch[icomb] * (1 + noise.P_phot[icomb] /
-                                                           (h * self.filter.nu * noise.g[icomb]))
+            noise.NEP_phot2[icomb] = noise.NEP_phot2_nobunch[icomb] * (1 + noise.P_phot[icomb] / (h * self.filter.nu * noise.g[icomb]))
 
-        if self.debug: self._raise_debug(noise, noise.icomb)
+        if self.debug:
+            self._raise_debug(noise, noise.icomb)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[icomb]))
-            return {"power": noise.P_phot[icomb],
-                    "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[icomb],
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+            return {"power": noise.P_phot[icomb], "NEP_phot2_nobunch": None, "NEP_phot2": noise.NEP_phot2[icomb], "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern)}
         else:
             return
 
-    def NEP_coldstop(self, noise, 
-                    return_only = False, sampling = None):
-
+    def NEP_coldstop(self, noise, return_only=False, sampling=None):
         """
         This method calculates the noise of the cold stop.
 
@@ -973,55 +902,45 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
-                
+
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         ics = noise.ics
-        #150GHz band
+        # 150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             T = noise.temperatures[ics]
             b = h * noise.nu_up / k / T
             J1 = quad(funct, 0, b, (4, 1))[0]
             J2 = quad(funct, 0, b, (4, 2))[0]
             L1 = quad(funct, 0, b, (3, 1))[0]
-            eta = (noise.emissivities * noise.tr_prod)[ics] * \
-                                            self.detector.efficiency
-            
-            noise.NEP_phot2[ics] = 2 * noise.gp[ics] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
-                             (J1 + eta * J2) * noise.S_det * noise.omega_coldstop * noise.sec_beam
-            noise.P_phot[ics] = noise.gp[ics] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
-                          noise.S_det * noise.omega_coldstop * noise.sec_beam
+            eta = (noise.emissivities * noise.tr_prod)[ics] * self.detector.efficiency
 
-        else:#220GHz band
-            eta = noise.emissivities[ics] * noise.tr_prod[ics] * \
-                                            self.detector.efficiency
+            noise.NEP_phot2[ics] = 2 * noise.gp[ics] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.S_det * noise.omega_coldstop * noise.sec_beam
+            noise.P_phot[ics] = noise.gp[ics] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.S_det * noise.omega_coldstop * noise.sec_beam
+
+        else:  # 220GHz band
+            eta = noise.emissivities[ics] * noise.tr_prod[ics] * self.detector.efficiency
             noise.g[ics] = noise.gp[ics] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.dnu
-            noise.P_phot[ics] =  eta * h * self.filter.nu / \
-                          (np.exp(h * self.filter.nu / k / noise.temperatures[ics]) - 1) * noise.g[ics] 
+            noise.P_phot[ics] = eta * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ics]) - 1) * noise.g[ics]
             noise.NEP_phot2_nobunch[ics] = h * self.filter.nu * noise.P_phot[ics] * 2
-            noise.NEP_phot2[ics] = noise.NEP_phot2_nobunch[ics] * (1 + noise.P_phot[ics] /
-                                                       (h * self.filter.nu * noise.g[ics]))
+            noise.NEP_phot2[ics] = noise.NEP_phot2_nobunch[ics] * (1 + noise.P_phot[ics] / (h * self.filter.nu * noise.g[ics]))
 
-        if self.debug: self._raise_debug(noise, noise.ics)
+        if self.debug:
+            self._raise_debug(noise, noise.ics)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[ics]))
-            return {"power": noise.P_phot[ics],
-                    "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[ics],
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+            return {"power": noise.P_phot[ics], "NEP_phot2_nobunch": None, "NEP_phot2": noise.NEP_phot2[ics], "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern)}
         else:
             return
 
-    def NEP_dichroic(self, noise, 
-                    return_only = False, sampling = None):
-
+    def NEP_dichroic(self, noise, return_only=False, sampling=None):
         """
         This method calculates the noise of the dichroic. It's only accounted for the FI configuration.
 
@@ -1035,13 +954,13 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
-                
+
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         idic = noise.idic
@@ -1051,41 +970,31 @@ class QubicInstrument(Instrument):
             J1 = quad(funct, 0, b, (4, 1))[0]
             J2 = quad(funct, 0, b, (4, 2))[0]
             L1 = quad(funct, 0, b, (3, 1))[0]
-            eta = (noise.emissivities * noise.tr_prod)[idic] * \
-                                                self.detector.efficiency
-            noise.g[idic] = noise.gp[idic] * noise.S_det * noise.omega_dichro 
-            noise.P_phot[idic] = noise.g[idic] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
-                                        noise.sec_beam
-            noise.NEP_phot2[idic] = 2 * noise.g[idic] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
-                              (J1 + eta * J2) * noise.sec_beam
-        else: #220GHz
-            eta = (noise.emissivities * noise.tr_prod)[idic] * \
-                                                self.detector.efficiency
+            eta = (noise.emissivities * noise.tr_prod)[idic] * self.detector.efficiency
+            noise.g[idic] = noise.gp[idic] * noise.S_det * noise.omega_dichro
+            noise.P_phot[idic] = noise.g[idic] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.sec_beam
+            noise.NEP_phot2[idic] = 2 * noise.g[idic] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.sec_beam
+        else:  # 220GHz
+            eta = (noise.emissivities * noise.tr_prod)[idic] * self.detector.efficiency
             noise.g[idic] = noise.gp[idic] * noise.S_det * noise.omega_dichro * (noise.nu / c) ** 2 * noise.dnu
-            noise.P_phot[idic] = h * noise.nu / \
-                           (np.exp(h * noise.nu / k / noise.temperatures[idic]) - 1) * noise.g[idic]
+            noise.P_phot[idic] = h * noise.nu / (np.exp(h * noise.nu / k / noise.temperatures[idic]) - 1) * noise.g[idic]
             noise.NEP_phot2_nobunch[idic] = h * noise.nu * noise.P_phot[idic] * 2
-            noise.NEP_phot2[idic] = noise.NEP_phot2_nobunch[idic] * (1 + noise.P_phot[idic] /
-                                                         (h * noise.nu * noise.g[idic]))
+            noise.NEP_phot2[idic] = noise.NEP_phot2_nobunch[idic] * (1 + noise.P_phot[idic] / (h * noise.nu * noise.g[idic]))
 
-        if self.debug: self._raise_debug(noise, noise.idic)
+        if self.debug:
+            self._raise_debug(noise, noise.idic)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[idic]))
-            return {"power": noise.P_phot[idic],
-                    "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[idic],
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+            return {"power": noise.P_phot[idic], "NEP_phot2_nobunch": None, "NEP_phot2": noise.NEP_phot2[idic], "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern)}
         else:
             return
 
-    def NEP_neutraldensityfilter(self, noise, 
-                                return_only = False, sampling = None):
-
+    def NEP_neutraldensityfilter(self, noise, return_only=False, sampling=None):
         """
-        This method calculates the noise of the neutral density filter for 150GHz band. 
+        This method calculates the noise of the neutral density filter for 150GHz band.
         In the case of the 220GHz the ndf is considered in an independent method called NEP_lastfilters_220.
-        
+
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
                 load_NEP_parameters method
@@ -1096,13 +1005,13 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
-                
+
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         indf = noise.indf
@@ -1112,27 +1021,20 @@ class QubicInstrument(Instrument):
         J1 = quad(funct, 0, b, (4, 1))[0]
         J2 = quad(funct, 0, b, (4, 2))[0]
         L1 = quad(funct, 0, b, (3, 1))[0]
-        eta = (noise.emissivities * noise.tr_prod)[indf] * \
-                                            self.detector.efficiency
-        noise.NEP_phot2[indf] = 2 * noise.gp[indf] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
-                          (J1 + eta * J2) * noise.S_det * np.pi * noise.sec_beam
-        noise.P_phot[indf] = noise.gp[indf] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
-                       noise.S_det * np.pi * noise.sec_beam
+        eta = (noise.emissivities * noise.tr_prod)[indf] * self.detector.efficiency
+        noise.NEP_phot2[indf] = 2 * noise.gp[indf] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.S_det * np.pi * noise.sec_beam
+        noise.P_phot[indf] = noise.gp[indf] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.S_det * np.pi * noise.sec_beam
 
-        if self.debug: self._raise_debug(noise, noise.indf)
+        if self.debug:
+            self._raise_debug(noise, noise.indf)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[indf]))
-            return {"power": noise.P_phot[indf],
-                    "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[indf],
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+            return {"power": noise.P_phot[indf], "NEP_phot2_nobunch": None, "NEP_phot2": noise.NEP_phot2[indf], "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern)}
         else:
             return
 
-    def NEP_lowpassedge(self, noise, i, 
-                        return_only = False, sampling = None):
-
+    def NEP_lowpassedge(self, noise, i, return_only=False, sampling=None):
         """
         This method calculates the noise of the low pass edge filter.
         In the case of the 220GHz the ndf is considered in an independent method called NEP_lastfilters_220.
@@ -1148,13 +1050,13 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
-                
+
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         T = noise.temperatures[i]
@@ -1162,27 +1064,20 @@ class QubicInstrument(Instrument):
         J1 = quad(funct, 0, b, (4, 1))[0]
         J2 = quad(funct, 0, b, (4, 2))[0]
         L1 = quad(funct, 0, b, (3, 1))[0]
-        eta = (noise.emissivities * noise.tr_prod)[i] * \
-                                            self.detector.efficiency
-        noise.NEP_phot2[i] = 2 * noise.gp[i] * eta * (k * T) ** 5 / c ** 2 / h ** 3 * \
-                       (J1 + eta * J2) * noise.S_det * np.pi * noise.sec_beam
-        noise.P_phot[i] = noise.gp[i] * eta * (k * T) ** 4 / c ** 2 / h ** 3 * L1 * \
-                    noise.S_det * np.pi * noise.sec_beam
+        eta = (noise.emissivities * noise.tr_prod)[i] * self.detector.efficiency
+        noise.NEP_phot2[i] = 2 * noise.gp[i] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.S_det * np.pi * noise.sec_beam
+        noise.P_phot[i] = noise.gp[i] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.S_det * np.pi * noise.sec_beam
 
-        if self.debug: self._raise_debug(noise, i)
+        if self.debug:
+            self._raise_debug(noise, i)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[i]))
-            return {"power": noise.P_phot[i],
-                    "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[i],
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+            return {"power": noise.P_phot[i], "NEP_phot2_nobunch": None, "NEP_phot2": noise.NEP_phot2[i], "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern)}
         else:
             return
 
-    def NEP_lastfilter(self, noise, 
-                        return_only = False, sampling = None):
-
+    def NEP_lastfilter(self, noise, return_only=False, sampling=None):
         """
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
@@ -1194,36 +1089,31 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
-                
+
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         ilast = noise.ilast
         T = noise.temperatures[ilast]
         eta = noise.emissivities[ilast] * noise.tr_prod[ilast] * self.detector.efficiency
-        noise.P_phot[ilast] = eta * noise.gp[ilast] * noise.S_det * sigma * T ** 4 / 2
-        noise.NEP_phot2[ilast] = eta * 2 * noise.gp[ilast] * noise.S_det * np.pi * (k * T) ** 5 \
-                           / c ** 2 / h ** 3 * (24.9 + eta * 1.1)        
+        noise.P_phot[ilast] = eta * noise.gp[ilast] * noise.S_det * sigma * T**4 / 2
+        noise.NEP_phot2[ilast] = eta * 2 * noise.gp[ilast] * noise.S_det * np.pi * (k * T) ** 5 / c**2 / h**3 * (24.9 + eta * 1.1)
 
-        if self.debug: self._raise_debug(noise, noise.ilast)
+        if self.debug:
+            self._raise_debug(noise, noise.ilast)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[noise.ilast]))
-            return {"power": noise.P_phot[noise.ilast],
-                    "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[noise.ilast],
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+            return {"power": noise.P_phot[noise.ilast], "NEP_phot2_nobunch": None, "NEP_phot2": noise.NEP_phot2[noise.ilast], "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern)}
         else:
             return
 
-    def NEP_lpefilter_220(self, noise, i, 
-                        return_only = False, sampling = None):
-
+    def NEP_lpefilter_220(self, noise, i, return_only=False, sampling=None):
         """
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
@@ -1236,13 +1126,13 @@ class QubicInstrument(Instrument):
             sampling:
                 qubic.get_sampling(dict) object
         return:
-            if return_only --> dictionary with the following keys: 
+            if return_only --> dictionary with the following keys:
                 "power" --> photon power
                 "NEP_phot2" --> NEP squared. shape = (#det,)
                 "NEP_array" --> NEP array sampled. shape = (#det,#samples)
-                
+
         """
-        #Check if there are a sampling array in case you asked for one component of the photon noise  
+        # Check if there are a sampling array in case you asked for one component of the photon noise
         self._raise_sampling_error(return_only, sampling)
 
         if noise.emissivities[i] == 0.0:
@@ -1250,24 +1140,19 @@ class QubicInstrument(Instrument):
             noise.NEP_phot2[i] = 0.0
         else:
             noise.g[i] = noise.gp[i] * noise.S_det * noise.omega_dichro * (self.filter.nu / c) ** 2 * noise.dnu
-            noise.P_phot[i] = noise.emissivities[i] * noise.tr_prod[i] * h * self.filter.nu / \
-                        (np.exp(h * self.filter.nu / k / noise.temperatures[i]) - 1) * noise.g[i] * \
-                        self.detector.efficiency
+            noise.P_phot[i] = noise.emissivities[i] * noise.tr_prod[i] * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[i]) - 1) * noise.g[i] * self.detector.efficiency
             noise.NEP_phot2_nobunch[i] = h * self.filter.nu * noise.P_phot[i] * 2
-            noise.NEP_phot2[i] = noise.NEP_phot2_nobunch[i] * (1 + noise.P_phot[i] /
-                                                   (h * self.filter.nu * noise.g[i]))
+            noise.NEP_phot2[i] = noise.NEP_phot2_nobunch[i] * (1 + noise.P_phot[i] / (h * self.filter.nu * noise.g[i]))
 
-        if self.debug: self._raise_debug(noise, i)
+        if self.debug:
+            self._raise_debug(noise, i)
 
         if return_only:
             nep_intern = np.sqrt(np.mean(noise.NEP_phot2[i]))
-            return {"power": noise.P_phot[i],
-                    "NEP_phot2_nobunch": None,
-                    "NEP_phot2": noise.NEP_phot2[i],
-                    "NEP_array": Instrument.get_noise(self, sampling, nep = nep_intern)}
+            return {"power": noise.P_phot[i], "NEP_phot2_nobunch": None, "NEP_phot2": noise.NEP_phot2[i], "NEP_array": Instrument.get_noise(self, sampling, nep=nep_intern)}
         else:
             return
-    
+
     def get_aperture_integration_operator(self):
         """
         Integrate flux density in the telescope aperture.
@@ -1275,7 +1160,7 @@ class QubicInstrument(Instrument):
 
         """
         nhorns = np.sum(self.horn.open)
-        return HomothetyOperator(nhorns * np.pi * self.horn.radeff ** 2)
+        return HomothetyOperator(nhorns * np.pi * self.horn.radeff**2)
 
     def get_convolution_peak_operator(self, **keywords):
         """
@@ -1285,8 +1170,7 @@ class QubicInstrument(Instrument):
 
         """
         if self.ripples:
-            return ConvolutionRippledGaussianOperator(self.filter.nu,
-                                                      **keywords)
+            return ConvolutionRippledGaussianOperator(self.filter.nu, **keywords)
         fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
         if "ripples" in keywords.keys():
             del keywords["ripples"]
@@ -1298,8 +1182,7 @@ class QubicInstrument(Instrument):
         the secondary beam transmission.
 
         """
-        return QubicInstrument._get_detector_integration_operator(
-            self.detector.center, self.detector.area, self.secondary_beam,self.use_file)
+        return QubicInstrument._get_detector_integration_operator(self.detector.center, self.detector.area, self.secondary_beam, self.use_file)
 
     @staticmethod
     def _get_detector_integration_operator(position, area, secondary_beam, use_file):
@@ -1308,8 +1191,7 @@ class QubicInstrument(Instrument):
         the secondary beam transmission.
 
         """
-        theta = np.arctan2(
-            np.sqrt(np.sum(position[..., :2] ** 2, axis=-1)), position[..., 2])
+        theta = np.arctan2(np.sqrt(np.sum(position[..., :2] ** 2, axis=-1)), position[..., 2])
         phi = np.arctan2(position[..., 1], position[..., 0])
         sr_det = -area / position[..., 2] ** 2 * np.cos(theta) ** 3
         sr_beam = secondary_beam.solid_angle
@@ -1332,8 +1214,7 @@ class QubicInstrument(Instrument):
         shapein = len(self), len(sampling)
         if sampling_period == 0:
             return IdentityOperator(shapein)
-        return ConvolutionTruncatedExponentialOperator(
-            tau / sampling_period, shapein=shapein)
+        return ConvolutionTruncatedExponentialOperator(tau / sampling_period, shapein=shapein)
 
     def get_filter_operator(self):
         """
@@ -1354,20 +1235,15 @@ class QubicInstrument(Instrument):
         if scene.kind == "I":
             return IdentityOperator(shapein=shape)
         if scene.kind == "QU":
-            return Rotation2dOperator(-4 * sampling.angle_hwp,
-                                      degrees=True, shapein=shape + (2,))
-        return Rotation3dOperator("X", -4 * sampling.angle_hwp,
-                                  degrees=True, shapein=shape + (3,))
+            return Rotation2dOperator(-4 * sampling.angle_hwp, degrees=True, shapein=shape + (2,))
+        return Rotation3dOperator("X", -4 * sampling.angle_hwp, degrees=True, shapein=shape + (3,))
 
     def get_invntt_operator(self, sampling):
         """
         Return the inverse time-time noise correlation matrix as an Operator.
 
         """
-        return Instrument.get_invntt_operator(
-            self, sampling, fknee=self.detector.fknee,
-            fslope=self.detector.fslope, ncorr=self.detector.ncorr,
-            nep=self.detector.nep)
+        return Instrument.get_invntt_operator(self, sampling, fknee=self.detector.fknee, fslope=self.detector.fslope, ncorr=self.detector.ncorr, nep=self.detector.nep)
 
     def get_polarizer_operator(self, sampling, scene):
         """
@@ -1385,17 +1261,14 @@ class QubicInstrument(Instrument):
             if self.optics.polarizer:
                 return HomothetyOperator(1 / 2)
             # 1 for the first detector grid and 0 for the second one
-            return DiagonalOperator(1 - grid, shapein=(nd, nt),
-                                    broadcast="rightward")
+            return DiagonalOperator(1 - grid, shapein=(nd, nt), broadcast="rightward")
 
         if not self.optics.polarizer:
-            raise NotImplementedError(
-                "Polarized input is not handled without the polarizer grid.")
+            raise NotImplementedError("Polarized input is not handled without the polarizer grid.")
 
         z = np.zeros(nd)
         data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]
-        return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
-               DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
+        return ReshapeOperator((nd, nt, 1), (nd, nt)) * DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
 
     def get_projection_operator(self, sampling, scene, verbose=True, interp_projection=False):
         """
@@ -1414,7 +1287,7 @@ class QubicInstrument(Instrument):
         """
         horn = getattr(self, "horn", None)
         primary_beam = self.primary_beam
-        #primary_beam = getattr(self, "primary_beam", None)
+        # primary_beam = getattr(self, "primary_beam", None)
 
         if sampling.fix_az:
             rotation = sampling.cartesian_horizontal2instrument
@@ -1422,48 +1295,60 @@ class QubicInstrument(Instrument):
             rotation = sampling.cartesian_galactic2instrument
 
         return QubicInstrument._get_projection_operator(
-            rotation, scene, self.filter.nu, self.detector.center,
-            self.synthbeam, horn, primary_beam, self.thetafits, self.phifits, 
-            self.valfits, self.use_file, self.freqs, interp_projection=interp_projection, verbose=verbose)
+            rotation,
+            scene,
+            self.filter.nu,
+            self.detector.center,
+            self.synthbeam,
+            horn,
+            primary_beam,
+            self.thetafits,
+            self.phifits,
+            self.valfits,
+            self.use_file,
+            self.freqs,
+            interp_projection=interp_projection,
+            verbose=verbose,
+        )
 
-    
     @staticmethod
-    def _get_projection_operator(
-            rotation, scene, nu, position, synthbeam, horn, primary_beam,
-            thetafits, phifits, valfits, use_file, freqs, interp_projection=False, verbose=True):
-
-        if use_file == True and interp_projection:
+    def _get_projection_operator(rotation, scene, nu, position, synthbeam, horn, primary_beam, thetafits, phifits, valfits, use_file, freqs, interp_projection=False, verbose=True):
+        if use_file and interp_projection:
             # Fuse
-            ValueError("'use_file == True' case not implemented for the interpolated projection operator.")
+            ValueError("'use_file is True' case not implemented for the interpolated projection operator.")
 
         ndetectors = position.shape[0]
         ntimes = rotation.data.shape[0]
         nside = scene.nside
 
-        if use_file == True:
-            isfreq=int(np.floor(nu/1e9))
-            frq=len(str(freqs[0]))
-            
-            if (frq <= 4):
-                freqid=np.where(freqs == isfreq)
+        if use_file:
+            isfreq = int(np.floor(nu / 1e9))
+            frq = len(str(freqs[0]))
+
+            if frq <= 4:
+                freqid = np.where(freqs == isfreq)
             else:
-                freqid=np.where(freqs == nu)
-            
-            importshape=np.shape(np.shape(thetafits))
-            
+                freqid = np.where(freqs == nu)
+
+            importshape = np.shape(np.shape(thetafits))
+
             if importshape[0] <= 2:
-                thetas,phis,vals = thetafits, phifits, valfits
+                thetas, phis, vals = thetafits, phifits, valfits
 
             else:
-                thetafits=thetafits[freqid].reshape((np.shape(thetafits)[1],np.shape(thetafits)[2]))
-                phifits=phifits[freqid].reshape((np.shape(phifits)[1],np.shape(phifits)[2]))
-                valfits=valfits[freqid].reshape((np.shape(valfits)[1],np.shape(valfits)[2]))
+                thetafits = thetafits[freqid].reshape((np.shape(thetafits)[1], np.shape(thetafits)[2]))
+                phifits = phifits[freqid].reshape((np.shape(phifits)[1], np.shape(phifits)[2]))
+                valfits = valfits[freqid].reshape((np.shape(valfits)[1], np.shape(valfits)[2]))
 
-                thetas, phis, vals, = thetafits, phifits, valfits
+                (
+                    thetas,
+                    phis,
+                    vals,
+                ) = thetafits, phifits, valfits
                 print("Getting Thetas from Fits File")
-    
+
             thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas, phis, vals, synthbeam)
-        
+
         else:
             # We get info on synthbeam
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
@@ -1480,13 +1365,11 @@ class QubicInstrument(Instrument):
         else:
             dtype_index = np.dtype(np.int32)
 
-        cls = {"I": FSRMatrix,
-               "QU": FSRRotation2dMatrix,
-               "IQU": FSRRotation3dMatrix}[scene.kind]
+        cls = {"I": FSRMatrix, "QU": FSRRotation2dMatrix, "IQU": FSRRotation3dMatrix}[scene.kind]
 
         ndims = len(scene.kind)
         nscene = len(scene)
-        nscenetot = product(scene.shape[:scene.ndim])
+        nscenetot = product(scene.shape[: scene.ndim])
         if nscene != nscenetot and interp_projection:
             # Fuse
             ValueError("'nscene != nscenetot' case not implemented for the interpolated projection operator.")
@@ -1529,40 +1412,28 @@ class QubicInstrument(Instrument):
             pool.map(func_thread, range(ndetectors))
 
         for k in range(nb_interp):
+            s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks, dtype=synthbeam.dtype, dtype_index=dtype_index, verbose=verbose)
 
-            s = cls((ndetectors * ntimes * ndims, nscene * ndims), ncolmax=npeaks,
-                dtype=synthbeam.dtype, dtype_index=dtype_index,
-                verbose=verbose)
-            
             if scene.kind == "I":
                 value = s.data.value.reshape(ndetectors, ntimes, npeaks)
                 if interp_projection:
                     print("The method 'got_projection_operator' with 'interp_projeciton=True' is not yet checked for scene.kind = 'I'.")
-                    value[...] = vals[:, None, :] * weights[:, :, :, k]      # to be checked one day
+                    value[...] = vals[:, None, :] * weights[:, :, :, k]  # to be checked one day
                 else:
                     value[...] = vals[:, None, :]
                 shapeout = (ndetectors, ntimes)
             else:
-                if str(dtype_index) not in ("int32", "int64") or \
-                        str(synthbeam.dtype) not in ("float32", "float64"):
-                    raise TypeError(
-                        "The projection matrix cannot be created with types: {0} a"
-                        "nd {1}.".format(dtype_index, synthbeam.dtype))
-                
-                if interp_projection:
-                    func = "weighted_matrix_rot{0}d_i{1}_r{2}".format(
-                        ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
-                
-                    getattr(flib.polarization, func)(
-                        rotation.data.T, direction.T, s.data.ravel().view(np.int8),
-                        vals.T, weights[:, :, :, k].T)
-                else:
-                    func = "matrix_rot{0}d_i{1}_r{2}".format(
-                        ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
+                if str(dtype_index) not in ("int32", "int64") or str(synthbeam.dtype) not in ("float32", "float64"):
+                    raise TypeError("The projection matrix cannot be created with types: {0} and {1}.".format(dtype_index, synthbeam.dtype))
 
-                    getattr(flib.polarization, func)(
-                        rotation.data.T, direction.T, s.data.ravel().view(np.int8),
-                        vals.T)
+                if interp_projection:
+                    func = "weighted_matrix_rot{0}d_i{1}_r{2}".format(ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
+
+                    getattr(flib.polarization, func)(rotation.data.T, direction.T, s.data.ravel().view(np.int8), vals.T, weights[:, :, :, k].T)
+                else:
+                    func = "matrix_rot{0}d_i{1}_r{2}".format(ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
+
+                    getattr(flib.polarization, func)(rotation.data.T, direction.T, s.data.ravel().view(np.int8), vals.T)
 
                 if scene.kind == "QU":
                     shapeout = (ndetectors, ntimes, 2)
@@ -1576,7 +1447,7 @@ class QubicInstrument(Instrument):
                 total_P = P.copy()
             else:
                 total_P = (total_P.__add__(P)).copy()
-            
+
         return total_P
 
     def get_transmission_operator(self):
@@ -1584,30 +1455,26 @@ class QubicInstrument(Instrument):
         Return the operator that multiplies by the cumulative instrumental
         transmission.
         """
-        return DiagonalOperator(
-            np.product(self.optics.components["transmission"]) *
-            self.detector.efficiency, broadcast="rightward")
+        return DiagonalOperator(np.product(self.optics.components["transmission"]) * self.detector.efficiency, broadcast="rightward")
 
-    def remove_significant_peaks (thetas, phis, vals, synthbeam):
-        
-        #now remove insignificant peaks
+    def remove_significant_peaks(thetas, phis, vals, synthbeam):
+        # now remove insignificant peaks
         vals[~np.isfinite(vals)] = 0
         index = _argsort_reverse(vals)
         thetas = thetas[tuple(index)]
         phis = phis[tuple(index)]
         vals = vals[tuple(index)]
         cumval = np.cumsum(vals, axis=-1)
-        imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None],axis=-1) + 1
-        imax = max(imaxs)
+        imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None], axis=-1) + 1
         # remove additional per-detector non-significant peaks
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
             vals[idet, imax_:] = 0
-            thetas[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
+            thetas[idet, imax_:] = np.pi / 2  # XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
             phis[idet, imax_:] = 0
 
         return thetas, phis, vals
-    
+
     @staticmethod
     def _peak_angles(scene, nu, position, synthbeam, horn, primary_beam):
         """
@@ -1615,8 +1482,7 @@ class QubicInstrument(Instrument):
         accounts for a specified energy fraction.
 
         """
-        theta, phi = QubicInstrument._peak_angles_kmax(
-            synthbeam.kmax, horn.spacing, horn.angle, nu, position)
+        theta, phi = QubicInstrument._peak_angles_kmax(synthbeam.kmax, horn.spacing, horn.angle, nu, position)
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
         index = _argsort_reverse(val)
@@ -1626,10 +1492,9 @@ class QubicInstrument(Instrument):
         val = val[tuple(index)]
 
         cumval = np.cumsum(val, axis=-1)
-        imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None],
-                          axis=-1) + 1
+        imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None], axis=-1) + 1
         imax = max(imaxs)
-        
+
         # slice initial arrays to discard the non-significant peaks
         theta = theta[:, :imax]
         phi = phi[:, :imax]
@@ -1666,21 +1531,20 @@ class QubicInstrument(Instrument):
             peaks are computed.
         """
         lmbda = c / nu
-        position = -position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
-        
+        position = -position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
+
         if angle != 0:
             angle = np.radians(angle)
-            _kx, _ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
+            _kx, _ky = np.mgrid[-kmax : kmax + 1, -kmax : kmax + 1]
             kx = _kx * np.cos(angle) - _ky * np.sin(angle)
             ky = _kx * np.sin(angle) + _ky * np.cos(angle)
         else:
-            kx, ky = np.mgrid[-kmax:kmax + 1, -kmax:kmax + 1]
-        
+            kx, ky = np.mgrid[-kmax : kmax + 1, -kmax : kmax + 1]
+
         nx = position[:, 0, None] - lmbda * kx.ravel() / horn_spacing
         ny = position[:, 1, None] - lmbda * ky.ravel() / horn_spacing
         local_dict = {"nx": nx, "ny": ny}
-        theta = ne.evaluate("arcsin(sqrt(nx**2 + ny**2))",
-                            local_dict=local_dict)
+        theta = ne.evaluate("arcsin(sqrt(nx**2 + ny**2))", local_dict=local_dict)
         phi = ne.evaluate("arctan2(ny, nx)", local_dict=local_dict)
         return theta, phi
 
@@ -1719,11 +1583,10 @@ class QubicInstrument(Instrument):
 
         """
         if external_A is None:
-            uvec = position / np.sqrt(np.sum(position ** 2, axis=-1))[..., None]
+            uvec = position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
             thetaphi = Cartesian2SphericalOperator("zenith,azimuth")(uvec)
-            sr = - area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3
-            tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) *
-                         sr / secondary_beam.solid_angle)[..., None]
+            sr = -area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3
+            tr = np.sqrt(secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) * sr / secondary_beam.solid_angle)[..., None]
             const = 2j * np.pi * nu / c
             product = np.dot(uvec, horn[horn.open].center.T)
             return ne.evaluate("tr * exp(const * product)")
@@ -1772,16 +1635,14 @@ class QubicInstrument(Instrument):
         shape = np.broadcast(theta, phi, spectral_irradiance).shape
         theta, phi, spectral_irradiance = [np.ravel(_) for _ in [theta, phi, spectral_irradiance]]
         uvec = hp.ang2vec(theta, phi)
-        source_E = np.sqrt(spectral_irradiance *
-                           primary_beam(theta, phi) * np.pi * horn.radeff ** 2)
+        source_E = np.sqrt(spectral_irradiance * primary_beam(theta, phi) * np.pi * horn.radeff**2)
         const = 2j * np.pi * nu / c
         product = np.dot(horn[horn.open].center, uvec.T)
         out = ne.evaluate("source_E * exp(const * product)")
         return out.reshape((-1,) + shape)
 
     @staticmethod
-    def _get_response(theta, phi, spectral_irradiance, position, area, nu,
-                      horn, primary_beam, secondary_beam, external_A=None, hwp_position=0):
+    def _get_response(theta, phi, spectral_irradiance, position, area, nu, horn, primary_beam, secondary_beam, external_A=None, hwp_position=0):
         """
         Return the monochromatic complex field [(W/Hz)^(1/2)] related to
         the electric field over a specified area of the focal plane created
@@ -1827,18 +1688,13 @@ class QubicInstrument(Instrument):
             area of the focal plane, in units of (W/Hz)^(1/2).
 
         """
-        A = QubicInstrument._get_response_A(
-            position, area, nu, horn, secondary_beam, external_A=external_A, hwp_position=hwp_position)
-        B = QubicInstrument._get_response_B(
-            theta, phi, spectral_irradiance, nu, horn, primary_beam)
-        E = np.dot(A, B.reshape((B.shape[0], -1))).reshape(
-            A.shape[:-1] + B.shape[1:])
+        A = QubicInstrument._get_response_A(position, area, nu, horn, secondary_beam, external_A=external_A, hwp_position=hwp_position)
+        B = QubicInstrument._get_response_B(theta, phi, spectral_irradiance, nu, horn, primary_beam)
+        E = np.dot(A, B.reshape((B.shape[0], -1))).reshape(A.shape[:-1] + B.shape[1:])
         return E
 
     @staticmethod
-    def _get_synthbeam(scene, position, area, nu, bandwidth, horn,
-                       primary_beam, secondary_beam, synthbeam_dtype=np.float32,
-                       theta_max=45, external_A=None, hwp_position=0):
+    def _get_synthbeam(scene, position, area, nu, bandwidth, horn, primary_beam, secondary_beam, synthbeam_dtype=np.float32, theta_max=45, external_A=None, hwp_position=0):
         """
         Return the monochromatic synthetic beam for a specified location
         on the focal plane, multiplied by a given area and bandwidth.
@@ -1888,19 +1744,15 @@ class QubicInstrument(Instrument):
         npix = len(index)
         nbytes_B = npix * nhorn * 24
         ngroup = int(np.ceil(nbytes_B / MAX_MEMORY_B))
-        out = np.zeros(position.shape[:-1] + (len(scene),),
-                       dtype=synthbeam_dtype)
+        out = np.zeros(position.shape[:-1] + (len(scene),), dtype=synthbeam_dtype)
         for s in split(npix, ngroup):
             index_ = index[s]
-            sb = QubicInstrument._get_response(
-                theta[index_], phi[index_], bandwidth, position, area, nu,
-                horn, primary_beam, secondary_beam, external_A=external_A, hwp_position=hwp_position)
-            #out[..., index_] = abs2(sb, dtype=synthbeam_dtype)
-            out[..., index_] = np.real(sb)**2 + np.imag(sb)**2
+            sb = QubicInstrument._get_response(theta[index_], phi[index_], bandwidth, position, area, nu, horn, primary_beam, secondary_beam, external_A=external_A, hwp_position=hwp_position)
+            # out[..., index_] = abs2(sb, dtype=synthbeam_dtype)
+            out[..., index_] = np.real(sb) ** 2 + np.imag(sb) ** 2
         return out
 
-    def get_synthbeam(self, scene, idet=None, theta_max=45, external_A=None, hwp_position=0,
-                      detector_integrate=None, detpos=None):
+    def get_synthbeam(self, scene, idet=None, theta_max=45, external_A=None, hwp_position=0, detector_integrate=None, detpos=None):
         """
         Return the detector synthetic beams, computed from the superposition
         of the electromagnetic fields.
@@ -1944,7 +1796,7 @@ class QubicInstrument(Instrument):
         detector_integrate: Optional, number of subpixels in x direction for integration over detectors
             default (None) is no integration => uses the center of the pixel
         detpos: Optional, position in the focal plane at which the Synthesized Beam is desired as np.array([x,y,z])
-        
+
 
         """
         if detpos is None:
@@ -1953,13 +1805,22 @@ class QubicInstrument(Instrument):
             pos = detpos
 
         if (idet is not None) and (detpos is None):
-            return self[idet].get_synthbeam(scene, theta_max=theta_max, external_A=external_A,
-                                            hwp_position=hwp_position, detector_integrate=detector_integrate)[0]
+            return self[idet].get_synthbeam(scene, theta_max=theta_max, external_A=external_A, hwp_position=hwp_position, detector_integrate=detector_integrate)[0]
         if detector_integrate is None:
             return QubicInstrument._get_synthbeam(
-                scene, pos, self.detector.area, self.filter.nu,
-                self.filter.bandwidth, self.horn, self.primary_beam,
-                self.secondary_beam, self.synthbeam.dtype, theta_max, external_A=external_A, hwp_position=hwp_position)
+                scene,
+                pos,
+                self.detector.area,
+                self.filter.nu,
+                self.filter.bandwidth,
+                self.horn,
+                self.primary_beam,
+                self.secondary_beam,
+                self.synthbeam.dtype,
+                theta_max,
+                external_A=external_A,
+                hwp_position=hwp_position,
+            )
         else:
             xmin = np.min(self.detector.vertex[..., 0:1])
             xmax = np.max(self.detector.vertex[..., 0:1])
@@ -1973,11 +1834,23 @@ class QubicInstrument(Instrument):
                     pos = self.detector.center
                     pos[0][0] = allx[i]
                     pos[0][1] = ally[j]
-                    sb += QubicInstrument._get_synthbeam(
-                        scene, pos, self.detector.area, self.filter.nu,
-                        self.filter.bandwidth, self.horn, self.primary_beam,
-                        self.secondary_beam, self.synthbeam.dtype, theta_max,
-                        external_A=external_A, hwp_position=hwp_position) / detector_integrate ** 2
+                    sb += (
+                        QubicInstrument._get_synthbeam(
+                            scene,
+                            pos,
+                            self.detector.area,
+                            self.filter.nu,
+                            self.filter.bandwidth,
+                            self.horn,
+                            self.primary_beam,
+                            self.secondary_beam,
+                            self.synthbeam.dtype,
+                            theta_max,
+                            external_A=external_A,
+                            hwp_position=hwp_position,
+                        )
+                        / detector_integrate**2
+                    )
             return sb
 
     def detector_subset(self, dets):
@@ -1991,6 +1864,7 @@ def _argsort_reverse(a, axis=-1):
     i[axis] = a.argsort(axis)[:, ::-1]
     return i
 
+
 def _pack_vector(*args):
     shape = np.broadcast(*args).shape
     out = np.empty(shape + (len(args),))
@@ -1998,39 +1872,37 @@ def _pack_vector(*args):
         out[..., i] = arg
     return out
 
+
 class QubicMultibandInstrument:
     """
     The QubicMultibandInstrument class
-    Represents the QUBIC multiband features 
+    Represents the QUBIC multiband features
     as an array of QubicInstrumet objects
     """
 
     def __init__(self, d):
-
         """
         filter_nus -- base frequencies array
-        filter_relative_bandwidths -- array of relative bandwidths 
+        filter_relative_bandwidths -- array of relative bandwidths
         center_detector -- bolean, optional
         if True, take only one detector at the centre of the focal plane
             Needed to study the synthesised beam
         """
-        
+
         self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
         self.d = d
         d1 = d.copy()
-        
+
         self.subinstruments = []
 
         ### Monochromatic
         if d["nf_sub"] == 1:
             band = d["filter_nu"]
 
-            _, _, filter_nus, deltas, _, _ = compute_freq(band,
-                                                        d["nf_sub"],
-                                                        d["filter_relative_bandwidth"])
-            
+            _, _, filter_nus, deltas, _, _ = compute_freq(band, d["nf_sub"], d["filter_relative_bandwidth"])
+
             nsubbands = len(filter_nus)
-            
+
             if not d["center_detector"]:
                 for i in range(nsubbands):
                     d1["filter_nu"] = filter_nus[i] * 1e9
@@ -2041,9 +1913,9 @@ class QubicMultibandInstrument:
                     d1["filter_nu"] = filter_nus[i] * 1e9
                     d1["filter_relative_bandwidth"] = deltas[i] / filter_nus[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)
-                    q.detector.center = np.array([[0., 0., -0.3]])
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
                     self.subinstruments.append(q)
-        
+
         # elif d["nf_sub"] == 1 and d["type_instrument"] == "wide":
 
         #     _, _, filter_nus150, deltas150, _, _ = compute_freq(150,
@@ -2052,9 +1924,9 @@ class QubicMultibandInstrument:
         #     _, _, filter_nus220, deltas220, _, _ = compute_freq(220,
         #                                                                 int(d["nf_sub"]/2),
         #                                                                 0.25)
-            
+
         #     nsubbands = len(filter_nus150)
-                                    
+
         #     if not d["center_detector"]:
         #         # 150 GHz
         #         for i in range(nsubbands):
@@ -2075,16 +1947,12 @@ class QubicMultibandInstrument:
         #             q = QubicInstrument(d1, FRBW=self.FRBW)
         #             q.detector.center = np.array([[0., 0., -0.3]])
         #             self.subinstruments.append(q)
-                    
+
         ### Multichromatic
         else:
-            _, _, filter_nus150, deltas150, _, _ = compute_freq(150,
-                                                                        int(d["nf_sub"]/2),
-                                                                        0.25)
-                        
-            _, _, filter_nus220, deltas220, _, _ = compute_freq(220,
-                                                                        int(d["nf_sub"]/2),
-                                                                        0.25)
+            _, _, filter_nus150, deltas150, _, _ = compute_freq(150, int(d["nf_sub"] / 2), 0.25)
+
+            _, _, filter_nus220, deltas220, _, _ = compute_freq(220, int(d["nf_sub"] / 2), 0.25)
 
             nsubbands = len(filter_nus150)
 
@@ -2092,23 +1960,22 @@ class QubicMultibandInstrument:
                 if self.d["debug"]:
                     print(f"Integration done with nu = {filter_nus150[i]} GHz with weight {deltas150[i]}")
                 d1["filter_nu"] = filter_nus150[i] * 1e9
-                d1["filter_relative_bandwidth"] = deltas150[i]/filter_nus150[i]
+                d1["filter_relative_bandwidth"] = deltas150[i] / filter_nus150[i]
                 q = QubicInstrument(d1, FRBW=self.FRBW)
                 if d["center_detector"]:
-                    q.detector.center = np.array([[0., 0., -0.3]])
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
                 self.subinstruments.append(q)
 
             for i in range(nsubbands):
                 if self.d["debug"]:
                     print(f"Integration done with nu = {filter_nus220[i]} GHz with weight {deltas220[i]}")
                 d1["filter_nu"] = filter_nus220[i] * 1e9
-                d1["filter_relative_bandwidth"] = deltas220[i]/filter_nus220[i]
+                d1["filter_relative_bandwidth"] = deltas220[i] / filter_nus220[i]
                 q = QubicInstrument(d1, FRBW=self.FRBW)
                 if d["center_detector"]:
-                    q.detector.center = np.array([[0., 0., -0.3]])
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
                 self.subinstruments.append(q)
-                
-            
+
     def __getitem__(self, i):
         return self.subinstruments[i]
 
@@ -2116,9 +1983,7 @@ class QubicMultibandInstrument:
         return len(self.subinstruments)
 
     def get_synthbeam(self, scene, idet=None, theta_max=45, detector_integrate=None, detpos=None):
-        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max,
-                                           detector_integrate=detector_integrate, detpos=detpos),
-                 self.subinstruments)
+        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max, detector_integrate=detector_integrate, detpos=detpos), self.subinstruments)
         sb = np.array(sb)
         bw = np.zeros(len(self))
         for i in range(len(self)):
@@ -2131,18 +1996,11 @@ class QubicMultibandInstrument:
         synthbeam = [q.synthbeam for q in self.subinstruments]
         for i in range(len(synthbeam)):
             synthbeam[i].kmax = 4
-        sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu,
-                                                              self[i][idet].detector.center,
-                                                              synthbeam[i],
-                                                              self[i].horn,
-                                                              self[i].primary_beam),
-                       range(len(self)))
+        sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu, self[i][idet].detector.center, synthbeam[i], self[i].horn, self[i].primary_beam), range(len(self)))
 
         def peaks_to_map(peaks):
             m = np.zeros(hp.nside2npix(scene.nside))
-            m[hp.ang2pix(scene.nside,
-                         peaks[0],
-                         peaks[1])] = peaks[2]
+            m[hp.ang2pix(scene.nside, peaks[0], peaks[1])] = peaks[2]
             return m
 
         sb = map(peaks_to_map, sb_peaks)
@@ -2158,39 +2016,37 @@ class QubicMultibandInstrument:
             subset_inst[i].detector = self[i].detector[dets]
         return subset_inst
 
+
 class QubicMultibandInstrumentTrapezoidalIntegration:
     """
     The QubicMultibandInstrument class
-    Represents the QUBIC multiband features 
+    Represents the QUBIC multiband features
     as an array of QubicInstrumet objects
     """
 
     def __init__(self, d):
-
         """
         filter_nus -- base frequencies array
-        filter_relative_bandwidths -- array of relative bandwidths 
+        filter_relative_bandwidths -- array of relative bandwidths
         center_detector -- bolean, optional
         if True, take only one detector at the centre of the focal plane
             Needed to study the synthesised beam
         """
-        
+
         self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
         self.d = d
         d1 = d.copy()
-        
+
         self.subinstruments = []
 
         ### Monochromatic
         if d["nf_sub"] == 1:
             band = d["filter_nu"]
 
-            _, _, filter_nus, deltas, _, __annotations__ = compute_freq(band,
-                                                                        d["nf_sub"],
-                                                                        d["filter_relative_bandwidth"])
-            
+            _, _, filter_nus, deltas, _, __annotations__ = compute_freq(band, d["nf_sub"], d["filter_relative_bandwidth"])
+
             nsubbands = len(filter_nus)
-            
+
             if not d["center_detector"]:
                 for i in range(nsubbands):
                     d1["filter_nu"] = filter_nus[i] * 1e9
@@ -2201,9 +2057,9 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
                     d1["filter_nu"] = filter_nus[i] * 1e9
                     d1["filter_relative_bandwidth"] = deltas[i] / filter_nus[i]
                     q = QubicInstrument(d1, FRBW=self.FRBW)
-                    q.detector.center = np.array([[0., 0., -0.3]])
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
                     self.subinstruments.append(q)
-        
+
         # elif d["nf_sub"] == 1 and d["type_instrument"] == "wide":
 
         #     _, _, filter_nus150, deltas150, _, _ = compute_freq(150,
@@ -2212,9 +2068,9 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         #     _, _, filter_nus220, deltas220, _, _ = compute_freq(220,
         #                                                                 int(d["nf_sub"]/2),
         #                                                                 0.25)
-                        
+
         #     nsubbands = len(filter_nus150)
-            
+
         #     if not d["center_detector"]:
         #         # 150 GHz
         #         for i in range(nsubbands):
@@ -2235,38 +2091,34 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         #             q = QubicInstrument(d1, FRBW=self.FRBW)
         #             q.detector.center = np.array([[0., 0., -0.3]])
         #             self.subinstruments.append(q)
-                    
+
         ### Multichromatic
         else:
-            _, nus_edge150, _, _, _, _ = compute_freq(150,
-                                                                        int(d["nf_sub"]/2 - 1),
-                                                                        0.25)
-                        
-            _, nus_edge220, _, _, _, _ = compute_freq(220,
-                                                                        int(d["nf_sub"]/2 - 1),
-                                                                        0.25)  
-            
-            nsubbands = len(nus_edge150)          
-            
+            _, nus_edge150, _, _, _, _ = compute_freq(150, int(d["nf_sub"] / 2 - 1), 0.25)
+
+            _, nus_edge220, _, _, _, _ = compute_freq(220, int(d["nf_sub"] / 2 - 1), 0.25)
+
+            nsubbands = len(nus_edge150)
+
             W150 = IntegrationTrapezeOperator(nus_edge150)
             W220 = IntegrationTrapezeOperator(nus_edge220)
-                        
+
             for i in range(nsubbands):
                 d1["filter_nu"] = nus_edge150[i] * 1e9
-                d1["filter_relative_bandwidth"] = W150.operands[i].todense(shapein=1)[0][0]/nus_edge150[i]
+                d1["filter_relative_bandwidth"] = W150.operands[i].todense(shapein=1)[0][0] / nus_edge150[i]
                 q = QubicInstrument(d1, FRBW=self.FRBW)
                 if d["center_detector"]:
-                    q.detector.center = np.array([[0., 0., -0.3]])
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
                 self.subinstruments.append(q)
 
             for i in range(nsubbands):
                 d1["filter_nu"] = nus_edge220[i] * 1e9
-                d1["filter_relative_bandwidth"] = W220.operands[i].todense(shapein=1)[0][0]/nus_edge220[i]
+                d1["filter_relative_bandwidth"] = W220.operands[i].todense(shapein=1)[0][0] / nus_edge220[i]
                 q = QubicInstrument(d1, FRBW=self.FRBW)
                 if d["center_detector"]:
-                    q.detector.center = np.array([[0., 0., -0.3]])
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]])
                 self.subinstruments.append(q)
-            
+
     def __getitem__(self, i):
         return self.subinstruments[i]
 
@@ -2274,9 +2126,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         return len(self.subinstruments)
 
     def get_synthbeam(self, scene, idet=None, theta_max=45, detector_integrate=None, detpos=None):
-        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max,
-                                           detector_integrate=detector_integrate, detpos=detpos),
-                 self.subinstruments)
+        sb = map(lambda i: i.get_synthbeam(scene, idet, theta_max, detector_integrate=detector_integrate, detpos=detpos), self.subinstruments)
         sb = np.array(sb)
         bw = np.zeros(len(self))
         for i in range(len(self)):
@@ -2289,18 +2139,11 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         synthbeam = [q.synthbeam for q in self.subinstruments]
         for i in range(len(synthbeam)):
             synthbeam[i].kmax = 4
-        sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu,
-                                                              self[i][idet].detector.center,
-                                                              synthbeam[i],
-                                                              self[i].horn,
-                                                              self[i].primary_beam),
-                       range(len(self)))
+        sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu, self[i][idet].detector.center, synthbeam[i], self[i].horn, self[i].primary_beam), range(len(self)))
 
         def peaks_to_map(peaks):
             m = np.zeros(hp.nside2npix(scene.nside))
-            m[hp.ang2pix(scene.nside,
-                         peaks[0],
-                         peaks[1])] = peaks[2]
+            m[hp.ang2pix(scene.nside, peaks[0], peaks[1])] = peaks[2]
             return m
 
         sb = map(peaks_to_map, sb_peaks)
@@ -2315,4 +2158,3 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         for i in range(len(subset_inst)):
             subset_inst[i].detector = self[i].detector[dets]
         return subset_inst
-

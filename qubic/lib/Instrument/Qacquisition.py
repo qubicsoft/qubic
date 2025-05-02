@@ -1,17 +1,17 @@
-# QUBIC stuff
 import pickle
 import warnings
 
-# General stuff
 import healpy as hp
 import numpy as np
-
-warnings.filterwarnings("ignore")
-
 import pysm3.units as u
-
-# FG-Buster packages
 from fgbuster.mixingmatrix import MixingMatrix
+from lib.Instrument.Qinstrument import (
+    QubicInstrument,
+    QubicMultibandInstrument,
+    compute_freq,
+)
+from lib.Qsamplings import get_pointing
+from lib.Qscene import QubicScene
 from pyoperators import (
     MPI,
     AdditionOperator,
@@ -23,25 +23,30 @@ from pyoperators import (
     DenseOperator,
     DiagonalOperator,
     IdentityOperator,
-    IntegrationTrapezeOperator,
     MPIDistributionIdentityOperator,
     Operator,
     PackOperator,
     ReshapeOperator,
     rule_manager,
 )
-from pysimulators import *
+from pysimulators import (
+    Acquisition,
+    FitsArray,
+    I,
+    SymmetricBandToeplitzOperator,
+    _fold_psd,
+    _gaussian_psd_1f,
+    _logloginterp_psd,
+    _psd2invntt,
+    _unfold_psd,
+    as_mpi,
+    proxy_group,
+)
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 from qubic.data import PATH
 
-from ..Qsamplings import get_pointing
-from ..Qscene import QubicScene
-from .Qinstrument import (
-    QubicInstrument,
-    QubicMultibandInstrument,
-    compute_freq,
-)
+warnings.filterwarnings("ignore")
 
 
 def arcmin2rad(arcmin):
@@ -694,21 +699,21 @@ class QubicMultiAcquisitions:
         ### Compute pointing matrix
         self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.dict) for i in range(len(self.multiinstrument))]
 
-        ### CO line emission
-        if nu_co is not None:
-            dmono = self.dict.copy()
-            dmono["filter_nu"] = nu_co * 1e9
+        # ### CO line emission
+        # if nu_co is not None:
+        #     dmono = self.dict.copy()
+        #     dmono["filter_nu"] = nu_co * 1e9
 
-            w = IntegrationTrapezeOperator(allnus_edges_220)
-            deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
+        #     w = IntegrationTrapezeOperator(allnus_edges_220)
+        #     deltas_trap = np.array([w.operands[i].todense(shapein=1)[0][0] for i in range(len(allnus_edges_220))]).max()
 
-            dmono["filter_relative_bandwidth"] = 0.05  #
+        #     dmono["filter_relative_bandwidth"] = 0.05  #
 
-            instrument_co = QubicInstrument(dmono, FRBW=0.25)
-            self.multiinstrument.subinstruments += [instrument_co]
-            self.subacqs += [QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)]
+        #     instrument_co = QubicInstrument(dmono, FRBW=0.25)
+        #     self.multiinstrument.subinstruments += [instrument_co]
+        #     self.subacqs += [QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)]
 
-            self.allnus = np.append(self.allnus, nu_co)
+        #     self.allnus = np.append(self.allnus, nu_co)
 
         for acq in self.subacqs:
             acq.comm = self.subacqs[0].comm
@@ -1418,7 +1423,7 @@ class JointAcquisitionComponentsMapMaking:
 
         try:
             mpidist = self.qubic.mpidist
-        except:
+        except Exception:
             mpidist = None
 
         He = self.external.get_operator(A=Ap, convolution=False, comm=mpidist, nu_co=nu_co)

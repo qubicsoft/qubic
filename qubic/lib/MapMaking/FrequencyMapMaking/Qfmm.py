@@ -7,22 +7,19 @@ import healpy as hp
 import numpy as np
 import yaml
 from fgbuster.component_model import CMB, Dust, Synchrotron
+from lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
+from lib.Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
+from lib.MapMaking.Qcg import pcg
+from lib.MapMaking.Qmap_plotter import PlotsFMM
+from lib.MapMaking.Qmaps import InputMaps, PlanckMaps
+from lib.Qdictionary import qubicDict
+from lib.Qfoldertools import create_folder_if_not_exists, do_gif
+from lib.Qmpi_tools import MpiTools
+from lib.Qsamplings import equ2gal
+from lib.Qspectra import Spectra
 from pyoperators import DiagonalOperator, ReshapeOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
-
-from ...Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
-from ...Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
-from ...Qdictionary import qubicDict
-from ...Qfoldertools import create_folder_if_not_exists, do_gif
-from ...Qmpi_tools import MpiTools
-
-### Lib directory
-from ...Qsamplings import equ2gal
-from ...Qspectra import Spectra
-from ..Qcg import pcg
-from ..Qmap_plotter import PlotsFMM
-from ..Qmaps import InputMaps, PlanckMaps
 
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
 
@@ -420,11 +417,15 @@ class PipelineFrequencyMapMaking:
             if self.params["Foregrounds"]["Dust"]:
                 f_dust = Dust(nu0=353, beta_d=1.54, temp=20)
                 weight_factor = f_dust.eval(self.joint.qubic.allnus)
-                fun = lambda nu: np.abs(fraction - f_dust.eval(nu))
+
+                def fun(nu):
+                    return np.abs(fraction - f_dust.eval(nu))
             else:
                 f_cmb = CMB()
                 weight_factor = f_cmb.eval(self.joint.qubic.allnus)
-                fun = lambda nu: np.abs(fraction - f_cmb.eval(nu))
+
+                def fun(nu):
+                    return np.abs(fraction - f_cmb.eval(nu))
 
             ### Compute expected resolutions and frequencies when not adding convolutions during reconstruction
             ### See FMM annexe B to understand the computations
@@ -545,7 +546,7 @@ class PipelineFrequencyMapMaking:
             sh_q = self.joint.qubic.ndets * self.joint.qubic.nsamples
             TOD_QUBIC = self.H_in_qubic(self.maps_input.m_nu).ravel() + self.noiseq
 
-            if self.params["PLANCK"]["external_data"] == False:
+            if not self.params["PLANCK"]["external_data"]:
                 TOD = TOD_QUBIC
             else:
                 TOD_QUBIC150 = TOD_QUBIC[:sh_q].copy()

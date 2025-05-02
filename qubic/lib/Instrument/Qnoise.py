@@ -1,10 +1,9 @@
 import numpy as np
+from lib.Instrument.Qacquisition import QubicIntegrated
+from lib.Qdictionary import qubicDict
 
-from .Qacquisition import QubicIntegrated
-from ..Qdictionary import qubicDict
 
 class QubicNoise:
-
     def __init__(
         self,
         band,
@@ -15,15 +14,14 @@ class QubicNoise:
         seed_noise=None,
         duration=3,
     ):
-
         if band != 150 and band != 220:
             raise TypeError("Please choose the QubicWideBandNoise method.")
 
-        '''
+        """
         NOTE:  the following code should be revisited!
         Why do we read the dictionary here?  It should be an input parameter.
         This is forcing this object to *always* use the pipeline_demo.dict
-        '''
+        """
         dictfilename = "dicts/pipeline_demo.dict"
         d = qubicDict()
         d.read_from_file(dictfilename)
@@ -48,11 +46,11 @@ class QubicNoise:
         self.dict["type_instrument"] = ""
         self.dict["effective_duration"] = duration
 
-        '''
+        """
         NOTE: the following code must be modified
         the QubicIntegrated is to be replaced by QubicAcquisition, but with the correct arguments
         self.acq = QubicAcquisition(instrument, sampling, scene, self.dict)
-        '''
+        """
         self.acq = QubicIntegrated(self.dict, Nsub=1, Nrec=1)
         print(f"Duration at {band} GHz is {duration} yrs")
 
@@ -66,14 +64,10 @@ class QubicNoise:
         return n
 
     def photon_noise(self):
-        return self.acq.get_noise(
-            det_noise=False, photon_noise=True, seed=self.seed_noise
-        )
+        return self.acq.get_noise(det_noise=False, photon_noise=True, seed=self.seed_noise)
 
     def detector_noise(self):
-        return self.acq.get_noise(
-            det_noise=True, photon_noise=False, seed=self.seed_noise
-        )
+        return self.acq.get_noise(det_noise=True, photon_noise=False, seed=self.seed_noise)
 
     def total_noise(self, wdet, wpho):
         ndet = wdet * self.detector_noise()
@@ -82,16 +76,13 @@ class QubicNoise:
 
 
 class QubicWideBandNoise:
-
     def __init__(self, d, npointings, detector_nep=4.7e-17, duration=3):
-
         self.d = d
         self.npointings = npointings
         self.detector_nep = detector_nep
         self.duration = duration
 
     def total_noise(self, wdet, wpho150, wpho220, seed_noise=None):
-
         Qubic150 = QubicNoise(
             150,
             self.npointings,
@@ -119,16 +110,13 @@ class QubicWideBandNoise:
 
 
 class QubicDualBandNoise:
-
     def __init__(self, d, npointings, detector_nep=4.7e-17, duration=[3, 3]):
-
         self.d = d
         self.npointings = npointings
         self.detector_nep = detector_nep
         self.duration = duration
 
     def total_noise(self, wdet, wpho150, wpho220, seed_noise=None):
-
         Qubic150 = QubicNoise(
             150,
             self.npointings,

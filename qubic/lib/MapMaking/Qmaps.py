@@ -8,7 +8,6 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysm3 import utils
 
 from qubic.data import PATH as data_dir
-from qubic.lib.Instrument.Qacquisition import arcmin2rad
 from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import CMBModel
 
 
@@ -160,8 +159,10 @@ class PlanckMaps(Maps):
             maps_noise[inu] += n
 
             if fwhm:
-                C = HealpixConvolutionGaussianOperator(fwhm=arcmin2rad(self._get_fwhm(nu)))
-                self.fwhm_ext.append(arcmin2rad(self._get_fwhm(nu)))
+                # Conversion from arcmin to rad
+                fwhm_rad = np.deg2rad(self._get_fwhm(nu) / 60.0)
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm_rad)
+                self.fwhm_ext.append(fwhm_rad)
                 maps[inu] = C(maps[inu])
                 maps_noise[inu] = C(maps_noise[inu])
             else:

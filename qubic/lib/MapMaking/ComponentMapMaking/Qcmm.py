@@ -418,26 +418,12 @@ class Pipeline:
             ### Model without spatial variation of spectral index
             if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] == 0:
                 previous_beta = self.preset.acquisition.beta_iter.copy()
-                self.chi2 = Chi2InstrumentType(
-                    self.preset,
-                    tod_comp,
-                    instr_type=self.preset.qubic.params_qubic["instrument"],
-                    parametric=True,
-                )
+                self.chi2 = Chi2InstrumentType(self.preset, tod_comp, instr_type=self.preset.qubic.params_qubic["instrument"], parametric=True)
 
                 ### Fit using scipy.optimize.minimize
-                self.preset.acquisition.beta_iter = minimize(
-                    self.chi2,
-                    x0=self.preset.acquisition.beta_iter,
-                    method="BFGS",
-                    callback=self.callback,
-                    tol=1e-10,
-                ).x
+                self.preset.acquisition.beta_iter = minimize(self.chi2, x0=self.preset.acquisition.beta_iter, method="BFGS", callback=self.callback, tol=1e-10).x
 
-                self.preset.acquisition.Amm_iter = self.chi2._get_mixingmatrix(
-                    nus=self.preset.qubic.joint_out.allnus,
-                    x=self.preset.acquisition.beta_iter,
-                )
+                self.preset.acquisition.Amm_iter = self.chi2._get_mixingmatrix(nus=self.preset.qubic.joint_out.allnus, x=self.preset.acquisition.beta_iter)
 
                 del tod_comp
                 gc.collect()
@@ -450,20 +436,11 @@ class Pipeline:
 
                 self.preset.tools.comm.Barrier()
 
-                self.preset.acquisition.allbeta = np.concatenate(
-                    (
-                        self.preset.acquisition.allbeta,
-                        np.array([self.preset.acquisition.beta_iter]),
-                    ),
-                    axis=0,
-                )
+                self.preset.acquisition.allbeta = np.concatenate((self.preset.acquisition.allbeta, np.array([self.preset.acquisition.beta_iter])), axis=0)
 
             ### Model with spatial variation of spectral index
             else:
-                index_num = hp.ud_grade(
-                    self.preset.sky.seenpix_qubic,
-                    self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"],
-                )  #
+                index_num = hp.ud_grade(self.preset.sky.seenpix_qubic, self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"])
                 self.preset.mixingmatrix._index_seenpix_beta = np.where(index_num)[0]
 
                 ### Simulated TOD for each components, nsub, npix with shape (npix, nsub, ncomp, nsnd)
@@ -472,42 +449,20 @@ class Pipeline:
                 ### Store fixed beta (those denoted with hp.UNSEEN are variable)
                 beta_fixed = self.preset.acquisition.beta_iter.copy()
                 beta_fixed[:, self.preset.mixingmatrix._index_seenpix_beta] = hp.UNSEEN
-                # chi2 = Chi2DualBand(
-                #     self.preset, tod_comp, parametric=True, full_beta_map=beta_fixed
-                # )
-                # chi2 = Chi2Parametric(self.preset, tod_comp, self.preset.acquisition.beta_iter, seenpix_wrap=None)
-                self.chi2 = Chi2InstrumentType(
-                    self.preset,
-                    tod_comp,
-                    instr_type=self.preset.qubic.params_qubic["instrument"],
-                    parametric=True,
-                    full_beta_map=beta_fixed,
-                )
+
+                self.chi2 = Chi2InstrumentType(self.preset, tod_comp, instr_type=self.preset.qubic.params_qubic["instrument"], parametric=True, full_beta_map=beta_fixed)
+
                 previous_beta = self.preset.acquisition.beta_iter[:, self.preset.mixingmatrix._index_seenpix_beta].copy()
                 self.nfev = 0
 
-                beta_i = fmin_l_bfgs_b(
-                    self.chi2,
-                    x0=previous_beta,
-                    callback=self.callback,
-                    approx_grad=True,
-                    epsilon=1e-6,
-                    maxls=20,
-                    maxiter=20,
-                )[0]
+                beta_i = fmin_l_bfgs_b(self.chi2, x0=previous_beta, callback=self.callback, approx_grad=True, epsilon=1e-6, maxls=20, maxiter=20)[0]
 
                 self.preset.acquisition.beta_iter[self.chi2.seenpix_beta] = beta_i
 
                 del tod_comp
                 gc.collect()
 
-                self.preset.acquisition.allbeta = np.concatenate(
-                    (
-                        self.preset.acquisition.allbeta,
-                        np.array([self.preset.acquisition.beta_iter]),
-                    ),
-                    axis=0,
-                )
+                self.preset.acquisition.allbeta = np.concatenate((self.preset.acquisition.allbeta, np.array([self.preset.acquisition.beta_iter])), axis=0)
 
                 if self.preset.tools.rank == 0:
                     print(f"Iteration k     : {previous_beta}")

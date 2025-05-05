@@ -21,11 +21,6 @@ from pyoperators import (
     PackOperator,
     ReshapeOperator,
     SymmetricBandToeplitzOperator,
-    _fold_psd,
-    _gaussian_psd_1f,
-    _logloginterp_psd,
-    _psd2invntt,
-    _unfold_psd,
     proxy_group,
     rule_manager,
 )
@@ -35,6 +30,13 @@ from pysimulators import (
     FitsArray,
 )
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+from pysimulators.noises import (
+    _fold_psd,
+    _gaussian_psd_1f,
+    _logloginterp_psd,
+    _psd2invntt,
+    _unfold_psd,
+)
 
 from qubic.data import PATH
 from qubic.lib.Instrument.Qinstrument import (
@@ -781,6 +783,8 @@ class QubicInstrumentType(QubicMultiAcquisitions):
     """
 
     def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
+        QubicMultiAcquisitions.__init__(self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co)
+
         if self.dict["instrument_type"] == "DB":
             self.used_bands = [150, 220]
             self.nFocalPlanes = 2

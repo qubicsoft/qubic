@@ -17,7 +17,7 @@ class Chi2InstrumentType:
     Instance to compute chi^2 for a given simulated TOD.
     """
 
-    def __init__(self, preset, dsim, instr_type, parametric=True, full_beta_map=None):
+    def __init__(self, preset, TOD_sim, instr_type, parametric=True, full_beta_map=None):
         self.preset = preset
         self.TOD_sim = TOD_sim
         self.nus = self.preset.qubic.joint_out.allnus
@@ -27,11 +27,9 @@ class Chi2InstrumentType:
         self.parametric = parametric
         self.full_beta_map = full_beta_map
 
-        if instr_type == "DB":  # this will later be implemented at a dictionary level!
+        if instr_type == "DB":
             self.nFocalPlanes = 2
-        elif instr_type == "UWB":
-            self.nFocalPlanes = 1
-        elif instr_type == "MB":
+        elif instr_type == "UWB" or instr_type == "MB":
             self.nFocalPlanes = 1
         else:
             raise ValueError("Instrument type {} is not implemented.".format(instr_type))
@@ -47,26 +45,29 @@ class Chi2InstrumentType:
         else:
             self.TOD_obs = self.preset.acquisition.TOD_qubic.copy()
 
-        ### If constant spectral index # diff ici
-        if self.dsim.ndim == 3:  # Can be concatenated with the case self.dsim.ndim == 4 by adding npix = 1 or npix = self.npix
+        ### If constant spectral index
+        if self.TOD_sim.ndim == 3:  # Can be concatenated with the case self.TOD_sim.ndim == 4 by adding npix = 1 or npix = self.npix
             npix = 1
+
         ### If varying spectral indices
-        elif self.dsim.ndim == 4:
+        elif self.TOD_sim.ndim == 4:
             self.seenpix_beta = np.where(self.full_beta_map == hp.UNSEEN)
             npix = self.npix
         else:
             raise TypeError("TOD_sim should have 3 or 4 dimensions.")
 
-        self.nc, self.nf, self.nsnd = self.dsim.shape
+        self.nc, self.nf, self.nsnd = self.TOD_sim.shape
         self.nsub = int(self.nf / self.nFocalPlanes)
 
-        self.dsim_fp = []
+        self.TOD_sim_fp = []
         for i in range(self.nFocalPlanes):
-            self.dsim_fp.append(self.dsim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.nc * self.nsub * npix, self.nsnd)))
-        # Missing self.dsim150 and self.dsim220 with new definition, use self.dsim_fp[0] and self.dsim_fp[1] instead
+            self.TOD_sim_fp.append(self.TOD_sim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.nc * self.nsub * npix, self.nsnd)))
+        # Missing self.TOD_sim150 and self.TOD_sim220 with new definition, use self.TOD_sim_fp[0] and self.TOD_sim_fp[1] instead
 
-    def _fill_A(self, x):  # idem (garder la version UWB, fonctionne mieux)
-        fsub = int(self.nf / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
+    def _fill_A(self, x):
+        """
+        Blind case
+        """
         A = np.ones((self.nf, self.nc))
         k = 0
         for i in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
@@ -75,8 +76,10 @@ class Chi2InstrumentType:
                 k += 1
         return A
 
-    def _get_mixingmatrix(self, nus, x):  # idem
-        ### Compute mixing matrix
+    def _get_mixingmatrix(self, nus, x):
+        """
+        Parametric case
+        """
         mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_model_out)
         return mixingmatrix.eval(nus, *x)
 
@@ -90,13 +93,11 @@ class Chi2InstrumentType:
             ### If blind -> we treat the mixing matrix element as free parameters
             else:
                 A = self._fill_A(x)
-            # print(A.shape)
-            # stop
-            ### Separe the mixing matrix element for 150 and 220 GHz if needed
 
+            ### Separe the mixing matrix element for 150 and 220 GHz if needed
             ysim = []
             for i in range(self.nFocalPlanes):
-                ysim.append(A[self.nsub * i : self.nsub * (i + 1)].T.reshape((self.nc * self.nsub)) @ self.dsim_fp[i])
+                ysim.append(A[self.nsub * i : self.nsub * (i + 1)].T.reshape((self.nc * self.nsub)) @ self.TOD_sim_fp[i])
 
             ### Create simulated TOD
             ysim = np.concatenate(ysim, axis=0)
@@ -115,38 +116,27 @@ class Chi2InstrumentType:
 
                 ### Compute residuals in time domain
                 _residuals = np.r_[ysim] - self.preset.acquisition.TOD_qubic
-                self.Lqubic = _dot(
-                    _residuals.T,
-                    self.preset.acquisition.invN.operands[0](_residuals),
-                    self.preset.comm,
-                )
+                self.Lqubic = _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
 
                 _residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
 
-                self.Lplanck = _dot(
-                    _residuals_pl.T,
-                    self.preset.acquisition.invN.operands[1](_residuals_pl),
-                    self.preset.comm,
-                )
+                self.Lplanck = _dot(_residuals_pl.T, self.preset.acquisition.invN.operands[1](_residuals_pl), self.preset.comm)
                 return self.Lqubic + self.Lplanck
+
             else:
                 ### Compute residuals in time domain
                 _residuals = ysim - self.TOD_obs
 
-                return _dot(
-                    _residuals.T,
-                    self.preset.acquisition.invN.operands[0](_residuals),
-                    self.preset.comm,
-                )
-                # Why so much different for DB?
-                _residuals = ysim - self.preset.acquisition.TOD_qubic
-                self.Lplanck = 0
-                self.Lqubic = _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
-                return self.Lqubic
-        elif self.dsim.ndim == 4:  # this implementation is exactly the same as for the DB, which feels wrong?
+                return _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
+                # # Why so much different for DB?
+                # _residuals = ysim - self.preset.acquisition.TOD_qubic
+                # self.Lplanck = 0
+                # self.Lqubic = _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
+                # return self.Lqubic
+
+        elif self.TOD_sim.ndim == 4:  # this implementation is exactly the same as for the DB, which feels wrong?
             # It is broken anyway
 
-            # print(x, x.shape, self.nc-1, self.npix)
             x = x.reshape((self.nc - 1, self.npix))
             A = self._get_mixingmatrix(self.nus, x)
 
@@ -177,11 +167,7 @@ class Chi2InstrumentType:
                 ### Compute residuals in time domain
                 _residuals = np.r_[ysim, ysim_pl] - self.TOD_obs
 
-                return _dot(
-                    _residuals.T,
-                    self.preset.acquisition.invN(_residuals),
-                    self.preset.comm,
-                )
+                return _dot(_residuals.T, self.preset.acquisition.invN(_residuals), self.preset.comm)
 
             else:
                 raise TypeError("Varying mixing matrix along the LOS is not yet implemented")
@@ -478,7 +464,7 @@ class Chi2Blind:
             tod_cmb_150 = np.sum(tod_comp[0, : self.nsub, :], axis=0)
             tod_cmb_220 = np.sum(tod_comp[0, self.nsub : 2 * self.nsub, :], axis=0)
 
-            ###Â FG contributions
+            ### FG contributions
             tod_comp_150 = tod_comp[1:, : self.nsub, :].copy()
             tod_comp_220 = tod_comp[1:, self.nsub : 2 * self.nsub, :].copy()
 

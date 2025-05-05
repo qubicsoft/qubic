@@ -82,6 +82,7 @@ class PresetAcquisition:
         self,
         seed_noise_qubic,
         seed_noise_planck,
+        seed_start_pcg,
         preset_tools,
         preset_external,
         preset_qubic,
@@ -104,9 +105,10 @@ class PresetAcquisition:
         self.preset_mixingmatrix = preset_mixing_matrix
         self.preset_gain = preset_gain
 
-        ### Set noise seeds
+        ### Set noise seeds + PCG start
         self.seed_noise_qubic = seed_noise_qubic
         self.seed_noise_planck = seed_noise_planck
+        self.seed_start_pcg = seed_start_pcg
 
         ### Define tolerance of the rms variations
         self.rms_tolerance = self.preset_tools.params["PCG"]["tol_rms"]
@@ -510,14 +512,8 @@ class PresetAcquisition:
 
         """
 
-        # Change this!
-        ### Create seed
-        if self.preset_tools.rank == 0:
-            seed = np.random.randint(100000000)
-        else:
-            seed = None
-        seed = self.preset_tools.comm.bcast(seed, root=0)
-        np.random.seed(seed)
+        ### Fix random state
+        np.random.seed(self.seed_start_pcg)
 
         self.beta_iter, self.Amm_iter = self.preset_mixingmatrix._get_beta_iter()
 

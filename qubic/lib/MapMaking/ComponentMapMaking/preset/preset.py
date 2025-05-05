@@ -51,8 +51,9 @@ class PresetInitialisation:
 
         """
         self.tools = PresetTools(self.comm, parameters_file)
-        self.seed_noise_qubic = self.tools.params["QUBIC"]["NOISE"]["seed"]
-        self.seed_noise_planck = self.tools.params["PLANCK"]["seed"]
+        self.seed_noise_qubic = self.tools.params["QUBIC"]["NOISE"]["seed_noise"]
+        self.seed_noise_planck = self.tools.params["PLANCK"]["seed_noise"]
+        self.seed_start_pcg = self.tools.params["PCG"]["seed_start"]
         self.tools.mpi._print_message("========= Initialization =========")
         self.tools.mpi._print_message("    => Checking simulation parameters")
         self.tools.check_for_errors()
@@ -97,9 +98,9 @@ class PresetInitialisation:
 
         self.tools.mpi._print_message("========= Acquisition =========")
         self.acquisition = PresetAcquisition(
-            # self.seed_noise,
             self.seed_noise_qubic,
             self.seed_noise_planck,
+            self.seed_start_pcg,
             self.tools,
             self.external,
             self.qubic,

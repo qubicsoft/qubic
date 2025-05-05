@@ -51,7 +51,7 @@ class PresetTools:
         if self.params["QUBIC"]["instrument"] not in ["DB", "UWB", "MB"]:
             raise TypeError("You must choose DB, UWB or MB instrument")
 
-        if self.params["QUBIC"]["instrument"] != "MB": # We might want to build off nsub with "MB"
+        if self.params["QUBIC"]["instrument"] != "MB": # We might want to build odd nsub with "MB"
             # Check if bin_mixing_matrix is even
             if self.params["Foregrounds"]["bin_mixing_matrix"] % 2 != 0:
                 raise TypeError("The argument bin_mixing_matrix should be even")

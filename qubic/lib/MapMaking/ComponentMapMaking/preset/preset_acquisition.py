@@ -437,14 +437,6 @@ class PresetAcquisition:
             fwhm=self.fwhm_tod,
         )
 
-        # ### Create seed
-        # if self.preset_tools.rank == 0:
-        #     np.random.seed(None)
-        #     seed_pl = np.random.randint(10000000)
-        # else:
-        #     seed_pl = None
-        # seed_pl = self.preset_tools.comm.bcast(seed_pl, root=0)
-
         ### Build noise variables
         noise_external = (
             self.preset_qubic.joint_in.external.get_noise(seed=self.seed_noise_planck)
@@ -518,6 +510,7 @@ class PresetAcquisition:
 
         """
 
+        # Change this!
         ### Create seed
         if self.preset_tools.rank == 0:
             seed = np.random.randint(100000000)

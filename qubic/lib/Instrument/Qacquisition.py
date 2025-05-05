@@ -671,7 +671,7 @@ class QubicMultiAcquisitions:
         self.allnus_rec = []
         if self.dict["instrument_type"] == "MB": # to be implemented on dictionary level
             print("Only the 150 GHz band will be used.")
-            f_bands = [150] # this is for the TD MonoBand instrument
+            f_bands = [150] # this is for the TD MonoBand instrument, the choice of the band could be implemented at dictionary level
         else:
             f_bands = [150, 220]
         for i, f_band in enumerate(f_bands):
@@ -1196,11 +1196,6 @@ class JointAcquisitionFrequencyMapMaking:
 
     def __init__(self, d, Nrec, Nsub, H=None):
 
-        print("\n__init__ of JointAcquisitionFrequencyMapMaking")
-        print("Nrec = {}, Nsub = {}".format(Nrec, Nsub))
-
-        # self.kind = kind
-        # self.kind = d["instrument_type"] # remember change
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
@@ -1215,8 +1210,6 @@ class JointAcquisitionFrequencyMapMaking:
         self.pl217 = PlanckAcquisition(217, self.scene)
 
     def get_operator(self, fwhm=None, seenpix=None):
-
-        print("\nget_operator of JointAcquisitionFrequencyMapMaking")
 
         ### nstokes is hardcoded to nstokes = 3
         ### We could retrieve it in the shape of H if we want to implement a different nstokes case
@@ -1288,7 +1281,6 @@ class JointAcquisitionComponentsMapMaking:
 
     def __init__(self, d, comp, Nsub, nus_external, nintegr, nu_co=None, H=None):
 
-        # self.kind = d["instrument_type"]
         self.d = d
         self.Nsub = Nsub
         self.comp = comp

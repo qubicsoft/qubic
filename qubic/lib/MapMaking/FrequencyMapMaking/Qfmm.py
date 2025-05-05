@@ -149,7 +149,6 @@ class PipelineFrequencyMapMaking:
         
         ### Define reconstructed and TOD operator
         self.get_H()
-        print("OK 3")
 
         ### Inverse noise covariance matrix
         if self.params['PLANCK']['external_data']:

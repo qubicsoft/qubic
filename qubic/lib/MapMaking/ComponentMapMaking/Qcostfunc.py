@@ -57,9 +57,6 @@ class Chi2InstrumentType:
 
         self.dsim_fp = []
         for i in range(self.nFocalPlanes):
-            # print("\nWhere tuple?")
-            # print(self.nsub)
-            # print(self.nsub*i)
             self.dsim_fp.append(self.dsim[:, self.nsub*i : self.nsub*(i+1)].reshape((self.nc * self.nsub * npix, self.nsnd)))
         # Missing self.dsim150 and self.dsim220 with new definition, use self.dsim_fp[0] and self.dsim_fp[1] instead
 

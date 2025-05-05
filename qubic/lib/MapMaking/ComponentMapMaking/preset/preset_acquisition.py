@@ -80,7 +80,8 @@ class PresetAcquisition:
 
     def __init__(
         self,
-        seed_noise,
+        seed_noise_qubic,
+        seed_noise_planck,
         preset_tools,
         preset_external,
         preset_qubic,
@@ -103,8 +104,9 @@ class PresetAcquisition:
         self.preset_mixingmatrix = preset_mixing_matrix
         self.preset_gain = preset_gain
 
-        ### Set noise seed
-        self.seed_noise = seed_noise
+        ### Set noise seeds
+        self.seed_noise_qubic = seed_noise_qubic
+        self.seed_noise_planck = seed_noise_planck
 
         ### Define tolerance of the rms variations
         self.rms_tolerance = self.preset_tools.params["PCG"]["tol_rms"]
@@ -254,9 +256,6 @@ class PresetAcquisition:
         ### Create the vector full of ones which will be used to compute the scalar operators
         vector_ones = np.ones(acquisition_operators[0].shapein)
 
-        # print(len(self.preset_qubic.joint_out.qubic.allnus))
-        # okzeg
-        
         ### Apply each sub_operator on the vector
         scalar_acquisition_operators = np.empty(
             len(self.preset_qubic.joint_out.qubic.allnus)
@@ -405,7 +404,7 @@ class PresetAcquisition:
             self.preset_qubic.params_qubic["NOISE"]["ndet"],
             self.preset_qubic.params_qubic["NOISE"]["npho150"],
             self.preset_qubic.params_qubic["NOISE"]["npho220"],
-            seed_noise=self.seed_noise,
+            seed_noise=self.seed_noise_qubic,
         ).ravel()
 
     def get_tod(self):
@@ -438,17 +437,17 @@ class PresetAcquisition:
             fwhm=self.fwhm_tod,
         )
 
-        ### Create seed
-        if self.preset_tools.rank == 0:
-            np.random.seed(None)
-            seed_pl = np.random.randint(10000000)
-        else:
-            seed_pl = None
-        seed_pl = self.preset_tools.comm.bcast(seed_pl, root=0)
+        # ### Create seed
+        # if self.preset_tools.rank == 0:
+        #     np.random.seed(None)
+        #     seed_pl = np.random.randint(10000000)
+        # else:
+        #     seed_pl = None
+        # seed_pl = self.preset_tools.comm.bcast(seed_pl, root=0)
 
         ### Build noise variables
         noise_external = (
-            self.preset_qubic.joint_in.external.get_noise(seed=seed_pl)
+            self.preset_qubic.joint_in.external.get_noise(seed=self.seed_noise_planck)
             * self.preset_tools.params["PLANCK"]["level_noise_planck"]
         )
         noise_qubic = self.get_noise()

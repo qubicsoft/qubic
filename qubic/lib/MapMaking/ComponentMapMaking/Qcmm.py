@@ -55,12 +55,12 @@ class Pipeline:
 
         """
 
-        ### Creating noise seed
-        mpitools = MpiTools(comm)
-        seed_noise = mpitools.get_random_value(init_seed=None)
+        # ### Creating noise seed
+        # mpitools = MpiTools(comm)
+        # seed_noise = mpitools.get_random_value(init_seed=None)
         
         ### Initialization
-        self.preset = PresetInitialisation(comm, seed_noise).initialize(parameters_file)
+        self.preset = PresetInitialisation(comm).initialize(parameters_file)
         self.plots = PlotsCMM(self.preset, dogif=True)
         if (
             self.preset.comp.params_foregrounds["Dust"]["type"] == "blind"

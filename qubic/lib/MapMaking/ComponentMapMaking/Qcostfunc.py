@@ -11,7 +11,9 @@ def _dot(x, y, comm):
     return d
 
 class Chi2InstrumentType:
-
+    """
+    Instance to compute chi^2 for a given simulated TOD.
+    """
     def __init__(self, preset, dsim, instr_type, parametric=True, full_beta_map=None):
 
         self.preset = preset

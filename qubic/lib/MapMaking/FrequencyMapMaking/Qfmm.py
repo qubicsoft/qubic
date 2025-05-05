@@ -548,16 +548,12 @@ class PipelineFrequencyMapMaking:
         
         
         for irec in range(self.params["QUBIC"]["nrec"]):
-            fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]) # why then take the max for the case nrec = 1?
-            if self.params["QUBIC"]["convolution_in"]:
-                C = HealpixConvolutionGaussianOperator(
-                    fwhm=fwhm_irec,
-                    lmax = 2 * self.params['Spectrum']['lmax'],
-                )
-            else:
-                # C = HealpixConvolutionGaussianOperator(fwhm=0)
-                C = IdentityOperator() # Isn't it better?
-            if fwhm_irec < (150 + 220)/2:
+            fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]) # self.fwhm_in = 0 if convolution_in == False
+            C = HealpixConvolutionGaussianOperator(
+                fwhm=fwhm_irec,
+                lmax = 2 * self.params['Spectrum']['lmax'],
+            )
+            if irec < self.params["QUBIC"]["nrec"]/2: # choose between the two levels of noise
                 noise = self.noise143
             else:
                 noise = self.noise217

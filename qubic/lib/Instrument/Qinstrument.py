@@ -186,6 +186,7 @@ class QubicInstrument(Instrument):
         d["optics"] = d["optics"].replace(d["optics"][-10:-8], d["config"])
         d["detarray"] = d["detarray"].replace(d["detarray"][-7:-5], d["config"])
         d["hornarray"] = d["hornarray"].replace(d["hornarray"][-7:-5], d["config"])
+        ### synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits' is usde even for TD, to be modified ('CalQubic_Synthbeam_Analytical_150_TD.fits' has to be created)
 
         if d["nf_sub"] is None and d["MultiBand"] is True:
             raise ValueError("Error: number of subband not specified")
@@ -218,6 +219,9 @@ class QubicInstrument(Instrument):
             use_file=False
         else:
             self.sbeam_fits = d["synthbeam"]
+        
+        # Is self.sbeam_fits used anywhere in the code?
+        # If not, Michael Wright synthbeam might not be implemented
 
 
         # Choose the primary beam calibration file
@@ -386,8 +390,9 @@ class QubicInstrument(Instrument):
         """
         if out is None:
             out = np.empty((len(self), len(sampling)))
-        self.get_noise_detector(sampling, out=out)
-        if det_noise is False:
+        if det_noise:
+            self.get_noise_detector(sampling, out=out)
+        else:
             out *= 0
         if photon_noise:
             out += self.get_noise_photon(sampling, scene)
@@ -2014,55 +2019,35 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         self.d = d
         d1 = d.copy()
 
-        _, nus_edge150, filter_nus150, deltas150, _, _ = compute_freq(
-            150, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
-        )
-        _, nus_edge220, filter_nus220, deltas220, _, _ = compute_freq(
-            220, int(d["nf_sub"] / 2), relative_bandwidth=self.FRBW
-        )
-        
-        delta_nu_over_nu_150 = deltas150 / filter_nus150
-        delta_nu_over_nu_220 = deltas220 / filter_nus220
-
-        if not d["center_detector"]:
-            self.subinstruments = []
-            for i in range(len(filter_nus150)):
-                if self.d["debug"]:
-                    print(
-                        f"Integration done with nu = {nus_edge150[i]} GHz with weight {delta_nu_over_nu_150[i]}"
-                    )
-                d1["filter_nu"] = filter_nus150[i] * 1e9
-
-                if d['debug']:
-                    print("setting filter_nu to ",d1["filter_nu"])
-
-                d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
-                self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
-
-            for i in range(len(filter_nus220)):
-                if self.d["debug"]:
-                    print(
-                        f"Integration done with nu = {nus_edge220[i]} GHz with weight {delta_nu_over_nu_220[i]}"
-                    )
-                d1["filter_nu"] = filter_nus220[i] * 1e9
-                d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
-                self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
+        # there was code duplication in the previous version
+        self.subinstruments = []
+        if d["instrument_type"] == "MB": # to be implemented on dictionary level
+            f_bands = [150]
         else:
+            f_bands = [150, 220]
 
-            self.subinstruments = []
-            for i in range(self.nsubbands):
-                d1["filter_nu"] = filter_nus150[i] * 1e9
-                d1["filter_relative_bandwidth"] = delta_nu_over_nu_150[i]
-                q = QubicInstrument(d1, FRBW=self.FRBW)[0]
-                q.detector.center = np.array([[0.0, 0.0, -0.3]])
-                self.subinstruments.append(q)
+        for f_band in f_bands:
+            _, nus_edge, filter_nus, deltas, _, _ = compute_freq(
+                f_band, int(d["nf_sub"] / len(f_bands)), relative_bandwidth=self.FRBW
+            )
+            delta_nu_over_nu = deltas / filter_nus
 
-            for i in range(self.nsubbands):
-                d1["filter_nu"] = filter_nus220[i] * 1e9
-                d1["filter_relative_bandwidth"] = delta_nu_over_nu_220[i]
-                q = QubicInstrument(d1, FRBW=self.FRBW)[0]
-                q.detector.center = np.array([[0.0, 0.0, -0.3]])
-                self.subinstruments.append(q)
+            for i in range(len(filter_nus)):
+                d1["filter_nu"] = filter_nus[i] * 1e9
+                d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
+                if d['debug']:
+                    print("setting filter_nu to ", d1["filter_nu"])
+                if not d["center_detector"]:
+                    if self.d["debug"]:
+                        print(
+                            f"Integration done with nu = {nus_edge[i]} GHz with weight {delta_nu_over_nu[i]}"
+                        )
+                    self.subinstruments += [QubicInstrument(d1, FRBW=self.FRBW)]
+                else:
+                # for i in range(self.nsubbands): # self.subbands not defined
+                    q = QubicInstrument(d1, FRBW=self.FRBW)[0]
+                    q.detector.center = np.array([[0.0, 0.0, -0.3]]) #hardcoded here?
+                    self.subinstruments.append(q)
 
             """
 
@@ -2083,7 +2068,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
 
             if not d["center_detector"]:
                 self.subinstruments = []
-                W = IntegrationTrapezeOperator(nus_edge150)
+                W = IntegrationTrapezeOperator(nus_edge150) # never used?
                 for i in range(len(nus_edge150)):
                     if self.d["debug"]:
                         print(
@@ -2187,7 +2172,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         return subset_inst
     
 
-class QubicMultibandInstrument:
+class QubicMultibandInstrument: # Is this class still used?
     """
     The QubicMultibandInstrument class
     Represents the QUBIC multiband features 

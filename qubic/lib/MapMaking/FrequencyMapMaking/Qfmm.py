@@ -116,8 +116,10 @@ class PipelineFrequencyMapMaking:
         self.externaldata.maps = self.comm.bcast(self.externaldata.maps, root=0)
         self.externaldata.maps_noise = self.comm.bcast(self.externaldata.maps_noise, root=0)
 
-        self.planck_acquisition143 = PlanckAcquisition(143, self.joint.qubic.scene)
-        self.planck_acquisition217 = PlanckAcquisition(217, self.joint.qubic.scene)
+        self.planck_acquisition = []
+        for band_pl in [143, 217]:
+            self.planck_acquisition.append(PlanckAcquisition(band_pl, self.joint.qubic.scene))
+
         self.nus_Q = self.get_averaged_nus()
 
         ### Coverage map
@@ -159,16 +161,14 @@ class PipelineFrequencyMapMaking:
             self.invN = R(self.invN(R.T))
         
         ### Noises
-        # seed_noise_planck = self.mpi.get_random_value()
 
-        self.noise143 = (
-            self.planck_acquisition143.get_noise(self.params["PLANCK"]["seed"])
-            * self.params["PLANCK"]["level_noise_planck"]
-        )
-        self.noise217 = (
-            self.planck_acquisition217.get_noise(self.params["PLANCK"]["seed"] + 1) # not the best
-            * self.params["PLANCK"]["level_noise_planck"]
-        )
+        rng_noise_planck = np.random.default_rng(self.params["PLANCK"]["seed_noise"])
+        self.noise_planck = []
+        for i in range(2):
+            self.noise_planck.append(
+                self.planck_acquisition[i].get_noise(rng_noise_planck)
+                * self.params["PLANCK"]["level_noise_planck"]
+            )
 
         qubic_noise = QubicTotNoise(
         self.dict_out,
@@ -180,7 +180,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["NOISE"]["ndet"],
             self.params["QUBIC"]["NOISE"]["npho150"],
             self.params["QUBIC"]["NOISE"]["npho220"],
-            seed_noise=self.params["QUBIC"]["NOISE"]["seed"],
+            seed_noise=self.params["QUBIC"]["NOISE"]["seed_noise"],
         ).ravel()
 
         ### Initialize plot instance
@@ -553,9 +553,9 @@ class PipelineFrequencyMapMaking:
                 lmax = 2 * self.params['Spectrum']['lmax'],
             )
             if irec < self.params["QUBIC"]["nrec"]/2: # choose between the two levels of noise
-                noise = self.noise143
+                noise = self.noise_planck[0]
             else:
-                noise = self.noise217
+                noise = self.noise_planck[1]
             TOD_PLANCK[irec] = C(
                 self.maps_input.maps[irec] + noise
             )

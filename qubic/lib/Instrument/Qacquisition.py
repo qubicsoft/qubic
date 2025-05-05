@@ -632,11 +632,10 @@ class PlanckAcquisition:
 
         return DiagonalOperator(myweight, broadcast="leftward", shapein=myweight.shape)
 
-    def get_noise(self, seed):
+    def get_noise(self, rng_noise):
         state = np.random.get_state()
-        np.random.seed(seed)
         out = (
-            np.random.standard_normal(np.ones((12 * self.nside**2, 3)).shape)
+            rng_noise.standard_normal(np.ones((12 * self.nside**2, 3)).shape)
             * self.sigma
         )
         np.random.set_state(state)

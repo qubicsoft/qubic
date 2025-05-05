@@ -30,7 +30,7 @@ QUBIC:
         npho150: 1                          # Level of photon noise at 150 GHz
         npho220: 1                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise # do two different parameters?
-        seed: 11111
+        seed_noise: 11111
     SYNTHBEAM:
         synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
         synthbeam_fraction: 0.99
@@ -52,7 +52,7 @@ PLANCK:
     external_data: True                    
     weight_planck: 0                            # Weight of Planck data within the QUBIC patch
     level_noise_planck: 1                       # Noise level for Planck data
-    seed: 22222
+    seed_noise: 22222
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
 

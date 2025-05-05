@@ -4,11 +4,6 @@ import copy
 import healpy as hp
 import numexpr as ne
 import numpy as np
-from lib.Calibration.Qcalibration import QubicCalibration
-from lib.Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
-from lib.Qbilin_interp import Cartesian2HealpixOperator_bilin_interp
-from lib.Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
-from lib.Qutilities import _compress_mask
 from pyoperators import (
     Cartesian2SphericalOperator,
     DenseBlockDiagonalOperator,
@@ -38,6 +33,11 @@ from scipy.constants import c, h, k, sigma
 from scipy.integrate import quad
 
 from qubic import _flib as flib
+from qubic.lib.Calibration.Qcalibration import QubicCalibration
+from qubic.lib.Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
+from qubic.lib.Qbilin_interp import Cartesian2HealpixOperator_bilin_interp
+from qubic.lib.Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
+from qubic.lib.Qutilities import _compress_mask
 
 __all__ = ["QubicInstrument", "QubicMultibandInstrumentTrapezoidalIntegration", "QubicMultibandInstrument"]
 

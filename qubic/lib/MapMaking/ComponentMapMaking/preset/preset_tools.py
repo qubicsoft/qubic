@@ -1,5 +1,6 @@
 import yaml
-from lib.Qmpi_tools import MpiTools
+
+from qubic.lib.Qmpi_tools import MpiTools
 
 
 class PresetTools:

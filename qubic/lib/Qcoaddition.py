@@ -5,15 +5,16 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal
-from lib.Calibration import Qfiber as ft
-from lib.Calibration import Qselfcal as scal
-from lib.Instrument.Qinstrument import QubicInstrument
-from lib.Qcoaddition import get_mode
-from lib.Qdictionary import qubicDict
-from lib.Qutilities import progress_bar
 from scipy import interpolate
 from scipy.interpolate import interp1d
 from scipy.signal import medfilt
+
+from qubic.lib.Calibration import Qfiber as ft
+from qubic.lib.Calibration import Qselfcal as scal
+from qubic.lib.Instrument.Qinstrument import QubicInstrument
+from qubic.lib.QdataHandling import get_mode
+from qubic.lib.Qdictionary import qubicDict
+from qubic.lib.Qutilities import progress_bar
 
 __all__ = ["MySplineFitting", "Pip1Tes", "FocalPlane", "PipAllTes"]
 

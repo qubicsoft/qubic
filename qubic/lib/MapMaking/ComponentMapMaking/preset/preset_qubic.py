@@ -1,7 +1,8 @@
 from fgbuster import component_model as c
-from lib.Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
-from lib.MapMaking.ComponentMapMaking import Qcomponent_model as model_co
-from lib.Qdictionary import qubicDict
+
+from qubic.lib.Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
+from qubic.lib.MapMaking.ComponentMapMaking import Qcomponent_model as model_co
+from qubic.lib.Qdictionary import qubicDict
 
 
 class PresetQubic:

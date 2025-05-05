@@ -1,9 +1,9 @@
 import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
-from lib.MapMaking.ComponentMapMaking import Qcomponent_model as c
 
 from qubic.data import PATH as data_dir
+from qubic.lib.MapMaking.ComponentMapMaking import Qcomponent_model as c
 
 
 class CMBModel:

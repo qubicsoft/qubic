@@ -1,8 +1,9 @@
 import healpy as hp
 import numpy as np
-from lib.Fitting import Qnamaster as nam
-from lib.Qsamplings import equ2gal
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+from qubic.lib.Fitting import Qnamaster as nam
+from qubic.lib.Qsamplings import equ2gal
 
 
 class PresetSky:

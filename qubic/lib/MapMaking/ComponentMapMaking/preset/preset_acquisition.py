@@ -1,14 +1,15 @@
 import numpy as np
 from fgbuster import component_model as c
-from lib.Instrument.Qnoise import (
-    QubicDualBandNoise,
-    QubicWideBandNoise,
-)
 from pyoperators import (
     DiagonalOperator,
     ReshapeOperator,
 )
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+from qubic.lib.Instrument.Qnoise import (
+    QubicDualBandNoise,
+    QubicWideBandNoise,
+)
 
 
 class PresetAcquisition:

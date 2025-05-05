@@ -3,12 +3,12 @@ import os
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
-from lib.Fitting import QreadMC as rmc
-from lib.Instrument.Qinstrument import compute_freq
-from lib.QskySim import cov2corr
 from scipy import interpolate
 
 import qubic
+from qubic.lib.Fitting import QreadMC as rmc
+from qubic.lib.Instrument.Qinstrument import compute_freq
+from qubic.lib.QskySim import cov2corr
 
 
 # ============ Functions do statistical tests on maps ===========#

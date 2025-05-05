@@ -15,7 +15,7 @@ from astropy.io import fits
 from iminuit.util import describe, make_func_code
 from pysimulators import FitsArray
 from qubicpack import qubicfp
-from qubicpack.pix2tes import TES2PIX, assign_pix2tes, assign_pix_grid, pix2tes
+from qubicpack.pix2tes import assign_pix2tes, assign_pix_grid, pix2tes
 from scipy.ndimage.filters import correlate1d
 
 from qubic.lib.Qutilities import progress_bar

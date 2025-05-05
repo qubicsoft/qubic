@@ -3,13 +3,14 @@ import time
 
 import healpy as hp
 import numpy as np
-from lib.MapMaking.Qmap_plotter import _plot_reconstructed_maps
-from lib.Qfoldertools import create_folder_if_not_exists
 from pyoperators.core import IdentityOperator, asoperator
 from pyoperators.iterative.core import AbnormalStopIteration, IterativeAlgorithm
 from pyoperators.iterative.stopconditions import MaxIterationStopCondition
 from pyoperators.memory import empty, zeros
 from pyoperators.utils.mpi import MPI
+
+from qubic.lib.MapMaking.Qmap_plotter import _plot_reconstructed_maps
+from qubic.lib.Qfoldertools import create_folder_if_not_exists
 
 __all__ = ["pcg"]
 

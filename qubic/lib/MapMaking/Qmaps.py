@@ -8,9 +8,8 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysm3 import utils
 
 from qubic.data import PATH as data_dir
-
-from ..Instrument.Qacquisition import arcmin2rad
-from .FrequencyMapMaking.Qspectra_component import CMBModel
+from qubic.lib.Instrument.Qacquisition import arcmin2rad
+from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import CMBModel
 
 
 class Maps:

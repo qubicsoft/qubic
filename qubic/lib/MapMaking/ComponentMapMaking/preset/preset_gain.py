@@ -1,5 +1,6 @@
 import numpy as np
-from lib.Qmpi_tools import join_data
+
+from qubic.lib.Qmpi_tools import join_data
 
 
 class PresetGain:

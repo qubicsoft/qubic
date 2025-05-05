@@ -5,13 +5,6 @@ import healpy as hp
 import numpy as np
 import pysm3.units as u
 from fgbuster.mixingmatrix import MixingMatrix
-from lib.Instrument.Qinstrument import (
-    QubicInstrument,
-    QubicMultibandInstrument,
-    compute_freq,
-)
-from lib.Qsamplings import get_pointing
-from lib.Qscene import QubicScene
 from pyoperators import (
     MPI,
     AdditionOperator,
@@ -32,19 +25,19 @@ from pyoperators import (
 from pysimulators import (
     Acquisition,
     FitsArray,
-    I,
-    SymmetricBandToeplitzOperator,
-    _fold_psd,
-    _gaussian_psd_1f,
-    _logloginterp_psd,
-    _psd2invntt,
-    _unfold_psd,
-    as_mpi,
-    proxy_group,
 )
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+from pysm3 import Sky, utils
 
 from qubic.data import PATH
+from qubic.lib.Instrument.Qinstrument import (
+    QubicInstrument,
+    QubicMultibandInstrument,
+    compute_freq,
+)
+from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import CMBModel
+from qubic.lib.Qsamplings import get_pointing
+from qubic.lib.Qscene import QubicScene
 
 warnings.filterwarnings("ignore")
 
@@ -1924,7 +1917,7 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
 
         allmaps = np.zeros((len(config), 12 * self.scene.nside**2, 3))
         ell = np.arange(2 * self.scene.nside - 1)
-        mycls = give_cl_cmb(r=r, Alens=Alens)
+        mycls = CMBModel(ell).give_cl_cmb(r=r, Alens=Alens)
 
         for k, kconf in enumerate(config.keys()):
             if kconf == "cmb":
@@ -1935,45 +1928,29 @@ class QubicFullBandSystematic(QubicPolyAcquisition):
 
             elif kconf == "dust":
                 nu0 = self.comp[k].__dict__["_fixed_params"]["nu0"]
-                sky = pysm3.Sky(
-                    nside=self.scene.nside,
-                    preset_strings=[config[kconf]],
-                    output_unit="uK_CMB",
-                )
-                # sky.components[0].mbb_index = hp.ud_grade(sky.components[0].mbb_index, 8)
+                sky = Sky(nside=self.scene.nside, preset_strings=[config[kconf]], output_unit="uK_CMB")
                 sky.components[0].mbb_temperature = 20 * sky.components[0].mbb_temperature.unit
-                # sky.components[0].mbb_index = hp.ud_grade(np.array(sky.components[0].mbb_index), 8)
                 mydust = np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0 * u.GHz, None, u.uK_CMB))
 
                 allmaps[k] = mydust.copy()
             elif kconf == "synchrotron":
                 nu0 = self.comp[k].__dict__["_fixed_params"]["nu0"]
-                sky = pysm3.Sky(
+                sky = Sky(
                     nside=self.scene.nside,
                     preset_strings=[config[kconf]],
                     output_unit="uK_CMB",
                 )
                 mysync = np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0 * u.GHz, None, u.uK_CMB))
                 allmaps[k] = mysync.copy()
-            elif kconf == "coline":
-                # sky = pysm3.Sky(nside=self.nside, preset_strings=['co2'], output_unit="uK_CMB")
-                # nu0 = sky.components[0].line_frequency['21'].value
-
-                # myco=np.array(sky.get_emission(nu0 * u.GHz, None).T * utils.bandpass_unit_conversion(nu0*u.GHz, None, u.uK_CMB))
-                # 10 is for reproduce the PsYM template
-                m = hp.ud_grade(hp.read_map(path_to_data + "CO_line.fits") * 10, self.scene.nside)
-                # print(self.nside)
-                mP = polarized_I(m, self.scene.nside)
-                # print(mP.shape)
-                myco = np.zeros((12 * self.scene.nside**2, 3))
-                myco[:, 0] = m.copy()
-                myco[:, 1:] = mP.T.copy()
-                allmaps[k] = myco.copy()
+            # elif kconf == "coline":
+            #     m = hp.ud_grade(hp.read_map(path_to_data + "CO_line.fits") * 10, self.scene.nside)
+            #     mP = polarized_I(m, self.scene.nside)
+            #     myco = np.zeros((12 * self.scene.nside**2, 3))
+            #     myco[:, 0] = m.copy()
+            #     myco[:, 1:] = mP.T.copy()
+            #     allmaps[k] = myco.copy()
             else:
                 raise TypeError("Choose right foreground model (d0, s0, ...)")
-
-        # if len(nus) == 1:
-        #    allmaps = allmaps[0].copy()
 
         return allmaps
 

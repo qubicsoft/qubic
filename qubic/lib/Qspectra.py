@@ -1,8 +1,9 @@
 import pickle
 
 import numpy as np
-from lib.Fitting import Qnamaster as nam
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+
+from qubic.lib.Fitting import Qnamaster as nam
 
 
 class Spectra:

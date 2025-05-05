@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal as scsig
-from lib.Calibration.Qfiber import printnow
 
 import qubic.lib.Calibration.Qfiber as ft
+from qubic.lib.Calibration.Qfiber import printnow
 
 
 class interp_template:

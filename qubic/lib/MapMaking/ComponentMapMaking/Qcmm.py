@@ -6,22 +6,23 @@ from functools import partial
 import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
-from lib.MapMaking.ComponentMapMaking.preset.preset import PresetInitialisation
-from lib.MapMaking.ComponentMapMaking.Qcostfunc import (
+from pyoperators import MPI, PackOperator, ReshapeOperator
+from pyoperators import pcg as pcg_op
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+from scipy.optimize import fmin_l_bfgs_b, minimize
+
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset import PresetInitialisation
+from qubic.lib.MapMaking.ComponentMapMaking.Qcostfunc import (
     Chi2Blind,
     Chi2DualBand,
     Chi2Parametric_alt,
     Chi2UltraWideBand,
 )
-from lib.MapMaking.Qcg import pcg
-from lib.MapMaking.Qmap_plotter import PlotsCMM
-from lib.Qfoldertools import do_gif
-from lib.Qmpi_tools import MpiTools, join_data
-from lib.QskySim import get_angular_profile
-from pyoperators import MPI, PackOperator, ReshapeOperator
-from pyoperators import pcg as pcg_op
-from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
-from scipy.optimize import fmin_l_bfgs_b, minimize
+from qubic.lib.MapMaking.Qcg import pcg
+from qubic.lib.MapMaking.Qmap_plotter import PlotsCMM
+from qubic.lib.Qfoldertools import do_gif
+from qubic.lib.Qmpi_tools import MpiTools, join_data
+from qubic.lib.QskySim import get_angular_profile
 
 
 class Pipeline:

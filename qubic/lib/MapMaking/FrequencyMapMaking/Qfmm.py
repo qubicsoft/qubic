@@ -7,19 +7,20 @@ import healpy as hp
 import numpy as np
 import yaml
 from fgbuster.component_model import CMB, Dust, Synchrotron
-from lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
-from lib.Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
-from lib.MapMaking.Qcg import pcg
-from lib.MapMaking.Qmap_plotter import PlotsFMM
-from lib.MapMaking.Qmaps import InputMaps, PlanckMaps
-from lib.Qdictionary import qubicDict
-from lib.Qfoldertools import create_folder_if_not_exists, do_gif
-from lib.Qmpi_tools import MpiTools
-from lib.Qsamplings import equ2gal
-from lib.Qspectra import Spectra
 from pyoperators import DiagonalOperator, ReshapeOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
+
+from qubic.lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
+from qubic.lib.Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
+from qubic.lib.MapMaking.Qcg import pcg
+from qubic.lib.MapMaking.Qmap_plotter import PlotsFMM
+from qubic.lib.MapMaking.Qmaps import InputMaps, PlanckMaps
+from qubic.lib.Qdictionary import qubicDict
+from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
+from qubic.lib.Qmpi_tools import MpiTools
+from qubic.lib.Qsamplings import equ2gal
+from qubic.lib.Qspectra import Spectra
 
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
 

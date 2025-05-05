@@ -4,8 +4,7 @@ import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from emcee import MCSamples
-from getdist import plots
+from getdist import MCSamples, plots
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 

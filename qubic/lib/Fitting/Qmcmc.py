@@ -1,5 +1,5 @@
 import emcee
-from numpy import np
+import numpy as np
 from scipy.integrate import cumulative_trapezoid
 from scipy.optimize import curve_fit
 

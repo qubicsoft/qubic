@@ -164,7 +164,6 @@ class PCGAlgorithm(IterativeAlgorithm):
             self.x[...] = 0
             self.convergence = np.array([])
             raise StopIteration("RHS is zero.")
-
         self.r[...] = self.b
         self.r -= self.A(self.x)
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)

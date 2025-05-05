@@ -12,14 +12,12 @@ def _dot(x, y, comm):
     return d
 
 
-class Chi2DualBand:
+class Chi2InstrumentType:
     """
-
     Instance to compute chi^2 for a given simulated TOD.
-
     """
 
-    def __init__(self, preset, TOD_sim, parametric=True, full_beta_map=None):
+    def __init__(self, preset, dsim, instr_type, parametric=True, full_beta_map=None):
         self.preset = preset
         self.TOD_sim = TOD_sim
         self.nus = self.preset.qubic.joint_out.allnus
@@ -29,149 +27,14 @@ class Chi2DualBand:
         self.parametric = parametric
         self.full_beta_map = full_beta_map
 
-        ### If parametric, we use the QUBIC + Planck data
-        if self.parametric:
-            if self.TOD_sim.ndim == 3:
-                self.TOD_obs = self.preset.acquisition.TOD_obs_zero_outside.copy()
-            elif self.TOD_sim.ndim == 4:
-                self.TOD_obs = self.preset.acquisition.TOD_obs.copy()
-
-        ### If blind, we use the QUBIC data only
+        if instr_type == "DB":  # this will later be implemented at a dictionary level!
+            self.nFocalPlanes = 2
+        elif instr_type == "UWB":
+            self.nFocalPlanes = 1
+        elif instr_type == "MB":
+            self.nFocalPlanes = 1
         else:
-            self.TOD_obs = self.preset.acquisition.TOD_qubic.copy()
-
-        ### If constant spectral index
-        if self.TOD_sim.ndim == 3:
-            self.ncomp, _, self.nsample_ndet = self.TOD_sim.shape
-
-            self.TOD_sim150 = self.TOD_sim[:, : self.nsub].reshape((self.ncomp * self.nsub, self.nsample_ndet))
-            self.TOD_sim220 = self.TOD_sim[:, self.nsub : self.nfreq].reshape((self.ncomp * self.nsub, self.nsample_ndet))
-
-        ### If varying spectral indices
-        elif self.TOD_sim.ndim == 4:
-            self.npix, _, self.ncomp, self.nsample_ndet = self.TOD_sim.shape
-
-            self.TOD_sim150 = self.TOD_sim[:, : self.nsub, :, :].reshape((self.ncomp * self.nsub * self.npix, self.nsample_ndet))
-            self.TOD_sim220 = self.TOD_sim[:, self.nsub : self.nfreq, :, :].reshape((self.ncomp * self.nsub * self.npix, self.nsample_ndet))
-            self.seenpix_beta = np.where(self.full_beta_map == hp.UNSEEN)
-
-        else:
-            raise TypeError("TOD_sim should have 3 or 4 dimensions.")
-
-    def _fill_A(self, x):
-        A = np.ones((self.nfreq, self.ncomp))
-        k = 0
-        for i in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
-            for j in range(1, self.ncomp):
-                A[i * self.fsub : (i + 1) * self.fsub, j] = np.array([x[k]] * self.fsub)
-                k += 1
-        return A
-
-    def _get_mixingmatrix(self, nus, x):
-        ### Compute mixing matrix
-        mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_model_out)
-        return mixingmatrix.eval(nus, *x)
-
-    def __call__(self, x):
-        ### If constant spectral index
-        if self.TOD_sim.ndim == 3:
-            ### If parametric -> we compute the mixing matrix element according to the spectral index
-            if self.parametric:
-                A = self._get_mixingmatrix(self.nus, x)
-            ### If blind -> we treat the mixing matrix element as free parameters
-            else:
-                ### Fill mixing matrix for the FG components
-                A = self._fill_A(x)
-
-            ### Separe the mixing matrix element for 150 and 220 GHz
-            Aq150 = A[: self.nsub].T.reshape((self.ncomp * self.nsub))
-            Aq220 = A[self.nsub : 2 * self.nsub].T.reshape((self.ncomp * self.nsub))
-
-            ### Create simulated TOD
-            ysim = np.concatenate((Aq150 @ self.TOD_sim150, Aq220 @ self.TOD_sim220), axis=0)
-
-            if self.parametric:
-                ### Separe QUBIC and Planck
-                Aext = A[2 * self.nsub :].copy()
-                H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext, convolution=False)
-
-                ### Compute Planck part of the chi^2
-                mycomp = self.preset.comp.components_iter.copy()
-                mycomp[:, ~self.preset.sky.seenpix_qubic, :] = 0
-                ysim_pl = H_planck(mycomp)
-
-                ### Compute residuals in time domain
-                _residuals = np.r_[ysim] - self.preset.acquisition.TOD_qubic
-                self.Lqubic = _dot(
-                    _residuals.T,
-                    self.preset.acquisition.invN.operands[0](_residuals),
-                    self.preset.comm,
-                )
-
-                _residuals = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
-
-                self.Lplanck = _dot(
-                    _residuals.T,
-                    self.preset.acquisition.invN.operands[1](_residuals),
-                    self.preset.comm,
-                )
-                return self.Lqubic + self.Lplanck
-
-            else:
-                ### Compute residuals in time domain
-                _residuals = ysim - self.preset.acquisition.TOD_qubic
-                self.Lplanck = 0
-                self.Lqubic = _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
-                return self.Lqubic
-
-        elif self.TOD_sim.ndim == 4:
-            x = x.reshape((self.ncomp - 1, self.npix))
-            A = self._get_mixingmatrix(self.nus, x)
-
-            ### Separe the mixing matrix element for 150 and 220 GHz
-            Aq150 = A[:, : self.nsub, :].reshape((self.ncomp * self.nsub * self.npix))
-            Aq220 = A[:, self.nsub : 2 * self.nsub, :].reshape((self.ncomp * self.nsub * self.npix))
-
-            ### Create simulated TOD
-            ysim = np.concatenate((Aq150 @ self.TOD_sim150, Aq220 @ self.TOD_sim220), axis=0)
-
-            if self.parametric:
-                ### Fill the full sky map of beta with the unknowns
-                full_map_beta = self.full_beta_map.copy()
-                x = x.reshape(((self.ncomp - 1) * self.npix))
-                full_map_beta[self.seenpix_beta] = x
-
-                ### Compute the mixing matrix for the full sky
-                A = self._get_mixingmatrix(self.nus, full_map_beta)
-
-                ### Separe QUBIC and Planck and switch axes
-                Aext = np.transpose(A[:, 2 * self.nsub :, :], (1, 0, 2))
-
-                H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext, convolution=False)
-
-                ### Compute Planck part of the chi^2
-                ysim_pl = H_planck(self.preset.comp.components_iter.copy())
-
-                ### Compute residuals in time domain
-                _residuals = np.r_[ysim, ysim_pl] - self.TOD_obs
-
-                return _dot(_residuals.T, self.preset.acquisition.invN(_residuals), self.preset.comm)
-            else:
-                raise TypeError("Varying mixing matrix along the LOS is not yet implemented")
-
-        else:
-            raise TypeError("TOD_sim should have 3 or 4 dimensions.")
-
-
-class Chi2UltraWideBand:
-    def __init__(self, preset, TOD_sim, parametric=True, full_beta_map=None):
-        self.preset = preset
-        self.TOD_sim = TOD_sim
-        self.nus = self.preset.qubic.joint_out.allnus
-        self.fsub = int(len(self.nus) / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
-
-        self.parametric = parametric
-        self.full_beta_map = full_beta_map
+            raise ValueError("Instrument type {} is not implemented.".format(instr_type))
 
         ### If parametric, we use the QUBIC + Planck data
         if self.parametric:
@@ -184,22 +47,27 @@ class Chi2UltraWideBand:
         else:
             self.TOD_obs = self.preset.acquisition.TOD_qubic.copy()
 
-        ### If constant spectral index
-        if self.TOD_sim.ndim == 3:
-            self.ncomp, self.nfreq, self.nsample_ndet = self.TOD_sim.shape
-            self.TOD_sim_i = self.TOD_sim.reshape((self.ncomp * self.nfreq, self.nsample_ndet))
-
+        ### If constant spectral index # diff ici
+        if self.dsim.ndim == 3:  # Can be concatenated with the case self.dsim.ndim == 4 by adding npix = 1 or npix = self.npix
+            npix = 1
         ### If varying spectral indices
-        elif self.TOD_sim.ndim == 4:
-            self.npix, self.nfreq, self.ncomp, self.nsample_ndet = self.TOD_sim.shape
-            self.TOD_sim_i = self.TOD_sim.reshape((self.ncomp * self.nfreq * self.npix, self.nsample_ndet))
+        elif self.dsim.ndim == 4:
             self.seenpix_beta = np.where(self.full_beta_map == hp.UNSEEN)
-
+            npix = self.npix
         else:
             raise TypeError("TOD_sim should have 3 or 4 dimensions.")
 
-    def _fill_A(self, x):
-        A = np.ones((self.nfreq, self.ncomp))
+        self.nc, self.nf, self.nsnd = self.dsim.shape
+        self.nsub = int(self.nf / self.nFocalPlanes)
+
+        self.dsim_fp = []
+        for i in range(self.nFocalPlanes):
+            self.dsim_fp.append(self.dsim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.nc * self.nsub * npix, self.nsnd)))
+        # Missing self.dsim150 and self.dsim220 with new definition, use self.dsim_fp[0] and self.dsim_fp[1] instead
+
+    def _fill_A(self, x):  # idem (garder la version UWB, fonctionne mieux)
+        fsub = int(self.nf / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
+        A = np.ones((self.nf, self.nc))
         k = 0
         for i in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
             for j in range(1, self.ncomp):
@@ -207,7 +75,7 @@ class Chi2UltraWideBand:
                 k += 1
         return A
 
-    def _get_mixingmatrix(self, nus, x):
+    def _get_mixingmatrix(self, nus, x):  # idem
         ### Compute mixing matrix
         mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_model_out)
         return mixingmatrix.eval(nus, *x)
@@ -222,12 +90,16 @@ class Chi2UltraWideBand:
             ### If blind -> we treat the mixing matrix element as free parameters
             else:
                 A = self._fill_A(x)
+            # print(A.shape)
+            # stop
+            ### Separe the mixing matrix element for 150 and 220 GHz if needed
 
-            ### Separe the mixing matrix element for 150 and 220 GHz
-            Aq = A[: self.nfreq].T.reshape((self.ncomp * self.nfreq))
+            ysim = []
+            for i in range(self.nFocalPlanes):
+                ysim.append(A[self.nsub * i : self.nsub * (i + 1)].T.reshape((self.nc * self.nsub)) @ self.dsim_fp[i])
 
             ### Create simulated TOD
-            ysim = Aq @ self.TOD_sim_i
+            ysim = np.concatenate(ysim, axis=0)
 
             if self.parametric:
                 ### Separe QUBIC and Planck
@@ -241,15 +113,22 @@ class Chi2UltraWideBand:
 
                 ysim_pl = H_planck(mycomp)
 
+                ### Compute residuals in time domain
                 _residuals = np.r_[ysim] - self.preset.acquisition.TOD_qubic
-                self.Lqubic = _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
+                self.Lqubic = _dot(
+                    _residuals.T,
+                    self.preset.acquisition.invN.operands[0](_residuals),
+                    self.preset.comm,
+                )
 
                 _residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
 
-                self.Lplanck = _dot(_residuals_pl.T, self.preset.acquisition.invN.operands[1](_residuals_pl), self.preset.comm)
-
+                self.Lplanck = _dot(
+                    _residuals_pl.T,
+                    self.preset.acquisition.invN.operands[1](_residuals_pl),
+                    self.preset.comm,
+                )
                 return self.Lqubic + self.Lplanck
-
             else:
                 ### Compute residuals in time domain
                 _residuals = ysim - self.TOD_obs
@@ -259,9 +138,16 @@ class Chi2UltraWideBand:
                     self.preset.acquisition.invN.operands[0](_residuals),
                     self.preset.comm,
                 )
+                # Why so much different for DB?
+                _residuals = ysim - self.preset.acquisition.TOD_qubic
+                self.Lplanck = 0
+                self.Lqubic = _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
+                return self.Lqubic
+        elif self.dsim.ndim == 4:  # this implementation is exactly the same as for the DB, which feels wrong?
+            # It is broken anyway
 
-        elif self.TOD_sim.ndim == 4:
-            x = x.reshape((self.ncomp - 1, self.npix))
+            # print(x, x.shape, self.nc-1, self.npix)
+            x = x.reshape((self.nc - 1, self.npix))
             A = self._get_mixingmatrix(self.nus, x)
 
             ### Separe the mixing matrix element for 150 and 220 GHz
@@ -300,7 +186,7 @@ class Chi2UltraWideBand:
             else:
                 raise TypeError("Varying mixing matrix along the LOS is not yet implemented")
         else:
-            raise TypeError("TOD_sim should have 3 or 4 dimensions.")
+            raise TypeError("dsim should have 3 or 4 dimensions.")
 
 
 class Chi2Parametric:
@@ -313,7 +199,7 @@ class Chi2Parametric:
             self.ncomp, self.nfreq, self.nsample_ndet = self.d.shape
             self.constant = True
         else:
-            if self.preset.qubic.params_qubic["instrument"] == "UWB":
+            if self.preset.qubic.params_qubic["instrument"] == "UWB":  # ?
                 pass
             else:
                 self.nfreq = self.d.shape[1]
@@ -400,8 +286,8 @@ class Chi2Parametric:
         return LLH
 
 
-class Chi2Parametric_alt:
-    def __init__(self, preset, d, A_blind, icomp):
+class Chi2Parametric_alt:  # work in progress?
+    def __init__(self, preset, d, A_blind, icomp, seenpix_wrap=None):
         self.preset = preset
         self.d = d
         self.A_blind = A_blind

@@ -6,10 +6,7 @@ from pyoperators import (
 )
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
-from qubic.lib.Instrument.Qnoise import (
-    QubicDualBandNoise,
-    QubicWideBandNoise,
-)
+from qubic.lib.Instrument.Qnoise import QubicTotNoise
 
 
 class PresetAcquisition:
@@ -82,7 +79,8 @@ class PresetAcquisition:
 
     def __init__(
         self,
-        seed_noise,
+        seed_noise_qubic,
+        seed_noise_planck,
         preset_tools,
         preset_external,
         preset_qubic,
@@ -105,8 +103,9 @@ class PresetAcquisition:
         self.preset_mixingmatrix = preset_mixing_matrix
         self.preset_gain = preset_gain
 
-        ### Set noise seed
-        self.seed_noise = seed_noise
+        ### Set noise seeds
+        self.seed_noise_qubic = seed_noise_qubic
+        self.seed_noise_planck = seed_noise_planck
 
         ### Define tolerance of the rms variations
         self.rms_tolerance = self.preset_tools.params["PCG"]["tol_rms"]
@@ -336,34 +335,21 @@ class PresetAcquisition:
 
         """
 
-        if self.preset_qubic.params_qubic["instrument"] == "UWB":
-            noise = QubicWideBandNoise(
-                self.preset_qubic.dict,
-                self.preset_qubic.params_qubic["npointings"],
-                detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
-                duration=np.mean(
-                    [
-                        self.preset_qubic.params_qubic["NOISE"]["duration_150"],
-                        self.preset_qubic.params_qubic["NOISE"]["duration_220"],
-                    ]
-                ),
-            )
-        else:
-            noise = QubicDualBandNoise(
-                self.preset_qubic.dict,
-                self.preset_qubic.params_qubic["npointings"],
-                detector_nep=self.preset_qubic.params_qubic["NOISE"]["detector_nep"],
-                duration=[
-                    self.preset_qubic.params_qubic["NOISE"]["duration_150"],
-                    self.preset_qubic.params_qubic["NOISE"]["duration_220"],
-                ],
-            )
+        noise = QubicTotNoise(
+            self.preset_qubic.dict,
+            self.preset_qubic.joint_out.qubic.sampling,
+            self.preset_qubic.joint_out.qubic.scene,
+            duration=[
+                self.preset_qubic.params_qubic["NOISE"]["duration_150"],
+                self.preset_qubic.params_qubic["NOISE"]["duration_220"],
+            ],
+        )
 
         return noise.total_noise(
             self.preset_qubic.params_qubic["NOISE"]["ndet"],
             self.preset_qubic.params_qubic["NOISE"]["npho150"],
             self.preset_qubic.params_qubic["NOISE"]["npho220"],
-            seed_noise=self.seed_noise,
+            seed_noise=self.seed_noise_qubic,
         ).ravel()
 
     def get_tod(self):
@@ -396,16 +382,8 @@ class PresetAcquisition:
             fwhm=self.fwhm_tod,
         )
 
-        ### Create seed
-        if self.preset_tools.rank == 0:
-            np.random.seed(None)
-            seed_pl = np.random.randint(10000000)
-        else:
-            seed_pl = None
-        seed_pl = self.preset_tools.comm.bcast(seed_pl, root=0)
-
         ### Build noise variables
-        noise_external = self.preset_qubic.joint_in.external.get_noise(seed=seed_pl) * self.preset_tools.params["PLANCK"]["level_noise_planck"]
+        noise_external = self.preset_qubic.joint_in.external.get_noise(seed=self.seed_noise_planck) * self.preset_tools.params["PLANCK"]["level_noise_planck"]
         noise_qubic = self.get_noise()
 
         ### Create QUBIC TOD
@@ -466,6 +444,7 @@ class PresetAcquisition:
 
         """
 
+        # Change this!
         ### Create seed
         if self.preset_tools.rank == 0:
             seed = np.random.randint(100000000)

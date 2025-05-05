@@ -12,7 +12,7 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
 
 from qubic.lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
-from qubic.lib.Instrument.Qnoise import QubicDualBandNoise, QubicWideBandNoise
+from qubic.lib.Instrument.Qnoise import QubicTotNoise
 from qubic.lib.MapMaking.Qcg import pcg
 from qubic.lib.MapMaking.Qmap_plotter import PlotsFMM
 from qubic.lib.MapMaking.Qmaps import InputMaps, PlanckMaps
@@ -78,11 +78,12 @@ class PipelineFrequencyMapMaking:
         ### Sky
         self.dict_in = self.get_dict(key="in")
         self.dict_out = self.get_dict(key="out")
+        # change config and detector_nep
 
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
             self.dict_in,
-            self.params["QUBIC"]["instrument"],
+            # self.params["QUBIC"]["instrument"],
             self.params["QUBIC"]["nsub_in"],
             self.params["QUBIC"]["nsub_in"],
             H=None,
@@ -96,7 +97,7 @@ class PipelineFrequencyMapMaking:
 
         self.joint = JointAcquisitionFrequencyMapMaking(
             self.dict_out,
-            self.params["QUBIC"]["instrument"],
+            # self.params["QUBIC"]["instrument"],
             self.params["QUBIC"]["nrec"],
             self.params["QUBIC"]["nsub_out"],
             H=H,
@@ -156,29 +157,22 @@ class PipelineFrequencyMapMaking:
             self.invN = R(self.invN(R.T))
 
         ### Noises
-        seed_noise_planck = self.mpi.get_random_value()
+        # seed_noise_planck = self.mpi.get_random_value()
 
-        self.noise143 = self.planck_acquisition143.get_noise(seed_noise_planck) * self.params["PLANCK"]["level_noise_planck"]
-        self.noise217 = self.planck_acquisition217.get_noise(seed_noise_planck + 1) * self.params["PLANCK"]["level_noise_planck"]
+        self.noise143 = self.planck_acquisition143.get_noise(self.params["PLANCK"]["seed"]) * self.params["PLANCK"]["level_noise_planck"]
+        self.noise217 = self.planck_acquisition217.get_noise(self.params["PLANCK"]["seed"] + 1) * self.params["PLANCK"]["level_noise_planck"]
 
-        if self.params["QUBIC"]["instrument"] == "DB":
-            qubic_noise = QubicDualBandNoise(
-                self.dict_out,
-                self.params["QUBIC"]["npointings"],
-                self.params["QUBIC"]["NOISE"]["detector_nep"],
-            )
-        elif self.params["QUBIC"]["instrument"] == "UWB":
-            qubic_noise = QubicWideBandNoise(
-                self.dict_out,
-                self.params["QUBIC"]["npointings"],
-                self.params["QUBIC"]["NOISE"]["detector_nep"],
-            )
+        qubic_noise = QubicTotNoise(
+            self.dict_out,
+            self.joint.qubic.sampling,
+            self.joint.qubic.scene,
+        )
 
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],
             self.params["QUBIC"]["NOISE"]["npho150"],
             self.params["QUBIC"]["NOISE"]["npho220"],
-            seed_noise=seed_noise_planck,
+            seed_noise=self.params["QUBIC"]["NOISE"]["seed"],
         ).ravel()
 
         ### Initialize plot instance
@@ -219,7 +213,6 @@ class PipelineFrequencyMapMaking:
 
         ### QUBIC Pointing matrix for TOD generation
         self.H_in_qubic = self.joint_tod.qubic.get_operator()
-
         ### Pointing matrix for reconstruction
         if self.params["PLANCK"]["external_data"]:
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
@@ -312,7 +305,7 @@ class PipelineFrequencyMapMaking:
         args = {
             "npointings": self.params["QUBIC"]["npointings"],
             "nf_recon": self.params["QUBIC"]["nrec"],
-            "nf_sub": self.params["QUBIC"][f"nsub_{key}"],
+            "nf_sub": self.params["QUBIC"][f"nsub_{key}"],  # here is the difference between in and out dictionaries
             "nside": self.params["SKY"]["nside"],
             "MultiBand": True,
             "period": 1,
@@ -331,14 +324,18 @@ class PipelineFrequencyMapMaking:
             "effective_duration150": 3,
             "effective_duration220": 3,
             "filter_relative_bandwidth": 0.25,
-            "type_instrument": "wide",
+            "type_instrument": "wide",  # ?
             "TemperatureAtmosphere150": None,
             "TemperatureAtmosphere220": None,
             "EmissivityAtmosphere150": None,
             "EmissivityAtmosphere220": None,
+            # mettre if ici pour fixer detector_nep
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
+            "interp_projection": False,
+            "instrument_type": self.params["QUBIC"]["instrument"],
+            "config": self.params["QUBIC"]["configuration"],
         }
 
         ### Get the default dictionary
@@ -406,10 +403,7 @@ class PipelineFrequencyMapMaking:
         if self.params["QUBIC"]["convolution_in"] and self.params["QUBIC"]["convolution_out"]:
             fwhm_rec = np.array([])
             for irec in range(self.params["QUBIC"]["nrec"]):
-                fwhm_rec = np.append(
-                    fwhm_rec,
-                    np.min(self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]),
-                )
+                fwhm_rec = np.append(fwhm_rec, np.min(self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]))
 
         elif self.params["QUBIC"]["convolution_in"] and self.params["QUBIC"]["convolution_out"] is False:
             fwhm_rec = np.array([])
@@ -490,102 +484,30 @@ class PipelineFrequencyMapMaking:
 
         """
 
-        if self.params["QUBIC"]["instrument"] == "UWB":
-            if self.params["QUBIC"]["nrec"] != 1:
-                TOD_PLANCK = np.zeros(
-                    (
-                        self.params["QUBIC"]["nrec"],
-                        12 * self.params["SKY"]["nside"] ** 2,
-                        3,
-                    )
-                )
-                for irec in range(int(self.params["QUBIC"]["nrec"] / 2)):
-                    if self.params["QUBIC"]["convolution_in"]:
-                        C = HealpixConvolutionGaussianOperator(
-                            fwhm=np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]),
-                            lmax=2 * self.params["Spectrum"]["lmax"],
-                        )
+        TOD_QUBIC = self.H_in_qubic(self.maps_input.m_nu).ravel() + self.noiseq
 
-                    else:
-                        C = HealpixConvolutionGaussianOperator(fwhm=0)
+        if not self.params["PLANCK"]["external_data"]:
+            return TOD_QUBIC
 
-                    TOD_PLANCK[irec] = C(self.maps_input.maps[irec] + self.noise143)
+        # To handle the case nrec == 1, even if it is broken because of the way compute_freq is used in QubicMultiAcquisitions
+        TOD_PLANCK = np.zeros((max(self.params["QUBIC"]["nrec"], 2), 12 * self.params["SKY"]["nside"] ** 2, 3))
 
-                for irec in range(int(self.params["QUBIC"]["nrec"] / 2), self.params["QUBIC"]["nrec"]):
-                    if self.params["QUBIC"]["convolution_in"]:
-                        C = HealpixConvolutionGaussianOperator(fwhm=np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]), lmax=2 * self.params["Spectrum"]["lmax"])
+        for irec in range(self.params["QUBIC"]["nrec"]):
+            fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in])  # self.fwhm_in = 0 if convolution_in == False
+            C = HealpixConvolutionGaussianOperator(fwhm=fwhm_irec, lmax=2 * self.params["Spectrum"]["lmax"])
 
-                    else:
-                        C = HealpixConvolutionGaussianOperator(fwhm=0)
-
-                    TOD_PLANCK[irec] = C(self.maps_input.maps[irec] + self.noise217)
+            if irec < self.params["QUBIC"]["nrec"] / 2:  # choose between the two levels of noise
+                noise = self.noise143
             else:
-                TOD_PLANCK = np.zeros(
-                    (
-                        2 * self.params["QUBIC"]["nrec"],
-                        12 * self.params["SKY"]["nside"] ** 2,
-                        3,
-                    )
-                )
+                noise = self.noise217
+            TOD_PLANCK[irec] = C(self.maps_input.maps[irec] + noise)
 
-                if self.params["QUBIC"]["convolution_in"]:
-                    C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_in[-1], lmax=2 * self.params["Spectrum"]["lmax"])
-                else:
-                    C = HealpixConvolutionGaussianOperator(fwhm=0)
+        if self.params["QUBIC"]["nrec"] == 1:  # To handle the case nrec == 1, TOD_PLANCK[0] alreay computed above
+            TOD_PLANCK[1] = C(self.maps_input.maps[1] + self.noise217)
 
-                TOD_PLANCK[0] = C(self.maps_input.maps[0] + self.noise143)
-                TOD_PLANCK[1] = C(self.maps_input.maps[1] + self.noise217)
+        TOD_PLANCK = TOD_PLANCK.ravel()
 
-            TOD_PLANCK = TOD_PLANCK.ravel()
-            TOD_QUBIC = self.H_in_qubic(self.maps_input.m_nu).ravel() + self.noiseq
-            if self.params["PLANCK"]["external_data"]:
-                TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
-            else:
-                TOD = TOD_QUBIC
-
-        else:
-            sh_q = self.joint.qubic.ndets * self.joint.qubic.nsamples
-            TOD_QUBIC = self.H_in_qubic(self.maps_input.m_nu).ravel() + self.noiseq
-
-            if not self.params["PLANCK"]["external_data"]:
-                TOD = TOD_QUBIC
-            else:
-                TOD_QUBIC150 = TOD_QUBIC[:sh_q].copy()
-                TOD_QUBIC220 = TOD_QUBIC[sh_q:].copy()
-
-                TOD = TOD_QUBIC150.copy()
-                TOD_PLANCK = np.zeros(
-                    (
-                        self.params["QUBIC"]["nrec"],
-                        12 * self.params["SKY"]["nside"] ** 2,
-                        3,
-                    )
-                )
-                for irec in range(int(self.params["QUBIC"]["nrec"] / 2)):
-                    if self.params["QUBIC"]["convolution_in"]:
-                        C = HealpixConvolutionGaussianOperator(fwhm=np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]), lmax=2 * self.params["Spectrum"]["lmax"])
-
-                    else:
-                        C = HealpixConvolutionGaussianOperator(fwhm=0)
-
-                    TOD = np.r_[
-                        TOD,
-                        C(self.maps_input.maps[irec] + self.noise143).ravel(),
-                    ]
-
-                TOD = np.r_[TOD, TOD_QUBIC220.copy()]
-                for irec in range(int(self.params["QUBIC"]["nrec"] / 2), self.params["QUBIC"]["nrec"]):
-                    if self.params["QUBIC"]["convolution_in"]:
-                        C = HealpixConvolutionGaussianOperator(fwhm=np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in]), lmax=2 * self.params["Spectrum"]["lmax"])
-
-                    else:
-                        C = HealpixConvolutionGaussianOperator(fwhm=0)
-
-                    TOD = np.r_[
-                        TOD,
-                        C(self.maps_input.maps[irec] + self.noise217).ravel(),
-                    ]
-
+        TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
         return TOD
 
     def get_preconditioner(self):
@@ -600,13 +522,7 @@ class PipelineFrequencyMapMaking:
         """
 
         if self.params["PCG"]["preconditioner"]:
-            approx_hth = np.zeros(
-                (
-                    self.params["QUBIC"]["nsub_out"],
-                    12 * self.params["SKY"]["nside"] ** 2,
-                    3,
-                )
-            )
+            approx_hth = np.zeros((self.params["QUBIC"]["nsub_out"], 12 * self.params["SKY"]["nside"] ** 2, 3))
             conditioner = np.zeros((self.params["QUBIC"]["nrec"], 12 * self.params["SKY"]["nside"] ** 2, 3))
             vec = np.ones(self.joint.qubic.H[0].shapein)
 
@@ -655,6 +571,7 @@ class PipelineFrequencyMapMaking:
         """
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
+
         A = self.H_out.T * self.invN * self.H_out
 
         if self.params["PLANCK"]["external_data"]:

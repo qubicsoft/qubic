@@ -27,7 +27,7 @@ class PresetInitialisation:
 
     """
 
-    def __init__(self, comm, seed_noise):
+    def __init__(self, comm):  # , seed_noise):
         """
         Initialize the class with MPI communication.
 
@@ -35,7 +35,6 @@ class PresetInitialisation:
 
         ### MPI common arguments
         self.comm = comm
-        self.seed_noise = seed_noise
 
         self.tools = None
         self.qubic = None
@@ -53,6 +52,8 @@ class PresetInitialisation:
 
         """
         self.tools = PresetTools(self.comm, parameters_file)
+        self.seed_noise_qubic = self.tools.params["QUBIC"]["NOISE"]["seed"]
+        self.seed_noise_planck = self.tools.params["PLANCK"]["seed"]
         self.tools.mpi._print_message("========= Initialization =========")
         self.tools.mpi._print_message("    => Checking simulation parameters")
         self.tools.check_for_errors()
@@ -94,7 +95,9 @@ class PresetInitialisation:
 
         self.tools.mpi._print_message("========= Acquisition =========")
         self.acquisition = PresetAcquisition(
-            self.seed_noise,
+            # self.seed_noise,
+            self.seed_noise_qubic,
+            self.seed_noise_planck,
             self.tools,
             self.external,
             self.qubic,

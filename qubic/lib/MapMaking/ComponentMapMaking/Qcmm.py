@@ -14,14 +14,13 @@ from scipy.optimize import fmin_l_bfgs_b, minimize
 from qubic.lib.MapMaking.ComponentMapMaking.preset.preset import PresetInitialisation
 from qubic.lib.MapMaking.ComponentMapMaking.Qcostfunc import (
     Chi2Blind,
-    Chi2DualBand,
+    Chi2InstrumentType,
     Chi2Parametric_alt,
-    Chi2UltraWideBand,
 )
 from qubic.lib.MapMaking.Qcg import pcg
 from qubic.lib.MapMaking.Qmap_plotter import PlotsCMM
 from qubic.lib.Qfoldertools import do_gif
-from qubic.lib.Qmpi_tools import MpiTools, join_data
+from qubic.lib.Qmpi_tools import join_data
 from qubic.lib.QskySim import get_angular_profile
 
 
@@ -46,12 +45,12 @@ class Pipeline:
 
         """
 
-        ### Creating noise seed
-        mpitools = MpiTools(comm)
-        seed_noise = mpitools.get_random_value(init_seed=None)
+        # ### Creating noise seed
+        # mpitools = MpiTools(comm)
+        # seed_noise = mpitools.get_random_value(init_seed=None)
 
         ### Initialization
-        self.preset = PresetInitialisation(comm, seed_noise).initialize(parameters_file)
+        self.preset = PresetInitialisation(comm).initialize(parameters_file)
         self.plots = PlotsCMM(self.preset, dogif=True)
         if self.preset.comp.params_foregrounds["Dust"]["type"] == "blind" or self.preset.comp.params_foregrounds["Synchrotron"]["type"] == "blind":
             self.chi2 = Chi2Blind(self.preset)
@@ -195,7 +194,7 @@ class Pipeline:
             x_planck = self.preset.comp.components_out * (1 - seenpix[None, :, None])
         self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck)))
 
-        # TO BE REMOVE
+        # TO BE REMOVED
         ### Update components when intensity maps are fixed
         # elif self.preset.tools.params['PCG']['fixI']:
         #    mask = np.ones((len(self.preset.comp.components_name_out), 12*self.preset.sky.params_sky['nside']**2, 3))
@@ -393,7 +392,7 @@ class Pipeline:
 
         return updated_mixingmatrix
 
-    def update_spectral_index(self):
+    def update_spectral_index(self):  # this function is too complex and has code duplication
         """Update spectral index.
 
         Method that perform step 3) of the pipeline for 2 possible designs : Two Bands and Ultra Wide Band
@@ -419,12 +418,12 @@ class Pipeline:
             ### Model without spatial variation of spectral index
             if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] == 0:
                 previous_beta = self.preset.acquisition.beta_iter.copy()
-
-                if self.preset.qubic.params_qubic["instrument"] == "DB":
-                    self.chi2 = Chi2DualBand(self.preset, tod_comp, parametric=True)
-
-                elif self.preset.qubic.params_qubic["instrument"] == "UWB":
-                    self.chi2 = Chi2UltraWideBand(self.preset, tod_comp, parametric=True)
+                self.chi2 = Chi2InstrumentType(
+                    self.preset,
+                    tod_comp,
+                    instr_type=self.preset.qubic.params_qubic["instrument"],
+                    parametric=True,
+                )
 
                 ### Fit using scipy.optimize.minimize
                 self.preset.acquisition.beta_iter = minimize(
@@ -473,14 +472,22 @@ class Pipeline:
                 ### Store fixed beta (those denoted with hp.UNSEEN are variable)
                 beta_fixed = self.preset.acquisition.beta_iter.copy()
                 beta_fixed[:, self.preset.mixingmatrix._index_seenpix_beta] = hp.UNSEEN
-                chi2 = Chi2DualBand(self.preset, tod_comp, parametric=True, full_beta_map=beta_fixed)
+                # chi2 = Chi2DualBand(
+                #     self.preset, tod_comp, parametric=True, full_beta_map=beta_fixed
+                # )
                 # chi2 = Chi2Parametric(self.preset, tod_comp, self.preset.acquisition.beta_iter, seenpix_wrap=None)
-
+                self.chi2 = Chi2InstrumentType(
+                    self.preset,
+                    tod_comp,
+                    instr_type=self.preset.qubic.params_qubic["instrument"],
+                    parametric=True,
+                    full_beta_map=beta_fixed,
+                )
                 previous_beta = self.preset.acquisition.beta_iter[:, self.preset.mixingmatrix._index_seenpix_beta].copy()
                 self.nfev = 0
 
                 beta_i = fmin_l_bfgs_b(
-                    chi2,
+                    self.chi2,
                     x0=previous_beta,
                     callback=self.callback,
                     approx_grad=True,
@@ -489,7 +496,7 @@ class Pipeline:
                     maxiter=20,
                 )[0]
 
-                self.preset.acquisition.beta_iter[chi2.seenpix_beta] = beta_i
+                self.preset.acquisition.beta_iter[self.chi2.seenpix_beta] = beta_i
 
                 del tod_comp
                 gc.collect()
@@ -523,11 +530,13 @@ class Pipeline:
 
             ### Blind using scipy.optimize.minimize
             if self.preset.comp.params_foregrounds["blind_method"] == "minimize":
-                if self.preset.qubic.params_qubic["instrument"] == "DB":
-                    self.chi2 = Chi2DualBand(self.preset, tod_comp, parametric=False)
-                elif self.preset.qubic.params_qubic["instrument"] == "UWB":
-                    self.chi2 = Chi2UltraWideBand(self.preset, tod_comp, parametric=False)
-
+                # Neveer used? It won't work as it is for now
+                self.chi2 = Chi2InstrumentType(
+                    self.preset,
+                    tod_comp,
+                    instr_type=self.preset.qubic.params_qubic["instrument"],
+                    parametric=False,
+                )
                 x0 = []
                 bnds = []
                 for inu in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
@@ -777,9 +786,11 @@ class Pipeline:
 
         """
 
-        self.H_i = self.preset.qubic.joint_out.get_operator(
-            # self.preset.acquisition.beta_iter,
-            A=self.preset.acquisition.Amm_iter,
+        raise ValueError("The method Pipeline.update_gain is broken.")
+
+        self.H_i = self.preset.qubic.joint_out.get_operator(  # Amm is now called A
+            self.preset.acquisition.beta_iter,
+            Amm=self.preset.acquisition.Amm_iter,
             gain=np.ones(self.preset.gain.gain_iter.shape),
             fwhm=self.preset.acquisition.fwhm_mapmaking,
             nu_co=self.preset.comp.nu_co,
@@ -787,7 +798,10 @@ class Pipeline:
         self.nsampling = self.preset.qubic.joint_out.qubic.nsamples
         self.ndets = self.preset.qubic.joint_out.qubic.ndets
 
-        if self.preset.qubic.params_qubic["instrument"] == "UWB":
+        # When (if) rewritten, the code will not have conditions on self.preset.qubic.params_qubic["instrument"] value
+        # Also, the shapes of inv, H_i and TOD were modified
+
+        if self.preset.qubic.params_qubic["instrument"] == "UWB":  # rewrite this?
             _r = ReshapeOperator(
                 self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
                 (self.preset.qubic.joint_out.qubic.ndets, self.preset.qubic.joint_out.qubic.nsamples),

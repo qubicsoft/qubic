@@ -56,7 +56,6 @@ class PresetQubic:
         self.preset_tools.mpi._print_message("    => Building QUBIC operator")
         self.joint_in = JointAcquisitionComponentsMapMaking(
             self.dict,
-            self.params_qubic["instrument"],
             components_fgb_in,
             self.params_qubic["nsub_in"],
             preset_external.external_nus,
@@ -65,27 +64,19 @@ class PresetQubic:
         )
 
         if self.params_qubic["nsub_in"] == self.params_qubic["nsub_out"]:
-            self.joint_out = JointAcquisitionComponentsMapMaking(
-                self.dict,
-                self.params_qubic["instrument"],
-                components_fgb_out,
-                self.params_qubic["nsub_in"],
-                preset_external.external_nus,
-                preset_external.params_external["nintegr_planck"],
-                nu_co=nu_co,
-                H=self.joint_in.qubic.H,
-            )
+            H_tojoint = self.joint_in.qubic.H
         else:
-            self.joint_out = JointAcquisitionComponentsMapMaking(
-                self.dict,
-                self.params_qubic["instrument"],
-                components_fgb_out,
-                self.params_qubic["nsub_out"],
-                preset_external.external_nus,
-                preset_external.params_external["nintegr_planck"],
-                nu_co=nu_co,
-                H=None,
-            )
+            H_tojoint = None
+
+        self.joint_out = JointAcquisitionComponentsMapMaking(
+            self.dict,
+            components_fgb_out,
+            self.params_qubic["nsub_out"],
+            preset_external.external_nus,
+            preset_external.params_external["nintegr_planck"],
+            nu_co=nu_co,
+            H=H_tojoint,
+        )
 
     def get_dict(self):
         """QUBIC dictionary.
@@ -139,6 +130,9 @@ class PresetQubic:
             "detector_nep": float(self.params_qubic["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params_qubic["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params_qubic["SYNTHBEAM"]["synthbeam_fraction"],
+            "interp_projection" : False,
+            "instrument_type": self.params_qubic["instrument"],
+            "config": self.params_qubic["configuration"],
         }
 
         ### Get the default dictionary

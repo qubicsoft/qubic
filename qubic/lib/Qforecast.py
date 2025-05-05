@@ -6,6 +6,7 @@ import healpy as hp
 import numpy as np
 
 from qubic.lib.Instrument.Qinstrument import compute_freq
+from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import CMBModel
 
 
 class NoiseEquivalentTemperature:
@@ -124,7 +125,7 @@ class AnalyticalForecast:
 
         """
 
-        ClBB = give_cl_cmb(ell, r=1, Alens=0.0)
+        ClBB = CMBModel(ell).give_cl_cmb(ell, r=1, Alens=0.0)
         s = np.sum((ell + 0.5) * self.fsky * (ClBB / Nl) ** 2) ** (-1 / 2)
 
         return s

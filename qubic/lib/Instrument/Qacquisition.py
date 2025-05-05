@@ -48,10 +48,6 @@ from qubic.lib.Qscene import QubicScene
 warnings.filterwarnings("ignore")
 
 
-def arcmin2rad(arcmin):
-    return arcmin * 0.000290888
-
-
 class QubicAcquisition(Acquisition):
     """
     The QubicAcquisition class, which combines the instrument, sampling and
@@ -168,7 +164,6 @@ class QubicAcquisition(Acquisition):
         np.random.seed(seed)
         out = self.instrument.get_noise(self.sampling, self.scene, det_noise, photon_noise, out=out)
         if self.effective_duration is not None:
-            # nsamplings = self.comm.allreduce(len(self.sampling))
             nsamplings = self.sampling.comm.allreduce(len(self.sampling))
 
             out *= np.sqrt(nsamplings * self.sampling.period / (self.effective_duration * 31557600))
@@ -1061,7 +1056,8 @@ class OtherDataParametric:
             else:
                 self.bw.append(self.dataset["bw{}".format(i)])
 
-        self.fwhm = arcmin2rad(self.create_array("fwhm", self.nus, self.nside))
+        # Conversion from arcimin to radian
+        self.fwhm = np.deg2rad(self.create_array("fwhm", self.nus, self.nside) / 60.0)
         self.comps = comps
         self.nc = len(self.comps)
 

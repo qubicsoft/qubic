@@ -35,7 +35,7 @@ class MpiTools:
             pass
         else:
             self.comm.Barrier()      
-    def get_random_value(self, init_seed=None): # Why do we want the same seed for all communicators?
+    def get_random_value(self, init_seed=None):
         """Random value
 
         Method to build a random seed.

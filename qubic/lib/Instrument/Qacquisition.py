@@ -940,7 +940,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 convolution = IdentityOperator()
             else:
                 convolution = HealpixConvolutionGaussianOperator(
-                    fwhm=fwhm[isub], lmax=2 * self.scene.nside # -1 ?
+                    fwhm=fwhm[isub], lmax=2 * self.scene.nside -1
                 )
 
             ### Compose operator as H = Proj * C * A
@@ -1158,7 +1158,7 @@ class OtherDataParametric:
                 else:
                     fwhm = 0
 
-                C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=2 * self.nside)
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=2 * self.nside - 1)
 
                 D = self._get_mixing_operator(A=A[k])
 

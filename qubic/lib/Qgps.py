@@ -57,7 +57,7 @@ class GPStools:
         else:
             return gps_data_path
 
-    def read_gps_bindat(self, gps_data_path, verbosity=0):
+    def read_gps_bindat(self, gps_data_path: str, verbosity=0):
         """GPS binary data.
 
         Method to convert the binary data acquired from by RTK simple broadcast into readable format and store them in a dictionary.
@@ -79,8 +79,7 @@ class GPStools:
         """
 
         if not os.path.isfile(gps_data_path):
-            print("ERROR!  File not found: %s" % gps_data_path)
-            return
+            ValueError("ERROR!  File not found: %s" % gps_data_path)
 
         # get date of the file.  We had a format change 2025-01-15 10:00 = 1736931600
         file_date = os.path.getatime(gps_data_path)

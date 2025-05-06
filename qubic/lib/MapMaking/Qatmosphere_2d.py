@@ -615,7 +615,7 @@ class AtmosphereMaps(AtmosphereProperties):
 
         return self.kolmogorov_correlation_function(r, r0)
 
-    def cl_from_angular_correlation_int(self, l):
+    def cl_from_angular_correlation_int(self, ell):
         r"""Angular power spectrum from angular correlation function.
 
         Compute the angular power spectrum from the angular correlation function, using the formula:
@@ -630,7 +630,7 @@ class AtmosphereMaps(AtmosphereProperties):
 
         Parameters
         ----------
-        l : int
+        ell : int
             Angular multipole order.
 
         Returns
@@ -648,7 +648,7 @@ class AtmosphereMaps(AtmosphereProperties):
             theta = np.degrees(np.arccos(cos_theta))
 
             # Compute the legendre polynomial of order l
-            legendre = sp.legendre(l)(cos_theta)
+            legendre = sp.legendre(ell)(cos_theta)
 
             # Return the product of the angular correlation function and the legendre polynomial
             return self.angular_correlation(theta, self.params["altitude_atm_2d"], self.params["correlation_length"]) * legendre

@@ -71,6 +71,7 @@ QUBIC:
     GAIN:
         sig_gain: 0                        # Standard deviation for input detector gains
         fit_gain: False                    # Fitting gain detectors
+        seed: 44444                         # seed used to create input gain
 
 SKY:
 

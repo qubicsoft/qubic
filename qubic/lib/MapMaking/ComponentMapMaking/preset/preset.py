@@ -64,7 +64,7 @@ class PresetInitialisation:
         if self.tools.rank == 0:
             if self.tools.params["save_iter"] != 0:
                 self.tools.params["foldername"] = (
-                    f"{self.tools.params['Foregrounds']['Dust']['type']}_{self.tools.params['Foregrounds']['Dust']['model_d']}_{self.tools.params['QUBIC']['instrument']}_"
+                    f"{self.tools.params['Foregrounds']['Dust']['type']}_{self.tools.params['Foregrounds']['Dust']['model']}_{self.tools.params['QUBIC']['instrument']}_"
                     + self.tools.params["foldername"]
                 )
                 create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/maps/")

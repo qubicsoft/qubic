@@ -319,21 +319,21 @@ class PresetAcquisition:
         ):
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
             fwhm_rec = np.zeros(len(self.preset_comp.components_model_out))
-            for comp in range(len(self.preset_comp.components_model_out)):
-                if self.preset_comp.components_name_out[comp] == "CMB":
+            for comp, comp_name in enumerate(self.preset_comp.components_name_out):
+                if comp_name == "CMB":
                     factor = scalar_acquisition_operators
-                if self.preset_comp.components_name_out[comp] == "Dust":
+                elif comp_name == "Dust":
                     f_dust = c.Dust(
-                        nu0=self.preset_comp.params_foregrounds["Dust"]["nu0_d"],
-                        beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][0],
+                        nu0=self.preset_comp.params_foregrounds["Dust"]["nu0"],
+                        beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_init"][0],
                         temp=20
                     )
                     factor = (scalar_acquisition_operators
                         * f_dust.eval(self.preset_qubic.joint_out.qubic.allnus))
-                if self.preset_comp.components_name_out[comp] == "Synchrotron":
+                elif self.preset_comp.components_name_out[comp] == "Synchrotron":
                     f_sync = c.Synchrotron(
-                        nu0=self.preset_comp.params_foregrounds["Synchrotron"]["nu0_s"],
-                        beta_pl=self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][0],
+                        nu0=self.preset_comp.params_foregrounds["Synchrotron"]["nu0"],
+                        beta_pl=self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"][0],
                     )
                     factor = (scalar_acquisition_operators
                         * f_sync.eval(self.preset_qubic.joint_out.qubic.allnus))
@@ -507,7 +507,7 @@ class PresetAcquisition:
         # Constant spectral index -> maps have shape (Ncomp, Npix, Nstk)
         istk = 0
         mypix = self.preset_sky.seenpix
-        for i, comp_name in enumerate(self.preset_comp.components_model_out):
+        for i, comp_name in enumerate(self.preset_comp.components_name_out):
             self.preset_comp.components_iter[i] = C2(
                 C1[i](self.preset_comp.components_iter[i]) # Two convolutions in a row?
             )

@@ -90,7 +90,7 @@ class PresetComponents:
 
         ### Monochromatic emission
         if self.preset_tools.params["Foregrounds"]["CO"]["CO_in"]:
-            self.nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"]
+            self.nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0"]
         else:
             self.nu_co = None
 
@@ -121,11 +121,11 @@ class PresetComponents:
             sky["CMB"] = self.preset_tools.params['CMB']['seed']
 
         if self.preset_tools.params["Foregrounds"]["Dust"][f"Dust_{key}"]:
-            sky["Dust"] = self.preset_tools.params["Foregrounds"]["Dust"]["model_d"]
+            sky["Dust"] = self.preset_tools.params["Foregrounds"]["Dust"]["model"]
 
         if self.preset_tools.params["Foregrounds"]["Synchrotron"][f"Synchrotron_{key}"]:
             sky["Synchrotron"] = self.preset_tools.params["Foregrounds"]["Synchrotron"][
-                "model_s"
+                "model"
             ]
 
         if self.preset_tools.params["Foregrounds"]["CO"][f"CO_{key}"]:

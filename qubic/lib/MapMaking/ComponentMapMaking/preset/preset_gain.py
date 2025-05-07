@@ -40,7 +40,7 @@ class PresetGain:
 
         """
 
-        np.random.seed(None)
+        np.random.seed(None) # rewrite randomness!
         if self.preset_qubic.params_qubic["instrument"] == "UWB":
             self.gain_in = np.random.normal(
                 1,

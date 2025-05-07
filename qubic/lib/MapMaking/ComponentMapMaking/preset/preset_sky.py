@@ -87,7 +87,7 @@ class PresetSky:
         self.mask[self.seenpix] = self.preset_tools.params["PLANCK"]["weight_planck"]
         C = HealpixConvolutionGaussianOperator(
             fwhm=self.preset_tools.params["PLANCK"]["fwhm_weight_planck"],
-            lmax=3 * self.params_sky["nside"],
+            lmax=3 * self.params_sky["nside"] - 1,
         )
         self.mask = C(self.mask)
 

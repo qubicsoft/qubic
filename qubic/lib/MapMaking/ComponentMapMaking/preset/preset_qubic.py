@@ -130,9 +130,8 @@ class PresetQubic:
             "detector_nep": float(self.params_qubic["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params_qubic["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params_qubic["SYNTHBEAM"]["synthbeam_fraction"],
-            "interp_projection" : False,
+            "interp_projection": False,
             "instrument_type": self.params_qubic["instrument"],
-            "config": self.params_qubic["configuration"],
         }
 
         ### Get the default dictionary

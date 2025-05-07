@@ -46,14 +46,13 @@ class PresetTools:
 
         Raises:
             TypeError: If any of the parameter checks fail.
-
         """
 
         # Check if the instrument is either 'DB', 'UWB' or 'MB'
         if self.params["QUBIC"]["instrument"] not in ["DB", "UWB", "MB"]:
             raise TypeError("You must choose DB, UWB or MB instrument")
 
-        if self.params["QUBIC"]["instrument"] != "MB": # We might want to build odd nsub with "MB"
+        if self.params["QUBIC"]["instrument"] != "MB":  # We might want to build odd nsub with "MB"
             # Check if bin_mixing_matrix is even
             if self.params["Foregrounds"]["bin_mixing_matrix"] % 2 != 0:
                 raise TypeError("The argument bin_mixing_matrix should be even")
@@ -114,8 +113,10 @@ class PresetTools:
             print(f"        DEC : {self.params['SKY']['DEC_center']}")
             if self.params["QUBIC"]["instrument"] == "DB":
                 print("        Type : Dual Bands")
-            else:
+            elif self.params["QUBIC"]["instrument"] == "UWB":
                 print("        Type : Ultra Wide Band")
+            else:
+                print("        Type : Multi Bands")
             print("    - Sky In :")
             print(f"        CMB : {self.params['CMB']['cmb']}")
             print(f"        Dust : {self.params['Foregrounds']['Dust']['Dust_in']} - {self.params['Foregrounds']['Dust']['model_d']}")

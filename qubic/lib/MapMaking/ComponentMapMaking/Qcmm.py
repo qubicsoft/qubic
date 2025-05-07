@@ -141,12 +141,7 @@ class Pipeline:
                     output="animation.gif",
                 )
             self.plots.display_maps(seenpix, ki=self._steps)
-            self.plots._display_allcomponents(
-                seenpix,
-                ki=self._steps,
-                gif=self.preset.tools.params["PCG"]["do_gif"],
-                reso=self.preset.tools.params["PCG"]["reso_plot"],
-            )
+            self.plots._display_allcomponents(seenpix, ki=self._steps, gif=self.preset.tools.params["PCG"]["do_gif"], reso=self.preset.tools.params["PCG"]["reso_plot"])
             self.plots.plot_rms_iteration(self.preset.acquisition.rms_plot, ki=self._steps)
 
     def update_components(self, seenpix):
@@ -188,10 +183,8 @@ class Pipeline:
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
 
-        if self.preset.qubic.params_qubic["convolution_out"]:
-            x_planck = self.preset.comp.components_convolved_out * (1 - seenpix[None, :, None])
-        else:
-            x_planck = self.preset.comp.components_out * (1 - seenpix[None, :, None])
+        x_planck = self.preset.comp.components_out * (1 - seenpix[None, :, None])
+
         self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck)))
 
         # TO BE REMOVED
@@ -243,13 +236,7 @@ class Pipeline:
 
         for i in range(len(self.preset.comp.components_name_out)):
             for j in range(self.preset.qubic.joint_out.qubic.nsub):
-                if self.preset.qubic.params_qubic["convolution_out"]:
-                    C = HealpixConvolutionGaussianOperator(
-                        fwhm=self.preset.acquisition.fwhm_mapmaking[j],
-                        lmax=3 * self.preset.sky.params_sky["nside"],
-                    )
-                else:
-                    C = HealpixConvolutionGaussianOperator(fwhm=0, lmax=3 * self.preset.sky.params_sky["nside"])
+                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
                 tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](C(self.preset.comp.components_iter[i])).ravel()
 
         return tod_comp
@@ -343,13 +330,8 @@ class Pipeline:
 
         for j in range(self.preset.qubic.params_qubic["nsub_out"]):
             for icomp in range(len(self.preset.comp.components_name_out)):
-                if self.preset.qubic.params_qubic["convolution_out"]:
-                    C = HealpixConvolutionGaussianOperator(
-                        fwhm=self.preset.acquisition.fwhm_mapmaking[j],
-                        lmax=3 * self.preset.sky.params_sky["nside"],
-                    )
-                else:
-                    C = HealpixConvolutionGaussianOperator(fwhm=0, lmax=3 * self.preset.sky.params_sky["nside"])
+                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
+
                 maps_conv[icomp] = C(self.preset.comp.components_iter[icomp, :, :]).copy()
                 for ii, i in enumerate(index):
                     maps_conv_i = maps_conv.copy()
@@ -435,8 +417,9 @@ class Pipeline:
                     print(f"Residuals       : {self.preset.mixingmatrix.beta_in - self.preset.acquisition.beta_iter}")
 
                 self.preset.tools.comm.Barrier()
-
                 self.preset.acquisition.allbeta = np.concatenate((self.preset.acquisition.allbeta, np.array([self.preset.acquisition.beta_iter])), axis=0)
+
+                self.plots.plot_beta_iteration(self.preset.acquisition.allbeta, truth=self.preset.mixingmatrix.beta_in, ki=self._steps)
 
             ### Model with spatial variation of spectral index
             else:
@@ -471,6 +454,7 @@ class Pipeline:
                     print(
                         f"Residuals       : {self.preset.mixingmatrix.beta_in[:, self.preset.mixingmatrix._index_seenpix_beta] - self.preset.acquisition.beta_iter[:, self.preset.mixingmatrix._index_seenpix_beta]}"
                     )
+
                     self.plots.plot_beta_iteration(
                         self.preset.acquisition.allbeta[:, :, self.preset.mixingmatrix._index_seenpix_beta],
                         truth=self.preset.mixingmatrix.beta_in[:, self.preset.mixingmatrix._index_seenpix_beta],
@@ -563,12 +547,7 @@ class Pipeline:
                 for i in range(len(self.preset.comp.components_name_out)):
                     if self.preset.comp.components_name_out[i] != "CMB":
                         print("I am fitting ", self.preset.comp.components_name_out[i])
-                        fun = partial(
-                            self.chi2._qu_alt,
-                            tod_comp=tod_comp,
-                            A=self.preset.acquisition.Amm_iter,
-                            icomp=i,
-                        )
+                        fun = partial(self.chi2._qu_alt, tod_comp=tod_comp, A=self.preset.acquisition.Amm_iter, icomp=i)
 
                         ### Starting point
                         x0 = []
@@ -858,8 +837,6 @@ class Pipeline:
                                 "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
                                 "fwhm_rec": self.preset.acquisition.fwhm_rec,
                                 "qubic_dict": {k: v for k, v in self.preset.qubic.dict.items() if k != "comm"},  # Need to remove the MPI communictor, which is not suppurted by pickle
-                                #'fwhm':self.preset.acquisition.fwhm_tod,
-                                #'acquisition.fwhm_rec':self.preset.acquisition.fwhm_mapmaking
                             },
                             handle,
                             protocol=pickle.HIGHEST_PROTOCOL,
@@ -963,7 +940,6 @@ class Pipeline:
 
         self._info = True
         self._steps = 0
-        # print(self.preset.acquisition.beta_iter)
         while self._info:
             ### Display iteration
             self.preset.tools._display_iter(self._steps)

@@ -30,7 +30,7 @@ def _plot_reconstructed_maps(
     plt.figure(figsize=figsize)
 
     _shape = maps.shape
-    C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=2 * hp.npix2nside(m_in.shape[1]))
+    C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=3 * hp.npix2nside(m_in.shape[1]) - 1)
     res = maps - m_in
     res
     k = 0
@@ -436,13 +436,15 @@ class PlotsCMM:
 
             plt.figure(figsize=figsize)
             plt.subplot(2, 1, 1)
-            if np.ndim(beta) == 1:
+
+            ### Constant beta on the sky
+            if np.ndim(beta) == 2:
                 plt.plot(alliter[1:] - 1, beta[1:])
                 if truth is not None:
                     plt.axhline(truth, ls="--", color="red")
+
+            ### Varying beta on the sky
             else:
-                print(beta.shape[1])
-                print(truth.shape)
                 for i in range(beta.shape[1]):
                     plt.plot(alliter, beta[:, i], "-k", alpha=0.3)
                     if truth is not None:
@@ -456,10 +458,10 @@ class PlotsCMM:
                 for i in range(beta.shape[1]):
                     plt.plot(alliter, abs(truth[i] - beta[:, i]), "-k", alpha=0.3)
             plt.yscale("log")
-            plt.savefig(f"CMM/jobs/{self.job_id}/beta_iter{ki + 1}.png")
+            plt.savefig(f"CMM/jobs/{self.job_id}/A_iter/beta_iter{ki + 1}.png")
 
             if ki > 0:
-                os.remove(f"CMM/jobs/{self.job_id}/beta_iter{ki}.png")
+                os.remove(f"CMM/jobs/{self.job_id}/A_iter/beta_iter{ki}.png")
             plt.close()
 
     def _display_allresiduals(self, map_i, seenpix, figsize=(14, 10), ki=0):
@@ -522,7 +524,7 @@ class PlotsCMM:
         for each component and Stokes parameter (I, Q, U). The maps are convolved using
         a Gaussian operator and displayed using Healpix's gnomview function.
         """
-        C = [HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_rec[i], lmax=3 * self.params["SKY"]["nside"]) for i in range(len(self.preset.comp.components_name_out))]
+        C = [HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_rec[i], lmax=3 * self.params["SKY"]["nside"] - 1) for i in range(len(self.preset.comp.components_name_out))]
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
             plt.figure(figsize=figsize)
@@ -610,8 +612,9 @@ class PlotsCMM:
                 for icomp in range(len(self.preset.comp.components_name_out)):
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
                     if self.preset.qubic.params_qubic["convolution_in"]:
-                        map_in = self.preset.comp.components_convolved_out[icomp, :, istk].copy()
-                        map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
+                        map_in = self.preset.comp.components_out[icomp, :, istk].copy()
+                        C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_rec[icomp], lmax=3 * self.params["SKY"]["nside"] - 1)
+                        map_out = C(self.preset.comp.components_iter[icomp, :, istk].copy())
                     else:
                         map_in = self.preset.comp.components_out[icomp, :, istk].copy()
                         map_out = self.preset.comp.components_iter[icomp, :, istk].copy()

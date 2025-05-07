@@ -21,9 +21,6 @@ class Chi2InstrumentType:
         self.preset = preset
         self.TOD_sim = TOD_sim
         self.nus = self.preset.qubic.joint_out.allnus
-        self.nfreq = len(self.nus)
-        self.nsub = int(self.nfreq / 2)
-        self.fsub = int(self.nfreq / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
         self.parametric = parametric
         self.full_beta_map = full_beta_map
 
@@ -56,19 +53,19 @@ class Chi2InstrumentType:
         else:
             raise TypeError("TOD_sim should have 3 or 4 dimensions.")
 
-        self.nc, self.nf, self.nsnd = self.TOD_sim.shape
-        self.nsub = int(self.nf / self.nFocalPlanes)
+        self.ncomp, self.nfreq, self.nsampling_ndet = self.TOD_sim.shape
+        self.nsub = int(self.nfreq / self.nFocalPlanes)
 
         self.TOD_sim_fp = []
         for i in range(self.nFocalPlanes):
-            self.TOD_sim_fp.append(self.TOD_sim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.nc * self.nsub * npix, self.nsnd)))
+            self.TOD_sim_fp.append(self.TOD_sim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.ncomp * self.nsub * npix, self.nsampling_ndet)))
         # Missing self.TOD_sim150 and self.TOD_sim220 with new definition, use self.TOD_sim_fp[0] and self.TOD_sim_fp[1] instead
 
     def _fill_A(self, x):
         """
         Blind case
         """
-        A = np.ones((self.nf, self.nc))
+        A = np.ones((self.nfreq, self.ncomp))
         k = 0
         for i in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
             for j in range(1, self.ncomp):
@@ -97,7 +94,7 @@ class Chi2InstrumentType:
             ### Separe the mixing matrix element for 150 and 220 GHz if needed
             ysim = []
             for i in range(self.nFocalPlanes):
-                ysim.append(A[self.nsub * i : self.nsub * (i + 1)].T.reshape((self.nc * self.nsub)) @ self.TOD_sim_fp[i])
+                ysim.append(A[self.nsub * i : self.nsub * (i + 1)].T.reshape((self.ncomp * self.nsub)) @ self.TOD_sim_fp[i])
 
             ### Create simulated TOD
             ysim = np.concatenate(ysim, axis=0)
@@ -137,7 +134,7 @@ class Chi2InstrumentType:
         elif self.TOD_sim.ndim == 4:  # this implementation is exactly the same as for the DB, which feels wrong?
             # It is broken anyway
 
-            x = x.reshape((self.nc - 1, self.npix))
+            x = x.reshape((self.ncomp - 1, self.npix))
             A = self._get_mixingmatrix(self.nus, x)
 
             ### Separe the mixing matrix element for 150 and 220 GHz

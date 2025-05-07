@@ -161,7 +161,7 @@ class PlanckMaps(Maps):
             if fwhm:
                 # Conversion from arcmin to rad
                 fwhm_rad = np.deg2rad(self._get_fwhm(nu) / 60.0)
-                C = HealpixConvolutionGaussianOperator(fwhm=fwhm_rad)
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm_rad, lmax=3 * self.nside - 1)
                 self.fwhm_ext.append(fwhm_rad)
                 maps[inu] = C(maps[inu])
                 maps_noise[inu] = C(maps_noise[inu])

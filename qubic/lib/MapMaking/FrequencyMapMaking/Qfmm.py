@@ -13,6 +13,7 @@ from scipy.optimize import minimize
 
 from qubic.lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
 from qubic.lib.Instrument.Qnoise import QubicTotNoise
+from qubic.lib.MapMaking.FrequencyMapMaking.FMM_errors_checking import ErrorChecking
 from qubic.lib.MapMaking.Qcg import pcg
 from qubic.lib.MapMaking.Qmap_plotter import PlotsFMM
 from qubic.lib.MapMaking.Qmaps import InputMaps, PlanckMaps
@@ -139,7 +140,7 @@ class PipelineFrequencyMapMaking:
 
         ### Convolve the Nsub input maps at QUBIC resolution
         for i in range(len(self.fwhm_in)):
-            C = HealpixConvolutionGaussianOperator(self.fwhm_in[i])
+            C = HealpixConvolutionGaussianOperator(self.fwhm_in[i], lmax=3 * self.params["SKY"]["nside"] - 1)
             self.maps_input.m_nu[i] = C(self.maps_input.m_nu[i])
 
         ### Initial maps
@@ -493,8 +494,9 @@ class PipelineFrequencyMapMaking:
         TOD_PLANCK = np.zeros((max(self.params["QUBIC"]["nrec"], 2), 12 * self.params["SKY"]["nside"] ** 2, 3))
 
         for irec in range(self.params["QUBIC"]["nrec"]):
-            fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in])  # self.fwhm_in = 0 if convolution_in == False
-            C = HealpixConvolutionGaussianOperator(fwhm=fwhm_irec, lmax=2 * self.params["Spectrum"]["lmax"])
+            ###! Tom: why we were applying this while fwhm_rec is already defined?
+            # fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in])  # self.fwhm_in = 0 if convolution_in == False
+            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec], lmax=3 * self.params["SKY"]["nside"] - 1)
 
             if irec < self.params["QUBIC"]["nrec"] / 2:  # choose between the two levels of noise
                 noise = self.noise143
@@ -590,7 +592,7 @@ class PipelineFrequencyMapMaking:
 
         true_maps = self.m_nu_in.copy()
         for irec in range(self.params["QUBIC"]["nrec"]):
-            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec], lmax=2 * self.params["Spectrum"]["lmax"])
+            C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec], lmax=3 * self.params["SKY"]["nside"] - 1)
             true_maps[irec] = C(self.m_nu_in[irec])
 
         ### PCG
@@ -755,6 +757,8 @@ class PipelineEnd2End:
     def main(self, specific_file=None):
         ### Execute Frequency Map-Making
         if self.params["Pipeline"]["mapmaking"]:
+            ### Checking errors
+            ErrorChecking(self.params).check_errors()
             ### Initialization
             self.mapmaking = PipelineFrequencyMapMaking(self.comm, self.file, self.params)
 

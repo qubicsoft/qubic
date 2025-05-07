@@ -18,13 +18,13 @@ Foregrounds:
         Dust_out: True
 
         type: 'parametric'                           # Reconstruction method
-        model_d: 'd0'
-        beta_d_init: [1.54, 0, 1000000000]                  # PySM model
+        model: 'd0'
+        beta_init: [1.54, 0, 1000000000]                  # PySM model
         nside_beta_in: 0                        # Input pixelization for beta_d (in a case of d1 model)
         nside_beta_out: 0                       # Output pixelization for beta_d (in a case of d1 model)
-        nu0_d: 150.00000001                              # Reference frequency (nu0_d)
+        nu0: 150.00000001                              # Reference frequency (nu0_d)
         l_corr: 10                              # Decorrelation level (seen only with d6 model)
-        amplification_d: 1                      # Amplification of the dust contribution
+        amplification: 1                      # Amplification of the dust contribution
     
     # Synchrotron emission
     Synchrotron:
@@ -32,16 +32,16 @@ Foregrounds:
         Synchrotron_out: True
 
         type: 'parametric'                      # Reconstruction method
-        model_s: 's0'                           # PySM model
-        beta_s_init: [-3, 0]
-        nu0_s: 150                             # Reference frequency (nu0_s)
-        amplification_s: 1                             # Amplification of the synchrotron contribution
+        model: 's0'                           # PySM model
+        beta_init: [-3, 0]
+        nu0: 150                             # Reference frequency (nu0_s)
+        amplification: 1                             # Amplification of the synchrotron contribution
 
     # CO line emission
     CO:
         CO_in: False
         CO_out: False
-        nu0_co: 230.538
+        nu0: 230.538
         polarization_fraction: 0.01                     # Polarization fraction
 
 QUBIC:

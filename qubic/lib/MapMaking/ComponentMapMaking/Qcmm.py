@@ -276,11 +276,11 @@ class Pipeline:
                 if self.preset.qubic.params_qubic["convolution_out"]:
                     C = HealpixConvolutionGaussianOperator(
                         fwhm=self.preset.acquisition.fwhm_mapmaking[j],
-                        lmax=3 * self.preset.sky.params_sky["nside"],
+                        lmax=3 * self.preset.sky.params_sky["nside"] - 1,
                     )
                 else:
                     C = HealpixConvolutionGaussianOperator(
-                        fwhm=0, lmax=3 * self.preset.sky.params_sky["nside"]
+                        fwhm=0, lmax=3 * self.preset.sky.params_sky["nside"] - 1
                     )
                 tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](
                     C(self.preset.comp.components_iter[i])
@@ -409,11 +409,11 @@ class Pipeline:
                 if self.preset.qubic.params_qubic["convolution_out"]:
                     C = HealpixConvolutionGaussianOperator(
                         fwhm=self.preset.acquisition.fwhm_mapmaking[j],
-                        lmax=3 * self.preset.sky.params_sky["nside"],
+                        lmax=3 * self.preset.sky.params_sky["nside"] - 1,
                     )
                 else:
                     C = HealpixConvolutionGaussianOperator(
-                        fwhm=0, lmax=3 * self.preset.sky.params_sky["nside"]
+                        fwhm=0, lmax=3 * self.preset.sky.params_sky["nside"] - 1
                     )
                 maps_conv[icomp] = C(
                     self.preset.comp.components_iter[icomp, :, :]
@@ -1082,7 +1082,7 @@ class Pipeline:
                     ) as handle:
                         pickle.dump(
                             {
-                                "components": self.preset.comp.components_in,
+                                "components": self.preset.comp.components_convolved_in,#self.preset.comp.components_in,
                                 "components_i": self.preset.comp.components_iter,
                                 "beta": self.preset.acquisition.allbeta,
                                 "beta_true": self.preset.mixingmatrix.beta_in,

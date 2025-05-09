@@ -154,7 +154,7 @@ class PresetSky:
         self.namaster = nam.Namaster(
             self.seenpix,
             lmin=self.preset_tools.params["SPECTRUM"]["lmin"],
-            lmax=3 * self.preset_tools.params["SKY"]["nside"],
+            lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
             delta_ell=self.preset_tools.params["SPECTRUM"]["dl"],
             aposize=self.preset_tools.params["SPECTRUM"]["aposize"],
         )

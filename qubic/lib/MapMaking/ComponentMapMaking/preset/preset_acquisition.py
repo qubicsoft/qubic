@@ -309,11 +309,6 @@ class PresetAcquisition:
         ):
             fwhm_rec = np.min(self.preset_qubic.joint_in.qubic.allfwhm) # min of allfwhm?
         elif (
-            not self.preset_qubic.params_qubic["convolution_in"]
-            and not self.preset_qubic.params_qubic["convolution_out"]
-        ):
-            fwhm_rec = np.mean(self.preset_qubic.joint_in.qubic.allfwhm) * 0
-        elif (
             self.preset_qubic.params_qubic["convolution_in"]
             and not self.preset_qubic.params_qubic["convolution_out"]
         ):
@@ -338,7 +333,6 @@ class PresetAcquisition:
                     factor = (scalar_acquisition_operators
                         * f_sync.eval(self.preset_qubic.joint_out.qubic.allnus))
                 fwhm_rec[comp] = np.sum(factor * fwhm_tod) / (np.sum(factor))
-
         elif (
             not self.preset_qubic.params_qubic["convolution_in"]
             and not self.preset_qubic.params_qubic["convolution_out"]

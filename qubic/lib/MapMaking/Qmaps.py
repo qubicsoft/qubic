@@ -47,7 +47,7 @@ class Maps:
         np.random.seed(seed)
         cmb = hp.synfast(mycls, self.nside, verbose=False, new=True).T
         return cmb
-    def average_map(self, r, Alens, central_nu, bw, nb=100):
+    def average_map(self, r, Alens, central_nu, bw, nb=100): # Never used?
 
         mysky = np.zeros((12*self.nside**2, 3))
 
@@ -120,6 +120,7 @@ class PlanckMaps(Maps):
         mysky = np.zeros((12*self.nside**2, 3))
 
         if len(model) != 0:
+            print("\nmodel", model)
             sky = pysm3.Sky(nside=self.nside, preset_strings=model)
             edges_min = central_nu - bw / 2
             edges_max = central_nu + bw / 2
@@ -134,7 +135,7 @@ class PlanckMaps(Maps):
                         bandpass_frequencies * u.GHz, None, u.uK_CMB
                     )
                 ).T
-                / 1.5
+                / 1.5 # why?
             )
 
         if is_cmb:
@@ -217,11 +218,13 @@ class InputMaps(Maps):
         self.m_nu = np.zeros((len(self.nus), 12 * self.nside**2, 3))
         self.sky = sky
 
-        for i in sky.keys():
+        for i in sky.keys(): # what about synchrotron?
             if i == "cmb":
                 cmb = self._get_cmb(r=0, Alens=1, seed=self.sky["cmb"])
                 self.m_nu += cmb.copy()
-            elif i == "dust":
+            # elif i == "dust":
+            else: # better?
+                print("\nhere")
                 self.sky_fg = self._separe_cmb_fg()
                 self.sky_pysm = pysm3.Sky(self.nside, preset_strings=self.list_fg)
                 self.m_nu_fg = self._get_fg_allnu()

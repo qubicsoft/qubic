@@ -2,7 +2,7 @@ path_out: 'test_merge/'
 datafilename: 'test'
 
 CMB:
-    cmb: True
+    cmb: False
     seed: 1                                 # CMB realization
     r: 0
     Alens: 1
@@ -10,7 +10,7 @@ CMB:
 Foregrounds:
 
     Dust: False                              # Thermal Dust emission
-    Synchrotron: False                      # Synchrotron emission
+    Synchrotron: False                      # Synchrotron emission # was not working?
 
 QUBIC:
 

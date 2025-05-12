@@ -171,9 +171,9 @@ class PipelineFrequencyMapMaking:
             )
 
         qubic_noise = QubicTotNoise(
-        self.dict_out,
-        self.joint.qubic.sampling,
-        self.joint.qubic.scene, # or equivalently (?) self.joint.scene
+            self.dict_out,
+            self.joint.qubic.sampling,
+            self.joint.qubic.scene, # or equivalently (?) self.joint.scene
         )
 
         self.noiseq = qubic_noise.total_noise(
@@ -282,16 +282,13 @@ class PipelineFrequencyMapMaking:
                 seed = self.comm.bcast(seed, root=0)
             else:
                 seed = self.params["CMB"]["seed"]
-                
             dict_sky["cmb"] = seed
 
-        for j in self.params["Foregrounds"]:
-            if j == "Dust":
-                if self.params["Foregrounds"][j]:
-                    dict_sky["dust"] = "d0"
-            elif j == "Synchrotron":
-                if self.params["Foregrounds"][j]:
-                    dict_sky["synchrotron"] = "s0"
+        ### We put a default model for each used foreground
+        list_models = ["d0", "s0"]
+        for j, foreground in enumerate(self.params["Foregrounds"]):
+            if self.params["Foregrounds"][foreground]:
+                dict_sky[foreground.lower()] = list_models[j]
 
         return dict_sky
 

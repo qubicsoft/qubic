@@ -288,7 +288,7 @@ class PipelineFrequencyMapMaking:
         list_models = ["d0", "s0"]
         for j, foreground in enumerate(self.params["Foregrounds"]):
             if self.params["Foregrounds"][foreground]:
-                dict_sky[foreground.lower()] = list_models[j]
+                dict_sky[foreground.lower()] = list_models[j] # dict keys are different in CMM (capital letter)
 
         return dict_sky
 

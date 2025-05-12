@@ -155,9 +155,10 @@ class QubicInstrument(Instrument):
 
         """
         self.d = d
-        self.debug = d["debug"]  # if True allows debuging prints
-        filter_nu = d["filter_nu"]
-        filter_relative_bandwidth = d["filter_relative_bandwidth"]
+        del d
+        self.debug = self.d["debug"]  # if True allows debuging prints
+        filter_nu = self.d["filter_nu"]
+        filter_relative_bandwidth = self.d["filter_relative_bandwidth"]
         if FRBW is not None:
             self.FRBW = FRBW
         else:
@@ -174,44 +175,36 @@ class QubicInstrument(Instrument):
         self.nu2_up = self.nu2 * (1 + self.FRBW / 2) + epsilon
         self.nu2_down = self.nu2 * (1 - self.FRBW / 2) - epsilon
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
-            d["optics"] = d["optics"].replace(d["optics"][-7:-4], "150")
+            self.d["optics"] = self.d["optics"].replace(self.d["optics"][-7:-4], "150")
         elif (filter_nu <= self.nu2_up) and (filter_nu >= self.nu2_down):
-            d["optics"] = d["optics"].replace(d["optics"][-7:-4], "220")
-            if d["config"] == "TD":
+            self.d["optics"] = self.d["optics"].replace(self.d["optics"][-7:-4], "220")
+            if self.d["config"] == "TD":
                 raise ValueError("TD Not used at frequency " +
-                                 str(int(d["filter_nu"] / 1e9)) + " GHz")
+                                 str(int(self.d["filter_nu"] / 1e9)) + " GHz")
         else:
-            raise ValueError("frequency = " + str(int(d["filter_nu"] / 1e9)) + " out of bounds: %.1f - %.1f")
+            raise ValueError("frequency = " + str(int(self.d["filter_nu"] / 1e9)) + " out of bounds: %.1f - %.1f")
 
-        d["optics"] = d["optics"].replace(d["optics"][-10:-8], d["config"])
-        d["detarray"] = d["detarray"].replace(d["detarray"][-7:-5], d["config"])
-        d["hornarray"] = d["hornarray"].replace(d["hornarray"][-7:-5], d["config"])
+        self.d["optics"] = self.d["optics"].replace(self.d["optics"][-10:-8], self.d["config"])
+        self.d["detarray"] = self.d["detarray"].replace(self.d["detarray"][-7:-5], self.d["config"])
+        self.d["hornarray"] = self.d["hornarray"].replace(self.d["hornarray"][-7:-5], self.d["config"])
         ### synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits' is usde even for TD, to be modified ('CalQubic_Synthbeam_Analytical_150_TD.fits' has to be created)
 
-        if d["nf_sub"] is None and d["MultiBand"] is True:
+        if self.self.d["nf_sub"] is None and self.d["MultiBand"] is True:
             raise ValueError("Error: number of subband not specified")
 
-        polarizer = d["polarizer"]
-        synthbeam_dtype = np.float32
-        synthbeam_fraction = d["synthbeam_fraction"]
-        synthbeam_kmax = d["synthbeam_kmax"]
-        synthbeam_peak150_fwhm = np.radians(d["synthbeam_peak150_fwhm"])
-        ripples = d["ripples"]
-        nripples = d["nripples"]
-
         #check if synthetic beam peaks are from file or calculated in peak_angles
-        use_file=d.get(("use_synthbeam_fits_file"))
+        use_file=self.d.get(("use_synthbeam_fits_file"))
         self.use_file=bool(use_file)
-        sbeam=bool(d.get("synthbeam"))
+        sbeam=bool(self.d.get("synthbeam"))
         
         if not sbeam:
             #Put in a dummy synthetic beam
             self.sbeam_fits = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
-            d["synthbeam"] = self.sbeam_fits
+            self.d["synthbeam"] = self.sbeam_fits
             print("There is no fits file given in this dictionary. Using analytical model of beam parameters") # why change self.sbeam_fits?
             use_file=False
         else:
-            self.sbeam_fits = d["synthbeam"]
+            self.sbeam_fits = self.d["synthbeam"]
         
         # Is self.sbeam_fits used anywhere in the code?
         # If not, Michael Wright synthbeam might not be implemented
@@ -219,34 +212,35 @@ class QubicInstrument(Instrument):
 
         # Choose the primary beam calibration file
         beam_number = {"gaussian": "2", "fitted_beam": "3", "multi_freq": "4"}
-        if d["beam_shape"] not in ["gaussian", "fitted_beam", "multi_freq"]:
-            raise ValueError("Beam shape '{}' not implemented.".format(d["beam_shape"]))
-        d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], beam_number[d["beam_shape"]])
-        primary_shape = d["beam_shape"]
-        secondary_shape = d["beam_shape"]
+        if self.d["beam_shape"] not in ["gaussian", "fitted_beam", "multi_freq"]:
+            raise ValueError("Beam shape '{}' not implemented.".format(self.d["beam_shape"]))
+        self.d["primbeam"] = self.d["primbeam"].replace(self.d["primbeam"][-6], beam_number[self.d["beam_shape"]])
+        primary_shape = self.d["beam_shape"]
+        secondary_shape = self.d["beam_shape"]
         if self.debug:
             print("primary_shape", primary_shape)
-            print("d['primbeam']", d["primbeam"])
-        self.config = d["config"]
-        calibration = QubicCalibration(d)
+            print("self.d['primbeam']", self.d["primbeam"])
+        self.config = self.d["config"]
+
+        calibration = QubicCalibration(self.d)
         self.calibration = calibration
 
-        self.ripples = ripples
-        self.nripples = nripples
+        self.ripples = self.d["ripples"]
+        self.nripples = self.d["nripples"]
         self._init_beams(primary_shape, secondary_shape, filter_nu)
         self._init_filter(filter_nu, filter_relative_bandwidth)
         self._init_horns(filter_nu)
-        self._init_optics(polarizer, d)
-        self._init_synthbeam(synthbeam_dtype, synthbeam_peak150_fwhm)
-        self.synthbeam.fraction = synthbeam_fraction
-        self.synthbeam.kmax = synthbeam_kmax
-        self.synthbeam_file(d)
+        self._init_optics()
+        self._init_synthbeam(synthbeam_dtype=np.float32)
+        self.synthbeam.fraction = self.d["synthbeam_fraction"]
+        self.synthbeam.kmax = self.d["synthbeam_kmax"]
+        self.synthbeam_file(self.d)
 
         layout = self._get_detector_layout()
         Instrument.__init__(self, layout)
 
     def _get_detector_layout(self):
-        
+
         ngrids = self.d["detector_ngrids"]
         nep = self.d["detector_nep"]
         fknee = self.d["detector_fknee"]
@@ -329,12 +323,12 @@ class QubicInstrument(Instrument):
             )
             self.horn.radeff = self.horn.radius / np.sqrt(kappa)
 
-    def _init_optics(self, polarizer, d):
+    def _init_optics(self):
         optics = Optics()
         calib = self.calibration.get("optics")
         optics.components = calib["components"]
-        optics.focal_length = d["focal_length"]
-        optics.polarizer = bool(polarizer)
+        optics.focal_length = self.d["focal_length"]
+        optics.polarizer = bool(self.d["polarizer"])
         self.optics = optics
 
     def synthbeam_file(self, d):
@@ -346,7 +340,8 @@ class QubicInstrument(Instrument):
         self.freqs = freqs
         self.numpeaks=np.zeros(10)
 
-    def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
+    def _init_synthbeam(self, dtype):
+        synthbeam_peak150_fwhm = np.radians(self.d["synthbeam_peak150_fwhm"])
         sb = SyntheticBeam()
         sb.dtype = np.dtype(dtype)
         if not self.ripples:

@@ -6,7 +6,7 @@ import numexpr as ne
 import numpy as np
 
 import scipy.constants as sp_cst
-from scipy.integrate import quad
+import scipy.integrate as sp_int
 
 from pyoperators import (
     Cartesian2SphericalOperator,
@@ -463,7 +463,7 @@ class QubicInstrument(Instrument):
             self.NEP_coldstop(noise)
 
             # Dichroic
-            if self.config == "FI":
+            if self.config == "FI": # should be done for 220 GHz too?
                 #Compute
                 self.NEP_dichroic(noise)
 
@@ -482,7 +482,7 @@ class QubicInstrument(Instrument):
             self.NEP_lowpassedge(noise, noise.lpe2)
 
         else:  # 220 GHz
-            self.NEP_horns(noise)
+            self.NEP_horns(noise) # duplication!
 
             # Environment NEP
             self.NEP_environment(noise, noise.names)
@@ -643,7 +643,7 @@ class QubicInstrument(Instrument):
         but you did not give the sampling.
         """
         if return_only:
-            if sampling == None:
+            if sampling is None:
                 raise ValueError("If you want only a component of the photon noise, I need a qubic sampling to map it (qubic.get_sampling(dictionary)) ")
         else:
             return
@@ -768,14 +768,14 @@ class QubicInstrument(Instrument):
 
         ib2b = noise.ib2b
         #150GHz band
-        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
+        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down): # why are the bands so different?
             #print("======== 150GHz band horns NEP")
             # back to back horns, as seen by the detectors through the combiner
-            T = noise.temperatures[ib2b]
+            T = noise.temperatures[ib2b] # duplication!
             b = sp_cst.h * noise.nu_up / sp_cst.k / T
-            I1 = quad(funct, 0, b, (4, 1))[0]
-            I2 = quad(funct, 0, b, (4, 2))[0]
-            K1 = quad(funct, 0, b, (3, 1))[0]
+            I1 = sp_int.quad(funct, 0, b, (4, 1))[0]
+            I2 = sp_int.quad(funct, 0, b, (4, 2))[0]
+            K1 = sp_int.quad(funct, 0, b, (3, 1))[0]
             eta = (noise.emissivities * noise.tr_prod)[ib2b] * \
                                     self.detector.efficiency
             # Here the physical horn area S_horns must be used
@@ -839,11 +839,11 @@ class QubicInstrument(Instrument):
 
         ib2b = noise.ib2b
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            T = noise.temperatures[ib2b]
+            T = noise.temperatures[ib2b] # duplication!
             b = sp_cst.h * noise.nu_up / sp_cst.k / T
-            I1 = quad(funct, 0, b, (4, 1))[0]
-            I2 = quad(funct, 0, b, (4, 2))[0]
-            K1 = quad(funct, 0, b, (3, 1))[0]
+            I1 = sp_int.quad(funct, 0, b, (4, 1))[0]
+            I2 = sp_int.quad(funct, 0, b, (4, 2))[0]
+            K1 = sp_int.quad(funct, 0, b, (3, 1))[0]
 
             eff_factor = np.prod(noise.transmissions[(len(names) - 4):]) * \
                          self.detector.efficiency
@@ -916,11 +916,11 @@ class QubicInstrument(Instrument):
         icomb = noise.icomb
         #150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            T = noise.temperatures[icomb]
+            T = noise.temperatures[icomb] # duplication!
             b = sp_cst.h * noise.nu_up / sp_cst.k / T
-            J1 = quad(funct, 0, b, (4, 1))[0]
-            J2 = quad(funct, 0, b, (4, 2))[0]
-            L1 = quad(funct, 0, b, (3, 1))[0]
+            J1 = sp_int.quad(funct, 0, b, (4, 1))[0]
+            J2 = sp_int.quad(funct, 0, b, (4, 2))[0]
+            L1 = sp_int.quad(funct, 0, b, (3, 1))[0]
             eta = (noise.emissivities * noise.tr_prod)[icomb] * \
                                         self.detector.efficiency
             noise.P_phot[icomb] = noise.gp[icomb] * eta * (sp_cst.k * T) ** 4 / sp_cst.c ** 2 / sp_cst.h ** 3 * L1 * \
@@ -979,11 +979,11 @@ class QubicInstrument(Instrument):
         ics = noise.ics
         #150GHz band
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            T = noise.temperatures[ics]
+            T = noise.temperatures[ics] # duplication!
             b = sp_cst.h * noise.nu_up / sp_cst.k / T
-            J1 = quad(funct, 0, b, (4, 1))[0]
-            J2 = quad(funct, 0, b, (4, 2))[0]
-            L1 = quad(funct, 0, b, (3, 1))[0]
+            J1 = sp_int.quad(funct, 0, b, (4, 1))[0]
+            J2 = sp_int.quad(funct, 0, b, (4, 2))[0]
+            L1 = sp_int.quad(funct, 0, b, (3, 1))[0]
             eta = (noise.emissivities * noise.tr_prod)[ics] * \
                                             self.detector.efficiency
             
@@ -1040,11 +1040,11 @@ class QubicInstrument(Instrument):
 
         idic = noise.idic
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            T = noise.temperatures[idic]
+            T = noise.temperatures[idic] # duplication!
             b = sp_cst.h * noise.nu_up / sp_cst.k / T
-            J1 = quad(funct, 0, b, (4, 1))[0]
-            J2 = quad(funct, 0, b, (4, 2))[0]
-            L1 = quad(funct, 0, b, (3, 1))[0]
+            J1 = sp_int.quad(funct, 0, b, (4, 1))[0]
+            J2 = sp_int.quad(funct, 0, b, (4, 2))[0]
+            L1 = sp_int.quad(funct, 0, b, (3, 1))[0]
             eta = (noise.emissivities * noise.tr_prod)[idic] * \
                                                 self.detector.efficiency
             noise.g[idic] = noise.gp[idic] * noise.S_det * noise.omega_dichro 
@@ -1101,11 +1101,11 @@ class QubicInstrument(Instrument):
 
         indf = noise.indf
 
-        T = noise.temperatures[indf]
+        T = noise.temperatures[indf] # duplication!
         b = sp_cst.h * noise.nu_up / sp_cst.k / T
-        J1 = quad(funct, 0, b, (4, 1))[0]
-        J2 = quad(funct, 0, b, (4, 2))[0]
-        L1 = quad(funct, 0, b, (3, 1))[0]
+        J1 = sp_int.quad(funct, 0, b, (4, 1))[0]
+        J2 = sp_int.quad(funct, 0, b, (4, 2))[0]
+        L1 = sp_int.quad(funct, 0, b, (3, 1))[0]
         eta = (noise.emissivities * noise.tr_prod)[indf] * \
                                             self.detector.efficiency
         noise.NEP_phot2[indf] = 2 * noise.gp[indf] * eta * (sp_cst.k * T) ** 5 / sp_cst.c ** 2 / sp_cst.h ** 3 * \
@@ -1151,11 +1151,11 @@ class QubicInstrument(Instrument):
         #Check if there are a sampling array in case you asked for one component of the photon noise  
         self._raise_sampling_error(return_only, sampling)
 
-        T = noise.temperatures[i]
+        T = noise.temperatures[i] # duplication!
         b = sp_cst.h * noise.nu_up / sp_cst.k / T
-        J1 = quad(funct, 0, b, (4, 1))[0]
-        J2 = quad(funct, 0, b, (4, 2))[0]
-        L1 = quad(funct, 0, b, (3, 1))[0]
+        J1 = sp_int.quad(funct, 0, b, (4, 1))[0]
+        J2 = sp_int.quad(funct, 0, b, (4, 2))[0]
+        L1 = sp_int.quad(funct, 0, b, (3, 1))[0]
         eta = (noise.emissivities * noise.tr_prod)[i] * \
                                             self.detector.efficiency
         noise.NEP_phot2[i] = 2 * noise.gp[i] * eta * (sp_cst.k * T) ** 5 / sp_cst.c ** 2 / sp_cst.h ** 3 * \

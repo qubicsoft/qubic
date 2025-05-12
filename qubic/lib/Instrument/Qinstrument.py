@@ -211,7 +211,7 @@ class QubicInstrument(Instrument):
         self.use_file=bool(use_file)
         sbeam=bool(d.get("synthbeam"))
         
-        if sbeam == False:
+        if not sbeam:
             #Put in a dummy synthetic beam
             self.sbeam_fits = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
             d["synthbeam"] = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
@@ -225,18 +225,12 @@ class QubicInstrument(Instrument):
 
 
         # Choose the primary beam calibration file
-        if d["beam_shape"] == "gaussian":
-            d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], "2")
-            primary_shape = "gaussian"
-            secondary_shape = "gaussian"
-        elif d["beam_shape"] == "fitted_beam":
-            d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], "3")
-            primary_shape = "fitted_beam"
-            secondary_shape = "fitted_beam"
-        else:
-            d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], "4")
-            primary_shape = "multi_freq"
-            secondary_shape = "multi_freq"
+        beam_number = {"gaussian": "2", "fitted_beam": "3", "multi_freq": "4"}
+        if d["beam_shape"] not in ["gaussian", "fitted_beam", "multi_freq"]:
+            raise ValueError("Beam shape '{}' not implemented.".format(d["beam_shape"]))
+        d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], beam_number[d["beam_shape"]])
+        primary_shape = d["beam_shape"]
+        secondary_shape = d["beam_shape"]
         if self.debug:
             print("primary_shape", primary_shape)
             print("d['primbeam']", d["primbeam"])

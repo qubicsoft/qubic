@@ -191,13 +191,6 @@ class QubicInstrument(Instrument):
         if d["nf_sub"] is None and d["MultiBand"] is True:
             raise ValueError("Error: number of subband not specified")
 
-        detector_fknee = d["detector_fknee"]
-        detector_fslope = d["detector_fslope"]
-        detector_ncorr = d["detector_ncorr"]
-        detector_nep = d["detector_nep"]
-        detector_ngrids = d["detector_ngrids"]
-        detector_tau = d["detector_tau"]
-
         polarizer = d["polarizer"]
         synthbeam_dtype = np.float32
         synthbeam_fraction = d["synthbeam_fraction"]
@@ -214,8 +207,8 @@ class QubicInstrument(Instrument):
         if not sbeam:
             #Put in a dummy synthetic beam
             self.sbeam_fits = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
-            d["synthbeam"] = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
-            print("There is no fits file given in this dictionary. Using analytical model of beam parameters")
+            d["synthbeam"] = self.sbeam_fits
+            print("There is no fits file given in this dictionary. Using analytical model of beam parameters") # why change self.sbeam_fits?
             use_file=False
         else:
             self.sbeam_fits = d["synthbeam"]
@@ -249,17 +242,18 @@ class QubicInstrument(Instrument):
         self.synthbeam.kmax = synthbeam_kmax
         self.synthbeam_file(d)
 
-        layout = self._get_detector_layout(
-            detector_ngrids,
-            detector_nep,
-            detector_fknee,
-            detector_fslope,
-            detector_ncorr,
-            detector_tau
-        )
+        layout = self._get_detector_layout()
         Instrument.__init__(self, layout)
 
-    def _get_detector_layout(self, ngrids, nep, fknee, fslope, ncorr, tau):
+    def _get_detector_layout(self):
+        
+        ngrids = self.d["detector_ngrids"]
+        nep = self.d["detector_nep"]
+        fknee = self.d["detector_fknee"]
+        fslope = self.d["detector_fslope"]
+        ncorr = self.d["detector_ncorr"]
+        tau = self.d["detector_tau"]
+
         shape, vertex, removed, ordering, quadrant, efficiency = \
             self.calibration.get("detarray")
         if ngrids == 2:

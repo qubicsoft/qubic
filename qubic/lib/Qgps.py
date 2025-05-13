@@ -615,9 +615,6 @@ class GPSCalsource(GPSAntenna):
         angle = self.compute_angle(v1, v2)
 
         ### Build the scipy Rotation instance
-        print(angle.shape)
-        print(rotation_axis.shape)
-        print((angle * rotation_axis).shape)
         rotation_instance = R.from_rotvec((angle * rotation_axis).T)
 
         return rotation_instance

@@ -385,25 +385,15 @@ class PresetAcquisition:
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        self.TOD_external = (self.H.operands[1])(self.preset_comp.components_in[:, :, :]) + noise_external
+        self.TOD_external = (self.H.operands[1])(self.preset_comp.components_in) + noise_external
 
-        _r = ReshapeOperator(
-            self.TOD_external.shape,
-            (
-                len(self.preset_external.external_nus),
-                12 * self.preset_sky.params_sky["nside"] ** 2,
-                3,
-            ),
-        )
+        _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
         maps_external = _r(self.TOD_external)
 
         ### Reconvolve Planck data toward QUBIC angular resolution
         if self.preset_qubic.params_qubic["convolution_in"] or self.preset_qubic.params_qubic["convolution_out"]:
             #! Is it the correct convolution's fwhm ?
-            C = HealpixConvolutionGaussianOperator(
-                fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
-                lmax=3 * self.preset_sky.params_sky["nside"] - 1,
-            )
+            C = HealpixConvolutionGaussianOperator(fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1], lmax=3 * self.preset_sky.params_sky["nside"] - 1)
             for i in range(maps_external.shape[0]):
                 maps_external[i] = C(maps_external[i])
 

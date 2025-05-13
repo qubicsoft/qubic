@@ -3,7 +3,6 @@ import numpy as np
 import pysm3
 import pysm3.units as u
 from pyoperators import IdentityOperator
-from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysm3 import utils
 
 from qubic.data import PATH
@@ -225,10 +224,10 @@ class PresetComponents:
         components = np.zeros((len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
 
         ### Compute convolution operator if needed
-        if self.preset_qubic.params_qubic["convolution_in"]:
-            C = HealpixConvolutionGaussianOperator(fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1], lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1)
-        else:
-            C = IdentityOperator()
+        #! Tom : remove the convolution of the input component maps, as the convolution are applied in H
+        # if self.preset_qubic.params_qubic["convolution_in"]:
+        #     C = HealpixConvolutionGaussianOperator(fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1], lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1)
+        C = IdentityOperator()
 
         ### Compute CMB power spectrum according Planck data
         mycls = self.give_cl_cmb(r=self.params_cmb["r"], Alens=self.params_cmb["Alens"])

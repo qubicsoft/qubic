@@ -225,11 +225,7 @@ class PresetMixingMatrix:
             for ii, i in enumerate(nus_qubic):
                 np.random.seed(seed + ii)
 
-                rho_covar, rho_mean = pysm3.models.dust.get_decorrelation_matrix(
-                    353 * u.GHz,
-                    np.array([i]) * u.GHz,
-                    correlation_length=lcorr * u.dimensionless_unscaled,
-                )
+                rho_covar, rho_mean = pysm3.models.dust.get_decorrelation_matrix(353 * u.GHz, np.array([i]) * u.GHz, correlation_length=lcorr * u.dimensionless_unscaled)
                 rho_covar, rho_mean = np.array(rho_covar), np.array(rho_mean)
                 Adeco[ii, idust] = rho_mean[:, 0] + rho_covar @ np.random.randn(1)
 
@@ -274,40 +270,20 @@ class PresetMixingMatrix:
         if self.preset_comp.params_foregrounds["Dust"]["model_d"] in ["d0", "d6"]:
             beta_iter = np.array([])
             if self.preset_comp.params_foregrounds["Dust"]["Dust_out"]:
-                beta_iter = np.append(
-                    beta_iter,
-                    np.random.normal(
-                        self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][0],
-                        self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][1],
-                        1,
-                    ),
-                )
+                beta_iter = np.append(beta_iter, np.random.normal(self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][0], self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][1], 1))
             if self.preset_comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]:
                 beta_iter = np.append(
-                    beta_iter,
-                    np.random.normal(
-                        self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][0],
-                        self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][1],
-                        1,
-                    ),
+                    beta_iter, np.random.normal(self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][0], self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][1], 1)
                 )
 
-            Adeco_iter = self.get_decorrelated_mixing_matrix(
-                self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][2],
-                seed=42,
-                key="out",
-            )
+            Adeco_iter = self.get_decorrelated_mixing_matrix(self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][2], seed=42, key="out")
             A_iter = self.get_mixingmatrix(self.nus_eff_out, beta_iter, key="out") * Adeco_iter
 
             return beta_iter, A_iter
 
         elif self.preset_comp.params_foregrounds["Dust"]["model_d"] == "d1":
-            beta_iter = np.zeros(
-                (
-                    len(self.preset_comp.components_out) - 1,
-                    12 * self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"] ** 2,
-                )
-            )
+            beta_iter = np.zeros((len(self.preset_comp.components_out) - 1, 12 * self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"] ** 2))
+
             for iname, name in enumerate(self.preset_comp.components_name_out):
                 if name == "CMB":
                     pass
@@ -361,15 +337,8 @@ class PresetMixingMatrix:
             self.Amm_in = self.get_mixingmatrix(self.nus_eff_in, self.beta_in, key="in")
 
             if self.preset_comp.params_foregrounds["Dust"]["Dust_in"]:
-                if self.preset_comp.params_foregrounds["Dust"]["model_d"] in [
-                    "d0",
-                    "d6",
-                ]:
-                    Adeco = self.get_decorrelated_mixing_matrix(
-                        lcorr=self.preset_comp.params_foregrounds["Dust"]["l_corr"],
-                        seed=1,
-                        key="in",
-                    )
+                if self.preset_comp.params_foregrounds["Dust"]["model_d"] in ["d0", "d6"]:
+                    Adeco = self.get_decorrelated_mixing_matrix(lcorr=self.preset_comp.params_foregrounds["Dust"]["l_corr"], seed=1, key="in")
 
                     ### Multiply the right element once even with multiple processors
                     if self.preset_tools.rank == 0:

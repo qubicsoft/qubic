@@ -1,4 +1,4 @@
-path_out: "test_merge/"
+path_out: "test_wo_convolution_wo_precond/"
 datafilename: "test"
 
 CMB:
@@ -8,7 +8,7 @@ CMB:
     Alens: 1
 
 Foregrounds:
-    Dust: False               # Thermal Dust emission
+    Dust: True               # Thermal Dust emission
     Synchrotron: False        # Synchrotron emission
 
 QUBIC:
@@ -20,14 +20,14 @@ QUBIC:
     nsub_in: 8                # Number of sub-acquisitions
     nsub_out: 8
     nrec: 2                   # Number of reconstructed frequency maps
-    convolution_in: True      # Angular resolution in the input TOD
+    convolution_in: False      # Angular resolution in the input TOD
     convolution_out: False    # Angular resolution in the reconstruction
     bandpass_correction: True # Correction to keep the edges of the integration band constant
     NOISE:
                               # randomness not fixed for det and photon noise, to be checked
-        ndet: 1               # Level of detector noise            
-        npho150: 1            # Level of photon noise at 150 GHz
-        npho220: 1            # Level of photon noise at 220 GHz
+        ndet: 0               # Level of detector noise            
+        npho150: 0            # Level of photon noise at 150 GHz
+        npho220: 0            # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17 # NEP of detector noise 
         seed: 11111
     SYNTHBEAM:
@@ -60,8 +60,8 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_iter_pcg: 30            # Number of PCG iterations #100
-    tol_pcg: 1.0e-12          # Tolerance for PCG
+    n_iter_pcg: 50            # Number of PCG iterations #100
+    tol_pcg: 1.0e-08          # Tolerance for PCG
     preconditioner: False
     initial_guess_intensity_to_zero: True
     gif: True

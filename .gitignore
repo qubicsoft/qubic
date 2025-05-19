@@ -1,6 +1,7 @@
 .DS_Store
 .ipynb_checkpoints
 *.pyc
+*.pyspy
 .idea/
 .coverage
 .f2py_f2cmap
@@ -17,3 +18,6 @@ flib/polarization.f90
 .pytest_cache/
 *.egg-info/
 ruff.toml
+*.png
+*.pkl
+*.gif

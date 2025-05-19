@@ -7,7 +7,7 @@ import healpy as hp
 import numpy as np
 import yaml
 from fgbuster.component_model import CMB, Dust, Synchrotron
-from pyoperators import DiagonalOperator, ReshapeOperator
+from pyoperators import BlockDiagonalOperator, DiagonalOperator, ReshapeOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
 
@@ -523,31 +523,79 @@ class PipelineFrequencyMapMaking:
             Preconditioner for PCG algorithm.
         """
 
+        #! Preconditioner from Leonora Kardum
+
         if self.params["PCG"]["preconditioner"]:
-            approx_hth = np.zeros((self.params["QUBIC"]["nsub_out"], 12 * self.params["SKY"]["nside"] ** 2, 3))
-            conditioner = np.zeros((self.params["QUBIC"]["nrec"], 12 * self.params["SKY"]["nside"] ** 2, 3))
-            vec = np.ones(self.joint.qubic.H[0].shapein)
+            H = self.H_out
 
-            for i in range(self.params["QUBIC"]["nsub_out"]):
-                if i < int(self.params["QUBIC"]["nrec"] / 2):
-                    approx_hth[i] = self.joint.qubic.H[i].T * self.joint.qubic.invn150 * self.joint.qubic.H[i](vec)
-                else:
-                    approx_hth[i] = self.joint.qubic.H[i].T * self.joint.qubic.invn220 * self.joint.qubic.H[i](vec)
-
-            for irec in range(self.params["QUBIC"]["nrec"]):
-                imin = irec * self.fsub_out
-                imax = (irec + 1) * self.fsub_out
-                for istk in range(3):
-                    conditioner[irec, self.seenpix, istk] = 1 / (np.sum(approx_hth[imin:imax, self.seenpix, 0], axis=0))
-
-            conditioner[conditioner == np.inf] = 1
-            if self.params["PLANCK"]["external_data"]:
-                M = DiagonalOperator(conditioner[:, self.seenpix, :])
+            if self.params["QUBIC"]["configuration"] == "FI":
+                no_det = 992
+            elif self.params["QUBIC"]["configuration"] == "TD":
+                no_det = 256
             else:
-                M = DiagonalOperator(conditioner)
+                raise ValueError("Incorrect instrumental configuration.")
+
+            stacked_dptdp_inv = np.zeros(shape=(self.params["QUBIC"]["nrec"], 12 * self.params["SKY"]["nside"] ** 2))
+            index_focalplane = 0
+            
+            for irec in range(self.params["QUBIC"]["nrec"]):
+                stacked_dptdp_inv_fsub = np.zeros((int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"]), 12 * self.params["SKY"]["nside"] ** 2))
+                
+                if irec == int(self.params["QUBIC"]["nrec"] / self.joint.qubic.nFocalPlanes):
+                    index_focalplane += 1
+
+                for k_fsub in range(int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])):
+                    index_nsub = irec * int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"]) + k_fsub - index_focalplane * int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])
+                    
+                    if not self.params["PLANCK"]["external_data"]:
+                        H_single = H.operands[1].operands[index_focalplane].operands[index_nsub]
+                    else:
+                        H_single = H.operands[0].operands[0].operands[1].operands[index_focalplane].operands[index_nsub]
+
+                    dptdp_nrec = np.zeros((12 * self.params["SKY"]["nside"] ** 2))
+
+                    D = H_single.operands[1]
+                    P = H_single.operands[-1]
+                    sh = P.matrix.data.index.shape
+
+                    point_per_det = int(sh[0] / no_det)
+                    mapPtP_perdet_seq = np.zeros((no_det, 12 * self.params["SKY"]["nside"] ** 2))
+                    sample_ranges = [(det * point_per_det, (det + 1) * point_per_det) for det in range(no_det)]
+                    for det, (start, end) in enumerate(sample_ranges):
+                        indices = P.matrix.data.index[start:end, :]
+                        weights = P.matrix.data.r11[start:end, :]
+                        flat_indices = indices.ravel()
+                        flat_weights = weights.ravel()
+
+                        mapPitPi = np.zeros(12 * self.params["SKY"]["nside"] ** 2)
+                        np.add.at(mapPitPi, flat_indices, flat_weights**2)
+
+                        mapPtP_perdet_seq[det, :] = mapPitPi
+
+                    D_elements = D.data
+                    D_sq = D_elements**2
+                    mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
+                    dptdp = mapPtP_seq_scaled.sum(axis=0)
+                    dptdp_nrec += dptdp
+
+                    if self.params["PLANCK"]["external_data"]:
+                        Diag_planck_143 = self.joint.pl143.get_invntt_operator().data[:, 0]
+                        Diag_planck_217 = self.joint.pl217.get_invntt_operator().data[:, 0]
+                        dptdp_nrec = dptdp_nrec + Diag_planck_143**2 + Diag_planck_217**2
+
+                    dptdp_nrec_inv = 1 / dptdp_nrec
+                    dptdp_nrec_inv[np.isinf(dptdp_nrec_inv)] = 0.0
+                    stacked_dptdp_inv_fsub[k_fsub] = dptdp_nrec_inv
+
+                stacked_dptdp_inv[irec] = np.sum(stacked_dptdp_inv_fsub, axis=0)
+
+            if not self.params["PLANCK"]["external_data"]:
+                preconditioner = BlockDiagonalOperator([DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+            else:
+                preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
         else:
-            M = None
-        return M
+            preconditioner = None
+        return preconditioner
 
     def call_pcg(self, d, x0, seenpix):
         r"""Preconditioned Conjugate Gradiant algorithm.
@@ -725,6 +773,7 @@ class PipelineFrequencyMapMaking:
                 "fwhm_in": self.fwhm_in,
                 "fwhm_out": self.fwhm_out,
                 "fwhm_rec": self.fwhm_rec,
+                "seenpix": self.seenpix,
                 "duration": mapmaking_time,
                 "qubic_dict": {k: v for k, v in self.dict_out.items() if k != "comm"},  # I have to remove the MPI communicator, which is not supported by pickle
             }

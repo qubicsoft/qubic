@@ -193,7 +193,7 @@ def create_random_pointings(center, npointings, dtheta, hwp_stepsize, date_obs=N
         Random seed.
 
     """
-
+    
     r = np.random.RandomState(seed)
 
     cosdtheta = np.cos(np.radians(dtheta))

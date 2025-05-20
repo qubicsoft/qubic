@@ -3,7 +3,7 @@ import time
 
 import healpy as hp
 import numpy as np
-from pyoperators.core import IdentityOperator, asoperator
+from pyoperators.core import IdentityOperator, asoperator, ReshapeOperator
 from pyoperators.iterative.core import AbnormalStopIteration, IterativeAlgorithm
 from pyoperators.iterative.stopconditions import MaxIterationStopCondition
 from pyoperators.memory import empty, zeros
@@ -169,7 +169,6 @@ class PCGAlgorithm(IterativeAlgorithm):
             self.x[...] = 0
             self.convergence = np.array([])
             raise StopIteration("RHS is zero.")
-
         self.r[...] = self.b
         self.r -= self.A(self.x)
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)

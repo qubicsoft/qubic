@@ -2,24 +2,23 @@ import numpy as np
 
 from ..Qutilities import assign_default_parameters
 from .Qacquisition import *
-from ..Qdictionary import qubicDict
-from ..Qsamplings import get_pointing
 
 class QubicNoise:
     # gives Qubic noise for one band
 
     def __init__(
-            self,
-            params,
-            band=None,
-            seed_noise=None,
-            rng_noise=None,
-            scene=None,
-            sampling=None,
+        self,
+        d,
+        band,
+        sampling,
+        scene,
+        rng_noise,
+        duration,
+        comm=None,
+        size=1,
     ):
 
         if band != 150 and band != 220:
-            # raise TypeError("Please choose the QubicWideBandNoise method.") # ? Doesn't match the previous implementation
             raise TypeError("Unknown band '{}'.".format(band))
 
         self.params = assign_default_parameters(params)
@@ -40,82 +39,84 @@ class QubicNoise:
         print(f"Duration at {band} GHz is {duration} yrs")
 
     def get_noise(self, det_noise, pho_noise):
-        n = self.detector_noise() * 0
-
         if det_noise:
-            n += self.detector_noise()
+            n = self.detector_noise()
+        else:
+            n = np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
         if pho_noise:
             n += self.photon_noise()
         return n
 
-    def photon_noise(self):
-        return self.acq.get_noise(
-            det_noise=False, photon_noise=True, rng_noise=self.rng_noise
-        )
+    def photon_noise(self, wpho=1):
+        if wpho == 0:
+            return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
+        else:
+            return wpho * self.acq.get_noise(
+                det_noise=False, photon_noise=True, seed=self.seed_photon
+            )
 
-    def detector_noise(self):
-        return self.acq.get_noise(
-            det_noise=True, photon_noise=False, rng_noise=self.rng_noise
-        )
-
-    # unused?
-    # def total_noise(self, wdet, wpho):
-    #     ndet = wdet * self.detector_noise()
-    #     npho = wpho * self.photon_noise()
-    #     return ndet + npho
+    def detector_noise(self, wdet=1):
+        if wdet == 0:
+            return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
+        else:
+            return wdet * self.acq.get_noise(
+                det_noise=True, photon_noise=False, seed=self.seed_detector
+            )
 
 
 class QubicTotNoise:
-    # gives Qubic noise for all bands: for UWB, they are coadded; for DB it returns two values
+    ### Gives Qubic noise for all bands: for UWB, they are coadded; for DB it returns two values
+    ### For MB, it returns only the 150 band noise
 
-    def __init__(self, type, d, sampling, scene, detector_nep=4.7e-17, duration=[3]):
+    def __init__(self, d, sampling, scene, duration=3):
         # we ask for the sampling and scene, as they are already determined when the noise is called
-        # is type in d?
-        self.type = type
+        self.type = d["instrument_type"]
         self.d = d
         self.sampling = sampling
         self.scene = scene
-        self.detector_nep = detector_nep
-        # if only one duration is given, then it means that both bands observed for the same time
-        if len(duration) == 1:
-            self.duration = [duration[0], duration[0]]
+        self.detector_nep = d["detector_nep"]
+        if self.type == "DB": # this will later be implemented at a dictionary level!
+            self.band_used = [150, 220]
+        elif self.type == "UWB":
+            self.band_used = [150, 220]
+        elif self.type == "MB":
+            self.band_used = [150]
+        else:
+            raise ValueError("Instrument type {} is not implemented.".format(self.type))
+        
+        # if only one duration is given, then it means that both focal planes (if they are two) observed for the same time
+        if isinstance(duration, (int, float)):
+            self.duration = [duration] * len(self.band_used)
         else:
             if self.type == "UWB" and (duration[0] != duration[1]):
-                raise TypeError("The duration for bands 150 and 220 has to be the same for the UWB instruement.")
+                raise TypeError("The duration for bands 150 and 220 has to be the same for the UWB instrument.")
             self.duration = duration
 
     def total_noise(self, wdet, wpho150, wpho220, seed_noise=None):
-        rng_noise = np.random.default_rng(seed=seed_noise)
+        rng_noise = np.random.default_rng(seed=seed_noise) # The way the randomness is treated is NOT GOOD, if doing more than one run (in parallel for example)
         wpho = np.array([wpho150, wpho220])
         npho = []
         ndet = []
         
-        for i, band in enumerate([150, 220]):
+        for i, band in enumerate(self.band_used):
             QnoiseBand = QubicNoise(
+            self.d,
             band,
             self.sampling,
             self.scene,
             rng_noise=rng_noise,
+            duration=self.duration[i],
             comm=self.d["comm"],
             size=self.d["nprocs_instrument"],
-            detector_nep=self.detector_nep,
-            duration=self.duration[i]
             )
-            if self.type == "UWB":
-                print("UWB")
-                npho.append(wpho[i] * QnoiseBand.photon_noise())
-                # print(np.shape(npho[i]))
-                # sys.exit()
-                ndet.append(wdet * QnoiseBand.detector_noise())
-            elif self.type == "DB":
-                print("DB")
-                npho.append(wpho[i] * QnoiseBand.photon_noise().ravel())#?
-                ndet.append(wdet * QnoiseBand.detector_noise().ravel())#?
-                # print(np.shape(npho[i]))
-                # sys.exit()
+            npho.append(QnoiseBand.photon_noise(wpho[i]))
+            ndet.append(QnoiseBand.detector_noise(wdet))
+
         if self.type == "UWB":
             return ndet[0] + npho[0] + npho[1]
         elif self.type == "DB":
             return np.r_[ndet[0] + npho[0], ndet[1] + npho[1]]
+        elif self.type == "MB":
+            return ndet[0] + npho[0]
         else:
             raise TypeError("Can't build noise for instrument type = {}.".format(self.type))

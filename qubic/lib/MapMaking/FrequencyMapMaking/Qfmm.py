@@ -163,11 +163,7 @@ class PipelineFrequencyMapMaking:
         self.noise143 = self.planck_acquisition143.get_noise(self.params["PLANCK"]["seed"]) * self.params["PLANCK"]["level_noise_planck"]
         self.noise217 = self.planck_acquisition217.get_noise(self.params["PLANCK"]["seed"] + 1) * self.params["PLANCK"]["level_noise_planck"]
 
-        qubic_noise = QubicTotNoise(
-            self.dict_out,
-            self.joint.qubic.sampling,
-            self.joint.qubic.scene,
-        )
+        qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
 
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],
@@ -515,86 +511,93 @@ class PipelineFrequencyMapMaking:
     def get_preconditioner(self):
         """PCG Preconditioner.
 
-        Computed using the formula: To be added.
-
         Returns
         -------
         M: DiagonalOperator
             Preconditioner for PCG algorithm.
         """
+        if not self.params["PCG"]["preconditioner"]:
+            return None
+        print("H", self.H_out.operands)
+        nrec = self.params["QUBIC"]["nrec"]
+        nside = self.params["SKY"]["nside"]
+        nsub_out = self.params["QUBIC"]["nsub_out"]
+        n_focalplanes = self.joint.qubic.nFocalPlanes
+        fsub = nsub_out // nrec
+        npix = 12 * nside**2
 
-        #! Preconditioner from Leonora Kardum
+        no_det = 992 if self.params["QUBIC"]["configuration"] == "FI" else 256 if self.params["QUBIC"]["configuration"] == "TD" else None
+        if no_det is None:
+            raise ValueError("Incorrect instrumental configuration.")
 
-        if self.params["PCG"]["preconditioner"]:
-            H = self.H_out
+        stacked_dptdp_inv = np.empty((nrec, npix))
+        index_focalplane = 0
 
-            if self.params["QUBIC"]["configuration"] == "FI":
-                no_det = 992
-            elif self.params["QUBIC"]["configuration"] == "TD":
-                no_det = 256
-            else:
-                raise ValueError("Incorrect instrumental configuration.")
+        # Pre-fetch Planck diagonals if needed
+        if self.params["PLANCK"]["external_data"]:
+            Diag_planck_143 = self.joint.pl143.get_invntt_operator().data[:, 0]
+            Diag_planck_217 = self.joint.pl217.get_invntt_operator().data[:, 0]
+            planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
 
-            stacked_dptdp_inv = np.zeros(shape=(self.params["QUBIC"]["nrec"], 12 * self.params["SKY"]["nside"] ** 2))
-            index_focalplane = 0
-            
-            for irec in range(self.params["QUBIC"]["nrec"]):
-                stacked_dptdp_inv_fsub = np.zeros((int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"]), 12 * self.params["SKY"]["nside"] ** 2))
-                
-                if irec == int(self.params["QUBIC"]["nrec"] / self.joint.qubic.nFocalPlanes):
-                    index_focalplane += 1
+        for irec in range(nrec):
+            stacked_dptdp_inv_fsub = np.empty((fsub, npix))
 
-                for k_fsub in range(int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])):
-                    index_nsub = irec * int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"]) + k_fsub - index_focalplane * int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])
-                    
-                    if not self.params["PLANCK"]["external_data"]:
-                        H_single = H.operands[1].operands[index_focalplane].operands[index_nsub]
-                    else:
-                        H_single = H.operands[0].operands[0].operands[1].operands[index_focalplane].operands[index_nsub]
-
-                    dptdp_nrec = np.zeros((12 * self.params["SKY"]["nside"] ** 2))
-
-                    D = H_single.operands[1]
-                    P = H_single.operands[-1]
-                    sh = P.matrix.data.index.shape
-
-                    point_per_det = int(sh[0] / no_det)
-                    mapPtP_perdet_seq = np.zeros((no_det, 12 * self.params["SKY"]["nside"] ** 2))
-                    sample_ranges = [(det * point_per_det, (det + 1) * point_per_det) for det in range(no_det)]
-                    for det, (start, end) in enumerate(sample_ranges):
-                        indices = P.matrix.data.index[start:end, :]
-                        weights = P.matrix.data.r11[start:end, :]
-                        flat_indices = indices.ravel()
-                        flat_weights = weights.ravel()
-
-                        mapPitPi = np.zeros(12 * self.params["SKY"]["nside"] ** 2)
-                        np.add.at(mapPitPi, flat_indices, flat_weights**2)
-
-                        mapPtP_perdet_seq[det, :] = mapPitPi
-
-                    D_elements = D.data
-                    D_sq = D_elements**2
-                    mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
-                    dptdp = mapPtP_seq_scaled.sum(axis=0)
-                    dptdp_nrec += dptdp
-
-                    if self.params["PLANCK"]["external_data"]:
-                        Diag_planck_143 = self.joint.pl143.get_invntt_operator().data[:, 0]
-                        Diag_planck_217 = self.joint.pl217.get_invntt_operator().data[:, 0]
-                        dptdp_nrec = dptdp_nrec + Diag_planck_143**2 + Diag_planck_217**2
-
-                    dptdp_nrec_inv = 1 / dptdp_nrec
-                    dptdp_nrec_inv[np.isinf(dptdp_nrec_inv)] = 0.0
-                    stacked_dptdp_inv_fsub[k_fsub] = dptdp_nrec_inv
-
-                stacked_dptdp_inv[irec] = np.sum(stacked_dptdp_inv_fsub, axis=0)
-
+            if irec == int(nrec / n_focalplanes):
+                index_focalplane += 1
+            print("index_focalplanes", index_focalplane)
+            # Select the correct H_qubic operator
             if not self.params["PLANCK"]["external_data"]:
-                preconditioner = BlockDiagonalOperator([DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+                H_qubic = self.H_out.operands[1]
             else:
-                preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+                H_qubic = self.H_out.operands[0].operands[0].operands[1]
+
+            for k_fsub in range(fsub):
+                if nrec == n_focalplanes:
+                    H_single = H_qubic.operands[index_focalplane].operands[k_fsub]
+                else:
+                    index_nrec = irec - index_focalplane * (nrec // n_focalplanes)
+                    if n_focalplanes > 1:
+                        H_single = H_qubic.operands[index_focalplane].operands[index_nrec].operands[k_fsub]
+                    else:
+                        H_single = H_qubic.operands[index_nrec].operands[k_fsub]
+
+                D = H_single.operands[1]
+                P = H_single.operands[-1]
+                sh = P.matrix.data.index.shape
+
+                point_per_det = sh[0] // no_det
+                mapPtP_perdet_seq = np.empty((no_det, npix))
+
+                for det in range(no_det):
+                    start, end = det * point_per_det, (det + 1) * point_per_det
+                    indices = P.matrix.data.index[start:end, :]
+                    weights = P.matrix.data.r11[start:end, :]
+                    flat_indices = indices.ravel()
+                    flat_weights = weights.ravel()
+
+                    mapPitPi = np.bincount(flat_indices, weights=flat_weights**2, minlength=npix)
+                    mapPtP_perdet_seq[det, :] = mapPitPi
+
+                D_sq = D.data**2
+                mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
+                dptdp = mapPtP_seq_scaled.sum(axis=0)
+
+                if self.params["PLANCK"]["external_data"]:
+                    dptdp = dptdp + planck_diag_sum
+
+                # Safe inversion
+                dptdp_inv = np.zeros_like(dptdp)
+                nonzero = dptdp != 0
+                dptdp_inv[nonzero] = 1.0 / dptdp[nonzero]
+                stacked_dptdp_inv_fsub[k_fsub] = dptdp_inv
+
+            stacked_dptdp_inv[irec] = stacked_dptdp_inv_fsub.sum(axis=0)
+
+        if self.params["PLANCK"]["external_data"]:
+            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
         else:
-            preconditioner = None
+            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+
         return preconditioner
 
     def call_pcg(self, d, x0, seenpix):

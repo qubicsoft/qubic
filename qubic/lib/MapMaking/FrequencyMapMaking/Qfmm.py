@@ -518,20 +518,16 @@ class PipelineFrequencyMapMaking:
         """
         if not self.params["PCG"]["preconditioner"]:
             return None
-        print("H", self.H_out.operands)
+
         nrec = self.params["QUBIC"]["nrec"]
         nside = self.params["SKY"]["nside"]
         nsub_out = self.params["QUBIC"]["nsub_out"]
-        n_focalplanes = self.joint.qubic.nFocalPlanes
         fsub = nsub_out // nrec
         npix = 12 * nside**2
-
-        no_det = 992 if self.params["QUBIC"]["configuration"] == "FI" else 256 if self.params["QUBIC"]["configuration"] == "TD" else None
-        if no_det is None:
-            raise ValueError("Incorrect instrumental configuration.")
+        no_det = len(self.joint.qubic.multiinstrument[0].detector)
+        H_qubic = self.joint.qubic.operator
 
         stacked_dptdp_inv = np.empty((nrec, npix))
-        index_focalplane = 0
 
         # Pre-fetch Planck diagonals if needed
         if self.params["PLANCK"]["external_data"]:
@@ -542,24 +538,8 @@ class PipelineFrequencyMapMaking:
         for irec in range(nrec):
             stacked_dptdp_inv_fsub = np.empty((fsub, npix))
 
-            if irec == int(nrec / n_focalplanes):
-                index_focalplane += 1
-            print("index_focalplanes", index_focalplane)
-            # Select the correct H_qubic operator
-            if not self.params["PLANCK"]["external_data"]:
-                H_qubic = self.H_out.operands[1]
-            else:
-                H_qubic = self.H_out.operands[0].operands[0].operands[1]
-
-            for k_fsub in range(fsub):
-                if nrec == n_focalplanes:
-                    H_single = H_qubic.operands[index_focalplane].operands[k_fsub]
-                else:
-                    index_nrec = irec - index_focalplane * (nrec // n_focalplanes)
-                    if n_focalplanes > 1:
-                        H_single = H_qubic.operands[index_focalplane].operands[index_nrec].operands[k_fsub]
-                    else:
-                        H_single = H_qubic.operands[index_nrec].operands[k_fsub]
+            for j_fsub in range(fsub):
+                H_single = H_qubic[irec * fsub + j_fsub]
 
                 D = H_single.operands[1]
                 P = H_single.operands[-1]
@@ -589,7 +569,7 @@ class PipelineFrequencyMapMaking:
                 dptdp_inv = np.zeros_like(dptdp)
                 nonzero = dptdp != 0
                 dptdp_inv[nonzero] = 1.0 / dptdp[nonzero]
-                stacked_dptdp_inv_fsub[k_fsub] = dptdp_inv
+                stacked_dptdp_inv_fsub[j_fsub] = dptdp_inv
 
             stacked_dptdp_inv[irec] = stacked_dptdp_inv_fsub.sum(axis=0)
 

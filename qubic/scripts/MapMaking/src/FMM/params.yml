@@ -1,4 +1,4 @@
-path_out: "test_UWB/"
+path_out: "test_MB/"
 datafilename: "test"
 
 CMB:
@@ -14,7 +14,7 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "UWB"          # Instrumental design (MB, DB or UWB)
+    instrument: "MB"          # Instrumental design (MB, DB or UWB)
     configuration: "FI"       # Instrumental configuration (TD or FI)
     npointings: 1000          # Number of time samples
     nsub_in: 8                # Number of sub-acquisitions
@@ -60,7 +60,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_iter_pcg: 50            # Number of PCG iterations #100
+    n_iter_pcg: 200            # Number of PCG iterations #100
     tol_pcg: 1.0e-08          # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: True

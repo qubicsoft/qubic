@@ -229,23 +229,24 @@ class PresetComponents:
         #     C = HealpixConvolutionGaussianOperator(fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1], lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1)
         C = IdentityOperator()
 
-        ### Compute CMB power spectrum according Planck data
-        mycls = self.give_cl_cmb(r=self.params_cmb["r"], Alens=self.params_cmb["Alens"])
-
         ### Build components list
         for icomp, comp_name in enumerate(skyconfig.keys()):
             # CMB case
             if comp_name == "CMB":
+                ### Compute CMB power spectrum according Planck data
+                mycls = self.give_cl_cmb(r=self.params_cmb["r"], Alens=self.params_cmb["Alens"])
+
                 np.random.seed(skyconfig[comp_name])
                 cmb = hp.synfast(mycls, self.preset_tools.params["SKY"]["nside"], verbose=False, new=True).T
 
                 components[icomp] = C(cmb).copy()
+
                 ###! Tom : I don't think this variable is really needed, we should always use the maps according to the parameters file
                 # components_convolved[icomp] = C(cmb).copy()
 
             # Dust case
             elif comp_name == "Dust":
-                sky_dust = pysm3.Sky(nside=self.preset_tools.params["SKY"]["nside"], preset_strings=[self.preset_tools.params["Foregrounds"]["Dust"]["model_d"]], output_unit="uK_CMB")
+                sky_dust = pysm3.Sky(nside=self.preset_tools.params["SKY"]["nside"], preset_strings=[self.preset_tools.params["Foregrounds"]["Dust"]["model_d"]])  # , output_unit="uK_CMB")
 
                 sky_dust.components[0].mbb_temperature = 20 * sky_dust.components[0].mbb_temperature.unit
                 map_Dust = (
@@ -298,13 +299,9 @@ class PresetComponents:
             # CO emission case
             elif comp_name == "coline":
                 map_co = hp.ud_grade(hp.read_map(PATH + "CO_line.fits") * 10, self.preset_tools.params["SKY"]["nside"])
-                map_co_polarised = self.polarized_I(
-                    map_co,
-                    self.preset_tools.params["SKY"]["nside"],
-                    polarization_fraction=self.preset_tools.params["Foregrounds"]["CO"]["polarization_fraction"],
-                )
-                sky_co = np.zeros((12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
+                map_co_polarised = self.polarized_I(map_co, self.preset_tools.params["SKY"]["nside"], polarization_fraction=self.preset_tools.params["Foregrounds"]["CO"]["polarization_fraction"])
 
+                sky_co = np.zeros((12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
                 sky_co[:, 0] = map_co.copy()
                 sky_co[:, 1:] = map_co_polarised.T.copy()
 

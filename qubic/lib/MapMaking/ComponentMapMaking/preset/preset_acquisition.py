@@ -1,6 +1,7 @@
 import numpy as np
 from fgbuster import component_model as c
 from pyoperators import (
+    BlockDiagonalOperator,
     DiagonalOperator,
     ReshapeOperator,
 )
@@ -111,6 +112,7 @@ class PresetAcquisition:
         self.rms_tolerance = self.preset_tools.params["PCG"]["tol_rms"]
         self.ites_to_converge = self.preset_tools.params["PCG"]["ites_to_converge"]
         self.rms_plot = np.zeros((1, 2))
+        self.convergence = np.array([])
 
         ### Inverse noise-covariance matrix
         self.preset_tools.mpi._print_message("    => Building inverse noise covariance matrix")
@@ -141,41 +143,7 @@ class PresetAcquisition:
         self.preset_tools.mpi._print_message("    => Initializing starting point")
         self.get_x0()
 
-    def get_approx_hth(self):
-        r"""Approx HTH.
-
-        Calculates the approximation of :math:`H^T.H`.
-
-        Returns
-        -------
-        approx_hth: array_like
-            The approximation of :math:`H^T.H` with shape :math:`(N_{sub}^{in}, N_{pixel}, 3)`.
-        approx_hth_ext: array_like
-            The approximation of :math:`H^T.H` for Planck.
-
-        """
-
-        # Approximation of H.T H
-        approx_hth = np.empty((len(self.preset_qubic.joint_out.qubic.H),) + self.preset_qubic.joint_out.qubic.H[0].shapein)
-        vector = np.ones(self.preset_qubic.joint_out.qubic.H[0].shapein)
-        for index in range(self.preset_qubic.params_qubic["nsub_out"]):
-            approx_hth[index] = self.preset_qubic.joint_out.qubic.H[index].T * self.preset_qubic.joint_out.qubic.invn150 * self.preset_qubic.joint_out.qubic.H[index](vector)
-
-        invN_ext = self.preset_qubic.joint_out.external.get_invntt_operator(mask=self.preset_sky.mask)
-
-        _r = ReshapeOperator(
-            (
-                len(self.preset_qubic.joint_out.external.nus),
-                approx_hth.shape[1],
-                approx_hth.shape[2],
-            ),
-            invN_ext.shapein,
-        )
-        approx_hth_ext = invN_ext(np.ones(invN_ext.shapein))
-
-        return approx_hth, _r.T(approx_hth_ext)
-
-    def get_preconditioner(self, seenpix, A_qubic, A_ext, precond=True, thr=0):
+    def get_preconditioner(self):
         """Preconditioner for PCG algorithm.
 
         Calculates and returns the preconditioner matrix for the optimization process.
@@ -198,37 +166,69 @@ class PresetAcquisition:
 
         """
 
-        if precond:
-            # Calculate the approximate H^T * H matrix
-            approx_hth, approx_hth_ext = self.get_approx_hth()
-
-            # Create a preconditioner matrix with dimensions (number of components, number of pixels, 3)
-            preconditioner = np.ones(
-                (
-                    len(self.preset_comp.components_model_out),
-                    approx_hth.shape[1],
-                    approx_hth.shape[2],
-                )
-            )
-
-            for icomp in range(len(self.preset_comp.components_model_out)):
-                for istk in range(3):
-                    precond_ext = 1 / (approx_hth_ext[:, :, 0].T @ A_ext[..., icomp] ** 2)
-                    precond_ext[precond_ext == np.inf] = 0
-                    preconditioner[icomp, :, istk] = precond_ext
-                    preconditioner[icomp, seenpix, istk] *= self.preset_tools.params["PLANCK"]["weight_planck"]
-
-            # We sum over the frequencies, take the inverse, and only keep the information on the patch.
-            for icomp in range(len(self.preset_comp.components_model_out)):
-                for istk in range(3):
-                    # print(A_qubic[..., icomp])
-                    precond_qubic = 1 / (approx_hth[:, :, 0].T @ (A_qubic[..., icomp]) ** 2)
-                    preconditioner[icomp, self.preset_sky.seenpix_qubic, istk] += precond_qubic[self.preset_sky.seenpix_qubic]
-
-            M = DiagonalOperator(preconditioner[:, seenpix, :])
-            return M
-        else:
+        if not self.preset_tools.params["QUBIC"]["preconditioner"]:
             return None
+
+        ncomp = len(self.preset_comp.components_model_out)
+        nside = self.preset_sky.params_sky["nside"]
+        npix = 12 * nside**2
+        nsub = self.preset_qubic.params_qubic["nsub_out"]
+        no_det = len(self.preset_qubic.joint_out.qubic.multiinstrument[0].detector)
+
+        H_qubic = self.preset_qubic.joint_out.qubic.operator
+
+        stacked_dptdp_inv = np.empty((ncomp, npix))
+
+        # Pre-fetch Planck diagonals if needed
+        # Diag_planck_143 = self.preset_qubic.joint_out.pl143.get_invntt_operator().data[:, 0]
+        # Diag_planck_217 = self.preset_qubic.joint_out.pl217.get_invntt_operator().data[:, 0]
+        # planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
+        planck_diag_sum = (
+            self.preset_qubic.joint_out.external.get_invntt_operator().data.reshape(len(self.preset_qubic.joint_out.external.allnus) // self.preset_tools.params["PLANCK"]["nintegr_planck"], npix, 3)[
+                ..., 0
+            ]
+            ** 2
+        ).sum(axis=0)
+
+        for icomp in range(ncomp):
+            stacked_dptdp_inv_nsub = np.empty((nsub, npix))
+
+            for j_nsub in range(nsub):
+                H_single = H_qubic[j_nsub]
+
+                D = H_single.operands[1]
+                P = H_single.operands[4]
+                sh = P.matrix.data.index.shape
+
+                point_per_det = sh[0] // no_det
+                mapPtP_perdet_seq = np.empty((no_det, npix))
+
+                for det in range(no_det):
+                    start, end = det * point_per_det, (det + 1) * point_per_det
+                    indices = P.matrix.data.index[start:end, :]
+                    weights = P.matrix.data.r11[start:end, :]
+                    flat_indices = indices.ravel()
+                    flat_weights = weights.ravel()
+
+                    mapPitPi = np.bincount(flat_indices, weights=flat_weights**2, minlength=npix)
+                    mapPtP_perdet_seq[det, :] = mapPitPi
+
+                D_sq = D.data**2
+                mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
+                dptdp = mapPtP_seq_scaled.sum(axis=0)
+                dptdp = dptdp + planck_diag_sum
+
+                # Safe inversion
+                dptdp_inv = np.zeros_like(dptdp)
+                nonzero = dptdp != 0
+                dptdp_inv[nonzero] = 1.0 / dptdp[nonzero]
+                stacked_dptdp_inv_nsub[j_nsub] = dptdp_inv
+
+            stacked_dptdp_inv[icomp] = stacked_dptdp_inv_nsub.sum(axis=0)
+
+            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.preset_sky.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+
+        return preconditioner
 
     def _get_scalar_acquisition_operator(self):
         """

@@ -1191,7 +1191,7 @@ class JointAcquisitionComponentsMapMaking:
         except Exception:
             mpidist = None
 
-        He = self.external.get_operator(A=Ap, convolution=False, comm=mpidist, nu_co=nu_co)
+        He = self.external.get_operator(A=Ap, convolution=True, myfwhm=fwhm, comm=mpidist, nu_co=nu_co)
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 

@@ -88,16 +88,9 @@ class Pipeline:
         ### Initialize PCG starting point
         initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
 
-        ### Update the precondtionner M
+        ### Update the preconditioner M
         # if self._steps == 0:
-        self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(
-            seenpix=seenpix,
-            A_qubic=self.preset.acquisition.Amm_iter[: self.preset.qubic.params_qubic["nsub_out"]],
-            # self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(A_qubic=self.preset.mixingmatrix.Amm_in[:self.preset.qubic.params_qubic["nsub_out"]],
-            A_ext=self.preset.mixingmatrix.Amm_in[self.preset.qubic.params_qubic["nsub_out"] :],
-            precond=self.preset.qubic.params_qubic["preconditioner"],
-            thr=self.preset.tools.params["PLANCK"]["thr_planck"],
-        )
+        self.preset.acquisition.M = self.preset.acquisition.get_preconditioner()
 
         ### Run PCG
         if self._steps == 0:
@@ -132,10 +125,11 @@ class Pipeline:
             input=self.preset.comp.components_out,
             iter_init=self._steps * num_iter,
             is_planck=True,
-        )["x"]["x"]
+        )["x"]
 
         ### Update components
-        self.preset.comp.components_iter[:, seenpix, :] = result.copy()
+        self.preset.comp.components_iter[:, seenpix, :] = result["x"].copy()
+        self.preset.acquisition.convergence = np.append(self.preset.acquisition.convergence, result["convergence"])
 
         ### Plot if asked
         if self.preset.tools.rank == 0:
@@ -842,6 +836,9 @@ class Pipeline:
                                 "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
                                 "fwhm_rec": self.preset.acquisition.fwhm_rec,
                                 "parameters": self.preset.tools.params,
+                                "convergence": self.preset.acquisition.convergence,
+                                "TOD_qubic": self.preset.acquisition.TOD_qubic,
+                                "TOD_external": self.preset.acquisition.TOD_external,
                                 "qubic_dict": {k: v for k, v in self.preset.qubic.dict.items() if k != "comm"},  # Need to remove the MPI communictor, which is not suppurted by pickle
                             },
                             handle,

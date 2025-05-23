@@ -1,0 +1,825 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+from qubicpack.qubicfp import qubicfp
+import sys,os
+import glob
+
+import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
+```
+
+```{python}
+day = '2025-05-14'
+data_dir = '/home/qubic/Calib-TD/'+day+'/'
+words = ['dome-open']
+keywords = ['*{}*'.format(word) for word in words]
+for keyword in keywords:
+    dirs = np.sort(glob.glob(data_dir+keyword))
+    print(dirs)
+```
+
+## Dome-open (13.48.14)
+
+```{python}
+dataset0 = dirs[7]
+a = qubicfp()
+a.read_qubicstudio_dataset(dataset0)
+```
+
+```{python}
+tod = a.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+init = timeaxis[0]
+tt = timeaxis - init
+
+print('number of timesamples along every TES in this dataset:', np.shape(todarray[0,:])) 
+```
+
+```{python}
+f = 1/(tt[1]-tt[0])
+t_samples = (len(tt)/f)/60#/60
+```
+
+```{python}
+t_samples #3 minutes of acquisition
+```
+
+# library to detect saturation and discontinuities in the data 
+
+```{python}
+import jumps_soft as sj
+```
+
+```{python}
+sat = sj.saturation()
+```
+
+ok = array of True and False, True if it's saturated, False if's not
+
+bad_idx = idx of the saturated TES in the focal plane (the same idx where ok = False)
+
+frac = fraction of the TOD saturated in the TES
+
+number = number of TES saturated
+
+```{python}
+ok, bad_idx, frac, number = sat.detect_saturation(todarray)
+```
+
+```{python}
+print('number of TES saturated in the focal plane:', number)
+```
+
+```{python}
+print('index TES with no saturation:')
+good_tod = np.array(np.where(ok==True))
+good_tod = np.reshape(good_tod, (good_tod.shape[1]))
+print(good_tod)
+```
+
+choose the threshold to detect discontinuities in the data. Can be a single value or a list of different thresholds (from largest to smallest). In 2025 data thr = 3e4 works fine. 
+
+window_size is the size of the moving median window
+
+```{python}
+#thr = [2e5, 1e5, 3e4, 1e4, 1e3] 
+thr = [3e4]
+```
+
+```{python}
+fluxjumps = sj.fluxjumps(thr=thr, window_size = 300)
+```
+
+For every TES used, the function will return: 
+
+nc = number of flux jumps detected 
+
+xc = index of the initial time sample of the jump 
+
+xcf = index of the final time sample fo the jump 
+
+thr = thr used. If a list is sent, it could be different for different TES. 
+
+```{python}
+for i in range(len(good_tod)):
+    idx_good = good_tod[i]
+    print('Analisis TES', idx_good)
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)], locals()['thr_{}'.format(idx_good)] = fluxjumps.jumps_detection(tt,todarray[idx_good])
+```
+
+```{python}
+TES_jump = np.ones(len(good_tod), dtype=int)
+for i in range(len(good_tod)):
+    idx = good_tod[i]   
+    result = locals()['nc_{}'.format(idx)]
+    if result == 0.:
+        TES_jump[i] = 0 
+        
+TES_yes = np.array(np.where(TES_jump==1))
+TES_yes = good_tod[TES_yes]
+TES_no = np.array(np.where(TES_jump==0))
+TES_no = good_tod[TES_no]
+
+TES_yes = np.reshape(TES_yes, TES_yes.shape[1])
+TES_no = np.reshape(TES_no, TES_no.shape[1])
+```
+
+```{python}
+
+```
+
+```{python}
+print('TES with no flux jumps found:',TES_no) 
+```
+
+a thr equal to 1e4 could possible detect these ones
+
+```{python}
+plt.plot(tt, todarray[42], label='TES 43')
+plt.plot(tt, todarray[10], label='TES 11')
+plt.legend()
+```
+
+```{python}
+plt.plot(tt, todarray[210])
+plt.plot(tt, todarray[211])
+```
+
+```{python}
+plt.plot(tt, todarray[194], label='TES 195')
+plt.plot(tt, todarray[197], label='TES 198')
+#plt.plot(tt, todarray[211], label='TES 212')
+plt.plot(tt, todarray[216], label='TES 217')
+plt.plot(tt, todarray[219], label='TES 220')
+#plt.plot(tt, todarray[210])
+plt.legend()
+```
+
+```{python}
+print('TES with flux jumps detected', TES_yes)
+```
+
+```{python}
+
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(tt, todarray[i], label=i)
+plt.legend()
+plt.title('threshold 3e4')
+```
+
+```{python}
+len(TES_yes)
+```
+
+```{python}
+fig, ax = plt.subplots(4,8, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+Decision tree algorithm to improve the amplitudes and correction
+
+thr_count = minium number of samples to be considered as a signal level between flux jumps 
+
+thr_amp = minimum number for the amplitude calculated between two signal levels
+
+```{python}
+dt = sj.DT(thr_count=200, thr_amp = 2e4)
+```
+
+it will return: 
+
+xcdt = index of the initial time sample of the jump using DT
+
+xcfdt = index of the final time sample fo the jump usign DT
+
+valini = initial levels between flux jumps 
+
+valfin = final levels between flux jumps 
+
+offdt = amplitude of the flux jump calculated as the diference between valfin and valini, using DT
+
+```{python}
+for i in TES_yes: 
+    locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], locals()['valini_{}'.format(i)], locals()['valfin_{}'.format(i)], locals()['offdt_{}'.format(i)] = dt.calculate_levels(tt, todarray[i], locals()['nc_{}'.format(i)])
+```
+
+```{python}
+for i in TES_yes: 
+    print('TES', i, locals()['offdt_{}'.format(i)])
+```
+
+```{python}
+fig, ax = plt.subplots(4,8, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xcdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcdt_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcfdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcfdt_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+fig, ax = plt.subplots(2,2, figsize=(12,8))
+
+ax[0,0].plot(tt, todarray[39])
+ax[0,0].plot(tt[xcdt_39], todarray[39][xcdt_39], marker='o', ms=5, lw=0, color='red')
+ax[0,0].plot(tt[xcfdt_39], todarray[39][xcfdt_39], marker='o', ms=5, lw=0, color='green')
+ax[0,0].set_title('TES 40')
+
+ax[0,1].plot(tt, todarray[226])
+ax[0,1].plot(tt[xcdt_226], todarray[226][xcdt_226], marker='o', ms=5, lw=0, color='red')
+ax[0,1].plot(tt[xcfdt_226], todarray[226][xcfdt_226], marker='o', ms=5, lw=0, color='green')
+ax[0,1].set_title('TES 227')
+
+
+ax[1,0].plot(tt, todarray[251])
+ax[1,0].plot(tt[xcdt_251], todarray[251][xcdt_251], marker='o', ms=5, lw=0, color='red')
+ax[1,0].plot(tt[xcfdt_251], todarray[251][xcfdt_251], marker='o', ms=5, lw=0, color='green')
+ax[1,0].set_title('TES 252')
+
+
+
+ax[1,1].plot(tt, todarray[148])
+ax[1,1].plot(tt[xcdt_148], todarray[148][xcdt_148], marker='o', ms=5, lw=0, color='red')
+ax[1,1].plot(tt[xcfdt_148], todarray[148][xcfdt_148], marker='o', ms=5, lw=0, color='green')
+ax[1,1].set_title('TES 149')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+plt.plot(tt, todarray[5])
+plt.plot(tt[xcdt_5], todarray[5][xcdt_5], marker='o', ms=5, lw=0, color='red')
+plt.plot(tt[xcfdt_5], todarray[5][xcfdt_5], marker='o', ms=5, lw=0, color='green')
+
+for i in range(len(valini_5)):
+    plt.axhline(y=valini_5[i], color='magenta')
+```
+
+```{python}
+
+```
+
+see the amplitudes of the flux jumps detected
+
+```{python}
+def offset_array(offset_corr):
+    off = []
+    for i in range(len(offset_corr)):
+        if len(offset_corr[i]) > 0:
+            off.append(np.reshape(offset_corr[i], (len(offset_corr[i]),1)))
+    off = np.concatenate(off)
+    return off
+```
+
+```{python}
+
+```
+
+```{python}
+off = []
+for i in TES_yes:
+    off.append(locals()['offdt_{}'.format(i)])
+```
+
+```{python}
+offdt_array = offset_array(off)
+```
+
+```{python}
+plt.hist(abs(offdt_array), range=(2e4, 1e5), bins=25)
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(abs(np.asarray(locals()['offdt_{}'.format(i)])), marker='s', lw=0, label='TES_{}'.format(i+1))
+    plt.legend()
+plt.axhspan(ymin=3.5e4, ymax=5.5e4, color='grey', alpha=0.3)
+plt.ylim(2e4, 1.5e5)
+```
+
+calculate the amplitude of the flux jumps without using DT
+
+```{python}
+corr = sj.correction()
+```
+
+```{python}
+for i in TES_yes:
+    locals()['offset_{}'.format(i)] = corr.calculate_amplitude(tt, todarray[i], locals()['xc_{}'.format(i)], locals()['xcf_{}'.format(i)], locals()['nc_{}'.format(i)])
+```
+
+```{python}
+for i in TES_yes:
+    print('TES', i, locals()['offset_{}'.format(i)])
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(abs(np.asarray(locals()['offset_{}'.format(i)])), marker='s', lw=0, label='TES_{}'.format(i+1))
+    plt.legend()
+    
+plt.axhspan(ymin=3.5e4, ymax=5.5e4, color='grey', alpha=0.3)
+plt.ylim(2e4, 1.5e5)
+```
+
+## Dome-open (14.03.25)
+
+```{python}
+dataset0 = dirs[8]
+a = qubicfp()
+a.read_qubicstudio_dataset(dataset0)
+```
+
+```{python}
+tod = a.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+init = timeaxis[0]
+tt = timeaxis - init
+
+print('number of timesamples along every TES in this dataset:', np.shape(todarray[0,:])) 
+```
+
+```{python}
+f = 1/(tt[1]-tt[0])
+t_samples = (len(tt)/f)/60#/60
+```
+
+```{python}
+t_samples #15 minutes of acquisition
+```
+
+```{python}
+
+```
+
+```{python}
+import jumps_soft as sj
+```
+
+```{python}
+sat = sj.saturation()
+```
+
+ok = array of True and False, True if it's saturated, False if's not
+
+bad_idx = idx of the saturated TES in the focal plane (the same idx where ok = False)
+
+frac = fraction of the TOD saturated in the TES
+
+number = number of TES saturated
+
+
+```{python}
+ok, bad_idx, frac, number = sat.detect_saturation(todarray)
+```
+
+```{python}
+print('number of TES saturated in the focal plane:', number)
+```
+
+```{python}
+print('index TES with no saturation:')
+good_tod = np.array(np.where(ok==True))
+good_tod = np.reshape(good_tod, (good_tod.shape[1]))
+print(good_tod)
+```
+
+choose the threshold to detect discontinuities in the data. Can be a single value or a list of different thresholds (from largest to smallest). In 2025 data thr = 3e4 works fine.
+
+window_size is the size of the moving median window
+
+
+```{python}
+#thr = [2e5, 1e5, 3e4, 1e4, 1e3] 
+thr = [3e4]
+```
+
+```{python}
+fluxjumps = sj.fluxjumps(thr=thr, window_size = 300)
+```
+
+```{python}
+for i in range(len(good_tod)):
+    idx_good = good_tod[i]
+    print('Analisis TES', idx_good)
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)], locals()['thr_{}'.format(idx_good)] = fluxjumps.jumps_detection(tt,todarray[idx_good])
+```
+
+```{python}
+TES_jump = np.ones(len(good_tod), dtype=int)
+for i in range(len(good_tod)):
+    idx = good_tod[i]   
+    result = locals()['nc_{}'.format(idx)]
+    if result == 0.:
+        TES_jump[i] = 0 
+        
+TES_yes = np.array(np.where(TES_jump==1))
+TES_yes = good_tod[TES_yes]
+TES_no = np.array(np.where(TES_jump==0))
+TES_no = good_tod[TES_no]
+
+TES_yes = np.reshape(TES_yes, TES_yes.shape[1])
+TES_no = np.reshape(TES_no, TES_no.shape[1])
+```
+
+```{python}
+print('TES with no flux jumps found:',TES_no) 
+```
+
+```{python}
+print('TES with flux jumps detected', TES_yes)
+```
+
+```{python}
+plt.plot(tt, todarray[69], label='TES 70')
+plt.plot(tt, todarray[75], label='TES 76')
+plt.legend()
+```
+
+```{python}
+plt.plot(tt, todarray[99], label='TES 100')
+plt.plot(tt, todarray[3], label='TES 4')
+plt.legend()
+```
+
+```{python}
+len(TES_yes)
+```
+
+```{python}
+75/5
+```
+
+```{python}
+fig, ax = plt.subplots(5,15, figsize=(30, 10))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+Decision tree algorithm to improve the amplitudes and correction
+
+thr_count = minium number of samples to be considered as a signal level between flux jumps
+
+thr_amp = minimum number for the amplitude calculated between two signal leve
+
+```{python}
+dt = sj.DT(thr_count=200, thr_amp = 2e4)
+```
+
+```{python}
+#nuevos_indices = TES_yes[~np.isin(TES_yes, remove_all)] # remove some of them
+```
+
+```{python}
+nc_5 #the number of jumps detected by the previous code is pretty big, so it could take a some time
+```
+
+```{python}
+
+```
+
+```{python}
+for i in TES_yes: 
+    print('TES', i)
+    locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], locals()['valini_{}'.format(i)], locals()['valfin_{}'.format(i)], locals()['offdt_{}'.format(i)] = dt.calculate_levels(tt, todarray[i], locals()['nc_{}'.format(i)])
+```
+
+```{python}
+len(nuevos_indices)
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+fig, ax = plt.subplots(5,15, figsize=(25, 20))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xcdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcdt_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcfdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcfdt_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+plt.show()
+```
+
+```{python}
+fig, ax = plt.subplots(2,3, figsize=(12,8))
+
+ax[0,0].plot(tt, todarray[23])
+ax[0,0].plot(tt[xcdt_23], todarray[23][xcdt_23], marker='o', ms=5, lw=0, color='red')
+ax[0,0].plot(tt[xcfdt_23], todarray[23][xcfdt_23], marker='o', ms=5, lw=0, color='green')
+ax[0,0].set_title('TES 24')
+
+ax[0,1].plot(tt, todarray[42])
+ax[0,1].plot(tt[xcdt_42], todarray[42][xcdt_42], marker='o', ms=5, lw=0, color='red')
+ax[0,1].plot(tt[xcfdt_42], todarray[42][xcfdt_42], marker='o', ms=5, lw=0, color='green')
+ax[0,1].set_title('TES 43')
+
+ax[0,2].plot(tt, todarray[56])
+ax[0,2].plot(tt[xcdt_56], todarray[56][xcdt_56], marker='o', ms=5, lw=0, color='red')
+ax[0,2].plot(tt[xcfdt_56], todarray[56][xcfdt_56], marker='o', ms=5, lw=0, color='green')
+ax[0,2].set_title('TES 57')
+
+ax[1,0].plot(tt, todarray[164])
+ax[1,0].plot(tt[xcdt_164], todarray[164][xcdt_164], marker='o', ms=5, lw=0, color='red')
+ax[1,0].plot(tt[xcfdt_164], todarray[164][xcfdt_164], marker='o', ms=5, lw=0, color='green')
+ax[1,0].set_title('TES 165')
+
+ax[1,1].plot(tt, todarray[166])
+ax[1,1].plot(tt[xcdt_166], todarray[166][xcdt_166], marker='o', ms=5, lw=0, color='red')
+ax[1,1].plot(tt[xcfdt_166], todarray[166][xcfdt_166], marker='o', ms=5, lw=0, color='green')
+ax[1,1].set_title('TES 167')
+
+ax[1,2].plot(tt, todarray[173])
+ax[1,2].plot(tt[xcdt_173], todarray[173][xcdt_173], marker='o', ms=5, lw=0, color='red')
+ax[1,2].plot(tt[xcfdt_173], todarray[173][xcfdt_173], marker='o', ms=5, lw=0, color='green')
+ax[1,2].set_title('TES 174')
+```
+
+```{python}
+plt.plot(tt, todarray[42], label='TES 43')
+#plt.axvline(tt[xc_42[0]])
+plt.plot(tt, todarray[56], label='TES 57')
+plt.plot(tt, todarray[23], label='TES 24')
+plt.plot(tt, todarray[106], label='TES 107')
+
+plt.legend()
+```
+
+```{python}
+plt.plot(tt, todarray[238], label='TES 239')
+plt.plot(tt, todarray[106], label='TES 107')
+plt.plot(tt, todarray[95], label='TES 96')
+plt.legend()
+```
+
+```{python}
+plt.plot(tt, todarray[3])
+plt.plot(tt[xcdt_3], todarray[3][xcdt_3], marker='o', ms=5, lw=0, color='red')
+plt.plot(tt[xcfdt_3], todarray[3][xcfdt_3], marker='o', ms=5, lw=0, color='green')
+for i in range(len(valini_3)):
+    plt.axhline(y=valini_3[i], color='magenta')
+#plt.title('TES 53')
+
+```
+
+```{python}
+
+```
+
+see the amplitudes of the flux jumps detected
+
+```{python}
+def offset_array(offset_corr):
+    off = []
+    for i in range(len(offset_corr)):
+        if len(offset_corr[i]) > 0:
+            off.append(np.reshape(offset_corr[i], (len(offset_corr[i]),1)))
+    off = np.concatenate(off)
+    return off
+```
+
+```{python}
+off = []
+for i in TES_yes:
+    off.append(locals()['offdt_{}'.format(i)])
+```
+
+```{python}
+offdt_array = offset_array(off)
+```
+
+```{python}
+plt.hist(abs(offdt_array), range=(2e4, 1e5), bins=25)
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(abs(np.asarray(locals()['offdt_{}'.format(i)])), marker='s', lw=0, label='TES_{}'.format(i+1))
+    plt.legend()
+plt.axhspan(ymin=3.5e4, ymax=5.5e4, color='grey', alpha=0.3)
+plt.ylim(2e4, 1.5e5)
+```
+
+calculate the amplitude of the flux jumps without using DT
+
+```{python}
+corr = sj.correction()
+```
+
+```{python}
+for i in TES_yes:
+    locals()['offset_{}'.format(i)] = corr.calculate_amplitude(tt, todarray[i], locals()['xc_{}'.format(i)], locals()['xcf_{}'.format(i)], locals()['nc_{}'.format(i)])
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(abs(np.asarray(locals()['offset_{}'.format(i)])), marker='s', lw=0, label='TES_{}'.format(i+1))
+    plt.legend()
+    
+plt.axhspan(ymin=3.5e4, ymax=5.5e4, color='grey', alpha=0.3)
+plt.ylim(2e4, 1.5e5)
+```
+
+```{python}
+
+```
+
+## Dome open (17.58.27)
+
+```{python}
+dirs[12]
+```
+
+```{python}
+dataset0 = dirs[12]
+a = qubicfp()
+a.read_qubicstudio_dataset(dataset0)
+```
+
+```{python}
+tod = a.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+init = timeaxis[0]
+tt = timeaxis - init
+
+print('number of timesamples along every TES in this dataset:', np.shape(todarray[0,:])) 
+```
+
+```{python}
+f = 1/(tt[1]-tt[0])
+t_samples = (len(tt)/f)/60/60
+```
+
+```{python}
+t_samples #2 hours of acquisition
+```
+
+```{python}
+import jumps_soft as sj
+```
+
+```{python}
+sat = sj.saturation()
+```
+
+```{python}
+ok, bad_idx, frac, number = sat.detect_saturation(todarray)
+```
+
+```{python}
+print('number of TES saturated in the focal plane:', number)
+```
+
+```{python}
+print('index TES with no saturation:')
+good_tod = np.array(np.where(ok==True))
+good_tod = np.reshape(good_tod, (good_tod.shape[1]))
+print(good_tod)
+```
+
+```{python}
+fig, ax = plt.subplots(2,2, figsize=(10, 8))
+
+ax[0,0].plot(tt, todarray[0], label='TES 1')
+ax[0,0].legend()
+ax[0,1].plot(tt, todarray[1], label='TES 2')
+ax[0,1].legend()
+
+ax[1,0].plot(tt, todarray[3], label='TES 4')
+ax[1,0].legend()
+
+ax[1,1].plot(tt, todarray[4], label='TES 5')
+ax[1,1].legend()
+
+```
+
+```{python}
+plt.plot(tt, todarray[0])
+
+plt.plot(tt, todarray[2])
+plt.plot(tt, todarray[3])
+plt.plot(tt, todarray[5])
+
+```
+
+```{python}
+plt.plot(tt, todarray[192], label='TES 193')
+plt.plot(tt, todarray[3], label='TES 4')
+plt.legend()
+```
+
+```{python}
+
+```
+
+## Dome open (20.15.16)
+
+```{python}
+dataset0 = dirs[13]
+a = qubicfp()
+a.read_qubicstudio_dataset(dataset0)
+```
+
+```{python}
+tod = a.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+init = timeaxis[0]
+tt = timeaxis - init
+
+print('number of timesamples along every TES in this dataset:', np.shape(todarray[0,:])) 
+```
+
+```{python}
+f = 1/(tt[1]-tt[0])
+t_samples = (len(tt)/f)#/60/60
+```
+
+```{python}
+t_samples
+```
+
+```{python}
+plt.plot(tt, todarray[15])
+```
+
+```{python}
+
+```
+
+

@@ -5,7 +5,7 @@ from scipy.fft import fftfreq, fft2, ifft2
 import sys
 import healpy as hp
 import time
-from scipy.signal import butter, filtfilt, bessel
+from scipy.signal import butter, filtfilt, bessel, sosfiltfilt
 import pandas as pd
 import jax
 import jax.numpy as jnp
@@ -438,12 +438,15 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
     mytod = -tod.copy()
 
     # Filter the TOD
-    mytod = my_filt(mytod)
+    mytod_1 = my_filt(mytod.copy())
+
+    mytod_2 = my_filt_2(mytod.copy())
 
     if doplot:
         fig, ax = plt.subplots(figsize=(10, 7))
         ax.plot(tt, -tod, label="TOD")
-        ax.plot(tt, mytod, label="filtered TOD")
+        ax.plot(tt, mytod_1, label="filtered TOD")
+        ax.plot(tt, mytod_2, label="filtered TOD 2")
         ax.legend()
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Flux [ADU]")
@@ -471,15 +474,31 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
         plt.show()
         # return mapsb_forth, mapcount_forth, mapsb_back, mapcount_back
     
-    mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
+    mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod_1[scantype != 0], nside=nside)
 
-    # plt.figure()
+    mapsb_2, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod_2[scantype != 0], nside=nside)
+
+    plt.figure()
     # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, 
     #             title="gaussian map", rot=center)
-    # hp.gnomview(mapsb, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, 
-    #             title="final map", rot=center)
-    # plt.show()
+    hp.gnomview(mapsb, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, 
+                title="final map", rot=center)
+    plt.savefig("figures/mapsb.pdf")
+    plt.show()
 
+    plt.figure()
+    hp.gnomview(mapsb_2, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, 
+                title="final map 2", rot=center)
+    plt.savefig("figures/mapsb_2.pdf")
+    plt.show()
+
+
+    plt.figure()
+    hp.gnomview(mapsb_2 - mapsb, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, 
+                title="mapsb_2 - mapsb", rot=center)
+    plt.savefig("figures/mapsb_2-mapsb.pdf")
+    plt.show()
+    # stop
     return mapsb, mapcount
 
 
@@ -488,36 +507,36 @@ def butter_bandpass(lowcut, highcut, fs, order=2):
     nyq = 0.5*fs
     low = lowcut/nyq
     high = highcut/nyq
-    b,a = butter(order, [low, high], btype='band')
-    return b,a
+    sos = butter(order, [low, high], btype='band', output='sos')
+    return sos
 
 def butter_bandpass_filter(data, *args, **kwargs):
-    b, a = butter_bandpass(*args, **kwargs)
-    return filtfilt(b, a, data) # no phase but filter applied twice (forwards and backwards), because I use filtfilt instead of lfilter
+    sos = butter_bandpass(*args, **kwargs)
+    return sosfiltfilt(sos, data) # no phase but filter applied twice (forwards and backwards), because I use filtfilt instead of lfilter
 
 def butter_pseudo_bandpass_filter(data, lowcut, highcut, fs, order=2):
-    b, a = butter_lowpass(highcut, fs, order=order)
-    data_altered = filtfilt(b, a, data)
-    b, a = butter_highpass(lowcut, fs, order=order)
-    return filtfilt(b, a, data_altered) # no phase but filter applied twice (forwards and backwards), because I use filtfilt instead of lfilter
+    sos = butter_lowpass(highcut, fs, order=order)
+    data_altered = sosfiltfilt(sos, data)
+    sos = butter_highpass(lowcut, fs, order=order)
+    return sosfiltfilt(sos, data_altered) # no phase but filter applied twice (forwards and backwards), because I use filtfilt instead of lfilter
 
-def butter_lowpass(highcut, fs, order=2):
+def butter_lowpass(highcut, fs, order):
     nyq = 0.5*fs
     high = highcut/nyq
-    b, a = butter(order, high, btype='lowpass')
-    return b,a
+    sos = butter(order, high, btype='lowpass', output='sos')
+    return sos
 
-def butter_highpass(lowcut, fs, order=2):
+def butter_highpass(lowcut, fs, order):
     nyq = 0.5*fs
     low = lowcut/nyq
-    b, a = butter(order, low, btype='highpass')
-    return b,a
+    sos = butter(order, low, btype='highpass', output='sos')
+    return sos
 
 def butter_highpass_filter(data, *args, **kwargs):
-    b, a = butter_highpass(*args, **kwargs)
-    return filtfilt(b, a, data) # no phase but filter applied twice (forwards and backwards), because I use filtfilt instead of lfilter
+    sos = butter_highpass(*args, **kwargs)
+    return sosfiltfilt(sos, data) # no phase but filter applied twice (forwards and backwards), because I use filtfilt instead of lfilter
 
-def bessel_bandpass(lowcut, highcut, fs, order=2):
+def bessel_bandpass(lowcut, highcut, fs, order):
     nyq = 0.5*fs
     low = lowcut/nyq
     high = highcut/nyq
@@ -526,17 +545,42 @@ def bessel_bandpass(lowcut, highcut, fs, order=2):
 
 def bessel_bandpass_filter(data, *args, **kwargs):
     b, a = bessel_bandpass(*args, **kwargs)
-    # b, a = butter_bandpass(*args, **kwargs)
     return filtfilt(b, a, data) # no phase but filter applied twice (forwards and backwards), because I use filtfilt instead of lfilter
+
+def bessel_highpass(lowcut, fs, order):
+    nyq = 0.5*fs
+    low = lowcut/nyq
+    sos = bessel(order, low, btype='highpass', output="sos")
+    return sos
+
+def bessel_highpass_filter(data, *args, **kwargs):
+    sos = bessel_highpass(*args, **kwargs)
+    return sosfiltfilt(sos, data) # no phase but filter applied twice (forwards and backwards), because I use filtfilt instead of lfilter
+
+
+def my_filt_2(mytod): # utiliser cette fonction ?
+    # Cuts are expressed in Hz, a back and forth scan takes 107.5 seconds
+    fs = 157.36 # Hz # could be computed directly on TOD
+    # lowcut = 4/107.5 # 4/107.5, i.e. half a forth (or back) scan
+    lowcut = 4/107.5
+    # highcut = 2/107.5*100/2 # 2/107.5*100/4, i.e. approx. 4 % of a forth (or back) scan --> passer à 2% parce que 4% est trop proche de la taille de la Lune (2/107.5*100/6 makes the Moon round but it's fine-tuned for it...)
+    # print("lowcut = {} Hz, highcut = {} Hz".format(lowcut, highcut))
+    # filt_tod = butter_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=1) # Hz
+    # filt_tod = butter_pseudo_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=1) # Hz
+    # filt_tod = butter_highpass_filter(mytod, lowcut=lowcut, fs=fs, order=1) # Hz
+    # filt_tod = bessel_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=1) # Hz
+    filt_tod = bessel_highpass_filter(mytod, lowcut=lowcut, fs=fs, order=5) # Hz
+    return filt_tod
 
 def my_filt(mytod): # utiliser cette fonction ?
     # Cuts are expressed in Hz, a back and forth scan takes 107.5 seconds
+    fs = 157.36 # Hz # could be computed directly on TOD
     lowcut = 4/107.5 # 4/107.5, i.e. half a forth (or back) scan
     # highcut = 2/107.5*100/2 # 2/107.5*100/4, i.e. approx. 4 % of a forth (or back) scan --> passer à 2% parce que 4% est trop proche de la taille de la Lune (2/107.5*100/6 makes the Moon round but it's fine-tuned for it...)
-    # filt_tod = butter_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=150, order=2) # Hz
-    # filt_tod = butter_pseudo_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=150, order=2) # Hz
-    filt_tod = butter_highpass_filter(mytod, lowcut=lowcut, fs=150, order=2) # Hz
-    # filt_tod = bessel_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=150, order=3) # Hz
+    # filt_tod = butter_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=2) # Hz
+    # filt_tod = butter_pseudo_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=2) # Hz
+    filt_tod = butter_highpass_filter(mytod, lowcut=lowcut, fs=fs, order=2) # Hz
+    # filt_tod = bessel_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=3) # Hz
     return filt_tod
         
 

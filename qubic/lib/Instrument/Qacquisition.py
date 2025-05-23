@@ -782,8 +782,8 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
     """
 
-    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None):
-        QubicMultiAcquisitions.__init__(self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co)
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None):
+        QubicMultiAcquisitions.__init__(self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co, sampling=sampling)
 
         if self.dict["instrument_type"] == "DB":
             self.used_bands = [150, 220]

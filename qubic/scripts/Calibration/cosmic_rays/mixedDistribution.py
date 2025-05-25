@@ -7,6 +7,7 @@ from scipy.stats import rv_continuous, norm, t, cauchy, uniform, kstest
 plt.rcParams['text.usetex'] = True
 
 
+
 class MixedDistribution:
     """
     The class fits a two-component mixed distribution to the residuals computed as (model - data) / data. It calculates key statistical measures based on the mixed distribution fit. The class accepts distributions derived from scipy.stats.rv_continuous (see https://docs.scipy.org/doc/scipy/reference/stats.html). Because the residuals are typically expected to follow a Gaussian distribution, one of the two components is often chosen as Gaussian. However, to maintain the generality of the class, both component distributions can be selected arbitrarily.

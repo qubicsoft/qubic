@@ -11,6 +11,7 @@ class FitResult:
     The FitResult data class defines the attributes related to the fit of a single candidate. Its method is_valid()
     returns True if the fit is valid, and False otherwise.
     """
+    
 
     a: float # offset
     b: float # amplitude

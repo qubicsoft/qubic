@@ -9,6 +9,7 @@ import multiprocessing as mp
 from results import FitResult
 
 
+
 class Model:
     """
     Class containing static methods for:

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from qubicpack.qubicfp import qubicfp
 from qubicpack.utilities import NPIXELS
 
+
 class IVMask:
     """
     A class to process IV (current-voltage) data for TES (Transition Edge Sensor) analysis,

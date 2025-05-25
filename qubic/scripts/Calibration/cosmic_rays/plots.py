@@ -22,6 +22,7 @@ if shutil.which('latex'):
     plt.rcParams['text.usetex'] = True
 
 
+
 def latex_percent(x, pos):
     """
     Format a tick value as a percentage string in LaTeX math mode.

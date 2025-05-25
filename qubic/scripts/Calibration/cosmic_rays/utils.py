@@ -11,6 +11,7 @@ def get_tes_asic_from_index(tes: int) -> tuple[int, int]:
     tes: int
         Global TES index in the range [0, 255].
 
+
     Returns
     ------
     tuple[int, int]

@@ -46,16 +46,22 @@ dependencies = [
     'corner',
     'emcee',
     'GetDist',
-    'healpy>=0.6.1',
+    'healpy',
     'iminuit',
     'pandas',
+    'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
     'progressbar',
+    'py-cpuinfo',
     'pyoperators[fft]>=0.13.18',
     'pysimulators>=1.2.3',
     'pysm3',
     'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
     'satorchipy @ git+https://github.com/satorchi/mypy@master',
     'scipy',
+    'bottleneck',
+    'scikit-learn',
+    'schwimmbad',
+    'imageio'
 ]
 dynamic = ['version']
 

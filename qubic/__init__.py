@@ -1,30 +1,12 @@
 from importlib.metadata import version as _version
-from . import dicts
+from . import TES
 from . import calfiles
 from . import data
+from . import dicts
+from . import doc
 from . import io
-from .acquisition import *
-from .beams import *
-from .calibration import *
-from .cl import *
-from .instrument import *
-from .mapmaking import *
-from .samplings import *
-from .scene import *
-from .xpol import *
-from .polyacquisition import *
-from .multiacquisition import *
-from .SpectroImLib import *
-from .ripples import *
-from .fibtools import *
-from .demodulation_lib import *
-from .selfcal_lib import *
-from .sb_fitting import *
-from .plotters import *
-from .lin_lib import *
-from .AnalysisMC import *
-from .ReadMC import *
-from . import qubicdict 
+from . import level1
+from . import lib
 
 
 def full(shape, fill_value, dtype=None, order='C'):

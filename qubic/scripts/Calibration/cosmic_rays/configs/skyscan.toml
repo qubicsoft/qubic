@@ -1,0 +1,15 @@
+# mandatory parameters
+[path]
+source = "/media/DataQubic/**/*(SkyScan)*"
+
+[optional]
+destination = "cr_results"
+remove_drift = false
+mask = "../masks"
+vertical_points = 3
+exponential_points = 6
+analysis_type = "all"
+tes = [-1]
+remove_files = true
+deconvolution = false
+dpi = 300

@@ -1,4 +1,4 @@
-path_am_files: "/home/tomlaclavere/qubic/qubic/scripts/Atmosphere/absorption_coefficient/"
+path_am_files: "/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/"
 # Physical parameters
 
 correlation_length: 1000           # Atmospheric correlation maximum lenght in m
@@ -36,6 +36,6 @@ dtheta: 15
 seed: 1
 
 # Qubic parameters
-npointings: 100
+npointings: 1000
 kmax: 1
 synthbeam_fraction: 1

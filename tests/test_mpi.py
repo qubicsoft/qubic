@@ -3,9 +3,11 @@ import pytest
 
 from pyoperators import MPI
 from pyoperators.utils.testing import assert_same
-from qubic import QubicAcquisition, QubicInstrument, QubicScene, get_pointing
+from qubic.lib.Instrument.Qacquisition import QubicAcquisition, QubicInstrument, QubicScene, get_pointing
+from qubic.lib.Qdictionary import qubicDict
+#from qubic import QubicAcquisition, QubicInstrument, QubicScene, get_pointing
 from qubic.mapmaking import tod2map_all, tod2map_each
-from qubic.qubicdict import qubicDict
+#from qubic.qubicdict import qubicDict
 
 pytestmark = pytest.mark.mpi
 

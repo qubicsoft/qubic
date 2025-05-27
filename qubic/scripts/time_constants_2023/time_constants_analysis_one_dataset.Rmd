@@ -5,7 +5,7 @@ jupyter:
       extension: .Rmd
       format_name: rmarkdown
       format_version: '1.2'
-      jupytext_version: 1.14.5
+      jupytext_version: 1.17.1
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -26,7 +26,7 @@ from matplotlib import pyplot as plt
 from IPython.display import display, HTML
 display(HTML("<style>.container { width:97% !important; }</style>"))
 
-# %matplotlib notebook
+# %matplotlib inline
 rc('figure',figsize=(11,6))
 rc('font',size=12)
 
@@ -41,9 +41,20 @@ from qubic import time_constants_tools as tct
 # day = '2023-03-31'
 day = '2023-04-17'
 # base_dir = '/home/nahue/Downloads/'
-base_dir = '/media/nahue/files_hdd/heavy-data/'
+# base_dir = '/home/nahue-ofi/heavy-data/'
+base_dir = '/home/nahue-ofi/Nextcloud/'
+# base_dir = '/media/nahue/files_hdd/heavy-data/'
 data_dir = base_dir + day + '/'
-thedirs = np.sort(glob.glob(data_dir+'**'))
+thedirs = np.sort(glob.glob(data_dir+'*12.55.04*'))
+
+## today 2025-05-27, I need to analyze
+# Vbias = 2.8V
+# carbonfibre:
+
+#     2025-05-22_13.20.04__dome-open-carbonfibre (square wave, 50% duty cycle)
+#     2025-05-22_13.22.49__dome-open-carbonfibre (square wave, 33% duty cycle)
+#     2025-05-22_13.24.59__dome-open-carbonfibre (square wave, 33%, period 5 secs)
+#     2025-05-22_14.28.12__dome-open-carbonfibre (sine wave, period 5 secs)
 
 print('Here are all the available files')
 for i in range(len(thedirs)):
@@ -74,7 +85,7 @@ for i in range(len(thedirs)):
 # params_poly = 1
 # typefit = 'just_exp'
 
-numfile = 2
+numfile = 0
 thedatadir = thedirs[numfile]
 
 print('We will analyse:')
@@ -99,10 +110,10 @@ print('Be aware that warnings won\'t be printed')
 only_overview = False
 doplot = ['all']
 saveplot = ['folded_data','focal_plane']#None
-save_dict = False
+save_dict = True
 force_sync = True
 fmod = 0.2 #None
-dutycycle = 66 #None
+dutycycle = 33 #None
 
 d = tct.compute_tc_squaremod(thedatadir, save_path = save_path, only_overview = only_overview, doplot = doplot,
                              saveplot = saveplot, save_dict = save_dict, fmod_explicit = fmod, dutycycle_explicit = dutycycle,
@@ -119,62 +130,70 @@ d = tct.compute_tc_squaremod(thedatadir, save_path = save_path, only_overview = 
 ```
 
 ```{python}
-# os.chdir(save_path)
-# alldic = {}
-# for i,thedatadir in enumerate(thedirs):
-#     alldic['{}'.format(i+1)] = np.load('d__{}.npy'.format(str.split(thedatadir,'/')[-1]),allow_pickle=True).item()
+os.chdir(save_path)
+alldic = {}
+
+# thedirs = thedatadir
+# print(thedatadir)
+# print(np.shape(thedirs))
+for i,thedatadir_i in enumerate(thedirs):
+    try:
+        alldic['{}'.format(i+1)] = np.load('d__{}.npy'.format(str.split(thedatadir_i,'/')[-1]),allow_pickle=True).item()
+    except:
+        print('No directory')
 ```
 
 ```{python}
-# figure()
-# title('Histograms risetime - datasets from {}'.format(day))
-# ylabel('Counts')
-# xlabel('Risetime [ ms ]')
+figure()
+title('Histograms risetime - datasets from {}'.format(day))
+ylabel('Counts')
+xlabel('Risetime [ ms ]')
 
-# rt_mean = np.zeros(len(thedirs))
-# rt_mean_error = np.zeros(len(thedirs))
-# ft_mean = np.zeros(len(thedirs))
-# ft_mean_error = np.zeros(len(thedirs))
-# Vbias = np.zeros(len(thedirs))
+rt_mean = np.zeros(len(thedirs))
+rt_mean_error = np.zeros(len(thedirs))
+ft_mean = np.zeros(len(thedirs))
+ft_mean_error = np.zeros(len(thedirs))
+Vbias = np.zeros(len(thedirs))
 
-# for i in np.arange(len(thedirs)):
-#     ok_cuts_rt = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']>0)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']<0.6)
-#     ok_cuts_ft = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']>0)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']<0.6)
-#     ok = ok_cuts_ft * ok_cuts_rt * d['ok']['Residuals_combined']
-#     rt_mean[i] = np.mean(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime'][ok])
-#     rt_mean_error[i] = np.sum(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime_error'][ok])/(np.sum(ok))
-#     ft_mean[i] = np.mean(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime'][ok])
-#     ft_mean_error[i] = np.sum(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime_error'][ok])/(np.sum(ok))
-#     Vbias[i] = alldic['{}'.format(i+1)]['Vbias'] 
+for i in np.arange(len(thedirs)):
+    ok_cuts_rt = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']>0)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']<0.6)
+    ok_cuts_ft = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']>0)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']<0.6)
+    ok = ok_cuts_ft * ok_cuts_rt * d['ok']['Residuals_combined']
+    rt_mean[i] = np.mean(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime'][ok])
+    rt_mean_error[i] = np.sum(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime_error'][ok])/(np.sum(ok))
+    ft_mean[i] = np.mean(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime'][ok])
+    ft_mean_error[i] = np.sum(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime_error'][ok])/(np.sum(ok))
+    Vbias[i] = alldic['{}'.format(i+1)]['Vbias'] 
 
-#     hist(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime'][ok],30,alpha=0.5,label='Vbias {:.1f}'.format(Vbias[i]))
+    hist(1e3*alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime'][ok],30,alpha=0.5,label='Vbias {:.1f}'.format(Vbias[i]))
 
-# grid()
-# legend()
+grid()
+legend()
 
-# figure()
-# title('Histograms falltime - datasets from {}'.format(day))
-# ylabel('Counts')
-# xlabel('Falltime [ ms ]')
+figure()
+title('Histograms falltime - datasets from {}'.format(day))
+ylabel('Counts')
+xlabel('Falltime [ ms ]')
 
-# for i in np.arange(len(thedirs)):
-#     hist(1e3*alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime'][ok],30,alpha=0.5,label='Vbias {:.1f}'.format(Vbias[i]))
+for i in np.arange(len(thedirs)):
+    hist(1e3*alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime'][ok],30,alpha=0.5,label='Vbias {:.1f}'.format(Vbias[i]))
 
-# grid()
-# legend()
+grid()
+legend()
 
-# tight_layout
+tight_layout
 
 
-# figure()
-# title('Mean time constants - datasets from {}'.format(day))
-# ylabel('Mean time constant [ ms ]')
-# xlabel('Vbias [V]')
-# errorbar(Vbias,1e3*rt_mean,yerr = 1e3*rt_mean_error,fmt='bo',alpha=0.5,label='Risetime')
-# errorbar(Vbias,1e3*ft_mean,yerr = 1e3*ft_mean_error,fmt='ro',alpha=0.5,label='Falltime')
-# grid()
-# legend()
-# tight_layout
+figure()
+title('Mean time constants - datasets from {}'.format(day))
+ylabel('Mean time constant [ ms ]')
+xlabel('Vbias [V]')
+errorbar(Vbias,1e3*rt_mean,yerr = 1e3*rt_mean_error,fmt='bo',alpha=0.5,label='Risetime')
+errorbar(Vbias,1e3*ft_mean,yerr = 1e3*ft_mean_error,fmt='ro',alpha=0.5,label='Falltime')
+grid()
+legend()
+tight_layout
+show()
 ```
 
 ```{python}

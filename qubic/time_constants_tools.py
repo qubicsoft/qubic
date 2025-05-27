@@ -18,23 +18,30 @@ from scipy.signal import savgol_filter
 
 import qubic as qubic
 from qubic import *
-from qubic.qubicdict import qubicDict
-from qubic.instrument import QubicInstrument
+
+from qubic.lib.Instrument.Qacquisition import QubicAcquisition, QubicInstrument, QubicScene, get_pointing
+from qubic.lib.Qdictionary import qubicDict
+#from qubic.qubicdict import qubicDict
+#from qubic.instrument import QubicInstrument
 
 
 
 #qubic related
 import qubic
-from qubic.qubicdict import qubicDict
-from qubic.instrument import QubicInstrument
+#from qubic.qubicdict import qubicDict
+#from qubic.instrument import QubicInstrument
 #import qubicpack
 #print('qubicpack:', qubicpack.__file__)
 from qubicpack.qubicfp import qubicfp
-from qubic import fibtools as ft
+
+from qubic.lib.Calibration import Qfiber as ft
+
 #print('ft:', ft.__file__)
 from qubicpack.utilities import Qubic_DataDir
-from qubic import selfcal_lib as scal
-from qubic import time_domain_tools as tdt
+
+from qubic.lib.Calibration import Qselfcal as scal
+
+from qubic.lib.Qcoaddition import MySplineFitting as msfitting
 
 def normalize(x):
 	"""
@@ -175,7 +182,8 @@ def plot_folded_data_on_FP(datain, time = None, datain_error = None, tes_ok_satu
 class asymsig_spl_class:
     def __init__(self, x, y, err, nbspl):
         #print('Number of spline: {}'.format(nbspl))
-        self.spl = tdt.MySplineFitting(x, y, err, nbspl)
+        #self.spl = tdt.MySplineFitting(x, y, err, nbspl)
+        self.spl = msfitting(x, y, err, nbspl)
         
     def __call__(self, x, pars):
         pars_asymsig = pars[:5]
@@ -1409,8 +1417,8 @@ def compute_tc_squaremod(thedatadir, timeaxistype = 'pps', force_sync = False, n
 		ylim(-2,2)
 		leg = legend()
 		
-		for lh in leg.legendHandles: 
-			lh.set_alpha(1)
+		#for lh in leg.legendHandles: 
+		#	lh.set_alpha(1)
 		
 		title('Folded data for all detectors')
 		xlabel('Time [s]')

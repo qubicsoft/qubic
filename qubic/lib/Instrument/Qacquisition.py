@@ -255,7 +255,7 @@ class QubicAcquisition(Acquisition):
             )
         return out
 
-    def get_invntt_operator(self, det_noise, photon_noise): # Not working in some cases?
+    def get_invntt_operator(self, det_noise, photon_noise): # Not working in some cases? ## det_noise, photon_noise are now weights
         """
         Return the inverse time-time noise correlation matrix as an Operator.
 
@@ -307,15 +307,15 @@ class QubicAcquisition(Acquisition):
 
         # Get sigma in Watt
         self.sigma = 0
-        if det_noise is not None:
+        if det_noise != 0:
             self.sigma = self.instrument.detector.nep / np.sqrt(
                 2 * self.sampling.period
-            )
+            ) * det_noise
 
-        if photon_noise:
+        if photon_noise != 0:
             sigma_photon = self.instrument._get_noise_photon_nep(self.scene) / np.sqrt(
                 2 * self.sampling.period
-            )
+            ) * photon_noise
             self.sigma = np.sqrt(self.sigma**2 + sigma_photon**2)
 
         else:
@@ -605,24 +605,22 @@ class PlanckAcquisition:
         if nintegr == 1:
             return Hp
 
-    def get_invntt_operator(self, beam_correction=0, mask=None, seenpix=None):
+    def get_invntt_operator(self, planck_ntot, beam_correction=0, mask=None, seenpix=None):
+
+        if planck_ntot == 0:
+            return IdentityOperator()
 
         if beam_correction != 0:
             factor = (
-                4
-                * np.pi
-                * (
-                    np.rad2deg(beam_correction)
-                    / 2.35
-                    / np.degrees(hp.nside2resol(self.scene.nside))
-                )
-                ** 2
+                4 * np.pi* (
+                    np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))
+                    )** 2
             )
             # print(f'corrected by {factor}')
             varnew = (
                 hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
             )
-            self.sigma = 1e6 * np.sqrt(varnew.T)
+            self.sigma = 1e6 * np.sqrt(varnew.T) * planck_ntot
 
         if mask is not None:
             for i in range(3):
@@ -953,17 +951,21 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
         return H
     
-    def get_invntt_operator(self): # DB and UWB had the same get_invntt_operator except from the return and the det_noise=False in 220 band
+    def get_invntt_operator(self, wdet, wpho150, wpho220): # DB and UWB had the same get_invntt_operator except from the return and the det_noise=False in 220 band
         """
 
         Method to compute the inverse noise covariance matrix in time-domain.
 
         """
 
+        if wdet == 0 and wpho150 == 0 and wpho220 == 0:
+            self.invn150 = IdentityOperator() # used in PresetAcquisition.get_approx_hth
+            return IdentityOperator(shapein=(len(self.multiinstrument[0]), len(self.sampling)))
+        photon_noise = [wpho150, wpho220]
         if self.dict["instrument_type"] == "UWB":
-            det_noise = [True, False]
+            det_noise = [wdet, 0]
         else: # doesn't matter for MB, because only the first is used anyway
-            det_noise = [True, True]
+            det_noise = [wdet, wdet]
         invn_list = []
         for iband, band in enumerate(self.used_bands):
             d = self.dict.copy()
@@ -971,7 +973,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
             d["effective_duration"] = self.dict["effective_duration{}".format(band)]
             inst = QubicInstrument(d)
             subacq = QubicAcquisition(inst, self.sampling, self.scene, d)
-            invn_list.append(subacq.get_invntt_operator(det_noise=det_noise[iband], photon_noise=True))
+            invn_list.append(subacq.get_invntt_operator(det_noise=det_noise[iband], photon_noise=photon_noise[iband]))
         self.invn150 = invn_list[0] # used in PresetAcquisition.get_approx_hth
         if self.dict["instrument_type"] == "UWB":
             self.invN = np.sum(invn_list)
@@ -1106,7 +1108,13 @@ class OtherDataParametric:
 
         return D
 
-    def get_invntt_operator(self, fact=None, mask=None):
+    def get_invntt_operator(self, planck_ntot, fact=None, mask=None):
+
+        invntt_operator_shapein = (3 * len(self.nus) * 12 * self.nside**2)
+
+        if planck_ntot == 0:
+            return IdentityOperator(shapein=invntt_operator_shapein)
+        
         # Create an empty array to store the values of sigma
         allsigma = np.array([])
 
@@ -1127,12 +1135,12 @@ class OtherDataParametric:
             # Append the noise value to the list of all sigmas
             allsigma = np.append(allsigma, sigma.ravel())
 
-        # Flatten the list of sigmas and create a diagonal operator
-        allsigma = allsigma.ravel().copy()
+        # Flatten the list of sigmas and multiply by Planck noise level, then create a diagonal operator
+        allsigma = allsigma.ravel().copy() * planck_ntot
         invN = DiagonalOperator(
             1 / allsigma**2,
             broadcast="leftward",
-            shapein=(3 * len(self.nus) * 12 * self.nside**2),
+            shapein=invntt_operator_shapein,
         )
 
         # Create reshape operator and apply it to the diagonal operator
@@ -1246,21 +1254,22 @@ class JointAcquisitionFrequencyMapMaking:
         return BlockColumnOperator(H_list, axisout=0) * U
 
     def get_invntt_operator( # We stack the invN_qubic and invN_planck on top of eachother
-        self, weight_planck=1, beam_correction=None, seenpix=None, mask=None
+        self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot, # noise weights of QUBIC and Planck
+        weight_planck=1, beam_correction=None, seenpix=None, mask=None,
     ):
 
         if beam_correction is None:
             beam_correction = [0] * self.Nrec
 
-        invn_q = self.qubic.get_invntt_operator()
+        invn_q = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220) # add weight of Qubic detector and photon noise
         R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
         invn_q = [R(invn_q(R.T))]
 
-        invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(
-            beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
+        invntt_planck143 = weight_planck * self.pl143.get_invntt_operator( # add weight of Planck noise here? Or inside function?
+            planck_ntot, beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
         )
         invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(
-            beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
+            planck_ntot, beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
         )
         R_planck = ReshapeOperator(
             invntt_planck143.shapeout, invntt_planck143.shape[0]
@@ -1317,10 +1326,12 @@ class JointAcquisitionComponentsMapMaking:
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 
-    def get_invntt_operator(self, fact=None, mask=None):
+    def get_invntt_operator(self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot, fact=None, mask=None):
 
-        invNq = self.qubic.get_invntt_operator()
+        invNq = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)
+        print("\n\n\ninvNq", invNq)
         R = ReshapeOperator(invNq.shapeout, invNq.shape[0])
-        invNe = self.external.get_invntt_operator(fact=fact, mask=mask)
+        
+        invNe = self.external.get_invntt_operator(planck_ntot, fact=fact, mask=mask)
 
         return BlockDiagonalOperator([R(invNq(R.T)), invNe], axisout=0)

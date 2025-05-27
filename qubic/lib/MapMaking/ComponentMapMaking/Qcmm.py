@@ -84,6 +84,9 @@ class Pipeline:
         )
         self._rms_noise_qubic_patch_per_ite[:] = np.nan
 
+        self.convergence = []
+
+
     def call_pcg(self, max_iterations, seenpix):  
         """Precontioned Conjugate Gradiant algorithm.
 
@@ -128,7 +131,7 @@ class Pipeline:
             gif_folder = None
 
         ### PCG
-        result = pcg(
+        all_results = pcg(
             A=self.preset.A,
             b=self.preset.b,
             comm=self.preset.comm,
@@ -147,7 +150,9 @@ class Pipeline:
             input=self.preset.comp.components_out,
             iter_init=self._steps * num_iter,
             is_planck=True,
-        )["x"]["x"]
+        )
+        result = all_results["x"]["x"]
+        self.convergence.append(all_results["algorithm"].convergence)
 
         ### Update components
         self.preset.comp.components_iter[:, seenpix, :] = result.copy()
@@ -210,6 +215,7 @@ class Pipeline:
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
+        # self.preset.A = U.T * H_i.T * H_i * U
 
         if self.preset.qubic.params_qubic["convolution_out"]:
             x_planck = self.preset.comp.components_convolved_out * (
@@ -1082,7 +1088,7 @@ class Pipeline:
                     ) as handle:
                         pickle.dump(
                             {
-                                "components": self.preset.comp.components_convolved_in,#self.preset.comp.components_in,
+                                "components": self.preset.comp.components_convolved_in, #self.preset.comp.components_in,
                                 "components_i": self.preset.comp.components_iter,
                                 "beta": self.preset.acquisition.allbeta,
                                 "beta_true": self.preset.mixingmatrix.beta_in,
@@ -1101,6 +1107,9 @@ class Pipeline:
                                 "fwhm_in": self.preset.acquisition.fwhm_tod,
                                 "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
                                 "fwhm_rec": self.preset.acquisition.fwhm_rec,
+                                "convergence": self.convergence,
+                                "TOD_qubic": self.preset.acquisition.TOD_qubic,
+                                "TOD_external": self.preset.acquisition.TOD_external,
                                 "qubic_dict": {k:v for k,v in self.preset.qubic.dict.items() if k != 'comm'}, # Need to remove the MPI communictor, which is not suppurted by pickle
                                 #'fwhm':self.preset.acquisition.fwhm_tod,
                                 #'acquisition.fwhm_rec':self.preset.acquisition.fwhm_mapmaking

@@ -120,8 +120,14 @@ class PresetAcquisition:
             "    => Building inverse noise covariance matrix"
         )
         self.invN = self.preset_qubic.joint_out.get_invntt_operator(
+            self.preset_tools.params["QUBIC"]["NOISE"]["ndet"],
+            self.preset_tools.params["QUBIC"]["NOISE"]["npho150"],
+            self.preset_tools.params["QUBIC"]["NOISE"]["npho220"],
+            self.preset_tools.params["PLANCK"]["level_noise_planck"],
             mask=self.preset_sky.mask
         )
+
+        print("\n\n\nself.invN", self.invN, "\n\n\n")
 
         ### Preconditioner
         #self.preset_tools._print_message("    => Creating preconditioner")
@@ -176,8 +182,11 @@ class PresetAcquisition:
             )
 
         invN_ext = self.preset_qubic.joint_out.external.get_invntt_operator(
+            planck_ntot=self.preset_tools.params["PLANCK"]["level_noise_planck"],
             mask=self.preset_sky.mask
         )
+
+        print("\n\n\ninvN_ext", invN_ext, "\n\n\n")
 
         _r = ReshapeOperator(
             (
@@ -502,17 +511,22 @@ class PresetAcquisition:
         istk = 0
         mypix = self.preset_sky.seenpix
         for i, comp_name in enumerate(self.preset_comp.components_name_out):
+            # self.preset_comp.components_iter[i] = C2(
+            #     C1[i](self.preset_comp.components_iter[i]) # Two convolutions in a row?
+            # )
             self.preset_comp.components_iter[i] = C2(
-                C1[i](self.preset_comp.components_iter[i]) # Two convolutions in a row?
+                self.preset_comp.components_convolved_out[i]
             )
             for istk in range(3):
                 if istk == 0:
                     key = "I"
                 else:
                     key = "P"
+                
+                initial_factor = self.preset_tools.params["INITIAL"]["qubic_patch_{}_{}".format(key, comp_name[:min(4, len(comp_name))].lower())] * self.preset_tools.params["INITIAL"]["global_{}".format(key)]
                 self.preset_comp.components_iter[
                     i, mypix, istk
-                ] *= self.preset_tools.params["INITIAL"]["qubic_patch_{}_{}".format(key, comp_name[:min(4, len(comp_name))].lower())]
+                ] *= initial_factor
                 # To make it more uniform, either name the components "cmb", "dust", "sync", "co" or the files "qubic_patch_I_CMB", "qubic_patch_I_Dust", "qubic_patch_I_Synchrotron", "qubic_patch_I_CO"
                 self.preset_comp.components_iter[
                     i, mypix, istk

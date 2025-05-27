@@ -256,10 +256,10 @@ class PresetComponents:
             self.preset_qubic.params_qubic["convolution_in"]
             or self.preset_qubic.params_qubic["convolution_out"]
         ):
-            C = HealpixConvolutionGaussianOperator( # Never used?
+            C = HealpixConvolutionGaussianOperator(
                 fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
                 # lmax=3 * self.preset_tools.params["SKY"]["nside"],
-                lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1, # Max useful is 3*nside - 1
+                lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
             )
         else:
             C = HealpixConvolutionGaussianOperator(fwhm=0)

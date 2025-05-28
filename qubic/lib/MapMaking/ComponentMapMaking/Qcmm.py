@@ -63,7 +63,6 @@ class Pipeline:
         self._rms_noise_qubic_patch_per_ite = np.empty((self.preset.tools.params["PCG"]["ites_to_converge"], len(self.preset.comp.components_name_out)))
         self._rms_noise_qubic_patch_per_ite[:] = np.nan
 
-        #! Tom: temporary for testing
         # for icomp in range(len(self.preset.comp.components_name_out)):
         #     C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_rec[icomp], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
         #     self.preset.comp.components_out[icomp] = C(self.preset.comp.components_out[icomp]).copy()

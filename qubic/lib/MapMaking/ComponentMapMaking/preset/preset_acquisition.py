@@ -3,6 +3,7 @@ from fgbuster import component_model as c
 from pyoperators import (
     BlockDiagonalOperator,
     DiagonalOperator,
+    IdentityOperator,
     ReshapeOperator,
 )
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
@@ -118,18 +119,8 @@ class PresetAcquisition:
         self.preset_tools.mpi._print_message("    => Building inverse noise covariance matrix")
         self.invN = self.preset_qubic.joint_out.get_invntt_operator(mask=self.preset_sky.mask)
 
-        ### Preconditioner
-        # self.preset_tools._print_message("    => Creating preconditioner")
-        # self.M = self.get_preconditioner(
-        #    A_qubic=self.preset_mixingmatrix.Amm_in[
-        #        :6#self.preset_qubic.params_qubic["nsub_out"]
-        #    ],
-        #    A_ext=self.preset_mixingmatrix.Amm_in[
-        #        7:#self.preset_qubic.params_qubic["nsub_out"]:
-        #    ],
-        #    precond=self.preset_qubic.params_qubic["preconditioner"],
-        #    thr=self.preset_tools.params["PLANCK"]["thr_planck"],
-        # )
+        #! Test to be removed
+        self.invN = IdentityOperator()
 
         ### Get convolution
         self.preset_tools.mpi._print_message("    => Getting convolution")

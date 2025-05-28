@@ -58,10 +58,9 @@ QUBIC:
     nsub_out: 8                                                   # Number of sub-acquisitions for the reconstruction
     convolution_in: False                                          # Angular resolution in the input TOD
     convolution_out: False                                         # Angular resolution in the reconstruction
-    preconditioner: True
+    preconditioner: False
     NOISE:
         ndet: 0                                                    # Level of detector noise
-        #! It would have been easier to have only one parameter for photon noise
         npho150: 0                                                 # Level of photon noise at 150 GHz
         npho220: 0                                                 # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                                      # NEP of detector noise
@@ -103,7 +102,7 @@ PLANCK:
 PCG:
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 50
+    n_init_iter_pcg: 250
     n_iter_pcg: 20                                                 # Number of PCG iterations
     tol_pcg: 1.0e-15                                                # Tolerance for PCG
     n_iter_loop: 1                                                 # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
@@ -120,13 +119,13 @@ INITIAL:
 
     fwhm0: 0 #.0078                                                # Convolution kernel for the initial guess maps
     sig_map_noise: 1                                               # Standard deviation of noise in first guess maps
-    qubic_patch_I_cmb: 1                                           # Multiplicative factor of initial CMB within the QUBIC patch
-    qubic_patch_I_dust: 1                                          # Multiplicative factor of initial Dust within the QUBIC patch
+    qubic_patch_I_cmb: 0                                           # Multiplicative factor of initial CMB within the QUBIC patch
+    qubic_patch_I_dust: 0                                          # Multiplicative factor of initial Dust within the QUBIC patch
     qubic_patch_I_sync: 1                                          # Multiplicative factor of initial Sync within the QUBIC patch
     qubic_patch_I_co: 1                                            # Multiplicative factor of initial CO within the QUBIC patch
 
-    qubic_patch_P_cmb: 1                                           # Multiplicative factor of initial CMB within the QUBIC patch
-    qubic_patch_P_dust: 1                                          # Multiplicative factor of initial Dust within the QUBIC patch
+    qubic_patch_P_cmb: 0                                           # Multiplicative factor of initial CMB within the QUBIC patch
+    qubic_patch_P_dust: 0                                          # Multiplicative factor of initial Dust within the QUBIC patch
     qubic_patch_P_sync: 1                                          # Multiplicative factor of initial Sync within the QUBIC patch
     qubic_patch_P_co: 1                                            # Multiplicative factor of initial CO within the QUBIC patch
 
@@ -143,6 +142,6 @@ Plots:
     thr_plot: 0.2                                                  # Threashold for maps plot
 
 save_iter: 1                                                       # Save every 'save_iter' iteration
-foldername: "test_invN"                 # Name of the saved folder
+foldername: "with_precond_wo_planck_x0_0"                 # Name of the saved folder
 filename: "file"                                                   # Name of the saved file
 lastite: True                                                      # Keep only the last iteration

@@ -1,9 +1,8 @@
-import healpy as hp
-import matplotlib.pyplot as plt
-import numpy as np
-import yaml
 import pickle as pkl
 
+import healpy as hp
+import numpy as np
+import yaml
 from pyoperators import (
     MPI,
     BlockRowOperator,
@@ -13,13 +12,12 @@ from pyoperators import (
 from pyoperators.iterative.core import AbnormalStopIteration
 from pysimulators.interfaces.healpy import (
     HealpixConvolutionGaussianOperator,
-    Spherical2HealpixOperator,
 )
 
 from qubic.lib.Instrument.Qacquisition import QubicDualBand
 from qubic.lib.Instrument.Qinstrument import compute_freq
 from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import CMBModel
-from qubic.lib.MapMaking.Qatmosphere_2d import AtmosphereMaps
+from qubic.lib.MapMaking.Qatmosphere import AtmosphereMaps
 from qubic.lib.MapMaking.Qcg_test_for_atm import PCGAlgorithm
 from qubic.lib.Qsamplings import QubicSampling, equ2gal, get_pointing
 
@@ -40,17 +38,15 @@ npix = hp.nside2npix(params["nside"])
 
 ### Random pointing
 qubic_dict["random_pointing"] = True
-qubic_dict['date_obs'] = '2023-10-01 22:57:00.000'
-qubic_dict['period'] = 3
+qubic_dict["date_obs"] = "2023-10-01 22:57:00.000"
+qubic_dict["period"] = 3
 
 qubic_dict["fix_azimuth"]["apply"] = False
 
 q_sampling_gal = get_pointing(qubic_dict)
 qubic_patch = np.array([0, -57])
 center_gal = equ2gal(qubic_patch[0], qubic_patch[1])
-center_local = np.array(
-    [np.mean(q_sampling_gal.azimuth), np.mean(q_sampling_gal.elevation)]
-)
+center_local = np.array([np.mean(q_sampling_gal.azimuth), np.mean(q_sampling_gal.elevation)])
 
 q_sampling_local = QubicSampling(
     q_sampling_gal.index.size,  # int(np.ceil(qubic_dict['duration']*3600/qubic_dict['period'])),
@@ -99,7 +95,7 @@ for isub in range(nus_tod.size):
     C = HealpixConvolutionGaussianOperator(fwhm=fwhm_tod[isub])
     atm_maps[isub] = C(atm_maps[isub])
     cmb_maps[isub] = C(cmb_maps[isub])
-    
+
 input_maps = np.zeros((2 * params["nsub_in"], hp.nside2npix(params["nside"]), 3))
 
 input_maps[: params["nsub_in"]] = cmb_maps
@@ -124,13 +120,9 @@ MixingMatrix = np.ones((params["nsub_in"], 2))
 # Atm mixing matrix
 MixingMatrix[:, 1] = atm.temperature * atm.integrated_abs_spectrum * atm.mean_water_vapor_density
 
-q_acquisition_local = QubicDualBand(
-    qubic_dict, params["nsub_in"], params["nsub_in"], sampling=q_sampling_local
-)
+q_acquisition_local = QubicDualBand(qubic_dict, params["nsub_in"], params["nsub_in"], sampling=q_sampling_local)
 
-q_acquisition_gal = QubicDualBand(
-    qubic_dict, params["nsub_in"], params["nsub_in"], sampling=q_sampling_gal
-)
+q_acquisition_gal = QubicDualBand(qubic_dict, params["nsub_in"], params["nsub_in"], sampling=q_sampling_gal)
 
 coverage_gal = q_acquisition_gal.coverage
 covnorm_gal = coverage_gal / coverage_gal.max()
@@ -179,9 +171,7 @@ A_local = (
     * r
 )
 
-H = BlockRowOperator([H_gal(A_gal), H_local(A_local)], axisin=0) * ReshapeOperator(
-    (2, npix, 3), (2 * npix, 3)
-)
+H = BlockRowOperator([H_gal(A_gal), H_local(A_local)], axisin=0) * ReshapeOperator((2, npix, 3), (2 * npix, 3))
 print(H.shapein, H.shapeout)
 
 invN = invN_gal
@@ -223,16 +213,16 @@ except AbnormalStopIteration as e:
     result = algo.finalize()
     success = False
     message = str(e)
-    
+
 dict_solution = {
-    'result': result,
-    'true_maps': true_maps,
-    'seenpix': seenpix,
-    'center_gal': center_gal,
-    'center_local': center_local,
-    'min_input': min_input,
-    'max_input': max_input,
+    "result": result,
+    "true_maps": true_maps,
+    "seenpix": seenpix,
+    "center_gal": center_gal,
+    "center_local": center_local,
+    "min_input": min_input,
+    "max_input": max_input,
 }
-    
+
 with open("solution.pkl", "wb") as pkl_file:
     pkl.dump(dict_solution, pkl_file, protocol=pkl.HIGHEST_PROTOCOL)

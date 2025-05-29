@@ -10,151 +10,138 @@ import matplotlib.pyplot as plt
 class QubicObservation:
 
     def __init__(self, d, hor_down=30, hor_up=70, sun_sep=20):
+        
+        # Location 
         self.earth_location = EarthLocation(lat=d['latitude'] * u.deg,
-                                            lon=d['longitude'] * u.deg)
+                                           lon=d['longitude'] * u.deg)
         self.utc_offset = -3 * u.hour
         self.hor_down = hor_down * u.deg
         self.hor_up = hor_up * u.deg
-        self.sun_sep = sun_sep * u.deg
 
+        # Sky coordinates
         self.eq = SkyCoord(ra=d['RA_center'] * u.deg,
                            dec=d['DEC_center'] * u.deg, frame='icrs')
         self.gal = self.eq.galactic
 
+        # Observation parameters
         self.date_obs = Time(d['date_obs'])
         self.duration = d['duration'] * u.hour
         self.ang_speed = d['angspeed'] * (u.deg / u.s)
         self.delta_az = d['delta_az'] * u.deg
         self.nsweeps_per_elevation = d['nsweeps_per_elevation']
         self.period = d['period'] * u.s
+        self.nsweep_even = (self.nsweeps_per_elevation % 2 == 0)
 
-        self.nsweep_even = self.nsweeps_per_elevation % 2 == 0
-        self.dtsweepOneAz = (2 * self.delta_az / self.ang_speed).to(u.s)
-        self.dt_centers = self.dtsweepOneAz * self.nsweeps_per_elevation
+        # Sweep shape parameters
+        self.step_s = 0.1              # sampling interval [s]
+        self.max_speed = 1.0           # [deg/s]
+        self.t_ramp = 1.0              # ramp duration [s]
+        self.pause_duration = 3.0      # pause at end [s]
 
-    def change_hor_down(self, hor_down): self.hor_down = hor_down * u.deg
-    def change_hor_up(self, hor_up): self.hor_up = hor_up * u.deg
-    def change_sun_sep(self, sun_sep): self.sun_sep = sun_sep * u.deg
+        # Compute segment counts
+        self.n_ramp = int(self.t_ramp / self.step_s)
+        x = np.linspace(-3, 3, self.n_ramp)
+        ramp = 1 / (np.cosh(x)**2)
+        ramp *= self.max_speed / np.max(ramp)
+        ramp_distance = np.sum(ramp) * self.step_s
+
+        flat_dist = 2 * self.delta_az.to_value(u.deg) - 2 * ramp_distance
+        if flat_dist < 0:
+            raise ValueError("Ramp parameters incompatible with delta_az")
+        t_flat = flat_dist / self.max_speed
+        self.n_flat = int(t_flat / self.step_s)
+        self.n_pause = int(self.pause_duration / self.step_s)
+
+        # Combine into speed profile 
+        
+        flat = np.ones(self.n_flat) * self.max_speed
+        self.speed_prof = np.concatenate([ramp, flat, ramp[::-1], np.zeros(self.n_pause)])
+        
+        # Precompute azimuth step sizes for one full sweep
+        
+        az_range = 2 * self.delta_az.to_value(u.deg)
+        self.az_step = self.speed_prof * self.step_s
+        self.az_step *= az_range / np.sum(self.az_step)
+
+        # Timing
+        total_samples = self.speed_prof.size
+        self.t_sweep = total_samples * self.step_s * u.s
+        self.dt_centers = self.t_sweep * self.nsweeps_per_elevation
+
+    def change_hor_down(self, hor_down):  self.hor_down = hor_down * u.deg
+    def change_hor_up(self, hor_up):      self.hor_up = hor_up * u.deg
 
     def get_pointing(self):
         self.centers = self.get_centers()
-        print(f"*********** {self.centers.obstime.size-1} recenterings performed ***********")
-        pointing = None
-        for i in range(len(self.centers)):
-            new_pointing = self.AzimuthSweep(self.centers[i], i)
-            pointing = new_pointing if pointing is None else np.append(pointing, new_pointing, axis=0)
-        return AltAz(az=pointing[:, 1] * u.deg, alt=pointing[:, 2] * u.deg,
-                     obstime=pointing[:, 0], location=self.earth_location)
+        print(f"*********** {len(self.centers)-1} recenterings performed ***********")
+        all_pts = [self.AzimuthSweep(cen, idx)
+                   for idx, cen in enumerate(self.centers)]
+        P = np.vstack(all_pts)
+        return AltAz(az=P[:,1]*u.deg,
+                     alt=P[:,2]*u.deg,
+                     obstime=P[:,0],
+                     location=self.earth_location)
 
     def get_centers(self):
         start = self.date_obs - self.utc_offset
-        time = np.arange(0, self.duration.to(u.s).value, 1) * u.s
-        hor_frame = AltAz(obstime=start + time, location=self.earth_location)
-        altaz = self.gal.transform_to(hor_frame)
-
-        hor_mask = (altaz.alt > self.hor_down) & (altaz.alt < self.hor_up)
-        altaz = altaz[hor_mask]
-
-        if not altaz.obstime.size:
+        tgrid = np.arange(0, self.duration.to(u.s).value, 1) * u.s
+        frame = AltAz(obstime=start + tgrid, location=self.earth_location)
+        path = self.gal.transform_to(frame)
+        mask = (path.alt > self.hor_down) & (path.alt < self.hor_up)
+        vis = path[mask]
+        if len(vis) == 0:
             raise ValueError('Source never visible')
 
-        unix_times = altaz.obstime.unix
-        end_index = np.append(np.where(np.diff(unix_times) > 1)[0], altaz.obstime.size - 1)
-        start_index = np.append(0, end_index[:-1] + 1)
-        durations = unix_times[end_index] - unix_times[start_index]
+        unix = vis.obstime.unix
+        ends = np.append(np.where(np.diff(unix) > 1)[0], len(vis)-1)
+        starts = np.append(0, ends[:-1]+1)
+        durations = unix[ends] - unix[starts]
 
-        if np.any(durations < self.dt_centers.to_value(u.s)):
-            warnings.warn('Insufficient time for elevation changes')
+        rec_times = []
+        for s, dur in zip(starts, durations):
+            offset = unix[s] - unix[0]
+            steps = np.arange(0, dur, self.dt_centers.to_value(u.s))
+            rec_times.append(offset + steps)
+        rec = np.concatenate(rec_times) * u.s
 
-        recenter_time = []
-        for i in range(len(durations)):
-            start_time = unix_times[start_index[i]] - unix_times[0]
-            steps = np.arange(0, durations[i], self.nsweeps_per_elevation * self.dtsweepOneAz.to_value(u.s))
-            recenter_time.append(start_time + steps)
-        recenter_time = np.concatenate(recenter_time) * u.s
-        return self.gal.transform_to(AltAz(obstime=altaz.obstime[0] + recenter_time,
-                                           location=self.earth_location))
+        return self.gal.transform_to(
+            AltAz(obstime=vis.obstime[0] + rec,
+                  location=self.earth_location))
 
     def AzimuthSweep(self, center, idx):
-
-        direction = [1, -1] if (self.nsweep_even or idx % 2 == 0) else [-1, 1]
-        Sweep_Azimuth = np.array([])
-
-        # Parameters
-
-        step_s = 0.1  # seconds
-        max_speed = 1.0  # deg/s
-        t_ramp = 1.0  # seconds
-        pause_duration = 3.0  # seconds
-        delta_az = self.delta_az.to_value(u.deg)
-
-        # Time samples for acc/dec ramps
-        n_ramp = int(t_ramp / step_s)
-        x_ramp = np.linspace(-3, 3, n_ramp)
-        ramp_profile = 1 / (np.cosh(x_ramp) ** 2) # Put this ramp as an external method
-        ramp_profile *= max_speed / np.max(ramp_profile)
-        ramp_distance = np.sum(ramp_profile) * step_s
-
-        # Flat segment
-        flat_distance = 2 * delta_az - 2 * ramp_distance
-        if flat_distance < 0:
-            raise ValueError("Ramp too wide or speed too high for given delta_az.")
         
-        t_flat = flat_distance / max_speed
-        n_flat = int(t_flat / step_s)
-        flat_profile = np.ones(n_flat) * max_speed
-
-        # Pause segment at end (zero speed)
-        n_pause = int(pause_duration / step_s)
-        pause_profile = np.zeros(n_pause)
-
-        # Total speed profile for one sweep
-        full_speed_profile = np.concatenate([
-            ramp_profile,
-            flat_profile,
-            ramp_profile[::-1],
-            pause_profile
-        ])
-
-        # Convert speed to azimuth steps
-        az_step = full_speed_profile * step_s
-        az_step *= (2 * delta_az) / np.sum(az_step)  # Normalize to match exact sweep range
-
+        # Build back-and-forth azimuths sweeps
+        
+        sequences = []
+        base = center.az.value
+        half = self.az_step.cumsum()
+        L = self.delta_az.to_value(u.deg)
         for i in range(self.nsweeps_per_elevation):
-            sweep_dir = direction[i % 2]
-            if sweep_dir > 0:
-                azimuths = center.az.value - delta_az + np.cumsum(az_step)
-            else:
-                azimuths = center.az.value + delta_az - np.cumsum(az_step)
-            Sweep_Azimuth = np.append(Sweep_Azimuth, azimuths)
+            if (self.nsweep_even or i % 2 == 0):  # forward on even
+                seq = base - L + half
+            else:                                 # backward on odd
+                seq = base + L - half
+            sequences.append(seq)
+        AZ = np.concatenate(sequences)
 
-        # Build full sweep array
-        Sweep = np.empty((len(Sweep_Azimuth), 3), dtype=object)
-        start_time = center.obstime - self.dt_centers * 0.5
-        sweep_duration = len(Sweep_Azimuth) * step_s * u.s
-        start_time = center.obstime + idx * sweep_duration
-        total_time = len(Sweep_Azimuth) * step_s
-        time_steps = np.arange(0, total_time, step_s)[:len(Sweep_Azimuth)] * u.s
-        Sweep[:, 0] = start_time + time_steps
-        Sweep[:, 1] = Sweep_Azimuth
-        Sweep[:, 2] = center.alt.value
+        # Timestamp around center
+        
+        t0 = center.obstime - self.t_sweep/2
+        times = t0 + np.arange(len(AZ)) * self.step_s * u.s
 
-        # Sun avoidance
-        sep = self.SunSeparation(Sweep).deg
-        Sweep = Sweep[sep > self.sun_sep.value]
-        if Sweep.size == 0:
-            raise ValueError('Sun obscures observation path')
+        # Assembling the data
+        
+        data = np.empty((len(AZ),3),object)
+        data[:,0] = times
+        data[:,1] = AZ
+        data[:,2] = center.alt.value
 
-        keep_idx = np.arange(len(Sweep)) % int(self.period.to_value(u.s) / step_s) == 0
-        return Sweep[keep_idx]
-
-    def SunSeparation(self, Sweep):
-        pointing = AltAz(az=Sweep[:, 1] * u.deg, alt=Sweep[:, 2] * u.deg,
-                         obstime=Sweep[:, 0], location=self.earth_location)
-        sun_pos = get_sun(pointing.obstime)
-        return pointing.separation(sun_pos)
+        # Down-sample by period
+        idxs = np.arange(data.shape[0]) % int(self.period.to_value(u.s)/self.step_s) == 0
+        return data[idxs]
 
     def SkyDips(self, azimuth, elevation, delta_elevation, ang_speed_elevation, dead_time=0.):
+
         az = azimuth * u.deg
         alt = elevation * u.deg
         delta_alt = delta_elevation * u.deg
@@ -189,9 +176,13 @@ class QubicObservation:
             Sweep_Elevation = np.append(Sweep_Elevation, sweep_el)
 
         az_array = np.full_like(Sweep_Elevation, az.value)
+        
         time = self.date_obs + np.linspace(0, self.duration.to_value(u.s),
                                            len(Sweep_Elevation), endpoint=False) * u.s
-
+        min_tsampling = 0.1 * u.s
+        nt = len(Sweep_Elevation)
+        time = self.date_obs + np.arange(nt) * min_tsampling
+        
         pointing = AltAz(az=az_array * u.deg, alt=Sweep_Elevation * u.deg,
                          obstime=time, location=self.earth_location)
 
@@ -199,6 +190,7 @@ class QubicObservation:
         indexes = np.arange(pointing.obstime.size)
         return pointing[indexes[indexes % ratio == 0]]
     
+
     def DeltaTime(self,time):
 		
         '''
@@ -215,20 +207,7 @@ class QubicObservation:
 
         return delta_time
     
-    def SunTrajectory(self, date="2025-04-14", npoints=500):
 
-
-        time_start = Time(f"{date} 00:00:00")
-        times = time_start + np.linspace(0, 24, npoints) * u.hour / 24
-
-        frame = AltAz(obstime=times, location=self.earth_location)
-        sun = get_sun(times).transform_to(frame)
-
-        data = np.empty((npoints, 3), dtype=object)
-        data[:, 0] = times
-        data[:, 1] = sun.az.to_value(u.deg)
-        data[:, 2] = sun.alt.to_value(u.deg)
-        return data
 
 
 
@@ -247,11 +226,6 @@ def plot_observation(d):
     daz = np.diff(az)
     speed = np.abs(np.insert(daz / dt, 0, 0))
 
-    #Compute Sun trajectory over the observation time range
-    times = pointing.obstime
-    sun_altaz = get_sun(times).transform_to(AltAz(obstime=times, location=qubic.earth_location))
-    sun_az = sun_altaz.az.deg
-    sun_alt = sun_altaz.alt.deg
 
     
     plt.figure(figsize=(12, 8))
@@ -260,7 +234,6 @@ def plot_observation(d):
     # Azimuth vs Time
     plt.subplot(2, 2, 1)
     plt.plot(time_rel, az, 'b-', alpha=0.7, label='Telescope')
-    plt.plot(time_rel, sun_az, 'orange', linestyle='--', label='Sun')
     plt.xlabel('Time (hours)')
     plt.ylabel('Azimuth (deg)')
     plt.title('Azimuth vs Time')
@@ -269,8 +242,7 @@ def plot_observation(d):
     
     # Elevation vs Time
     plt.subplot(2, 2, 2)
-    plt.plot(time_rel, pointing.alt.deg, 'ro', alpha=0.7)
-    #plt.plot(time_rel, sun_alt, 'goldenrod', linestyle='--', label='Sun')
+    plt.plot(time_rel, pointing.alt.deg, 'r', alpha=0.7)
     plt.xlabel('Time (hours)')
     plt.ylabel('Elevation (deg)')
     plt.title('Elevation vs Time')
@@ -280,7 +252,6 @@ def plot_observation(d):
     # Elevation vs Azimuth
     plt.subplot(2, 2, 3)
     sc = plt.scatter(az, pointing.alt.deg, c=time_rel, cmap='viridis', s=10)
-    #plt.scatter(sun_az, sun_alt, c='orange', s=10, alpha=0.5, label='Sun')
     plt.colorbar(sc, label='Time (hours)')
     plt.xlabel('Azimuth (deg)')
     plt.ylabel('Elevation (deg)')

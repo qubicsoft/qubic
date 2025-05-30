@@ -128,7 +128,7 @@ class Pipeline:
 
         ### Update components
         self.preset.comp.components_iter[:, seenpix, :] = result["x"].copy()
-        self.preset.acquisition.convergence = np.append(self.preset.acquisition.convergence, result["convergence"])
+        self.preset.acquisition.convergence.append(np.array(result["convergence"].copy()))
 
         ### Plot if asked
         if self.preset.tools.rank == 0:

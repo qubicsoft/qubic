@@ -113,14 +113,14 @@ class PresetAcquisition:
         self.rms_tolerance = self.preset_tools.params["PCG"]["tol_rms"]
         self.ites_to_converge = self.preset_tools.params["PCG"]["ites_to_converge"]
         self.rms_plot = np.zeros((1, 2))
-        self.convergence = np.array([])
+        self.convergence = []
 
         ### Inverse noise-covariance matrix
         self.preset_tools.mpi._print_message("    => Building inverse noise covariance matrix")
         self.invN = self.preset_qubic.joint_out.get_invntt_operator(mask=self.preset_sky.mask)
 
         #! Test to be removed
-        self.invN = IdentityOperator()
+        self.invN = BlockDiagonalOperator([IdentityOperator(self.invN.operands[0].shapein), IdentityOperator(self.invN.operands[1].shapein)], axisout=0)
 
         ### Get convolution
         self.preset_tools.mpi._print_message("    => Getting convolution")

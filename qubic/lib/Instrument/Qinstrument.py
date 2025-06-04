@@ -1934,19 +1934,29 @@ class QubicMultibandInstrument:
         synthbeam = [q.synthbeam for q in self.subinstruments]
         for i in range(len(synthbeam)):
             synthbeam[i].kmax = 4
-        sb_peaks = map(lambda i: QubicInstrument._peak_angles(scene, self[i].filter.nu, self[i][idet].detector.center, synthbeam[i], self[i].horn, self[i].primary_beam), range(len(self)))
+        sb_peaks = map(
+            lambda i: QubicInstrument._peak_angles(
+                scene,
+                self[i].filter.nu,
+                self[i][idet].detector.center,
+                synthbeam[i],
+                self[i].horn,
+                self[i].primary_beam,
+            ),
+            range(len(self)),
+        )
 
-        def peaks_to_map(peaks):
-            m = np.zeros(hp.nside2npix(scene.nside))
-            m[hp.ang2pix(scene.nside, peaks[0], peaks[1])] = peaks[2]
-            return m
+    #     def peaks_to_map(peaks):
+    #         m = np.zeros(hp.nside2npix(scene.nside))
+    #         m[hp.ang2pix(scene.nside, peaks[0], peaks[1])] = peaks[2]
+    #         return m
 
-        sb = map(peaks_to_map, sb_peaks)
-        C = [i.get_convolution_peak_operator() for i in self.subinstruments]
-        sb = [(C[i])(sb[i]) for i in range(len(self))]
-        sb = np.array(sb)
-        sb = sb.sum(axis=0)
-        return sb
+    #     sb = map(peaks_to_map, sb_peaks)
+    #     C = [i.get_convolution_peak_operator() for i in self.subinstruments]
+    #     sb = [(C[i])(sb[i]) for i in range(len(self))]
+    #     sb = np.array(sb)
+    #     sb = sb.sum(axis=0)
+    #     return sb
 
     def detector_subset(self, dets):
         subset_inst = copy.deepcopy(self)
@@ -2052,12 +2062,12 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
             m[hp.ang2pix(scene.nside, peaks[0], peaks[1])] = peaks[2]
             return m
 
-        sb = map(peaks_to_map, sb_peaks)
-        C = [i.get_convolution_peak_operator() for i in self.subinstruments]
-        sb = [(C[i])(sb[i]) for i in range(len(self))]
-        sb = np.array(sb)
-        sb = sb.sum(axis=0)
-        return sb
+    #     sb = map(peaks_to_map, sb_peaks)
+    #     C = [i.get_convolution_peak_operator() for i in self.subinstruments]
+    #     sb = [(C[i])(sb[i]) for i in range(len(self))]
+    #     sb = np.array(sb)
+    #     sb = sb.sum(axis=0)
+    #     return sb
 
     def detector_subset(self, dets):
         subset_inst = copy.deepcopy(self)

@@ -72,7 +72,7 @@ class PresetMixingMatrix:
         np.random.seed(1)
         extra = np.ones(len(nus))
 
-        if self.preset_comp.params_foregrounds["Dust"]["model_d"] != "d6":
+        if self.preset_comp.params_foregrounds["Dust"]["model"] != "d6":
             return np.ones(len(nus))
 
         else:
@@ -127,7 +127,7 @@ class PresetMixingMatrix:
         A = np.zeros((nfreq, ncomp))
         
         # Check if the Dust model is 'd6' and not in initialization step
-        if self.preset_comp.params_foregrounds['Dust']['model_d'] == 'd6' and init == False:
+        if self.preset_comp.params_foregrounds['Dust']['model'] == 'd6' and init == False:
             # Compute extra scaling factor for Dust component
             extra = self.extra_sed(nus, self.preset_comp.params_foregrounds['Dust']['l_corr'])
         else:
@@ -267,21 +267,21 @@ class PresetMixingMatrix:
         return mixingmatrix.eval(nus, *beta)
 
     def _get_beta_iter(self):
-        if self.preset_comp.params_foregrounds["Dust"]["model_d"] in ["d0", "d6"]:
+        if self.preset_comp.params_foregrounds["Dust"]["model"] in ["d0", "d6"]:
             beta_iter = np.array([])
             if self.preset_comp.params_foregrounds["Dust"]["Dust_out"]:
-                beta_iter = np.append(beta_iter, np.random.normal(self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][0], self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][1], 1))
+                beta_iter = np.append(beta_iter, np.random.normal(self.preset_comp.params_foregrounds["Dust"]["beta_init"][0], self.preset_comp.params_foregrounds["Dust"]["beta_init"][1], 1))
             if self.preset_comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]:
                 beta_iter = np.append(
-                    beta_iter, np.random.normal(self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][0], self.preset_comp.params_foregrounds["Synchrotron"]["beta_s_init"][1], 1)
+                    beta_iter, np.random.normal(self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"][0], self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"][1], 1)
                 )
 
-            Adeco_iter = self.get_decorrelated_mixing_matrix(self.preset_comp.params_foregrounds["Dust"]["beta_d_init"][2], seed=42, key="out")
+            Adeco_iter = self.get_decorrelated_mixing_matrix(self.preset_comp.params_foregrounds["Dust"]["beta_init"][2], seed=42, key="out")
             A_iter = self.get_mixingmatrix(self.nus_eff_out, beta_iter, key="out") * Adeco_iter
 
             return beta_iter, A_iter
 
-        elif self.preset_comp.params_foregrounds["Dust"]["model_d"] == "d1":
+        elif self.preset_comp.params_foregrounds["Dust"]["model"] == "d1":
             beta_iter = np.zeros((len(self.preset_comp.components_out) - 1, 12 * self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"] ** 2))
 
             for iname, name in enumerate(self.preset_comp.components_name_out):
@@ -296,7 +296,7 @@ class PresetMixingMatrix:
             Amm_iter = np.transpose(Amm_iter, (1, 0, 2))
             return beta_iter, Amm_iter
         else:
-            raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model_d']} is not yet implemented...")
+            raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model']} is not yet implemented...")
 
     def get_beta_input(self):
         """Spectral index.
@@ -325,7 +325,7 @@ class PresetMixingMatrix:
 
         """
 
-        if self.preset_comp.params_foregrounds["Dust"]["model_d"] in ["d0", "d6"]:
+        if self.preset_comp.params_foregrounds["Dust"]["model"] in ["d0", "d6"]:
             # self.Amm_in = self._get_Amm(self.preset_comp.components_model_in, self.preset_comp.components_name_in, self.nus_eff_in, init=False)
 
             # self.Amm_in[len(self.preset_qubic.joint_in.qubic.allnus):] = self._get_Amm(self.preset_comp.components_model_in, self.preset_comp.components_name_in, self.nus_eff_in, init=True)[len(self.preset_qubic.joint_in.qubic.allnus):]
@@ -337,7 +337,7 @@ class PresetMixingMatrix:
             self.Amm_in = self.get_mixingmatrix(self.nus_eff_in, self.beta_in, key="in")
 
             if self.preset_comp.params_foregrounds["Dust"]["Dust_in"]:
-                if self.preset_comp.params_foregrounds["Dust"]["model_d"] in ["d0", "d6"]:
+                if self.preset_comp.params_foregrounds["Dust"]["model"] in ["d0", "d6"]:
                     Adeco = self.get_decorrelated_mixing_matrix(lcorr=self.preset_comp.params_foregrounds["Dust"]["l_corr"], seed=1, key="in")
 
                     ### Multiply the right element once even with multiple processors
@@ -350,7 +350,7 @@ class PresetMixingMatrix:
                         self.Amm_in = None
                     self.Amm_in = self.preset_tools.comm.bcast(self.Amm_in, root=0)
 
-                elif self.preset_comp.params_foregrounds["Dust"]["model_d"] == "d1":
+                elif self.preset_comp.params_foregrounds["Dust"]["model"] == "d1":
                     # self.Amm_in = None
                     self.beta_in = np.zeros(
                         (
@@ -372,7 +372,7 @@ class PresetMixingMatrix:
                     # stop
 
                 else:
-                    raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model_d']} is not yet implemented...")
+                    raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model']} is not yet implemented...")
 
     def get_index_seenpix_beta(self):
         """Spatially varying spectral index.

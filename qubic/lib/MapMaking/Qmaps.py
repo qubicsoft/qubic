@@ -133,7 +133,7 @@ class PlanckMaps(Maps):
         out = np.random.standard_normal(np.ones((12 * self.nside**2, 3)).shape) * sigma
         return out
 
-    def run(self, fwhm=False, number_of_band_integration=100):
+    def run(self, use_fwhm=False, number_of_band_integration=100):
         """
 
         Method that create global variables such as :
@@ -158,7 +158,7 @@ class PlanckMaps(Maps):
             maps[inu] += n
             maps_noise[inu] += n
 
-            if fwhm:
+            if use_fwhm:
                 # Conversion from arcmin to rad
                 fwhm_rad = np.deg2rad(self._get_fwhm(nu) / 60.0)
                 C = HealpixConvolutionGaussianOperator(fwhm=fwhm_rad, lmax=3 * self.nside - 1)

@@ -63,9 +63,7 @@ class Pipeline:
         self._rms_noise_qubic_patch_per_ite = np.empty((self.preset.tools.params["PCG"]["ites_to_converge"], len(self.preset.comp.components_name_out)))
         self._rms_noise_qubic_patch_per_ite[:] = np.nan
 
-        # for icomp in range(len(self.preset.comp.components_name_out)):
-        #     C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_rec[icomp], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
-        #     self.preset.comp.components_out[icomp] = C(self.preset.comp.components_out[icomp]).copy()
+        self.convergence = []
 
     def call_pcg(self, max_iterations, seenpix):
         """Precontioned Conjugate Gradiant algorithm.
@@ -88,7 +86,6 @@ class Pipeline:
         initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
 
         ### Update the preconditioner M
-        # if self._steps == 0:
         self.preset.acquisition.M = self.preset.acquisition.get_preconditioner()
 
         ### Run PCG
@@ -105,7 +102,7 @@ class Pipeline:
             gif_folder = None
 
         ### PCG
-        result = pcg(
+        results = pcg(
             A=self.preset.A,
             b=self.preset.b,
             comm=self.preset.comm,
@@ -127,8 +124,8 @@ class Pipeline:
         )["x"]
 
         ### Update components
-        self.preset.comp.components_iter[:, seenpix, :] = result["x"].copy()
-        self.preset.acquisition.convergence.append(np.array(result["convergence"].copy()))
+        self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy()
+        self.preset.acquisition.convergence.append(np.array(results["convergence"].copy()))
 
         ### Plot if asked
         if self.preset.tools.rank == 0:
@@ -180,6 +177,7 @@ class Pipeline:
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
+        # self.preset.A = U.T * H_i.T * H_i * U
 
         x_planck = self.preset.comp.components_out * (1 - seenpix[None, :, None])
 
@@ -814,8 +812,9 @@ class Pipeline:
                     ) as handle:
                         pickle.dump(
                             {
-                                "components": self.preset.comp.components_in,
-                                "components_i": self.preset.comp.components_iter,
+                                "components_in": self.preset.comp.components_in,
+                                "components_convolved_recon": self.preset.acquisition.components_convolved_recon,
+                                "components_iter": self.preset.comp.components_iter,
                                 "beta": self.preset.acquisition.allbeta,
                                 "beta_true": self.preset.mixingmatrix.beta_in,
                                 "index_beta": self.preset.mixingmatrix._index_seenpix_beta,

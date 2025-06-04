@@ -524,7 +524,9 @@ class PlotsCMM:
         for each component and Stokes parameter (I, Q, U). The maps are convolved using
         a Gaussian operator and displayed using Healpix's gnomview function.
         """
-        C = [HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_rec[i], lmax=3 * self.params["SKY"]["nside"] - 1) for i in range(len(self.preset.comp.components_name_out))]
+        # C = [HealpixConvolutionGaussianOperator(
+        #     fwhm=self.preset.acquisition.fwhm_rec[i],
+        #     lmax=3 * self.params["SKY"]["nside"]) for i in range(len(self.preset.comp.components_name_out))]
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
             plt.figure(figsize=figsize)
@@ -533,10 +535,11 @@ class PlotsCMM:
                 for icomp in range(len(self.preset.comp.components_name_out)):
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
 
-                    map_in = C[icomp](self.preset.comp.components_out[icomp, :, istk]).copy()
+                    # map_in = C[icomp](self.preset.comp.components_out[icomp, :, istk]).copy() # why?
+                    map_in = self.preset.acquisition.components_convolved_recon[icomp, :, istk].copy()
                     map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
 
-                    sig = np.std(self.preset.comp.components_out[icomp, seenpix, istk])
+                    # sig = np.std(self.preset.comp.components_out[icomp, seenpix, istk])
                     map_in[~seenpix] = hp.UNSEEN
                     map_out[~seenpix] = hp.UNSEEN
 
@@ -553,7 +556,7 @@ class PlotsCMM:
                     #     map_out[~seenpix] = hp.UNSEEN
 
                     r = map_in - map_out
-                    nsig = 2
+                    # nsig = 2
                     hp.gnomview(
                         map_out,
                         rot=self.preset.sky.center,
@@ -562,8 +565,8 @@ class PlotsCMM:
                         title=f"{self.preset.comp.components_name_out[icomp]} - {stk[istk]} - Output",
                         cmap="jet",
                         sub=(3, len(self.preset.comp.components_out) * 2, k + 1),
-                        min=-nsig * sig,
-                        max=nsig * sig,
+                        # min=-nsig * sig,
+                        # max=nsig * sig,
                     )
                     k += 1
                     hp.gnomview(
@@ -574,8 +577,8 @@ class PlotsCMM:
                         title=f"{self.preset.comp.components_name_out[icomp]} - {stk[istk]} - Residual",
                         cmap="jet",
                         sub=(3, len(self.preset.comp.components_out) * 2, k + 1),
-                        min=-nsig * np.std(r[seenpix]),
-                        max=nsig * np.std(r[seenpix]),
+                        # min=-nsig * np.std(r[seenpix]),
+                        # max=nsig * np.std(r[seenpix]),
                     )
                     k += 1
 
@@ -612,9 +615,8 @@ class PlotsCMM:
                 for icomp in range(len(self.preset.comp.components_name_out)):
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
                     if self.preset.qubic.params_qubic["convolution_in"]:
-                        map_in = self.preset.comp.components_out[icomp, :, istk].copy()
-                        C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_rec[icomp], lmax=3 * self.params["SKY"]["nside"] - 1)
-                        map_out = C(self.preset.comp.components_iter[icomp, :, istk].copy())
+                        map_in = self.preset.acquisition.components_convolved_recon[icomp, :, istk].copy()
+                        map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
                     else:
                         map_in = self.preset.comp.components_out[icomp, :, istk].copy()
                         map_out = self.preset.comp.components_iter[icomp, :, istk].copy()

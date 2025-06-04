@@ -557,7 +557,7 @@ class PlotsCMM:
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
 
                     # map_in = C[icomp](self.preset.comp.components_out[icomp, :, istk]).copy() # why?
-                    map_in = self.preset.comp.components_convolved_in[icomp, :, istk].copy()
+                    map_in = self.preset.acquisition.components_convolved_recon[icomp, :, istk].copy()
                     map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
 
                     # sig = np.std(self.preset.comp.components_out[icomp, seenpix, istk])
@@ -639,9 +639,7 @@ class PlotsCMM:
 
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
                     if self.preset.qubic.params_qubic["convolution_in"]:
-                        map_in = self.preset.comp.components_convolved_out[
-                            icomp, :, istk
-                        ].copy()
+                        map_in = self.preset.acquisition.components_convolved_recon[icomp, :, istk].copy()
                         map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
                     else:
                         map_in = self.preset.comp.components_out[icomp, :, istk].copy()

@@ -161,7 +161,7 @@ class PlanckMaps(Maps):
             * sigma
         )
         return out
-    def run(self, fwhm=False, number_of_band_integration=100):
+    def run(self, use_fwhm=False, number_of_band_integration=100):
         """
 
         Method that create global variables such as :
@@ -191,7 +191,7 @@ class PlanckMaps(Maps):
             maps[inu] += n
             maps_noise[inu] += n
             
-            if fwhm:
+            if use_fwhm:
                 C = HealpixConvolutionGaussianOperator(
                     fwhm=arcmin2rad(self._get_fwhm(nu))
                 )

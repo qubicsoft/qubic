@@ -81,12 +81,15 @@ class PresetComponents:
 
         ### Compute true components
         self.preset_tools.mpi._print_message("    => Creating components")
-        self.components_in, self.components_convolved_in, _ = self.get_components(
-            self.skyconfig_in
-        )
-        self.components_out, self.components_convolved_out, self.components_iter = (
-            self.get_components(self.skyconfig_out)
-        )
+        # self.components_in, self.components_convolved_in, _ = self.get_components(
+        #     self.skyconfig_in
+        # )
+        # self.components_out, self.components_convolved_out, self.components_iter = (
+        #     self.get_components(self.skyconfig_out)
+        # )
+
+        self.components_in, _ = self.get_components(self.skyconfig_in)
+        self.components_out, self.components_iter = self.get_components(self.skyconfig_out)
 
         ### Monochromatic emission
         if self.preset_tools.params["Foregrounds"]["CO"]["CO_in"]:
@@ -247,22 +250,22 @@ class PresetComponents:
         components = np.zeros(
             (len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3)
         )
-        components_convolved = np.zeros(
-            (len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3)
-        )
+        # components_convolved = np.zeros(
+        #     (len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3)
+        # )
 
         ### Compute convolution operator if needed
-        if (
-            self.preset_qubic.params_qubic["convolution_in"]
-            or self.preset_qubic.params_qubic["convolution_out"]
-        ):
-            C = HealpixConvolutionGaussianOperator(
-                fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
-                # lmax=3 * self.preset_tools.params["SKY"]["nside"],
-                lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
-            )
-        else:
-            C = HealpixConvolutionGaussianOperator(fwhm=0)
+        # if (
+        #     self.preset_qubic.params_qubic["convolution_in"]
+        #     or self.preset_qubic.params_qubic["convolution_out"]
+        # ):
+        #     C = HealpixConvolutionGaussianOperator(
+        #         fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
+        #         # lmax=3 * self.preset_tools.params["SKY"]["nside"],
+        #         lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
+        #     )
+        # else:
+        #     C = HealpixConvolutionGaussianOperator(fwhm=0)
 
         ### Compute CMB power spectrum according Planck data
         mycls = self.give_cl_cmb(r=self.params_cmb["r"], Alens=self.params_cmb["Alens"])
@@ -333,10 +336,10 @@ class PresetComponents:
                 raise TypeError("Choose right foreground model (d0, s0, ...)")
             
             components[icomp] = component_map.copy()
-            components_convolved[icomp] = C(component_map).copy()
+            # components_convolved[icomp] = C(component_map).copy()
 
         # if self.preset_tools.params['Foregrounds']['Dust']['nside_beta_out'] != 0:
         #     components = components.T.copy()
         components_iter = components.copy()
 
-        return components, components_convolved, components_iter
+        return components, components_iter #components, components_convolved, components_iter

@@ -493,40 +493,40 @@ class QubicAcquisition(Acquisition):
         partitionin = 2 * (len(self.instrument) // 2,)
         return BlockRowOperator([I, -I], axisin=0, partitionin=partitionin) #?
 
-    def get_observation(self, map, convolution=True, noiseless=False):
-        """
-        tod = map2tod(acquisition, map)
-        tod, convolved_map = map2tod(acquisition, map, convolution=True)
-        Parameters
-        ----------
-        map : I, QU or IQU maps
-            Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
-            with npix = 12 * nside**2
-        noiseless : boolean, optional
-            If True, no noise is added to the observation.
-        convolution : boolean, optional
-            Set to True to convolve the input map by a gaussian and return it.
-        Returns
-        -------
-        tod : array
-            The Time-Ordered-Data of shape (ndetectors, ntimes).
-        convolved_map : array, optional
-            The convolved map, if the convolution keyword is set.
-        """
-        if convolution:
-            convolution = self.get_convolution_peak_operator()
-            map = convolution(map)
+    # def get_observation(self, map, convolution=True, noiseless=False):
+    #     """
+    #     tod = map2tod(acquisition, map)
+    #     tod, convolved_map = map2tod(acquisition, map, convolution=True)
+    #     Parameters
+    #     ----------
+    #     map : I, QU or IQU maps
+    #         Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
+    #         with npix = 12 * nside**2
+    #     noiseless : boolean, optional
+    #         If True, no noise is added to the observation.
+    #     convolution : boolean, optional
+    #         Set to True to convolve the input map by a gaussian and return it.
+    #     Returns
+    #     -------
+    #     tod : array
+    #         The Time-Ordered-Data of shape (ndetectors, ntimes).
+    #     convolved_map : array, optional
+    #         The convolved map, if the convolution keyword is set.
+    #     """
+    #     if convolution:
+    #         convolution = self.get_convolution_peak_operator()
+    #         map = convolution(map)
 
-        H = self.get_operator()
-        tod = H(map)
+    #     H = self.get_operator()
+    #     tod = H(map)
 
-        if not noiseless:
-            tod += self.get_noise()
+    #     if not noiseless:
+    #         tod += self.get_noise()
 
-        if convolution:
-            return tod, map
+    #     if convolution:
+    #         return tod, map
 
-        return tod
+    #     return tod
 
     def get_preconditioner(self, cov):
         if cov is not None:
@@ -933,11 +933,12 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 algo = "CMM"
 
             ### Compute gaussian kernel to account for angular resolution
+            # convolution = IdentityOperator()
             if fwhm is None:
                 convolution = IdentityOperator()
             else:
                 convolution = HealpixConvolutionGaussianOperator(
-                    fwhm=fwhm[isub], lmax=2 * self.scene.nside -1
+                    fwhm=fwhm[isub], lmax= 3*self.scene.nside - 1
                 )
 
             ### Compose operator as H = Proj * C * A
@@ -1156,7 +1157,7 @@ class OtherDataParametric:
         for ii, i in enumerate(self.nus):
             ope_i = []
             for j in range(self.nintegr):
-
+                # fwhm = 0
                 if convolution:
                     if myfwhm is not None:
                         fwhm = myfwhm[ii]
@@ -1165,7 +1166,7 @@ class OtherDataParametric:
                 else:
                     fwhm = 0
 
-                C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=2 * self.nside - 1)
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=3 * self.nside - 1)
 
                 D = self._get_mixing_operator(A=A[k])
 

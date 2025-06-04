@@ -109,13 +109,15 @@ class Pipeline:
 
         ### Update the precondtionner M
         #if self._steps == 0:
-        self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(seenpix=seenpix,
-            A_qubic=self.preset.acquisition.Amm_iter[:self.preset.qubic.params_qubic["nsub_out"]],
-        #self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(A_qubic=self.preset.mixingmatrix.Amm_in[:self.preset.qubic.params_qubic["nsub_out"]],
-            A_ext=self.preset.mixingmatrix.Amm_in[self.preset.qubic.params_qubic["nsub_out"]:],
-            precond=self.preset.qubic.params_qubic["preconditioner"], 
-            thr=self.preset.tools.params["PLANCK"]["thr_planck"]
-        )
+        # self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(seenpix=seenpix,
+        #     A_qubic=self.preset.acquisition.Amm_iter[:self.preset.qubic.params_qubic["nsub_out"]],
+        # #self.preset.acquisition.M = self.preset.acquisition.get_preconditioner(A_qubic=self.preset.mixingmatrix.Amm_in[:self.preset.qubic.params_qubic["nsub_out"]],
+        #     A_ext=self.preset.mixingmatrix.Amm_in[self.preset.qubic.params_qubic["nsub_out"]:],
+        #     precond=self.preset.qubic.params_qubic["preconditioner"], 
+        #     thr=self.preset.tools.params["PLANCK"]["thr_planck"]
+        # )
+        self.preset.acquisition.M = self.preset.acquisition.get_preconditioner()
+
 
         ### Run PCG
         if self._steps == 0:
@@ -199,7 +201,7 @@ class Pipeline:
             fwhm=self.preset.acquisition.fwhm_mapmaking,
             nu_co=self.preset.comp.nu_co,
         )
-
+        
         U = (
             ReshapeOperator(
                 (len(self.preset.comp.components_name_out) * sum(seenpix) * 3),
@@ -1088,8 +1090,9 @@ class Pipeline:
                     ) as handle:
                         pickle.dump(
                             {
-                                "components": self.preset.comp.components_convolved_in, #self.preset.comp.components_in,
-                                "components_i": self.preset.comp.components_iter,
+                                "components_in": self.preset.comp.components_in,
+                                "components_convolved_recon": self.preset.acquisition.components_convolved_recon,
+                                "components_iter": self.preset.comp.components_iter,
                                 "beta": self.preset.acquisition.allbeta,
                                 "beta_true": self.preset.mixingmatrix.beta_in,
                                 "index_beta": self.preset.mixingmatrix._index_seenpix_beta,

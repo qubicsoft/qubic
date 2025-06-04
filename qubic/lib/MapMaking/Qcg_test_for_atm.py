@@ -191,8 +191,8 @@ class PCGAlgorithm(IterativeAlgorithm):
             _r = map_i[self.seenpix, :] - self.input[self.seenpix, :]
         else:
             _r = np.zeros(self.input.shape)
-            for i in range(map_i.shape[0]):
-                _r[i, self.seenpix[i]] = map_i[i, self.seenpix[i], :] - self.input[i, self.seenpix[i], :]
+            # for i in range(map_i.shape[0]):
+            #     _r[i, self.seenpix[i]] = map_i[i, self.seenpix[i], :] - self.input[i, self.seenpix[i], :]
         self.rms = np.std(_r, axis=1)
 
         if self.gif is not None:

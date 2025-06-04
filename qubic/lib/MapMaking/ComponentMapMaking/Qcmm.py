@@ -398,7 +398,7 @@ class Pipeline:
             ### Model without spatial variation of spectral index
             if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] == 0:
                 previous_beta = self.preset.acquisition.beta_iter.copy()
-                self.chi2 = Chi2InstrumentType(self.preset, tod_comp, instr_type=self.preset.qubic.params_qubic["instrument"], parametric=True)
+                self.chi2 = Chi2InstrumentType(self.preset, tod_comp, parametric=True)
 
                 ### Fit using scipy.optimize.minimize
                 self.preset.acquisition.beta_iter = minimize(self.chi2, x0=self.preset.acquisition.beta_iter, method="BFGS", callback=self.callback, tol=1e-10).x
@@ -471,7 +471,6 @@ class Pipeline:
                 self.chi2 = Chi2InstrumentType(
                     self.preset,
                     tod_comp,
-                    instr_type=self.preset.qubic.params_qubic["instrument"],
                     parametric=False,
                 )
                 x0 = []

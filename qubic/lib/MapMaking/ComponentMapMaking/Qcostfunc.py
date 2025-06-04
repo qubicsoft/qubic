@@ -17,19 +17,12 @@ class Chi2InstrumentType:
     Instance to compute chi^2 for a given simulated TOD.
     """
 
-    def __init__(self, preset, TOD_sim, instr_type, parametric=True, full_beta_map=None):
+    def __init__(self, preset, TOD_sim, parametric=True, full_beta_map=None):
         self.preset = preset
         self.TOD_sim = TOD_sim
         self.nus = self.preset.qubic.joint_out.allnus
         self.parametric = parametric
         self.full_beta_map = full_beta_map
-
-        if instr_type == "DB":
-            self.nFocalPlanes = 2
-        elif instr_type == "UWB" or instr_type == "MB":
-            self.nFocalPlanes = 1
-        else:
-            raise ValueError("Instrument type {} is not implemented.".format(instr_type))
 
         ### If parametric, we use the QUBIC + Planck data
         if self.parametric:
@@ -54,10 +47,12 @@ class Chi2InstrumentType:
             raise TypeError("TOD_sim should have 3 or 4 dimensions.")
 
         self.ncomp, self.nfreq, self.nsampling_ndet = self.TOD_sim.shape
-        self.nsub = int(self.nfreq / self.nFocalPlanes)
+        print("TOD_sim shape:", self.TOD_sim.shape)
+        self.nsub = int(self.nfreq / self.preset.qubic.joint_out.qubic.nFocalPlanes)
+        self.fsub = self.nfreq // self.preset.comp.params_foregrounds["bin_mixing_matrix"]
 
         self.TOD_sim_fp = []
-        for i in range(self.nFocalPlanes):
+        for i in range(self.preset.qubic.joint_out.qubic.nFocalPlanes):
             self.TOD_sim_fp.append(self.TOD_sim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.ncomp * self.nsub * npix, self.nsampling_ndet)))
         # Missing self.TOD_sim150 and self.TOD_sim220 with new definition, use self.TOD_sim_fp[0] and self.TOD_sim_fp[1] instead
 
@@ -93,7 +88,7 @@ class Chi2InstrumentType:
 
             ### Separe the mixing matrix element for 150 and 220 GHz if needed
             ysim = []
-            for i in range(self.nFocalPlanes):
+            for i in range(self.preset.qubic.joint_out.qubic.nFocalPlanes):
                 ysim.append(A[self.nsub * i : self.nsub * (i + 1)].T.reshape((self.ncomp * self.nsub)) @ self.TOD_sim_fp[i])
 
             ### Create simulated TOD

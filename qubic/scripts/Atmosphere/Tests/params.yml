@@ -31,11 +31,11 @@ nside: 128
 n_theta: 10000
 normalization: 1
 flat: False
-coverage_cut: 0.1
+coverage_cut: 0.2
 dtheta: 15
 seed: 1
 
 # Qubic parameters
-npointings: 1000
+npointings: 7000
 kmax: 1
 synthbeam_fraction: 1

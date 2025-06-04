@@ -502,7 +502,7 @@ class PipelineFrequencyMapMaking:
             fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in])  # self.fwhm_in = 0 if convolution_in == False
             C = HealpixConvolutionGaussianOperator(
                 fwhm=fwhm_irec,
-                lmax=2 * self.params["Spectrum"]["lmax"],
+                lmax=3 * self.params["SKY"]["nside"] - 1,
             )
             if irec < self.params["QUBIC"]["nrec"] / 2:  # choose between the two levels of noise
                 noise = self.noise_planck[0]
@@ -511,7 +511,7 @@ class PipelineFrequencyMapMaking:
             TOD_PLANCK[irec] = C(self.maps_input.maps[irec] + noise)
 
         if self.params["QUBIC"]["nrec"] == 1:  # To handle the case nrec == 1, TOD_PLANCK[0] alreay computed above
-            TOD_PLANCK[1] = C(self.maps_input.maps[1] + self.noise217)
+            TOD_PLANCK[1] = C(self.maps_input.maps[1] + self.noise_planck[1])
 
         TOD_PLANCK = TOD_PLANCK.ravel()
 

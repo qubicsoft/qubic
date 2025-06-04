@@ -48,7 +48,7 @@ class Chi2InstrumentType:
 
         self.ncomp, self.nfreq, self.nsampling_ndet = self.TOD_sim.shape
         print("TOD_sim shape:", self.TOD_sim.shape)
-        self.nsub = int(self.nfreq / self.preset.qubic.joint_out.qubic.nFocalPlanes)
+        self.nsub = self.nfreq // self.preset.qubic.joint_out.qubic.nFocalPlanes
         self.fsub = self.nfreq // self.preset.comp.params_foregrounds["bin_mixing_matrix"]
 
         self.TOD_sim_fp = []

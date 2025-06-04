@@ -112,7 +112,7 @@ class PresetTools:
             elif self.params["QUBIC"]["instrument"] == "UWB":
                 print("        Type : Ultra Wide Band")
             else:
-                print("        Type : Multi Bands")
+                print("        Type : Mono Band")
             print("    - Sky In :")
             print(f"        CMB : {self.params['CMB']['cmb']}")
             print(f"        Dust : {self.params['Foregrounds']['Dust']['Dust_in']} - {self.params['Foregrounds']['Dust']['model_d']}")

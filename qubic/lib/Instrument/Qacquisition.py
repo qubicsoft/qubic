@@ -1080,8 +1080,6 @@ class OtherDataParametric:
                     fwhm = 0
 
                 C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=3 * self.nside - 1)
-                C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=3 * self.nside - 1)
-
                 D = self._get_mixing_operator(A=A[k])
 
                 ope_i += [C * D]
@@ -1224,7 +1222,6 @@ class JointAcquisitionComponentsMapMaking:
 
     def get_invntt_operator(self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot, fact=None, mask=None):
         invNq = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)
-        print("\n\n\ninvNq", invNq)
         R = ReshapeOperator(invNq.shapeout, invNq.shape[0])
 
         invNe = self.external.get_invntt_operator(planck_ntot, fact=fact, mask=mask)

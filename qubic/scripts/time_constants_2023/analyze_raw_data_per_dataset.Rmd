@@ -7,20 +7,21 @@ from importlib import reload
 import numpy as np
 from pathlib import Path
 from matplotlib.pyplot import *
-# %matplotlib notebook
-from IPython.display import display, HTML
-display(HTML("<style>.container { width:97% !important; }</style>"))
+# %matplotlib inline
+
+# from IPython.display import display, HTML
+# display(HTML("<style>.container { width:97% !important; }</style>"))
 
 from scipy.ndimage import gaussian_filter1d as gauss_filter
 from scipy.signal import savgol_filter
 from qubicpack.qubicfp import qubicfp
-from qubic import fibtools as ft
+from qubic.lib.Calibration import Qfiber as ft
 from qubic import time_constants_tools as tct
 ```
 
 ```{python}
 # base_dir = '/sps/qubic/Data/Calib-TD/'
-base_dir = '/media/nahue/files_hdd/heavy-data/'
+# base_dir = '/media/nahue/files_hdd/heavy-data/'
 # base_save_path = '/media/nahue/files_hdd/heavy-data'
 # specific_save_folder = '/time_constants_results/all_TC_datasets_my_computer_2'
 # save_path = base_save_path+specific_save_folder
@@ -28,27 +29,34 @@ base_dir = '/media/nahue/files_hdd/heavy-data/'
 # Path(save_path).mkdir( parents=True, exist_ok=True )
     
 # print(save_path)
+
+# base_dir = '/home/nahue/Downloads/'
+# base_dir = '/home/nahue-ofi/heavy-data/'
+base_dir = '/home/nahue-ofi/Nextcloud/time-constants/'
+# base_dir = '/home/nahue-ofi/Downloads/'
+# base_dir = '/media/nahue/files_hdd/heavy-data/'
+
 ```
 
 ```{python}
 days = ['2019-06-27','2019-07-03','2019-11-12','2019-11-14','2020-07-24','2020-07-25',
 	'2020-07-27','2020-10-16','2020-11-12','2022-04-06','2022-08-18','2022-08-24',
-	'2023-03-02','2023-03-07','2023-03-31','2023-04-03','2023-04-17','2023-05-24']
+	'2023-03-02','2023-03-07','2023-03-31','2023-04-03','2023-04-17','2023-05-24','2025-05-22']
 
 keywords = ['*TimeCst*','*Fibers*','*New*'+'*TimeCstScript*','*TimeCstScript*','*TimeCstScript*',
 	    '*TimeCstScript*','*TimeCstScript*','*TimeCstScript*','*carbonfibre*',
 	    '*NoiseMeasurement_FileDuration_CalSourceON180*','*timeconstant_TimePerPos*','*TimeCstScript*',
-	    '*calsource','*DomeOpen-Amp*','*CF-0*','*CFiber_square*','*carbon-fiber_0.2*','*__calsource*']
+	    '*calsource','*DomeOpen-Amp*','*CF-0*','*CFiber_square*','*carbon-fiber_0.2*','*__calsource*','*carbonfibre*']
 
 fmods = [[0.25],[0.25],[0.6],[0.6],[0.6],[0.6],[0.6],[0.6],[0.8],[0.2],[None],[0.3],[0.2],
-	 [0.2, 0.7],[0.6, 0.6, 0.2, 0.2],[0.2],[0.2],[None]]
+	 [0.2, 0.7],[0.6, 0.6, 0.2, 0.2],[0.2],[0.2],[None],[0.2]]
 
 dcs = [[30],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],[33.33333],
-       [33],[60],[None],[30],[66],[66, 66],[33, 66, 66, 66],[33],[33],[None]]
+       [33],[60],[None],[30],[66],[66, 66],[33, 66, 66, 66],[33],[33],[None],[50,33,33,33]]
 ```
 
 ```{python}
-numberday = -4
+numberday = -1
 day = days[numberday]
 keyword = keywords[numberday]
 
@@ -57,6 +65,10 @@ thedirs = np.sort(glob.glob(data_dir+keyword))
 
 for j,thedir in enumerate(thedirs):
     print(j,thedir)
+```
+
+```{python}
+# len(keywords)
 ```
 
 ```{python}
@@ -79,6 +91,10 @@ a.read_qubicstudio_dataset(thedatadir)
 # print(calsource_dict['modulator'])
 # print(calsource_dict['cf'])
 # caltime, calsourcedata = a.calsource()
+```
+
+```{python}
+
 ```
 
 ```{python}
@@ -439,7 +455,7 @@ def simulate_squaremodulated_tod(modulation_frequency = 0.2, sampling_frequency 
                 exponential_signal = exponential_signal[:len(slow_part)]
                 noise = noise[:len(slow_part)]
         except:
-            prtin('Something wrong with the given slow_part array. Taking default')
+            print('Something wrong with the given slow_part array. Taking default')
             slow_part = 1e-4 * amplitude * (time-np.max(time)/2)**2
 
     ## final simulated tod
@@ -484,7 +500,7 @@ tt2 = a.timeaxis(asic=2)
 tod1 = a.timeline_array(asic=1)
 tod2 = a.timeline_array(asic=2)
 
-force_sync = True
+force_sync = False
 
 if force_sync == True:
     
@@ -492,6 +508,8 @@ if force_sync == True:
     tt2 -= tt2[0]
 
 else:
+
+    t_init = np.min([tt1[0],tt2[0]])
 
     tt1 -= t_init
     tt2 -= t_init
@@ -501,13 +519,14 @@ tesnum = 96
 t_folded = tt1 % period
 
 tod = tod1[tesnum-1]
-slowpart_tod = savgol_filter(tod, int(len(tod)/10), 4)
+slowpart_tod = savgol_filter(tod, int(len(tod)/10), 3)
 flat_tod = tod-slowpart_tod
 
 figure(figsize=(8,4))
 title(f'Raw TOD TES {tesnum}\n {dataset_info}')
 plot(tt1,tod,label='Raw signal')
-plot(tt1,smoothed_tod,label='Slow behaviour')
+# plot(tt1,smoothed_tod,label='Slow behaviour')
+plot(tt1,slowpart_tod,label='Slow behaviour')
 xlabel('Time [s]')
 ylabel('ADU')
 legend()
@@ -575,16 +594,20 @@ tight_layout
 
 ## Simulating an exponential signal
 
+
+## Simulating an exponential signal
+
 ```{python}
-noise_level = 3
-slow_part = 10*slowpart_tod
+noise_level = 0.1
+slow_part = 0*slowpart_tod
 nperiods = 140
 fmod = 0.2
 period = 1/fmod
 fsam = 150
 dc = 66
+dc = 66
 risetime_par = 0.05
-falltime_par = 0.12
+falltime_par = 0.3
 t0 = 0.5
 amplitude = 25000
 offset = 0
@@ -615,207 +638,323 @@ elif typefit == 'just_exp':
     nparams_ext = 0
     fctfit = tct.simsig_asym
 
-    
-    
-    
+nbins_array = [50,75,100,200,500]    
 N = 100
+doplot=True
 
-risetime = np.zeros(N)
-riseerr = np.zeros(N)
-falltime = np.zeros(N)
-fallerr = np.zeros(N)
+risetime = np.zeros((N,len(nbins_array)))
+riseerr = np.zeros((N,len(nbins_array)))
+falltime = np.zeros((N,len(nbins_array)))
+fallerr = np.zeros((N,len(nbins_array)))
 
-risetime_flat = np.zeros(N)
-riseerr_flat = np.zeros(N)
-falltime_flat = np.zeros(N)
-fallerr_flat = np.zeros(N)
+risetime_flat = np.zeros((N,len(nbins_array)))
+riseerr_flat = np.zeros((N,len(nbins_array)))
+falltime_flat = np.zeros((N,len(nbins_array)))
+fallerr_flat = np.zeros((N,len(nbins_array)))
 
-for i in range(N):
-    time, simulated_tod, simulated_tod_noslowpart, simulated_tod_just_exponential, time_period, exponential_signal_one_period = simulate_squaremodulated_tod(exponential_pars = exponential_pars, modulation_frequency=fmod, sampling_frequency=fsam, nperiods=nperiods,noise_level=noise_level,slow_part=slow_part)
+for i_nbins, nbins in enumerate(nbins_array):
+    for i in range(N):
+        time, simulated_tod, simulated_tod_noslowpart, simulated_tod_just_exponential, time_period, exponential_signal_one_period = simulate_squaremodulated_tod(exponential_pars = exponential_pars, modulation_frequency=fmod, sampling_frequency=fsam, nperiods=nperiods,noise_level=noise_level,slow_part=slow_part)
+    
+        flat_simulated_tod, slowpart_simulated_tod = baseline_subtraction(time,simulated_tod,period=period)
+    
+    
+        # figure(figsize=(8,4))
+        # title(f'Simulated TOD with S/N = {1/noise_level}')
+        # plot(time,simulated_tod,label='Simulated TOD')
+        # plot(time, slowpart_simulated_tod,label='Slowly varying part')
+        # xlabel('Time [s]')
+        # ylabel('ADU')
+        # legend()
+        # grid()
+        # tight_layout
+    
+        # figure(figsize=(8,4))
+        # title('Flattened simulated TOD')
+        # plot(time, flat_simulated_tod)
+        # grid()
+        # xlabel('Time [s]')
+        # ylabel('ADU')
+        # tight_layout
+    
+        # spectrum_st, freq_st = ft.power_spectrum(time, simulated_tod, rebin=True)
+        # spectrum_fst, freq_fst = ft.power_spectrum(time, flat_simulated_tod, rebin=True)
+    
+        # figure(figsize=(8,4))
+        # plot(freq_st, gauss_filter(spectrum_st,1),'.',label='Simulated TOD')
+        # plot(freq_fst, gauss_filter(spectrum_fst,1),label='Flattened sim TOD')
+        # yscale('log')
+        # xscale('log')
+        # xlabel('Frequency [Hz]')
+        # ylabel('Smoothed PSD')
+        # title('Simulated TOD')
+        # grid()
+        # legend()
+    
+        # figure(figsize=(8,4))
+        # plot(freq_st, spectrum_st/spectrum_fst,'.',label='PSD(signal)/PSD(flatsignal)')
+        # plot(freq_st, gauss_filter(spectrum_st,1)/gauss_filter(spectrum_fst,1),label='Smoothed PSD(signal)/PSD(flatsignal)')
+        # yscale('log')
+        # xscale('log')
+        # xlabel('Frequency [Hz]')
+        # ylabel('PSD ratio')
+        # title('Simulated TOD')
+        # grid()
+        # legend()
+    
+        folded, t_fold, folded_nonorm, dfolded, dfolded_nonorm, newdata= ft.fold_data(time, np.reshape(simulated_tod, (1,len(simulated_tod))), period, nbins,
+                                                                                             return_error=True)
+        folded = folded[0,:]
+        dfolded = dfolded[0,:]
+        folded_nonorm = folded_nonorm[0,:]
+        dfolded_nonorm = dfolded_nonorm[0,:]
+    
+        if doplot== True:
+            if i==0 or i==N-1:
+                if i_nbins==0 or nbins==nbins_array[-1]:
+                    figure(figsize=(8,4))
+                    errorbar(t_fold,folded_nonorm,yerr=dfolded_nonorm,fmt='ko',label='Computed folded data',zorder=2)
+                    plot(time_period,exponential_signal_one_period-np.mean(exponential_signal_one_period),'.',zorder=3,label=f'Actual periodic signal \n risetime:{exponential_pars[1]:.2f} \n falltime:{exponential_pars[2]:.2f}')
+                    title(f'Raw simulated TOD + ft.fold_data() + fit')
+                    xlabel('Time [s]')
+                    ylabel('Folded data [ADU]')
+    
+        ## to fit
+        t = t_fold
+        tofit = folded_nonorm
+        errors = dfolded_nonorm
+    
+        guess, allguess = tct.get_best_initial_guess(tofit = tofit, t = t, nbins = nbins, dutycycle = dutycycle, risetime = risetime_guess, falltime = falltime_guess, nparams_ext = nparams_ext, typefit = typefit, fctfit = fctfit)
+    
+        limits = [[0,np.maximum(guess[0]-0.2,0.),guess[0]+0.2], [1,0., guess[1]*10],
+                  [2,0., guess[2]*10], [3,guess[3]-period/2,guess[3]+period/2],
+                  [4,-1.2*np.abs(guess[4]),1.2*np.abs(guess[4])],[5,np.min(tofit)-0.1*np.abs(guess[4]),np.max(tofit)+0.1*np.abs(guess[4])]]
+    
+        ### Fixed parameters
+        fixpars = []
+    
+        m, ch2, ndf = tct.fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
+    
+        ch2vals_folded = ch2
+        ndfvals_folded = ndf
+        dcfit_folded = m.values[0]
+        dcerr_folded = m.errors[0]
+        risefit_folded = m.values[1]
+        riseerr_folded = m.errors[1]
+        fallfit_folded = m.values[2]
+        fallerr_folded = m.errors[2]
+        t0fit_folded = m.values[3]
+        t0err_folded = m.errors[3]
+        ampfit_folded = m.values[4]
+        amperr_folded = m.errors[4]
+        validfit_folded = m.valid
+        allpars_folded = np.array(m.values)
+        allerrs_folded = np.array(m.errors)
 
-    flat_simulated_tod, slowpart_simulated_tod = baseline_subtraction(time,simulated_tod,period=period)
+        if doplot== True:
+            if i==0 or i==N-1:
+                if i_nbins==0 or nbins==nbins_array[-1]:   
+                    plot(t_fold,fctfit(t_fold,allguess),'--',label='Initial guess',zorder=4)
+                    plot(t_fold,fctfit(t_fold,allpars_folded),zorder=5,label = f'Best fit\n risetime:{risefit_folded:.3f} +/-{riseerr_folded:.4f}\n falltime:{fallfit_folded:.3f} +/-{fallerr_folded:.4f}')
+                
+                    legend()
+                    grid()
+                    tight_layout
+    
+        risetime[i,i_nbins] = risefit_folded
+        riseerr[i,i_nbins] = riseerr_folded
+        falltime[i,i_nbins] = fallfit_folded
+        fallerr[i,i_nbins] = fallerr_folded
+    
+        ### for flattened simulated tod
+    
+        folded, t_fold, folded_nonorm, dfolded, dfolded_nonorm, newdata= ft.fold_data(time, np.reshape(flat_simulated_tod, (1,len(flat_simulated_tod))), period, nbins,
+                                                                                             return_error=True)
+        folded = folded[0,:]
+        dfolded = dfolded[0,:]
+        folded_nonorm = folded_nonorm[0,:]
+        dfolded_nonorm = dfolded_nonorm[0,:]
 
+        if doplot== True:
+            if i==0 or i==N-1:
+                if i_nbins==0 or nbins==nbins_array[-1]:
+                    figure(figsize=(8,4))
+                    errorbar(t_fold,folded_nonorm,yerr=dfolded_nonorm,fmt='ko',label='Computed folded data',zorder=2)
+                    plot(time_period,exponential_signal_one_period-np.mean(exponential_signal_one_period),'.',zorder=3,label=f'Actual periodic signal \n risetime:{exponential_pars[1]:.2f} \n falltime:{exponential_pars[2]:.2f}')
+                    title(f'Flattened simulated TOD + ft.fold_data() + fit')
+                    xlabel('Time [s]')
+                    ylabel('Folded data [ADU]')
+    
+        ## to fit
+        t = t_fold
+        tofit = folded_nonorm
+        errors = dfolded_nonorm
+    
+        ## same type fit and cd, rt, ft guess than before
+    
+        guess, allguess = tct.get_best_initial_guess(tofit = tofit, t = t, nbins = nbins, dutycycle = dutycycle, risetime = risetime_guess, falltime = falltime_guess, nparams_ext = nparams_ext, typefit = typefit, fctfit = fctfit)
+    
+        limits = [[0,np.maximum(guess[0]-0.2,0.),guess[0]+0.2], [1,0., guess[1]*10],
+                  [2,0., guess[2]*10], [3,guess[3]-period/2,guess[3]+period/2],
+                  [4,-1.2*np.abs(guess[4]),1.2*np.abs(guess[4])],[5,np.min(tofit)-0.1*np.abs(guess[4]),np.max(tofit)+0.1*np.abs(guess[4])]]
+    
+        ### Fixed parameters
+        # fixpars = [1,0,0,0,0,0]
+        fixpars = []
+    
+        m, ch2, ndf = tct.fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
+    
+        ch2vals_folded = ch2
+        ndfvals_folded = ndf
+        dcfit_folded = m.values[0]
+        dcerr_folded = m.errors[0]
+        risefit_folded = m.values[1]
+        riseerr_folded = m.errors[1]
+        fallfit_folded = m.values[2]
+        fallerr_folded = m.errors[2]
+        t0fit_folded = m.values[3]
+        t0err_folded = m.errors[3]
+        ampfit_folded = m.values[4]
+        amperr_folded = m.errors[4]
+        validfit_folded = m.valid
+        allpars_folded = np.array(m.values)
+        allerrs_folded = np.array(m.errors)
 
-    # figure(figsize=(8,4))
-    # title(f'Simulated TOD with S/N = {1/noise_level}')
-    # plot(time,simulated_tod,label='Simulated TOD')
-    # plot(time, slowpart_simulated_tod,label='Slowly varying part')
-    # xlabel('Time [s]')
-    # ylabel('ADU')
-    # legend()
-    # grid()
-    # tight_layout
-
-    # figure(figsize=(8,4))
-    # title('Flattened simulated TOD')
-    # plot(time, flat_simulated_tod)
-    # grid()
-    # xlabel('Time [s]')
-    # ylabel('ADU')
-    # tight_layout
-
-    # spectrum_st, freq_st = ft.power_spectrum(time, simulated_tod, rebin=True)
-    # spectrum_fst, freq_fst = ft.power_spectrum(time, flat_simulated_tod, rebin=True)
-
-    # figure(figsize=(8,4))
-    # plot(freq_st, gauss_filter(spectrum_st,1),'.',label='Simulated TOD')
-    # plot(freq_fst, gauss_filter(spectrum_fst,1),label='Flattened sim TOD')
-    # yscale('log')
-    # xscale('log')
-    # xlabel('Frequency [Hz]')
-    # ylabel('Smoothed PSD')
-    # title('Simulated TOD')
-    # grid()
-    # legend()
-
-    # figure(figsize=(8,4))
-    # plot(freq_st, spectrum_st/spectrum_fst,'.',label='PSD(signal)/PSD(flatsignal)')
-    # plot(freq_st, gauss_filter(spectrum_st,1)/gauss_filter(spectrum_fst,1),label='Smoothed PSD(signal)/PSD(flatsignal)')
-    # yscale('log')
-    # xscale('log')
-    # xlabel('Frequency [Hz]')
-    # ylabel('PSD ratio')
-    # title('Simulated TOD')
-    # grid()
-    # legend()
-
-    folded, t_fold, folded_nonorm, dfolded, dfolded_nonorm, newdata= ft.fold_data(time, np.reshape(simulated_tod, (1,len(simulated_tod))), period, nbins,
-                                                                                         return_error=True)
-    folded = folded[0,:]
-    dfolded = dfolded[0,:]
-    folded_nonorm = folded_nonorm[0,:]
-    dfolded_nonorm = dfolded_nonorm[0,:]
-
-    # figure(figsize=(8,4))
-    # errorbar(t_fold,folded_nonorm,yerr=dfolded_nonorm,fmt='ko',label='Computed folded data',zorder=2)
-    # plot(time_period,exponential_signal_one_period-np.mean(exponential_signal_one_period),'.',zorder=3,label=f'Actual periodic signal \n risetime:{exponential_pars[1]:.2f} \n falltime:{exponential_pars[2]:.2f}')
-    # title(f'Raw simulated TOD + ft.fold_data() + fit')
-    # xlabel('Time [s]')
-    # ylabel('Folded data [ADU]')
-
-    ## to fit
-    t = t_fold
-    tofit = folded_nonorm
-    errors = dfolded_nonorm
-
-    guess, allguess = tct.get_best_initial_guess(tofit = tofit, t = t, nbins = nbins, dutycycle = dutycycle, risetime = risetime_guess, falltime = falltime_guess, nparams_ext = nparams_ext, typefit = typefit, fctfit = fctfit)
-
-    limits = [[0,np.maximum(guess[0]-0.2,0.),guess[0]+0.2], [1,0., guess[1]*10],
-              [2,0., guess[2]*10], [3,guess[3]-period/2,guess[3]+period/2],
-              [4,-1.2*np.abs(guess[4]),1.2*np.abs(guess[4])],[5,np.min(tofit)-0.1*np.abs(guess[4]),np.max(tofit)+0.1*np.abs(guess[4])]]
-
-    ### Fixed parameters
-    fixpars = []
-
-    m, ch2, ndf = tct.fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
-
-    ch2vals_folded = ch2
-    ndfvals_folded = ndf
-    dcfit_folded = m.values[0]
-    dcerr_folded = m.errors[0]
-    risefit_folded = m.values[1]
-    riseerr_folded = m.errors[1]
-    fallfit_folded = m.values[2]
-    fallerr_folded = m.errors[2]
-    t0fit_folded = m.values[3]
-    t0err_folded = m.errors[3]
-    ampfit_folded = m.values[4]
-    amperr_folded = m.errors[4]
-    validfit_folded = m.valid
-    allpars_folded = np.array(m.values)
-    allerrs_folded = np.array(m.errors)
-
-    # plot(t_fold,fctfit(t_fold,allguess),'--',label='Initial guess',zorder=4)
-    # plot(t_fold,fctfit(t_fold,allpars_folded),zorder=5,label = f'Best fit\n risetime:{risefit_folded:.3f} +/-{riseerr_folded:.4f}\n falltime:{fallfit_folded:.3f} +/-{fallerr_folded:.4f}')
-
-    # legend()
-    # grid()
-    # tight_layout
-
-    risetime[i] = risefit_folded
-    riseerr[i] = riseerr_folded
-    falltime[i] = fallfit_folded
-    fallerr[i] = fallerr_folded
-
-    ### for flattened simulated tod
-
-    folded, t_fold, folded_nonorm, dfolded, dfolded_nonorm, newdata= ft.fold_data(time, np.reshape(flat_simulated_tod, (1,len(flat_simulated_tod))), period, nbins,
-                                                                                         return_error=True)
-    folded = folded[0,:]
-    dfolded = dfolded[0,:]
-    folded_nonorm = folded_nonorm[0,:]
-    dfolded_nonorm = dfolded_nonorm[0,:]
-
-    # figure(figsize=(8,4))
-    # errorbar(t_fold,folded_nonorm,yerr=dfolded_nonorm,fmt='ko',label='Computed folded data',zorder=2)
-    # plot(time_period,exponential_signal_one_period-np.mean(exponential_signal_one_period),'.',zorder=3,label=f'Actual periodic signal \n risetime:{exponential_pars[1]:.2f} \n falltime:{exponential_pars[2]:.2f}')
-    # title(f'Flattened simulated TOD + ft.fold_data() + fit')
-    # xlabel('Time [s]')
-    # ylabel('Folded data [ADU]')
-
-    ## to fit
-    t = t_fold
-    tofit = folded_nonorm
-    errors = dfolded_nonorm
-
-    ## same type fit and cd, rt, ft guess than before
-
-    guess, allguess = tct.get_best_initial_guess(tofit = tofit, t = t, nbins = nbins, dutycycle = dutycycle, risetime = risetime_guess, falltime = falltime_guess, nparams_ext = nparams_ext, typefit = typefit, fctfit = fctfit)
-
-    limits = [[0,np.maximum(guess[0]-0.2,0.),guess[0]+0.2], [1,0., guess[1]*10],
-              [2,0., guess[2]*10], [3,guess[3]-period/2,guess[3]+period/2],
-              [4,-1.2*np.abs(guess[4]),1.2*np.abs(guess[4])],[5,np.min(tofit)-0.1*np.abs(guess[4]),np.max(tofit)+0.1*np.abs(guess[4])]]
-
-    ### Fixed parameters
-    # fixpars = [1,0,0,0,0,0]
-    fixpars = []
-
-    m, ch2, ndf = tct.fit_one(t, tofit, errors, allguess, fctfit = fctfit, limits=limits, fixpars=fixpars)
-
-    ch2vals_folded = ch2
-    ndfvals_folded = ndf
-    dcfit_folded = m.values[0]
-    dcerr_folded = m.errors[0]
-    risefit_folded = m.values[1]
-    riseerr_folded = m.errors[1]
-    fallfit_folded = m.values[2]
-    fallerr_folded = m.errors[2]
-    t0fit_folded = m.values[3]
-    t0err_folded = m.errors[3]
-    ampfit_folded = m.values[4]
-    amperr_folded = m.errors[4]
-    validfit_folded = m.valid
-    allpars_folded = np.array(m.values)
-    allerrs_folded = np.array(m.errors)
-
-    # plot(t_fold,fctfit(t_fold,allguess),'--',label='Initial guess',zorder=4)
-    # plot(t_fold,fctfit(t_fold,allpars_folded),zorder=5,label = f'Best fit\n risetime:{risefit_folded:.3f} +/-{riseerr_folded:.4f}\n falltime:{fallfit_folded:.3f} +/-{fallerr_folded:.4f}')
-
-    # legend()
-    # grid()
-    # tight_layout
-
-    risetime_flat[i] = risefit_folded
-    riseerr_flat[i] = riseerr_folded
-    falltime_flat[i] = fallfit_folded
-    fallerr_flat[i] = fallerr_folded
+        if doplot== True:
+            if i==0 or i==N-1:
+                if i_nbins==0 or nbins==nbins_array[-1]:
+                    plot(t_fold,fctfit(t_fold,allguess),'--',label='Initial guess',zorder=4)
+                    plot(t_fold,fctfit(t_fold,allpars_folded),zorder=5,label = f'Best fit\n risetime:{risefit_folded:.3f} +/-{riseerr_folded:.4f}\n falltime:{fallfit_folded:.3f} +/-{fallerr_folded:.4f}')
+                
+                    legend()
+                    grid()
+                    tight_layout
+    
+        risetime_flat[i,i_nbins] = risefit_folded
+        riseerr_flat[i,i_nbins] = riseerr_folded
+        falltime_flat[i,i_nbins] = fallfit_folded
+        fallerr_flat[i,i_nbins] = fallerr_folded
     
 ```
 
 ```{python}
-figure()
-errorbar(np.arange(N),risetime,yerr=riseerr,fmt='.',label='raw tod')
-errorbar(np.arange(N),risetime_flat,yerr=riseerr_flat,fmt='.',label='flattened tod')
+figure(0)
+time_limit = 30
+plot(time[time<time_limit],simulated_tod[time<time_limit],'.',label='sim tod')
+plot(time[time<time_limit],flat_simulated_tod[time<time_limit],'.',label='flat sim tod')
+# errorbar(np.arange(N),risetime_flat,yerr=riseerr_flat,fmt='.',label='flattened tod')
+# axhline(risetime_par,linestyle='--',color='gray')
+grid()
+legend()
+tight_layout
+
+for i_nbins,nbins in enumerate(nbins_array):
+    figure(1)
+    if i_nbins==0:
+        errorbar(np.arange(N),risetime[:,i_nbins],yerr=riseerr[:,i_nbins],fmt='.',color='C0',label='raw tod')
+        errorbar(np.arange(N),risetime_flat[:,i_nbins],yerr=riseerr_flat[:,i_nbins],fmt='.',color='C1',label='flattened tod')
+    errorbar(np.arange(N),risetime[:,i_nbins],yerr=riseerr[:,i_nbins],fmt='.',color='C0')
+    errorbar(np.arange(N),risetime_flat[:,i_nbins],yerr=riseerr_flat[:,i_nbins],fmt='.',color='C1')
+
+    
+    figure(2)
+    if i_nbins==0:
+        errorbar(np.arange(N),falltime[:,i_nbins],yerr=fallerr[:,i_nbins],fmt='.',color='C0',label='raw tod')
+        errorbar(np.arange(N),falltime_flat[:,i_nbins],yerr=fallerr_flat[:,i_nbins],fmt='.',color='C1',label='flattened tod')
+    errorbar(np.arange(N),falltime[:,i_nbins],yerr=fallerr[:,i_nbins],fmt='.',color='C0')
+    errorbar(np.arange(N),falltime_flat[:,i_nbins],yerr=fallerr_flat[:,i_nbins],fmt='.',color='C1')
+
+
+figure(1)
 axhline(risetime_par,linestyle='--',color='gray')
+grid()
+legend()
+tight_layout
+
+figure(2)
+axhline(falltime_par,linestyle='--',color='gray')
+grid()
+legend()
+tight_layout
+```
+
+```{python}
+figure()
+for i_nbins,nbins in enumerate(nbins_array):
+    # hist_bins = 
+    hist(risetime[:,i_nbins],30,alpha=0.5,label=f'Nbins = {nbins}')
+
+axvline(risetime_par,linestyle='--',color='gray')
+title('Risetime from raw TOD - hist over noise realizations')
+grid()
+legend()
+tight_layout
+
+figure()
+for i_nbins,nbins in enumerate(nbins_array):
+    hist(falltime[:,i_nbins],30,alpha=0.5,label=f'Nbins = {nbins}')
+
+axvline(falltime_par,linestyle='--',color='gray')
+title('Falltime from raw TOD - hist over noise realizations')
+grid()
+legend()
+tight_layout
+
+figure()
+for i_nbins,nbins in enumerate(nbins_array):
+    # hist_bins = 
+    hist(risetime_flat[:,i_nbins],30,alpha=0.5,label=f'Nbins = {nbins}')
+
+axvline(risetime_par,linestyle='--',color='gray')
+title('Risetime from flat TOD - hist over noise realizations')
+grid()
+legend()
+tight_layout
+
+figure()
+for i_nbins,nbins in enumerate(nbins_array):
+    hist(falltime_flat[:,i_nbins],30,alpha=0.5,label=f'Nbins = {nbins}')
+
+axvline(falltime_par,linestyle='--',color='gray')
+title('Falltime from flat TOD - hist over noise realizations')
+grid()
+legend()
+tight_layout
+```
+
+```{python}
+figure()
+plot(nbins_array,np.mean(risetime,axis=0),'.')
+axhline(risetime_par,linestyle='--',color='gray')
+title('Mean risetime over noise realizations from raw TOD')
 grid()
 legend()
 tight_layout
 
 
 figure()
-errorbar(np.arange(N),falltime,yerr=fallerr,fmt='.',label='raw tod')
-errorbar(np.arange(N),falltime_flat,yerr=fallerr_flat,fmt='.',label='flattened tod')
+plot(nbins_array,np.mean(falltime,axis=0),'.')
 axhline(falltime_par,linestyle='--',color='gray')
+title('Mean falltime over noise realizations from raw TOD')
+# xscale('log')
+grid()
+legend()
+tight_layout
+
+figure()
+plot(nbins_array,np.mean(risetime_flat,axis=0),'.')
+axhline(risetime_par,linestyle='--',color='gray')
+title('Mean risetime over noise realizations from flat TOD')
+grid()
+legend()
+tight_layout
+
+
+figure()
+plot(nbins_array,np.mean(falltime_flat,axis=0),'.')
+axhline(falltime_par,linestyle='--',color='gray')
+title('Mean falltime over noise realizations from flat TOD')
+# xscale('log')
 grid()
 legend()
 tight_layout

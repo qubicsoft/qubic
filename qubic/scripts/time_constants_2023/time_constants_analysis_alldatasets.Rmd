@@ -35,7 +35,7 @@ from matplotlib import pyplot as plt
 from IPython.display import display, HTML
 display(HTML("<style>.container { width:97% !important; }</style>"))
 
-# %matplotlib notebook
+# %matplotlib inline
 rc('figure',figsize=(11,6))
 rc('font',size=12)
 
@@ -49,7 +49,8 @@ rc('font',size=12)
 Define the path where all the dictionaries are stored and then construct a list with those dictionaries
 
 ```{python}
-save_path = '/media/nahue/files_hdd/heavy-data/time_constants_results/all_TC_datasets_up_to_may_2023_3/'
+# save_path = '/media/nahue/files_hdd/heavy-data/time_constants_results/all_TC_datasets_up_to_may_2023_3/'
+save_path = '/home/nahue-ofi/Nextcloud/time-constants/time_constants_results/all_TC_datasets_up_to_may_2023_3/'
 # save_path = '/media/nahue/files_hdd/heavy-data/all_TC_datasets_up_to_may_2023/'
 # save_path = '/home/nahue/Downloads/2023-04-17/results/'
 thedicts = np.sort(glob.glob(save_path+'d__*'))
@@ -111,7 +112,7 @@ dicts_to_delete = np.array([ '/media/nahue/files_hdd/heavy-data/alldatasets_to_m
 
 for dict_to_delete in dicts_to_delete:
     thedicts = np.delete(thedicts, np.where(thedicts == dict_to_delete)[0])
-# print(thedicts)
+print(thedicts)
 ```
 
 ### Load the dictionaries
@@ -199,6 +200,8 @@ tesnum = 21
 
 tes_to_plot = [21,96,95,203]
 
+tes_to_plot = [96]
+
 figure(3)
 
 ax = axes()
@@ -252,7 +255,7 @@ figure(5)
 ax = axes()
 ax.set_axisbelow(True)
 ax.set_title('TES #{} for all the datasets'.format(tes_to_plot))
-ax.set_ylabel('Time constant [ ms ]')
+ax.set_ylabel('Risetime [ ms ]')
 ax.set_xlabel('Amplitude [ADU]')
 ax.set_xscale("log")
 ax.set_yscale("log")
@@ -260,6 +263,24 @@ grid(which='both',linestyle='--')
 for tesnum in tes_to_plot:
     colors = cmap(0.1+0.9*(Vbias[ok_fortes[tesnum-1]]-np.min(Vbias[ok_fortes[tesnum-1]]))/(np.max(Vbias[ok_fortes[tesnum-1]])-np.min(Vbias[ok_fortes[tesnum-1]])))
     ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*rt[ok_fortes[tesnum-1],tesnum-1],alpha=0.9,c=colors)#,label='Risetime')
+    # ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*ft[ok_fortes[tesnum-1],tesnum-1],alpha=0.9,c=colors)#,label='Falltime')
+
+# legend()
+tight_layout
+
+figure(6)
+
+ax = axes()
+ax.set_axisbelow(True)
+ax.set_title('TES #{} for all the datasets'.format(tes_to_plot))
+ax.set_ylabel('Falltime [ ms ]')
+ax.set_xlabel('Amplitude [ADU]')
+ax.set_xscale("log")
+ax.set_yscale("log")
+grid(which='both',linestyle='--')
+for tesnum in tes_to_plot:
+    colors = cmap(0.1+0.9*(Vbias[ok_fortes[tesnum-1]]-np.min(Vbias[ok_fortes[tesnum-1]]))/(np.max(Vbias[ok_fortes[tesnum-1]])-np.min(Vbias[ok_fortes[tesnum-1]])))
+    # ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*rt[ok_fortes[tesnum-1],tesnum-1],alpha=0.9,c=colors)#,label='Risetime')
     ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1]),1e3*ft[ok_fortes[tesnum-1],tesnum-1],alpha=0.9,c=colors)#,label='Falltime')
 
 # legend()

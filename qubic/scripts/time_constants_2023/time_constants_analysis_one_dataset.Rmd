@@ -39,13 +39,15 @@ from qubic import time_constants_tools as tct
 ```{python}
 ## Select a dataset corresponding to the TC measurement thorugh square modulation (external calsource or carbon fibres)
 # day = '2023-03-31'
-day = '2023-04-17'
+# day = '2023-04-17'
+day = '2025-05-22'
 # base_dir = '/home/nahue/Downloads/'
 # base_dir = '/home/nahue-ofi/heavy-data/'
-base_dir = '/home/nahue-ofi/Nextcloud/'
+base_dir = '/home/nahue-ofi/Nextcloud/time-constants/'
+# base_dir = '/home/nahue-ofi/Downloads/'
 # base_dir = '/media/nahue/files_hdd/heavy-data/'
 data_dir = base_dir + day + '/'
-thedirs = np.sort(glob.glob(data_dir+'*12.55.04*'))
+thedirs = np.sort(glob.glob(data_dir+'*carbonfibre*'))
 
 ## today 2025-05-27, I need to analyze
 # Vbias = 2.8V
@@ -85,7 +87,7 @@ for i in range(len(thedirs)):
 # params_poly = 1
 # typefit = 'just_exp'
 
-numfile = 0
+numfile = 2
 thedatadir = thedirs[numfile]
 
 print('We will analyse:')
@@ -113,7 +115,7 @@ saveplot = ['folded_data','focal_plane']#None
 save_dict = True
 force_sync = True
 fmod = 0.2 #None
-dutycycle = 33 #None
+dutycycle = 50 #None
 
 d = tct.compute_tc_squaremod(thedatadir, save_path = save_path, only_overview = only_overview, doplot = doplot,
                              saveplot = saveplot, save_dict = save_dict, fmod_explicit = fmod, dutycycle_explicit = dutycycle,
@@ -126,57 +128,89 @@ d = tct.compute_tc_squaremod(thedatadir, save_path = save_path, only_overview = 
 ```
 
 ```{python}
-
-```
-
-```{python}
-os.chdir(save_path)
 alldic = {}
 
-# thedirs = thedatadir
-# print(thedatadir)
-# print(np.shape(thedirs))
-for i,thedatadir_i in enumerate(thedirs):
+results_dir = '/home/nahue-ofi/Nextcloud/time-constants/2025-05-22/results/'
+thedirs_results = np.sort(glob.glob(results_dir+'*d__*'))
+
+print(thedirs_results)
+
+for i,thedatadir_i in enumerate(thedirs_results):
     try:
-        alldic['{}'.format(i+1)] = np.load('d__{}.npy'.format(str.split(thedatadir_i,'/')[-1]),allow_pickle=True).item()
+        alldic['{}'.format(i+1)] = np.load(thedatadir_i,allow_pickle=True).item()
     except:
         print('No directory')
 ```
 
 ```{python}
-figure()
+# base_dir = '/home/nahue-ofi/Nextcloud/'
+# data_dir = base_dir + 'time-constants/time_constants_results/all_TC_datasets_up_to_may_2023_3/'
+# thedirs = np.sort(glob.glob(data_dir+'*d__*'))
+
+# os.chdir(save_path)
+# alldic = {}
+
+# print(thedirs)
+# print(np.shape(thedirs))
+
+# for i,thedatadir_i in enumerate(thedirs):
+#     try:
+#         alldic['{}'.format(i+1)] = np.load(thedatadir_i,allow_pickle=True).item()
+#     except:
+#         print('No directory')
+```
+
+```{python}
+figure(1)
+
 title('Histograms risetime - datasets from {}'.format(day))
 ylabel('Counts')
 xlabel('Risetime [ ms ]')
 
-rt_mean = np.zeros(len(thedirs))
-rt_mean_error = np.zeros(len(thedirs))
-ft_mean = np.zeros(len(thedirs))
-ft_mean_error = np.zeros(len(thedirs))
-Vbias = np.zeros(len(thedirs))
 
-for i in np.arange(len(thedirs)):
-    ok_cuts_rt = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']>0)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']<0.6)
-    ok_cuts_ft = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']>0)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']<0.6)
-    ok = ok_cuts_ft * ok_cuts_rt * d['ok']['Residuals_combined']
-    rt_mean[i] = np.mean(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime'][ok])
-    rt_mean_error[i] = np.sum(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime_error'][ok])/(np.sum(ok))
-    ft_mean[i] = np.mean(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime'][ok])
-    ft_mean_error[i] = np.sum(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime_error'][ok])/(np.sum(ok))
+rt = np.zeros((256,len(thedirs_results)))
+rt_error = np.zeros((256,len(thedirs_results)))
+ft = np.zeros((256,len(thedirs_results)))
+ft_error = np.zeros((256,len(thedirs_results)))
+rt_mean = np.zeros(len(thedirs_results))
+rt_mean_error = np.zeros(len(thedirs_results))
+ft_mean = np.zeros(len(thedirs_results))
+ft_mean_error = np.zeros(len(thedirs_results))
+ok = np.zeros((256,len(thedirs_results)))
+Vbias = np.zeros(len(thedirs_results))
+
+min_cut = 0.005
+max_cut = 0.6
+
+for i in np.arange(len(thedirs_results)):
+    ok_cuts_rt = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']>min_cut)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']<max_cut)
+    ok_cuts_ft = (alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']>min_cut)&(alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']<max_cut)
+    okk = ok_cuts_ft * ok_cuts_rt * d['ok']['Residuals_combined']
+    okk = okk.astype(bool)
+    ok[:,i] = okk
+    rt[:,i] = alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime']
+    rt_error[:,i] = alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime_error']
+    ft[:,i] = alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime']
+    ft_error[:,i] = alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime_error']
+    rt_mean[i] = np.mean(rt[:,i][okk])
+    rt_mean_error[i] = np.sum(rt_error[:,i][okk])/(np.sum(okk))
+    ft_mean[i] = np.mean(ft[:,i][okk])
+    ft_mean_error[i] = np.sum(ft_error[:,i][okk])/(np.sum(okk))
     Vbias[i] = alldic['{}'.format(i+1)]['Vbias'] 
 
-    hist(1e3*alldic['{}'.format(i+1)]['alltod_folded_nonorm']['risetime'][ok],30,alpha=0.5,label='Vbias {:.1f}'.format(Vbias[i]))
+    figure(1)
+    hist(1e3*rt[:,i][okk],30,alpha=0.5,label='Vbias {:.1f}'.format(Vbias[i]))
+    figure(2)
+    hist(1e3*ft[:,i][okk],30,alpha=0.5,label='Vbias {:.1f}'.format(Vbias[i]))
 
+figure(1)
 grid()
 legend()
 
-figure()
+figure(2)
 title('Histograms falltime - datasets from {}'.format(day))
 ylabel('Counts')
 xlabel('Falltime [ ms ]')
-
-for i in np.arange(len(thedirs)):
-    hist(1e3*alldic['{}'.format(i+1)]['alltod_folded_nonorm']['falltime'][ok],30,alpha=0.5,label='Vbias {:.1f}'.format(Vbias[i]))
 
 grid()
 legend()
@@ -197,22 +231,48 @@ show()
 ```
 
 ```{python}
+tesnum_pos_array = np.zeros(256)
+
+tesnum_selected = np.array([96,110,225])
+
+tesnum_i_array = tesnum_selected - 1
+
+# print(tesnum_i)
+
+for i,tesnum_i in enumerate(tesnum_i_array):
+    for j in range(len(thedirs_results)):
+        if ok[tesnum_i,j]:
+            figure(3)
+            errorbar(tesnum_i,1e3*rt[tesnum_i,j],yerr = 1e3*rt_error[tesnum_i,j],fmt='ro',alpha=0.5,color='C0')
+            figure(4)
+            errorbar(tesnum_i,1e3*ft[tesnum_i,j],yerr = 1e3*ft_error[tesnum_i,j],fmt='ro',alpha=0.5,color='C0')
+# errorbar(Vbias,1e3*ft_mean,yerr = 1e3*ft_mean_error,fmt='ro',alpha=0.5,label='Falltime')
+figure(3)
+title('Risetime')
+grid()
+figure(4)
+title('Falltime')
+grid()
+
+```
+
+```{python}
 # rt_nonorm = alldic['1']['alltod_folded_nonorm']['risetime']
 # rt_norm = alldic['1']['alltod_folded_norm']['risetime']
 # b = np.abs(rt_nonorm-rt_norm)
 
-# # figure()
-# # plot(b,'.')
-
+# figure()
+# plot(b,'.')
+# yscale('log')
 
 # results = np.array([b]).T
 # labels = tct.run_DBSCAN(results, doplot=True, parnames = ['Risetime diff'],eps_cpar=0.01,min_samples_cpar = 10)
 ```
 
 ```{python}
-# # print(alldic['1'])#['alltod_folded_nonorm']['amplitude'])
+# # # print(alldic['1'])#['alltod_folded_nonorm']['amplitude'])
 # amps_1 = np.abs(alldic['1']['alltod_folded_nonorm']['amplitude'])
-# ok = alldic['1']['ok']['Residuals'] & (amps_1<20000) & (amps_1>0)
+# ok = alldic['1']['ok']['Residuals_combined'] & (amps_1<20000) & (amps_1>0)
 
 # figure()
 # hist(amps_1[ok],15)
@@ -222,7 +282,7 @@ show()
 # figure()
 # plot(d['alltod_folded_norm']['residuals_fit_folded_median'],d['alltod_folded_norm']['residuals_folded_median'],'.')
 # plot(d['alltod_folded_norm']['residuals_fit_folded_median'],d['alltod_folded_norm']['residuals_fit_folded_median'])
-# # show()
+# # # show()
 ```
 
 ```{python}

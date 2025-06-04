@@ -432,6 +432,199 @@ def get_new_azel(azt, elt, azmoon, elmoon):
     return newazt, newelt
 
 
+def decorel_azel(mytod, azt, elt, scantype, resolution=0.04, doplot=True, nbins=50, n_el=20):
+    ### Profiling in Azimuth and elevation
+    el_lims = np.linspace(np.min(elt)-0.0001, np.max(elt)+0.0001, n_el+1)
+    el_av = 0.5 * (el_lims[1:] + el_lims[:-1])
+
+    okall = np.abs(scantype) > 0 
+    okpos = scantype > 0 
+    okneg = scantype < 0 
+    oks = [okpos, okneg]
+    oks_names = ['+ scans', '- scans']
+    minaz = np.min(azt[okall])
+    maxaz = np.max(azt[okall])
+    xaz = np.linspace(minaz, maxaz, nbins)
+    az_lims = np.linspace(minaz, maxaz, nbins + 1)
+    az_av = 0.5 * (az_lims[1:] + az_lims[:-1])
+
+    ### Use gaussian smoothing to remove noise
+    azt_smoothed_stack = np.zeros((nbins, n_el, 2))
+
+    if doplot: 
+        plt.figure()
+    for i in range(len(oks)):
+        if doplot: 
+            plt.subplot(1,2,i+1)
+            plt.xlabel('Az')
+            plt.ylabel('TOD')
+            plt.title(oks_names[i])
+        for j in range(n_el):
+            ok = oks[i] & (elt >= el_lims[j]) & (elt < el_lims[j+1])
+            if np.sum(ok)==0:
+                break
+            xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=nbins, mode=False, dispersion=True, plot=False, cutbad=False) # pourquoi est-ce que cela marchait avec cutbad=True avant ? Bins différents ?
+
+            plt.figure()
+            plt.title("Result from Qfiber.profile")
+            plt.scatter(azt[ok], mytod[ok], s=1, c="r", label='Input TOD')
+            plt.plot(xc, yc, label="profile")
+            plt.legend()
+            plt.show()
+
+            gauss_kernel = gaussian(xc, np.mean(xc), resolution) # resolution in degrees (azimuth) # 1.5 degree?
+
+            azt_smoothed_stack[:, j, i] = np.convolve(yc, gauss_kernel, mode='same')
+            azt_smoothed_stack[:, j, i] = np.roll(azt_smoothed_stack[:, j, i], -1) # because mode='same' shifts the max of convolution by one
+
+            # print(np.shape(azt_smoothed_stack[:, j, i]))
+            # sys.exit()
+
+            # d'abord rendre cela périodique !! regarder si plus d'un scan par bin d'élévation
+            # et changer le code en conséquence
+            # faire des bins en scan plutôt qu'élévation ? 118 scans (x2 +/-)
+
+            # fitted = np.interp(xaz, xc, azt_smoothed_stack[:, j, i])
+            # fit_func = BarycentricInterpolator(xc, azt_smoothed_stack[:, j, i])
+
+            fit_func = interp1d(xc, azt_smoothed_stack[:, j, i], kind="quadratic", fill_value="extrapolate")
+            fitted = fit_func(xaz)
+            if j ==1:
+                plt.figure()
+                plt.title("Result from Gaussian filter")
+                plt.subplot(2,1,1)
+                # plt.plot(tt, tod, label='Input TOD')
+                plt.scatter(azt[ok], mytod[ok], s=1, c="r", label='Input TOD')
+                plt.plot(xc, azt_smoothed_stack[:, j, i], c="b", label='Smoothed TOD')
+                plt.legend()
+                plt.subplot(2,1,2)
+                plt.scatter(azt[ok], mytod[ok] - interp1d(az_av, azt_smoothed_stack[:, j, i], kind="quadratic", fill_value="extrapolate")(azt[ok]), s=1)
+                plt.show()
+                sys.exit()
+
+            if doplot:
+                plt.title("Test?")
+                pl = plt.errorbar(xc, yc, yerr=dy, xerr=dx, fmt='o')
+                plt.plot(xaz, fitted, color=pl[0].get_color(), label = oks_names[i] + ' - El = {0:5.1f}'.format(np.mean(elt[ok])))
+    #if doplot: legend()
+
+    ### Now interpolate this to remove it to the data
+    nscans = np.max(np.abs(scantype))
+    min_scan = np.min(np.abs(scantype[scantype != 0])) # added this to prevent crash if we removed this data already
+    for i in range(min_scan, nscans+1):
+        okp = scantype == i
+        okn = scantype == (-i)
+        for k, ok in enumerate([okp, okn]):
+            if not True in ok:
+                continue
+            the_el = np.median(elt[ok])
+            # print(i, the_el)
+            this_el_stack = np.array([interp1d(el_av, azt_smoothed_stack[j, :, k], kind="quadratic", fill_value="extrapolate")(the_el) for j in range(nbins)])
+            mytod[ok] -= interp1d(az_av, this_el_stack, kind="quadratic", fill_value="extrapolate")(azt[ok])
+                    
+    ### And interpolate for scantype==0 regions
+    # bad_chunks = get_chunks(mytod, scantype, 0)
+    # mytod = linear_rescale_chunks(mytod, bad_chunks, sz=100)
+    return mytod
+
+
+def detect_moon_by_scan(mytod, tt, scantype, resolution=0.01, doplot=True):
+    allscans = [scantype == i  for i in range(np.min(scantype), np.max(scantype) + 1)]
+    mytod_smooth = mytod.copy()
+
+    ### Use gaussian smoothing to remove noise
+
+    if doplot: 
+        plt.figure()
+
+    for i, mask_i in range(len(allscans)):
+
+        scan_i = mytod[mask_i]
+        tt_i = tt[mask_i]
+        gauss_kernel = gaussian(tt_i, np.mean(tt_i), resolution) # resolution in seconds
+        mytod_smooth[mask_i] = np.convolve(scan_i, gauss_kernel, mode='same')
+        mytod_smooth[mask_i] = np.roll(mytod_smooth[mask_i], -1) # because mode='same' shifts the max of convolution by one
+
+    plt.figure()
+    plt.scatter(tt, mytod, label="TOD")
+    plt.plot(tt, mytod_smooth, label="smoothed TOD")
+    plt.legend()
+    plt.show()
+
+    for i in range(len(oks)):
+        if doplot: 
+            plt.subplot(1,2,i+1)
+            plt.xlabel('Az')
+            plt.ylabel('TOD')
+            plt.title(oks_names[i])
+        for j in range(n_el):
+            ok = oks[i] & (elt >= el_lims[j]) & (elt < el_lims[j+1])
+            if np.sum(ok)==0:
+                break
+            xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=nbins, mode=False, dispersion=True, plot=False, cutbad=False) # pourquoi est-ce que cela marchait avec cutbad=True avant ? Bins différents ?
+
+            plt.figure()
+            plt.title("Result from Qfiber.profile")
+            plt.scatter(azt[ok], mytod[ok], s=1, c="r", label='Input TOD')
+            plt.plot(xc, yc, label="profile")
+            plt.legend()
+            plt.show()
+
+            gauss_kernel = gaussian(xc, np.mean(xc), resolution) # resolution in degrees (azimuth) # 1.5 degree?
+
+            azt_smoothed_stack[:, j, i] = np.convolve(yc, gauss_kernel, mode='same')
+            azt_smoothed_stack[:, j, i] = np.roll(azt_smoothed_stack[:, j, i], -1) # because mode='same' shifts the max of convolution by one
+
+            # print(np.shape(azt_smoothed_stack[:, j, i]))
+            # sys.exit()
+
+            # d'abord rendre cela périodique !! regarder si plus d'un scan par bin d'élévation
+            # et changer le code en conséquence
+            # faire des bins en scan plutôt qu'élévation ? 118 scans (x2 +/-)
+
+            # fitted = np.interp(xaz, xc, azt_smoothed_stack[:, j, i])
+            # fit_func = BarycentricInterpolator(xc, azt_smoothed_stack[:, j, i])
+
+            fit_func = interp1d(xc, azt_smoothed_stack[:, j, i], kind="quadratic", fill_value="extrapolate")
+            fitted = fit_func(xaz)
+            if j ==1:
+                plt.figure()
+                plt.title("Result from Gaussian filter")
+                plt.subplot(2,1,1)
+                # plt.plot(tt, tod, label='Input TOD')
+                plt.scatter(azt[ok], mytod[ok], s=1, c="r", label='Input TOD')
+                plt.plot(xc, azt_smoothed_stack[:, j, i], c="b", label='Smoothed TOD')
+                plt.legend()
+                plt.subplot(2,1,2)
+                plt.scatter(azt[ok], mytod[ok] - interp1d(az_av, azt_smoothed_stack[:, j, i], kind="quadratic", fill_value="extrapolate")(azt[ok]), s=1)
+                plt.show()
+                sys.exit()
+
+            if doplot:
+                plt.title("Test?")
+                pl = plt.errorbar(xc, yc, yerr=dy, xerr=dx, fmt='o')
+                plt.plot(xaz, fitted, color=pl[0].get_color(), label = oks_names[i] + ' - El = {0:5.1f}'.format(np.mean(elt[ok])))
+    #if doplot: legend()
+
+    ### Now interpolate this to remove it to the data
+    nscans = np.max(np.abs(scantype))
+    min_scan = np.min(np.abs(scantype[scantype != 0])) # added this to prevent crash if we removed this data already
+    for i in range(min_scan, nscans+1):
+        okp = scantype == i
+        okn = scantype == (-i)
+        for k, ok in enumerate([okp, okn]):
+            if not True in ok:
+                continue
+            the_el = np.median(elt[ok])
+            # print(i, the_el)
+            this_el_stack = np.array([interp1d(el_av, azt_smoothed_stack[j, :, k], kind="quadratic", fill_value="extrapolate")(the_el) for j in range(nbins)])
+            mytod[ok] -= interp1d(az_av, this_el_stack, kind="quadratic", fill_value="extrapolate")(azt[ok])
+                    
+    ### And interpolate for scantype==0 regions
+    # bad_chunks = get_chunks(mytod, scantype, 0)
+    # mytod = linear_rescale_chunks(mytod, bad_chunks, sz=100)
+    return mytod
+
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256, doplot=True, check_back_forth=False):
 
     # Inversion in signal
@@ -442,18 +635,38 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
 
     mytod_2 = my_filt_2(mytod.copy())
 
+    # decorel_azel(mytod, azt, elt, scantype, resolution=1, doplot=True, nbins=200, n_el=50)
+
+    # Moving average in post: https://stackoverflow.com/questions/11352047/finding-moving-average-from-data-points-in-python/34387987#34387987
+
+    # Moon detection
+    window_width = 200
+    data = np.pad( mytod, int(window_width/2) , mode='edge')
+    cumsum_vec = np.cumsum(data)
+    tod_ma_flat = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
+    # Moving average
+    window_width = 20
+    data = np.pad( mytod, int(window_width/2) , mode='edge')
+    cumsum_vec = np.cumsum(data)
+    tod_ma = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
+
+    tod_diff = tod_ma - tod_ma_flat
+
     if doplot:
         fig, ax = plt.subplots(figsize=(10, 7))
         ax.plot(tt, -tod, label="TOD")
-        ax.plot(tt, mytod_1, label="filtered TOD")
-        ax.plot(tt, mytod_2, label="filtered TOD 2")
+        ax.plot(tt, tod_ma, label="tod_ma")
+        ax.plot(tt, tod_ma_flat, label="tod_ma_flat")
+        # ax.plot(tt, mytod_1, label="filtered TOD")
+        # ax.plot(tt, mytod_2, label="filtered TOD 2")
+        # ax.plot(tt, tod_diff, label="Moving average")
         ax.legend()
         ax.set_xlabel("Time [s]")
         ax.set_ylabel("Flux [ADU]")
         plt.tight_layout()
         plt.savefig("tod_filtering.pdf")
         plt.show()
-        
+    zae
     # Map-making
 
     # newelt = -newelt

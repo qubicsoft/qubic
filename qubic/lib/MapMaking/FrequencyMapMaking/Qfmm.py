@@ -614,8 +614,6 @@ class PipelineFrequencyMapMaking:
         """
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
-        print("H_out", self.H_out.shapein, self.H_out.shapeout)
-        print("invN", self.invN.shapein, self.invN.shapeout)
         A = self.H_out.T * self.invN * self.H_out
 
         if self.params["PLANCK"]["external_data"]:
@@ -632,10 +630,10 @@ class PipelineFrequencyMapMaking:
         else:
             gif_folder = None
 
-        true_maps = self.m_nu_in.copy()
+        self.maps_input_convolved = self.m_nu_in.copy()
         for irec in range(self.params["QUBIC"]["nrec"]):
             C = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[irec], lmax=3 * self.params["SKY"]["nside"] - 1)
-            true_maps[irec] = C(self.m_nu_in[irec])
+            self.maps_input_convolved[irec] = C(self.m_nu_in[irec])
 
         ### PCG
         solution_qubic_planck = pcg(
@@ -654,7 +652,7 @@ class PipelineFrequencyMapMaking:
             center=self.center,
             reso=self.params["PCG"]["resolution_plot"],
             fwhm_plot=self.params["PCG"]["fwhm_plot"],
-            input=true_maps,
+            input=self.maps_input_convolved,
             is_planck=self.params["PLANCK"]["external_data"],
         )
 
@@ -756,6 +754,7 @@ class PipelineFrequencyMapMaking:
 
             dict_solution = {
                 "maps_in": self.m_nu_in,
+                "maps_in_convolved": self.maps_input_convolved,
                 "maps": self.s_hat,
                 "maps_noise": self.s_hat_noise,
                 "tod": self.TOD,

@@ -608,8 +608,8 @@ class PlanckAcquisition:
     def get_invntt_operator(self, planck_ntot, beam_correction=0, mask=None, seenpix=None):
 
         if planck_ntot == 0:
-            return IdentityOperator()
-
+            return IdentityOperator(shapein=(hp.nside2npix(self.nside), 3))
+        
         if beam_correction != 0:
             factor = (
                 4 * np.pi* (
@@ -621,7 +621,7 @@ class PlanckAcquisition:
                 hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
             )
             self.sigma = 1e6 * np.sqrt(varnew.T) * planck_ntot
-
+        
         if mask is not None:
             for i in range(3):
                 self.sigma[:, i] /= mask.copy()
@@ -960,8 +960,8 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         """
 
         if wdet == 0 and wpho150 == 0 and wpho220 == 0:
-            self.invn150 = IdentityOperator() # used in PresetAcquisition.get_approx_hth
-            return IdentityOperator(shapein=(len(self.multiinstrument[0]), len(self.sampling)))
+            shapein = (self.nFocalPlanes, len(self.multiinstrument[0]), len(self.sampling))
+            return IdentityOperator(shapein=shapein)
         photon_noise = [wpho150, wpho220]
         if self.dict["instrument_type"] == "UWB":
             det_noise = [wdet, 0]
@@ -1254,7 +1254,7 @@ class JointAcquisitionFrequencyMapMaking:
         H_list += [H_planck]
         return BlockColumnOperator(H_list, axisout=0) * U
 
-    def get_invntt_operator( # We stack the invN_qubic and invN_planck on top of eachother
+    def get_invntt_operator( # We create a block diagonal matrix with invN_qubic and invN_planck
         self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot, # noise weights of QUBIC and Planck
         weight_planck=1, beam_correction=None, seenpix=None, mask=None,
     ):

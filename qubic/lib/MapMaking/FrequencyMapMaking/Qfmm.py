@@ -239,7 +239,7 @@ class PipelineFrequencyMapMaking:
             )  
         else:
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
-            
+
     def get_averaged_nus(self):
         """Average frequency
 

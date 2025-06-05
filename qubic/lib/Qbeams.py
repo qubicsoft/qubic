@@ -1,12 +1,10 @@
+import numexpr as ne
 import numpy as np
 from pyoperators.utils import reshape_broadcast
 from pysimulators.beams import Beam
-import numexpr as ne
 from scipy import interpolate
 
-__all__ = ['BeamGaussian',
-           'BeamFitted',
-           'MultiFreqBeam']
+__all__ = ["BeamGaussian", "BeamFitted", "MultiFreqBeam"]
 
 
 def with_alpha(x, alpha, xspl):
@@ -19,7 +17,7 @@ def with_alpha(x, alpha, xspl):
 
 def get_spline_tofit(xspline, index, xx):
     yspline = np.zeros(np.size(xspline))
-    yspline[index] = 1.
+    yspline[index] = 1.0
     tck = interpolate.splrep(xspline, yspline)
     yy = interpolate.splev(xx, tck, der=0)
     return yy
@@ -35,7 +33,7 @@ def gauss_plus(x, a, s, z):
 
     """
     x = x[..., None]
-    out = (np.exp(-(x - z) ** 2 / 2 / s ** 2) + np.exp(-(x + z) ** 2 / 2 / s ** 2)) * a
+    out = (np.exp(-((x - z) ** 2) / 2 / s**2) + np.exp(-((x + z) ** 2) / 2 / s**2)) * a
     return out.sum(axis=-1)
 
 
@@ -63,13 +61,13 @@ class BeamGaussian(Beam):
             self.fwhm = 0.1009 * np.sqrt(8 * np.log(2)) * 220 / self.nu
         self.sigma = self.fwhm / np.sqrt(8 * np.log(2))
         self.backward = bool(backward)
-        Beam.__init__(self, 2 * np.pi * self.sigma ** 2)
+        Beam.__init__(self, 2 * np.pi * self.sigma**2)
 
     def __call__(self, theta, phi):
         if self.backward:
             theta = np.pi - theta
-        coef = -0.5 / self.sigma ** 2
-        out = ne.evaluate('exp(coef * theta**2)')
+        coef = -0.5 / self.sigma**2
+        out = ne.evaluate("exp(coef * theta**2)")
         return reshape_broadcast(out, np.broadcast(theta, phi).shape)
 
 
@@ -120,8 +118,7 @@ class MultiFreqBeam(Beam):
 
     """
 
-    def __init__(self, parth, parfr, parbeam, alpha, xspl, nu=150,
-                 backward=False):
+    def __init__(self, parth, parfr, parbeam, alpha, xspl, nu=150, backward=False):
         """
         Parameters
         ----------
@@ -140,7 +137,7 @@ class MultiFreqBeam(Beam):
         self.backward = bool(backward)
         self.sp = interpolate.RectBivariateSpline(parth, parfr, parbeam)
         omega = with_alpha(nu, self.alpha, self.xspl)
-        Beam.__init__(self, omega)#, nu=nu)
+        Beam.__init__(self, omega)  # , nu=nu)
 
     def __call__(self, theta, phi):
         if self.backward:
@@ -148,4 +145,3 @@ class MultiFreqBeam(Beam):
         out = self.sp(theta, self.nu, grid=False)
 
         return reshape_broadcast(out, np.broadcast(theta, phi).shape)
-

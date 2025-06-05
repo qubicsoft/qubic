@@ -540,9 +540,9 @@ class PipelineFrequencyMapMaking:
         stacked_dptdp_inv = np.empty((nrec, npix))
 
         # Pre-fetch Planck diagonals if needed
-        if self.params["PLANCK"]["external_data"]:
-            Diag_planck_143 = self.joint.pl143.get_invntt_operator().data[:, 0]
-            Diag_planck_217 = self.joint.pl217.get_invntt_operator().data[:, 0]
+        if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
+            Diag_planck_143 = self.joint.pl143.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data[:, 0]
+            Diag_planck_217 = self.joint.pl217.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data[:, 0]
             planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
 
         for irec in range(nrec):
@@ -572,7 +572,7 @@ class PipelineFrequencyMapMaking:
                 mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
                 dptdp = mapPtP_seq_scaled.sum(axis=0)
 
-                if self.params["PLANCK"]["external_data"]:
+                if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
                     dptdp = dptdp + planck_diag_sum
 
                 # Safe inversion
@@ -614,7 +614,8 @@ class PipelineFrequencyMapMaking:
         """
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
-
+        print("H_out", self.H_out.shapein, self.H_out.shapeout)
+        print("invN", self.invN.shapein, self.invN.shapeout)
         A = self.H_out.T * self.invN * self.H_out
 
         if self.params["PLANCK"]["external_data"]:

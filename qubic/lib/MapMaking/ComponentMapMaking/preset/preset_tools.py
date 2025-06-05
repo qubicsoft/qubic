@@ -79,11 +79,11 @@ class PresetTools:
                 raise TypeError("bin_mixing_matrix should be a multiple of nsub_out")
 
         # Check if nside_beta is a multiple of 2 for d1 case
-        if self.params["Foregrounds"]["Dust"]["model_d"] == "d1" and self.params["Foregrounds"]["Dust"]["nside_beta_in"] % 2 != 0:
+        if self.params["Foregrounds"]["Dust"]["model"] == "d1" and self.params["Foregrounds"]["Dust"]["nside_beta_in"] % 2 != 0:
             if self.params["Foregrounds"]["Dust"]["nside_beta_in"] <= 0:
                 raise TypeError("nside_beta should be a multiple of two > 0 for d1 Dust model")
 
-        if self.params["Foregrounds"]["Dust"]["model_d"] == "d1" and self.params["Foregrounds"]["Dust"]["type"] == "blind":
+        if self.params["Foregrounds"]["Dust"]["model"] == "d1" and self.params["Foregrounds"]["Dust"]["type"] == "blind":
             raise TypeError("Blind method is not implemented for d1 model")
 
         if self.params["PCG"]["fixI"] and self.params["PCG"]["fix_pixels_outside_patch"]:
@@ -115,13 +115,13 @@ class PresetTools:
                 print("        Type : Mono Band")
             print("    - Sky In :")
             print(f"        CMB : {self.params['CMB']['cmb']}")
-            print(f"        Dust : {self.params['Foregrounds']['Dust']['Dust_in']} - {self.params['Foregrounds']['Dust']['model_d']}")
-            print(f"        Synchrotron : {self.params['Foregrounds']['Synchrotron']['Synchrotron_in']} - {self.params['Foregrounds']['Synchrotron']['model_s']}")
+            print(f"        Dust : {self.params['Foregrounds']['Dust']['Dust_in']} - {self.params['Foregrounds']['Dust']['model']}")
+            print(f"        Synchrotron : {self.params['Foregrounds']['Synchrotron']['Synchrotron_in']} - {self.params['Foregrounds']['Synchrotron']['model']}")
             print(f"        CO : {self.params['Foregrounds']['CO']['CO_in']}\n")
             print("    - Sky Out :")
             print(f"        CMB : {self.params['CMB']['cmb']}")
-            print(f"        Dust : {self.params['Foregrounds']['Dust']['Dust_out']} - {self.params['Foregrounds']['Dust']['model_d']}")
-            print(f"        Synchrotron : {self.params['Foregrounds']['Synchrotron']['Synchrotron_out']} - {self.params['Foregrounds']['Synchrotron']['model_s']}")
+            print(f"        Dust : {self.params['Foregrounds']['Dust']['Dust_out']} - {self.params['Foregrounds']['Dust']['model']}")
+            print(f"        Synchrotron : {self.params['Foregrounds']['Synchrotron']['Synchrotron_out']} - {self.params['Foregrounds']['Synchrotron']['model']}")
             print(f"        CO : {self.params['Foregrounds']['CO']['CO_out']}\n")
 
             print(f"        MPI Tasks : {self.size}")

@@ -562,9 +562,9 @@ class PlanckAcquisition:
         if nintegr == 1:
             return Hp
 
-    def get_invntt_operator(self, planck_ntot, beam_correction=0, mask=None, seenpix=None):
+    def get_invntt_operator(self, planck_ntot, beam_correction=0, mask=None):
         if planck_ntot == 0:
-            return IdentityOperator()
+            return IdentityOperator(shapein=(hp.nside2npix(self.nside), 3))
 
         if beam_correction != 0:
             factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2
@@ -819,7 +819,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
             block_list = []
             for iband in range(self.nFocalPlanes):
-                edges_band = [iband * int(self.nrec // self.nFocalPlanes), (iband + 1) * int(self.nrec // self.nFocalPlanes)]  # splitting nrec op
+                edges_band = [iband * (self.nrec // self.nFocalPlanes), (iband + 1) * (self.nrec // self.nFocalPlanes)]  # splitting nrec op
                 block_list.append(BlockRowOperator(op_sum[edges_band[0] : edges_band[1]], new_axisin=0))
 
             operator_H = BlockDiagonalOperator(block_list, new_axisout=0)
@@ -898,8 +898,8 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         """
 
         if wdet == 0 and wpho150 == 0 and wpho220 == 0:
-            self.invn150 = IdentityOperator()  # used in PresetAcquisition.get_approx_hth
-            return IdentityOperator(shapein=(len(self.multiinstrument[0]), len(self.sampling)))
+            return IdentityOperator(shapein=(self.nFocalPlanes, len(self.multiinstrument[0]), len(self.sampling)))
+
         photon_noise = [wpho150, wpho220]
         if self.dict["instrument_type"] == "UWB":
             det_noise = [wdet, 0]
@@ -1144,16 +1144,17 @@ class JointAcquisitionFrequencyMapMaking:
 
         ### Get QUBIC H operator
         H_qubic = self.qubic.get_operator(fwhm=fwhm)
-
+        print("H_qubic shapein: ", H_qubic.shapein, "H_qubic shapeout: ", H_qubic.shapeout)
         R_planck = ReshapeOperator((12 * self.qubic.scene.nside**2, nstokes), (12 * self.qubic.scene.nside**2 * nstokes))
         H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0)
         # It is necessary to change the shape of H_planck_ in order to stack it with H_qubic
         R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
         H_planck = R_diag(H_planck_)
-
+        print("H_planck shapein: ", H_planck.shapein, "H_planck shapeout: ", H_planck.shapeout)
         H_list = [H_qubic]
         ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
         H_list += [H_planck]
+        print("H", (BlockColumnOperator(H_list, axisout=0) * U).shapein, "shapeout: ", (BlockColumnOperator(H_list, axisout=0) * U).shapeout)
         return BlockColumnOperator(H_list, axisout=0) * U
 
     def get_invntt_operator(  # We stack the invN_qubic and invN_planck on top of eachother
@@ -1164,7 +1165,6 @@ class JointAcquisitionFrequencyMapMaking:
         planck_ntot,  # noise weights of QUBIC and Planck
         weight_planck=1,
         beam_correction=None,
-        seenpix=None,
         mask=None,
     ):
         if beam_correction is None:
@@ -1173,19 +1173,21 @@ class JointAcquisitionFrequencyMapMaking:
         invn_q = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)  # add weight of Qubic detector and photon noise
         R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
         invn_q = [R(invn_q(R.T))]
+        print("invN_qubic shapein: ", invn_q[0].shapein, "invN_qubic shapeout: ", invn_q[0].shapeout)
+        invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, beam_correction=beam_correction[0], mask=mask)
+        invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, beam_correction=beam_correction[0], mask=mask)
 
-        invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(  # add weight of Planck noise here? Or inside function?
-            planck_ntot, beam_correction=beam_correction[0], mask=mask, seenpix=seenpix
-        )
-        invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, beam_correction=beam_correction[0], mask=mask, seenpix=seenpix)
         R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
+
         invN_143 = R_planck(invntt_planck143(R_planck.T))
         invN_217 = R_planck(invntt_planck217(R_planck.T))
         if self.Nrec == 1:
             invNe = [invN_143, invN_217]
         else:
             invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
+        print("invN_planck shapein: ", invNe[0].shapein, "invN_planck shapeout: ", invNe[0].shapeout)
         invN = invn_q + invNe
+        print("invN shapein: ", BlockDiagonalOperator(invN, axisout=0).shapein, "invN shapeout: ", BlockDiagonalOperator(invN, axisout=0).shapeout)
         return BlockDiagonalOperator(invN, axisout=0)
 
 

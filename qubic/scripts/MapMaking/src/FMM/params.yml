@@ -1,4 +1,4 @@
-path_out: "test_DB_w_precond_w_planck/"
+path_out: "test_master/"
 datafilename: "test"
 
 CMB:
@@ -14,13 +14,13 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "DB"          # Instrumental design (MB, DB or UWB)
+    instrument: "UWB"          # Instrumental design (MB, DB or UWB)
     configuration: "FI"       # Instrumental configuration (TD or FI)
     npointings: 1000          # Number of time samples
     nsub_in: 8                # Number of sub-acquisitions
     nsub_out: 8
-    nrec: 4                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-    convolution_in: True                    # Angular resolution in the input TOD
+    nrec: 2                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
+    convolution_in: False                    # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
@@ -59,7 +59,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_iter_pcg: 200            # Number of PCG iterations #100
+    n_iter_pcg: 50            # Number of PCG iterations #100
     tol_pcg: 1.0e-08          # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: True

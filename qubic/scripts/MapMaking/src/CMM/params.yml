@@ -18,7 +18,7 @@ Foregrounds:
         Dust_in: True
         Dust_out: True
 
-        type: "blind"                                         # Reconstruction method
+        type: "parametric"                                         # Reconstruction method
         model: "d0"
         beta_init: [1., 0., 10000000]                           # PySM model
         nside_beta_in: 0                                           # Input pixelization for beta_d (in a case of d1 model)
@@ -66,7 +66,7 @@ QUBIC:
         detector_nep: 4.7e-17                                      # NEP of detector noise
         duration_150: 3                                            # Effective duration at 150 GHz
         duration_220: 3                                            # Effective duration at 220 GHz
-        seed: 11111
+        seed_noise: 11111
     SYNTHBEAM:
         synthbeam_kmax: 1                                          # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
         synthbeam_fraction: 1                                      # Fraction of synthesized beam
@@ -98,7 +98,7 @@ PLANCK:
     143GHz: True
     217GHz: True
     353GHz: False
-    seed: 22222
+    seed_noise: 22222
 
 PCG:
     ### This section control PCG parameters
@@ -148,6 +148,6 @@ Plots:
     thr_plot: 0.2                                                  # Threashold for maps plot
 
 save_iter: 1                                                       # Save every 'save_iter' iteration
-foldername: "wo_precond_wo_planck"                 # Name of the saved folder
+foldername: "test_merge"                 # Name of the saved folder
 filename: "file"                                                   # Name of the saved file
 lastite: True                                                      # Keep only the last iteration

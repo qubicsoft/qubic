@@ -6,16 +6,22 @@ import gc
 import numpy as np
 from pathlib import Path
 from matplotlib.pyplot import *
-# %matplotlib notebook
+# %matplotlib inline
 
 from qubicpack.qubicfp import qubicfp
-from qubic import fibtools as ft
+from qubic.lib.Calibration import Qfiber as ft
 # from qubic import time_constants_tools as tct
 ```
 
 ```{python}
 # base_dir = '/sps/qubic/Data/Calib-TD/'
-base_dir = '/media/nahue/files_hdd/heavy-data/'
+# base_dir = '/media/nahue/files_hdd/heavy-data/'
+
+# base_dir = '/home/nahue/Downloads/'
+# base_dir = '/home/nahue-ofi/heavy-data/'
+base_dir = '/home/nahue-ofi/Nextcloud/time-constants/'
+
+
 # base_save_path = '/media/nahue/files_hdd/heavy-data'
 # specific_save_folder = '/time_constants_results/all_TC_datasets_my_computer_2'
 # save_path = base_save_path+specific_save_folder
@@ -26,19 +32,21 @@ base_dir = '/media/nahue/files_hdd/heavy-data/'
 ```
 
 ```{python}
-day = '2023-05-24'
+# day = '2023-04-17'
+day = '2025-05-22'
+# day = '2023-05-24'
 ```
 
 ```{python}
 data_dir = base_dir + day + '/'
-thedirs = np.sort(glob.glob(data_dir+'**'))
+thedirs = np.sort(glob.glob(data_dir+'*carbon*'))
 
 for j,thedir in enumerate(thedirs):
     print(j,thedir)
 ```
 
 ```{python}
-numfile = 1
+numfile = 2
 thedatadir = thedirs[numfile]
 
 print('\n')
@@ -80,7 +88,7 @@ t_init = np.min([tt1[0],tt2[0],tt1_ct[0],tt2_ct[0]])
 
 print(t_init)
 
-force_sync = False
+force_sync = True
 
 if force_sync == True:
     
@@ -227,11 +235,13 @@ print('Initial time difference (computertime - ppstime) for ASIC 2:', '{} ms'.fo
 try:
     fmod = calsource_dict['cf']['frequency']
 except:
-    if len(fmods[numberday])>1:
-        fmod = fmods[numberday][numfile]
-    else:
-        fmod = fmods[numberday][0]
+    print('Give fmod')
+    # if len(fmods[numberday])>1:
+    #     fmod = fmods[numberday][numfile]
+    # else:
+    #     fmod = fmods[numberday][0]
 
+# fmod = 0.2
 period = 1/fmod
 nbins = 100
 print(period)
@@ -260,9 +270,9 @@ xlabel('Time [s]')
 for i in range(128):
     if i==0:
         plot(t_fold, folded[i,:], 'k-',alpha=0.1,label='ASIC 1')
-#         plot(t_fold, folded[i+128,:], 'b-',alpha=0.1,label='ASIC 2')        
+        plot(t_fold, folded[i+128,:], 'b-',alpha=0.1,label='ASIC 2')        
     plot(t_fold, folded[i,:], 'k-',alpha=0.1)
-#     plot(t_fold, folded[i+128,:], 'b-',alpha=0.1)  
+    plot(t_fold, folded[i+128,:], 'b-',alpha=0.1)  
 ylim(-2.5,2.5)
 grid()
 legend()
@@ -295,7 +305,7 @@ title('Method: a.timeaxis() (latest qubicpack)\n Dataset: {}'.format(dataset_inf
 ylabel('Normalized folded data')
 xlabel('Time [s]')
 for i in range(128):
-#     plot(t_fold1, folded1[i,:], 'k-',alpha=0.1)
+    plot(t_fold1, folded1[i,:], 'k-',alpha=0.1)
     plot(t_fold2, folded2[i,:], 'b-',alpha=0.1)
 ylim(-2.5,2.5)
 grid()
@@ -316,7 +326,7 @@ grid()
 from scipy import signal
 
 import matplotlib.mlab as mlab
-from qubic import fibtools as ft
+# from qubic import fibtools as ft
 import scipy.ndimage as f
 ```
 
@@ -339,7 +349,7 @@ for i in np.arange(256):
 ```
 
 ```{python}
-# %matplotlib notebook
+# %matplotlib inline
 
 spectra = np.asarray(spectra)
 smooth_spectra = np.asarray(smooth_spectra)
@@ -357,6 +367,10 @@ xscale('log')
 xlabel('Frequency [Hz]')
 ylabel('Smoothed spectra')
 tight_layout
+```
+
+```{python}
+
 ```
 
 ```{python}

@@ -130,7 +130,7 @@ for i,thedict in enumerate(thedicts):
 Here we extract the time constants values, their errors and the ok arrays. We define some additional cuts and compute mean values.
 
 ```{python}
-figure(1)
+figure()
 title('Histograms risetime - all datasets up to May 2023 - Different Vbias')
 ylabel('Counts')
 xlabel('Risetime [ ms ]')
@@ -175,7 +175,7 @@ grid()
 # legend()
 tight_layout
 
-figure(2)
+figure()
 title('Histograms falltime - all datasets up to May - Different Vbias')
 ylabel('Counts')
 xlabel('Falltime [ ms ]')
@@ -196,13 +196,13 @@ Here we study the time constant value for each TES depending on the signal ampli
 ```{python}
 ok_fortes = np.transpose(ok)
 
-tesnum = 21
+# tesnum = 21
 
-tes_to_plot = [21,96,95,203]
+# tes_to_plot = [21,96,95,203]
 
 tes_to_plot = [96]
 
-figure(3)
+figure()
 
 ax = axes()
 ax.set_axisbelow(True)
@@ -227,7 +227,7 @@ grid(which='both',linestyle='--')
 legend()
 tight_layout
 
-figure(4)
+figure()
 
 ax = axes()
 ax.set_axisbelow(True)
@@ -250,7 +250,7 @@ tight_layout
 
 cmap = plt.colormaps['magma']
 
-figure(5)
+figure()
 
 ax = axes()
 ax.set_axisbelow(True)
@@ -268,7 +268,7 @@ for tesnum in tes_to_plot:
 # legend()
 tight_layout
 
-figure(6)
+figure()
 
 ax = axes()
 ax.set_axisbelow(True)
@@ -288,11 +288,34 @@ tight_layout
 ```
 
 ```{python}
+figure()
 
-```
+tes_to_plot = [96]
+Vbias_selected = 2.8
+delta_Vbias = 0.1
 
-```{python}
+ax = axes()
+ax.set_axisbelow(True)
 
+ax.set_ylabel('Falltime [ ms ]')
+ax.set_xlabel('Amplitude [ADU]')
+ax.set_xscale("log")
+ax.set_yscale("log")
+grid(which='both',linestyle='--')
+
+
+for i,tesnum in enumerate(tes_to_plot):
+    ok_array_Vbias = (Vbias[ok_fortes[tesnum-1]] > Vbias_selected - delta_Vbias) * (Vbias[ok_fortes[tesnum-1]] < Vbias_selected + delta_Vbias)
+    if i == 0:
+            ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1][ok_array_Vbias]),1e3*rt[ok_fortes[tesnum-1],tesnum-1][ok_array_Vbias],alpha=0.9,color='blue',label='Risetime')
+            ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1][ok_array_Vbias]),1e3*ft[ok_fortes[tesnum-1],tesnum-1][ok_array_Vbias],alpha=0.9,color='red',label='Falltime') 
+
+    ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1][ok_array_Vbias]),1e3*rt[ok_fortes[tesnum-1],tesnum-1][ok_array_Vbias],alpha=0.9,color='blue')
+    ax.scatter(np.abs(amps[ok_fortes[tesnum-1],tesnum-1][ok_array_Vbias]),1e3*ft[ok_fortes[tesnum-1],tesnum-1][ok_array_Vbias],alpha=0.9,color='red')
+
+ax.set_title(f'TES #{tes_to_plot} for all the datasets Vbias in [{Vbias_selected - delta_Vbias},{Vbias_selected + delta_Vbias}]')
+legend()
+tight_layout
 ```
 
 ```{python}

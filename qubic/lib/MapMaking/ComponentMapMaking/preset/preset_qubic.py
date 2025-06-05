@@ -1,7 +1,8 @@
 from fgbuster import component_model as c
-from .. import Qcomponent_model as model_co
-from ....Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
-from ....Qdictionary import qubicDict
+
+from qubic.lib.Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
+from qubic.lib.MapMaking.ComponentMapMaking import Qcomponent_model as model_co
+from qubic.lib.Qdictionary import qubicDict
 
 
 class PresetQubic:
@@ -47,7 +48,7 @@ class PresetQubic:
         components_fgb_out, _ = self.get_components_fgb(key="out")
 
         if self.preset_tools.params["Foregrounds"]["CO"]["CO_in"]:
-            nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"]
+            nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0"]
         else:
             nu_co = None
 
@@ -129,9 +130,8 @@ class PresetQubic:
             "detector_nep": float(self.params_qubic["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params_qubic["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params_qubic["SYNTHBEAM"]["synthbeam_fraction"],
-            "interp_projection" : False,
+            "interp_projection": False,
             "instrument_type": self.params_qubic["instrument"],
-            "config": self.params_qubic["configuration"],
         }
 
         ### Get the default dictionary
@@ -168,28 +168,24 @@ class PresetQubic:
         if self.preset_tools.params["Foregrounds"]["Dust"][f"Dust_{key}"]:
             components += [
                 c.Dust(
-                    nu0=self.preset_tools.params["Foregrounds"]["Dust"]["nu0_d"],
+                    nu0=self.preset_tools.params["Foregrounds"]["Dust"]["nu0"],
                     temp=20,
                 )
             ]
             components_name += ["Dust"]
 
         if self.preset_tools.params["Foregrounds"]["Synchrotron"][f"Synchrotron_{key}"]:
-            components += [
-                c.Synchrotron(
-                    nu0=self.preset_tools.params["Foregrounds"]["Synchrotron"]["nu0_s"]
-                )
-            ]
+            components += [c.Synchrotron(nu0=self.preset_tools.params["Foregrounds"]["Synchrotron"]["nu0"])]
             components_name += ["Synchrotron"]
 
         if self.preset_tools.params["Foregrounds"]["CO"][f"CO_{key}"]:
             components += [
-                #c.COLine(
-                #    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
+                # c.COLine(
+                #    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0"],
                 #    active=False,
-                #)
+                # )
                 model_co.Monochromatic(
-                    nu0=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
+                    nu0=self.preset_tools.params["Foregrounds"]["CO"]["nu0"],
                 )
             ]
             components_name += ["CO"]

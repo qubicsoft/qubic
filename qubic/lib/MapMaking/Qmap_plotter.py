@@ -1,9 +1,10 @@
 import os
-import yaml
 
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
+import yaml
+from getdist import MCSamples, plots
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 
@@ -29,9 +30,7 @@ def _plot_reconstructed_maps(
     plt.figure(figsize=figsize)
 
     _shape = maps.shape
-    C = HealpixConvolutionGaussianOperator(
-        fwhm=fwhm, lmax=2 * hp.npix2nside(m_in.shape[1])
-    )
+    C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=3 * hp.npix2nside(m_in.shape[1]) - 1)
     res = maps - m_in
     res
     k = 0
@@ -41,7 +40,6 @@ def _plot_reconstructed_maps(
         _m[~seenpix, :] = hp.UNSEEN
         _r[~seenpix, :] = hp.UNSEEN
         for istk in range(_shape[-1]):
-
             hp.gnomview(
                 _m[:, istk],
                 rot=center,
@@ -79,7 +77,6 @@ class Plots:
     """
 
     def __init__(self):
-
         pass
 
     def _make_samples(self, chain, names, labels):
@@ -112,7 +109,7 @@ class Plots:
                             fp_name += [list(self.params["Sky"][name].keys())[k]]
                     k += 1
                 k = 0
-            except:
+            except Exception:
                 pass
 
         return fp, fp_name, fp_latex
@@ -187,7 +184,6 @@ class Plots:
         plt.close()
 
     def get_Dl_plot(self, ell, Dl, Dl_err, nus, job_id, figsize=(10, 10), model=None):
-
         plt.figure(figsize=figsize)
 
         k = 0
@@ -207,27 +203,21 @@ class Plots:
 
 
 class PlotsFMM:
-
     def __init__(self, seenpix):
-
         self.stk = ["I", "Q", "U"]
         self.seenpix = seenpix
 
-    def plot_frequency_maps(
-        self, m_in, m_out, center, reso=15, nsig=3, filename=None, figsize=(10, 8)
-    ):
-
+    def plot_frequency_maps(self, m_in, m_out, center, reso=15, nsig=3, filename=None, figsize=(10, 8)):
         m_in[:, ~self.seenpix, :] = hp.UNSEEN
         m_out[:, ~self.seenpix, :] = hp.UNSEEN
         res = m_out - m_in
         nf, _, _ = m_out.shape
 
-        fig = plt.figure(figsize=figsize)
+        plt.figure(figsize=figsize)
 
         k = 1
         for inu in range(nf):
             for istk in range(3):
-
                 sig = np.std(m_out[0, self.seenpix, istk])
 
                 hp.gnomview(
@@ -277,7 +267,6 @@ class PlotsFMM:
         nsig=3,
         name="signal",
     ):
-
         m_in[:, ~seenpix, :] = hp.UNSEEN
         m_out[:, ~seenpix, :] = hp.UNSEEN
 
@@ -285,7 +274,6 @@ class PlotsFMM:
 
         k = 1
         for i in range(self.params["QUBIC"]["nrec"]):
-
             hp.gnomview(
                 m_in[i, :, istk],
                 rot=center,
@@ -324,10 +312,7 @@ class PlotsFMM:
         plt.savefig(f"FMM/allplots_{job_id}/frequency_maps_{self.stk[istk]}_{name}.png")
         plt.close()
 
-    def plot_FMM_mollview(
-        self, m_in, m_out, nus, job_id, figsize=(10, 8), istk=1, nsig=3, fwhm=0
-    ):
-
+    def plot_FMM_mollview(self, m_in, m_out, nus, job_id, figsize=(10, 8), istk=1, nsig=3, fwhm=0):
         C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
         plt.figure(figsize=figsize)
 
@@ -377,7 +362,6 @@ class PlotsCMM:
     """
 
     def __init__(self, preset, dogif=True):
-
         self.preset = preset
         self.job_id = self.preset.job_id
         self.dogif = dogif
@@ -399,7 +383,6 @@ class PlotsCMM:
         """
 
         if self.params["Plots"]["conv_beta"]:
-
             nf_in, nc_in = A_in.shape
             nf_out, nc_out = A_out.shape
             fsub = int(nf_in / nf_out)
@@ -409,9 +392,7 @@ class PlotsCMM:
                 plt.plot(nus_in, A_in[:, ic], "-k")
 
             for inu in range(nf_out):
-                plt.errorbar(
-                    nus_out[inu], np.mean(A_in[inu * fsub : (inu + 1) * fsub]), fmt="og"
-                )
+                plt.errorbar(nus_out[inu], np.mean(A_in[inu * fsub : (inu + 1) * fsub]), fmt="og")
 
             for ic in range(nc_out):
                 plt.errorbar(nus_out, A_out[:, ic], fmt="xb")
@@ -423,7 +404,7 @@ class PlotsCMM:
             plt.ylim(eps_min, eps_max)
             plt.yscale("log")
 
-            plt.savefig(f"CMM/jobs/{self.job_id}/A_iter/A_iter{ki+1}.png")
+            plt.savefig(f"CMM/jobs/{self.job_id}/A_iter/A_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
@@ -455,13 +436,15 @@ class PlotsCMM:
 
             plt.figure(figsize=figsize)
             plt.subplot(2, 1, 1)
-            if np.ndim(beta) == 1:
+
+            ### Constant beta on the sky
+            if np.ndim(beta) == 2:
                 plt.plot(alliter[1:] - 1, beta[1:])
                 if truth is not None:
                     plt.axhline(truth, ls="--", color="red")
+
+            ### Varying beta on the sky
             else:
-                print(beta.shape[1])
-                print(truth.shape)
                 for i in range(beta.shape[1]):
                     plt.plot(alliter, beta[:, i], "-k", alpha=0.3)
                     if truth is not None:
@@ -475,10 +458,10 @@ class PlotsCMM:
                 for i in range(beta.shape[1]):
                     plt.plot(alliter, abs(truth[i] - beta[:, i]), "-k", alpha=0.3)
             plt.yscale("log")
-            plt.savefig(f"CMM/jobs/{self.job_id}/beta_iter{ki+1}.png")
+            plt.savefig(f"CMM/jobs/{self.job_id}/A_iter/beta_iter{ki + 1}.png")
 
             if ki > 0:
-                os.remove(f"CMM/jobs/{self.job_id}/beta_iter{ki}.png")
+                os.remove(f"CMM/jobs/{self.job_id}/A_iter/beta_iter{ki}.png")
             plt.close()
 
     def _display_allresiduals(self, map_i, seenpix, figsize=(14, 10), ki=0):
@@ -504,7 +487,6 @@ class PlotsCMM:
 
             for istk in range(3):
                 for icomp in range(len(self.preset.comp.components_name_out)):
-
                     _reso = 15
                     nsig = 3
 
@@ -522,16 +504,14 @@ class PlotsCMM:
                     k += 1
 
             plt.tight_layout()
-            plt.savefig(f"CMM/jobs/{self.job_id}/allcomps/allres_iter{ki+1}.png")
+            plt.savefig(f"CMM/jobs/{self.job_id}/allcomps/allres_iter{ki + 1}.png")
 
             # if self.preset.tools.rank == 0:
             #    if ki > 0:
             #        os.remove(f'jobs/{self.job_id}/allcomps/allres_iter{ki}.png')
             plt.close()
 
-    def _display_allcomponents(
-        self, seenpix, figsize=(14, 10), ki=0, gif=True, reso=15
-    ):
+    def _display_allcomponents(self, seenpix, figsize=(14, 10), ki=0, gif=True, reso=15):
         """
         Display all components of the Healpix map with Gaussian convolution.
 
@@ -544,22 +524,22 @@ class PlotsCMM:
         for each component and Stokes parameter (I, Q, U). The maps are convolved using
         a Gaussian operator and displayed using Healpix's gnomview function.
         """
-        C = [HealpixConvolutionGaussianOperator(
-            fwhm=self.preset.acquisition.fwhm_rec[i],
-            lmax=3 * self.params["SKY"]["nside"]) for i in range(len(self.preset.comp.components_name_out))]
+        # C = [HealpixConvolutionGaussianOperator(
+        #     fwhm=self.preset.acquisition.fwhm_rec[i],
+        #     lmax=3 * self.params["SKY"]["nside"]) for i in range(len(self.preset.comp.components_name_out))]
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
             plt.figure(figsize=figsize)
             k = 0
             for istk in range(3):
                 for icomp in range(len(self.preset.comp.components_name_out)):
-
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
 
-                    map_in = C[icomp](self.preset.comp.components_out[icomp, :, istk]).copy()
+                    # map_in = C[icomp](self.preset.comp.components_out[icomp, :, istk]).copy() # why?
+                    map_in = self.preset.acquisition.components_convolved_recon[icomp, :, istk].copy()
                     map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
 
-                    sig = np.std(self.preset.comp.components_out[icomp, seenpix, istk])
+                    # sig = np.std(self.preset.comp.components_out[icomp, seenpix, istk])
                     map_in[~seenpix] = hp.UNSEEN
                     map_out[~seenpix] = hp.UNSEEN
 
@@ -576,7 +556,7 @@ class PlotsCMM:
                     #     map_out[~seenpix] = hp.UNSEEN
 
                     r = map_in - map_out
-                    nsig = 2
+                    # nsig = 2
                     hp.gnomview(
                         map_out,
                         rot=self.preset.sky.center,
@@ -585,8 +565,8 @@ class PlotsCMM:
                         title=f"{self.preset.comp.components_name_out[icomp]} - {stk[istk]} - Output",
                         cmap="jet",
                         sub=(3, len(self.preset.comp.components_out) * 2, k + 1),
-                        min=-nsig * sig,
-                        max=nsig * sig,
+                        # min=-nsig * sig,
+                        # max=nsig * sig,
                     )
                     k += 1
                     hp.gnomview(
@@ -597,19 +577,17 @@ class PlotsCMM:
                         title=f"{self.preset.comp.components_name_out[icomp]} - {stk[istk]} - Residual",
                         cmap="jet",
                         sub=(3, len(self.preset.comp.components_out) * 2, k + 1),
-                        min=-nsig * np.std(r[seenpix]),
-                        max=nsig * np.std(r[seenpix]),
+                        # min=-nsig * np.std(r[seenpix]),
+                        # max=nsig * np.std(r[seenpix]),
                     )
                     k += 1
 
             plt.tight_layout()
-            plt.savefig(f"CMM/jobs/{self.job_id}/allcomps/allcomps_iter{ki+1}.png")
+            plt.savefig(f"CMM/jobs/{self.job_id}/allcomps/allcomps_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    os.remove(
-                        f"CMM/jobs/{self.job_id}/allcomps/allcomps_iter{ki}.png"
-                    )
+                    os.remove(f"CMM/jobs/{self.job_id}/allcomps/allcomps_iter{ki}.png")
             plt.close()
 
     def display_maps(self, seenpix, figsize=(14, 8), nsig=6, ki=0, view="gnomview"):
@@ -635,12 +613,9 @@ class PlotsCMM:
                 k = 0
 
                 for icomp in range(len(self.preset.comp.components_name_out)):
-
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
                     if self.preset.qubic.params_qubic["convolution_in"]:
-                        map_in = self.preset.comp.components_convolved_out[
-                            icomp, :, istk
-                        ].copy()
+                        map_in = self.preset.acquisition.components_convolved_recon[icomp, :, istk].copy()
                         map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
                     else:
                         map_in = self.preset.comp.components_out[icomp, :, istk].copy()
@@ -730,16 +705,14 @@ class PlotsCMM:
                     k += 3
 
                 plt.tight_layout()
-                plt.savefig(f"CMM/jobs/{self.job_id}/{s}/maps_iter{ki+1}.png")
+                plt.savefig(f"CMM/jobs/{self.job_id}/{s}/maps_iter{ki + 1}.png")
 
                 if self.preset.tools.rank == 0:
                     if ki > 0:
                         os.remove(f"CMM/jobs/{self.job_id}/{s}/maps_iter{ki}.png")
 
                 plt.close()
-            self.preset.acquisition.rms_plot = np.concatenate(
-                (self.preset.acquisition.rms_plot, rms_i), axis=0
-            )
+            self.preset.acquisition.rms_plot = np.concatenate((self.preset.acquisition.rms_plot, rms_i), axis=0)
 
     def plot_gain_iteration(self, gain, figsize=(8, 6), ki=0):
         """
@@ -755,12 +728,7 @@ class PlotsCMM:
         """
 
         if self.params["Plots"]["conv_gain"]:
-
             plt.figure(figsize=figsize)
-
-            niter = gain.shape[0]
-            ndet = gain.shape[1]
-            alliter = np.arange(1, niter + 1, 1)
 
             # plt.hist(gain[:, i, j])
             if self.preset.qubic.params_qubic["type"] == "two":
@@ -783,7 +751,7 @@ class PlotsCMM:
             plt.xlim(-0.1, 0.1)
             plt.ylim(0, 100)
             plt.axvline(0, ls="--", color="black")
-            plt.savefig(f"CMM/jobs/{self.job_id}/gain_iter{ki+1}.png")
+            plt.savefig(f"CMM/jobs/{self.job_id}/gain_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0:
@@ -792,7 +760,6 @@ class PlotsCMM:
             plt.close()
 
     def plot_rms_iteration(self, rms, figsize=(8, 6), ki=0):
-
         if self.params["Plots"]["conv_rms"]:
             plt.figure(figsize=figsize)
 
@@ -802,7 +769,7 @@ class PlotsCMM:
             plt.yscale("log")
 
             plt.tight_layout()
-            plt.savefig(f"CMM/jobs/{self.job_id}/rms_iter{ki+1}.png")
+            plt.savefig(f"CMM/jobs/{self.job_id}/rms_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0:

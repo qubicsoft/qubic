@@ -1,4 +1,4 @@
-path_out: "test_master/"
+path_out: "wo_precond_w_planck_w_convo/"
 datafilename: "test"
 
 CMB:
@@ -20,7 +20,7 @@ QUBIC:
     nsub_in: 8                # Number of sub-acquisitions
     nsub_out: 8
     nrec: 2                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-    convolution_in: False                    # Angular resolution in the input TOD
+    convolution_in: True                    # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
@@ -61,7 +61,7 @@ PCG:
 
     n_iter_pcg: 50            # Number of PCG iterations #100
     tol_pcg: 1.0e-08          # Tolerance for PCG
-    preconditioner: True
+    preconditioner: False
     initial_guess_intensity_to_zero: True
     gif: True
     resolution_plot: 15

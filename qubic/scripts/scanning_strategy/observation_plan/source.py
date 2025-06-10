@@ -223,14 +223,22 @@ class Source(ABC):
         # start index of the following one)
         # (if we the last block correspond to the end of time_grid, the index of the block end will be set to
         # len(self.time_grid) - 1)
+        # self.valid_time_intervals = [[self.time_grid[r[0]],
+        #                               self.time_grid[min(r[-1] + 1, len(self.time_grid) - 1)]] for r in runs]
+
         self.valid_time_intervals = [[self.time_grid[r[0]],
-                                      self.time_grid[min(r[-1] + 1, len(self.time_grid) - 1)]] for r in runs]
+                                      self.time_grid[r[-1]]] for r in runs]
 
         # Check if the start time of the last time interval block is equal to its end time.
         # If so, add one time_resolution to properly account for the final time interval block
-        last_valid = self.valid_time_intervals[-1]
-        if last_valid[0] == last_valid[-1]:
-            self.valid_time_intervals[-1][1] += self.time_resolution - 1 * u.s
+
+        for idx, (start, stop) in enumerate(self.valid_time_intervals):
+            if start == stop:
+                self.valid_time_intervals[idx] = [start, stop + self.time_resolution - 1 * u.s]
+
+        # last_valid = self.valid_time_intervals[-1]
+        # if last_valid[0] == last_valid[-1]:
+        #     self.valid_time_intervals[-1][1] += self.time_resolution - 1 * u.s
 
     def _parse_ylabels(self):
 
@@ -301,8 +309,10 @@ class Source(ABC):
         # Set title including percentage
         safe_name = self.name.replace("-", r"\,")
         title = (
-                r"$\bf{Constraint\ Grid:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}\n"
-                                               rf"${percent:.1f} \% \ observable$ "
+                r"$\bf{Constraint\ Grid:}$ " +
+                f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}\n" +
+                rf"${percent:.1f} \% \ observable$ - " +
+                rf"Time Resolution: ${round(self.time_resolution.value)} \, {self.time_resolution.unit}$"
         )
 
         fig.suptitle(title)
@@ -323,7 +333,7 @@ class Source(ABC):
         ax.grid(which='minor', color='#333333', linewidth=1)
         ax.set_aspect("equal")
 
-        plt.savefig(os.path.join(self.plots_dir, f"{self.name}_constraint_grid.png"), dpi=600)
+        plt.savefig(os.path.join(self.plots_dir, f"{self.name}_constraint_grid.png"), dpi=400)
         plt.show()
 
     def plot_monthly_heatmap(self, year, month, time_resolution=None, cmap='Blues'):
@@ -451,7 +461,7 @@ class Source(ABC):
             out_fname = os.path.join(self.plots_dir,
                                      f"{self.name}_{year}-{month:02d}_heatmap.png")
 
-            plt.savefig(out_fname, dpi=300)
+            plt.savefig(out_fname, dpi=400)
             plt.show()
             print(f"Saved monthly heat‑map to {out_fname}")
         else:
@@ -617,7 +627,7 @@ class Source(ABC):
 
         if plot_path:
             fname = f"{self.name}_months_visible.png"
-            plt.savefig(os.path.join(self.plots_dir, fname), dpi=300)
+            plt.savefig(os.path.join(self.plots_dir, fname), dpi=400)
 
         plt.show()
 
@@ -806,7 +816,7 @@ class PointSource(Source):
 
             # altaz_frame = AltAz(obstime=tw, location=self.qubic_site.location)
             # disk_altaz = source.transform_to(altaz_frame)
-            # print(disk_altaz.alt.degree)
+            # print(disk_altaz.alt.deg, tw.strftime('%H:%M'))
 
             plot_sky(
                 source, self.qubic_site, tw,
@@ -830,7 +840,8 @@ class PointSource(Source):
             add_label = False
 
         safe_name = self.name.replace("-", r"\,")
-        title = r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}"
+        title = (r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}\n" +
+                 rf"Time Resolution: ${round(loc_time_resolution.value)} \, {loc_time_resolution.unit}$")
 
         plt.legend(loc="upper right", bbox_to_anchor=(1.50, 1))
         fig = plt.gcf()
@@ -839,7 +850,7 @@ class PointSource(Source):
         plt.gca().set_facecolor("whitesmoke")
         if make_plot:
             plt.savefig(os.path.join(self.plots_dir, f"{self.name}_polar_plot"),
-                        dpi=600)
+                        dpi=400)
         plt.show()
 
 
@@ -1016,19 +1027,19 @@ class ExtendedSource(Source):
             tw = time_grid_from_range([start, stop], time_resolution=loc_time_resolution)
             altaz = AltAz(obstime=tw, location=self.qubic_site.location)
 
-            # ─── center ───
+            # center
             center_altaz = self.coord.transform_to(altaz)
 
-            # ─── shift +\- radius ───
-            offset = self.radius
-            top_altaz = SkyCoord(
-                alt=np.minimum(center_altaz.alt + offset, 90 * u.deg),
-                az=center_altaz.az, frame=altaz
-            )
-            bottom_altaz = SkyCoord(
-                alt=np.maximum(center_altaz.alt - offset, -90 * u.deg),
-                az=center_altaz.az, frame=altaz
-            )
+            #  shift +\- radius
+            # offset = self.radius
+            # top_altaz = SkyCoord(
+            #     alt=np.minimum(center_altaz.alt + offset, 90 * u.deg),
+            #     az=center_altaz.az, frame=altaz
+            # )
+            # bottom_altaz = SkyCoord(
+            #     alt=np.maximum(center_altaz.alt - offset, -90 * u.deg),
+            #     az=center_altaz.az, frame=altaz
+            # )
 
             sun = get_body("sun", time=tw, location=self.qubic_site.location).transform_to(altaz)
             moon = get_body("moon", time=tw, location=self.qubic_site.location).transform_to(altaz)
@@ -1065,7 +1076,8 @@ class ExtendedSource(Source):
         safe_name = self.name.replace("-", r"\,")
         title = (
                 r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}\n"
-                                          r"QUBIC Patch Radius " + f"{self.radius.value:.1f}" + r"$^\circ$ "
+                                          r"QUBIC Patch Radius " + f"{self.radius.value:.1f}" + r"$^\circ$ - " +
+                rf"Time Resolution: ${round(loc_time_resolution.value)} \, {loc_time_resolution.unit}$"
         )
 
         fig.suptitle(title)
@@ -1074,12 +1086,12 @@ class ExtendedSource(Source):
 
         if make_plot:
             plt.savefig(os.path.join(self.plots_dir,
-                                     f"{self.name}_polar_plot"), dpi=600)
+                                     f"{self.name}_polar_plot"), dpi=400)
         plt.show()
 
 
 if __name__ == "__main__":
-    obs_time = Time('2025-04-07T00:00:00')  # right region
+    obs_time = Time('2025-06-12T00:00:00')  # right region
     region_path = "data/sky_regions.ecsv"
     # sources_path = "data/sources.txt"
 
@@ -1106,7 +1118,7 @@ if __name__ == "__main__":
         description="Qubic telescope on Alto Chorrillos, Salta",
     )
 
-    month = 7
+    month = 6
     year = 2025
     base_dir = "plots_trajectories"
     n_days = cal.monthrange(year, month)[1]
@@ -1132,17 +1144,17 @@ if __name__ == "__main__":
         #     source.plot_trajectory(loc_time_resolution=20 * u.min, make_plot=True)
         #     source.write_trajectory()
 
-        # moon_source = PointSource("moon",
-        #                           qubic_site,
-        #                           obs_time,
-        #                           point_source_constraints,
-        #                           time_resolution=time_resolution,
-        #                           results_dir=result_dir)
+        moon_source = PointSource("moon",
+                                  qubic_site,
+                                  obs_time,
+                                  point_source_constraints,
+                                  time_resolution=time_resolution,
+                                  results_dir=result_dir)
         #
-        # moon_source.configure()
-        # moon_source.evaluate_constraints(make_plot=True)
-        # moon_source.plot_trajectory(loc_time_resolution=20 * u.min, make_plot=True)
-        # moon_source.write_trajectory()
+        moon_source.configure()
+        moon_source.evaluate_constraints(make_plot=True)
+        moon_source.plot_trajectory(loc_time_resolution=time_resolution / 2, make_plot=True)
+        moon_source.write_trajectory()
 
         regions = ExtendedSource.load_sources(
             qubic_site, obs_time, extended_source_constraints,
@@ -1156,11 +1168,8 @@ if __name__ == "__main__":
             region = regions[region]
             region.configure()
             region.evaluate_constraints(make_plot=True)
-            region.plot_trajectory(loc_time_resolution=20 * u.min, make_plot=True)
+            region.plot_trajectory(loc_time_resolution=time_resolution / 2, make_plot=True)
             region.write_trajectory()
-
-
-
 
         #     region.plot_months_visible(Time("2025-01-01"),
         #                                Time("2026-12-31"),

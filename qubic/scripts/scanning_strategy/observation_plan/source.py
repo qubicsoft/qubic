@@ -1085,7 +1085,7 @@ if __name__ == "__main__":
 
     time_resolution = 30 * u.min
     point_source_constraints = [
-        AltitudeConstraint(15 * u.deg, 85 * u.deg),
+        AltitudeConstraint(35 * u.deg, 85 * u.deg),
         AirmassConstraint(3),
         SunSeparationConstraint(min=50 * u.deg)
     ]

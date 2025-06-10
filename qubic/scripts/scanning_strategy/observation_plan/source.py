@@ -14,13 +14,88 @@ from astropy.time import Time
 from astropy.table import Table, QTable
 from astropy.coordinates import SkyCoord, get_body, EarthLocation, AltAz, GCRS
 
+from astroquery.simbad import Simbad
+
 from pytz import timezone
 from astroplan.plots import plot_sky
-from astroplan import FixedTarget, Constraint, Observer, months_observable
+from astroplan import FixedTarget, Constraint, Observer
 from astroplan.utils import time_grid_from_range
 from astroplan import AltitudeConstraint, AirmassConstraint
 
 from constraint import SunSeparationConstraint, MoonSeparationConstraint
+
+plt.rcParams['text.usetex'] = True
+plt.rcParams['font.family'] = 'serif'
+
+
+def load_sources_from_file(
+        path: str,
+        qubic_site,
+        obs_time,
+        point_constraints: list,
+        extended_constraints: list,
+        time_resolution: u.Quantity,
+        results_dir: str = '.',
+        radius: u.Quantity = 14 * u.deg,
+        radial_samples: int = 50,
+        polar_angle_samples: int = 100):
+    """
+    Carica da un file di testo una lista di sorgenti e le classifica
+    in PointSource ed ExtendedSource.
+
+    Restituisce una tupla: (point_sources, extended_sources).
+    """
+    # Aggiungo i campi necessari a SIMBAD
+    Simbad.add_votable_fields("ra", "dec", "coo_err_maj", "coo_err_min", "dim")
+
+    # Leggo i nomi dal file
+    with open(path) as f:
+        names = [line.strip() for line in f if line.strip()]
+
+    point_sources = []
+    extended_sources = []
+
+    for name in names:
+        tbl = Simbad.query_object(name)
+        if tbl is None:
+            print(f"{name}: non trovato")
+            continue
+
+        # Coordinate ICRS
+        ra, dec = tbl["ra"][0], tbl["dec"][0]
+        coord = SkyCoord(ra, dec, unit=(u.hourangle, u.deg), frame="icrs")
+
+        # Major axis in arcmin – se > 1 consideriamo estesa
+        maj = tbl["galdim_majaxis"][0]
+        is_extended = (maj is not None and maj > 1)
+
+        if is_extended:
+            src = ExtendedSource(
+                name=name,
+                coord=coord,
+                qubic_site=qubic_site,
+                obs_time=obs_time,
+                constraints=extended_constraints,
+                time_resolution=time_resolution,
+                results_dir=results_dir,
+                radius=radius,
+                radial_samples=radial_samples,
+                polar_angle_samples=polar_angle_samples
+            )
+            extended_sources.append(src)
+        else:
+            src = PointSource(
+                name=name,
+                qubic_site=qubic_site,
+                obs_time=obs_time,
+                constraints=point_constraints,
+                time_resolution=time_resolution,
+                coord=coord,
+                results_dir=results_dir)
+
+            point_sources.append(src)
+
+    return point_sources, extended_sources
 
 
 class Source(ABC):
@@ -69,6 +144,7 @@ class Source(ABC):
             obs_time: Time,
             constraints: list,
             time_resolution: u.Quantity,
+            coord: SkyCoord | None = None,
             results_dir: str = '.'):
 
         self.name = name
@@ -76,13 +152,13 @@ class Source(ABC):
         self.obs_time = obs_time
         self.time_resolution = time_resolution
         self.constraints = constraints
+        self.coord = coord
         self.results_dir = results_dir
 
-        self.coord: SkyCoord | None = None
         self.time_grid: list[Time] = []
         self.constraints_grid: np.ndarray = np.array([])
         self.valid_time_intervals: list = []
-        self.plots_dir: str = '.'
+        self.plots_dir: str = '..'
 
     def configure(self):
         """
@@ -120,6 +196,10 @@ class Source(ABC):
         if self.constraints_grid.size == 0:
             self.evaluate_constraints()
 
+        if not self.constraints:
+            self.valid_time_intervals = [[self.time_grid[0], self.time_grid[-1]]]
+            return
+
         # Mask that checks whether the constraints are satisfied for each time interval in time_grid.
         # It contains True or False depending on whether the constraints are met
         mask = np.all(self.constraints_grid == 1, axis=0)
@@ -152,6 +232,31 @@ class Source(ABC):
         if last_valid[0] == last_valid[-1]:
             self.valid_time_intervals[-1][1] += self.time_resolution - 1 * u.s
 
+    def _parse_ylabels(self):
+
+        def fmt_val(v):
+            if hasattr(v, 'unit') and v.unit.is_equivalent(u.deg):
+                return rf"{v.value} ^ \circ"
+            return str(v)
+
+        labels = []
+        for c in self.constraints:
+            minv, maxv = c.min, c.max
+
+            name = c.__class__.__name__.replace('Constraint', '')
+
+            if minv is not None and maxv is None:
+
+                label = rf"${name} \ge {fmt_val(minv)}$"
+            elif minv is None and maxv is not None:
+
+                label = rf"${name} \le {fmt_val(maxv)}$"
+            else:
+
+                label = rf"${fmt_val(minv)} \le {name} \le {fmt_val(maxv)}$"
+
+            labels.append(label)
+        return labels
 
     def _plot_constraint_grid(self, grid: np.ndarray, make_plot: bool = False):
         """
@@ -167,6 +272,14 @@ class Source(ABC):
             if true, make the constraint grid plot
         """
 
+        if not self.constraints:
+            return
+
+        # Compute time resolution from the first two entries of time_grid
+        dt = (self.time_grid[1] - self.time_grid[0]).to(u.hour)
+        # Number of time steps in a full 24h period at this resolution
+        N = int((24 * u.hour / dt).decompose().value)
+
         if not make_plot:
             return
 
@@ -174,21 +287,37 @@ class Source(ABC):
                   -0.5, len(self.constraints) - 0.5)
 
         fig, ax = plt.subplots(figsize=(14, 6), tight_layout=True)
-        fig.suptitle(f'Constrain grid {self.name} source - {self.obs_time.strftime("%Y/%m/%d")} UTC')
 
         # two-color map: invalid (orange), valid (teal)
         cmap = ListedColormap(["#D95F02", "#1B9E77"])
         ax.imshow(grid, extent=extent, origin="lower", cmap=cmap, vmin=0, vmax=1)
 
+        # Compute percentage of observable hours
+        valid_per_slot = np.all(grid, axis=0)
+        n_valid = valid_per_slot.sum()
+        tot_hours = n_valid * dt.value  # dt is in hours
+        percent = tot_hours / 24.0 * 100
+
+        # Set title including percentage
+        safe_name = self.name.replace("-", r"\,")
+        title = (
+                r"$\bf{Constraint\ Grid:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}\n"
+                                               rf"${percent:.1f} \% \ observable$ "
+        )
+
+        fig.suptitle(title)
+
         ax.set_xticks(range(len(self.time_grid)))
         ax.set_xticklabels([t.datetime.strftime("%H:%M") for t in self.time_grid], rotation=30, ha="right")
         ax.set_xlabel('UTC Time')
 
+        ytick_labels = self._parse_ylabels()
+
         # y-ticks for each constraint class names
         ax.set_yticks(range(len(self.constraints)))
-        ax.set_yticklabels([c.__class__.__name__ for c in self.constraints])
+        ax.set_yticklabels(ytick_labels)
 
-        ax.set_xticks(np.arange(-0.5, len(self.time_grid)), minor=True)
+        ax.set_xticks(np.arange(-0.5, N), minor=True)
         ax.set_yticks(np.arange(-0.5, len(self.constraints)), minor=True)
 
         ax.grid(which='minor', color='#333333', linewidth=1)
@@ -307,7 +436,7 @@ class Source(ABC):
             ax.set_yticks(np.arange(n_days))
             ax.set_yticklabels([f"{d:02d}" for d in range(1, n_days + 1)])
 
-            ax.set_xlabel("UTC time (HH:MM)")
+            ax.set_xlabel("Local time (HH:MM)")
             ax.set_ylabel("Day of month")
             ax.set_title(f"Valid observation windows for '{self.name}' – "
                          f"{cal.month_name[month]} {year}")
@@ -353,19 +482,18 @@ class Source(ABC):
 
         visible: list[tuple[int, int]] = []
 
-        # Start from the first day of the month containing start
-        current = Time(f"{start.datetime.year}-{start.datetime.month:02d}-01 00:00:00", scale='utc')
-
         # Determine target coordinates array: extended region or single point
         if hasattr(self, "region_coord"):
             target_coords = self.region_coord
         else:
             if self.coord is None:
-                self.coord = get_body(self.name, time=current, location=self.qubic_site.location)
-                # raise RuntimeError("coord not initialized: load the source first")
+                raise RuntimeError("coord not initialized: load the source first")
 
             # SkyCoord array of length 1
             target_coords = np.atleast_1d(self.coord)
+
+        # Start from the first day of the month containing start
+        current = Time(f"{start.datetime.year}-{start.datetime.month:02d}-01 00:00:00", scale='utc')
 
         # Iterate month by month until we pass end
         while current < end:
@@ -546,7 +674,7 @@ class Source(ABC):
                 ras.extend(sc_icrs.ra.deg)
                 decs.extend(sc_icrs.dec.deg)
 
-                elevations.extend(sc_altaz.az.deg)
+                elevations.extend(sc_altaz.alt.deg)
                 azimuths.extend(sc_altaz.az.deg)
             else:
                 mask = (self.time_grid >= start) & (self.time_grid <= stop)
@@ -563,13 +691,12 @@ class Source(ABC):
                 ras.extend(icrs_coords.ra.deg)
                 decs.extend(icrs_coords.dec.deg)
 
-                elevations.extend(altaz_coords.az.deg)
+                elevations.extend(altaz_coords.alt.deg)
                 azimuths.extend(altaz_coords.az.deg)
 
             # Convert datetime objects to ISO strings
             times_local = [t.strftime('%Y-%m-%d %H:%M:%S') for t in times_local]
             times_utc = [t.strftime('%Y-%m-%d %H:%M:%S') for t in times_utc]
-
 
             # Build QTable and write to ECSV
             table = QTable([times_utc, times_local, ras, decs, elevations, azimuths],
@@ -578,7 +705,7 @@ class Source(ABC):
             savepath = os.path.join(dest, f"{name}.ecsv")
 
             table.write(savepath, format="ascii.ecsv", overwrite=True)
-            print(f"Wrote valid observation times with RA/DEC to {dest} - {start.strftime('%Y/%m/%d %H:%M')}")
+            print(f"Wrote valid observation times with RA/DEC to {dest} - {start.strftime('%Y/%m/%d %H:%S')}")
 
     @classmethod
     @abstractmethod
@@ -610,8 +737,9 @@ class PointSource(Source):
         if not self.time_grid:
             self.compute_time_grid()
 
-        self.coord = get_body(self.name, time=self.time_grid,
-                              location=self.qubic_site.location)
+        if not self.coord:
+            self.coord = get_body(self.name, time=self.time_grid,
+                                  location=self.qubic_site.location)
 
     @classmethod
     def load_sources(*args, **kwargs):
@@ -667,7 +795,13 @@ class PointSource(Source):
 
         for start, stop in self.valid_time_intervals:
             tw = time_grid_from_range([start, stop], time_resolution=loc_time_resolution)
-            source = get_body(self.name, time=tw, location=self.qubic_site.location)
+            altaz = AltAz(obstime=tw, location=self.qubic_site.location)
+
+            if self.coord.isscalar:
+                source = self.coord.transform_to(altaz)
+            else:
+                source = get_body(self.name, time=tw, location=self.qubic_site.location)
+
             sun = get_body("sun", time=tw, location=self.qubic_site.location)
 
             # altaz_frame = AltAz(obstime=tw, location=self.qubic_site.location)
@@ -695,9 +829,12 @@ class PointSource(Source):
 
             add_label = False
 
+        safe_name = self.name.replace("-", r"\,")
+        title = r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}"
+
         plt.legend(loc="upper right", bbox_to_anchor=(1.50, 1))
         fig = plt.gcf()
-        fig.suptitle(f"Polar plot {self.name} source - {self.obs_time.strftime('%Y/%m/%d')} UTC")
+        fig.suptitle(title)
         fig.tight_layout()
         plt.gca().set_facecolor("whitesmoke")
         if make_plot:
@@ -712,10 +849,10 @@ class ExtendedSource(Source):
             self,
             name: str,
             coord: SkyCoord,
-            region_coord: SkyCoord,
             qubic_site: Observer,
             obs_time: Time,
             constraints: list,
+            region_coord: SkyCoord | None = None,
             results_dir: str = '.',
             time_resolution: u.Quantity = 1 * u.h,
             radius: u.Quantity = 10 * u.deg,
@@ -723,13 +860,24 @@ class ExtendedSource(Source):
             polar_angle_samples: int = 100):
 
         super().__init__(name, qubic_site, obs_time,
-                         constraints, time_resolution, results_dir)
+                         constraints, time_resolution, coord, results_dir)
 
-        self.coord = coord
-        self.region_coord = region_coord
         self.radius = radius
         self.radial_samples = radial_samples
         self.polar_angle_samples = polar_angle_samples
+
+        if not region_coord:
+            # Generate an array of equally spaced position angles [0, 360) degrees
+            pas = np.linspace(0, 360, polar_angle_samples) * u.deg
+            # Create an array of constant separations equal to the specified radius
+            seps = np.full_like(pas, radius)
+
+            # Sample points around the central coordinate to define the disk
+            disk_icrs = self.coord.directional_offset_by(
+                position_angle=pas,
+                separation=seps)
+
+            self.region_coord = disk_icrs
 
     @classmethod
     def load_sources(
@@ -740,7 +888,7 @@ class ExtendedSource(Source):
             time_resolution,
             source_file: str,
             results_dir: str = '.',
-            radius: u.Quantity = 10 * u.deg,
+            radius: u.Quantity = 14 * u.deg,
             radial_samples: int = 50,
             polar_angle_samples: int = 100):
 
@@ -779,8 +927,8 @@ class ExtendedSource(Source):
 
         Returns
         -------
-        [cls]
-            Mapping from source name to an instantiated Source object
+        dict[str, cls]
+            Mapping from source name to an instantiated Source object.
         """
 
         if not os.path.isfile(source_file):
@@ -789,14 +937,12 @@ class ExtendedSource(Source):
         # Read the ECSV table of sky regions
         sky_regions = Table.read(source_file, format="ascii.ecsv")
 
-        # Generate an array of equally spaced position angles [0, 360) degrees
-        pas = np.linspace(0, 360, polar_angle_samples) * u.deg
-        # Create an array of constant separations equal to the specified radius
-        seps = np.full_like(pas, radius)
+        # # Generate an array of equally spaced position angles [0, 360) degrees
+        # pas = np.linspace(0, 360, polar_angle_samples) * u.deg
+        # # Create an array of constant separations equal to the specified radius
+        # seps = np.full_like(pas, radius)
 
-        # # Compute the observatory's GCRS geocentric location at the given obstime
-        # obsgeoloc = qubic_site.location.get_gcrs(obstime=obstime).cartesian
-        result = []
+        result = {}
 
         # Loop over each row in the table to build source instances
         for row in sky_regions:
@@ -807,22 +953,10 @@ class ExtendedSource(Source):
                 unit=u.deg, frame="galactic"
             ).transform_to("icrs")
 
-            # # Transform the center coordinate into GCRS at the observation time
-            # center_gcrs = center_icrs.transform_to(GCRS(obstime=obstime, obsgeoloc=obsgeoloc))
-
-            # Sample points around the central coordinate to define the disk
-            disk_icrs = center_icrs.directional_offset_by(
-                position_angle=pas,
-                separation=seps)
-
-            # # Transform the sampled disk coordinates to GCRS frame
-            # disk_gcrs = disk_icrs.transform_to(GCRS(obstime=obstime, obsgeoloc=obsgeoloc))
-
-            # Instantiate the Source subclass for this region
-            result.append(cls(
-                name, center_icrs, disk_icrs,
-                qubic_site, obstime, constraints, results_dir,
-                time_resolution, radius, radial_samples, polar_angle_samples))
+            result[name] = cls(
+                name, center_icrs,
+                qubic_site, obstime, constraints, None, results_dir,
+                time_resolution, radius, radial_samples, polar_angle_samples)
 
         return result
 
@@ -839,6 +973,9 @@ class ExtendedSource(Source):
 
         if not self.time_grid:
             self.compute_time_grid()
+
+        if not self.constraints:
+            return
 
         grid = np.zeros((len(self.constraints), len(self.time_grid)))
 
@@ -879,8 +1016,10 @@ class ExtendedSource(Source):
             tw = time_grid_from_range([start, stop], time_resolution=loc_time_resolution)
             altaz = AltAz(obstime=tw, location=self.qubic_site.location)
 
+            # ─── center ───
             center_altaz = self.coord.transform_to(altaz)
 
+            # ─── shift +\- radius ───
             offset = self.radius
             top_altaz = SkyCoord(
                 alt=np.minimum(center_altaz.alt + offset, 90 * u.deg),
@@ -899,15 +1038,15 @@ class ExtendedSource(Source):
                                    "label": f'Center: {start.datetime.strftime("%H:%M")} - {stop.datetime.strftime("%H:%M")}'},
                      north_to_east_ccw=False)
 
-            plot_sky(top_altaz, self.qubic_site, tw,
-                     style_kwargs={"marker": "^",
-                                   "label": f"Top (+{offset})" if add_label else ""},
-                     north_to_east_ccw=False)
-
-            plot_sky(bottom_altaz, self.qubic_site, tw,
-                     style_kwargs={"marker": "v",
-                                   "label": f"Bottom (–{offset})" if add_label else ""},
-                     north_to_east_ccw=False)
+            # plot_sky(top_altaz, self.qubic_site, tw,
+            #          style_kwargs={"marker": "^",
+            #                        "label": f"Top (+{offset})" if add_label else ""},
+            #          north_to_east_ccw=False)
+            #
+            # plot_sky(bottom_altaz, self.qubic_site, tw,
+            #          style_kwargs={"marker": "v",
+            #                        "label": f"Bottom (–{offset})" if add_label else ""},
+            #          north_to_east_ccw=False)
 
             plot_sky(sun, self.qubic_site, tw,
                      style_kwargs={"marker": "*", "color": "gold",
@@ -922,7 +1061,14 @@ class ExtendedSource(Source):
 
         plt.legend(loc="upper right", bbox_to_anchor=(1.60, 1))
         fig = plt.gcf()
-        fig.suptitle(f"Polar plot {self.name} source - {self.obs_time.strftime('%Y/%m/%d')} UTC")
+
+        safe_name = self.name.replace("-", r"\,")
+        title = (
+                r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}\n"
+                                          r"QUBIC Patch Radius " + f"{self.radius.value:.1f}" + r"$^\circ$ "
+        )
+
+        fig.suptitle(title)
         fig.tight_layout()
         plt.gca().set_facecolor("whitesmoke")
 
@@ -933,12 +1079,16 @@ class ExtendedSource(Source):
 
 
 if __name__ == "__main__":
+    obs_time = Time('2025-04-07T00:00:00')  # right region
+    region_path = "data/sky_regions.ecsv"
+    # sources_path = "data/sources.txt"
 
     time_resolution = 30 * u.min
     point_source_constraints = [
         AltitudeConstraint(15 * u.deg, 85 * u.deg),
         AirmassConstraint(3),
-        SunSeparationConstraint(min=50 * u.deg)]
+        SunSeparationConstraint(min=50 * u.deg)
+    ]
 
     extended_source_constraints = point_source_constraints + [MoonSeparationConstraint(min=30 * u.deg)]
 
@@ -947,7 +1097,6 @@ if __name__ == "__main__":
         lat=-24.1844 * u.deg,
         height=4820 * u.m,
     )
-
     qubic_site = Observer(
         name="Qubic",
         location=location,
@@ -957,71 +1106,67 @@ if __name__ == "__main__":
         description="Qubic telescope on Alto Chorrillos, Salta",
     )
 
-    # Observability windows for 06/2025
-    month = 5
+    month = 7
     year = 2025
     base_dir = "plots_trajectories"
     n_days = cal.monthrange(year, month)[1]
 
-    # path to sky_regions.ecsv (it contains the galactic coordinates of the four regions)
-    extended_source_path = "data/sky_regions.ecsv"
-
-    # produce all the observability grid and the observability windows for a given month
-    for day in range(24, n_days + 1):
-
+    for day in range(1, n_days + 1):
         obs_time = Time(f'{year}-{month}-{day}T00:00:00')
-        result_dir = os.path.join("plots_trajectories", obs_time.strftime("%Y%m%d"))
+        result_dir = os.path.join(base_dir, obs_time.strftime("%Y%m%d"))
 
-        moon_source = PointSource("moon",
-                                  qubic_site,
-                                  obs_time,
-                                  point_source_constraints,
-                                  time_resolution=time_resolution,
-                                  results_dir=result_dir)
+        # points, extended = load_sources_from_file(
+        #     path=sources_path,
+        #     obs_time=obs_time,
+        #     point_constraints=point_source_constraints,
+        #     time_resolution=time_resolution,
+        #     results_dir=result_dir,
+        #     qubic_site=qubic_site,
+        #     extended_constraints=extended_source_constraints,
+        #     radial_samples=50,
+        #     polar_angle_samples=100)
+        #
+        # for source in points + extended:
+        #     source.configure()
+        #     source.evaluate_constraints(make_plot=True)
+        #     source.plot_trajectory(loc_time_resolution=20 * u.min, make_plot=True)
+        #     source.write_trajectory()
+
+        # moon_source = PointSource("moon",
+        #                           qubic_site,
+        #                           obs_time,
+        #                           point_source_constraints,
+        #                           time_resolution=time_resolution,
+        #                           results_dir=result_dir)
+        #
+        # moon_source.configure()
+        # moon_source.evaluate_constraints(make_plot=True)
+        # moon_source.plot_trajectory(loc_time_resolution=20 * u.min, make_plot=True)
+        # moon_source.write_trajectory()
 
         regions = ExtendedSource.load_sources(
             qubic_site, obs_time, extended_source_constraints,
             time_resolution=time_resolution,
             radius=14 * u.deg,
-            source_file=extended_source_path,
+            source_file=region_path,
             results_dir=result_dir
         )
 
-        for source in regions + [moon_source]:
+        for region in regions:
+            region = regions[region]
+            region.configure()
+            region.evaluate_constraints(make_plot=True)
+            region.plot_trajectory(loc_time_resolution=20 * u.min, make_plot=True)
+            region.write_trajectory()
 
-            source.configure()
-            source.evaluate_constraints(make_plot=True)
-            source.plot_trajectory(loc_time_resolution=20 * u.min, make_plot=True)
-            source.write_trajectory()
 
-    # # Given an year, it shows the observability windows for all the months
-    # # set obs_time to empty due to the fact that is not used for this analysis
-    # obs_time = None
-    #
-    # result_dir = os.path.join('plots_trajectory', 'months_visible')
-    #
-    # moon_source = PointSource("moon",
-    #                           qubic_site,
-    #                           obs_time,
-    #                           point_source_constraints,
-    #                           time_resolution=time_resolution,
-    #                           results_dir=result_dir)
-    #
-    # regions = ExtendedSource.load_sources(
-    #     qubic_site, obs_time, extended_source_constraints,
-    #     time_resolution=time_resolution,
-    #     radius=14 * u.deg,
-    #     source_file=extended_source_path,
-    #     results_dir=result_dir
-    # )
-    #
-    # for source in [moon_source]:
-    #
-    #     source.configure()
-    #
-    #     source.plot_months_visible(Time("2025-01-01"),
-    #                                Time("2026-12-31"),
-    #                                time_resolution=15 * u.min)
-    #
-    #     for month in range(1, 13):
-    #         source.plot_monthly_heatmap(2025, month, time_resolution=15 * u.min)
+
+
+        #     region.plot_months_visible(Time("2025-01-01"),
+        #                                Time("2026-12-31"),
+        #                                time_resolution=15 * u.min)
+
+        #     for month in range(1, 13):
+        #         region.plot_monthly_heatmap(2025, month, time_resolution=15 * u.min)
+        # # #
+        # break

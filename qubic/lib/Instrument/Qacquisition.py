@@ -799,8 +799,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         else:
             raise TypeError(f"{self.dict['instrument_type']} is not implemented...")
 
-    def sum_over_band(self, h, algo, gain=None):  # same for DB and UWB sum_over_band for FMM except for the return,
-        # similar for CMM, with one band instead of two
+    def sum_over_band(self, h, algo, gain=None):
         """
 
         Perform sum over sub-operators depending on the reconstruction algorithms (FMM or CMM)
@@ -816,7 +815,6 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 imin = irec * f
                 imax = (irec + 1) * f - 1
                 op_sum += [h[(self.allnus >= self.allnus[imin]) * (self.allnus <= self.allnus[imax])].sum(axis=0)]
-
             block_list = []
             for iband in range(self.nFocalPlanes):
                 edges_band = [iband * (self.nrec // self.nFocalPlanes), (iband + 1) * (self.nrec // self.nFocalPlanes)]  # splitting nrec op
@@ -873,7 +871,6 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 algo = "CMM"
 
             ### Compute gaussian kernel to account for angular resolution
-            # convolution = IdentityOperator()
             if fwhm is None:
                 convolution = IdentityOperator()
             else:
@@ -1144,17 +1141,14 @@ class JointAcquisitionFrequencyMapMaking:
 
         ### Get QUBIC H operator
         H_qubic = self.qubic.get_operator(fwhm=fwhm)
-        print("H_qubic shapein: ", H_qubic.shapein, "H_qubic shapeout: ", H_qubic.shapeout)
         R_planck = ReshapeOperator((12 * self.qubic.scene.nside**2, nstokes), (12 * self.qubic.scene.nside**2 * nstokes))
         H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0)
         # It is necessary to change the shape of H_planck_ in order to stack it with H_qubic
         R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
         H_planck = R_diag(H_planck_)
-        print("H_planck shapein: ", H_planck.shapein, "H_planck shapeout: ", H_planck.shapeout)
         H_list = [H_qubic]
         ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
         H_list += [H_planck]
-        print("H", (BlockColumnOperator(H_list, axisout=0) * U).shapein, "shapeout: ", (BlockColumnOperator(H_list, axisout=0) * U).shapeout)
         return BlockColumnOperator(H_list, axisout=0) * U
 
     def get_invntt_operator(  # We stack the invN_qubic and invN_planck on top of eachother
@@ -1173,7 +1167,6 @@ class JointAcquisitionFrequencyMapMaking:
         invn_q = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)  # add weight of Qubic detector and photon noise
         R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
         invn_q = [R(invn_q(R.T))]
-        print("invN_qubic shapein: ", invn_q[0].shapein, "invN_qubic shapeout: ", invn_q[0].shapeout)
         invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, beam_correction=beam_correction[0], mask=mask)
         invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, beam_correction=beam_correction[0], mask=mask)
 
@@ -1185,9 +1178,7 @@ class JointAcquisitionFrequencyMapMaking:
             invNe = [invN_143, invN_217]
         else:
             invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
-        print("invN_planck shapein: ", invNe[0].shapein, "invN_planck shapeout: ", invNe[0].shapeout)
         invN = invn_q + invNe
-        print("invN shapein: ", BlockDiagonalOperator(invN, axisout=0).shapein, "invN shapeout: ", BlockDiagonalOperator(invN, axisout=0).shapeout)
         return BlockDiagonalOperator(invN, axisout=0)
 
 

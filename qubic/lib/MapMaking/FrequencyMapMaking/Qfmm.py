@@ -328,16 +328,14 @@ class PipelineFrequencyMapMaking:
             "nprocs_instrument": self.size,
             "photon_noise": True,
             "nhwp_angles": 3,
-            #'effective_duration':3,
             "effective_duration150": 3,
             "effective_duration220": 3,
             "filter_relative_bandwidth": 0.25,
-            "type_instrument": "wide",  # ?
+            "type_instrument": "wide",
             "TemperatureAtmosphere150": None,
             "TemperatureAtmosphere220": None,
             "EmissivityAtmosphere150": None,
             "EmissivityAtmosphere220": None,
-            # mettre if ici pour fixer detector_nep
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
@@ -501,17 +499,14 @@ class PipelineFrequencyMapMaking:
         TOD_PLANCK = np.zeros((max(self.params["QUBIC"]["nrec"], 2), 12 * self.params["SKY"]["nside"] ** 2, 3))
 
         for irec in range(self.params["QUBIC"]["nrec"]):
-            # fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in])
-            fwhm_irec = self.fwhm_rec[irec]
-            C = HealpixConvolutionGaussianOperator(fwhm=fwhm_irec, lmax=3 * self.params["SKY"]["nside"] - 1)
             if irec < self.params["QUBIC"]["nrec"] / 2:  # choose between the two levels of noise
                 noise = self.noise_planck[0]
             else:
                 noise = self.noise_planck[1]
-            TOD_PLANCK[irec] = C(self.input_maps.maps[irec] + noise)
+            TOD_PLANCK[irec] = self.maps_input_convolved[irec] + noise
 
         if self.params["QUBIC"]["nrec"] == 1:  # To handle the case nrec == 1, TOD_PLANCK[0] alreay computed above
-            TOD_PLANCK[1] = C(self.input_maps.maps[1] + self.noise_planck[1])
+            TOD_PLANCK[1] = self.maps_input_convolved[1] + noise[1]
 
         TOD_PLANCK = TOD_PLANCK.ravel()
 

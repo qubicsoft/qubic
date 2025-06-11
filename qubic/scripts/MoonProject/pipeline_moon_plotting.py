@@ -21,6 +21,13 @@ conv_reso_fwhm = 2.35482
 
 #########################
 
+def get_ylim(x, xlim, y):
+    x_in_range = (x >= xlim[0]) & (x <= xlim[1])
+    y_in_range = y[x_in_range]
+    min_y = np.min(y_in_range)
+    max_y = np.max(y_in_range)
+    new_ylim = [min_y - 0.05 * np.abs(min_y), max_y + 0.05 * np.abs(max_y)]
+    return new_ylim
 
 def display_one(mapsb, anatype='', sub=(1,1,1), nlo=3, nhi=3, reso=12, rot=[0,50]):
     unseen = (mapsb == hp.UNSEEN)
@@ -83,7 +90,9 @@ def plot_fit_img(mapxy, axs, ipos, jpos, iguess, jguess, ifit, jfit, vmin, vmax,
     im = ax.imshow(mapxy, origin=origin, extent=[np.max(ipos), np.min(ipos), np.max(jpos), np.min(jpos)], vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
     ax.set_xlabel('Degrees')
     ax.set_ylabel('Degrees')
-    ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=3, label='Guess') # j = -azt = x, i = elt = y
+    # ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=3, label='Guess') # j = -azt = x, i = elt = y
+    # ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
+    ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=3, label='Guess') # j = azt, i = -elt
     ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
     ax.legend()
     cax = axs[-1]

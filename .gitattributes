@@ -1,6 +1,6 @@
-*.ipynb filter=clean_ipynb
+#*.ipynb filter=clean_ipynb
 
 # *.ipynb	diff=jupyternotebook
 
 # *.ipynb	merge=jupyternotebook
-*.ipynb filter=clean_ipynb
+#*.ipynb filter=clean_ipynb

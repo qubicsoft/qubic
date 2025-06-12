@@ -7,7 +7,7 @@ CMB:
 Foregrounds:
     ### This section define the in/out foregrounds contribution
 
-    fit_spectral_index: True                                                  # If False, the beta reconstruction is skipped
+    fit_spectral_index: False                                                  # If False, the beta reconstruction is skipped
     bin_mixing_matrix: 4
     blind_method:
         "minimize"                                                            # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
@@ -20,10 +20,10 @@ Foregrounds:
 
         type: "parametric"                                                    # Reconstruction method
         model: "d0"
-        beta_init: [1., 0., 10000000]                                         # PySM model
+        beta_init: [1.54, 0., 10000000]                                         # PySM model
         nside_beta_in: 0                                                      # Input pixelization for beta_d (in a case of d1 model)
         nside_beta_out: 0                                                     # Output pixelization for beta_d (in a case of d1 model)
-        nu0: 150.00000001                                                     # Reference frequency (nu0_d)
+        nu0: 150.0                                                    # Reference frequency (nu0_d)
         l_corr: 10000000                                                      # Decorrelation level (seen only with d6 model)
         amplification: 1                                                      # Amplification of the dust contribution
 
@@ -56,7 +56,7 @@ QUBIC:
     npointings: 1000                                                          # Number of time samples
     nsub_in: 8                                                                # Number of sub-acquisitions
     nsub_out: 8                                                               # Number of sub-acquisitions for the reconstruction
-    convolution_in: False                                                     # Angular resolution in the input TOD
+    convolution_in: True                                                     # Angular resolution in the input TOD
     convolution_out: False                                                    # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:
@@ -88,7 +88,7 @@ PLANCK:
     ### This section define which external data are we using
 
     level_noise_planck: 0                                                     # Noise level for Planck data
-    nintegr_planck: 100                                                       # Number of integration step for Planck data
+    nintegr_planck: 10                                                       # Number of integration step for Planck data
     weight_planck: 0                                                          # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                     # FWHM for apodized QUBIC patch
     30GHz: False
@@ -103,10 +103,10 @@ PLANCK:
 PCG:
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 1
+    n_init_iter_pcg: 50
     n_iter_pcg: 5                                                             # Number of PCG iterations
-    tol_pcg: 1.0e-30                                                          # Tolerance for PCG
-    n_iter_loop: 5                                                            # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+    tol_pcg: 1.0e-25                                                          # Tolerance for PCG
+    n_iter_loop: 1                                                            # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
     ites_to_converge: 1                                                       # should be less than n_iter_loop
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                           # Fixing pixels outside QUBIC patch
@@ -148,6 +148,6 @@ Plots:
     thr_plot: 0.2                                                             # Threashold for maps plot
 
 save_iter: 1                                                                  # Save every 'save_iter' iteration
-foldername: "test_merge"                                                      # Name of the saved folder
+foldername: "test_w_convo"                                                      # Name of the saved folder
 filename: "file"                                                              # Name of the saved file
 lastite: True                                                                 # Keep only the last iteration

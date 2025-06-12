@@ -662,7 +662,6 @@ class QubicMultiAcquisitions:
 
         ### Multi-frequency instrument
         self.multiinstrument = QubicMultibandInstrument(self.dict)
-        print(self.multiinstrument)
 
         if sampling is None:
             self.sampling = get_pointing(self.dict)
@@ -935,7 +934,7 @@ class OtherDataParametric:
             else:
                 self.bw.append(self.dataset["bw{}".format(i)])
 
-        self.fwhm = np.deg2rad(self.create_array("fwhm", self.nus, self.nside) / 60.0)
+        # self.fwhm = np.deg2rad(self.create_array("fwhm", self.nus, self.nside) / 60.0)
         self.comps = comps
         self.nc = len(self.comps)
 
@@ -1059,7 +1058,7 @@ class OtherDataParametric:
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
 
-    def get_operator(self, A, convolution, myfwhm=None, nu_co=None, comm=None):
+    def get_operator(self, A, myfwhm=None, nu_co=None, comm=None):
         R2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
 
         Operator = []
@@ -1067,16 +1066,12 @@ class OtherDataParametric:
         k = 0
         for ii, _ in enumerate(self.nus):
             ope_i = []
-            for _ in range(self.nintegr):
-                if convolution:
-                    if myfwhm is not None:
-                        fwhm = myfwhm[ii]
-                    else:
-                        fwhm = self.fwhm[ii]
-                else:
-                    fwhm = 0
+            if myfwhm is not None:
+                C = HealpixConvolutionGaussianOperator(fwhm=myfwhm[ii], lmax=3 * self.nside - 1)
+            else:
+                C = IdentityOperator()
 
-                C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=3 * self.nside - 1)
+            for _ in range(self.nintegr):
                 D = self._get_mixing_operator(A=A[k])
 
                 ope_i += [C * D]
@@ -1209,7 +1204,7 @@ class JointAcquisitionComponentsMapMaking:
         except Exception:
             mpidist = None
 
-        He = self.external.get_operator(A=Ap, convolution=True, myfwhm=fwhm, comm=mpidist, nu_co=nu_co)
+        He = self.external.get_operator(A=Ap, myfwhm=fwhm, comm=mpidist, nu_co=nu_co)
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 

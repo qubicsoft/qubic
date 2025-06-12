@@ -130,10 +130,14 @@ class PresetAcquisition:
         self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec = self.get_convolution()
 
-        self.components_convolved_recon = np.zeros(np.shape(self.preset_comp.components_out))
-        for i, comp_name in enumerate(self.preset_comp.components_name_out):
-            C_recon = HealpixConvolutionGaussianOperator(self.fwhm_rec[0])
-            self.components_convolved_recon[i] = C_recon(self.preset_comp.components_iter[i])
+        #! Tom : check this part
+        self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
+        for icomp, _ in enumerate(self.preset_comp.components_name_out):
+            comp_nsub = np.zeros((self.preset_tools.params["QUBIC"]["nsub_in"], 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
+            for jsub in range(self.preset_tools.params["QUBIC"]["nsub_in"]):
+                C = HealpixConvolutionGaussianOperator(self.fwhm_tod[jsub])
+                comp_nsub[jsub] = self.preset_mixingmatrix.Amm_in[jsub, icomp] * (C(self.preset_comp.components_in[icomp]))
+            self.components_in_convolved[icomp] = comp_nsub.mean(axis=0)
 
         ### Get observed data
         self.preset_tools.mpi._print_message("    => Getting observational data")
@@ -377,7 +381,7 @@ class PresetAcquisition:
         self.H = self.preset_qubic.joint_in.get_operator(
             A=self.preset_mixingmatrix.Amm_in,
             gain=self.preset_gain.gain_in,
-            fwhm=self.fwhm_tod,
+            fwhm=self.fwhm_tod * 0,
         )
 
         ### Build noise variables
@@ -385,19 +389,21 @@ class PresetAcquisition:
         noise_qubic = self.get_noise()
 
         ### Create QUBIC TOD
-        self.TOD_qubic = (self.H.operands[0])(self.preset_comp.components_in) + noise_qubic
+        self.TOD_qubic = (self.H.operands[0])(self.components_in_convolved) + noise_qubic
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        self.TOD_external = (self.H.operands[1])(self.preset_comp.components_in[:, :, :]) + noise_external
+        self.TOD_external = (self.H.operands[1])(self.components_in_convolved) + noise_external
 
+        #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
         maps_external = _r(self.TOD_external)
 
         ### Reconvolve Planck data toward QUBIC angular resolution
+        #! Tom : correct this part, we  don't want to reconvolve here
         if self.preset_qubic.params_qubic["convolution_in"] or self.preset_qubic.params_qubic["convolution_out"]:
             C = HealpixConvolutionGaussianOperator(
-                fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
+                fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1] * 0,
                 lmax=3 * self.preset_sky.params_sky["nside"],
             )
             for i in range(maps_external.shape[0]):
@@ -405,7 +411,7 @@ class PresetAcquisition:
 
         # if self.preset_tools.params['PCG']['fix_pixels_outside_patch']:
         # maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
-        self.TOD_external = _r.T(maps_external)
+        # self.TOD_external = _r.T(maps_external)
 
         # self.seenpix_external = np.tile(self.preset_sky.seenpix_qubic, (maps_external.shape[0], 3, 1)).reshape(maps_external.shape)
 

@@ -118,7 +118,7 @@ class Pipeline:
             center=self.preset.sky.center,
             reso=self.preset.tools.params["PCG"]["reso_plot"],
             fwhm_plot=self.preset.tools.params["PCG"]["fwhm_plot"],
-            input=self.preset.comp.components_out,
+            input=self.preset.acquisition.components_in_convolved,
             iter_init=self._steps * num_iter,
             is_planck=True,
         )["x"]
@@ -177,7 +177,6 @@ class Pipeline:
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
-        # self.preset.A = U.T * H_i.T * H_i * U
 
         x_planck = self.preset.comp.components_out * (1 - seenpix[None, :, None])
 
@@ -229,6 +228,8 @@ class Pipeline:
                 self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
             )
         )
+        print(self.preset.comp.components_iter.shape)
+        raise ValueError("Tom : is it correct to use this H here ?")
 
         for i in range(len(self.preset.comp.components_name_out)):
             for j in range(self.preset.qubic.joint_out.qubic.nsub):
@@ -487,7 +488,7 @@ class Pipeline:
                     callback=self.callback,
                     tol=1e-10,
                 ).x
-                Ai = self.chi2._fill_A(Ai)  # Ai.reshape((self.preset.qubic.joint_out.qubic.nsub, len(self.preset.comp.components_name_out)-1))
+                Ai = self.chi2._fill_A(Ai)
 
                 for inu in range(self.preset.qubic.joint_out.qubic.nsub):
                     for icomp in range(1, len(self.preset.comp.components_name_out)):
@@ -813,7 +814,7 @@ class Pipeline:
                         pickle.dump(
                             {
                                 "components_in": self.preset.comp.components_in,
-                                "components_convolved_recon": self.preset.acquisition.components_convolved_recon,
+                                "components_in_convolved": self.preset.acquisition.components_in_convolved,
                                 "components_iter": self.preset.comp.components_iter,
                                 "beta": self.preset.acquisition.allbeta,
                                 "beta_true": self.preset.mixingmatrix.beta_in,

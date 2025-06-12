@@ -368,9 +368,6 @@ class PresetMixingMatrix:
 
                     self.Amm_in = self.get_mixingmatrix(self.nus_eff_in, self.beta_in)
                     self.Amm_in = np.transpose(self.Amm_in, (1, 0, 2))
-                    # print(self.Amm_in.shape)
-                    # stop
-
                 else:
                     raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model']} is not yet implemented...")
 

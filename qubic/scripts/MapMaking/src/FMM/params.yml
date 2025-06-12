@@ -1,4 +1,4 @@
-path_out: "w_convo_wo_precond/"
+path_out: "w_convo_out_wo_precond/"
 datafilename: "test"
 
 CMB:
@@ -21,7 +21,7 @@ QUBIC:
     nsub_out: 8
     nrec: 2                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
     convolution_in: True                    # Angular resolution in the input TOD
-    convolution_out: False                  # Angular resolution in the reconstruction
+    convolution_out: True                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
         ndet: 0                             # Level of detector noise            # randomness not fixed for det and photon noise, to be checked

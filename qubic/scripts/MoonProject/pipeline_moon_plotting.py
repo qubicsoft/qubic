@@ -84,10 +84,17 @@ def display_all(mapsb, mapsb_pos, mapsb_neg, anatype='', rot=[0,50], highcontras
     do_display_all(mapsb, mapsb_pos, mapsb_neg, mapav, mapdiff, mapdiff2, rot=rot, anatype=anatype, reso=reso, myrange=myrange, TESNum=TESNum)
 
 
-def plot_fit_img(mapxy, axs, ipos, jpos, iguess, jguess, ifit, jfit, vmin, vmax, ms, origin="upper"):
+def plot_fit_img(mapij, axs, ipos, jpos, iguess, jguess, ifit, jfit, vmin, vmax, ms, origin="upper"):
     ax = axs[0]
     ax.clear()
-    im = ax.imshow(mapxy, origin=origin, extent=[np.max(ipos), np.min(ipos), np.max(jpos), np.min(jpos)], vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
+    # im = ax.imshow(mapxy, origin=origin, extent=[np.max(ipos), np.min(ipos), np.max(jpos), np.min(jpos)], vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
+    if origin == "upper":
+        bottom = np.max(ipos)
+        top = np.min(ipos)
+    elif origin == "lower":
+        bottom = np.min(ipos)
+        top = np.max(ipos)
+    im = ax.imshow(mapij, origin=origin, extent=[np.max(jpos), np.min(jpos), bottom, top], vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
     ax.set_xlabel('Degrees')
     ax.set_ylabel('Degrees')
     # ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=3, label='Guess') # j = -azt = x, i = elt = y

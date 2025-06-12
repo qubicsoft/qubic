@@ -528,7 +528,7 @@ def decorel_azel(mytod, azt, elt, scantype, resolution=0.04, doplot=True, nbins=
     return mytod
 
 
-def detect_peaks_TOD(tt, mytod, resolution, doplot=True):
+def detect_peaks_TOD(tt, mytod, resolution, doplot=False):
 
     mytod = mytod.copy()
     # plt.figure()
@@ -558,8 +558,9 @@ def detect_peaks_TOD(tt, mytod, resolution, doplot=True):
 
     if doplot:
         plt.figure()
-        plt.plot(tt, np.roll(gauss_kernel, len(gauss_kernel)//4 + int(15.2*freq_sampling))*5900000 - 120000)
         plt.plot(tt, mytod)
+        # plt.plot(tt, np.roll(gauss_kernel, len(gauss_kernel)//4 + int(15.2*freq_sampling))*5900000 - 120000) # order 0 peak for TES 152
+        plt.plot(tt, np.roll(gauss_kernel, len(gauss_kernel)//4 + int(1083.2*freq_sampling))*5900000 - 190000) # order 1 peak for TES 83
         plt.xlim(xlim)
         plt.ylim(pmp.get_ylim(tt, xlim, mytod))
         plt.show()
@@ -574,27 +575,32 @@ def detect_peaks_TOD(tt, mytod, resolution, doplot=True):
         # zf
     return filtmapsn
 
-def remove_peaks(tt, tod, peaks_detected, interval):
+def remove_peaks(tt, tod, peaks_detected, interval, mask):
     index = np.arange(len(tod))
+    index_masked = index[mask]
     for peak in peaks_detected:
-        low = (index >= peak - 3*interval) & (index <= peak - interval)
-        high = (index >= peak + interval) & (index <= peak + 3*interval)
-        slope = (np.median(tod[high]) - np.median(tod[low]))/(np.median(tt[high]) - np.median(tt[low]))
-        origin = np.median(tod[low])- slope*np.median(tt[low])
-        tod[peak - interval : peak + interval] = slope*tt[peak - interval : peak + interval] + origin
+        if peak in index_masked:
+            low = (index >= peak - 3*interval) & (index <= peak - interval)
+            high = (index >= peak + interval) & (index <= peak + 3*interval)
+            slope = (np.median(tod[high]) - np.median(tod[low]))/(np.median(tt[high]) - np.median(tt[low]))
+            origin = np.median(tod[low])- slope*np.median(tt[low])
+            tod[peak - interval : peak + interval] = slope*tt[peak - interval : peak + interval] + origin
     return tod
 
-def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval):
+def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
     index = np.arange(len(tod))
+    index_masked = index[mask]
     for peak in peaks_detected:
-        low = (index >= peak - 3*interval) & (index <= peak - interval)
-        high = (index >= peak + interval) & (index <= peak + 3*interval)
-        slope = (np.median(tod[high]) - np.median(tod[low]))/(np.median(tt[high]) - np.median(tt[low]))
-        origin = np.median(tod[low])- slope*np.median(tt[low])
-        nopeak_tod[peak - interval : peak + interval] = tod[peak - interval : peak + interval] - (slope*tt[peak - interval : peak + interval] + origin)
+        if peak in index_masked:
+            low = (index >= peak - 3*interval) & (index <= peak - interval)
+            high = (index >= peak + interval) & (index <= peak + 3*interval)
+            slope = (np.median(tod[high]) - np.median(tod[low]))/(np.median(tt[high]) - np.median(tt[low]))
+            origin = np.median(tod[low])- slope*np.median(tt[low])
+            nopeak_tod[peak - interval : peak + interval] = tod[peak - interval : peak + interval] - (slope*tt[peak - interval : peak + interval] + origin)
     return nopeak_tod
 
-xlim = [9480, 9550]
+# xlim = [9480, 9550]
+xlim = [10540, 10640]
 
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256, doplot=True, check_back_forth=False):
 
@@ -610,15 +616,30 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
 
     time_moon = 2 # sec
 
-    filtmapsn = detect_peaks_TOD(tt, mytod_1, resolution=time_moon, doplot=False)
+    # Moving average in post: https://stackoverflow.com/questions/11352047/finding-moving-average-from-data-points-in-python/34387987#34387987
 
-    # min_elt, max_elt = 39, 51 # 29.97844299316406 50.08891662597656
+    # Moving average
+    win_w = int(time_moon*freq_sampling/4)
+    window_width = win_w + win_w%2 # ensures an even number
+    data = np.pad(mytod_1, int(window_width/2) , mode='edge')
+    cumsum_vec = np.cumsum(data)
+    tod_ma = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
+
+
+    # filtmapsn = detect_peaks_TOD(tt, mytod_1, resolution=time_moon, doplot=True)
+    # filtmapsn = detect_peaks_TOD(tt, mytod, resolution=time_moon, doplot=True)
+    filtmapsn = detect_peaks_TOD(tt, tod_ma, resolution=time_moon, doplot=True)
+
+    min_elt, max_elt = 39, 51 # 29.97844299316406 50.08891662597656
     # mask_elt = (elt >= min_elt) & (elt <= max_elt)
+    mask_elt = elt >= min_elt
 
     # peaks_detected = (filtmapsn > 0.5 * 1e-6) & mask_elt
-    peaks_detected, properties = find_peaks(filtmapsn, height=None, threshold=None, distance=20*freq_sampling, prominence=(4*np.std(filtmapsn), None), width=(1*freq_sampling, 3*freq_sampling), wlen=None, rel_height=0.5, plateau_size=None)
+    # prominence = (4*np.std(filtmapsn), None)
+    prominence = (5*np.std(filtmapsn[mask_elt]), None)
+    peaks_detected, properties = find_peaks(filtmapsn, height=None, threshold=None, distance=20*freq_sampling, prominence=prominence, width=(1*freq_sampling, 6*freq_sampling), wlen=None, rel_height=0.5, plateau_size=None)
 
-    if doplot and False:
+    if doplot and True:
         plt.figure()
         plt.plot(tt, filtmapsn, label="TOD")
         plt.scatter(tt[peaks_detected], filtmapsn[peaks_detected], c="r", label="peaks_detected", zorder=1000)
@@ -633,15 +654,16 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
         plt.legend()
         plt.show()
 
-    tod_no_peak = remove_peaks(tt, mytod.copy(), peaks_detected, interval=int(2.5*freq_sampling))
+    tod_no_peak = remove_peaks(tt, mytod.copy(), peaks_detected, interval=int(2.5*freq_sampling), mask=mask_elt)
     mytod_3 = my_filt(tod_no_peak.copy())
-    mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, peaks_detected, interval=int(2.5*freq_sampling))
+    mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, peaks_detected, interval=int(2.5*freq_sampling), mask=mask_elt)
 
     if doplot and True:
+        peaks_detected_ = np.isin(np.arange(len(tt)), peaks_detected)
         plt.figure()
         plt.plot(tt, mytod, label="TOD")
         # plt.plot(tt, tod_no_peak, label="TOD no peak")
-        plt.scatter(tt[peaks_detected], mytod[peaks_detected], c="r", label="peaks_detected", zorder=1000)
+        plt.scatter(tt[peaks_detected_ & mask_elt], mytod[peaks_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
         # plt.plot(tt, mytod_3, label="filtered")
         plt.plot(tt, mytod_4, label="filtered with peaks added")
         plt.legend()
@@ -669,18 +691,6 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
 
     # decorel_azel(mytod, azt, elt, scantype, resolution=1, doplot=True, nbins=200, n_el=50)
 
-    # Moving average in post: https://stackoverflow.com/questions/11352047/finding-moving-average-from-data-points-in-python/34387987#34387987
-
-    # # Moon detection
-    # window_width = 20000
-    # data = np.pad( mytod, int(window_width/2) , mode='edge')
-    # cumsum_vec = np.cumsum(data)
-    # tod_ma_flat = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
-    # # Moving average
-    # window_width = 20
-    # data = np.pad( mytod, int(window_width/2) , mode='edge')
-    # cumsum_vec = np.cumsum(data)
-    # tod_ma = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
 
     # tod_diff = tod_ma - tod_ma_flat
     # tod_diff = mytod - mytod_2
@@ -852,12 +862,12 @@ def my_filt(mytod): # utiliser cette fonction ?
         
 
 class gauss2dfit:
-    def __init__(self, xx, yy):
-        self.xx = xx
-        self.yy = yy
+    def __init__(self, ii, jj):
+        self.ii = ii
+        self.jj = jj
     def __call__(self, x, pars):
-        amp, xc, yc, sig = pars
-        mygauss = amp * np.exp(-0.5*((self.xx-xc)**2+(self.yy-yc)**2)/sig**2)
+        amp, ic, jc, sig = pars
+        mygauss = amp * np.exp(-0.5*((self.ii-ic)**2+(self.jj-jc)**2)/sig**2)
         return np.ravel(mygauss)
 
 class filtgauss2dfit:
@@ -1018,21 +1028,21 @@ def map_to_TOD(hp_map, newazt, newelt):
     map_tod = hp.get_interp_val(hp_map, newazt, newelt, lonlat=True)
     return map_tod
 
-def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None):
+def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None):
     # xx, yy = np.meshgrid(x, y, indexing="xy")
     iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     # iipos = jax.block_until_ready(iipos)
     # time_0 = time.time()
     
     ### Displays the image as an array
-    mm, ss = ft.meancut(mapxy, 3)
+    mm, ss = ft.meancut(mapij, 3)
     if mini is None:
         mini = mm-nsig*ss
     if maxi is None:
-        maxi = np.max(mapxy)
+        maxi = np.max(mapij)
 
-
-    g2d = gauss2dfit(iipos, jjpos)
+    g2d = gauss2dfit(iipos, jjpos) # has to be in the same order as in m from the fit
+    # g2d = gauss2dfit(jjpos, iipos) # jjpos: azimuth, iipos: elevation
     # scantype, newazt, newelt, nside = pack
     # guess = jax.block_until_ready(guess)
     # time_1 = time.time()
@@ -1043,12 +1053,12 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
 
     ### Guess where the maximum is and the other parameters with a matched filter
     if guess is None:
-        Nx = len(mapxy)
-        Ny = len(mapxy[0])
-        lobe_pos = (Nx//2, Ny//2)
-        Kx, Ky, K = get_K(Nx, Ny)
-        ft_phase = get_ft_phase(lobe_pos, Nx, Ny)
-        cos_win = cos_window(Nx, Ny, lx=20, ly=20)
+        Ni = len(mapij)
+        Nj = len(mapij[0])
+        lobe_pos = (Ni//2, Nj//2)
+        _, _, K = get_K(Ni, Nj)
+        ft_phase = get_ft_phase(lobe_pos, Ni, Nj)
+        cos_win = cos_window(Ni, Nj, lx=20, ly=20)
         deltaK = 1
         Kbin = get_Kbin(deltaK, K)
         nKbin = len(Kbin) - 1  # nb of bins
@@ -1056,7 +1066,7 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         size_pix = reso/60 # degree
         # reso_instr = 0.92 # degree
         reso_img = 1.036 # degree # test
-        ft_shape = fft2(gauss2D(Nx, Ny, x0=lobe_pos[0], y0=lobe_pos[1], reso=[reso_img/size_pix], normal=True))
+        ft_shape = fft2(gauss2D(Ni, Nj, x0=lobe_pos[0], y0=lobe_pos[1], reso=[reso_img/size_pix], normal=True))
 
         # Test with a filtered Gaussian
         # pars = 1, iipos[Nx//2, Ny//2], jjpos[Ny//2, Ny//2], reso_img/conv_reso_fwhm
@@ -1068,7 +1078,7 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         # plt.imshow(myfiltgauss)
         # plt.show()
 
-        filtmapsn = get_filtmapsn(mapxy * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
+        filtmapsn = get_filtmapsn(mapij * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
 
         # plt.figure()
         # plt.imshow(filtmapsn)
@@ -1088,21 +1098,21 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         
     ### Do the fit putting the UNSEEN to a very low weight
     errpix = iipos*0 + ss
-    errpix[mapxy==0] *= 1e5
+    errpix[mapij==0] *= 1e5
 
 
     # g2d = jax.block_until_ready(g2d)
     # time_2 = time.time()
     # print("Time before fit.Data is: {}".format(time_2 - time_1))
 
-    data = fit.Data(np.ravel(iipos), np.ravel(mapxy), np.ravel(errpix), g2d)
+    data = fit.Data(np.ravel(iipos), np.ravel(mapij), np.ravel(errpix), g2d)
 
     # data = jax.block_until_ready(data)
     # time_3 = time.time()
     # print("Time before data.fit_minuit is: {}".format(time_3 - time_2))
 
     m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
-    # m: amplitude, elevation, azimuth, fwhm Gaussian fit
+    # m: amplitude, elevation (i), azimuth ((-)j), sigma Gaussian fit
 
     # m = jax.block_until_ready(m)
     # time_4 = time.time()
@@ -1114,18 +1124,18 @@ def fitgauss_img(mapxy, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     fitted = np.reshape(g2d(ipos, m.values), (xs, xs))
 
     if doplot:
-        origin = "lower" #"lower" swaps the y-axis and the guess doesn't match, default is "upper"
+        origin = "upper" #"lower" swaps the y-axis and the guess doesn't match, default is "upper"
         if axs is None:
             fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(16, 5))
             axs[1].imshow(fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
-            im = axs[2].imshow(mapxy - fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
-            axs[0].set_ylabel('Degrees')
+            im = axs[2].imshow(mapij - fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
+            axs[0].set_ylabel('Elevation [degrees]')
             for i in range(3):
-                axs[i].set_xlabel('Degrees')
+                axs[i].set_xlabel('Azimuth [degrees]')
             axs[2].set_title('Residuals')
     
     if doplot:
-        axs = pmp.plot_fit_img(mapxy, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=m.values[1], jfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
+        axs = pmp.plot_fit_img(mapij, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=m.values[1], jfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
         return m, fitted, axs
     return m, fitted
     
@@ -1522,7 +1532,7 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
 
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, 
-                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False):
+                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None):
     ### First read the data from disk if needed
     if data is None:
         print('Reading data from disk: '+datadir)
@@ -1581,6 +1591,9 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
         print('Using sequential loop')
         allmaps = np.zeros((len(allTESNum), 12*nside**2))
         for i in range(len(allTESNum)):
+            if isok_arr is not None: # only compute good TES (to make testing phase easier)
+                if not isok_arr[i]:
+                    continue
             TESNum = allTESNum[i]
             print('TES# {}'.format(TESNum), end=" ")
             tod = alltod[TESNum-1,:]

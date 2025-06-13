@@ -389,11 +389,11 @@ class PresetAcquisition:
         noise_qubic = self.get_noise()
 
         ### Create QUBIC TOD
-        self.TOD_qubic = (self.H.operands[0])(self.components_in_convolved) + noise_qubic
+        self.TOD_qubic = (self.H.operands[0])(self.preset_comp.components_in) + noise_qubic
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        self.TOD_external = (self.H.operands[1])(self.components_in_convolved) + noise_external
+        self.TOD_external = (self.H.operands[1])(self.preset_comp.components_in) + noise_external
 
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
@@ -403,15 +403,15 @@ class PresetAcquisition:
         #! Tom : correct this part, we  don't want to reconvolve here
         if self.preset_qubic.params_qubic["convolution_in"] or self.preset_qubic.params_qubic["convolution_out"]:
             C = HealpixConvolutionGaussianOperator(
-                fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1] * 0,
+                fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
                 lmax=3 * self.preset_sky.params_sky["nside"],
             )
             for i in range(maps_external.shape[0]):
                 maps_external[i] = C(maps_external[i])
 
         # if self.preset_tools.params['PCG']['fix_pixels_outside_patch']:
-        # maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
-        # self.TOD_external = _r.T(maps_external)
+        maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
+        self.TOD_external = _r.T(maps_external)
 
         # self.seenpix_external = np.tile(self.preset_sky.seenpix_qubic, (maps_external.shape[0], 3, 1)).reshape(maps_external.shape)
 

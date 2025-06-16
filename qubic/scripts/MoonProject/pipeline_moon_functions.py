@@ -607,7 +607,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
     # What worked best so far:
     # - filter raw TOD (get rid of large scales)
     # - use it to compute a moving average (smoothing the little scales)
-    # - detect peaks from the result (prominence = 2.5 std of data used in detection excluding trees elevation, width=(1*freq_sampling, 5*freq_sampling), wlen=20*freq_sampling, rel_height=0.5)
+    # - detect peaks from the result (distance=10*freq_sampling, prominence = 2.5 std of data used in detection excluding trees elevation, width=(1*freq_sampling, 5*freq_sampling), wlen=20*freq_sampling, rel_height=0.5)
     # - remove the detected peaks from raw TOD and replace them by a linear fit of raw data around peaks
     # - filter the result (get rid of large scales)
     # - add the removed peaks again (difference between raw peaks and linear fit of filtered data around peaks)
@@ -624,12 +624,12 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
 
     time_moon = 2 # sec
 
-    ## Moving average in post: https://stackoverflow.com/questions/11352047/finding-moving-average-from-data-points-in-python/34387987#34387987
-    win_w = int(time_moon*freq_sampling/2)
-    window_width = win_w + win_w%2 # ensures an even number
-    data = np.pad(mytod, int(window_width/2) , mode='edge')
-    cumsum_vec = np.cumsum(data)
-    tod_ma = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
+    # ## Moving average in post: https://stackoverflow.com/questions/11352047/finding-moving-average-from-data-points-in-python/34387987#34387987
+    # win_w = int(time_moon*freq_sampling/2)
+    # window_width = win_w + win_w%2 # ensures an even number
+    # data = np.pad(mytod, int(window_width/2) , mode='edge')
+    # cumsum_vec = np.cumsum(data)
+    # tod_ma = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
 
 
     # filtmapsn = detect_peaks_TOD(tt, mytod_1, resolution=time_moon, doplot=True)
@@ -646,34 +646,77 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
     # peaks_detected, properties = find_peaks(filtmapsn, height=None, threshold=None, distance=20*freq_sampling, prominence=prominence, width=(1*freq_sampling, 3*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
     # threshold = (0.1*np.std(filtmapsn[mask_elt]), None)
     # peaks_detected, properties = find_peaks(filtmapsn, height=None, threshold=threshold, distance=20*freq_sampling, width=(1*freq_sampling, 3*freq_sampling), wlen=None, rel_height=0.5, plateau_size=None)
-    tod_ma_filt = my_filt(tod_ma)
+
+
+    # config 8 : 
+    # speedmin=0.1
+    # tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass order 1
+    # lowcut = 6/107.5
+    # highcut = 2/107.5*100/4
+    # prominence = (1.5*np.std(tod_ma_filt[mask_elt]), None)
+    # data_peaks = tod_ma_filt
+    # peaks_detected, properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 6*freq_sampling), wlen=8*freq_sampling, rel_height=0.5, plateau_size=None)
+
+    # config 9 : 
+    # speedmin=0.1
+    # tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
+    # order 2
+    # lowcut = 8/107.5
+    # highcut = 2/107.5*100/4
+    # prominence = (3*np.std(tod_ma_filt[mask_elt]), None)
+    # data_peaks = tod_ma_filt
+    # peaks_detected, properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=20*freq_sampling, rel_height=0.5, plateau_size=None)
+
+    # config 10 : 
+    # speedmin=0.1
+    # tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
+    # order 3
+    # lowcut = 8/107.5
+    # highcut = 2/107.5*100/4
+    # prominence = (3*np.std(tod_ma_filt[mask_elt]), None)
+    # data_peaks = tod_ma_filt
+    # peaks_detected, properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=15*freq_sampling, rel_height=0.5, plateau_size=None)
+
+    # config 11 : 
+    # speedmin=0.1
+    # tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
+    # order 3
+    # lowcut = 8/107.5
+    # highcut = 2/107.5*100/4
+    # prominence = (3*np.std(tod_ma_filt[mask_elt]), None)
+    # data_peaks = tod_ma_filt
+    # peaks_detected, properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
+
+    # tod_ma_filt = my_filt(tod_ma)
+    tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
     # filtmapsn = detect_peaks_TOD(tt, tod_ma_filt, resolution=time_moon, doplot=True)
-    prominence = (2.5*np.std(tod_ma_filt[mask_elt]), None)
+    prominence = (3*np.std(tod_ma_filt[mask_elt]), None)
     # data_peaks = np.where(np.isfinite(tod_ma_filt), tod_ma_filt, np.zeros_like(tod_ma_filt))
     data_peaks = tod_ma_filt
-    peaks_detected, properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 6*freq_sampling), wlen=20*freq_sampling, rel_height=0.5, plateau_size=None)
+    # data_peaks[scantype == 0] = np.zeros_like(data_peaks)[scantype == 0]
+    peaks_detected, properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
     # width up to 5 seconds for order 1 peaks
     # might have to go even higher for the peaks aligned with elevation scans
     # distance=None helps with order 1 peaks that are a bit irregular (close to border of map/dead time)
-    widths = properties["widths"].astype(int)
+    widths = properties["widths"]
 
     if doplot and True:
-        # plt.figure()
-        # plt.plot(tt, filtmapsn, label="TOD")
-        # plt.scatter(tt[peaks_detected], filtmapsn[peaks_detected], c="r", label="peaks_detected", zorder=1000)
-        # # plt.scatter(tt[peaks_detected], peaks_detected[peaks_detected], c="g", label="peaks_detected")
-        # plt.legend()
-        # plt.show()
-
         plt.figure()
-        plt.plot(tt, mytod, label="TOD")
-        plt.scatter(tt[peaks_detected], mytod[peaks_detected], c="r", label="peaks_detected", zorder=1000)
+        plt.plot(tt, data_peaks, label="TOD")
+        plt.scatter(tt[peaks_detected], data_peaks[peaks_detected], c="r", label="peaks_detected", zorder=1000)
         # plt.scatter(tt[peaks_detected], peaks_detected[peaks_detected], c="g", label="peaks_detected")
         plt.legend()
         plt.show()
 
+        # plt.figure()
+        # plt.plot(tt, mytod, label="TOD")
+        # plt.scatter(tt[peaks_detected], mytod[peaks_detected], c="r", label="peaks_detected", zorder=1000)
+        # # plt.scatter(tt[peaks_detected], peaks_detected[peaks_detected], c="g", label="peaks_detected")
+        # plt.legend()
+        # plt.show()
+
     # interval_peak = int(time_moon*freq_sampling * 1.5) # 1.5 is good
-    interval_peak = widths
+    interval_peak = (widths).astype(int)
     tod_no_peak = remove_peaks(tt, mytod.copy(), peaks_detected, interval=interval_peak, mask=mask_elt)
     mytod_3 = my_filt(tod_no_peak.copy())
     mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, peaks_detected, interval=interval_peak, mask=mask_elt)
@@ -862,13 +905,13 @@ def my_filt_2(mytod): # utiliser cette fonction ?
     # Cuts are expressed in Hz, a back and forth scan takes 107.5 seconds
     fs = 157.36 # Hz # could be computed directly on TOD
     # lowcut = 4/107.5 # 4/107.5, i.e. half a forth (or back) scan
-    # lowcut = 4/107.5
-    highcut = 2/107.5*2 # 2/107.5*100/4, i.e. approx. 4 % of a forth (or back) scan --> passer à 2% parce que 4% est trop proche de la taille de la Lune (2/107.5*100/6 makes the Moon round but it's fine-tuned for it...)
+    lowcut = 8/107.5
+    highcut = 2/107.5*100/4 # 2/107.5*100/4, i.e. approx. 4 % of a forth (or back) scan --> passer à 2% parce que 4% est trop proche de la taille de la Lune (2/107.5*100/6 makes the Moon round but it's fine-tuned for it...)
     # print("lowcut = {} Hz, highcut = {} Hz".format(lowcut, highcut))
-    # filt_tod = butter_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=1) # Hz
+    filt_tod = butter_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=8) # Hz
     # filt_tod = butter_pseudo_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=1) # Hz
     # filt_tod = butter_highpass_filter(mytod, lowcut=lowcut, fs=fs, order=1) # Hz
-    filt_tod = butter_lowpass_filter(mytod, highcut=highcut, fs=fs, order=1) # Hz
+    # filt_tod = butter_lowpass_filter(mytod, highcut=highcut, fs=fs, order=1) # Hz
     # filt_tod = bessel_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=1) # Hz
     # filt_tod = bessel_highpass_filter(mytod, lowcut=lowcut, fs=fs, order=5) # Hz
     return filt_tod
@@ -1082,7 +1125,9 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         lobe_pos = (Ni//2, Nj//2)
         _, _, K = get_K(Ni, Nj)
         ft_phase = get_ft_phase(lobe_pos, Ni, Nj)
-        cos_win = cos_window(Ni, Nj, lx=20, ly=20)
+        border_size_i = Ni*0.1 # Ni = xs
+        border_size_j = Nj*0.1 # Nj = xs
+        cos_win = cos_window(Ni, Nj, lx=border_size_i, ly=border_size_j)
         deltaK = 1
         Kbin = get_Kbin(deltaK, K)
         nKbin = len(Kbin) - 1  # nb of bins

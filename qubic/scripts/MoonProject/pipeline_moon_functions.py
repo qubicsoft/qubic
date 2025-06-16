@@ -999,10 +999,7 @@ def map_to_TOD(hp_map, newazt, newelt):
     return map_tod
 
 def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None):
-    # xx, yy = np.meshgrid(x, y, indexing="xy")
     iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
-    # iipos = jax.block_until_ready(iipos)
-    # time_0 = time.time()
     
     ### Displays the image as an array
     mm, ss = ft.meancut(mapij, 3)
@@ -1012,14 +1009,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         maxi = np.max(mapij)
 
     g2d = gauss2dfit(iipos, jjpos) # has to be in the same order as in m from the fit
-    # g2d = gauss2dfit(jjpos, iipos) # jjpos: azimuth, iipos: elevation
-    # scantype, newazt, newelt, nside = pack
-    # guess = jax.block_until_ready(guess)
-    # time_1 = time.time()
-    # print("Time before filtgauss2dfit initialization is: {}".format(time_1 - time_0))
-
-    # g2d = filtgauss2dfit(ipos, jpos, scantype, newelt, newazt, nside)
-
 
     ### Guess where the maximum is and the other parameters with a matched filter
     if guess is None:
@@ -1040,30 +1029,14 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         reso_img = 1.036 # degree # test
         ft_shape = fft2(gauss2D(Ni, Nj, x0=lobe_pos[0], y0=lobe_pos[1], reso=[reso_img/size_pix], normal=True))
 
-        # Test with a filtered Gaussian
-        # pars = 1, iipos[Nx//2, Ny//2], jjpos[Ny//2, Ny//2], reso_img/conv_reso_fwhm
-        # myfiltgauss_flat = g2d(0, pars)
-        # myfiltgauss = myfiltgauss_flat.reshape(Nx, Ny)
-        # ft_shape = fft2(myfiltgauss)
-
-        # plt.figure()
-        # plt.imshow(myfiltgauss)
-        # plt.show()
-
         filtmapsn = get_filtmapsn(mapij * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
 
-        # plt.figure()
-        # plt.imshow(filtmapsn)
-        # plt.show()
-        # sys.exit()
-        
         maxii = filtmapsn == np.nanmax(filtmapsn)
         max_i = np.mean(iipos[maxii])
         max_j = np.mean(jjpos[maxii])
         guess = np.array([1e4, max_i, max_j, reso_img/conv_reso_fwhm])
         if verbose:
             print("guess: i = {}, j = {}".format(guess[1], guess[2]))
-            # print(guess)
     else:
         max_i = guess[1]
         max_j = guess[2]
@@ -1072,26 +1045,11 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     errpix = iipos*0 + ss
     errpix[mapij==0] *= 1e5
 
-
-    # g2d = jax.block_until_ready(g2d)
-    # time_2 = time.time()
-    # print("Time before fit.Data is: {}".format(time_2 - time_1))
-
     data = fit.Data(np.ravel(iipos), np.ravel(mapij), np.ravel(errpix), g2d)
-
-    # data = jax.block_until_ready(data)
-    # time_3 = time.time()
-    # print("Time before data.fit_minuit is: {}".format(time_3 - time_2))
 
     m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
     # m: amplitude, elevation (i), azimuth ((-)j), sigma Gaussian fit
 
-    # m = jax.block_until_ready(m)
-    # time_4 = time.time()
-    # print("Time taken by data.fit_minuit is: {}".format(time_4 - time_3))
-
-    # print("{} iterations of filtgauss2dfit needed.".format(g2d.nIter))
-    
     ### Image of the fitted Gaussian
     fitted = np.reshape(g2d(ipos, m.values), (xs, xs))
 
@@ -1114,50 +1072,18 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     
 
 def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, xycreid_corr=None, axs=None, pack=None):
-    # a = 0
-    # a = jax.block_until_ready(a)
-    # time_0 = time.time()
     ### get the gnomview back into a np.array in order to fit it
     mm = mymap.copy()
     badpix = mm == hp.UNSEEN
     mm[badpix] = 0          ### Set bad pixels to zero before returning the np.array()
     mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
 
-    ### np.array coordinates
-    # Doesn't work with the fit plot but is ok with final gnomview plot of the Moon map corrected
-    # But in order to stack the maps I now have to use (azt, -elt) position fitted here (why??)
-    # x = -(np.arange(xs) - (xs - 1)/2)*reso/60
-    # y = x.copy()
-    # x += rot[0]
-    # y -= rot[1]
-
-    # Works on fit plot but then azt and elt are with the wrong sign on the final gnomview plot. Weird!!
-    # x = (np.arange(xs) - (xs - 1)/2)*reso/60
-    # y = x.copy()
-    # x -= rot[0]
-    # y += rot[1]
-
     # hp.gnomview creates and shows a map with azt (abs) and elt (ord) growing starting from the lower-right angle of the image
     # whereas plt.imshow of a gnomview map shows an image with azt (abs) and elt (ord) growing from the upper-right corner
-    x = (np.arange(xs) - (xs - 1)/2)*reso/60 # elevation
-    y = -x.copy()                            # azimuth
-    x += rot[1]
-    y -= rot[0]
-
-    # Other tests
-    # x = - (np.arange(xs) - (xs - 1)/2)*reso/60 # elevation
-    # y = - x.copy()                            # azimuth
-    # x += rot[1]
-    # y -= rot[0]
-
-    # i = (np.arange(xs) - (xs - 1)/2)*reso/60 # elevation
-    # j = - i.copy()                           # -azimuth
-    # i += rot[1]
-    # j -= rot[0]
-
-
-    # print(np.min(y), np.max(y))
-    # sys.exit()
+    i_elt = (np.arange(xs) - (xs - 1)/2)*reso/60 # elevation
+    j_azt = -i_elt.copy()                            # azimuth
+    i_elt += rot[1]
+    j_azt -= rot[0]
 
     if xycreid_corr is not None:
         try:
@@ -1170,24 +1096,12 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
                 print("TES has no position on sky")
                 print(guess)
         
-    # y = jax.block_until_ready(y)
-    # time_1 = time.time()
-    # print("Time before fitgauss_img: {}".format(time_1 - time_0))
     if doplot:
-        m, fitted, fig_axs = fitgauss_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso, pack=pack)
+        m, fitted, fig_axs = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso, pack=pack)
         if verbose:
             print(m.values)
     else:
-        m, fitted = fitgauss_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack)
-    # try:
-    #     m, fitted = fitgauss_img(mapxy, x, y, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm)
-    # except:
-    #     m = None
-    #     fitted = None
-    
-    # m = jax.block_until_ready(m)
-    # time_2 = time.time()
-    # print("Total time is: {}".format(time_2 - time_0))
+        m, fitted = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack)
 
     if return_images:
         return m, mapxy, fitted, [np.min(x), np.max(x), np.min(y), np.max(y)], fig_axs

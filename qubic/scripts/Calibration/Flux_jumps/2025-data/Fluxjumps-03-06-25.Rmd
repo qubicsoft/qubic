@@ -1,0 +1,1032 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+from qubicpack.qubicfp import qubicfp
+import sys,os
+import glob
+
+import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
+```
+
+```{python}
+day = '2025-06-03'
+data_dir = '/home/qubic/Calib-TD/'+day+'/'
+words = ['dome-open']
+keywords = ['*{}*'.format(word) for word in words]
+for keyword in keywords:
+    dirs = np.sort(glob.glob(data_dir+keyword))
+    print(dirs)
+```
+
+```{python}
+
+```
+
+## Dome open - night
+
+```{python}
+dataset0 = dirs[0]
+a1 = qubicfp()
+a1.read_qubicstudio_dataset(dataset0)
+```
+
+```{python}
+a1.Rfeedback() 
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+import jumps_soft as sj
+```
+
+```{python}
+sat = sj.saturation()
+```
+
+```{python}
+tod = a1.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+init = timeaxis[0]
+tt = timeaxis - init
+
+print('number of timesamples along every TES in this dataset:', np.shape(todarray[0,:])) 
+```
+
+```{python}
+tt[-1]/60  #6 minutos
+```
+
+```{python}
+ok, bad_idx, frac, number = sat.detect_saturation(todarray)
+```
+
+```{python}
+print('number of TES saturated in the focal plane:', number)
+```
+
+```{python}
+print('index TES with no saturation:')
+good_tod = np.array(np.where(ok==True))
+good_tod = np.reshape(good_tod, (good_tod.shape[1]))
+print(good_tod)
+```
+
+```{python}
+thr = [2e5]
+```
+
+```{python}
+fluxjumps = sj.fluxjumps(thr=thr, window_size = 300)
+```
+
+```{python}
+for i in range(len(good_tod)):
+    idx_good = good_tod[i]
+    print('Analisis TES', idx_good)
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)], locals()['thr_{}'.format(idx_good)] = fluxjumps.jumps_detection(tt,todarray[idx_good])
+```
+
+```{python}
+TES_jump = np.ones(len(good_tod), dtype=int)
+for i in range(len(good_tod)):
+    idx = good_tod[i]   
+    result = locals()['nc_{}'.format(idx)]
+    if result == 0.:
+        TES_jump[i] = 0 
+        
+TES_yes = np.array(np.where(TES_jump==1))
+TES_yes = good_tod[TES_yes]
+TES_no = np.array(np.where(TES_jump==0))
+TES_no = good_tod[TES_no]
+
+TES_yes = np.reshape(TES_yes, TES_yes.shape[1])
+TES_no = np.reshape(TES_no, TES_no.shape[1])
+```
+
+```{python}
+print('TES with flux jumps detected', TES_yes)
+```
+
+```{python}
+fig, ax = plt.subplots(1,2, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    #ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+```{python}
+fig, ax = plt.subplots(10,10, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_no[:100])):
+    idxyes = TES_no[:100][i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+```{python}
+plt.plot(tt, todarray[3])
+```
+
+```{python}
+3.95e6 - 4.05e6
+```
+
+```{python}
+-80000 - 160000
+```
+
+```{python}
+len(TES_no)
+```
+
+```{python}
+fig, ax = plt.subplots(5,11, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_no[100:])):
+    idxyes = TES_no[100:][i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+dirs[2]
+```
+
+## 11.49.48 dome-open sky dip
+
+```{python}
+dataset0 = dirs[2]
+a2 = qubicfp()
+a2.read_qubicstudio_dataset(dataset0)
+```
+
+```{python}
+a2.Rfeedback()
+```
+
+```{python}
+#Rfeedback is 10kOhm
+```
+
+```{python}
+tod = a2.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+init = timeaxis[0]
+tt = timeaxis - init
+
+print('number of timesamples along every TES in this dataset:', np.shape(todarray[0,:])) 
+```
+
+```{python}
+import jumps_soft as sj
+```
+
+```{python}
+sat = sj.saturation()
+```
+
+```{python}
+ok, bad_idx, frac, number = sat.detect_saturation(todarray)
+```
+
+```{python}
+print('number of TES saturated in the focal plane:', number)
+```
+
+```{python}
+print('index TES with no saturation:')
+good_tod = np.array(np.where(ok==True))
+good_tod = np.reshape(good_tod, (good_tod.shape[1]))
+print(good_tod)
+```
+
+```{python}
+#when the R.feedback is 10kOhm instead of 100kOhm the threshold should be one order of magnitude smaller
+```
+
+```{python}
+thr = [3e4]
+```
+
+```{python}
+fluxjumps = sj.fluxjumps(thr=thr, window_size = 300)
+```
+
+```{python}
+for i in range(len(good_tod)):
+    idx_good = good_tod[i]
+    print('Analisis TES', idx_good)
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)], locals()['thr_{}'.format(idx_good)] = fluxjumps.jumps_detection(tt,todarray[idx_good])
+```
+
+```{python}
+TES_jump = np.ones(len(good_tod), dtype=int)
+for i in range(len(good_tod)):
+    idx = good_tod[i]   
+    result = locals()['nc_{}'.format(idx)]
+    if result == 0.:
+        TES_jump[i] = 0 
+        
+TES_yes = np.array(np.where(TES_jump==1))
+TES_yes = good_tod[TES_yes]
+TES_no = np.array(np.where(TES_jump==0))
+TES_no = good_tod[TES_no]
+
+TES_yes = np.reshape(TES_yes, TES_yes.shape[1])
+TES_no = np.reshape(TES_no, TES_no.shape[1])
+```
+
+```{python}
+len(TES_yes)
+```
+
+```{python}
+TES_yes
+```
+
+```{python}
+fig, ax = plt.subplots(3,9, figsize=(21, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+len(TES_no)
+```
+
+```{python}
+fig, ax = plt.subplots(10,10, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_no[:100])):
+    idxyes = TES_no[:100][i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+```{python}
+fig, ax = plt.subplots(5,10, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_no[100:150])):
+    idxyes = TES_no[100:150][i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+```{python}
+# %matplotlib notebook
+```
+
+```{python}
+plt.plot(tt, todarray[13])
+plt.plot(tt[xc_13], todarray[13][xc_13], 'r.')
+plt.plot(tt[xcf_13], todarray[13][xcf_13], 'g.')
+
+
+```
+
+```{python}
+plt.plot(tt, todarray[31])
+plt.plot(tt[xc_31], todarray[31][xc_31], 'r.')
+plt.plot(tt[xcf_31], todarray[31][xcf_31], 'g.')
+
+
+```
+
+```{python}
+corr = sj.correction()
+```
+
+```{python}
+for i in TES_yes:
+    locals()['offset_{}'.format(i)] = corr.calculate_amplitude(tt, todarray[i],locals()['xc_{}'.format(i)], locals()['xcf_{}'.format(i)], len(locals()['xc_{}'.format(i)]))
+        #locals()['todcorrdt2_{}'.format(i)] = corr2.correct_TOD(todarray[i], locals()['offdt_{}'.format(i)], locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], len(locals()['xcdt_{}'.format(i)]))
+        #locals()['todcorrdt3_{}'.format(i)] = corr3.correct_TOD(todarray[i], locals()['offdt_{}'.format(i)], locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], len(locals()['xcdt_{}'.format(i)]))
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(abs(np.asarray(locals()['offset_{}'.format(i)])), marker='s', lw=0, label='TES_{}'.format(i+1))
+    plt.legend()
+    
+plt.axhspan(ymin=3.5e4, ymax=5.5e4, color='grey', alpha=0.3)
+plt.axhline(y=4.5e4, color='black')
+plt.axhline(y=9e4, color='black')
+plt.axhline(y=2.25e4, color='black')
+
+plt.ylim(2e4, 1.5e5)
+plt.ylabel('amplitude')
+plt.xlabel('# jumps found')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+dirs[4]
+```
+
+##  13.22.29 dome-open
+
+```{python}
+dataset0 = dirs[4]
+a4 = qubicfp()
+a4.read_qubicstudio_dataset(dataset0)
+```
+
+```{python}
+tod = a4.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+init = timeaxis[0]
+tt = timeaxis - init
+
+print('number of timesamples along every TES in this dataset:', np.shape(todarray[0,:])) 
+```
+
+```{python}
+a4.Rfeedback()
+```
+
+```{python}
+import jumps_soft as sj
+```
+
+```{python}
+sat = sj.saturation()
+```
+
+```{python}
+ok, bad_idx, frac, number = sat.detect_saturation(todarray)
+```
+
+```{python}
+print('number of TES saturated in the focal plane:', number)
+```
+
+```{python}
+print('index TES with no saturation:')
+good_tod = np.array(np.where(ok==True))
+good_tod = np.reshape(good_tod, (good_tod.shape[1]))
+print(good_tod)
+```
+
+```{python}
+thr = [2e5]
+```
+
+```{python}
+fluxjumps = sj.fluxjumps(thr=thr, window_size = 300)
+```
+
+```{python}
+for i in range(len(good_tod)):
+    idx_good = good_tod[i]
+    print('Analisis TES', idx_good)
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)], locals()['thr_{}'.format(idx_good)] = fluxjumps.jumps_detection(tt,todarray[idx_good])
+```
+
+```{python}
+TES_jump = np.ones(len(good_tod), dtype=int)
+for i in range(len(good_tod)):
+    idx = good_tod[i]   
+    result = locals()['nc_{}'.format(idx)]
+    if result == 0.:
+        TES_jump[i] = 0 
+        
+TES_yes = np.array(np.where(TES_jump==1))
+TES_yes = good_tod[TES_yes]
+TES_no = np.array(np.where(TES_jump==0))
+TES_no = good_tod[TES_no]
+
+TES_yes = np.reshape(TES_yes, TES_yes.shape[1])
+TES_no = np.reshape(TES_no, TES_no.shape[1])
+```
+
+```{python}
+TES_yes
+```
+
+```{python}
+len(TES_yes)
+```
+
+```{python}
+fig, ax = plt.subplots(4,5, figsize=(21, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+dt = sj.DT(thr_count=1e3, thr_amp = 2e5, tol=1e3)
+```
+
+```{python}
+for i in TES_yes:
+    print(i)
+    locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], locals()['valini_{}'.format(i)], locals()['valfin_{}'.format(i)], locals()['offdt_{}'.format(i)] = dt.calculate_levels(tt, todarray[i], locals()['nc_{}'.format(i)])
+```
+
+```{python}
+fig, ax = plt.subplots(4,5, figsize=(21, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xcdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcdt_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcfdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcfdt_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+# %matplotlib notebook
+```
+
+```{python}
+# 195 bad! 
+```
+
+```{python}
+plt.plot(tt, todarray[195])
+plt.plot(tt[xcdt_195], todarray[195][xcdt_195], 'r.')
+plt.plot(tt[xcfdt_195], todarray[195][xcfdt_195], 'g.')
+
+```
+
+```{python}
+
+```
+
+```{python}
+#what to do in cases like this?
+```
+
+```{python}
+plt.plot(tt, todarray[88])
+plt.plot(tt[xcdt_88], todarray[88][xcdt_88], 'r.')
+plt.plot(tt[xcfdt_88], todarray[88][xcfdt_88], 'g.')
+
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(abs(np.asarray(locals()['offdt_{}'.format(i)])), marker='s', lw=0, label='TES_{}'.format(i+1))
+    plt.legend()
+    
+plt.axhspan(ymin=3.5e5, ymax=5.5e5, color='grey', alpha=0.3)
+plt.axhline(y=4.5e5, color='black')
+plt.axhline(y=9e5, color='black')
+plt.axhline(y=2.25e5, color='black')
+
+#plt.ylim(2e5, 1.5e6)
+plt.ylabel('amplitude')
+plt.xlabel('# jumps found')
+```
+
+```{python}
+corr = sj.correction()
+```
+
+```{python}
+for i in TES_yes:
+    locals()['todcorrdt1_{}'.format(i)] = corr.correct_TOD(todarray[i], locals()['offdt_{}'.format(i)], locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], len(locals()['xcdt_{}'.format(i)]))
+        #locals()['todcorrdt2_{}'.format(i)] = corr2.correct_TOD(todarray[i], locals()['offdt_{}'.format(i)], locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], len(locals()['xcdt_{}'.format(i)]))
+        #locals()['todcorrdt3_{}'.format(i)] = corr3.correct_TOD(todarray[i], locals()['offdt_{}'.format(i)], locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], len(locals()['xcdt_{}'.format(i)]))
+```
+
+```{python}
+fig, ax = plt.subplots(4,5, figsize=(21, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, locals()['todcorrdt1_{}'.format(idxyes)])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xcdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcdt_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcfdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcfdt_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+plt.plot(tt, todarray[114])
+plt.plot(tt[xcdt_114], todarray[114][xcdt_114], 'r.')
+plt.plot(tt[xcfdt_114], todarray[114][xcfdt_114], 'g.')
+```
+
+```{python}
+plt.plot(tt, todarray[206])
+plt.plot(tt[xcdt_206], todarray[206][xcdt_206], 'r.')
+plt.plot(tt[xcfdt_206], todarray[206][xcfdt_206], 'g.')
+```
+
+```{python}
+plt.plot(tt, todarray[121])
+plt.plot(tt, todcorrdt1_121)
+plt.plot(tt[xcdt_121], todarray[121][xcdt_121], 'r.')
+plt.plot(tt[xcfdt_121], todarray[121][xcfdt_121], 'g.')
+```
+
+```{python}
+plt.plot(tt, todarray[6])
+plt.plot(tt, todcorrdt1_6)
+plt.plot(tt[xcdt_6], todarray[6][xcdt_6], 'r.')
+plt.plot(tt[xcfdt_6], todarray[6][xcfdt_6], 'g.')
+```
+
+```{python}
+
+```
+
+```{python}
+len(TES_no)
+```
+
+```{python}
+fig, ax = plt.subplots(10,10, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_no[:100])):
+    idxyes = TES_no[:100][i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+```{python}
+plt.plot(tt, todarray[140])
+```
+
+```{python}
+# 140 not detected
+```
+
+```{python}
+fig, ax = plt.subplots(8,8, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_no[100:])):
+    idxyes = TES_no[100:][i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+plt.plot(tt, todarray[213])
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+dirs[9]
+```
+
+## 15.20.21 dome open-el70
+
+```{python}
+dataset0 = dirs[9]
+a9 = qubicfp()
+a9.read_qubicstudio_dataset(dataset0)
+```
+
+```{python}
+a9.Rfeedback()
+```
+
+```{python}
+tod = a9.tod()
+timeaxis = tod[0]
+todarray = tod[1]
+init = timeaxis[0]
+tt = timeaxis - init
+
+print('number of timesamples along every TES in this dataset:', np.shape(todarray[0,:])) 
+```
+
+```{python}
+import jumps_soft as sj
+```
+
+```{python}
+sat = sj.saturation()
+```
+
+```{python}
+ok, bad_idx, frac, number = sat.detect_saturation(todarray)
+```
+
+```{python}
+print('number of TES saturated in the focal plane:', number)
+```
+
+```{python}
+print('index TES with no saturation:')
+good_tod = np.array(np.where(ok==True))
+good_tod = np.reshape(good_tod, (good_tod.shape[1]))
+print(good_tod)
+```
+
+```{python}
+thr = [1e5]
+```
+
+```{python}
+fluxjumps = sj.fluxjumps(thr=thr, window_size = 300)
+```
+
+```{python}
+for i in range(len(good_tod)):
+    idx_good = good_tod[i]
+    print('Analisis TES', idx_good)
+    locals()['nc_{}'.format(idx_good)], locals()['xc_{}'.format(idx_good)],  locals()['xcf_{}'.format(idx_good)], locals()['thr_{}'.format(idx_good)] = fluxjumps.jumps_detection(tt,todarray[idx_good])
+```
+
+```{python}
+TES_jump = np.ones(len(good_tod), dtype=int)
+for i in range(len(good_tod)):
+    idx = good_tod[i]   
+    result = locals()['nc_{}'.format(idx)]
+    if result == 0.:
+        TES_jump[i] = 0 
+        
+TES_yes = np.array(np.where(TES_jump==1))
+TES_yes = good_tod[TES_yes]
+TES_no = np.array(np.where(TES_jump==0))
+TES_no = good_tod[TES_no]
+
+TES_yes = np.reshape(TES_yes, TES_yes.shape[1])
+TES_no = np.reshape(TES_no, TES_no.shape[1])
+```
+
+```{python}
+TES_yes
+```
+
+```{python}
+len(TES_yes)
+```
+
+```{python}
+fig, ax = plt.subplots(5,8, figsize=(21, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+dt = sj.DT(thr_count=1e3, thr_amp = 2e5, tol=1e3)
+```
+
+```{python}
+for i in TES_yes:
+    print(i)
+    locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], locals()['valini_{}'.format(i)], locals()['valfin_{}'.format(i)], locals()['offdt_{}'.format(i)] = dt.calculate_levels(tt, todarray[i], locals()['nc_{}'.format(i)])
+```
+
+```{python}
+fig, ax = plt.subplots(5,8, figsize=(21, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xcdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcdt_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcfdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcfdt_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+#maybe neglect the confused ones and analyse the others
+```
+
+```{python}
+plt.plot(tt, todarray[54])
+plt.plot(tt[xcdt_54], todarray[54][xcdt_54], 'r.')
+plt.plot(tt[xcfdt_54], todarray[54][xcfdt_54], 'g.')
+
+
+```
+
+```{python}
+fig, ax = plt.subplots(3,4, figsize=(21, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    ax[i].plot(tt[locals()['xcdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcdt_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    ax[i].plot(tt[locals()['xcfdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcfdt_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+corr = sj.correction()
+```
+
+```{python}
+for i in TES_yes:
+    locals()['todcorrdt1_{}'.format(i)] = corr.correct_TOD(todarray[i], locals()['offdt_{}'.format(i)], locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], len(locals()['xcdt_{}'.format(i)]))
+        #locals()['todcorrdt2_{}'.format(i)] = corr2.correct_TOD(todarray[i], locals()['offdt_{}'.format(i)], locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], len(locals()['xcdt_{}'.format(i)]))
+        #locals()['todcorrdt3_{}'.format(i)] = corr3.correct_TOD(todarray[i], locals()['offdt_{}'.format(i)], locals()['xcdt_{}'.format(i)], locals()['xcfdt_{}'.format(i)], len(locals()['xcdt_{}'.format(i)]))
+```
+
+```{python}
+fig, ax = plt.subplots(3,4, figsize=(21, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_yes)):
+    idxyes = TES_yes[i]
+    ax[i].plot(tt, locals()['todcorrdt1_{}'.format(idxyes)])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xcdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcdt_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcfdt_{}'.format(idxyes)]], todarray[idxyes][locals()['xcfdt_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+
+plt.show()
+```
+
+```{python}
+for i in TES_yes:
+    plt.plot(abs(np.asarray(locals()['offdt_{}'.format(i)])), marker='s', lw=0, label='TES_{}'.format(i+1))
+    plt.legend()
+    
+plt.axhspan(ymin=3.5e5, ymax=5.5e5, color='grey', alpha=0.3)
+plt.axhline(y=4.5e5, color='black')
+plt.axhline(y=9e5, color='black')
+plt.axhline(y=2.25e5, color='black')
+
+#plt.ylim(2e5, 1.5e6)
+plt.ylabel('amplitude')
+plt.xlabel('# jumps found')
+```
+
+```{python}
+len(TES_no)
+```
+
+```{python}
+fig, ax = plt.subplots(10,10, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_no[:100])):
+    idxyes = TES_no[:100][i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+```{python}
+TES_yes
+```
+
+```{python}
+plt.plot(tt, todarray[50])
+plt.plot(tt, todarray[54])
+```
+
+```{python}
+plt.plot(tt, todarray[4])
+plt.plot(tt, todarray[30])
+```
+
+```{python}
+plt.plot(tt, todarray[60])
+plt.plot(tt, todarray[85])
+```
+
+```{python}
+fig, ax = plt.subplots(4,6, figsize=(20, 8))
+
+ax = ax.flatten()
+for i in range(len(TES_no[100:])):
+    idxyes = TES_no[100:][i]
+    ax[i].plot(tt, todarray[idxyes])
+    ax[i].set_title('TES {}'.format(idxyes + 1))
+    #ax[i].plot(tt[locals()['xc_{}'.format(idxyes)]], todarray[idxyes][locals()['xc_{}'.format(idxyes)]], marker='o', ms=5, color='red', lw=0)
+    #ax[i].plot(tt[locals()['xcf_{}'.format(idxyes)]], todarray[idxyes][locals()['xcf_{}'.format(idxyes)]], marker='o', ms=5, color='green', lw=0)
+    ax[i].axis('off')
+
+    
+
+plt.tight_layout()
+#plt.savefig("comparacion.png")
+
+plt.show()
+```
+
+```{python}
+#most of them seems not detected
+```
+
+```{python}
+
+```

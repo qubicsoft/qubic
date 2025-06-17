@@ -1,10 +1,10 @@
+import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
 
-from ..ComponentMapMaking import Qcomponent_model as c
-import fgbuster.mixingmatrix as mm
-
 from qubic.data import PATH as data_dir
+from qubic.lib.MapMaking.ComponentMapMaking import Qcomponent_model as c
+
 
 class CMBModel:
     """
@@ -21,7 +21,6 @@ class CMBModel:
     """
 
     def __init__(self, ell):
-
         self.ell = ell
 
     def give_cl_cmb(self, r, Alens):
@@ -31,18 +30,11 @@ class CMBModel:
 
 
         """
-        power_spectrum = hp.read_cl(data_dir + "Cls_Planck2018_lensed_scalar.fits")[
-            :, :4000
-        ]
+        power_spectrum = hp.read_cl(data_dir + "Cls_Planck2018_lensed_scalar.fits")[:, :4000]
         if Alens != 1.0:
             power_spectrum *= Alens
         if r:
-            power_spectrum += (
-                r
-                * hp.read_cl(
-                    data_dir + "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
-                )[:, :4000]
-            )
+            power_spectrum += r * hp.read_cl(data_dir + "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits")[:, :4000]
         return power_spectrum
 
     def cl2dl(self, ell, cl):
@@ -72,10 +64,9 @@ class CMBModel:
         Dl_eff = np.interp(self.ell, np.arange(1, 4001, 1), allDl)
         return Dl_eff
 
+
 class SkySpectra:
-
     def __init__(self, ell, nus, nu0_d=353, nu0_s=23):
-
         self.nus = nus
         self.ell = ell
         if self.ell is None:
@@ -102,9 +93,7 @@ class SkySpectra:
         if Alens != 1.0:
             power_spectrum[2] *= Alens
         if r:
-            power_spectrum += (
-                r * hp.read_cl(data_dir + "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits")[:, :4000]
-            )
+            power_spectrum += r * hp.read_cl(data_dir + "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits")[:, :4000]
 
         return np.interp(self.ell, np.linspace(1, 4001, 4000), power_spectrum[2])
 
@@ -140,7 +129,6 @@ class SkySpectra:
         return A[None, :] * A[:, None]
 
     def scale_dustsync(self, betad, betas, temp=20):
-
         comp = c.Dust(nu0=self.nu0_d, temp=temp, beta_d=betad)
         Adust = mm.MixingMatrix(comp).eval(self.nus)[:, 0]
 
@@ -150,7 +138,6 @@ class SkySpectra:
         return Adust[None, :] * Async[:, None] + Adust[:, None] * Async[None, :]
 
     def model(self, r, Alens, Ad, alphad, betad, As, alphas, betas, eps):
-
         Dl_model = np.zeros((self.nfreq, self.nfreq, self.nbins))
 
         ### CMB
@@ -160,17 +147,9 @@ class SkySpectra:
         prod_Anu_d = self.scale_dust(betad=betad)[..., None]
         prod_Anu_s = self.scale_sync(betas=betas)[..., None]
 
-        Dl_model += (
-            Ad * prod_Anu_d * (self.ell / 80) ** alphad
-            + As * prod_Anu_s * (self.ell / 80) ** alphas
-        )
+        Dl_model += Ad * prod_Anu_d * (self.ell / 80) ** alphad + As * prod_Anu_s * (self.ell / 80) ** alphas
 
         prod_Anu_ds = self.scale_dustsync(betad=betad, betas=betas)[..., None]
-        Dl_model += (
-            eps
-            * np.sqrt(abs(As) * abs(Ad))
-            * prod_Anu_ds
-            * (self.ell / 80) ** ((alphad + alphas) / 2)
-        )
+        Dl_model += eps * np.sqrt(abs(As) * abs(Ad)) * prod_Anu_ds * (self.ell / 80) ** ((alphad + alphas) / 2)
 
         return Dl_model

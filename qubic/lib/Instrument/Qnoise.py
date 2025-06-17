@@ -1,23 +1,13 @@
 import numpy as np
 
 from ..Qutilities import assign_default_parameters
-from .Qacquisition import *
+from .Qacquisition import QubicAcquisition
+from .Qinstrument import QubicInstrument
 
 class QubicNoise:
     # gives Qubic noise for one band
 
-    def __init__(
-        self,
-        d,
-        band,
-        sampling,
-        scene,
-        rng_noise,
-        duration,
-        comm=None,
-        size=1,
-    ):
-
+    def __init__(self, d, band, sampling, scene, rng_noise, duration, comm=None, size=1):
         if band != 150 and band != 220:
             raise TypeError("Unknown band '{}'.".format(band))
 
@@ -35,7 +25,6 @@ class QubicNoise:
         # so we can calculate them separately
         self.acq = QubicAcquisition(QubicInstrument(self.params), sampling, scene, self.params) 
 
-
         print(f"Duration at {band} GHz is {duration} yrs")
 
     def get_noise(self, det_noise, pho_noise):
@@ -51,17 +40,13 @@ class QubicNoise:
         if wpho == 0:
             return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
         else:
-            return wpho * self.acq.get_noise(
-                det_noise=False, photon_noise=True, seed=self.seed_photon
-            )
+            return wpho * self.acq.get_noise(det_noise=False, photon_noise=True, seed=self.seed_photon)
 
     def detector_noise(self, wdet=1):
         if wdet == 0:
             return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
         else:
-            return wdet * self.acq.get_noise(
-                det_noise=True, photon_noise=False, seed=self.seed_detector
-            )
+            return wdet * self.acq.get_noise(det_noise=True, photon_noise=False, seed=self.seed_detector)
 
 
 class QubicTotNoise:
@@ -75,7 +60,7 @@ class QubicTotNoise:
         self.sampling = sampling
         self.scene = scene
         self.detector_nep = d["detector_nep"]
-        if self.type == "DB": # this will later be implemented at a dictionary level!
+        if self.type == "DB":  # this will later be implemented at a dictionary level!
             self.band_used = [150, 220]
         elif self.type == "UWB":
             self.band_used = [150, 220]
@@ -83,7 +68,7 @@ class QubicTotNoise:
             self.band_used = [150]
         else:
             raise ValueError("Instrument type {} is not implemented.".format(self.type))
-        
+
         # if only one duration is given, then it means that both focal planes (if they are two) observed for the same time
         if isinstance(duration, (int, float)):
             self.duration = [duration] * len(self.band_used)
@@ -93,21 +78,21 @@ class QubicTotNoise:
             self.duration = duration
 
     def total_noise(self, wdet, wpho150, wpho220, seed_noise=None):
-        rng_noise = np.random.default_rng(seed=seed_noise) # The way the randomness is treated is NOT GOOD, if doing more than one run (in parallel for example)
+        rng_noise = np.random.default_rng(seed=seed_noise)  # The way the randomness is treated is NOT GOOD, if doing more than one run (in parallel for example)
         wpho = np.array([wpho150, wpho220])
         npho = []
         ndet = []
-        
+
         for i, band in enumerate(self.band_used):
             QnoiseBand = QubicNoise(
-            self.d,
-            band,
-            self.sampling,
-            self.scene,
-            rng_noise=rng_noise,
-            duration=self.duration[i],
-            comm=self.d["comm"],
-            size=self.d["nprocs_instrument"],
+                self.d,
+                band,
+                self.sampling,
+                self.scene,
+                rng_noise=rng_noise,
+                duration=self.duration[i],
+                comm=self.d["comm"],
+                size=self.d["nprocs_instrument"],
             )
             npho.append(QnoiseBand.photon_noise(wpho[i]))
             ndet.append(QnoiseBand.detector_noise(wdet))

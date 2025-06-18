@@ -75,8 +75,9 @@ class PresetComponents:
         ### Compute true components
         self.preset_tools.mpi._print_message("    => Creating components")
 
-        self.components_in, _ = self.get_components(self.skyconfig_in)
-        self.components_out, self.components_iter = self.get_components(self.skyconfig_out)
+        self.components_in = self.get_components(self.skyconfig_in)
+        self.components_out = self.get_components(self.skyconfig_out)
+        self.components_iter = self.components_out
 
         ### Monochromatic emission
         if self.preset_tools.params["Foregrounds"]["CO"]["CO_in"]:
@@ -261,7 +262,4 @@ class PresetComponents:
 
             components[icomp] = component_map.copy()
 
-        ### Initial value for components map
-        components_iter = components.copy()
-
-        return components, components_iter
+        return components

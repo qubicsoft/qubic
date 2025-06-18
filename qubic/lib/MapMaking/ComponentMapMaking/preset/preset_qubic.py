@@ -59,7 +59,7 @@ class PresetQubic:
             components_fgb_in,
             self.params_qubic["nsub_in"],
             preset_external.external_nus,
-            preset_external.params_external["nintegr_planck"],
+            preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
         )
 
@@ -73,7 +73,7 @@ class PresetQubic:
             components_fgb_out,
             self.params_qubic["nsub_out"],
             preset_external.external_nus,
-            preset_external.params_external["nintegr_planck"],
+            preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
             H=H_tojoint,
         )

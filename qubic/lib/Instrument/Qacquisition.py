@@ -1058,7 +1058,7 @@ class OtherDataParametric:
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
 
-    def get_operator(self, A, myfwhm=None, nu_co=None, comm=None):
+    def get_operator(self, A, fwhm=None, nu_co=None, comm=None):
         R2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
 
         Operator = []
@@ -1066,8 +1066,8 @@ class OtherDataParametric:
         k = 0
         for ii, _ in enumerate(self.nus):
             ope_i = []
-            if myfwhm is not None:
-                C = HealpixConvolutionGaussianOperator(fwhm=myfwhm[ii], lmax=3 * self.nside - 1)
+            if fwhm is not None:
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm[ii], lmax=3 * self.nside - 1)
             else:
                 C = IdentityOperator()
 
@@ -1104,8 +1104,177 @@ class OtherDataParametric:
         return R2tod(out)
 
 
+class PlanckAcquisitionTest:
+    def __init__(self, nus, nside, comps, nsub_planck=2, use_pysm=False):
+        self.nsub_planck = nsub_planck
+        self.use_pysm = use_pysm
+
+        self.nus = nus
+        self.nside = nside
+        self.npix = 12 * self.nside**2
+        self.bandwith = []
+        self.noise = []
+        self.fwhm = []
+        for nu in self.nus:
+            _planckData = pickle.load(open(PATH + f"Planck{nu}GHz.pkl", "rb"))
+            self.noise.append(_planckData[f"noise{nu}"])
+            self.fwhm.append(_planckData[f"fwhm{nu}"])
+
+            if nsub_planck == 1:
+                self.bandwith.append(0)
+            else:
+                self.bandwith.append(_planckData[f"bw{nu}"])
+
+        self.comps = comps
+        self.allnus = []
+        for inu, nu in enumerate(self.nus):
+            self.allnus += list(np.linspace(nu - self.bandwith[inu] / 2, nu + self.bandwith[inu] / 2, self.nsub_planck))
+        self.allnus = np.array(self.allnus)
+
+    def _get_mixing_matrix(self, nus, beta):
+        """
+
+        Method to return mixing matrix.
+
+        If beta has shape (ncomp), then the mixing matrix will have shape (nfreq, ncomp).
+        If beta has shape (npix, ncomp), the the elements of the mxing matrix vary across the sky, it will have shape (npix, nfreq, ncomp)
+
+        """
+
+        ### Define Mixing Matrix with FGB classes
+        mm = MixingMatrix(*self.comps)
+
+        ### Compute them using the eval method at each frequency nus
+        mixing_matrix_elements = mm.eval(nus, *beta)
+
+        _sh = mixing_matrix_elements.shape
+        if _sh[0] != 1:
+            beta = hp.ud_grade(beta, self.nside)
+            mixing_matrix_elements = mm.eval(nus, *beta)
+
+            mixing_matrix = np.transpose(mixing_matrix_elements, (1, 0, 2))
+        else:
+            mixing_matrix = mixing_matrix_elements[0]
+
+        return np.round(mixing_matrix, 6)
+
+    def _get_mixing_operator(self, A):
+        """
+        Method to define an operator like object for a given frequency nu, the input A should be for one frequency.
+        The type of operator depends on the shape of input A.
+        """
+
+        if A.ndim == 1:  ### If constant beta across the sky
+            r = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
+            D = r * DenseOperator(A, broadcast="rightward", shapein=(A.shape[0], self.npix, 3), shapeout=(1, self.npix, 3))
+
+        else:  ### If varying beta across the sky
+            r = ReshapeOperator((self.npix, 1, 3), (self.npix, 3))
+            _, nc = A.shape
+
+            def reshape_fct(vec, out):
+                out[...] = vec.T
+
+            R = Operator(direct=reshape_fct, transpose=reshape_fct, shapein=(nc, self.npix, 3), shapeout=(3, self.npix, nc), flags="linear")
+
+            ### if pixelization of A is lower than the one of components
+            if hp.npix2nside(A.shape[0]) != self.nside:
+                A = hp.ud_grade(A.T, self.nside).T
+
+            d = DenseBlockDiagonalOperator(A[:, np.newaxis, :], broadcast="rightward", shapein=(self.npix, nc))
+
+            ### Multiply by 3 to create A matrix for I, Q and U
+            D = r * BlockDiagonalOperator([d] * 3, new_axisin=0, new_axisout=2) * R
+
+        return D
+
+    def get_operator(self, A=None, fwhm=None, comm=None, nu_co=None):
+        Rmap2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
+
+        Operator = []
+
+        k = 0
+        for ii, _ in enumerate(self.nus):
+            ope_i = []
+            if fwhm is not None:
+                C = HealpixConvolutionGaussianOperator(fwhm=fwhm[ii], lmax=3 * self.nside - 1)
+            else:
+                C = IdentityOperator()
+
+            for _ in range(self.nsub_planck):
+                if A is not None:
+                    D = self._get_mixing_operator(A=A[k])
+                else:
+                    D = IdentityOperator()
+
+                ope_i += [C * D]
+
+                k += 1
+
+            if comm is not None:
+                Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
+            else:
+                Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
+
+        return BlockColumnOperator(Operator, axisout=0)
+
+    def get_invntt_operator(self, planck_ntot, fact=None, mask=None):
+        invntt_operator_shapein = 3 * len(self.nus) * 12 * self.nside**2
+
+        if planck_ntot == 0:
+            return IdentityOperator(shapein=invntt_operator_shapein)
+
+        # Create an empty array to store the values of sigma
+        allsigma = np.array([])
+
+        # Iterate through the frequency values
+        for inu in range(len(self.nus)):
+            # Determine the scaling factor for the noise
+            if fact is None:
+                f = 1
+            else:
+                f = fact[inu]
+
+            # Get the noise value for the current frequency and upsample to the desired nside
+            sigma = f * hp.ud_grade(self.noise[inu].T, self.nside).T
+
+            if mask is not None:
+                sigma /= np.array([mask, mask, mask]).T
+
+            # Append the noise value to the list of all sigmas
+            allsigma = np.append(allsigma, sigma.ravel())
+
+        # Flatten the list of sigmas and multiply by Planck noise level, then create a diagonal operator
+        allsigma = allsigma.ravel().copy() * planck_ntot
+        invN = DiagonalOperator(1 / allsigma**2, broadcast="leftward", shapein=invntt_operator_shapein)
+
+        # Create reshape operator and apply it to the diagonal operator
+        R = ReshapeOperator(invN.shapeout, invN.shape[0])
+        return R(invN(R.T))
+
+    def get_noise(self, seed=None, fact=None, seenpix=None):
+        state = np.random.get_state()
+        np.random.seed(seed)
+        out = np.zeros((len(self.nus), self.npix, 3))
+
+        for inu in range(len(self.nus)):
+            if fact is None:
+                f = 1
+            else:
+                f = fact[inu]
+            sigma = f * hp.ud_grade(self.noise[inu].T, self.nside).T
+            out[inu] = np.random.standard_normal((self.npix, 3)) * sigma
+        if seenpix is not None:
+            out[:, seenpix, :] = 0
+        np.random.set_state(state)
+        return out
+
+    def get_maps(self):
+        return 0
+
+
 class JointAcquisitionFrequencyMapMaking:
-    def __init__(self, d, Nrec, Nsub, H=None):
+    def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=2):
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
@@ -1114,8 +1283,11 @@ class JointAcquisitionFrequencyMapMaking:
         self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None)
 
         self.scene = self.qubic.scene
-        self.pl143 = PlanckAcquisition(143, self.scene)
-        self.pl217 = PlanckAcquisition(217, self.scene)
+        self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+        self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+        self.planck_acquisition = [self.pl143, self.pl217]
+        #! Tom: we should use the following here, but it is not working right now, one will need to adjust the shape and the way invN is used
+        # self.planck_acquisition = PlanckAcquisitionTest(nus=[143, 217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
 
     def get_operator(self, fwhm=None, seenpix=None):
         ### nstokes is hardcoded to nstokes = 3
@@ -1162,8 +1334,8 @@ class JointAcquisitionFrequencyMapMaking:
         invn_q = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)  # add weight of Qubic detector and photon noise
         R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
         invn_q = [R(invn_q(R.T))]
-        invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, beam_correction=beam_correction[0], mask=mask)
-        invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, beam_correction=beam_correction[0], mask=mask)
+        invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, mask=mask)
+        invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, mask=mask)
 
         R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
 
@@ -1174,6 +1346,7 @@ class JointAcquisitionFrequencyMapMaking:
         else:
             invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
         invN = invn_q + invNe
+
         return BlockDiagonalOperator(invN, axisout=0)
 
 
@@ -1189,7 +1362,7 @@ class JointAcquisitionComponentsMapMaking:
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
 
         self.scene = self.qubic.scene
-        self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nintegr)
+        self.external = PlanckAcquisitionTest(self.nus_external, self.scene.nside, self.comp, self.nintegr)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):
@@ -1204,7 +1377,7 @@ class JointAcquisitionComponentsMapMaking:
         except Exception:
             mpidist = None
 
-        He = self.external.get_operator(A=Ap, myfwhm=fwhm, comm=mpidist, nu_co=nu_co)
+        He = self.external.get_operator(A=Ap, fwhm=fwhm, comm=mpidist, nu_co=nu_co)
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 

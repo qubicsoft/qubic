@@ -17,24 +17,48 @@ class Maps:
         self.nside = nside
         self.nrec = nrec
         self.nsub = len(self.nus)
-        # self.m_nu = np.zeros((len(self.nus), 12 * self.nside**2, 3))
         self.skyconfig = skyconfig
 
-        self.skyconfig_pysm = []
+        #! Tom:  Corrected factor to adjust Planck maps regarding Bicep results, should be around 1.5
+        # I put it to 1.0 for now
+        # Need to be verify and corrected (+ implemented in a cleaner way)
+        self.corrected_factor_bicep = 1.0
+
+        self.skyconfig_foregrounds = []
         for key in skyconfig.keys():
             if key == "cmb":
                 self.is_cmb = True
             else:
-                self.skyconfig_pysm += [skyconfig[key]]
+                self.skyconfig_foregrounds += [skyconfig[key]]
 
     def average_within_band(self, m_nu):
         m_mean = np.zeros((self.nrec, 12 * self.nside**2, 3))
-        f = int(self.nsub / self.nrec)
+        fsub = self.nsub // self.nrec
         for i in range(self.nrec):
-            m_mean[i] = np.mean(m_nu[i * f : (i + 1) * f], axis=0)
+            m_mean[i] = np.mean(m_nu[i * fsub : (i + 1) * fsub], axis=0)
         return m_mean
 
+    def _corrected_maps(self, m_nu, m_nu_fg):
+        """
+        Function to remove the mean of the foreground maps m_nu_fg in the frequency maps m_nu.
+        """
+
+        fsub = self.nsub // self.nrec
+
+        mean_fg = self.average_within_band(m_nu_fg)
+
+        k = 0
+        for i in range(self.nrec):
+            delta = m_nu_fg[i * fsub : (i + 1) * fsub] - mean_fg[i]
+            for j in range(fsub):
+                m_nu[k] -= delta[j]
+                k += 1
+
+        return m_nu
+
     def _get_cmb(self, r, Alens, seed):
+        #! Tom : Is it okay to compute the CMB from power spectrum instead of using PySM ?
+        #! I compared the two options and the fluctuations amplitude are not the same
         cmbmodel = CMBModel(None)
         mycls = cmbmodel.give_cl_cmb(r, Alens)
 
@@ -45,13 +69,13 @@ class Maps:
     def average_map(self, r, Alens, central_nu, bw, nb=100):
         mysky = np.zeros((12 * self.nside**2, 3))
 
-        if len(self.skyconfig_pysm) != 0:
-            sky = pysm3.Sky(nside=self.nside, preset_strings=self.skyconfig_pysm)
+        if len(self.skyconfig_foregrounds) != 0:
+            sky = pysm3.Sky(nside=self.nside, preset_strings=self.skyconfig_foregrounds)
             edges_min = central_nu - bw / 2
             edges_max = central_nu + bw / 2
             bandpass_frequencies = np.linspace(edges_min, edges_max, nb)
             print(f"Integrating bandpass from {edges_min} GHz to {edges_max} GHz with {nb} frequencies.")
-            mysky += np.array(sky.get_emission(bandpass_frequencies * u.GHz, None) * utils.bandpass_unit_conversion(bandpass_frequencies * u.GHz, None, u.uK_CMB)).T / 1.5
+            mysky += np.array(sky.get_emission(bandpass_frequencies * u.GHz, None) * utils.bandpass_unit_conversion(bandpass_frequencies * u.GHz, None, u.uK_CMB)).T / self.corrected_factor_bicep
 
         if self.is_cmb:
             cmb = self._get_cmb(r, Alens, self.skyconfig["cmb"])
@@ -59,25 +83,59 @@ class Maps:
 
         return mysky
 
-    def _corrected_maps(self, m_nu, m_nu_fg):
-        f = int(self.nsub / self.nrec)
 
-        mean_fg = self.average_within_band(m_nu_fg)
+class InputMaps(Maps):
+    def __init__(self, sky, nus, nrec, nside=256, corrected_bandpass=True):
+        Maps.__init__(self, sky, nus, nrec, nside=nside, corrected_bandpass=corrected_bandpass)
 
-        k = 0
-        for i in range(self.nrec):
-            delta = m_nu_fg[i * f : (i + 1) * f] - mean_fg[i]
-            for j in range(f):
-                m_nu[k] -= delta[j]
-                k += 1
+        self.nus = nus
+        self.nside = nside
+        self.nrec = nrec
+        self.nsub = len(self.nus)
+        self.m_nu = np.zeros((len(self.nus), 12 * self.nside**2, 3))
+        self.sky = sky
 
-        return m_nu
+        for i in sky.keys():
+            if i == "cmb":
+                cmb = self._get_cmb(r=0, Alens=1, seed=self.sky["cmb"])
+                self.m_nu += cmb.copy()
+            elif i == "dust":
+                self.sky_fg = self._separe_cmb_fg()
+                self.sky_pysm = pysm3.Sky(self.nside, preset_strings=self.list_fg)
+                self.m_nu_fg = self._get_fg_allnu()
+                self.m_nu += self.m_nu_fg.copy()
+
+                if corrected_bandpass:
+                    self.m_nu = self._corrected_maps(self.m_nu, self.m_nu_fg)
+
+        self.maps = self.average_within_band(self.m_nu)
+
+    def _separe_cmb_fg(self):
+        self.list_fg = []
+        new_s = {}
+        for i in self.sky.keys():
+            if i == "cmb":
+                pass
+            else:
+                new_s[i] = self.sky[i]
+                self.list_fg += [self.sky[i]]
+
+        return new_s
+
+    def _get_fg_1nu(self, nu):
+        return np.array(self.sky_pysm.get_emission(nu * u.GHz, None).T * utils.bandpass_unit_conversion(nu * u.GHz, None, u.uK_CMB)) / self.corrected_factor_bicep
+
+    def _get_fg_allnu(self):
+        m = np.zeros((len(self.nus), 12 * self.nside**2, 3))
+
+        for inu, nu in enumerate(self.nus):
+            m[inu] = self._get_fg_1nu(nu)
+
+        return m
 
 
 class PlanckMaps(Maps):
     def __init__(self, skyconfig, nus, nrec, nside=256, r=0, Alens=1):  # nside, r=0, Alens=1):
-        # self.params = params
-
         Maps.__init__(self, skyconfig, nus, nrec, nside=nside)
         self.experiments = {
             "Planck": {
@@ -110,7 +168,7 @@ class PlanckMaps(Maps):
             edges_max = central_nu + bw / 2
             bandpass_frequencies = np.linspace(edges_min, edges_max, nb)
             print(f"Integrating bandpass from {edges_min} GHz to {edges_max} GHz with {nb} frequencies.")
-            mysky += np.array(sky.get_emission(bandpass_frequencies * u.GHz, None) * utils.bandpass_unit_conversion(bandpass_frequencies * u.GHz, None, u.uK_CMB)).T / 1.5
+            mysky += np.array(sky.get_emission(bandpass_frequencies * u.GHz, None) * utils.bandpass_unit_conversion(bandpass_frequencies * u.GHz, None, u.uK_CMB)).T / self.corrected_factor_bicep
 
         if is_cmb:
             cmb = self._get_cmb(r, Alens, skyconfig["cmb"])
@@ -147,12 +205,8 @@ class PlanckMaps(Maps):
         maps_noise = np.zeros((len(self.experiments["Planck"]["frequency"]), 12 * self.nside**2, 3))
         self.fwhm_ext = []
         for inu, nu in enumerate(self.experiments["Planck"]["frequency"]):
-            # print(self.external_nus, inu, nu)
-
             bandwidth = self.experiments["Planck"]["bw"][inu]
             maps[inu] = self._get_ave_map(self.r, self.Alens, self.skyconfig, nu, nu * bandwidth, nb=number_of_band_integration)
-
-            # maps[inu] *= 0
 
             n = self._get_noise(nu)
             maps[inu] += n
@@ -169,53 +223,3 @@ class PlanckMaps(Maps):
                 self.fwhm_ext.append(0)
 
         return maps, maps_noise
-
-
-class InputMaps(Maps):
-    def __init__(self, sky, nus, nrec, nside=256, corrected_bandpass=True):
-        Maps.__init__(self, sky, nus, nrec, nside=nside, corrected_bandpass=corrected_bandpass)
-
-        self.nus = nus
-        self.nside = nside
-        self.nrec = nrec
-        self.nsub = len(self.nus)
-        self.m_nu = np.zeros((len(self.nus), 12 * self.nside**2, 3))
-        self.sky = sky
-
-        for i in sky.keys():
-            if i == "cmb":
-                cmb = self._get_cmb(r=0, Alens=1, seed=self.sky["cmb"])
-                self.m_nu += cmb.copy()
-            elif i == "dust":
-                self.sky_fg = self._separe_cmb_fg()
-                self.sky_pysm = pysm3.Sky(self.nside, preset_strings=self.list_fg)
-                self.m_nu_fg = self._get_fg_allnu()
-                self.m_nu += self.m_nu_fg.copy()
-
-                if corrected_bandpass:
-                    self.m_nu = self._corrected_maps(self.m_nu, self.m_nu_fg)
-
-        self.maps = self.average_within_band(self.m_nu)
-
-    def _get_fg_1nu(self, nu):
-        return np.array(self.sky_pysm.get_emission(nu * u.GHz, None).T * utils.bandpass_unit_conversion(nu * u.GHz, None, u.uK_CMB)) / 1.5
-
-    def _get_fg_allnu(self):
-        m = np.zeros((len(self.nus), 12 * self.nside**2, 3))
-
-        for inu, nu in enumerate(self.nus):
-            m[inu] = self._get_fg_1nu(nu)
-
-        return m
-
-    def _separe_cmb_fg(self):
-        self.list_fg = []
-        new_s = {}
-        for i in self.sky.keys():
-            if i == "cmb":
-                pass
-            else:
-                new_s[i] = self.sky[i]
-                self.list_fg += [self.sky[i]]
-
-        return new_s

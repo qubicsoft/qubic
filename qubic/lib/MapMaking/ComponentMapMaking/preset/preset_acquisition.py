@@ -3,7 +3,6 @@ from fgbuster import component_model as c
 from pyoperators import (
     BlockDiagonalOperator,
     DiagonalOperator,
-    ReshapeOperator,
 )
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
@@ -381,7 +380,7 @@ class PresetAcquisition:
         self.H = self.preset_qubic.joint_in.get_operator(
             A=self.preset_mixingmatrix.Amm_in,
             gain=self.preset_gain.gain_in,
-            fwhm=self.fwhm_tod * 0,
+            fwhm=self.fwhm_tod,
         )
 
         ### Build noise variables
@@ -393,35 +392,35 @@ class PresetAcquisition:
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        self.TOD_external = (self.H.operands[1])(self.preset_comp.components_in) + noise_external
+        self.TOD_external = self.H.operands[1](self.preset_comp.components_in + noise_external)
 
-        #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
-        _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
-        maps_external = _r(self.TOD_external)
+        # #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
+        # _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
+        # maps_external = _r(self.TOD_external)
 
-        ### Reconvolve Planck data toward QUBIC angular resolution
-        #! Tom : correct this part, we  don't want to reconvolve here
-        if self.preset_qubic.params_qubic["convolution_in"] or self.preset_qubic.params_qubic["convolution_out"]:
-            C = HealpixConvolutionGaussianOperator(
-                fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
-                lmax=3 * self.preset_sky.params_sky["nside"],
-            )
-            for i in range(maps_external.shape[0]):
-                maps_external[i] = C(maps_external[i])
+        # ### Reconvolve Planck data toward QUBIC angular resolution
+        # #! Tom : correct this part, we  don't want to reconvolve here
+        # if self.preset_qubic.params_qubic["convolution_in"] or self.preset_qubic.params_qubic["convolution_out"]:
+        #     C = HealpixConvolutionGaussianOperator(
+        #         fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
+        #         lmax=3 * self.preset_sky.params_sky["nside"],
+        #     )
+        #     for i in range(maps_external.shape[0]):
+        #         maps_external[i] = C(maps_external[i])
 
-        # if self.preset_tools.params['PCG']['fix_pixels_outside_patch']:
-        maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
-        self.TOD_external = _r.T(maps_external)
+        # # if self.preset_tools.params['PCG']['fix_pixels_outside_patch']:
+        # maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
+        # self.TOD_external = _r.T(maps_external)
 
-        # self.seenpix_external = np.tile(self.preset_sky.seenpix_qubic, (maps_external.shape[0], 3, 1)).reshape(maps_external.shape)
+        # # self.seenpix_external = np.tile(self.preset_sky.seenpix_qubic, (maps_external.shape[0], 3, 1)).reshape(maps_external.shape)
 
-        ### Planck dataset with 0 outside QUBIC patch (Planck is assumed on the full sky)
-        maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
-        self.TOD_external_zero_outside_patch = _r.T(maps_external)
+        # ### Planck dataset with 0 outside QUBIC patch (Planck is assumed on the full sky)
+        # maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
+        # self.TOD_external_zero_outside_patch = _r.T(maps_external)
 
         ### Observed TOD (Planck is assumed on the full sky)
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
-        self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch]
+        # self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch]
 
     def get_x0(self):
         """PCG starting point.

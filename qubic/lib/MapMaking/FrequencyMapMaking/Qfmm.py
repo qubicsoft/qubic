@@ -11,7 +11,7 @@ from pyoperators import BlockDiagonalOperator, DiagonalOperator, ReshapeOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
 
-from qubic.lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking, PlanckAcquisition
+from qubic.lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking
 from qubic.lib.Instrument.Qnoise import QubicTotNoise
 from qubic.lib.MapMaking.FrequencyMapMaking.FMM_errors_checking import ErrorChecking
 from qubic.lib.MapMaking.Qcg import pcg
@@ -115,10 +115,6 @@ class PipelineFrequencyMapMaking:
         self.externaldata.maps = self.comm.bcast(self.externaldata.maps, root=0)
         self.externaldata.maps_noise = self.comm.bcast(self.externaldata.maps_noise, root=0)
 
-        self.planck_acquisition = []
-        for band_pl in [143, 217]:
-            self.planck_acquisition.append(PlanckAcquisition(band_pl, self.joint.qubic.scene))
-
         self.nus_Q = self.get_averaged_nus()
 
         ### Coverage map
@@ -137,7 +133,6 @@ class PipelineFrequencyMapMaking:
             self.joint_tod.qubic.allnus,
             self.params["QUBIC"]["nrec"],
             nside=self.params["SKY"]["nside"],
-            corrected_bandpass=self.params["QUBIC"]["bandpass_correction"],
         )
 
         ### Convolve the Nsub input maps at QUBIC resolution
@@ -169,10 +164,9 @@ class PipelineFrequencyMapMaking:
 
         ### Noises
 
-        rng_noise_planck = np.random.default_rng(self.params["PLANCK"]["seed_noise"])
         self.noise_planck = []
         for i in range(2):
-            self.noise_planck.append(self.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
+            self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(seed=self.params["PLANCK"]["seed_noise"]) * self.params["PLANCK"]["level_noise_planck"])
 
         qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
 

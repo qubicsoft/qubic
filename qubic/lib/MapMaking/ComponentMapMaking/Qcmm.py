@@ -177,7 +177,6 @@ class Pipeline:
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
-
         x_planck = self.preset.comp.components_out * (1 - seenpix[None, :, None])
 
         self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck)))

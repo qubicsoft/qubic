@@ -48,12 +48,12 @@ QUBIC:
 
     ### This section control the parameters related to QUBIC
 
-    instrument: 'UWB'                        # Instrumental design (DB or UWB)
+    instrument: 'DB'                        # Instrumental design (DB or UWB)
     configuration: 'FI'                     # Instrumental configuration (TD or FI) # to be implemented in the code
-    npointings: 5000                        # Number of time samples
-    nsub_in: 6                              # Number of sub-acquisitions
-    nsub_out: 6                             # Number of sub-acquisitions for the reconstruction
-    convolution_in: True                    # Angular resolution in the input TOD
+    npointings: 1000                        # Number of time samples
+    nsub_in: 8                              # Number of sub-acquisitions
+    nsub_out: 8                             # Number of sub-acquisitions for the reconstruction
+    convolution_in: False                    # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:                          
@@ -85,25 +85,25 @@ PLANCK:
 
     ### This section define which external data are we using
 
-    level_noise_planck: 0                         # Noise level for Planck data
-    nintegr_planck: 1                             # Number of integration step for Planck data
+    level_noise_planck: 1                         # Noise level for Planck data
+    nintegr_planck: 10                             # Number of integration step for Planck data
     thr_planck: 0.15                              # Threashold to remove planck weight within QUBIC patch
-    weight_planck: 1                              # Weight of Planck data within the QUBIC patch
+    weight_planck: 0                              # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                         # FWHM for apodized QUBIC patch
     30GHz: False
     44GHz: False
     70GHz: False
-    100GHz: True
+    100GHz: False
     143GHz: True
     217GHz: True
-    353GHz: True
+    353GHz: False
     seed_noise: 22222
 
 PCG:
 
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 100 
+    n_init_iter_pcg: 50 
     n_iter_pcg: 100                                     # Number of PCG iterations
     tol_pcg: 1.0e-30                                # Tolerance for PCG
     n_iter_loop: 1                                  # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
@@ -148,6 +148,6 @@ Plots:
     thr_plot: 0.2             # Threashold for maps plot
 
 save_iter: 1                                    # Save every 'save_iter' iteration
-foldername: 'test_invN'          # Name of the saved folder
-filename: 'after_changes_nonoise'                                # Name of the saved file
+foldername: 'test_planck'          # Name of the saved folder
+filename: 'initial'                                # Name of the saved file
 lastite: True                                   # Keep only the last iteration 

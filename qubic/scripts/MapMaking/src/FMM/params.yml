@@ -1,4 +1,4 @@
-path_out: 'test_merge/'
+path_out: 'test_noise/'
 datafilename: 'test'
 
 CMB:
@@ -9,7 +9,7 @@ CMB:
 
 Foregrounds:
 
-    Dust: False                              # Thermal Dust emission
+    Dust: True                              # Thermal Dust emission
     Synchrotron: False                      # Synchrotron emission
 
 QUBIC:
@@ -18,10 +18,10 @@ QUBIC:
     
     instrument: 'UWB'                       # Instrumental design (MB, DB or UWB)
     configuration: 'FI'                     # Instrumental configuration (TD or FI) # to be implemented in the code # create a dictionary for TD and one for FI
-    npointings: 1000                        # Number of time samples
+    npointings: 8000                        # Number of time samples
     nsub_in: 8                              # Number of sub-acquisitions
     nsub_out: 8
-    nrec: 4                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
+    nrec: 2                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
     convolution_in: True                    # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
@@ -51,7 +51,7 @@ PLANCK:
 
     external_data: True                    
     weight_planck: 0                            # Weight of Planck data within the QUBIC patch
-    level_noise_planck: 0                       # Noise level for Planck data
+    level_noise_planck: 1                       # Noise level for Planck data
     seed_noise: 22222
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
@@ -64,7 +64,7 @@ PCG:
 
     ### This section control PCG parameters
 
-    n_iter_pcg: 30                                   # Number of PCG iterations #100
+    n_iter_pcg: 50                                   # Number of PCG iterations #100
     tol_pcg: 1.0e-12                                # Tolerance for PCG
     preconditioner: False
     initial_guess_intensity_to_zero: True

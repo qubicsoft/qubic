@@ -464,7 +464,7 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 # xlim = [9480, 9550]
 xlim = [10540, 10640]
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256, doplot=True, check_back_forth=False):
+def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True, check_back_forth=False, also_tod=False):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -501,6 +501,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
         plt.scatter(tt[peaks_detected], data_peaks[peaks_detected], c="r", label="peaks_detected", zorder=1000)
         # plt.scatter(tt[peaks_detected], peaks_detected[peaks_detected], c="g", label="peaks_detected")
         plt.legend()
+        plt.tight_layout()
+        plt.savefig("figures/peak_detection_TES_{}.pdf".format(TES_number), dpi=300)
         plt.show()
 
         # plt.figure()
@@ -529,6 +531,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
         # plt.plot(tt, mytod_3, label="filtered")
         plt.plot(tt, mytod_4, label="filtered with peaks added")
         plt.legend()
+        plt.tight_layout()
+        plt.savefig("figures/TOD_TES_{}.pdf".format(TES_number), dpi=300)
         plt.show()
 
     if doplot and False:
@@ -552,13 +556,20 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
 
     # newelt = -newelt
     # Calculate center of maps from pointing w.r.t. Moon
-    # center=[np.mean(newazt), np.mean(newelt)]
-    center=[0, 0]
+    center=[np.mean(newazt), np.mean(newelt)]
+    # center=[0, 0]
+
+    final_tod = mytod_4
+    comparison_tod = mytod_1
+
+    mask_scan = scantype != 0
+    mask_map = mask_scan# * mask_elt
+    mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
 
     # To compare the map created with only forth scans with the map created with only back scans
     if check_back_forth:
-        mapsb_forth, mapcount_forth = healpix_map(newazt[scantype > 0], newelt[scantype > 0], mytod[scantype > 0], nside=nside)
-        mapsb_back, mapcount_back = healpix_map(newazt[scantype < 0], newelt[scantype < 0], mytod[scantype < 0], nside=nside)
+        mapsb_forth, mapcount_forth = healpix_map(newazt[scantype > 0], newelt[scantype > 0], final_tod[scantype > 0], nside=nside)
+        mapsb_back, mapcount_back = healpix_map(newazt[scantype < 0], newelt[scantype < 0], final_tod[scantype < 0], nside=nside)
         plt.figure()
         hp.gnomview(mapsb_forth, reso=10, sub=(1, 3, 1), min=-5e3, max=1.2e4, 
                 title="forth scans", rot=center)
@@ -569,23 +580,17 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
         plt.show()
         # return mapsb_forth, mapcount_forth, mapsb_back, mapcount_back
     
-    final_tod = mytod_4
-    comparison_tod = mytod_1
-
-    mask_scan = scantype != 0
-    mask_map = mask_scan# * mask_elt
-    mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
-
-    
 
     if doplot:
         
         plt.figure()
         # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, 
         #             title="gaussian map", rot=center)
-        hp.gnomview(mapsb, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, 
+        hp.gnomview(mapsb, reso=10, min=-5e3, max=1.2e4, 
                     title="final map", rot=center)
         # plt.savefig("figures/mapsb.pdf")
+        plt.tight_layout()
+        plt.savefig("figures/map_TES_{}.pdf".format(TES_number), dpi=300)
         plt.show()
         
     if doplot and False:
@@ -603,6 +608,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, nside=256
         plt.savefig("figures/mapsb_2-mapsb.pdf")
         plt.show()
         # stop
+    if also_tod:
+        return mapsb, mapcount, final_tod
     return mapsb, mapcount
 
 
@@ -966,7 +973,7 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
         m, fitted = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack)
 
     if return_images:
-        return m, mapxy, fitted, [np.min(x), np.max(x), np.min(y), np.max(y)], fig_axs
+        return m, mapxy, fitted, [np.min(i_elt), np.max(i_elt), np.min(j_azt), np.max(j_azt)], fig_axs
 
     return m
     
@@ -1279,57 +1286,47 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     return azmoon, elmoon
 
 
-def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, 
-                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None):
-    ### First read the data from disk if needed
-    if data is None:
-        print('Reading data from disk: '+datadir)
+def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None):
+    if data is None: # first read the data from disk if needed
         tt, alltod, thk, az, el, tinit = read_data(datadir, remove_t0=False)
         az += az_qubic
-        tt_save = np.copy(tt)
-        alltod_save = np.copy(alltod)
-        thk_save = np.copy(thk)
-        az_save = np.copy(az)
-        el_save = np.copy(el)
-        data = [tt_save, alltod_save, thk_save, az_save, el_save, tinit]
         print("tinit = {}".format(tinit))
-    else:
-        print('Using data already stored in memory - not read from disk')
-        tt_save, alltod_save, thk_save, az_save, el_save, tinit = data
-        tt = np.copy(tt_save)
-        alltod = np.copy(alltod_save)
-        thk = np.copy(thk_save)
-        az = np.copy(az_save)
-        el = np.copy(el_save)
+
+        # Remove the first start_tt points (out of 1998848)
+        tinit = tt[start_tt]
+        print("tinit = {}".format(tinit))
+        alltod = alltod[:, start_tt:]
+        tt = tt[start_tt:]
+        # need to put tt[0] to zero, but be careful of real time
+        # Also, I would have to adjust the mount time?
+        tt -= tinit# + 0.21 # delta_t seen in plotting back and forth images
+        thk -= tinit - 0.21 # seems better this way (almost no change except on one border)
         print(np.shape(tt))
         print(np.shape(alltod))
         print("tinit = {}".format(tinit))
-    
-    # Remove the first start_tt points (out of 1998848)
-    tinit = tt[start_tt]
-    print("tinit = {}".format(tinit))
-    alltod = alltod[:, start_tt:]
-    tt = tt[start_tt:]
-    # I need to put tt[0] to zero, but be careful of real time
-    # Also, I would have to adjust the mount time?
-    tt -= tinit + 0.21 # delta_t seen in plotting back and forth images
-    thk -= tinit
-    print(np.shape(tt))
-    print(np.shape(alltod))
-    print("tinit = {}".format(tinit))
 
-    ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
-    azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+        ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
+        azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+        
+        ### Identify scan types and numbers
+        scantype_hk, azt, elt, scantype, vmean = identify_scans(thk, az, el, 
+                                                                    tt=tt, doplot=False, 
+                                                                    plotrange=[0, 2000], 
+                                                                    thr_speedmin=speedmin)
 
-    
-    ### Identify scan types and numbers
-    scantype_hk, azt, elt, scantype, vmean = identify_scans(thk, az, el, 
-                                                                tt=tt, doplot=False, 
-                                                                plotrange=[0, 2000], 
-                                                                thr_speedmin=speedmin)
+        # New coordinates centered on the Moon
+        newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
 
-    # New coordinates centered on the Moon
-    newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
+        data = [tt, alltod, azt, elt, newazt, newelt, scantype] # what will be read later if this function is reused
+    else: # if the previous step was already done in previous execution
+        print('Using data already stored in memory - not read from disk')
+        tt, alltod, azt, elt, newazt, newelt, scantype = data
+    return data, tt.copy(), alltod.copy(), azt.copy(), elt.copy(), newazt.copy(), newelt.copy(), scantype.copy()
+
+def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, 
+                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None):
+
+    data, tt, alltod, azt, elt, newazt, newelt, scantype = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir)
 
     ### Loop over TES to do the maps
     print('\nLooping coaddition mapmaking over selected TES')
@@ -1337,7 +1334,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
     start_time = time.perf_counter()
     if parallel is False:
         print('Using sequential loop')
-        allmaps = np.zeros((len(allTESNum), 12*nside**2))
+        allmaps = np.zeros((len(allTESNum), 12*nside**2)) + 1e-15 # to fool minuit
         for i in range(len(allTESNum)):
             if isok_arr is not None: # only compute good TES (to make testing phase easier)
                 if not isok_arr[i]:
@@ -1347,7 +1344,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             tod = alltod[TESNum-1,:]
             
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
-                                                             nside=nside, 
+                                                             TES_number=TESNum, nside=nside, 
                                                              doplot=doplot, check_back_forth=check_back_forth)
             print('OK', flush=True)
     else:
@@ -1360,21 +1357,21 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             tod = alltod[TESNum - 1, :]
 
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
-                                                           nside=nside, doplot=doplot)        
+                                                           TES_number=i+1, nside=nside, doplot=doplot)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
                 # Directly assign the result to the correct index in allmaps
                 # allmaps is a list of numpy arrays, so we can use allmaps[i] directly
                 allmaps[i] = map_result
         
-        def parallel_coadded_maps(allTESNum, alltod, tt, azt, elt, scantype, azmoon, elmoon, nside, doplot):
+        def parallel_coadded_maps(allTESNum, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot):
             # Use Manager to create a shared list that will be modified by parallel processes
             with Manager() as manager:
                 # Create a list of NumPy arrays initialized to zeros
                 allmaps = manager.list([np.zeros(12 * nside ** 2) for _ in range(len(allTESNum))])
         
                 # Run the parallel processing with the correct arguments
-                Parallel(n_jobs=-1)(delayed(process_TES)(i, allTESNum[i], allmaps, alltod, tt, azt, elt, scantype, azmoon, elmoon, nside, doplot)
+                Parallel(n_jobs=-1)(delayed(process_TES)(i, allTESNum[i], allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot)
                                     for i in range(len(allTESNum)))
         
                 # Convert the manager list back to a NumPy array (this ensures allmaps is a numpy array of arrays)
@@ -1383,7 +1380,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             return allmaps_np
 
         allmaps = parallel_coadded_maps(allTESNum, alltod, tt, azt, elt, 
-                                        scantype, azmoon, elmoon, nside, doplot)
+                                        scantype, newazt, newelt, nside, doplot)
         print("NSIDE = ", nside)
     
     end_time = time.perf_counter()

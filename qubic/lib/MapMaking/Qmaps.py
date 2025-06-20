@@ -22,7 +22,7 @@ class Maps:
         #! Tom:  Corrected factor to adjust Planck maps regarding Bicep results, should be around 1.5
         # I put it to 1.0 for now
         # Need to be verify and corrected (+ implemented in a cleaner way)
-        self.corrected_factor_bicep = 1.0
+        self.corrected_factor_bicep = 1.5
 
         self.skyconfig_foregrounds = []
         for key in skyconfig.keys():

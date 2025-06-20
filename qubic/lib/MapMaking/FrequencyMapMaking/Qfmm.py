@@ -163,9 +163,11 @@ class PipelineFrequencyMapMaking:
             self.invN = R(self.invN(R.T))
 
         ### Noises
-
+        rng_noise_planck = np.random.default_rng(self.params["PLANCK"]["seed_noise"])
         self.noise_planck = []
         for i in range(2):
+            # self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
+
             self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(seed=self.params["PLANCK"]["seed_noise"]) * self.params["PLANCK"]["level_noise_planck"])
 
         qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
@@ -502,9 +504,7 @@ class PipelineFrequencyMapMaking:
         if self.params["QUBIC"]["nrec"] == 1:  # To handle the case nrec == 1, TOD_PLANCK[0] alreay computed above
             TOD_PLANCK[1] = self.maps_input_convolved[1] + noise[1]
 
-        TOD_PLANCK = TOD_PLANCK.ravel()
-
-        TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
+        TOD = np.r_[TOD_QUBIC, TOD_PLANCK.ravel()]
         return TOD
 
     def get_preconditioner(self):
@@ -527,12 +527,6 @@ class PipelineFrequencyMapMaking:
         H_qubic = self.joint.qubic.operator
 
         stacked_dptdp_inv = np.empty((nrec, npix))
-
-        # Pre-fetch Planck diagonals if needed
-        if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
-            Diag_planck_143 = self.joint.pl143.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data[:, 0]
-            Diag_planck_217 = self.joint.pl217.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data[:, 0]
-            planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
 
         for irec in range(nrec):
             stacked_dptdp_inv_fsub = np.empty((fsub, npix))
@@ -561,8 +555,12 @@ class PipelineFrequencyMapMaking:
                 mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
                 dptdp = mapPtP_seq_scaled.sum(axis=0)
 
-                if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
-                    dptdp = dptdp + planck_diag_sum
+                # # Pre-fetch Planck diagonals if needed
+                # if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
+                #     Diag_planck_143 = self.joint.pl143.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data  # [:, 0]
+                #     Diag_planck_217 = self.joint.pl217.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data  # [:, 0]
+                #     planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
+                #     dptdp = dptdp + planck_diag_sum
 
                 # Safe inversion
                 dptdp_inv = np.zeros_like(dptdp)
@@ -606,7 +604,7 @@ class PipelineFrequencyMapMaking:
         A = self.H_out.T * self.invN * self.H_out
 
         if self.params["PLANCK"]["external_data"]:
-            x_planck = self.maps_input * (1 - seenpix[None, :, None])
+            x_planck = self.maps_input_convolved * (1 - seenpix[None, :, None])
             b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck))
         else:
             b = self.H_out.T * self.invN * d

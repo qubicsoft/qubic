@@ -1283,6 +1283,8 @@ class JointAcquisitionFrequencyMapMaking:
         self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None)
 
         self.scene = self.qubic.scene
+        # self.pl143 = PlanckAcquisition(143, self.scene)
+        # self.pl217 = PlanckAcquisition(217, self.scene)
         self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
         self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
         self.planck_acquisition = [self.pl143, self.pl217]
@@ -1318,7 +1320,7 @@ class JointAcquisitionFrequencyMapMaking:
         H_list += [H_planck]
         return BlockColumnOperator(H_list, axisout=0) * U
 
-    def get_invntt_operator(  # We stack the invN_qubic and invN_planck on top of eachother
+    def get_invntt_operator(  # We stack the invNqubic and invN_planck on top of eachother
         self,
         qubic_ndet,
         qubic_npho150,
@@ -1331,9 +1333,9 @@ class JointAcquisitionFrequencyMapMaking:
         if beam_correction is None:
             beam_correction = [0] * self.Nrec
 
-        invn_q = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)  # add weight of Qubic detector and photon noise
-        R = ReshapeOperator(invn_q.shapeout, invn_q.shape[0])
-        invn_q = [R(invn_q(R.T))]
+        invNq = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)  # add weight of Qubic detector and photon noise
+        R = ReshapeOperator(invNq.shapeout, invNq.shape[0])
+        invNq = [R(invNq(R.T))]
         invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, mask=mask)
         invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, mask=mask)
 
@@ -1345,9 +1347,8 @@ class JointAcquisitionFrequencyMapMaking:
             invNe = [invN_143, invN_217]
         else:
             invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
-        invN = invn_q + invNe
 
-        return BlockDiagonalOperator(invN, axisout=0)
+        return BlockDiagonalOperator(invNq + invNe, axisout=0)
 
 
 class JointAcquisitionComponentsMapMaking:

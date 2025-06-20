@@ -551,7 +551,7 @@ class PlanckAcquisition:
             sigma = np.array(hp.ud_grade(sigma.T, self.nside, power=2), copy=False).T
         self.sigma = sigma * 1e6
 
-    def get_operator(self, nintegr=1):
+    def get_operator(self, nsub_planck=1):
         Hp = DiagonalOperator(
             np.ones((12 * self.nside**2, 3)),
             broadcast="rightward",
@@ -559,7 +559,7 @@ class PlanckAcquisition:
             shapeout=np.ones((12 * self.nside**2, 3)).ravel().shape,
         )
 
-        if nintegr == 1:
+        if nsub_planck == 1:
             return Hp
 
     def get_invntt_operator(self, planck_ntot, beam_correction=0, mask=None):
@@ -918,8 +918,8 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
 
 class OtherDataParametric:
-    def __init__(self, nus, nside, comps, nintegr=2):
-        self.nintegr = nintegr
+    def __init__(self, nus, nside, comps, nsub_planck=2):
+        self.nsub_planck = nsub_planck
         pkl_file = open(PATH + "AllDataSet_Components_MapMaking.pkl", "rb")
         dataset = pickle.load(pkl_file)
         self.dataset = dataset
@@ -929,7 +929,7 @@ class OtherDataParametric:
         self.npix = 12 * self.nside**2
         self.bw = []
         for _, i in enumerate(self.nus):
-            if nintegr == 1:
+            if nsub_planck == 1:
                 self.bw.append(0)
             else:
                 self.bw.append(self.dataset["bw{}".format(i)])
@@ -938,12 +938,12 @@ class OtherDataParametric:
         self.comps = comps
         self.nc = len(self.comps)
 
-        if nintegr == 1:
+        if nsub_planck == 1:
             self.allnus = self.nus
         else:
             self.allnus = []
             for inu, nu in enumerate(self.nus):
-                self.allnus += list(np.linspace(nu - self.bw[inu] / 2, nu + self.bw[inu] / 2, self.nintegr))
+                self.allnus += list(np.linspace(nu - self.bw[inu] / 2, nu + self.bw[inu] / 2, self.nsub_planck))
             self.allnus = np.array(self.allnus)
 
     def create_array(self, name, nus, nside):
@@ -1071,7 +1071,7 @@ class OtherDataParametric:
             else:
                 C = IdentityOperator()
 
-            for _ in range(self.nintegr):
+            for _ in range(self.nsub_planck):
                 D = self._get_mixing_operator(A=A[k])
 
                 ope_i += [C * D]
@@ -1079,9 +1079,9 @@ class OtherDataParametric:
                 k += 1
 
             if comm is not None:
-                Operator.append(comm * R2tod(AdditionOperator(ope_i) / self.nintegr))
+                Operator.append(comm * R2tod(AdditionOperator(ope_i) / self.nsub_planck))
             else:
-                Operator.append(R2tod(AdditionOperator(ope_i) / self.nintegr))
+                Operator.append(R2tod(AdditionOperator(ope_i) / self.nsub_planck))
 
         return BlockColumnOperator(Operator, axisout=0)
 
@@ -1315,10 +1315,8 @@ class JointAcquisitionFrequencyMapMaking:
         # It is necessary to change the shape of H_planck_ in order to stack it with H_qubic
         R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
         H_planck = R_diag(H_planck_)
-        H_list = [H_qubic]
-        ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
-        H_list += [H_planck]
-        return BlockColumnOperator(H_list, axisout=0) * U
+
+        return BlockColumnOperator([H_qubic, H_planck], axisout=0) * U
 
     def get_invntt_operator(  # We stack the invNqubic and invN_planck on top of eachother
         self,
@@ -1352,18 +1350,19 @@ class JointAcquisitionFrequencyMapMaking:
 
 
 class JointAcquisitionComponentsMapMaking:
-    def __init__(self, d, comp, Nsub, nus_external, nintegr, nu_co=None, H=None):
+    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None):
         self.d = d
         self.Nsub = Nsub
         self.comp = comp
         self.nus_external = nus_external
-        self.nintegr = nintegr
+        self.nsub_planck = nsub_planck
 
         ### Select the instrument model
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
 
         self.scene = self.qubic.scene
-        self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nintegr)
+        # self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nsub_planck)
+        self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_pysm=False)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):

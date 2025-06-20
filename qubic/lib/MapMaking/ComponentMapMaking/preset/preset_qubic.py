@@ -111,7 +111,6 @@ class PresetQubic:
             "noiseless": False,
             "comm": self.comm,
             "kind": "IQU",
-            "config": "FI",
             "verbose": False,
             "dtheta": self.params_qubic["dtheta"],
             "nprocs_sampling": 1,
@@ -132,6 +131,7 @@ class PresetQubic:
             "synthbeam_fraction": self.params_qubic["SYNTHBEAM"]["synthbeam_fraction"],
             "interp_projection": False,
             "instrument_type": self.params_qubic["instrument"],
+            "config": self.params_qubic["configuration"],
         }
 
         ### Get the default dictionary

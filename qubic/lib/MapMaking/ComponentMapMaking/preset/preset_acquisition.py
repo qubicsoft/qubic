@@ -392,7 +392,7 @@ class PresetAcquisition:
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        self.TOD_external = self.H.operands[1](self.preset_comp.components_in + noise_external)
+        self.TOD_external = self.H.operands[1](self.preset_comp.components_in) + noise_external
 
         # #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         # _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))

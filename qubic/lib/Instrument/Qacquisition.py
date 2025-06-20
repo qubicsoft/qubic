@@ -1363,7 +1363,7 @@ class JointAcquisitionComponentsMapMaking:
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
 
         self.scene = self.qubic.scene
-        self.external = PlanckAcquisitionTest(self.nus_external, self.scene.nside, self.comp, self.nintegr)
+        self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nintegr)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):

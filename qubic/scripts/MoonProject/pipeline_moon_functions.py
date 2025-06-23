@@ -274,7 +274,7 @@ def gaussian(x, mu, reso):
 		res = 1 / (np.sqrt(2 * np.pi) * sig) * np.exp(-((x - mu) / sig)**2 / 2)
 		return res / np.sum(res) # area under the curve = 1
 
-def gauss2D(Nx, Ny, x0, y0, reso, amp=None, normal=True):
+def gauss2D(Nx, Ny, x0, y0, reso, amp=None, normal=True): # reso is the fwhm
     # don't forget to convert all values (x0, y0, reso) in pixel space
     x, y = np.meshgrid(np.arange(Nx), np.arange(Ny), indexing='ij')
     if len(reso) == 1:

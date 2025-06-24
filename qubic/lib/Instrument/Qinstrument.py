@@ -38,8 +38,6 @@ from qubic.lib.Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
 from qubic.lib.Qbilin_interp import Cartesian2HealpixOperator_bilin_interp
 from qubic.lib.Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
 from qubic.lib.Qutilities import _compress_mask
-from qubic.lib.Qripples import ConvolutionRippledGaussianOperator, BeamGaussianRippled
-from qubic.lib.Qbeams import (BeamGaussian, BeamFitted, MultiFreqBeam)
 
 __all__ = ["QubicInstrument", "QubicMultibandInstrumentTrapezoidalIntegration", "QubicMultibandInstrument"]
 

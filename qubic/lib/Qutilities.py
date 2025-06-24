@@ -1,41 +1,44 @@
-import signal, traceback, os, string
-from progressbar import ProgressBar, Bar, ETA, Percentage
+import os
+import re
+import signal
+import traceback
+
 import numpy as np
 from PIL import Image
-from qubic.data import PATH as data_dir
-from qubic.calfiles import PATH as cal_dir
-from qubic.dicts import PATH as dicts_dir
+from progressbar import ETA, Bar, Percentage, ProgressBar
 
+from qubic.calfiles import PATH as cal_dir
+from qubic.data import PATH as data_dir
+from qubic.dicts import PATH as dicts_dir
 
 _NLEVELS = 0
 _MAX_NLEVELS = 0
 
+
 def join_toward_rank(comm, data, target_rank):
-    #print('enter', target_rank)
+    # print('enter', target_rank)
     gathered_data = comm.gather(data, root=target_rank)
-    #print('bis')
+    # print('bis')
     if comm.Get_rank() == target_rank:
-        #print(' bis bis')
-        return np.concatenate(gathered_data)#[0]
+        # print(' bis bis')
+        return np.concatenate(gathered_data)  # [0]
     else:
         return
-    
 
 
 def join_data(comm, data):
-
     if comm is None:
         pass
     else:
         data = comm.gather(data, root=0)
 
         if comm.Get_rank() == 0:
-
             data = np.concatenate(data)
-        
+
         data = comm.bcast(data)
 
     return data
+
 
 def split_data(comm, theta):
     if comm is None:
@@ -53,7 +56,7 @@ class _ProgressBar(ProgressBar):
         ProgressBar.__init__(self, poll=poll, **keywords)
         if self._nlevels == 0:
             self._signal_old = signal.signal(signal.SIGINT, self._int_handler)
-        print('\n\n\033[F', end='')
+        print("\n\n\033[F", end="")
 
     def update(self, n=None):
         if n is not None:
@@ -67,11 +70,11 @@ class _ProgressBar(ProgressBar):
         global _NLEVELS, _MAX_NLEVELS
         ProgressBar.finish(self)
         if self._nlevels == 0:
-            print((_MAX_NLEVELS - 1) * '\n', end='')
+            print((_MAX_NLEVELS - 1) * "\n", end="")
             signal.signal(signal.SIGINT, self._signal_old)
             _MAX_NLEVELS = 0
         else:
-            print('\033[F\033[F', end='')
+            print("\033[F\033[F", end="")
         _NLEVELS -= 1
 
     def _int_handler(self, signum, frame):
@@ -84,7 +87,7 @@ class _ProgressBar(ProgressBar):
         raise e
 
 
-def progress_bar(n, info=''):
+def progress_bar(n, info=""):
     """
     Return a default progress bar.
 
@@ -98,15 +101,14 @@ def progress_bar(n, info=''):
     ...     bar.update()
 
     """
-    return _ProgressBar(widgets=[info, Percentage(), Bar('=', '[', ']'),
-                                 ETA()], maxval=n).start()
+    return _ProgressBar(widgets=[info, Percentage(), Bar("=", "[", "]"), ETA()], maxval=n).start()
 
 
 def _compress_mask(mask):
     mask = mask.ravel()
     if len(mask) == 0:
-        return ''
-    output = ''
+        return ""
+    output = ""
     old = mask[0]
     n = 1
     for new in mask[1:]:
@@ -114,8 +116,8 @@ def _compress_mask(mask):
             if n > 2:
                 output += str(n)
             elif n == 2:
-                output += '+' if old else '-'
-            output += '+' if old else '-'
+                output += "+" if old else "-"
+            output += "+" if old else "-"
             n = 1
             old = new
         else:
@@ -123,32 +125,32 @@ def _compress_mask(mask):
     if n > 2:
         output += str(n)
     elif n == 2:
-        output += '+' if old else '-'
-    output += '+' if old else '-'
+        output += "+" if old else "-"
+    output += "+" if old else "-"
     return output
 
 
 def _uncompress_mask(mask):
     i = 0
-    l = []
+    mask_list = []
     nmask = len(mask)
     while i < nmask:
         val = mask[i]
-        if val == '+':
-            l.append(True)
+        if val == "+":
+            mask_list.append(True)
             i += 1
-        elif val == '-':
-            l.append(False)
+        elif val == "-":
+            mask_list.append(False)
             i += 1
         else:
             j = i + 1
             val = mask[j]
-            while val not in ('+', '-'):
+            while val not in ("+", "-"):
                 j += 1
                 val = mask[j]
-            l.extend(int(mask[i:j]) * (True if val == '+' else False,))
+            mask_list.extend(int(mask[i:j]) * (True if val == "+" else False,))
             i = j + 1
-    return np.array(l, bool)
+    return np.array(mask_list, bool)
 
 
 def create_folder_if_not_exists(folder_name):
@@ -164,22 +166,22 @@ def create_folder_if_not_exists(folder_name):
         pass
 
 
-def do_gif(input_folder, N, filename, output='animation.gif'):
-
-    nmaps = np.arange(1, N+1, 1)
+def do_gif(input_folder, N, filename, output="animation.gif"):
+    nmaps = np.arange(1, N + 1, 1)
     image_list = []
-    #for filename in sorted(os.listdir(input_folder)):
+    # for filename in sorted(os.listdir(input_folder)):
     for n in nmaps:
-        image_path = os.path.join(input_folder, filename+f'{n}.png')
+        image_path = os.path.join(input_folder, filename + f"{n}.png")
         image = Image.open(image_path)
         image_list.append(image)
 
     output_gif_path = os.path.join(input_folder, output)
-    #output_gif_path = f"figures/{stk}/animation.gif"
+    # output_gif_path = f"figures/{stk}/animation.gif"
     image_list[0].save(output_gif_path, save_all=True, append_images=image_list[1:], duration=100, loop=0)
 
-def find_file(filename,verbosity=1):
-    '''
+
+def find_file(filename, verbosity=1):
+    """
     find the full path to the file given the filename
     It could be a dictionary, or a data, or calibration file.
 
@@ -192,29 +194,31 @@ def find_file(filename,verbosity=1):
 
     we return the path name of the file that was found
     Otherwise we print a "not found" error, and return None
-    '''
+    """
 
     if os.path.isfile(filename):
         return filename
 
     basename = os.path.basename(filename)
-    dir_list = ['.']
+    dir_list = ["."]
 
-    if 'QUBIC_DICT' in os.environ.keys():
-        dir_list.append(os.environ['QUBIC_DICT'])
+    if "QUBIC_DICT" in os.environ.keys():
+        dir_list.append(os.environ["QUBIC_DICT"])
 
-    if 'QUBIC_DATADIR' in os.environ.keys():
-        dir_list.append(os.environ['QUBIC_DATADIR'])
-        
-    dir_list += [dicts_dir,cal_dir,data_dir]
-    
+    for var in os.environ.keys():
+        match = re.search("QUBIC_.*DIR", var)
+        if match:
+            dir_list.append(os.environ[var])
+
+    dir_list += [dicts_dir, cal_dir, data_dir]
+
     for D in dir_list:
-        filename_fullpath = os.path.join(D,basename)
+        filename_fullpath = os.path.join(D, basename)
         if os.path.isfile(filename_fullpath):
             return filename_fullpath
 
     # if we get this far, then we haven't found the file
-    if verbosity>0:
-        print('ERROR!  File not found: %s' % basename)
-        print('        I looked in the following directories:\n    %s' % '     \n'.join(dir_list))
+    if verbosity > 0:
+        print("ERROR!  File not found: %s" % basename)
+        print("        I looked in the following directories:\n    %s" % "     \n".join(dir_list))
     return None

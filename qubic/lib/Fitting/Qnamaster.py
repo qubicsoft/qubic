@@ -1,13 +1,12 @@
-import numpy as np
 import healpy as hp
+import numpy as np
 import pymaster as nmt
 
-__all__ = ['Namaster']
+__all__ = ["Namaster"]
 
 
 class Namaster(object):
-
-    def __init__(self, weight_mask, lmin, lmax, delta_ell, aposize=10.0, apotype='C1'):
+    def __init__(self, weight_mask, lmin, lmax, delta_ell, aposize=10.0, apotype="C1"):
         """
 
         Parameters
@@ -30,9 +29,9 @@ class Namaster(object):
         lmax = int(lmax)
         delta_ell = int(delta_ell)
         if lmin < 1:
-            raise ValueError('Input lmin is less than 1.')
+            raise ValueError("Input lmin is less than 1.")
         if lmax < lmin:
-            raise ValueError('Input lmax is less than lmin.')
+            raise ValueError("Input lmax is less than lmin.")
         self.lmin = lmin
         self.lmax = lmax
         self.delta_ell = delta_ell
@@ -66,14 +65,9 @@ class Namaster(object):
         -------
         The binned monopoles and the NmtBin object
         """
-        b = nmt.NmtBin(nside,
-                       bpws=self.bpws,
-                       ells=self.ells,
-                       weights=self.weights,
-                       lmax=self.lmax,
-                       is_Dell=True)
+        b = nmt.NmtBin(bpws=self.bpws, ells=self.ells, weights=self.weights, lmax=self.lmax).from_lmax_linear(self.lmax, self.delta_ell, is_Dell=True)
         ell_binned = b.get_effective_ells()
-        self.ell_binned = ell_binned
+        self.ell_binned = ell_binned[np.where(ell_binned >= self.lmin)]
 
         return ell_binned, b
 
@@ -92,7 +86,7 @@ class Namaster(object):
 
         """
         ell_binned, b = self.get_binning(nside)
-        input_cls_reshape = np.reshape(input_cls[:self.lmax + 1], (1, self.lmax + 1))
+        input_cls_reshape = np.reshape(input_cls[: self.lmax + 1], (1, self.lmax + 1))
         cls_binned = b.bin_cell(input_cls_reshape)
 
         fact = 2 * np.pi / (ell_binned * (ell_binned + 1))
@@ -107,9 +101,7 @@ class Namaster(object):
         """
         resol = np.degrees(hp.nside2resol(hp.npix2nside(len(self.weight_mask))))
         if resol < self.aposize:
-            mask_apo = nmt.mask_apodization(self.weight_mask,
-                                            aposize=self.aposize,
-                                            apotype=self.apotype)
+            mask_apo = nmt.mask_apodization(self.weight_mask, aposize=self.aposize, apotype=self.apotype)
         else:
             mask_apo = self.weight_mask.copy()
         return mask_apo
@@ -151,23 +143,15 @@ class Namaster(object):
         if beam_correction is not None:
             if beam_correction is True:
                 # Default value for QUBIC at 150 GHz
-                beam = hp.gauss_beam(np.deg2rad(0.39268176),
-                                     lmax=3 * nside - 1)
+                beam = hp.gauss_beam(np.deg2rad(0.39268176), lmax=3 * nside - 1)
             else:
-                beam = hp.gauss_beam(np.deg2rad(beam_correction),
-                                     lmax=3 * nside - 1)
+                beam = hp.gauss_beam(np.deg2rad(beam_correction), lmax=3 * nside - 1)
         else:
             beam = None
 
-        f0 = nmt.NmtField(mask_apo,
-                          [mp_t],
-                          beam=beam)
+        f0 = nmt.NmtField(mask_apo, [mp_t], beam=beam)
 
-        f2 = nmt.NmtField(mask_apo,
-                          [mp_q, mp_u],
-                          purify_e=purify_e,
-                          purify_b=purify_b,
-                          beam=beam)
+        f2 = nmt.NmtField(mask_apo, [mp_q, mp_u], purify_e=purify_e, purify_b=purify_b, beam=beam)
 
         self.f0 = f0
         self.f2 = f2
@@ -192,8 +176,7 @@ class Namaster(object):
         cl_decoupled = workspace.decouple_cell(cl_coupled)
         return cl_decoupled
 
-    def get_spectra(self, map, mask_apo=None, map2=None, purify_e=False, purify_b=True, w=None,
-                    beam_correction=None, pixwin_correction=False, verbose=True):
+    def get_spectra(self, map, mask_apo=None, map2=None, purify_e=False, purify_b=True, w=None, beam_correction=None, pixwin_correction=False, verbose=True):
         """
         Get spectra from IQU maps.
         Parameters
@@ -234,17 +217,11 @@ class Namaster(object):
             mask_apo = self.mask_apo
 
         # Get fields
-        f0, f2 = self.get_fields(map, mask_apo=mask_apo,
-                                 purify_e=purify_e,
-                                 purify_b=purify_b,
-                                 beam_correction=beam_correction)
+        f0, f2 = self.get_fields(map, mask_apo=mask_apo, purify_e=purify_e, purify_b=purify_b, beam_correction=beam_correction)
 
         # Cross-Spectra case
         if map2 is not None:
-            f0bis, f2bis = self.get_fields(map2, mask_apo=mask_apo,
-                                           purify_e=purify_e,
-                                           purify_b=purify_b,
-                                           beam_correction=beam_correction)
+            f0bis, f2bis = self.get_fields(map2, mask_apo=mask_apo, purify_e=purify_e, purify_b=purify_b, beam_correction=beam_correction)
         else:
             f0bis = f0
             f2bis = f2
@@ -279,20 +256,20 @@ class Namaster(object):
         # Put the 4 spectra in one array
         spectra = np.array([c00[0], c22[0], c22[3], c02[0]]).T
         if verbose:
-            print('Getting TT, EE, BB, TE spectra in that order.')
+            print("Getting TT, EE, BB, TE spectra in that order.")
 
         if pixwin_correction is True:
             pwb = self.get_pixwin_correction(nside)
-            spectra[:, 0] /= (pwb[0] ** 2) # TT
-            spectra[:, 1] /= (pwb[1] ** 2) # EE
-            spectra[:, 2] /= (pwb[1] ** 2) # BB
-            spectra[:, 3] /= (pwb[0] * pwb[1]) # TE
+            spectra[:, 0] /= pwb[0] ** 2  # TT
+            spectra[:, 1] /= pwb[1] ** 2  # EE
+            spectra[:, 2] /= pwb[1] ** 2  # BB
+            spectra[:, 3] /= pwb[0] * pwb[1]  # TE
 
         return self.ell_binned, spectra, w
 
     def get_pixwin_correction(self, nside):
         """Return the binned pixel window function multiplied by 2pi/(l(l+1))
-        for temperature and polarization """
+        for temperature and polarization"""
         pw = list(hp.pixwin(nside, pol=True, lmax=self.lmax))
 
         ell_binned, b = self.get_binning(nside)
@@ -301,24 +278,24 @@ class Namaster(object):
         return pwb
 
     def _binning(self):
-        ells = np.arange(self.lmin, self.lmax, dtype='int32')  # Array of multipoles
-        weights = 1. / self.delta_ell * np.ones_like(ells)  # Array of weights
+        ells = np.arange(self.lmin, self.lmax, dtype="int32")  # Array of multipoles
+        weights = 1.0 / self.delta_ell * np.ones_like(ells)  # Array of weights
         bpws = -1 + np.zeros_like(ells)  # Array of bandpower indices
         i = 0
         # print(self.lmax - self.delta_ell)
         while self.delta_ell * (i + 1) < (self.lmax - self.delta_ell):
-            bpws[self.delta_ell * i: self.delta_ell * (i + 1)] = i
+            bpws[self.delta_ell * i : self.delta_ell * (i + 1)] = i
             i += 1
 
         return ells, weights, bpws
 
     def knox_errors(self, clth):
-        dcl = np.sqrt(2. / (2 * self.ell_binned + 1) / self.fsky / self.delta_ell) * clth
+        dcl = np.sqrt(2.0 / (2 * self.ell_binned + 1) / self.fsky / self.delta_ell) * clth
         return dcl
 
     def knox_covariance(self, clth):
         dcl = self.knox_errors(clth)
-        return np.diag(dcl ** 2)
+        return np.diag(dcl**2)
 
     def get_covariance_coeff(self):
         if self.cw is None:
@@ -329,14 +306,19 @@ class Namaster(object):
     def get_covariance_TT_TT(self, cl_tt):
         self.get_covariance_coeff()
         w00 = self.w[0]
-        covar_00_00 = nmt.gaussian_covariance(self.cw,
-                                              0, 0, 0, 0,  # Spins of the 4 fields
-                                              [cl_tt * 0],  # TT
-                                              [cl_tt * 0],  # TT
-                                              [cl_tt * 0],  # TT
-                                              [cl_tt * 0],  # TT
-                                              w00, wb=w00).reshape([len(self.ell_binned), 1,
-                                                                    len(self.ell_binned), 1])
+        covar_00_00 = nmt.gaussian_covariance(
+            self.cw,
+            0,
+            0,
+            0,
+            0,  # Spins of the 4 fields
+            [cl_tt * 0],  # TT
+            [cl_tt * 0],  # TT
+            [cl_tt * 0],  # TT
+            [cl_tt * 0],  # TT
+            w00,
+            wb=w00,
+        ).reshape([len(self.ell_binned), 1, len(self.ell_binned), 1])
         covar_TT_TT = covar_00_00[:, 0, :, 0]
         return covar_TT_TT
 
@@ -346,17 +328,19 @@ class Namaster(object):
         n_ell = len(cl_ee)
         cl_eb = np.zeros(n_ell)
         cl_bb = np.zeros(n_ell)
-        covar_22_22 = nmt.gaussian_covariance(self.cw, 2, 2, 2, 2,  # Spins of the 4 fields
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              w22, wb=w22).reshape([len(self.ell_binned), 4,
-                                                                    len(self.ell_binned), 4])
+        covar_22_22 = nmt.gaussian_covariance(
+            self.cw,
+            2,
+            2,
+            2,
+            2,  # Spins of the 4 fields
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            w22,
+            wb=w22,
+        ).reshape([len(self.ell_binned), 4, len(self.ell_binned), 4])
 
         covar_EE_EE = covar_22_22[:, 0, :, 0]
         # covar_EE_EB = covar_22_22[:, 0, :, 1]
@@ -382,16 +366,19 @@ class Namaster(object):
         n_ell = len(cl_bb)
         cl_eb = np.zeros(n_ell)
         cl_ee = np.zeros(n_ell)
-        covar_22_22 = nmt.gaussian_covariance(self.cw, 2, 2, 2, 2,  # Spins of the 4 fields
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              w22, wb=w22)
+        covar_22_22 = nmt.gaussian_covariance(
+            self.cw,
+            2,
+            2,
+            2,
+            2,  # Spins of the 4 fields
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            w22,
+            wb=w22,
+        )
 
         covar_22_22 = np.reshape(covar_22_22, (len(self.ell_binned), 4, len(self.ell_binned), 4))
 
@@ -423,13 +410,19 @@ class Namaster(object):
         cl_ee = np.zeros(n_ell)
         cl_eb = np.zeros(n_ell)
         cl_tb = np.zeros(n_ell)
-        covar_02_02 = nmt.gaussian_covariance(self.cw, 0, 2, 0, 2,  # Spins of the 4 fields
-                                              [cl_tt],  # TT
-                                              [cl_te, cl_tb],  # TE, TB
-                                              [cl_te, cl_tb],  # ET, BT
-                                              [cl_ee, cl_eb,
-                                               cl_eb, cl_bb],  # EE, EB, BE, BB
-                                              w02, wb=w02)
+        covar_02_02 = nmt.gaussian_covariance(
+            self.cw,
+            0,
+            2,
+            0,
+            2,  # Spins of the 4 fields
+            [cl_tt],  # TT
+            [cl_te, cl_tb],  # TE, TB
+            [cl_te, cl_tb],  # ET, BT
+            [cl_ee, cl_eb, cl_eb, cl_bb],  # EE, EB, BE, BB
+            w02,
+            wb=w02,
+        )
         covar_02_02 = np.reshape(covar_02_02, (len(self.ell_binned), 2, len(self.ell_binned), 2))
         covar_TE_TE = covar_02_02[:, 0, :, 0]
         # covar_TE_TB = covar_02_02[:, 0, :, 1]

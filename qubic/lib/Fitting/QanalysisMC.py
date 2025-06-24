@@ -1,12 +1,14 @@
 import os
+
 import healpy as hp
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy import interpolate
-import matplotlib.pyplot as plt
 
-from qubic.lib.QskySim import cov2corr
-from qubic.lib.Instrument.Qinstrument import compute_freq
+import qubic
 from qubic.lib.Fitting import QreadMC as rmc
+from qubic.lib.Instrument.Qinstrument import compute_freq
+from qubic.lib.QskySim import cov2corr
 
 
 # ============ Functions do statistical tests on maps ===========#
@@ -52,7 +54,7 @@ def std_profile(many_patch, nbins, nside, center, seenmap):
         std_bin[b, :, :] = np.std(many_patch[:, :, ok, :], axis=(0, 2))
 
     # Interpolation to get a profile
-    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind='linear', fill_value='extrapolate')
+    fit = interpolate.interp1d(bin_centers, std_bin, axis=0, kind="linear", fill_value="extrapolate")
     std_profile = fit(ang)
 
     return bin_centers, ang, std_bin, std_profile
@@ -78,7 +80,7 @@ def get_residuals(fits_noise, fits_noiseless, residuals_way):
     nreals = len(fits_noise)
     residuals = []
 
-    if residuals_way == 'mean_recon':
+    if residuals_way == "mean_recon":
         seenmap = rmc.get_seenmap(fits_noise[0])
         recon, conv, diff = rmc.get_patch(fits_noise[0], seenmap)
         nbands, npix, nstk = recon.shape
@@ -91,25 +93,25 @@ def get_residuals(fits_noise, fits_noiseless, residuals_way):
         seenmap = rmc.get_seenmap(fits_noise[i])
         recon, conv, diff = rmc.get_patch(fits_noise[i], seenmap)
 
-        if residuals_way == 'noiseless':
+        if residuals_way == "noiseless":
             recon_nl, conv_nl, diff_nl = rmc.get_patch(fits_noiseless, seenmap)
             residuals.append(recon - recon_nl)
 
-        elif residuals_way == 'conv':
+        elif residuals_way == "conv":
             residuals.append(diff)
 
-        elif residuals_way == 'mean_recon':
+        elif residuals_way == "mean_recon":
             residuals.append(recon - np.mean(rec, axis=0))
 
         else:
-            raise ValueError('The way to compute residuals is not valid.')
+            raise ValueError("The way to compute residuals is not valid.")
 
     return np.asarray(residuals)
 
 
 def rms_method(name, residuals_way, zones=1, simulation_dir=None):
     """
-    Get the std of the residuals from one simulation. 
+    Get the std of the residuals from one simulation.
     STD are computed over realisations and pixels for I, Q, U separately.
 
     Parameters
@@ -123,39 +125,38 @@ def rms_method(name, residuals_way, zones=1, simulation_dir=None):
 
     Returns
     -------
-    rms_I, rms_Q, rms_U : dictionarys containing RMS for IQU 
+    rms_I, rms_Q, rms_U : dictionarys containing RMS for IQU
     setpar : a dict with some parameters of the simu.
     """
 
-    dictfile = name + '.dict'
+    dictfile = name + ".dict"
     if simulation_dir is not None:
-        dictfile = simulation_dir + os.sep + name + '.dict'
+        dictfile = simulation_dir + os.sep + name + ".dict"
         if not os.path.isfile(dictfile):
-            print('ERROR! Dictionary file does not exist: %s' % dictfile)
+            print("ERROR! Dictionary file does not exist: %s" % dictfile)
             return None
-        
 
     # Dictionary saved during the simulation
     # if the dictionary is given without an absolute path, it will search in the package directory
     d = qubic.qubicdict.qubicDict()
     dict_ok = d.read_from_file(dictfile)
     if not dict_ok:
-        print('ERROR! Dictionary not read.')
+        print("ERROR! Dictionary not read.")
         return None
-    
-    setpar = {'tol': d['tol'], 'nep': d['detector_nep'], 'npoint': d['npointings']}
 
-    nf_recon = d['nf_recon']
+    setpar = {"tol": d["tol"], "nep": d["detector_nep"], "npoint": d["npointings"]}
+
+    nf_recon = d["nf_recon"]
 
     rms_I, rms_Q, rms_U = dict(), dict(), dict()
 
     for irec in nf_recon:
+        #! rep_simu is not defined in the function (Tom)
         residuals = get_residuals(name, rep_simu, residuals_way, irec)
-        files, maps_recon_patch, maps_conv_patch, maps_diff_patch = \
-            rmc.get_patch_many_files(rep_simu + name, '*nfrecon{}*False*'.format(irec), verbose=False)
+        files, _, _, maps_diff_patch = rmc.get_patch_many_files(rep_simu + name, "*nfrecon{}*False*".format(irec), verbose=False)
 
         npix_patch = maps_diff_patch.shape[2]
-        setpar.update({'pixpatch': npix_patch})
+        setpar.update({"pixpatch": npix_patch})
         #         print(setpar)
 
         nreals = np.shape(residuals)[0]
@@ -174,17 +175,34 @@ def rms_method(name, residuals_way, zones=1, simulation_dir=None):
             if zones == 2:
                 angle = True
 
-            center = qubic.equ2gal(d['RA_center'], d['DEC_center'])
+            center = qubic.equ2gal(d["RA_center"], d["DEC_center"])
             seenmap = rmc.get_seenmap(files[0])
-            nside = d['nside']
+            nside = d["nside"]
 
             residuals_zones = np.empty((nreals, zones, irec, npix_patch, 3))
             for real in range(nreals):
-                pix_zones, residuals_zones[real] = rmc.make_zones(residuals[real], zones, nside, center, seenmap,
-                                                                  angle=angle, dtheta=d['dtheta'], verbose=False,
-                                                                  doplot=False)
+                pix_zones, residuals_zones[real] = rmc.make_zones(residuals[real], zones, nside, center, seenmap, angle=angle, dtheta=d["dtheta"], verbose=False, doplot=False)
 
-            rms_i, rms_q, rms_u = np.empty((zones, irec,)), np.empty((zones, irec,)), np.empty((zones, irec,))
+            rms_i, rms_q, rms_u = (
+                np.empty(
+                    (
+                        zones,
+                        irec,
+                    )
+                ),
+                np.empty(
+                    (
+                        zones,
+                        irec,
+                    )
+                ),
+                np.empty(
+                    (
+                        zones,
+                        irec,
+                    )
+                ),
+            )
             for izone in range(zones):
                 for i in range(irec):
                     rms_i[izone, i] = np.std(residuals_zones[:, izone, i, :, 0])
@@ -212,10 +230,10 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
         pixel where the covariance will be computed
     verbose : bool
         If True, print information. False by default.
-    stokesjoint: bool 
-        If True return Stokes parameter together 
+    stokesjoint: bool
+        If True return Stokes parameter together
         I0,I1,..., Q0,Q1,..., U0, U1, ... . Otherwise will return
-        I0,Q0,U0,  I1,Q1,U1, ... 
+        I0,Q0,U0,  I1,Q1,U1, ...
         Default: False
 
     Return
@@ -228,17 +246,17 @@ def get_covcorr1pix(maps, ipix, verbose=False, stokesjoint=False):
 
     """
 
-    if type(ipix) != int:
-        raise TypeError('ipix has to be an integer number')
+    if type(ipix) is not int:
+        raise TypeError("ipix has to be an integer number")
 
     nreal, nfrec, npix, nstk = np.shape(maps)
 
     if verbose:
-        print('The shape of the input map has to be: (nsample, nfrecons, npix, 3): {}'.format(maps.shape))
-        print('Number of reconstructed sub-bands to analyze: {}'.format(nfrec))
-        print('Number of realizations: {}'.format(nreal))
-        print('Number of Stokes: {}'.format(nstk))
-        print('Computing covariance matrix in pixel {}'.format(ipix))
+        print("The shape of the input map has to be: (nsample, nfrecons, npix, 3): {}".format(maps.shape))
+        print("Number of reconstructed sub-bands to analyze: {}".format(nfrec))
+        print("Number of realizations: {}".format(nreal))
+        print("Number of Stokes: {}".format(nstk))
+        print("Computing covariance matrix in pixel {}".format(ipix))
 
     data = np.reshape(maps[:, :, ipix, :], (nreal, nfrec * nstk))
 
@@ -271,10 +289,10 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
     patch: np.array
         Sky patch observed (see get_patch_many_files() from ReadMC module)
 
-    stokesjoint: bool 
-        If True return Stokes parameter together 
+    stokesjoint: bool
+        If True return Stokes parameter together
         I0,I1,..., Q0,Q1,..., U0, U1, ... . Otherwise will return
-        I0,Q0,U0,  I1,Q1,U1, ... 
+        I0,Q0,U0,  I1,Q1,U1, ...
         Default: False
 
     doplot: If True return a imshow plot of the matrix
@@ -309,19 +327,19 @@ def get_covcorr_patch(patch, stokesjoint=False, doplot=False):
         plt.figure()
         plt.subplot(121)
         vmax = np.max(np.abs(cov[:, :, 0]))
-        plt.imshow(cov[:, :, 0], vmin=-vmax, vmax=vmax, cmap='bwr')
-        plt.title('Covariance pixel 0')
+        plt.imshow(cov[:, :, 0], vmin=-vmax, vmax=vmax, cmap="bwr")
+        plt.title("Covariance pixel 0")
         plt.colorbar()
 
         plt.subplot(122)
-        plt.imshow(corr[:, :, 0], vmin=-1, vmax=1, cmap='bwr')
-        plt.title('Correlation pixel 0')
+        plt.imshow(corr[:, :, 0], vmin=-1, vmax=1, cmap="bwr")
+        plt.title("Correlation pixel 0")
         plt.colorbar()
 
     return cov, corr
 
 
-def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
+def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color="b"):
     """
     Plots the histograms of each element of the matrix.
     Each histogram represents the distribution of a given
@@ -341,12 +359,12 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
         Color of the histogram
 
     """
-    stokes = ['I', 'Q', 'U']
+    stokes = ["I", "Q", "U"]
     dim = np.shape(mat_npix)[0]
     min = np.min(mat_npix)
     max = np.max(mat_npix)
 
-    ttl = title_prefix + ' Hist over pix for each matrix element'
+    ttl = title_prefix + " Hist over pix for each matrix element"
     plt.figure(ttl, figsize=(10, 10))
     for iterm in range(dim):
         for jterm in range(dim):
@@ -356,8 +374,7 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
             std = np.std(mat_npix[iterm, jterm, :])
 
             plt.subplot(dim, dim, idx)
-            plt.hist(mat_npix[iterm, jterm, :], color=color, density=True,
-                     bins=bins, label='m={0:.2f} \n $\sigma$={1:.2f}'.format(mean, std))
+            plt.hist(mat_npix[iterm, jterm, :], color=color, density=True, bins=bins, label="m={0:.2f} \n $\sigma$={1:.2f}".format(mean, std))
             # no yticks for histogram in middle
             if idx % dim != 1:
                 plt.yticks([])
@@ -367,16 +384,16 @@ def plot_hist(mat_npix, bins, title_prefix, ymax=0.5, color='b'):
 
             # Names
             if iterm == (dim - 1):
-                plt.xlabel(stokes[jterm % 3] + '{}'.format(jterm / 3))
+                plt.xlabel(stokes[jterm % 3] + "{}".format(jterm / 3))
             if jterm == 0:
-                plt.ylabel(stokes[iterm % 3] + '{}'.format(iterm / 3))
+                plt.ylabel(stokes[iterm % 3] + "{}".format(iterm / 3))
 
             # same scale for each plot
             plt.xlim((min, max))
-            plt.ylim((0., ymax))
+            plt.ylim((0.0, ymax))
 
-            plt.legend(fontsize='xx-small')
-            plt.subplots_adjust(hspace=0., wspace=0.)
+            plt.legend(fontsize="xx-small")
+            plt.subplots_adjust(hspace=0.0, wspace=0.0)
 
 
 def get_covcorr_between_pix(maps, verbose=False):
@@ -404,10 +421,10 @@ def get_covcorr_between_pix(maps, verbose=False):
     nreal, nsub, npix, nstokes = np.shape(maps)
 
     if verbose:
-        print('The shape of the input map has to be: (nreal, nsub, npix, 3)')
-        print('Number of reconstructed sub-bands to analyze: {}'.format(nsub))
-        print('Number of realizations: {}'.format(nreal))
-        print('Number of pixels {}'.format(npix))
+        print("The shape of the input map has to be: (nreal, nsub, npix, 3)")
+        print("Number of reconstructed sub-bands to analyze: {}".format(nsub))
+        print("Number of realizations: {}".format(nreal))
+        print("Number of pixels {}".format(npix))
 
     cov_pix = np.empty((nsub, nstokes, npix, npix))
     corr_pix = np.empty((nsub, nstokes, npix, npix))
@@ -428,7 +445,7 @@ def distance_square(matrix):
     """
     n = np.shape(matrix)[0]
     d = np.sum(np.square(matrix))
-    return d / n ** 2
+    return d / n**2
 
 
 def distance_sup(matrix):
@@ -452,10 +469,10 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     allmaps : list
         List of arrays of shape (nreals, nsub, npix, 3)
         List of maps for each number of sub-bands.
-    
-    stokesjoint: if True return Stokes parameter together 
+
+    stokesjoint: if True return Stokes parameter together
         I0,I1,..., Q0,Q1,..., U0,U1, ... . Otherwise will return
-        I0,Q0,U0,  I1,Q1,U1, ... 
+        I0,Q0,U0,  I1,Q1,U1, ...
         Default: False
 
     Returns
@@ -468,7 +485,6 @@ def covariance_IQU_subbands(allmaps, stokesjoint=False):
     """
     allmean, allcov = [], []
     for isub in range(len(allmaps)):
-
         sh = allmaps[isub].shape
         nsub = sh[1]  # Number of subbands
         mean = np.zeros(3 * nsub)
@@ -521,7 +537,7 @@ def get_weighted_correlation_average(x, cov):
     except np.linalg.LinAlgError:
         # If singular matrix because of numerical precision do it with np.inv
         inv_cov = np.linalg.inv(cov)
-    sig2 = 1. / np.sum(inv_cov)
+    sig2 = 1.0 / np.sum(inv_cov)
     weighted_mean = sig2 * np.sum(inv_cov @ x)
     return weighted_mean, sig2
 
@@ -550,17 +566,17 @@ def get_Cp(patch, verbose=True, doplot=True):
 
     # Prepare to save
     if verbose:
-        print('==== Computing Cp matrix ====')
-        print('# realisations ', nreals)
-        print('# bands ', nfrecon)
-        print('patch.shape = ', patch.shape)
-        print('npix_patch = ', npix_patch)
+        print("==== Computing Cp matrix ====")
+        print("# realisations ", nreals)
+        print("# bands ", nfrecon)
+        print("patch.shape = ", patch.shape)
+        print("npix_patch = ", npix_patch)
 
     # The full one
     covariance, _ = get_covcorr_patch(patch, stokesjoint=True, doplot=doplot)
 
     if verbose:
-        print('covariance.shape =', covariance.shape)
+        print("covariance.shape =", covariance.shape)
 
     # Cut the covariance matrix for each Stokes parameter
     Cp = np.empty((nfrecon, nfrecon, nstk, npix_patch))
@@ -569,15 +585,15 @@ def get_Cp(patch, verbose=True, doplot=True):
         b = (istokes + 1) * nfrecon
         Cp[:, :, istokes, :] = covariance[a:b, a:b, :]
     if verbose:
-        print('Cp.shape = ', Cp.shape)
+        print("Cp.shape = ", Cp.shape)
 
         # Look at the value in Cp and the determinant
         for ipix in range(10):
             for istokes in range(nstk):
                 det = np.linalg.det(Cp[:, :, istokes, ipix])
-                print('det = ', det)
+                print("det = ", det)
 
-        print('==== Done. Cp matrix computed ====')
+        print("==== Done. Cp matrix computed ====")
 
     return Cp
 
@@ -603,11 +619,11 @@ def make_weighted_av(patch, Cp, verbose=False):
     nreals, nbands, npix_patch, nstks = np.shape(patch)
 
     if verbose:
-        print('Cp.shape = ', np.shape(Cp))
-        print('# realizations = ', nreals)
-        print('# bands = ', nbands)
-        print('# pixels = ', npix_patch)
-        print('# stokes = ', nstks)
+        print("Cp.shape = ", np.shape(Cp))
+        print("# realizations = ", nreals)
+        print("# bands = ", nbands)
+        print("# pixels = ", npix_patch)
+        print("# stokes = ", nstks)
 
     weighted_av = np.zeros((nreals, npix_patch, nstks))
     sig2 = np.zeros((npix_patch, nstks))
@@ -618,15 +634,14 @@ def make_weighted_av(patch, Cp, verbose=False):
             for istokes in range(nstks):
                 x = patch[ireal, :, ipix, istokes]
                 # Only do it if the matrix is not singular:
-                if np.linalg.det(Cp[:, :, istokes, ipix]) != 0.:
-                    weighted_av[ireal, ipix, istokes], sig2[ipix, istokes] = \
-                        get_weighted_correlation_average(x, Cp[:, :, istokes, ipix])
+                if np.linalg.det(Cp[:, :, istokes, ipix]) != 0.0:
+                    weighted_av[ireal, ipix, istokes], sig2[ipix, istokes] = get_weighted_correlation_average(x, Cp[:, :, istokes, ipix])
                 else:
                     nsing += 1
     if verbose:
-        print('# singular matrices: ', nsing)
-        print('Weigthed mean matrix per pixel, shape: ', weighted_av.shape)
-        print('Variance in MC simulation, shape: ', sig2.shape)
+        print("# singular matrices: ", nsing)
+        print("Weigthed mean matrix per pixel, shape: ", weighted_av.shape)
+        print("Variance in MC simulation, shape: ", sig2.shape)
 
     return weighted_av, sig2
 
@@ -637,7 +652,7 @@ def average_pix_sig2(sig2, ang, ang_threshold):
     """
     sig2mean = np.empty((3,))
     npix = np.shape(ang[ang < ang_threshold])
-    print('npix =', npix)
+    print("npix =", npix)
     for istokes in range(3):
         sig2mean[istokes] = np.mean(sig2[:, istokes][ang < ang_threshold])
     return sig2mean
@@ -662,9 +677,9 @@ def Cp2Cp_prime(Cp, verbose=True):
     """
     nfrec, _, nstk, npix_patch = np.shape(Cp)
     if verbose:
-        print('nfrec =', nfrec)
-        print('nstk =', nstk)
-        print('npix_patch =', npix_patch)
+        print("nfrec =", nfrec)
+        print("nstk =", nstk)
+        print("npix_patch =", npix_patch)
 
     # Normalize each matrix by the first element
     Np = np.empty_like(Cp)
@@ -676,7 +691,7 @@ def Cp2Cp_prime(Cp, verbose=True):
     N = np.mean(Np, axis=3)
 
     if verbose:
-        print('N shape:', N.shape)
+        print("N shape:", N.shape)
 
     # We re-multiply N by the first term
     Cp_prime = np.empty_like(Cp)
@@ -685,7 +700,7 @@ def Cp2Cp_prime(Cp, verbose=True):
             Cp_prime[:, :, istokes, ipix] = Cp[0, 0, istokes, ipix] * N[:, :, istokes]
 
     if verbose:
-        print('Cp_prime.shape =', Cp_prime.shape)
+        print("Cp_prime.shape =", Cp_prime.shape)
 
     return N, Cp_prime
 
@@ -709,9 +724,9 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     """
     nfrec, _, nstk, npix_patch = np.shape(Cp)
     if verbose:
-        print('nfrec =', nfrec)
-        print('nstk =', nstk)
-        print('npix_patch =', npix_patch)
+        print("nfrec =", nfrec)
+        print("nstk =", nstk)
+        print("npix_patch =", npix_patch)
 
     # Convert cov matrices to correlation matrices
     Np = np.empty_like(Cp)
@@ -723,7 +738,7 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
     N = np.mean(Np, axis=3)
 
     if verbose:
-        print('N shape:', N.shape)
+        print("N shape:", N.shape)
 
     # We re-multiply N to get back to covariance matrices
     Cp_prime = np.empty_like(Cp)
@@ -735,7 +750,7 @@ def Cp2Cp_prime_viaCorr(Cp, verbose=True):
                     Cp_prime[i, j, istokes, ipix] = N[i, j, istokes] * coeff
 
     if verbose:
-        print('Cp_prime.shape =', Cp_prime.shape)
+        print("Cp_prime.shape =", Cp_prime.shape)
 
     return N, Cp_prime
 
@@ -776,7 +791,7 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
     corrections = []
     for isub in range(nf_recon):
         # Compute wide of the sub-band
-        sum_delta_i = deltas[isub * nb: isub * nb + nb].sum()
+        sum_delta_i = deltas[isub * nb : isub * nb + nb].sum()
         corrections.append(Delta / sum_delta_i)
 
     correction_mat = np.empty((3 * nf_recon, 3 * nf_recon))
@@ -784,8 +799,8 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
         for j in range(3 * nf_recon):
             freq_i = i // nf_recon
             freq_j = j // nf_recon
-            sum_delta_i = deltas[freq_i * nb: freq_i * nb + nb].sum()
-            sum_delta_j = deltas[freq_j * nb: freq_j * nb + nb].sum()
+            sum_delta_i = deltas[freq_i * nb : freq_i * nb + nb].sum()
+            sum_delta_j = deltas[freq_j * nb : freq_j * nb + nb].sum()
             correction_mat[i, j] = Delta / np.sqrt(sum_delta_i * sum_delta_j)
 
     return corrections, correction_mat
@@ -794,19 +809,19 @@ def get_corrections(nf_sub, nf_recon, band=150, relative_bandwidth=0.25):
 # =================== Old functions ================
 def get_rms_covar(nsubvals, seenmap, allmapsout):
     """Test done by Matthieu Tristram :
-Calculate the variance map in each case accounting for the band-band covariance matrix for each pixel from the MC.
-This is pretty noisy so it may be interesting to get the average matrix.
-We calculate all the matrices for each pixel and normalize them to average 1
-and then calculate the average matrix over the pixels.
+    Calculate the variance map in each case accounting for the band-band covariance matrix for each pixel from the MC.
+    This is pretty noisy so it may be interesting to get the average matrix.
+    We calculate all the matrices for each pixel and normalize them to average 1
+    and then calculate the average matrix over the pixels.
 
-variance_map : array of shape (len(nsubvals), 3, npixok)
+    variance_map : array of shape (len(nsubvals), 3, npixok)
 
-allmeanmat : list of arrays (nsub, nsub, 3)
-        Mean over pixels of the cov matrices freq-freq
-allstdmat : list of arrays (nsub, nsub, 3)
-        Std over pixels of the cov matrices freq-freq
-"""
-    print('\nCalculating variance map with freq-freq cov matrix for each pixel from MC')
+    allmeanmat : list of arrays (nsub, nsub, 3)
+            Mean over pixels of the cov matrices freq-freq
+    allstdmat : list of arrays (nsub, nsub, 3)
+            Std over pixels of the cov matrices freq-freq
+    """
+    print("\nCalculating variance map with freq-freq cov matrix for each pixel from MC")
     seen = np.where(seenmap == 1)[0]
     npixok = np.sum(seenmap)
     variance_map = np.zeros((len(nsubvals), 3, npixok)) + hp.UNSEEN
@@ -814,7 +829,7 @@ allstdmat : list of arrays (nsub, nsub, 3)
     allstdmat = []
 
     for isub in range(len(nsubvals)):
-        print('for nsub = {}'.format(nsubvals[isub]))
+        print("for nsub = {}".format(nsubvals[isub]))
         mapsout = allmapsout[isub]
         covmat_freqfreq = np.zeros((nsubvals[isub], nsubvals[isub], len(seen), 3))
         # Loop over pixels
@@ -826,7 +841,7 @@ allstdmat : list of arrays (nsub, nsub, 3)
                 if np.size(mat) == 1:
                     variance_map[isub, i, p] = mat
                 else:
-                    variance_map[isub, i, p] = 1. / np.sum(np.linalg.inv(mat))
+                    variance_map[isub, i, p] = 1.0 / np.sum(np.linalg.inv(mat))
                 covmat_freqfreq[:, :, p, i] = mat / np.mean(mat)
                 # its normalization is irrelevant for the later average
         # Average and std over pixels
@@ -851,14 +866,14 @@ def get_rms_covarmean(nsubvals, seenmap, allmapsout, allmeanmat):
 
     """
 
-    print('\n\nCalculating variance map with pixel averaged freq-freq cov matrix from MC')
+    print("\n\nCalculating variance map with pixel averaged freq-freq cov matrix from MC")
     npixok = np.sum(seenmap)
 
     rmsmap_cov = np.zeros((len(nsubvals), 3, npixok)) + hp.UNSEEN
     meanmap_cov = np.zeros((len(nsubvals), 3, npixok)) + hp.UNSEEN
 
     for isub in range(len(nsubvals)):
-        print('For nsub = {}'.format(nsubvals[isub]))
+        print("For nsub = {}".format(nsubvals[isub]))
         mapsout = allmapsout[isub]
         sh = mapsout.shape
         nreals = sh[0]
@@ -886,6 +901,6 @@ def get_mean_cov(vals, invcov):
     This function does the same as: get_weighted_correlation_average
     """
     AtNid = np.sum(np.dot(invcov, vals))
-    AtNiA_inv = 1. / np.sum(invcov)
+    AtNiA_inv = 1.0 / np.sum(invcov)
     mean_cov = AtNid * AtNiA_inv
     return mean_cov

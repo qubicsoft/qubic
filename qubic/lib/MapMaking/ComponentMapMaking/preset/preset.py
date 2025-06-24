@@ -1,12 +1,14 @@
-from .preset_acquisition import *
-from .preset_external_data import *
-from .preset_components import *
-from .preset_gain import *
-from .preset_mixingmatrix import *
-from .preset_qubic import *
-from .preset_sky import *
-from .preset_tools import *
-from ....Qfoldertools import create_folder_if_not_exists
+import os
+
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_acquisition import PresetAcquisition
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_components import PresetComponents
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_external_data import PresetExternal
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_gain import PresetGain
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_mixingmatrix import PresetMixingMatrix
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_qubic import PresetQubic
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_sky import PresetSky
+from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_tools import PresetTools
+from qubic.lib.Qfoldertools import create_folder_if_not_exists
 
 
 class PresetInitialisation:
@@ -25,7 +27,7 @@ class PresetInitialisation:
 
     """
 
-    def __init__(self, comm, seed_noise):
+    def __init__(self, comm):  # , seed_noise):
         """
         Initialize the class with MPI communication.
 
@@ -33,8 +35,7 @@ class PresetInitialisation:
 
         ### MPI common arguments
         self.comm = comm
-        self.seed_noise = seed_noise
-        
+
         self.tools = None
         self.qubic = None
         self.fg = None
@@ -51,6 +52,9 @@ class PresetInitialisation:
 
         """
         self.tools = PresetTools(self.comm, parameters_file)
+        self.seed_noise_qubic = self.tools.params["QUBIC"]["NOISE"]["seed_noise"]
+        self.seed_noise_planck = self.tools.params["PLANCK"]["seed_noise"]
+        self.seed_start_pcg = self.tools.params["PCG"]["seed_start"]
         self.tools.mpi._print_message("========= Initialization =========")
         self.tools.mpi._print_message("    => Checking simulation parameters")
         self.tools.check_for_errors()
@@ -61,14 +65,11 @@ class PresetInitialisation:
         if self.tools.rank == 0:
             if self.tools.params["save_iter"] != 0:
                 self.tools.params["foldername"] = (
-                    f"{self.tools.params['Foregrounds']['Dust']['type']}_{self.tools.params['Foregrounds']['Dust']['model_d']}_{self.tools.params['QUBIC']['instrument']}_"
+                    f"{self.tools.params['Foregrounds']['Dust']['type']}_{self.tools.params['Foregrounds']['Dust']['model']}_{self.tools.params['QUBIC']['instrument']}_"
                     + self.tools.params["foldername"]
                 )
                 create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/maps/")
-            if (
-                self.tools.params["Plots"]["maps"] == True
-                or self.tools.params["Plots"]["conv_beta"] == True
-            ):
+            if self.tools.params["Plots"]["maps"] or self.tools.params["Plots"]["conv_beta"]:
                 create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/I")
                 create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/Q")
                 create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/U")
@@ -95,7 +96,9 @@ class PresetInitialisation:
 
         self.tools.mpi._print_message("========= Acquisition =========")
         self.acquisition = PresetAcquisition(
-            self.seed_noise,
+            self.seed_noise_qubic,
+            self.seed_noise_planck,
+            self.seed_start_pcg,
             self.tools,
             self.external,
             self.qubic,

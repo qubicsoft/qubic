@@ -1,0 +1,353 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.14.5
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# IV Analysis
+#### Through this jupyter notebook it is possible to perform IV curves analysis and create a mask (.txt file) containing two lines:
+#### - first line: global indices of POSITIVE TESs;
+#### - second line: global indices of NEGATIVE TESs;
+
+#### If there are no positive (negative) TESs, the row will contain only the value -1.
+#### The mask can be passed via command line to the crd.py code to perform the cosmic ray analysis taking into account the sign of the TESs and not analyzing the invalid TESs 
+
+```{python}
+import os
+import sys
+import glob
+import time
+import numpy as np
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+
+from qubicpack.qubicfp import qubicfp
+from qubicpack.utilities import NPIXELS
+from qubicpack.qubicasic import qubicasic
+```
+
+```{python}
+# find all datasets containing IV curves
+iv_dir = '/media/DataQubic/**/*IV*'
+datasets = sorted(glob.glob(iv_dir))
+datasets
+```
+
+```{python}
+def get_tes_asic_from_index(tes: int) -> tuple[int, int]:
+    """
+    Returns TES index with respect to ASIC
+
+    Parameters
+    ----------
+    tes: int
+        TES index [0, 255]
+
+    Returns
+    ------
+    tuple[int, int]
+        returns the TES index in the range [1, 128] and its corresponding ASIC
+    """
+
+    return (tes + 1, 1) if tes + 1 < 129 else (tes - 128 + 1, 2)
+```
+
+```{python}
+def is_valid_iv(v: np.ndarray, i: np.ndarray, ratio=0.2) -> tuple[bool, str]:
+    """
+    Verify the validity and sign of an I-V curve. 
+    
+    It is considered valid and positive if, as the voltage decreases, 
+    the current decreases until reaching a minimum point from which the 
+    voltage continues to decrease, but the current increases (superconducting region). 
+    
+    It is considered valid and negative if the described trend is reversed with respect 
+    to a horizontal axis while remaining in the same quadrant.
+    
+    Parameters
+    ----------
+    v: np.ndarray
+        voltage array
+        
+    i: np.ndarray
+        current array
+    
+    ratio: float
+        parameter that defines the start and end intervals of the I-V curve 
+        within which the minimum should not be located
+        
+    Returns
+    -------
+    tuple[bool, str]
+        a tuple containing true/false (validity) and positive/negative (sign)
+    
+    """
+
+    # check if the voltage values are strictly increasing. 
+    # If not, invert the voltage and current arrays.
+    if v[-1] < v[0]:
+        v = v[::-1]
+        i = i[::-1]
+        
+    tes_sign = 'positive'
+
+    # first filtering based on the sign of the TES.
+    # If the TES is negative, flip it over a horizontal axis
+    if i[i.shape[0]//2] - i[0] > 0 and i[-1] - i[i.shape[0]//2] < 0:
+        tes_sign = 'negative'
+        i = np.fabs(i - i.max())
+        
+    min_idx = np.argmin(i)
+    
+    # if the minimum is located at the beginning or at the end of the curve, consider it not valid
+    if 0 <= min_idx <= int(len(i) * ratio) or min_idx >= int(len(i) * (1 - ratio)):
+        return False, tes_sign
+
+    # array consisting of 7 equally spaced points before the minimum and 7 equally spaced points after the minimum
+    points = np.hstack((np.linspace(0, min_idx, 7, dtype=int), 
+                        np.linspace(min_idx * (1 + ratio), i.shape[0] - 1, 7, dtype=int)))
+    
+    # number of points before the minimum
+    points_sx_min = np.sum(points < min_idx)
+
+    # If the successive differences between the 7 points before the minimum are greater than or equal to zero, 
+    # and the successive differences between the 7 points after the minimum are less than or equal to zero, 
+    # the I-V curve is considered not valid 
+    if np.any(np.diff(i[points[:points_sx_min]]) >= 0) or np.any(np.diff(i[points[points_sx_min:]]) <= 0):
+        return False, tes_sign
+    
+    return True, tes_sign
+```
+
+## IV curve for a single TES
+
+```{python}
+fig, ax = plt.subplots(figsize = (15, 5))
+ax.set(xlabel="V [Volt]", ylabel="I [Ampere]", facecolor='whitesmoke', title= f"I-V curve - ASIC {asic.asic_index() + 1} - TES {tes_idx}")
+
+# read IV data
+data_set_path = "/media/DataQubic/2022-07-04/2022-07-04_15.32.22__IV 317mK/"  # 2023-05-17_17.00.38__IV-320mK-DomeOpen-Aplt180/
+qubic = qubicfp()
+qubic.verbosity = 0
+qubic.read_qubicstudio_dataset(data_set_path) 
+asic = qubic.asic_list[0]
+os.makedirs("iv_plots", exist_ok=True)
+
+tes_idx = 5
+v_tes, i_tes = asic.best_iv_curve(tes_idx)
+
+# commented instructions within the function is_valid_iv.
+# They are repeated here only for the plot execution
+sign = 'positive'
+
+if v_tes[-1] < v_tes[0]:
+    
+    v_tes = v_tes[::-1]
+    i_tes = i_tes[::-1]
+
+min_idx = np.argmin(i_tes)
+
+if i_tes[i_tes.shape[0]//2] - i_tes[0] > 0 and i_tes[-1] - i_tes[i_tes.shape[0]//2] < 0:
+    min_idx = np.argmin(np.fabs(i_tes - i_tes.max()))
+    sign = 'negative'
+
+points = np.hstack((np.linspace(0, min_idx - 1, 7, dtype=int), 
+                    np.linspace(min_idx + 1, i_tes.shape[0] - 1, 7, dtype=int)))
+
+points_sx_min = np.sum(points < min_idx)
+
+# start, mid and end points in order to define preliminary 
+# if the I-V curve is positive or negative 
+p = [0, i_tes.shape[0]//2, -1]
+ax.scatter(v_tes[p], i_tes[p], color='red')
+
+ax.plot(v_tes, i_tes)
+fig.suptitle(f"{data_set_path.split(os.sep)[-2]}")
+
+
+status_qubicpack = 'Valid TES' if asic.is_good_iv(tes_idx) else 'Not Valid TES'
+status_is_valid = 'Valid TES' if is_valid_iv(v_tes, i_tes)[0] else 'Not Valid TES'
+ax.annotate(f"qubicpack.iv.is_good_iv(): {status_qubicpack}\n\nis_valid_iv(): {status_is_valid} - '{is_valid_iv(v_tes, i_tes)[1]}' TES", 
+            xy=(2e-6, 7.5e-6),
+            bbox = dict(boxstyle="round", fc="lightgray", ec="black"))
+fig.savefig(f"./iv_plots/iv_{asic.asic_index()}_{tes_idx}" , dpi=120)
+plt.show()
+```
+
+## IV curves for ALL datasets
+
+```{python}
+# find and sort datasets from oldest to newest
+datasets = sorted(glob.glob('/media/DataQubic/**/*IV*'))
+# I create an array that will contain the sign of each TES:
+# 1 if the TES is positive
+# 0 if the TES is NOT valid
+# -1 if the TES is negative
+sign_matrix = np.zeros((len(datasets), 2*NPIXELS), dtype=int)
+
+
+for dt_row, dt_path in tqdm(enumerate(datasets), ncols=100, file=sys.stdout, desc='progress', unit=' dataset'):
+    qubic = qubicfp()
+    qubic.verbosity = 0
+    qubic.read_qubicstudio_dataset(dt_path)
+
+    n_asic = 0
+    # qubic.asic_list is a list that contains 16 ASICs 
+    # and use filter to cycle only on the TD's ASICs
+    for asic in filter(lambda x: x, qubic.asic_list):
+        
+        v_tes, i_tes = asic.best_iv_curve()
+
+        for tes in range(128):
+            # except 0, 1, or -1 in the matrix containing the sign of TESs depending on whether the TES is valid or not and its sign if valid 
+            sign_matrix[dt_row][tes + n_asic * 128] = 0 if not (res := is_valid_iv(v_tes[tes], i_tes[tes]))[0] else (1 if res[1] == 'positive' else -1)
+
+        n_asic += 1
+
+    del qubic
+```
+
+## Validity and sign of a TES versus IV datasets
+
+```{python}
+plt.clf()
+dts = list(map(lambda x: x.split(os.sep)[-1], datasets))
+fig, ax = plt.subplots(figsize=(15,6))
+
+ax.set_yticks(range(len(dts)))
+ax.set_yticklabels(dts)
+
+ax.set_title(r'$Validity \ and \ Sign \ of \ a \ tes \ vs. \ IV \ datasets$')
+ax.set_ylabel(r'$IV \ datasets$', fontsize=16)
+ax.set_xlabel(r'$ \# \ TES$', fontsize=16)
+
+pos = ax.imshow(sign_matrix, cmap='copper', aspect='auto')
+cbar = fig.colorbar(pos)
+cbar.set_ticks(ticks=[1, 0, -1], labels=['Positive', 'Not Valid', 'Negative'])
+fig.tight_layout()
+fig.show()
+fig.savefig("validity_sign_vs_dataset", dpi=1000)
+```
+
+## TES ALWAYS INVALID in all IV Datasets analyzed per site
+
+```{python}
+# returns the number of datasets per site
+
+iv_dts_by_year = [len(list(list(filter(lambda x: year in x, dts)))) for year in ['2020', '2022', '2023']]
+iv_dts_by_year
+```
+
+```{python}
+# I consider only those columns of the matrix that have NULL values in 2020 (Paris), 2022 (Salta), 2023 (Alto Chorrillos). 
+# This is equivalent to looking for those TESs that were ALWAYS found to be INVALID in all the IV Datasets analyzed
+
+inv_tes_paris = np.where((sign_matrix[:iv_dts_by_year[0], :] == 0).all(axis=0))[0]
+
+inv_tes_salta = np.where((sign_matrix[iv_dts_by_year[0]:sum(iv_dts_by_year[:2]), :] == 0).all(axis=0))[0]
+
+inv_tes_ac = np.where((sign_matrix[sum(iv_dts_by_year[:2]):] == 0).all(axis=0))[0]
+```
+
+```{python}
+# create the files containing the masks for each IV dataset analyzed 
+masks_dir = 'masks'
+os.makedirs(masks_dir, exist_ok=True)
+
+for idx, dt in enumerate(datasets):
+    # mask fname example: mask_2020-07-21_16.20.51__IV_320mk.txt
+    mask_fname = 'mask_' + os.path.split(dt)[-1].replace(' ', '_') + '.txt'
+    mask_fname = os.path.join(masks_dir, mask_fname)
+    # Retrieve the column indices of the sign_matrix containing:
+    # 1 (positive TES)
+    # -1 (negative TES)
+    positives = np.where(sign_matrix[idx,:] == 1)[0] 
+    negatives = np.where(sign_matrix[idx,:] == -1)[0] 
+
+    # I create the strings that contain the indices of the positive and neagtive TES
+    positives = ' '.join(map(str, positives)) + '\n' if positives.size else '-1\n'
+    negatives = ' '.join(map(str, negatives)) + '\n' if negatives.size else '-1\n'
+
+    with open(mask_fname, 'w', newline='', encoding='utf8') as fout:
+        fout.writelines([positives, negatives])
+```
+
+```{python}
+# contains indices of all TESs that have never been valid along all sites
+invalid_tes = np.where((sign_matrix == 0).all(axis=0))[0]
+print(f"Invalid tes along alla iv datasets: \n{invalid_tes}")
+```
+
+## TES never have been valid along all IV datasets analyzed
+
+```{python}
+# folder where all plots of iv curves will be saved
+all_iv_dest_dir = 'tes_iv_plots'
+os.makedirs(all_iv_dest_dir, exist_ok=True)
+
+fig, (ax_paris, ax_salta, ax_ac) = plt.subplots(3, 1, figsize=(12, 6), sharex=True, sharey=True, tight_layout=True)
+
+
+for inv_tes in tqdm(invalid_tes, ncols=100, file=sys.stdout, desc='progress', unit='tes'):
+
+    fig.suptitle(f"IV Curves - TES {get_tes_asic_from_index(inv_tes)}")
+
+    ax_paris.cla()
+    ax_salta.cla()
+    ax_ac.cla()
+
+    ax_paris.set(title="IV Datasets - Paris 2020", facecolor='whitesmoke', ylabel='I [arbitrary unit]')
+    ax_salta.set(title="IV Datasets - Salta 2022", facecolor='whitesmoke', ylabel='I [arbitrary unit]')
+    ax_ac.set(title="IV Datasets - Alto Chorrillos 2023", facecolor='whitesmoke', ylabel='I [arbitrary unit]', xlabel='V [arbitrary unit]')
+    
+    for dt in datasets:
+        
+        qubic = qubicfp()
+        qubic.verbosity = 0
+        qubic.read_qubicstudio_dataset(dt)
+        
+        asic = list(filter(lambda x: x, qubic.asic_list))
+
+        # there are datasets for which IV curves were 
+        # performed only for ASIC 1
+        if inv_tes > 128 and len(asic) == 1:
+            continue
+
+        asic = asic[0] if inv_tes < 128 else asic[1]
+    
+        v_tes, i_tes = asic.best_iv_curve(inv_tes + 1 - 128 * (inv_tes > 128))
+        x, y = v_tes, i_tes
+
+        # linear normalization
+        x = (x - np.min(x)) / (np.max(x) - np.min(x))
+        y = (y - np.min(y)) / (np.max(y) - np.min(y))
+        
+        ax = ax_paris if '2020' in dt else (ax_salta if '2022' in dt else ax_ac)
+        ax.plot(x, y, alpha=0.3, color='gray', label=os.path.split(dt)[-1])
+
+        del qubic
+        
+    fig.savefig(os.path.join(all_iv_dest_dir, f'{inv_tes}.png'), dpi=1000)        
+```
+
+```{python}
+# ONLY for MacOS and Linux
+
+# !tar cf iv_plots.tar.xz --use-compress-program='xz -6T0' tes_iv_plots
+```
+
+```{python}
+# !jupytext --to R notebooks/make_iv_masks.ipynb
+```
+
+```{python}
+
+```

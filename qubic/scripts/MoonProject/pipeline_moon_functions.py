@@ -559,7 +559,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     center=[np.mean(newazt), np.mean(newelt)]
     # center=[0, 0]
 
-    final_tod = mytod_4
+    # final_tod = mytod_4 # good filter
+    final_tod = mytod # no filter
     comparison_tod = mytod_1
 
     mask_scan = scantype != 0

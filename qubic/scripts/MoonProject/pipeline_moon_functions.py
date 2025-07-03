@@ -48,6 +48,7 @@ from qubic.lib.Calibration.Qcalibration import QubicCalibration
 from qubic.lib.Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
 from qubic.lib.Qutilities import _compress_mask
 from qubic.lib.Instrument.Qinstrument import SyntheticBeam
+from qubic.lib.Qsamplings import hor2equ
 
 #########################
 
@@ -481,9 +482,11 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     # Filter the TOD
     mytod_1 = my_filt(mytod.copy())
 
-    min_elt, max_elt = 39, 51 # 29.97844299316406 50.08891662597656
-    # mask_elt = (elt >= min_elt) & (elt <= max_elt)
-    mask_elt = elt >= min_elt
+    # min_elt, max_elt = 39, 51 # 29.97844299316406 50.08891662597656
+    # # mask_elt = (elt >= min_elt) & (elt <= max_elt)
+    # mask_elt = elt >= min_elt
+
+    mask_elt = azt >= 335
 
     tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
     prominence = (3*np.std(tod_ma_filt[mask_elt]), None)
@@ -572,11 +575,17 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         mapsb_forth, mapcount_forth = healpix_map(newazt[scantype > 0], newelt[scantype > 0], final_tod[scantype > 0], nside=nside)
         mapsb_back, mapcount_back = healpix_map(newazt[scantype < 0], newelt[scantype < 0], final_tod[scantype < 0], nside=nside)
         plt.figure()
-        hp.gnomview(mapsb_forth, reso=10, sub=(1, 3, 1), min=-5e3, max=1.2e4, 
+        # hp.gnomview(mapsb_forth, reso=10, sub=(1, 3, 1), min=-5e3, max=1.2e4, 
+        #         title="forth scans", rot=center)
+        # hp.gnomview(mapsb_back, reso=10, sub=(1, 3, 2), min=-5e3, max=1.2e4, 
+        #         title="back scans", rot=center)
+        # hp.gnomview(mapsb_forth - mapsb_back, reso=10, sub=(1, 3, 3), min=-5e3, max=1.2e4, 
+        #         title="forth - back scans", rot=center)
+        hp.gnomview(mapsb_forth, reso=10, sub=(1, 3, 1), 
                 title="forth scans", rot=center)
-        hp.gnomview(mapsb_back, reso=10, sub=(1, 3, 2), min=-5e3, max=1.2e4, 
+        hp.gnomview(mapsb_back, reso=10, sub=(1, 3, 2), 
                 title="back scans", rot=center)
-        hp.gnomview(mapsb_forth - mapsb_back, reso=10, sub=(1, 3, 3), min=-5e3, max=1.2e4, 
+        hp.gnomview(mapsb_forth - mapsb_back, reso=10, sub=(1, 3, 3), 
                 title="forth - back scans", rot=center)
         plt.show()
         # return mapsb_forth, mapcount_forth, mapsb_back, mapcount_back
@@ -587,7 +596,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         plt.figure()
         # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, 
         #             title="gaussian map", rot=center)
-        hp.gnomview(mapsb, reso=10, min=-5e3, max=1.2e4, 
+        # hp.gnomview(mapsb, reso=10, min=-5e3, max=1.2e4, 
+        #             title="final map", rot=center)
+        hp.gnomview(mapsb, reso=10, 
                     title="final map", rot=center)
         # plt.savefig("figures/mapsb.pdf")
         plt.tight_layout()
@@ -1244,6 +1255,7 @@ def read_data(datadir, remove_t0=True):
     tt, alltod = a.tod()
     az = a.azimuth()
     el = a.elevation()
+    Tbath = a.Tbath
     thk = a.timeaxis(datatype='hk')
     tinit = tt[0]
     if remove_t0:
@@ -1252,7 +1264,7 @@ def read_data(datadir, remove_t0=True):
         tt -= tinit
         thk -= tinit
     del(a)
-    return tt, alltod, thk, az, el, tinit
+    return tt, alltod, thk, az, el, tinit, Tbath
 
 def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     MySite = EarthLocation(lat=ObsSite['lat'], lon=ObsSite['lon'], height=ObsSite['height'])
@@ -1289,9 +1301,16 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
 
 def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None):
     if data is None: # first read the data from disk if needed
-        tt, alltod, thk, az, el, tinit = read_data(datadir, remove_t0=False)
+        tt, alltod, thk, az, el, tinit, Tbath = read_data(datadir, remove_t0=False)
         az += az_qubic
         print("tinit = {}".format(tinit))
+
+        print("shape Tbath", np.shape(Tbath))
+        fig, ax = plt.subplots()
+        ax2 = ax.twinx()
+        ax.plot(Tbath[0], -Tbath[1], c='r')
+        ax2.plot(tt, alltod[72], c='g')
+        plt.show()
 
         # Remove the first start_tt points (out of 1998848)
         tinit = tt[start_tt]
@@ -1308,15 +1327,28 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None):
 
         ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
         azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+
+        
         
         ### Identify scan types and numbers
         scantype_hk, azt, elt, scantype, vmean = identify_scans(thk, az, el, 
                                                                     tt=tt, doplot=False, 
                                                                     plotrange=[0, 2000], 
                                                                     thr_speedmin=speedmin)
+    
+        
 
         # New coordinates centered on the Moon
         newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
+
+        # If RA Dec coordinates
+        # RAmoon, Decmoon = hor2equ(azmoon, elmoon, tt - tt[0], date_obs="2022-07-14 01:54:17", # hardcoded for now, as a test
+        #     latitude=ObsSite["lat"].value, longitude=ObsSite["lon"].value)
+        # RA, Dec = hor2equ(azt, elt, tt, date_obs="2022-07-14 01:54:17", # hardcoded for now, as a test
+        #     latitude=ObsSite["lat"].value, longitude=ObsSite["lon"].value)
+        # newRA, newDec = get_new_azel(RA, Dec, RAmoon, Decmoon)
+        # azt, elt = RA, Dec
+        # newazt, newelt = newRA, newDec
 
         data = [tt, alltod, azt, elt, newazt, newelt, scantype] # what will be read later if this function is reused
     else: # if the previous step was already done in previous execution

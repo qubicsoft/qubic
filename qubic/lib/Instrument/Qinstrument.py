@@ -154,7 +154,7 @@ class QubicInstrument(Instrument):
             "gaussian", "fitted_beam" or "multi_freq"
 
         """
-        self.d = d
+        self.d = d.copy()
         self.debug = d["debug"]  # if True allows debuging prints
         filter_nu = d["filter_nu"]
         filter_relative_bandwidth = d["filter_relative_bandwidth"]
@@ -2040,7 +2040,7 @@ class QubicMultibandInstrumentTrapezoidalIntegration:
         """
 
         self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
-        self.d = d
+        self.d = d.copy()
         d1 = d.copy()
 
         _, nus_edge150, filter_nus150, deltas150, _, _ = compute_freq(
@@ -2237,7 +2237,7 @@ class QubicMultibandInstrument:
         """
         
         self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
-        self.d = d
+        self.d = d.copy()
         d1 = d.copy()
 
         ### Monochromatic

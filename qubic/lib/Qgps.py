@@ -8,6 +8,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.spatial.transform import Rotation as R
 
+#! : Be careful between the label antenna 1 and antenna 2, it is highly possible that the two have been switched in the code, or switch in the real installation.
+#! : Be careful about the code to compute the position of the calibration source, it is a bit simplistic at it computes the translation of the antenna 2 posisition, and apply this translation on the initial position of the calibration source. It might be wrong if the antenna 2 is not placed close to the calibration source.
+
 
 class GPStools:
     def __init__(self, gps_data_path):
@@ -535,11 +538,13 @@ class GPSCalsource(GPSAntenna):
 
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
         self.vector_1_2_ini = self.position_ini_antenna2 - self.position_ini_antenna1
+
         self.vector_1_2 = self.position_antenna2 - self.position_antenna1
+
         self.vector_calsource_qubic_ini = self.position_qubic - self.position_ini_calsource
 
         ### Compute the calibration source orientation vector
-        self.deviation_angle = self.compute_angle(self.vector_1_2, self.vector_1_2_ini[:, None])
+        self.deviation_angle = self._compute_angle(self.vector_1_2, self.vector_1_2_ini[:, None])
         self.rotation_instance = self.compute_rotation(self.vector_1_2, self.vector_1_2_ini[:, None])
         self.vector_calsource_orientation = self.apply_rotation(self.vector_calsource_qubic_ini, self.rotation_instance)
 
@@ -583,7 +588,7 @@ class GPSCalsource(GPSAntenna):
 
         return cross_product
 
-    def compute_angle(self, v1, v2):
+    def _compute_angle(self, v1, v2):
         dot_product = self._compute_dot_product(v1, v2)
         cross_product = self._compute_cross_product(v1, v2)
 
@@ -612,7 +617,7 @@ class GPSCalsource(GPSAntenna):
 
         ### Define the rotation axis and angle between the vectors
         rotation_axis = cross_product / np.linalg.norm(cross_product, axis=0)
-        angle = self.compute_angle(v1, v2)
+        angle = self._compute_angle(v1, v2)
 
         ### Build the scipy Rotation instance
         rotation_instance = R.from_rotvec((angle * rotation_axis).T)
@@ -782,50 +787,66 @@ class GPSCalsource(GPSAntenna):
         ----------
         index : int
             Index of the observation time.
-
         """
+
+        # Primary point palette
+        palette = {
+            "Antenna 1": "#1f77b4",
+            "Antenna 2": "#ff7f0e",
+            "Calibration Source": "#d62728",
+            "Initial Antenna 1": "#aec7e8",
+            "Initial Antenna 2": "#ffbb78",
+            "Initial Calibration Source": "#ff9896",
+            "Base Antenna": "#9467bd",
+            "QUBIC": "#8c564b",
+        }
+
+        # Re‑use those colors for vectors
+        vector_palette = {
+            "Vector Antenna 1 to 2": palette["Antenna 1"],
+            "Initial Vector Antenna 1 to 2": palette["Initial Antenna 1"],
+            "Vector Calibration Source": palette["Calibration Source"],
+            "Initial Vector Calibration Source": palette["Initial Calibration Source"],
+        }
 
         fig = go.Figure()
 
-        ### Store the points and vectors and thir associated informations
-        points_data = [
-            (self.position_antenna1[:, index], "darkblue", "square", "Antenna 1"),
-            (self.position_antenna2[:, index], "darkblue", "diamond", "Antenna 2"),
-            (self.position_calsource[:, index], "darkred", "x", "Calibration Source"),
-            (self.position_ini_antenna1, "blue", "square", "Initial Antenna 1"),
-            (self.position_ini_antenna2, "blue", "diamond", "Initial Antenna 2"),
-            (self.position_ini_calsource, "red", "x", "Initial Calibration Source"),
-            (self.base_antenna_position, "pink", "circle", "Base Antenna"),
-            (self.position_qubic, "black", "circle", "QUBIC"),
-        ]
-        vectors_data = [
-            (self.position_antenna1[:, index], self.vector_1_2[:, index], "darkblue", "Vector Antenna 1 to 2"),
-            (self.position_ini_antenna1, self.vector_1_2_ini, "blue", "Initial Vector Antenna 1 to 2"),
-            (self.position_calsource[:, index], self.vector_calsource_orientation[:, index], "darkred", "Vector Calibration Source"),
-            (self.position_ini_calsource, self.vector_calsource_qubic_ini, "red", "Initial Vector Calibration Source"),
-        ]
-
-        ### Plot points as 3D scatter
-        for pos, color, symbol, name in points_data:
+        # --- Plot points ---
+        for pos, label in [
+            (self.position_antenna1[:, index], "Antenna 1"),
+            (self.position_antenna2[:, index], "Antenna 2"),
+            (self.position_calsource[:, index], "Calibration Source"),
+            (self.position_ini_antenna1, "Initial Antenna 1"),
+            (self.position_ini_antenna2, "Initial Antenna 2"),
+            (self.position_ini_calsource, "Initial Calibration Source"),
+            (self.base_antenna_position, "Base Antenna"),
+            (self.position_qubic, "QUBIC"),
+        ]:
+            is_initial = label.startswith("Initial")
             fig.add_trace(
                 go.Scatter3d(
                     x=[pos[0]],
                     y=[pos[1]],
                     z=[pos[2]],
                     mode="markers",
-                    marker=dict(size=5, color=color, symbol=symbol),
-                    text=[name],
-                    name=name,
-                    hovertemplate=("<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<br>Z: %{z:.2f}<extra></extra>"),
+                    name=label,
+                    marker=dict(size=6 if is_initial else 8, symbol="circle", color=palette[label], opacity=0.6 if is_initial else 0.9, line=dict(width=1, color="black")),
+                    hovertemplate=(f"<b>{label}</b><br>X: %{{x:.2f}}<br>Y: %{{y:.2f}}<br>Z: %{{z:.2f}}<extra></extra>"),
                 )
             )
 
-        ### Plot vectors
-        for pos, vector, color, name in vectors_data:
-            self.plot_vector(fig, pos, vector, color=color, name=name, show_arrow=True)
+        # --- Plot vectors (no 'line' kw) ---
+        for pos, vec, label in [
+            (self.position_antenna1[:, index], self.vector_1_2[:, index], "Vector Antenna 1 to 2"),
+            (self.position_ini_antenna1, self.vector_1_2_ini, "Initial Vector Antenna 1 to 2"),
+            (self.position_calsource[:, index], self.vector_calsource_orientation[:, index], "Vector Calibration Source"),
+            (self.position_ini_calsource, self.vector_calsource_qubic_ini, "Initial Vector Calibration Source"),
+        ]:
+            is_initial = label.startswith("Initial")
+            self.plot_vector(fig, pos, vec, color=vector_palette[label], name=label, show_arrow=True, arrow_size=0.15 if is_initial else 0.25)
 
-        ### Store points and vectors positions, to build a reference scale for the limit of the plot
-        all_points = np.vstack(
+        # --- Compute axis limits uniformly ---
+        all_pts = np.vstack(
             [
                 self.position_antenna1[:, index],
                 self.position_antenna2[:, index],
@@ -835,44 +856,37 @@ class GPSCalsource(GPSAntenna):
                 self.position_ini_calsource,
                 self.base_antenna_position,
                 self.position_qubic,
-            ]
-        )
-        vector_endpoints = np.vstack(
-            [
                 self.position_antenna1[:, index] + self.vector_1_2[:, index],
                 self.position_ini_antenna1 + self.vector_1_2_ini,
                 self.position_calsource[:, index] + self.vector_calsource_orientation[:, index],
                 self.position_ini_calsource - self.vector_calsource_qubic_ini,
             ]
         )
-        all_points = np.vstack([all_points, vector_endpoints])
+        mins = all_pts.min(axis=0)
+        maxs = all_pts.max(axis=0)
+        center = (mins + maxs) / 2
+        scale = (maxs - mins).max() * 1.2
 
-        ### Calculate characteristic scale
-        margin = 0.2
-        min_coords = np.min(all_points, axis=0)
-        max_coords = np.max(all_points, axis=0)
-        plot_range = max_coords - min_coords
+        lims = {
+            "x": [center[0] - scale / 2, center[0] + scale / 2],
+            "y": [center[1] - scale / 2, center[1] + scale / 2],
+            "z": [center[2] - scale / 2, center[2] + scale / 2],
+        }
 
-        ### Use largest range as characteristic scale
-        char_scale = np.max(plot_range)
-        center = (max_coords + min_coords) / 2
-        limits_min = center - (1 + margin) * char_scale / 2
-        limits_max = center + (1 + margin) * char_scale / 2
-
-        ### Update layout with calculated limits
+        # --- Layout tweaks ---
         fig.update_layout(
-            width=1200,
-            height=800,
+            width=1000,
+            height=700,
+            title=f"Calibration Source Deviation @ {self.datetime[index]:%Y-%m-%d %H:%M:%S}",
             scene=dict(
-                xaxis=dict(range=[limits_min[0], limits_max[0]], title="North"),
-                yaxis=dict(range=[limits_min[1], limits_max[1]], title="East"),
-                zaxis=dict(range=[limits_min[2], limits_max[2]], title="Down"),
+                xaxis=dict(range=lims["x"], title="North (m)", backgroundcolor="rgb(230,230,230)"),
+                yaxis=dict(range=lims["y"], title="East (m)", backgroundcolor="rgb(230,230,230)"),
+                zaxis=dict(range=lims["z"], title="Down (m)", backgroundcolor="rgb(230,230,230)"),
                 aspectmode="cube",
-                camera=dict(up=dict(x=0, y=0, z=1), center=dict(x=0, y=0, z=0), eye=dict(x=1.5, y=1.5, z=1.5)),
+                camera=dict(eye=dict(x=1.5, y=1.5, z=1.2)),
             ),
-            title=f"Calibration source - Position and Orientation at time : {self.datetime[index]}",
-            showlegend=True,
-            legend=dict(x=1.1, y=0.5),
+            legend=dict(x=0.9, y=0.5, bgcolor="rgba(255,255,255,0.7)", bordercolor="black", borderwidth=1),
+            margin=dict(l=0, r=200, b=0, t=50),
         )
 
         fig.show()

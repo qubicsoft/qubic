@@ -537,9 +537,9 @@ class GPSCalsource(GPSAntenna):
             self._get_observation_data(self.observation_indices)
 
         ### Compute the vectors between the calibration source and QUBIC, and the vector between the antennas in NED coordinates
-        self.vector_1_2_ini = self.position_ini_antenna2 - self.position_ini_antenna1
+        self.vector_1_2_ini = self.position_ini_antenna1 - self.position_ini_antenna2
 
-        self.vector_1_2 = self.position_antenna2 - self.position_antenna1
+        self.vector_1_2 = self.position_antenna1 - self.position_antenna2
 
         self.vector_calsource_qubic_ini = self.position_qubic - self.position_ini_calsource
 
@@ -549,7 +549,7 @@ class GPSCalsource(GPSAntenna):
         self.vector_calsource_orientation = self.apply_rotation(self.vector_calsource_qubic_ini, self.rotation_instance)
 
         ### Compute the position of the calibration source in cartesian and azimutal coordinates
-        self.position_calsource = self.get_calsource_position(self.position_ini_antenna2[:, None], self.position_ini_calsource[:, None], self.position_antenna2)
+        self.position_calsource = self.get_calsource_position(self.position_ini_antenna1[:, None], self.position_ini_calsource[:, None], self.position_antenna1)
         self.position_calsource_azel = self.cartesian_to_azel(self.position_calsource)
 
     def _get_observation_data(self, observation_indices):
@@ -837,8 +837,8 @@ class GPSCalsource(GPSAntenna):
 
         # --- Plot vectors (no 'line' kw) ---
         for pos, vec, label in [
-            (self.position_antenna1[:, index], self.vector_1_2[:, index], "Vector Antenna 1 to 2"),
-            (self.position_ini_antenna1, self.vector_1_2_ini, "Initial Vector Antenna 1 to 2"),
+            (self.position_antenna2[:, index], self.vector_1_2[:, index], "Vector Antenna 1 to 2"),
+            (self.position_ini_antenna2, self.vector_1_2_ini, "Initial Vector Antenna 1 to 2"),
             (self.position_calsource[:, index], self.vector_calsource_orientation[:, index], "Vector Calibration Source"),
             (self.position_ini_calsource, self.vector_calsource_qubic_ini, "Initial Vector Calibration Source"),
         ]:
@@ -856,8 +856,8 @@ class GPSCalsource(GPSAntenna):
                 self.position_ini_calsource,
                 self.base_antenna_position,
                 self.position_qubic,
-                self.position_antenna1[:, index] + self.vector_1_2[:, index],
-                self.position_ini_antenna1 + self.vector_1_2_ini,
+                self.position_antenna2[:, index] + self.vector_1_2[:, index],
+                self.position_ini_antenna2 + self.vector_1_2_ini,
                 self.position_calsource[:, index] + self.vector_calsource_orientation[:, index],
                 self.position_ini_calsource - self.vector_calsource_qubic_ini,
             ]

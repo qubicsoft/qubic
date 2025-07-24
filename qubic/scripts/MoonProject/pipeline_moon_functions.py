@@ -449,6 +449,27 @@ def get_new_azel_v2(azt, elt, azmoon, elmoon):
     return newazt, newelt
 
 
+def get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr):
+    newazt_ = (azt - azmoon) * np.cos(np.radians(elt))
+    newelt_ = (elt - elmoon)
+    newelt = newelt_[:, None] - det_pos[..., 1]
+    newazt = (newazt_[:, None] - det_pos[..., 0]) * np.cos(np.radians(newelt_[:, None]))
+    if isok_arr is not None:
+        nb_notok = np.sum(~isok_arr)
+        print(np.shape(np.tile(newazt_, (1, nb_notok)).reshape(len(newazt_), nb_notok)))
+        newazt[:, ~isok_arr] = np.tile(newazt_, (1, nb_notok)).reshape(len(newazt_), nb_notok)
+        newelt[:, ~isok_arr] = np.tile(newelt_, (1, nb_notok)).reshape(len(newazt_), nb_notok)
+
+    # elt_ = elt - det_pos[..., 1]
+    # azt_ = (azt - det_pos[..., 0]) * np.cos(np.radians(det_pos[..., 1]))
+    # newazt = (azt_ - azmoon) * np.cos(np.radians(elt_))
+    # newelt = (elt_ - elmoon)
+
+    # newazt = (azt - azmoon - det_pos[..., 0]) * np.cos(np.radians(elt))
+    # newelt = (elt - elmoon - det_pos[..., 1])
+    return newazt, newelt
+
+
 def decorel_azel(mytod, azt, elt, scantype, resolution=0.04, doplot=True, nbins=50, n_el=20):
     ### Profiling in Azimuth and elevation
     el_lims = np.linspace(np.min(elt)-0.0001, np.max(elt)+0.0001, n_el+1)
@@ -619,7 +640,7 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 # xlim = [9480, 9550]
 xlim = [10540, 10640]
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True, check_back_forth=False, also_tod=False):
+def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True, check_back_forth=False, also_tod=False, det_pos=None):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -642,8 +663,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     # mask_elt = azt >= 335
 
     tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
-    # prominence = (3*np.std(tod_ma_filt[mask_elt]), None) # good filter
-    prominence = None
+    prominence = (3*np.std(tod_ma_filt[mask_elt]), None) # good filter
+    # prominence = None
     data_peaks = tod_ma_filt
     peaks_detected, properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
     # width up to 8 seconds for order 1 peaks
@@ -713,8 +734,11 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
     # newelt = -newelt
     # Calculate center of maps from pointing w.r.t. Moon
-    center=[np.mean(newazt), np.mean(newelt)]
-    # center=[0, 0]
+    # center=[np.mean(newazt), np.mean(newelt)]
+    if det_pos is None:
+        center=[np.mean(newazt), np.mean(newelt)]
+    else:
+        center=[0, 0]
 
     final_tod = mytod_4 # good filter
     # final_tod = mytod # no filter
@@ -1453,7 +1477,7 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     return azmoon, elmoon
 
 
-def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None):
+def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None):
     if data is None: # first read the data from disk if needed
         tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False)
         az += az_qubic
@@ -1486,7 +1510,7 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None):
         
         ### Identify scan types and numbers
         scantype_hk, azt, elt, scantype, vmean = identify_scans(thk, az, el, 
-                                                                    tt=tt, doplot=False, 
+                                                                    tt=tt, doplot=True, 
                                                                     plotrange=[0, 2000], 
                                                                     thr_speedmin=speedmin)
         
@@ -1496,18 +1520,29 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None):
 
         # New coordinates centered on the Moon
         newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
-        newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
+        # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon)
+        # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos)
 
-        plt.figure()
-        plt.plot(newazt)
-        plt.plot(newazt2)
-        plt.show()
-        plt.figure()
-        plt.plot(newelt)
-        plt.plot(newelt2)
-        plt.show()
-        azr
+        
+        # fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+        # ax = axs[0]
+        # ax.plot(newazt, label="newazt = (azt - azmoon)*cos(elt)")
+        # ax.plot(newazt2, label="two rotations")
+        # ax.set_xlabel("time [s]")
+        # ax.set_ylabel("azimuth [deg]")
+        # ax.set_xlim([2e4, 16e4])
+        # ax.legend()
+        # ax = axs[1]
+        # ax.plot(newelt, label="newelt = (elt - elmoon)")
+        # ax.plot(newelt2, label="two rotations")
+        # ax.set_xlabel("time [s]")
+        # ax.set_ylabel("elevation [deg]")
+        # ax.set_xlim([2e4, 16e4])
+        # ax.set_ylim([17.5, 20.5])
+        # ax.legend()
+        # plt.show()
+        # azr
 
         # If RA Dec coordinates
         # RAmoon, Decmoon = hor2equ(azmoon, elmoon, tt - tt[0], date_obs="2022-07-14 01:54:17", # hardcoded for now, as a test
@@ -1518,16 +1553,32 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None):
         # azt, elt = RA, Dec
         # newazt, newelt = newRA, newDec
 
-        data = [tt, alltod, azt, elt, newazt, newelt, scantype, Tbath] # what will be read later if this function is reused
+        data = [tt, tinit, alltod, azt, elt, newazt, newelt, scantype, Tbath] # what will be read later if this function is reused
     else: # if the previous step was already done in previous execution
         print('Using data already stored in memory - not read from disk')
-        tt, alltod, azt, elt, newazt, newelt, scantype, Tbath = data
-    return data, tt.copy(), alltod.copy(), azt.copy(), elt.copy(), newazt.copy(), newelt.copy(), scantype.copy(), Tbath.copy()
+        tt, tinit, alltod, azt, elt, newazt, newelt, scantype, Tbath = data
+    return data, tt.copy(), tinit, alltod.copy(), azt.copy(), elt.copy(), newazt.copy(), newelt.copy(), scantype.copy(), Tbath.copy()
+
+def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None, isok_arr=None):
+    print('Using data already stored in memory - not read from disk and computing different azel for each det')
+    tt, tinit, alltod, azt, elt, newazt, newelt, scantype, Tbath = data
+    ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
+    azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+    # for each detector, we get a different set of azimuth elevation
+    allnewazt, allnewelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr)
+    return tt, tinit, alltod, azt, elt, allnewazt, allnewelt, scantype, Tbath
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, 
-                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None):
+                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None, det_pos=None):
 
-    data, tt, alltod, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir)
+    if det_pos is None:
+        data, tt, tinit, alltod, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir)
+    else:
+        tt, tinit, alltod, azt, elt, newazt_, newelt_, scantype, Tbath = format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data, datadir, det_pos, isok_arr)
+        print(np.shape(newazt_))
+        print(np.shape(newelt_))
+
+    # newazt, newelt = azt, elt
 
     ### Loop over TES to do the maps
     print('\nLooping coaddition mapmaking over selected TES')
@@ -1542,11 +1593,18 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
                     continue
             TESNum = allTESNum[i]
             print('TES# {}'.format(TESNum), end=" ")
-            tod = alltod[TESNum-1,:]
-            
+            iTES = TESNum - 1
+            tod = alltod[iTES, :]
+            if det_pos is not None:
+                if np.shape(newazt_)[1] == 1:
+                    newazt = newazt_[:, 0]
+                    newelt = newelt_[:, 0]
+                else:
+                    newazt = newazt_[:, iTES]
+                    newelt = newelt_[:, iTES]
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                              TES_number=TESNum, nside=nside, 
-                                                             doplot=doplot, check_back_forth=check_back_forth)
+                                                             doplot=doplot, check_back_forth=check_back_forth, det_pos=det_pos)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
@@ -1558,7 +1616,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             tod = alltod[TESNum - 1, :]
 
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
-                                                           TES_number=i+1, nside=nside, doplot=doplot)        
+                                                           TES_number=i+1, nside=nside, doplot=doplot, det_pos=det_pos)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
                 # Directly assign the result to the correct index in allmaps
@@ -1570,18 +1628,25 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             with Manager() as manager:
                 # Create a list of NumPy arrays initialized to zeros
                 allmaps = manager.list([np.zeros(12 * nside ** 2) for _ in range(len(allTESNum))])
-        
-                # Run the parallel processing with the correct arguments
-                Parallel(n_jobs=-1)(delayed(process_TES)(i, allTESNum[i], allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot)
-                                    for i in range(len(allTESNum)))
+
+                if det_pos is None:
+                    # Run the parallel processing with the correct arguments
+                    Parallel(n_jobs=-1)(delayed(process_TES)(i, allTESNum[i], allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot)
+                                        for i in range(len(allTESNum)))
+                else:
+                    Parallel(n_jobs=-1)(delayed(process_TES)(i, allTESNum[i], allmaps, alltod, tt, azt, elt, scantype, newazt[:, i], newelt[:, i], nside, doplot)
+                                        for i in range(len(allTESNum)))
         
                 # Convert the manager list back to a NumPy array (this ensures allmaps is a numpy array of arrays)
                 allmaps_np = np.array([np.array(allmaps[i]) for i in range(len(allTESNum))])
         
             return allmaps_np
 
+        if det_pos is not None:
+            newazt = newazt_
+            newelt = newelt_
         allmaps = parallel_coadded_maps(allTESNum, alltod, tt, azt, elt, 
-                                        scantype, newazt, newelt, nside, doplot)
+                                        scantype, newazt, newelt, nside, doplot=False)
         print("NSIDE = ", nside)
     
     end_time = time.perf_counter()
@@ -1591,8 +1656,11 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
         
 
     # Get central Az and El from pointing
-    # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
-    center = [np.mean(newazt), np.mean(newelt)]
+    if det_pos is not None:
+        # center = det_pos
+        center = [0, 0]
+    else:
+        center = [np.mean(newazt), np.mean(newelt)]
     return allmaps, data, center, newazt, newelt, scantype
 
 
@@ -2018,3 +2086,83 @@ class synthbeam2dfit:
         sb_map = hp.gnomview(synthbeam_rot_filt, reso=self.reso, rot=[0, 0, 0], min=-5e2, max=1e6, return_projected_map=True, xsize=self.xs, no_plot=True).data
 
         return np.ravel(sb_map)
+    
+
+### From ipynb pipeline_moon_fit_order1_peak.ipynb
+
+# get the spherical geodesic of length ang_dist_deg + 2*delta_angle_deg coursing through the two points A and B, +/- delta_angle_deg
+def get_great_circle_traj(point_A, point_B, sphere_centre, sphere_radius, npoints, ang_dist_deg, delta_angle_deg, offset=0):
+    # offset is in part of the circumference
+    if (not np.isclose(np.linalg.norm(point_A - sphere_centre), sphere_radius)) or (not np.isclose(np.linalg.norm(point_B - sphere_centre), sphere_radius)):
+        print(np.linalg.norm(point_A - sphere_centre))
+        print(np.linalg.norm(point_B - sphere_centre))
+        print(sphere_radius)
+        raise ValueError("One of the points is not on the sphere.")
+    ang_dist_rad = np.radians(ang_dist_deg) # the length of the line is fixed (ang_dist_deg + 2*delta_angle_deg)
+    delta_angle_rad = np.radians(delta_angle_deg)
+    plane = get_plane(point_A, point_B, sphere_centre, offset=offset) # compute the equation of the plane with A, B and the sphere centre C
+    vec_1, vec_2 = get_vect_plane(plane, point_A, sphere_centre, offset=offset) # create two orthogonal vectors, one pointing at A
+    # vec_A = point_A - sphere_centre
+    # vec_B = point_B - sphere_centre
+    # angle = np.arccos(np.dot(vec_A, vec_B)/(np.linalg.norm(vec_A) * np.linalg.norm(vec_B))) # compute the angle between CA and CB
+    # the distance is now assumed!
+    # print(angle)
+    # print(ang_dist_rad)
+    theta = np.linspace(0 - delta_angle_rad, ang_dist_rad + delta_angle_rad, npoints).reshape(npoints, 1)
+    great_circle = sphere_radius * (np.cos(theta) * vec_1 + np.sin(theta) * vec_2) # get the geodesic on the sphere between the two points, +/- delta_angle_deg
+    return great_circle, theta.reshape(npoints)
+
+
+# get two orthogonal vectors on the plane, one pointing at point_ref_end from point_ref_start
+def get_vect_plane(plane, point_ref_end, point_ref_start, offset=0): 
+    if not np.isclose(np.dot(plane[:3], point_ref_end) + plane[3], 0):
+        raise ValueError("The reference end point is not on the plane.")
+    if not np.isclose(np.dot(plane[:3], point_ref_start) + plane[3], 0):
+        raise ValueError("The reference start point is not on the plane.")
+    perp_vect = plane[:3]/np.sqrt(np.sum(plane[:3]**2))
+    vec_1 = (point_ref_end - point_ref_start)/np.linalg.norm(point_ref_end - point_ref_start)
+    vec_2 = np.cross(perp_vect, vec_1)/np.linalg.norm(np.cross(vec_1, perp_vect))
+    return vec_1, vec_2
+
+# wrapper to get spherical geodesic from points A and B in spherical coordinates instead of cartesian
+def get_traj(point_A_sph, point_B_sph, npoints, ang_dist_deg, delta_angle_deg):
+    point_A = spherical2cartesian(1, point_A_sph[0], point_A_sph[1])
+    point_B = spherical2cartesian(1, point_B_sph[0], point_B_sph[1])
+    sphere_centre=np.array([0, 0, 0])
+    
+    great_circle_traj, angle_array = get_great_circle_traj(point_A, point_B, sphere_centre=sphere_centre, sphere_radius=1, npoints=npoints, ang_dist_deg=ang_dist_deg, delta_angle_deg=delta_angle_deg)
+    theta_gc = np.arccos(great_circle_traj[:, 2])
+    phi_gc = np.arctan2(great_circle_traj[:, 1], great_circle_traj[:, 0])
+    return theta_gc, phi_gc, angle_array
+
+# get the value of a map along a spherical geodesic
+def get_values_line(map_, point_A_sph, point_B_sph, npoints, ang_dist_deg, delta_angle_deg):
+    theta_gc, phi_gc, angle_array = get_traj(point_A_sph, point_B_sph, npoints, ang_dist_deg, delta_angle_deg)
+    return hp.get_interp_val(map_, theta_gc, phi_gc), theta_gc, phi_gc, angle_array
+
+# get the mean value of a map along a spherical geodesic in the width +/- widht_angle_deg
+def get_values_large_line(map_, theta_gc, phi_gc, width_angle_deg, nlines):
+    theta_gc_ = np.tile(theta_gc, (nlines, 1))
+    phi_gc_ = phi_gc + np.radians(np.linspace(-width_angle_deg, width_angle_deg, nlines)).reshape(nlines, 1)
+    res = hp.get_interp_val(map_, theta_gc_, phi_gc_)
+    return np.mean(res, axis=0), res, theta_gc_, phi_gc_
+
+# get the value of a map on line parallel to a spherical geodesic in the direction theta or phi, supposed to represent the elevation
+def get_side_lines(hpmap, theta_gc, phi_gc, side, nlines):
+    if side == "phi":
+        theta_gc_test_diff = np.tile(theta_gc, (nlines, 1))
+        phi_gc_test_diff_up = phi_gc + np.radians(np.linspace(2, 3, nlines)).reshape(nlines, 1)
+        phi_gc_test_diff_down = phi_gc - np.radians(np.linspace(2, 3, nlines)).reshape(nlines, 1)
+        zi_up = hp.get_interp_val(hpmap, theta_gc_test_diff, phi_gc_test_diff_up)
+        zi_down = hp.get_interp_val(hpmap, theta_gc_test_diff, phi_gc_test_diff_down)
+        coord_up = [theta_gc_test_diff, phi_gc_test_diff_up]
+        coord_down = [theta_gc_test_diff, phi_gc_test_diff_down]
+    elif side == "theta":
+        phi_gc_test_diff = np.tile(phi_gc, (nlines, 1))
+        theta_gc_test_diff_up = theta_gc + np.radians(np.linspace(1.5, 2, nlines)).reshape(nlines, 1)
+        theta_gc_test_diff_down = theta_gc - np.radians(np.linspace(1.5, 2, nlines)).reshape(nlines, 1)
+        zi_up = hp.get_interp_val(hpmap, theta_gc_test_diff_up, phi_gc_test_diff)
+        zi_down = hp.get_interp_val(hpmap, theta_gc_test_diff_down, phi_gc_test_diff)
+        coord_up = [theta_gc_test_diff_up, phi_gc_test_diff]
+        coord_down = [theta_gc_test_diff_down, phi_gc_test_diff]
+    return zi_up, zi_down, coord_up, coord_down

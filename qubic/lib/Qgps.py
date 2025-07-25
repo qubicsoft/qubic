@@ -803,8 +803,8 @@ class GPSCalsource(GPSAntenna):
 
         # Re‑use those colors for vectors
         vector_palette = {
-            "Vector Antenna 1 to 2": palette["Antenna 1"],
-            "Initial Vector Antenna 1 to 2": palette["Initial Antenna 1"],
+            "Vector Antenna 2 to 1": palette["Antenna 1"],
+            "Initial Vector Antenna 2 to 1": palette["Initial Antenna 1"],
             "Vector Calibration Source": palette["Calibration Source"],
             "Initial Vector Calibration Source": palette["Initial Calibration Source"],
         }
@@ -837,8 +837,8 @@ class GPSCalsource(GPSAntenna):
 
         # --- Plot vectors (no 'line' kw) ---
         for pos, vec, label in [
-            (self.position_antenna2[:, index], self.vector_1_2[:, index], "Vector Antenna 1 to 2"),
-            (self.position_ini_antenna2, self.vector_1_2_ini, "Initial Vector Antenna 1 to 2"),
+            (self.position_antenna2[:, index], self.vector_1_2[:, index], "Vector Antenna 2 to 1"),
+            (self.position_ini_antenna2, self.vector_1_2_ini, "Initial Vector Antenna 2 to 1"),
             (self.position_calsource[:, index], self.vector_calsource_orientation[:, index], "Vector Calibration Source"),
             (self.position_ini_calsource, self.vector_calsource_qubic_ini, "Initial Vector Calibration Source"),
         ]:

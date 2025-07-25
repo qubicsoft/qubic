@@ -32,7 +32,7 @@ class AtmosphereProperties:
 
         np.random.seed(self.params["seed"])
 
-        ### Build atmsopheric coordinates
+        ### Build atmospheric coordinates
         # Cartesian coordinates
         if self.params["h_grid"] == 1:
             # 2d model

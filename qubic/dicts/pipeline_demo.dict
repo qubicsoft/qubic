@@ -1,7 +1,7 @@
 ############################################# Instrument ################################
 debug = False #False/True # Boolean
 
-config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
 beam_shape = 'gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'
@@ -21,11 +21,11 @@ detector_fknee=0
 detector_fslope=1
 detector_ncorr=10
 detector_ngrids=1
-detector_tau=0.01
+detector_tau=0.05 # modificato
 polarizer=True
 synthbeam_fraction=1.
 synthbeam_kmax=1
-synthbeam_peak150_fwhm=0.39268176 # in degree
+synthbeam_peak150_fwhm=0.68 # in degree
 ripples=False
 nripples=0
 focal_length=0.3
@@ -47,9 +47,39 @@ summer=False
 
 ############################################# Pointing ##############################
 
+#RA_center= 0. #deg
+#DEC_center=-57. #deg
+#period=0.006 #s
+#date_obs='2016-01-01 00:00:00'
+
+#latitude= -(24 + 11. / 60)   #ARGENTINA
+#longitude= -(66 + 28. / 60)   #ARGENTINA
+
+#hwp_stepsize=15 # (degrees) used for random and sweeping pointing
+
+#random_pointing=False   
+
+# ## vecchia conf con un solo sweep ##
+#repeat_pointing=False
+#npointings=1670
+#dtheta=15.
+#nhwp_angles=3 # use only for repeat_pointing
+#seed=1
+
+#sweeping_pointing_deadtime=True
+sweeping_pointing=True
+#duration=0.0062 #h
+#angspeed= 2 #deg/s
+#delta_az= 20 #deg
+#nsweeps_per_elevation= 1
+#angspeed_psi= 0.1 #deg/s
+#maxpsi= 10 #deg
+#fix_azimuth={'apply':False} #,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
+
+# moon analysis
 RA_center= 0. #deg
 DEC_center=-57. #deg
-period=1. #s
+period=0.1 #s
 date_obs='2016-01-01 00:00:00'
 
 latitude= -(24 + 11. / 60)   #ARGENTINA
@@ -57,7 +87,7 @@ longitude= -(66 + 28. / 60)   #ARGENTINA
 
 hwp_stepsize=15 # (degrees) used for random and sweeping pointing
 
-random_pointing=True   
+random_pointing=False   
 
 repeat_pointing=False
 npointings=3000
@@ -66,13 +96,14 @@ nhwp_angles=3 # use only for repeat_pointing
 seed=1
 
 sweeping_pointing_deadtime=False
-sweeping_pointing=False
-duration=20 #h
+sweeping_pointing=True
+duration= 2 #h
 angspeed= 0.4 #deg/s
 delta_az= 20 #deg
 nsweeps_per_elevation= 1
 angspeed_psi= 0.1 #deg/s
 maxpsi= 10 #deg
+dead_time = 74.05 # seconds   ### Measured in Salta at VE14 on July 5th 2022
 fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
 
 ############################################# Acquisition ##############################

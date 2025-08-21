@@ -2,12 +2,17 @@
 import os
 import pickle
 import time
-
 import healpy as hp
+import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from fgbuster.component_model import CMB, Dust, Synchrotron
-from pyoperators import BlockDiagonalOperator, DiagonalOperator, ReshapeOperator
+from pyoperators import (BlockDiagonalOperator,
+                         DiagonalOperator,
+                         ReshapeOperator,
+                         IdentityOperator,
+                         ConvolutionOperator,
+                         MPI)
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
 
@@ -76,7 +81,7 @@ class PipelineFrequencyMapMaking:
         ### Center of the QUBIC patch
         self.center = equ2gal(self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"])
 
-        ### Sky
+        ## Sky
         self.dict_in = self.get_dict(key="in")
         self.dict_out = self.get_dict(key="out")
         # change config and detector_nep
@@ -85,8 +90,8 @@ class PipelineFrequencyMapMaking:
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
             self.dict_in,
             # self.params["QUBIC"]["instrument"],
-            self.params["QUBIC"]["nsub_in"],
-            self.params["QUBIC"]["nsub_in"],
+            self.params["QUBIC"]["nsub_in"], # TODO: dovrebbe essere n_rec
+            self.params["QUBIC"]["nsub_in"], 
             H=None,
         )
 
@@ -105,9 +110,11 @@ class PipelineFrequencyMapMaking:
         )
 
         ### Ensure that all processors have the same external dataset
-        self.externaldata = PlanckMaps(self.skyconfig, self.joint_tod.qubic.allnus, self.params["QUBIC"]["nrec"], nside=self.params["SKY"]["nside"])
+        self.externaldata = PlanckMaps(self.skyconfig, self.joint_tod.qubic.allnus, self.params["QUBIC"]["nrec"],
+                                       nside=self.params["SKY"]["nside"])
         if self.rank == 0:
-            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(use_fwhm=self.params["QUBIC"]["convolution_in"])
+            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(
+                use_fwhm=self.params["QUBIC"]["convolution_in"])
         else:
             self.externaldata.maps = None
             self.externaldata.maps_noise = None
@@ -145,7 +152,7 @@ class PipelineFrequencyMapMaking:
             C = HealpixConvolutionGaussianOperator(self.fwhm_in[i], lmax=3 * self.params["SKY"]["nside"] - 1)
             self.maps_input.m_nu[i] = C(self.maps_input.m_nu[i])
 
-        ### Initial maps
+        ## Initial maps
         self.m_nu_in = self.get_input_map(m_nu=self.maps_input.m_nu)
 
         ### Define reconstructed and TOD operator
@@ -161,16 +168,92 @@ class PipelineFrequencyMapMaking:
                 planck_ntot=self.params["PLANCK"]["level_noise_planck"],
             )
         else:
-            self.invN = self.joint.qubic.get_invntt_operator(self.params["QUBIC"]["NOISE"]["ndet"], self.params["QUBIC"]["NOISE"]["npho150"], self.params["QUBIC"]["NOISE"]["npho220"])
+            self.invN = self.joint.qubic.get_invntt_operator(self.params["QUBIC"]["NOISE"]["ndet"],
+                                                             self.params["QUBIC"]["NOISE"]["npho150"],
+                                                             self.params["QUBIC"]["NOISE"]["npho220"])
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
+
+        self.ITF = IdentityOperator()
+        # Instrument Transfer Function (Map-Making-Level deconvolution)
+        if self.params["QUBIC"]['deconvolution']:
+            dt = self.joint_tod.qubic.dict['period']
+            tau = self.joint_tod.qubic.dict['detector_tau']
+
+            print(f"{dt = } | {tau =}")
+
+            # Choose the kernel length L so that the exponential tail we cut off
+            # is numerically negligible.
+            #
+            #   G[k] = exp(-k * dt / tau)  #  response of a 1-pole bolometer
+            #
+            # The contribution beyond k = k_cut drops like exp(-k_cut).
+            # By taking
+            #       L = ceil( k * tau / dt )      with k ≈ 5-6,
+            #
+            # we keep the kernel out to t = k τ, where its amplitude is
+            #     exp(-k)  ≤ 1%  ( ≈ 0.7 % for k=5, 0.25 % for k=6 )
+            # and the power we discard is exp(-2k) ≲ 10⁻⁴.
+            # This gives a good compromise: the truncated kernel is short
+            # (so the Toeplitz bandwidth and mat-vec cost stay low) while the error
+            # introduced by the missing tail is far below detector noise
+
+            L = int(np.ceil(5 * tau / dt))
+            kernel = np.exp(-np.arange(L) * dt / tau)
+            kernel /= np.sum(kernel)  # normalizzazione
+            # Number of QUBIC time samples
+            self.bolometer_kernel = kernel 
+            Nt_q = self.H_in_qubic.shapeout[0] if isinstance(self.H_in_qubic.shapeout,
+                                                             tuple) else self.H_in_qubic.shapeout
+            # self.ITF = SymmetricBandToeplitzOperator(
+            #     firstrow=kernel,
+            #     shapein=(Nt_q,),
+            #     shapeout=(Nt_q,),
+            # )
+
+            self.ITF = ConvolutionOperator(kernel, axes=(0,), shapein=(Nt_q,), shapeout=(Nt_q,))
+
+            nrec = self.params["QUBIC"]["nrec"]
+            nside = self.params["SKY"]["nside"]
+            npix = 12 * nside ** 2
+
+            Nt_p = 3 * npix * max(nrec, 2)
+
+            if self.params["PLANCK"]["external_data"]:
+                # Build a block‑diagonal operator: ITF for QUBIC (Nt_q × Nt_q)
+                # followed by an identity for the Planck part (Nt_p × Nt_p).
+                # We concatenate along the time‑sample axis (axis 0) and give PyOperators
+                # the exact size of each block so it does not have to guess.
+                self.ITF = BlockDiagonalOperator(
+                    (self.ITF, IdentityOperator(shapein=(Nt_p,), shapeout=(Nt_p,))),
+                    axisin=0,
+                    axisout=0,
+                    partitionin=(Nt_q, Nt_p),
+                    # partitionout=(Nt_q, Nt_p),
+                )
+
+        # Keep a handle to the QUBIC‑only part of the operator for TOD generation.
+        if self.params["PLANCK"]["external_data"]:
+            if self.params["QUBIC"]['deconvolution']:
+                # Deconvolution ON: first operand is the SymmetricBandToeplitzOperator
+                # that acts only on the QUBIC samples.
+                self.ITF_QUBIC = self.ITF.operands[0]
+            else:
+                # Deconvolution OFF: use a simple identity on the QUBIC TOD length.
+                Nt_q = self.H_in_qubic.shapeout[0] if isinstance(self.H_in_qubic.shapeout,
+                                                                 tuple) else self.H_in_qubic.shapeout
+                self.ITF_QUBIC = IdentityOperator(shapein=(Nt_q,), shapeout=(Nt_q,))
+        else:
+            # No external Planck data: ITF already acts only on the QUBIC samples.
+            self.ITF_QUBIC = self.ITF
 
         ### Noises
 
         rng_noise_planck = np.random.default_rng(self.params["PLANCK"]["seed_noise"])
         self.noise_planck = []
         for i in range(2):
-            self.noise_planck.append(self.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
+            self.noise_planck.append(
+                self.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
 
         qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
 
@@ -210,6 +293,96 @@ class PipelineFrequencyMapMaking:
 
         return dict_comps
 
+    def add_disk_point_source(self,
+                              lon_deg: float,
+                              lat_deg: float,
+                              stokes_uK=(1000.0, 0.0, 0.0),
+                              radius_arcmin: float = 400.0):
+        """
+        Inject a simple top-hat disk filled with equal-amplitude deltas centered at (lon, lat)
+        in Galactic coordinates. No smoothing or Gaussian weighting is applied.
+        The weights are uniform and normalized so the total injected amplitude equals the provided Stokes values.
+
+        Parameters
+        ----------
+        lon_deg, lat_deg : float
+            Galactic longitude and latitude in degrees.
+        stokes_uK : tuple(float, float, float)
+            Integrated (I, Q, U) amplitudes in μK_CMB to inject across the disk.
+        radius_arcmin : float
+            Disk radius in arcminutes.
+        """
+
+        nside = int(self.params["SKY"]["nside"])  # HEALPix nside
+        v0 = hp.ang2vec(lon_deg, lat_deg, lonlat=True)
+        r_disc = np.deg2rad(radius_arcmin / 60.0)
+
+        pix = hp.query_disc(nside, v0, r_disc, inclusive=False)
+        if np.size(pix) == 0:
+            # Fallback to a single pixel if the radius is too small
+            single_pix = hp.ang2pix(nside, lon_deg, lat_deg, lonlat=True)
+            pix = np.array([single_pix], dtype=int)
+
+        # Uniform weights normalized to sum to 1
+        w = np.ones(pix.shape[0], dtype=float)
+        w = w / w.sum()
+
+        st = np.asarray(stokes_uK, dtype=float)
+        if st.ndim == 0:
+            st = np.array([float(st), 0.0, 0.0])
+
+        Nsub = self.maps_input.m_nu.shape[0]
+        for i in range(Nsub):
+            self.maps_input.m_nu[i, pix, 0] += st[0] * w
+            self.maps_input.m_nu[i, pix, 1] += st[1] * w
+            self.maps_input.m_nu[i, pix, 2] += st[2] * w
+
+    def build_point_source(self,
+                           lon_deg: float,
+                           lat_deg: float,
+                           stokes_uK=(1000.0, 0.0, 0.0),
+                           radius_arcmin: float = 5.0):
+        """
+        Create a small "point" source (top-hat disk) map cube with the same
+        shape as `self.maps_input.m_nu` (N_sub, N_pix, 3), without modifying
+        the existing maps. The total integrated Stokes (I, Q, U) equals
+        `stokes_uK` in µK_CMB, uniformly distributed over the selected pixels.
+
+        Parameters
+        ----------
+        lon_deg, lat_deg : float
+            Galactic longitude and latitude in degrees.
+        stokes_uK : tuple(float, float, float)
+            Integrated (I, Q, U) amplitudes in µK_CMB.
+        radius_arcmin : float
+            Disk radius in arcminutes (keep small to mimic a point source).
+        """
+
+        nside = int(self.params["SKY"]["nside"])  # HEALPix nside
+        v0 = hp.ang2vec(lon_deg, lat_deg, lonlat=True)
+        r_disc = np.deg2rad(radius_arcmin / 60.0)
+
+        pix = hp.query_disc(nside, v0, r_disc, inclusive=False)
+        if np.size(pix) == 0:
+            single_pix = hp.ang2pix(nside, lon_deg, lat_deg, lonlat=True)
+            pix = np.array([single_pix], dtype=int)
+
+        # Uniform weights normalized to sum to 1
+        w = np.ones(pix.shape[0], dtype=float)
+        w = w / w.sum()
+
+        st = np.asarray(stokes_uK, dtype=float)
+        if st.ndim == 0:
+            st = np.array([float(st), 0.0, 0.0])
+
+        ps = np.zeros_like(self.maps_input.m_nu)
+        Nsub = ps.shape[0]
+        for i in range(Nsub):
+            ps[i, pix, 0] += st[0] * w
+            ps[i, pix, 1] += st[1] * w
+            ps[i, pix, 2] += st[2] * w
+        return ps
+
     def get_H(self):
         """Acquisition operator
 
@@ -240,7 +413,7 @@ class PipelineFrequencyMapMaking:
 
         nus_ave = []
         for i in range(self.params["QUBIC"]["nrec"]):
-            nus_ave += [np.mean(self.joint.qubic.allnus[i * self.fsub_out : (i + 1) * self.fsub_out])]
+            nus_ave += [np.mean(self.joint.qubic.allnus[i * self.fsub_out: (i + 1) * self.fsub_out])]
 
         return np.array(nus_ave)
 
@@ -314,7 +487,7 @@ class PipelineFrequencyMapMaking:
             "nf_sub": self.params["QUBIC"][f"nsub_{key}"],  # here is the difference between in and out dictionaries
             "nside": self.params["SKY"]["nside"],
             "MultiBand": True,
-            "period": 1,
+            # "period": 1,
             "RA_center": self.params["SKY"]["RA_center"],
             "DEC_center": self.params["SKY"]["DEC_center"],
             "filter_nu": 220 * 1e9,
@@ -401,7 +574,8 @@ class PipelineFrequencyMapMaking:
                 fwhm_out = np.append(
                     fwhm_out,
                     np.sqrt(
-                        self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out] ** 2 - np.min(self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]) ** 2
+                        self.joint.qubic.allfwhm[irec * self.fsub_out: (irec + 1) * self.fsub_out] ** 2 - np.min(
+                            self.joint.qubic.allfwhm[irec * self.fsub_out: (irec + 1) * self.fsub_out]) ** 2
                     ),
                 )
 
@@ -409,7 +583,8 @@ class PipelineFrequencyMapMaking:
         if self.params["QUBIC"]["convolution_in"] and self.params["QUBIC"]["convolution_out"]:
             fwhm_rec = np.array([])
             for irec in range(self.params["QUBIC"]["nrec"]):
-                fwhm_rec = np.append(fwhm_rec, np.min(self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]))
+                fwhm_rec = np.append(fwhm_rec,
+                                     np.min(self.joint.qubic.allfwhm[irec * self.fsub_out: (irec + 1) * self.fsub_out]))
 
         elif self.params["QUBIC"]["convolution_in"] and self.params["QUBIC"]["convolution_out"] is False:
             fwhm_rec = np.array([])
@@ -474,7 +649,7 @@ class PipelineFrequencyMapMaking:
         m_nu_in = np.zeros((self.params["QUBIC"]["nrec"], 12 * self.params["SKY"]["nside"] ** 2, 3))
 
         for i in range(self.params["QUBIC"]["nrec"]):
-            m_nu_in[i] = np.mean(m_nu[i * self.fsub_out : (i + 1) * self.fsub_out], axis=0)
+            m_nu_in[i] = np.mean(m_nu[i * self.fsub_out: (i + 1) * self.fsub_out], axis=0)
 
         return m_nu_in
 
@@ -490,7 +665,22 @@ class PipelineFrequencyMapMaking:
 
         """
 
-        TOD_QUBIC = self.H_in_qubic(self.maps_input.m_nu).ravel() + self.noiseq
+        # Inject an optional point source *inside* the operator product that creates the TOD
+        # (d = ITF_QUBIC · H_in_qubic · (s + s_ps) + n)
+        ps_cfg = self.params.get("POINT_SOURCE", {})
+        if ps_cfg.get("enabled", False):
+            ps_mnu = self.build_point_source(
+                lon_deg=float(self.center[0]),
+                lat_deg=float(self.center[1]),
+                stokes_uK=tuple(ps_cfg.get("stokes_uK", (1.0, 0.0, 0.0))),
+                radius_arcmin=float(ps_cfg.get("radius_arcmin", 5.0)),
+            )
+            print(f'{ps_cfg["radius_arcmin"] = }')
+            maps_for_tod = self.maps_input.m_nu + ps_mnu
+        else:
+            maps_for_tod = self.maps_input.m_nu
+
+        TOD_QUBIC = self.ITF_QUBIC * self.H_in_qubic(maps_for_tod).ravel() + self.noiseq
 
         if not self.params["PLANCK"]["external_data"]:
             return TOD_QUBIC
@@ -499,7 +689,8 @@ class PipelineFrequencyMapMaking:
         TOD_PLANCK = np.zeros((max(self.params["QUBIC"]["nrec"], 2), 12 * self.params["SKY"]["nside"] ** 2, 3))
 
         for irec in range(self.params["QUBIC"]["nrec"]):
-            fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in : (irec + 1) * self.fsub_in])  # self.fwhm_in = 0 if convolution_in == False
+            fwhm_irec = np.min(self.fwhm_in[irec * self.fsub_in: (
+                                                                         irec + 1) * self.fsub_in])  # self.fwhm_in = 0 if convolution_in == False
             C = HealpixConvolutionGaussianOperator(
                 fwhm=fwhm_irec,
                 lmax=3 * self.params["SKY"]["nside"] - 1,
@@ -529,11 +720,16 @@ class PipelineFrequencyMapMaking:
         if not self.params["PCG"]["preconditioner"]:
             return None
 
+        itf_energy = 1 if not self.params["QUBIC"].get("deconvolution", False) \
+                   else float(np.sum(self.bolometer_kernel ** 2))
+
+        print(f'{itf_energy = }')
+
         nrec = self.params["QUBIC"]["nrec"]
         nside = self.params["SKY"]["nside"]
         nsub_out = self.params["QUBIC"]["nsub_out"]
         fsub = nsub_out // nrec
-        npix = 12 * nside**2
+        npix = 12 * nside ** 2
         no_det = len(self.joint.qubic.multiinstrument[0].detector)
         H_qubic = self.joint.qubic.operator
 
@@ -541,9 +737,11 @@ class PipelineFrequencyMapMaking:
 
         # Pre-fetch Planck diagonals if needed
         if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
-            Diag_planck_143 = self.joint.pl143.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data[:, 0]
-            Diag_planck_217 = self.joint.pl217.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data[:, 0]
-            planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
+            Diag_planck_143 = self.joint.pl143.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data[:,
+            0]
+            Diag_planck_217 = self.joint.pl217.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data[:,
+            0]
+            planck_diag_sum = Diag_planck_143 ** 2 + Diag_planck_217 ** 2
 
         for irec in range(nrec):
             stacked_dptdp_inv_fsub = np.empty((fsub, npix))
@@ -565,12 +763,12 @@ class PipelineFrequencyMapMaking:
                     flat_indices = indices.ravel()
                     flat_weights = weights.ravel()
 
-                    mapPitPi = np.bincount(flat_indices, weights=flat_weights**2, minlength=npix)
+                    mapPitPi = np.bincount(flat_indices, weights=flat_weights ** 2, minlength=npix)
                     mapPtP_perdet_seq[det, :] = mapPitPi
 
-                D_sq = D.data**2
+                D_sq = D.data ** 2
                 mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
-                dptdp = mapPtP_seq_scaled.sum(axis=0)
+                dptdp = mapPtP_seq_scaled.sum(axis=0) * itf_energy
 
                 if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
                     dptdp = dptdp + planck_diag_sum
@@ -584,9 +782,11 @@ class PipelineFrequencyMapMaking:
             stacked_dptdp_inv[irec] = stacked_dptdp_inv_fsub.sum(axis=0)
 
         if self.params["PLANCK"]["external_data"]:
-            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+            preconditioner = BlockDiagonalOperator(
+                [DiagonalOperator(ci[self.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
         else:
-            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+            preconditioner = BlockDiagonalOperator(
+                [DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
 
         return preconditioner
 
@@ -616,13 +816,13 @@ class PipelineFrequencyMapMaking:
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         print("H_out", self.H_out.shapein, self.H_out.shapeout)
         print("invN", self.invN.shapein, self.invN.shapeout)
-        A = self.H_out.T * self.invN * self.H_out
+        A = self.H_out.T * self.ITF.T * self.invN * self.ITF * self.H_out
 
         if self.params["PLANCK"]["external_data"]:
             x_planck = self.m_nu_in * (1 - seenpix[None, :, None])
-            b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck))
+            b = self.H_out.T * self.ITF.T * self.invN * (d - self.H_out_all_pix(x_planck))
         else:
-            b = self.H_out.T * self.invN * d
+            b = self.H_out.T * self.ITF.T * self.invN * d
 
         ### Preconditionning
         M = self.get_preconditioner()
@@ -769,7 +969,8 @@ class PipelineFrequencyMapMaking:
                 "fwhm_rec": self.fwhm_rec,
                 "seenpix": self.seenpix,
                 "duration": mapmaking_time,
-                "qubic_dict": {k: v for k, v in self.dict_out.items() if k != "comm"},  # I have to remove the MPI communicator, which is not supported by pickle
+                "qubic_dict": {k: v for k, v in self.dict_out.items() if k != "comm"},
+                # I have to remove the MPI communicator, which is not supported by pickle
             }
 
             self._save_data(self.file, dict_solution)
@@ -794,7 +995,8 @@ class PipelineEnd2End:
 
         self.folder = "FMM/" + self.params["path_out"] + "maps/"
         self.file = self.folder + self.params["datafilename"] + f"_{self.job_id}.pkl"
-        self.file_spectrum = "FMM/" + self.params["path_out"] + "spectrum/" + "spectrum_" + self.params["datafilename"] + f"_{self.job_id}.pkl"
+        self.file_spectrum = "FMM/" + self.params["path_out"] + "spectrum/" + "spectrum_" + self.params[
+            "datafilename"] + f"_{self.job_id}.pkl"
         self.mapmaking = None
 
     def main(self, specific_file=None):
@@ -807,6 +1009,30 @@ class PipelineEnd2End:
 
             ### Run
             self.mapmaking.run()
+
+            ### Get synthesized beam
+            for prefix, obj in zip(["after_dict_in", "after_dict_out"],
+                                   [self.mapmaking.joint_tod, self.mapmaking.joint]):
+                scene = obj.scene
+                qubic_multi = obj.qubic.multiinstrument
+                synth_beam = qubic_multi[0].get_synthbeam(scene, idet=154)  # this is the QubicSoft number for TES #33
+
+                rot_custom = hp.Rotator(rot=[180, 90 - 50], inv=True)
+                sbrot = rot_custom.rotate_map_alms(synth_beam)
+                hp.gnomview(10 * np.log10(sbrot / sbrot.max()),
+                            rot=[0, 50],
+                            reso=30,
+                            xsize=200,
+                            ysize=200,
+                            sub=(1, 1, 1),
+                            title=f'{prefix} - Theoretical SB',
+                            unit='dB',
+                            #min=-40,
+                            max=0,
+                            margins=(0.05, 0.05, 0.05, 0.05)
+                            )
+                plt.savefig(self.folder + f"{prefix}_sb_theoretical.pdf", dpi=1000)
+                plt.close()
 
         ### Execute spectrum
         if self.params["Pipeline"]["spectrum"]:
@@ -836,3 +1062,11 @@ class PipelineEnd2End:
                 }
 
                 self.mapmaking._save_data(self.file_spectrum, dict_solution)
+
+
+if __name__ == "__main__":
+    pipeline_path = "/home/sofiafera/thesis/qubic/qubic/scripts/MapMaking/src/FMM/params.yml"
+
+    comm = MPI.COMM_WORLD
+    pipeline_end2end = PipelineEnd2End(comm, pipeline_path)
+    pipeline_end2end.main()

@@ -1,26 +1,33 @@
-path_out: "test_master/"
+path_out: "test_master_moon_deconv/"
 datafilename: "test"
 
 CMB:
-    cmb: True
+    cmb: False
     seed: 1                   # CMB realization
     r: 0
     Alens: 1
 
 Foregrounds:
-    Dust: True               # Thermal Dust emission
+    Dust: False              # Thermal Dust emission
     Synchrotron: False        # Synchrotron emission
+
+POINT_SOURCE:
+  enabled: True
+  stokes_uK: [1000.0, 0.0, 0.0]  # I,Q,U in µK_CMB
+  radius_arcmin: 8.0
+
 
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "UWB"          # Instrumental design (MB, DB or UWB)
-    configuration: "FI"       # Instrumental configuration (TD or FI)
+    instrument: "MB"          # Instrumental design (MB, DB or UWB)
+    configuration: "TD"       # Instrumental configuration (TD or FI)
+    deconvolution: True
     npointings: 1000          # Number of time samples
     nsub_in: 8                # Number of sub-acquisitions
     nsub_out: 8
     nrec: 2                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-    convolution_in: False                    # Angular resolution in the input TOD
+    convolution_in: True                    # Angular resolution in the input TOD
     convolution_out: False                  # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
@@ -37,7 +44,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-    nside: 128                # Nside of components
+    nside: 256                # Nside of components
     coverage_cut: 0.1         # Define a cut where the coverage is too low
     RA_center: 0
     DEC_center: -57
@@ -45,9 +52,9 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
 
-    external_data: True                    
+    external_data: True                   
     weight_planck: 0                            # Weight of Planck data within the QUBIC patch
-    level_noise_planck: 0                       # Noise level for Planck data
+    level_noise_planck: 10                       # Noise level for Planck data
     seed_noise: 22222
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
@@ -59,11 +66,11 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_iter_pcg: 50            # Number of PCG iterations #100
-    tol_pcg: 1.0e-08          # Tolerance for PCG
+    n_iter_pcg: 600            # Number of PCG iterations #100
+    tol_pcg: 1.0e-05          # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: True
-    gif: True
+    gif: true
     resolution_plot: 15
     fwhm_plot: 0
 

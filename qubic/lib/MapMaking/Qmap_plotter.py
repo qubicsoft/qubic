@@ -221,12 +221,14 @@ class PlotsFMM:
                 sig = np.std(m_out[0, self.seenpix, istk])
 
                 hp.gnomview(
-                    m_out[inu, :, istk],
+                    10*np.log10(m_out[inu, :, istk] / m_out[inu, :, istk].max()),
                     rot=center,
                     reso=reso,
                     cmap="jet",
-                    min=-nsig * sig,
-                    max=nsig * sig,
+                    # min=-nsig * sig,
+                    # max=nsig * sig,
+                    max=0,
+                    unit='dB',
                     sub=(nf, 6, k),
                     title=f"Output {self.stk[istk]}",
                     notext=True,

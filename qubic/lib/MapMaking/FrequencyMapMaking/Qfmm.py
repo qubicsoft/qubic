@@ -147,7 +147,45 @@ class PipelineFrequencyMapMaking:
             corrected_bandpass=self.params["QUBIC"]["bandpass_correction"],
         )
 
-        ### Convolve the Nsub input maps at QUBIC resolution
+        ps_cfg = self.params.get("POINT_SOURCE", {})
+        self._ps_added = False
+        self.ps_mnu = None
+        
+        if ps_cfg.get("enabled", False):
+            self.ps_mnu = self.build_point_source(
+                lon_deg=float(self.center[0]),
+                lat_deg=float(self.center[1]),
+                stokes_uK=tuple(ps_cfg.get("stokes_uK", (1000.0, 0.0, 0.0))),
+                radius_arcmin=float(ps_cfg.get("radius_arcmin", 20.0)),
+            )
+
+            self.maps_input.m_nu = self.maps_input.m_nu + self.ps_mnu
+            self._ps_added = True
+
+            # Plot th input map 
+            stokes = ["I", "Q", "U"]
+            rows = 2   # number of bands to show as rows (0 and 1)
+            cols = 3   # I, Q, U as columns
+
+            fig = plt.figure(figsize=(4 * cols, 4 * rows), tight_layout=True)
+
+            for i in range(rows):  # protect in case q > 2
+                for s, st in enumerate(stokes):
+                    # panel index increases row-wise
+                    sub_index = i * cols + s + 1
+                    hp.gnomview(self.maps_input.m_nu[i, :, s],
+                                rot=self.center,
+                                reso=10,
+                                xsize=200,
+                                ysize=200,
+                                sub=(rows, cols, sub_index),
+                                title=rf"${st} \, band \, {i}$",
+                                notext=False)
+
+            plt.savefig("input_maps_w_ps.png", bbox_inches="tight", dpi=1000)
+            plt.close(fig)
+
+         ### Convolve the Nsub input maps at QUBIC resolution
         for i in range(len(self.fwhm_in)):
             C = HealpixConvolutionGaussianOperator(self.fwhm_in[i], lmax=3 * self.params["SKY"]["nside"] - 1)
             self.maps_input.m_nu[i] = C(self.maps_input.m_nu[i])
@@ -292,50 +330,7 @@ class PipelineFrequencyMapMaking:
             dict_comps += [Synchrotron(nu0=150, beta_pl=-3)]
 
         return dict_comps
-
-    def add_disk_point_source(self,
-                              lon_deg: float,
-                              lat_deg: float,
-                              stokes_uK=(1000.0, 0.0, 0.0),
-                              radius_arcmin: float = 400.0):
-        """
-        Inject a simple top-hat disk filled with equal-amplitude deltas centered at (lon, lat)
-        in Galactic coordinates. No smoothing or Gaussian weighting is applied.
-        The weights are uniform and normalized so the total injected amplitude equals the provided Stokes values.
-
-        Parameters
-        ----------
-        lon_deg, lat_deg : float
-            Galactic longitude and latitude in degrees.
-        stokes_uK : tuple(float, float, float)
-            Integrated (I, Q, U) amplitudes in μK_CMB to inject across the disk.
-        radius_arcmin : float
-            Disk radius in arcminutes.
-        """
-
-        nside = int(self.params["SKY"]["nside"])  # HEALPix nside
-        v0 = hp.ang2vec(lon_deg, lat_deg, lonlat=True)
-        r_disc = np.deg2rad(radius_arcmin / 60.0)
-
-        pix = hp.query_disc(nside, v0, r_disc, inclusive=False)
-        if np.size(pix) == 0:
-            # Fallback to a single pixel if the radius is too small
-            single_pix = hp.ang2pix(nside, lon_deg, lat_deg, lonlat=True)
-            pix = np.array([single_pix], dtype=int)
-
-        # Uniform weights normalized to sum to 1
-        w = np.ones(pix.shape[0], dtype=float)
-        w = w / w.sum()
-
-        st = np.asarray(stokes_uK, dtype=float)
-        if st.ndim == 0:
-            st = np.array([float(st), 0.0, 0.0])
-
-        Nsub = self.maps_input.m_nu.shape[0]
-        for i in range(Nsub):
-            self.maps_input.m_nu[i, pix, 0] += st[0] * w
-            self.maps_input.m_nu[i, pix, 1] += st[1] * w
-            self.maps_input.m_nu[i, pix, 2] += st[2] * w
+        
 
     def build_point_source(self,
                            lon_deg: float,
@@ -665,22 +660,7 @@ class PipelineFrequencyMapMaking:
 
         """
 
-        # Inject an optional point source *inside* the operator product that creates the TOD
-        # (d = ITF_QUBIC · H_in_qubic · (s + s_ps) + n)
-        ps_cfg = self.params.get("POINT_SOURCE", {})
-        if ps_cfg.get("enabled", False):
-            ps_mnu = self.build_point_source(
-                lon_deg=float(self.center[0]),
-                lat_deg=float(self.center[1]),
-                stokes_uK=tuple(ps_cfg.get("stokes_uK", (1.0, 0.0, 0.0))),
-                radius_arcmin=float(ps_cfg.get("radius_arcmin", 5.0)),
-            )
-            print(f'{ps_cfg["radius_arcmin"] = }')
-            maps_for_tod = self.maps_input.m_nu + ps_mnu
-        else:
-            maps_for_tod = self.maps_input.m_nu
-
-        TOD_QUBIC = self.ITF_QUBIC * self.H_in_qubic(maps_for_tod).ravel() + self.noiseq
+        TOD_QUBIC = self.ITF_QUBIC * self.H_in_qubic(self.maps_input.m_nu).ravel() + self.noiseq
 
         if not self.params["PLANCK"]["external_data"]:
             return TOD_QUBIC

@@ -39,7 +39,7 @@ hornarray='CalQubic_HornArray_CC.fits'
 synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits'
 
 ############################################# Scene ################################
-nside=256
+nside=1024
 kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
@@ -49,7 +49,7 @@ summer=False
 
 #RA_center= 0. #deg
 #DEC_center=-57. #deg
-#period=0.006 #s
+#period=0.1 #s
 #date_obs='2016-01-01 00:00:00'
 
 #latitude= -(24 + 11. / 60)   #ARGENTINA
@@ -76,7 +76,7 @@ sweeping_pointing=True
 #maxpsi= 10 #deg
 #fix_azimuth={'apply':False} #,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
 
-# moon analysis
+############################ moon analysis
 RA_center= 0. #deg
 DEC_center=-57. #deg
 period=0.1 #s
@@ -98,13 +98,13 @@ seed=1
 sweeping_pointing_deadtime=False
 sweeping_pointing=True
 duration= 2 #h
-angspeed= 0.4 #deg/s
-delta_az= 20 #deg
-nsweeps_per_elevation= 1
+angspeed= 3 #deg/s
+delta_az= 28 #deg
+nsweeps_per_elevation= 386
 angspeed_psi= 0.1 #deg/s
 maxpsi= 10 #deg
 dead_time = 74.05 # seconds   ### Measured in Salta at VE14 on July 5th 2022
-fix_azimuth={'apply':False,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
+fix_azimuth={'apply':False} #,'az':50,'el':50,'el_step':1, 'fix_hwp':True, 'fix_pitch':True}
 
 ############################################# Acquisition ##############################
 

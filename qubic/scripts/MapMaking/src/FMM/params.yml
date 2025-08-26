@@ -13,8 +13,8 @@ Foregrounds:
 
 POINT_SOURCE:
   enabled: True
-  stokes_uK: [1000.0, 0.0, 0.0]  # I,Q,U in µK_CMB
-  radius_arcmin: 30.0
+  stokes_uK: [1.0e6, 0.0, 0.0] # I Q U
+  radius_arcmin: 15.5
 
 
 QUBIC:
@@ -68,7 +68,7 @@ PCG:
 
     n_iter_pcg: 600            # Number of PCG iterations #100
     tol_pcg: 1.0e-05          # Tolerance for PCG
-    preconditioner: True
+    preconditioner: False
     initial_guess_intensity_to_zero: True
     gif: true
     resolution_plot: 15

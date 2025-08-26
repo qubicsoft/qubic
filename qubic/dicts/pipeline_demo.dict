@@ -16,7 +16,7 @@ bandwidth=None
 twosided=None
 sigma=None
 ## Detector nep  + reading noise: sqrt(4.7e-17**2 + 2e-16**2)
-detector_nep=4.7e-17 #2.05e-16 (TD), 4.7e-17(FI)
+detector_nep=2.05e-16 # (TD), 4.7e-17(FI)
 detector_fknee=0
 detector_fslope=1
 detector_ncorr=10
@@ -49,7 +49,7 @@ summer=False
 
 #RA_center= 0. #deg
 #DEC_center=-57. #deg
-#period=0.1 #s
+#period=0.01 #s
 #date_obs='2016-01-01 00:00:00'
 
 #latitude= -(24 + 11. / 60)   #ARGENTINA
@@ -79,7 +79,7 @@ sweeping_pointing=True
 ############################ moon analysis
 RA_center= 0. #deg
 DEC_center=-57. #deg
-period=0.1 #s
+period=0.006 #s
 date_obs='2016-01-01 00:00:00'
 
 latitude= -(24 + 11. / 60)   #ARGENTINA
@@ -97,7 +97,7 @@ seed=1
 
 sweeping_pointing_deadtime=False
 sweeping_pointing=True
-duration= 2 #h
+duration= 1 #h
 angspeed= 3 #deg/s
 delta_az= 28 #deg
 nsweeps_per_elevation= 386

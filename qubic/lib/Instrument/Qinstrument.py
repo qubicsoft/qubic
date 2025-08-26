@@ -215,7 +215,7 @@ class QubicInstrument(Instrument):
             self.sbeam_fits = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
             d["synthbeam"] = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
             print("There is no fits file given in this dictionary. Using analytical model of beam parameters")
-            use_file=False
+            self.use_file=False
         else:
             self.sbeam_fits = d["synthbeam"]
 
@@ -1475,12 +1475,16 @@ class QubicInstrument(Instrument):
         else:
             # We get info on synthbeam
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+            # phis, thetas, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam) # test --> not what is needed
+            # phis += np.pi/2 # test to rotate the beam around LOS --> still need the mirror beam
+            phis = -phis - np.pi/2 # test to get the mirrored beam + rotation 90 degrees to mimic data from Moon Salta
+
         # shape(vals)   : (ndetectors, npeaks)
         # shape(thetas) : (ndetectors, npeaks)
 
         npeaks = thetas.shape[-1]
         thetaphi = _pack_vector(thetas, phis)  # (ndetectors, npeaks, 2)
-        direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi)
+        direction = Spherical2CartesianOperator("zenith,azimuth")(thetaphi) 
 
         e_nf = direction[:, None, :, :]
         if nside > 8192:

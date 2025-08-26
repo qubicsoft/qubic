@@ -1807,8 +1807,8 @@ def get_DBscan_res(x_fit, y_fit, x_theo, y_theo, x_err, y_err, FWHM, errFWHM, vi
     if doplot:
         plt.figure()
         plt.subplot().set_aspect(1)
-        plt.plot(delta_az[visibly_ok_arr], delta_el[visibly_ok_arr], 'ko', label='all visibly ok ({})'.format(len(delta_az[visibly_ok_arr])))
-        plt.plot(delta_az[DB_ok], delta_el[DB_ok], 'ro', label='DBSCAN selected ({})'.format(len(delta_az[DB_ok])))
+        plt.scatter(delta_az[visibly_ok_arr], delta_el[visibly_ok_arr], c='k', s=30, label='all visibly ok ({})'.format(len(delta_az[visibly_ok_arr])))
+        plt.scatter(delta_az[DB_ok], delta_el[DB_ok], c='r', s=20, label='DBSCAN selected ({})'.format(len(delta_az[DB_ok])))
         plt.xlabel('$\Delta_{az}^{Moon} - Offset_{Creidhe}$')
         plt.ylabel('$\Delta_{el}^{Moon} - Offset_{Creidhe}$')
         plt.legend()

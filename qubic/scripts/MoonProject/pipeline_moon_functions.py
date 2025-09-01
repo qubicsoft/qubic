@@ -53,6 +53,7 @@ from qubic.lib.Qsamplings import hor2equ
 #########################
 
 conv_reso_fwhm = 2.35482
+AU_meters = 149597870700 # m
 
 #########################
 # import matplotlib.style as style
@@ -1480,6 +1481,7 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
 def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None):
     if data is None: # first read the data from disk if needed
         tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False)
+        # az = -az - np.max(np.abs(az)) # the map doesn't look great, there probably isn't an azimuth inversion then?
         az += az_qubic
         print("tinit = {}".format(tinit))
 
@@ -1506,8 +1508,21 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
         azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
 
-        
-        
+        # print("mean az el Moon", np.mean(azmoon), np.mean(elmoon))
+        # print("mean az el pointing", np.mean(az), np.mean(el))
+
+        # fig, axs = plt.subplots(1, 2)
+        # ax = axs[0]
+        # ax.plot(thk, az, label="az")
+        # ax.plot(tt, azmoon, label="azmoon")
+        # ax.legend()
+        # ax = axs[1]
+        # ax.plot(thk, el, label="el")
+        # ax.plot(tt, elmoon, label="elmoon")
+        # ax.legend()        
+        # plt.show()
+
+        # aze
         ### Identify scan types and numbers
         scantype_hk, azt, elt, scantype, vmean = identify_scans(thk, az, el, 
                                                                     tt=tt, doplot=True, 
@@ -1515,15 +1530,12 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
                                                                     thr_speedmin=speedmin)
         
         Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
-    
-        
 
         # New coordinates centered on the Moon
         newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
         # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos)
-
         
         # fig, axs = plt.subplots(1, 2, figsize=(15, 5))
         # ax = axs[0]

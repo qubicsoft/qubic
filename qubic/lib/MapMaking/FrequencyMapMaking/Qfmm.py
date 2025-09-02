@@ -549,7 +549,8 @@ class PipelineFrequencyMapMaking:
         
         TOD_PLANCK = np.zeros(
                     (
-                        max(self.params["QUBIC"]["nrec"], 2), # To handle the case nrec == 1, even if it is broken because of the way compute_freq is used in QubicMultiAcquisitions
+                        # max(self.params["QUBIC"]["nrec"], 2), # To handle the case nrec == 1, even if it is broken because of the way compute_freq is used in QubicMultiAcquisitions
+                        self.params["QUBIC"]["nrec"],
                         12 * self.params["SKY"]["nside"] ** 2,
                         3,
                     )
@@ -570,10 +571,10 @@ class PipelineFrequencyMapMaking:
                 self.maps_input.maps[irec] + noise
             )
         
-        if self.params["QUBIC"]["nrec"] == 1: # To handle the case nrec == 1, TOD_PLANCK[0] alreay computed above
-            TOD_PLANCK[1] = C(
-                self.maps_input.maps[1] + self.noise217
-            )
+        # if self.params["QUBIC"]["nrec"] == 1: # To handle the case nrec == 1, TOD_PLANCK[0] already computed above
+        #     TOD_PLANCK[1] = C(
+        #         self.maps_input.maps[1] + self.noise217
+        #     )
 
         TOD_PLANCK = TOD_PLANCK.ravel()
             
@@ -703,10 +704,10 @@ class PipelineFrequencyMapMaking:
 
         self.mpi._barrier()
 
-        if self.params["QUBIC"]["nrec"] == 1:
-            solution_qubic_planck["x"]["x"] = np.array(
-                [solution_qubic_planck["x"]["x"]]
-            )
+        # if self.params["QUBIC"]["nrec"] == 1: # was causing an error with the shape of solution_qubic_planck["x"]["x"]
+        #     solution_qubic_planck["x"]["x"] = np.array(
+        #         [solution_qubic_planck["x"]["x"]]
+        #     )
         
         solution = np.ones(self.m_nu_in.shape) * hp.UNSEEN
         if self.params['PLANCK']['external_data']:

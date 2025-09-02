@@ -673,7 +673,6 @@ class QubicMultiAcquisitions:
             f_bands = [150, 220]
         for i, f_band in enumerate(f_bands):
             ### Compute frequencies on the edges
-
             _, _, nus_subbands_i, _, _, _ = compute_freq(
                 f_band,
                 Nfreq=int(self.nsub / len(f_bands)),
@@ -681,13 +680,18 @@ class QubicMultiAcquisitions:
             )
 
             ### Compute the effective reconstructed frequencies if FMM is applied
-            _, _, nus_i, _, _, _ = compute_freq(
-                f_band,
-                Nfreq=int(self.nrec / len(f_bands)),
-                relative_bandwidth=self.dict["filter_relative_bandwidth"],
-            )
-
-            ### Joint 150 and 220 GHz band if needed
+            if nrec == 1:
+                if f_band == f_bands[0]:
+                    nus_i = [np.mean(f_bands)]
+                else:
+                    nus_i = []
+            else:
+                _, _, nus_i, _, _, _ = compute_freq(
+                    f_band,
+                    Nfreq=int(self.nrec / len(f_bands)),
+                    relative_bandwidth=self.dict["filter_relative_bandwidth"],
+                )
+            ### Join 150 and 220 GHz band if needed
             self.allnus += list(nus_subbands_i)
             self.allnus_rec += list(nus_i)
 
@@ -1229,7 +1233,7 @@ class JointAcquisitionFrequencyMapMaking:
         ### shapeout: (self.Nrec, npix, nstokes)
         if seenpix is not None:
             U = (
-                ReshapeOperator((self.Nrec * sum(seenpix) * nstokes), (self.Nrec, sum(seenpix), nstokes))
+                ReshapeOperator((self.Nrec * sum(seenpix) * nstokes), (self.Nrec, sum(seenpix), nstokes)) # doesn't allow for different input shapes for Planck and Qubic
                 * PackOperator(
                     np.broadcast_to(seenpix[None, :, None], (self.Nrec, seenpix.size, nstokes)).copy()
                 )
@@ -1244,10 +1248,10 @@ class JointAcquisitionFrequencyMapMaking:
             (12 * self.qubic.scene.nside**2, nstokes),
             (12 * self.qubic.scene.nside**2 * nstokes),
         )
-        H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0)
+        H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0) # if Nrec == 1, then Planck has only one band too...
         # It is necessary to change the shape of H_planck_ in order to stack it with H_qubic
-        R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
-        H_planck = R_diag(H_planck_)
+        # R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
+        H_planck = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0]) * H_planck_ * ReshapeOperator((self.Nrec, 12 * self.qubic.scene.nside**2, nstokes), H_planck_.shapein)
 
         H_list = [H_qubic]
         ### Doing the BlockDiagonal H_planck line by line in order to stack it with H_qubic in a BlockColumnOperator
@@ -1278,7 +1282,8 @@ class JointAcquisitionFrequencyMapMaking:
         invN_143 = R_planck(invntt_planck143(R_planck.T))
         invN_217 = R_planck(invntt_planck217(R_planck.T))
         if self.Nrec == 1:
-            invNe = [invN_143, invN_217]
+            # invNe = [invN_143, invN_217]
+            invNe = [invN_143]
         else:
             invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(
                 self.Nrec / 2

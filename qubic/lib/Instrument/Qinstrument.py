@@ -1477,7 +1477,7 @@ class QubicInstrument(Instrument):
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
             # phis, thetas, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam) # test --> not what is needed
             # phis += np.pi/2 # test to rotate the beam around LOS --> still need the mirror beam
-            phis = -phis - np.pi/2 # test to get the mirrored beam + rotation 90 degrees to mimic data from Moon Salta
+            # phis = -phis #- np.pi/2 # test to get the mirrored beam + rotation 90 degrees to mimic data from Moon Salta
 
         # shape(vals)   : (ndetectors, npeaks)
         # shape(thetas) : (ndetectors, npeaks)

@@ -34,6 +34,7 @@ from astropy.coordinates import EarthLocation, AltAz, get_moon
 
 #### QUBIC IMPORT
 from qubicpack.qubicfp import qubicfp
+import qubicpack.pixel_translation as pt
 import qubic.lib.Calibration.Qfiber as ft
 
 from qubic.lib import Qdictionary
@@ -662,7 +663,6 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     # # mask_elt = (elt >= min_elt) & (elt <= max_elt)
     mask_elt = elt >= min_elt
     # mask_elt = azt >= 335
-
     tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
     prominence = (3*np.std(tod_ma_filt[mask_elt]), None) # good filter
     # prominence = None
@@ -1091,6 +1091,10 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
 
         filtmapsn = get_filtmapsn(mapij * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
 
+        # plt.figure()
+        # plt.imshow(filtmapsn * 1e4)
+        # plt.show()
+
         maxii = filtmapsn == np.nanmax(filtmapsn)
         max_i = np.mean(iipos[maxii])
         max_j = np.mean(jjpos[maxii])
@@ -1140,10 +1144,14 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
 
     # hp.gnomview creates and shows a map with azt (abs) and elt (ord) growing starting from the lower-right angle of the image
     # whereas plt.imshow of a gnomview map shows an image with azt (abs) and elt (ord) growing from the upper-right corner
-    i_elt = (np.arange(xs) - (xs - 1)/2)*reso/60 # elevation
-    j_azt = -i_elt.copy()                            # azimuth
-    i_elt += rot[1]
-    j_azt -= rot[0]
+    # i_elt = -(np.arange(xs) - (xs - 1)/2)*reso/60     # elevation - elevation_moon (hence minus sign)
+    # j_azt = -i_elt.copy()                             # azimuth - azimuth_moon (evolves in the opposite direction to elevation)
+    # i_elt += rot[1]
+    # j_azt += rot[0]
+
+    # flipped ??
+    i_elt = (np.arange(xs) - (xs - 1)/2)*reso/60     # elevation - elevation_moon (hence minus sign)
+    j_azt = -i_elt.copy()                             # azimuth - azimuth_moon (evolves in the opposite direction to elevation)
 
     if xycreid_corr is not None:
         try:
@@ -1156,6 +1164,11 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
                 print("TES has no position on sky")
                 print(guess)
         
+    # # test méli mélo
+    # i_elt_ = i_elt.copy()
+    # i_elt = j_azt.copy()
+    # j_azt = i_elt_.copy()
+
     if doplot:
         m, fitted, fig_axs = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso, pack=pack)
         if verbose:
@@ -1480,6 +1493,18 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
 
 def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None):
     if data is None: # first read the data from disk if needed
+        ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
+        FPidentity = pt.make_id_focalplane()
+        QPidx = np.array([FPidentity[fp_idx].QPindex for fp_idx in range(len(FPidentity)) if FPidentity[fp_idx].quadrant == 3]).reshape(17, 17) # TD quadrant = 3
+        QPidx[11:15, 0] = np.array([4, 36, 68, 100]) - 1 # thermometers
+        QPidx[-1, 2:6] = np.array([132, 164, 196, 228]) - 1 # thermometers
+        QPidx_old = QPidx.flatten()[QPidx.flatten()>=0]
+        QPidx = np.flip(np.flip(QPidx, axis=0).T, axis=0)
+        QPidx = QPidx.flatten()
+        QPidx = QPidx[QPidx>=0]
+        sort_idx_old = np.argsort(QPidx_old)
+        QPidx = QPidx[sort_idx_old]
+        QPidx = QPidx_old # if want old
         tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False)
         # az = -az - np.max(np.abs(az)) # the map doesn't look great, there probably isn't an azimuth inversion then?
         az += az_qubic
@@ -1565,28 +1590,28 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         # azt, elt = RA, Dec
         # newazt, newelt = newRA, newDec
 
-        data = [tt, tinit, alltod, azt, elt, newazt, newelt, scantype, Tbath] # what will be read later if this function is reused
+        data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath] # what will be read later if this function is reused
     else: # if the previous step was already done in previous execution
         print('Using data already stored in memory - not read from disk')
-        tt, tinit, alltod, azt, elt, newazt, newelt, scantype, Tbath = data
-    return data, tt.copy(), tinit, alltod.copy(), azt.copy(), elt.copy(), newazt.copy(), newelt.copy(), scantype.copy(), Tbath.copy()
+        tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = data
+    return data, tt.copy(), tinit, alltod.copy(), QPidx.copy(), azt.copy(), elt.copy(), newazt.copy(), newelt.copy(), scantype.copy(), Tbath.copy()
 
 def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None, isok_arr=None):
     print('Using data already stored in memory - not read from disk and computing different azel for each det')
-    tt, tinit, alltod, azt, elt, newazt, newelt, scantype, Tbath = data
+    tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = data
     ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
     azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
     # for each detector, we get a different set of azimuth elevation
     allnewazt, allnewelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr)
-    return tt, tinit, alltod, azt, elt, allnewazt, allnewelt, scantype, Tbath
+    return tt, tinit, alltod, QPidx, azt, elt, allnewazt, allnewelt, scantype, Tbath
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, 
                       doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None, det_pos=None):
 
     if det_pos is None:
-        data, tt, tinit, alltod, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir)
+        data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir)
     else:
-        tt, tinit, alltod, azt, elt, newazt_, newelt_, scantype, Tbath = format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data, datadir, det_pos, isok_arr)
+        tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath = format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data, datadir, det_pos, isok_arr)
         print(np.shape(newazt_))
         print(np.shape(newelt_))
 
@@ -1606,7 +1631,8 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             TESNum = allTESNum[i]
             print('TES# {}'.format(TESNum), end=" ")
             iTES = TESNum - 1
-            tod = alltod[iTES, :]
+            # tod = alltod[iTES, :]
+            tod = alltod[iTES == QPidx][0] # order of TES not well-imlpemented before
             if det_pos is not None:
                 if np.shape(newazt_)[1] == 1:
                     newazt = newazt_[:, 0]
@@ -1625,7 +1651,8 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             # Create a lock for each process to ensure safe access to shared memory
             lock = Lock()
             
-            tod = alltod[TESNum - 1, :]
+            # tod = alltod[TESNum - 1, :]
+            tod = alltod[TESNum - 1 == QPidx][0] # order of TES not well-imlpemented before
 
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                            TES_number=i+1, nside=nside, doplot=doplot, det_pos=det_pos)        
@@ -1837,6 +1864,10 @@ def rotate_translate_scale_2d(xin, theta, center, scale):
 def rot_trans_scale_pts(x, pars):
     pts = np.reshape(x, (len(x)//2, 2))
     return np.ravel(rotate_translate_scale_2d(pts, np.radians(pars[0]), np.array([pars[1],pars[2]]), pars[3]))
+                    
+def rot_trans_scale2d_pts(x, pars):
+    pts = np.reshape(x, (len(x)//2, 2))
+    return np.ravel(rotate_translate_scale_2d(pts, np.radians(pars[0]), np.array([pars[1],pars[2]]), np.array([pars[3], pars[4]])))
 
 
 def get_synthbeam_freqs(idet, nsub=16, nside=512):

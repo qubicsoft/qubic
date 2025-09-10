@@ -161,7 +161,30 @@ class fluxjumps:
 
         return nc_unique, xc_unique, xcf_unique
 
-    def jumps_detection(self, tt, todarray, nc_cond=False):
+    def change_values(self, xc, xcf, max_gap=10):
+
+        xc2 = []
+        xcf2 = []
+
+        i = 0
+        while i < len(xc):
+            xini = xc[i]
+            xfin = xcf[i]
+            j = i + 1
+
+            # Agrupar mientras estén dentro del margen
+            while j < len(xc) and xc[j] - xfin <= max_gap:
+                xfin = xcf[j]
+                j += 1
+
+            xc2.append(xini)
+            xcf2.append(xfin)
+            i = j
+
+        return xc2, xcf2
+
+
+    def jumps_detection(self, tt, todarray, consec = True, nc_cond=False):
 
         tod_haar = self.haar_function(todarray) #1. make the haar filter of the raw TOD
 
@@ -186,11 +209,15 @@ class fluxjumps:
         xc, xcf = self.initial_start_end(nc, idx_jumps, tod_haar, thr_used, clust) #5. find the beginning and the end of a jump, also the size of the jump
         nc_unique, xc_unique, xcf_unique = self.unique(xc, xcf)
 
+        if consec == True:
+            xc_unique, xcf_unique = self.change_values(xc_unique, xcf_unique)
+            nc_unique = len(xc_unique)
+
         return nc_unique, xc_unique, xcf_unique, thr_used
 
 class correction:
 
-    def __init__(self, region_off = 5, region_amp = 10, change_mode = "noise"):
+    def __init__(self, region_off = 5, region_amp = 10, change_mode = "const"):
 
         """ Class that calculates the amplitude of the flux jump found and applies the correction to the TOD
 
@@ -233,65 +260,16 @@ class correction:
 
         return tod_new
 
-    def changesignal(self, tod_new, xc, xcf):
+    def changesignal_init(self, tod_new, xc, xcf):
 
         y_cor = tod_new.copy()
-        for i in range(len(xc)):
-            xini = xc[i]
-            xfin = xcf[i]
-
-            if xini == 0 or xfin >= len(tod_new)-1:
-                continue
-
-            y_cor[xini:xfin] = np.interp(
-                np.arange(xini, xfin),
-                [xini-self.region_amp, xfin],
-                [tod_new[xini-self.region_amp], tod_new[xfin]]
-                )
-
-        return y_cor
-
-    # copia una región pasada y la reemplaza en donde ocurre el jump
-    def changesignal_copy_pattern(self, tod_new, xc, xcf):
-
-        y_cor = tod_new.copy()
+        std = np.std(tod_new[:xc[0]])
+        #mean = np.mean(tod_new[:xc[0]])
 
         for i in range(len(xc)):
-            xini = xc[i]
-            xfin = xcf[i]
-
-            L = xfin - xini  # largo del salto
-
-            # Buscar una región anterior para copiar
-            source_start = xini - self.region_amp - L
-            source_end = xini - self.region_amp
-
-            pattern = tod_new[source_start:source_end]
-
-            pre_mean = np.mean(tod_new[xini - self.region_amp:xini])
-            pat_mean = np.mean(pattern)
-            adjusted_pattern = pattern + (pre_mean - pat_mean)
-
-            y_cor[xini:xfin] = adjusted_pattern
-
-        return y_cor
-
-    # realiza filtro salvitzgy golay y reemplaza eso 
-    def changesignal_predictive(self, tod_new, xc, xcf):
-
-        y_cor = tod_new.copy()
-
-        for i in range(len(xc)):
-            xini = xc[i]
-            xfin = xcf[i]
-            L = xfin - xini
-
-            past_region = tod_new[xini - L:xini]
-            smoothed = savgol_filter(past_region, window_length=len(past_region), polyorder=2)
-
-            extrap = smoothed  # o usar un modelo AR más avanzado
-
-            y_cor[xini:xfin] = extrap
+            mean = np.mean(tod_new[xc[i]-self.region_amp:xc[i]])
+            ynew=np.random.normal(mean, std, len(tod_new[xc[i]:xcf[i]]))
+            y_cor[xc[i]:xcf[i]] = ynew
 
         return y_cor
 
@@ -307,17 +285,69 @@ class correction:
 
         return y_cor
 
+    def constrained_realization(self, tod_new, xini, xfin):
+
+        xini = int(xini)
+        xfin = int(xfin)
+
+        y = tod_new.copy()
+        L = xfin - xini
+
+        region_pre = min(L//2, xini) # no ir mas alla del principio
+        region_post = min(L - region_pre, len(y)-xfin) # no ir mas alla del final
+
+        total_need = L 
+        still_need = total_need - (region_pre + region_post)
+
+        if still_need > 0.:
+            #sacamos de donde haya mayor cantidad, para que las regiones sumen L 
+            extra_pre = min(still_need, region_pre)
+            extra_post = still_need - extra_pre
+            region_pre += extra_pre 
+            region_post += extra_post
+
+        pre = y[xini - region_pre:xini]
+        post = y[xfin:xfin + region_post]
+        
+        local_data = np.concatenate([pre, post])
+
+        N = len(local_data)
+        #power spectrum to the data before and after the jump
+
+        fft_data = np.fft.rfft(local_data - np.mean(local_data))
+        power_spectrum = np.abs(fft_data) ** 2
+
+        #random phase realization
+        random_phases = np.exp(1j * 2 * np.pi * np.random.rand(len(fft_data)))
+        new_fft = np.sqrt(power_spectrum) * random_phases
+        sim_signal = np.fft.irfft(new_fft, n=N)
+
+        sim_trunc = sim_signal[:L]
+
+        start_val = y[xini - 1]
+        end_val = y[xfin]
+        sim_trunc -= np.mean(sim_trunc)  # centrado
+        sim_trunc = sim_trunc / np.std(sim_trunc) * np.std(pre)  # escalar
+
+        #linear transition to the edges
+        window = np.linspace(0, 1, L)
+        sim_trunc = sim_trunc + (1 - window) * (start_val - sim_trunc[0]) + window * (end_val - sim_trunc[-1])
+        y[xini:xfin] = sim_trunc
+
+        return y
+
+
     def correct_TOD(self, todarray, offset, xc, xcf, nc):
 
         tod_new = self.move_offset(todarray, offset, xc, xcf, nc)
-        if self.change_mode == "interp":
-            tod_corr = self.changesignal(tod_new, xc, xcf)
+        if self.change_mode == "init":
+            tod_corr = self.changesignal_init(tod_new, xc, xcf)
         elif self.change_mode == "noise":
             tod_corr = self.changesignal_noise(tod_new, xc, xcf)
-        elif self.change_mode == "copy":
-            tod_corr = self.changesignal_copy_pattern(tod_new, xc, xcf)
-        elif self.change_mode == "filter":
-            tod_corr = self.changesignal_predictive(tod_new, xc, xcf)
+        elif self.change_mode == "const":
+            tod_corr = tod_new 
+            for i in range(nc):
+                tod_corr = self.constrained_realization(tod_corr, xc[i], xcf[i])
 
         return tod_corr
 
@@ -432,7 +462,66 @@ class DT:
 
         return start, end
 
-    def calculate_levels(self, tt, todarray, nc):
+    def calculate_start_end2(self, todarray, valini, valfin, indexini, indexfin):
+
+        start = np.zeros(len(valini), dtype=int)
+        end = np.zeros(len(valini), dtype=int)
+        for i in range(len(valini)):
+            index1 = np.where((todarray < valini[i]+self.tol) & (todarray > valini[i]-self.tol))[0]
+            index2 = np.where((todarray < valfin[i]+self.tol) & (todarray > valfin[i]-self.tol))[0]
+
+            if len(index1) == 0 or len(index2) == 0:
+                tol2 = 50*self.tol
+                index1 = np.where((todarray < valini[i]+tol2) & (todarray > valini[i]-tol2))[0]
+                index2 = np.where((todarray < valfin[i]+tol2) & (todarray > valfin[i]-tol2))[0]
+
+            candidates_end = index2[index2 > indexfin[i]]
+            if len(candidates_end) > 0:
+                end[i] = candidates_end[0]
+            else:
+                end[i] = indexfin[i] + 1
+
+            candidates_start = index1[(index1 < end[i]) & (index1 > indexini[i])]
+            if len(candidates_start) > 0:
+                start[i] = np.max(candidates_start)
+            else:
+                start[i] = indexini[i] + 1
+            
+
+            if len(valini) > 1:
+                if end[i-1] == start[i]:
+                    start[i] += 1
+
+        return start, end
+
+
+    def change_values(self, xc, xcf, max_gap=10):
+
+        order = np.argsort(xc)
+        xc = np.array(xc)[order]
+        xcf = np.array(xcf)[order]
+
+        xc2 = []
+        xcf2 = []
+
+        i = 0
+        while i < len(xc):
+            xini = xc[i]
+            xfin = xcf[i]
+            j = i + 1
+
+            # Agrupar mientras estén dentro del margen
+            while j < len(xc) and xc[j] - xfin <= max_gap:
+                xfin = xcf[j]
+                j += 1
+
+            xc2.append(xini)
+            xcf2.append(xfin)
+            i = j
+
+        return xc2, xcf2
+
+    def calculate_levels(self, tt, todarray, nc, consec=True):
 
         if self.depth == False:
             num = self.depth_number
@@ -443,9 +532,12 @@ class DT:
         ypred_unique, index, count = self.uniqueindex(ypred)
         ypred_unique, index, count = self.count_filter(ypred_unique, index, count)
         amplitude, valini, valfin, indexini, indexfin = self.amplitude_filter(ypred_unique, index, count)
-        xc, xcf = self.calculate_start_end(todarray, valini, valfin, indexfin)
+        xc, xcf = self.calculate_start_end2(todarray, valini, valfin, indexini, indexfin)
 
-        return xc, xcf, valini, valfin, amplitude
+        if consec == True:
+            xc_unique, xcf_unique = self.change_values(xc, xcf)
+
+        return xc_unique, xcf_unique#, amplitude
 
 
 

@@ -985,21 +985,23 @@ class AtmosphereMaps(AtmosphereProperties):
         return hp_maps_2d
 
 
-class WindPerturbation(AtmosphereMaps):
-    def __init__(self, params, npointings, x0=0, y0=0, z0=0):
-        ###Import the class describing the atmosphere
+class WindPerturbation:
+    def __init__(self, params, qubic_sampling):
+        """Wind Perturbation
+
+        Parameters
+        ----------
+        params : dict
+            Dictionary containing all the simulation parameters
+        scanning_strategy : QubicSampling
+            QubicSampling instance
+        """
+
         self.params = params
-        AtmosphereMaps.__init__(self, params)
-
-        ###Computing initial coordinates
-        self.x0, self.y0, self.z0 = x0, y0, z0
-        # self.r0, self.az0, self.el0 = AtmosphereMaps.horizontal_plane_to_azel(self.x0 , self.y0, self.z0)
-
-        ###Computing the number of qubic samples
-        self.npointings = npointings
+        self.qubic_sampling = qubic_sampling
 
     def get_constant_wind_distribution(self, wind_x, wind_y):
-        r"""Create constant wind field in m/s
+        r"""Constant wind field
 
         Parameters
         ----------
@@ -1009,14 +1011,14 @@ class WindPerturbation(AtmosphereMaps):
         Returns
         -------
         wind_field : array_like
-            shaped (2, npointings)
+            shape (2, npointings)
         """
 
         ones = np.cumsum(np.ones(self.npointings))
         return wind_x * ones, wind_y * ones
 
     def get_normal_wind_distribution(self, wind_mean, wind_std):
-        r"""Get normally distributed wind field in m/s
+        r"""Random wind field
 
         Parameters
         ----------
@@ -1026,6 +1028,7 @@ class WindPerturbation(AtmosphereMaps):
         Returns
         -------
         wind_field : array_like
+            shape (2, npointings)
 
         """
         wind_x = np.random.normal(wind_mean[0], wind_std[0], self.npointings)

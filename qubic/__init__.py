@@ -28,4 +28,4 @@ if numpy.__version__ < '1.8':
     numpy.full_like = full_like
 del full, full_like, numpy
 
-__version__ = _version('qubic')
+__version__ = "2.0.0"

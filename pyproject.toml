@@ -1,12 +1,6 @@
 [build-system]
-build-backend = 'setuptools.build_meta'
-requires = [
-    'oldest-supported-numpy',
-    'pchanial-legacy-install-hooks==1.0.1',
-    'setuptools==64.0.3',
-    'setuptools_scm[toml]>=6.2',
-    'wheel',
-]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
 
 [project]
 name = 'qubic'
@@ -15,11 +9,15 @@ authors = [
     {name = 'Jean-Christophe Hamilton', email = 'hamilton@apc.in2p3.fr'},
     {name = 'Mikhail Stolpovskiy', email = 'mikhail.stolpovskiy@apc.univ-paris7.fr'},
     {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
+    {name = 'Alexandre Huchet', email = 'huchet@apc.in2p3.fr'},
+    {name = 'Tom Laclavere', email = 'laclavere@apc.in2p3.fr'},
     {name = 'Louise Mousset', email = 'mousset@apc.in2p3.fr'},
     {name = 'Mathias Régnier', email = 'mathias.p.regnier@gmail.com'},
 ]
 maintainers = [
     {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
+    {name = 'Alexandre Huchet', email = 'huchet@apc.in2p3.fr'},
+    {name = 'Tom Laclavere', email = 'laclavere@apc.in2p3.fr'},
 ]
 description = 'Simulation and map-making tools for the QUBIC experiment.'
 readme = 'README.md'
@@ -36,37 +34,37 @@ classifiers = [
     'Programming Language :: Fortran',
     'Development Status :: 5 - Production/Stable',
     'Intended Audience :: Science/Research',
-    'Operating System :: OS Independent',
+    'Operating System :: POSIX :: Linux',
     'Topic :: Scientific/Engineering',
     'Topic :: Scientific/Engineering :: Astronomy',
     'Topic :: Scientific/Engineering :: Physics',
 ]
 requires-python = '>=3.8, <=3.13'
 dependencies = [
-    'astropy',
-    'camb',
-    'corner',
-    'emcee',
-    'GetDist',
-    'healpy',
-    'iminuit',
-    'pandas',
-    'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
-    'progressbar',
-    'py-cpuinfo',
-    'pyoperators[fft]>=0.13.18',
-    'pysimulators>=1.2.3',
-    'pysm3',
-    'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
-    'satorchipy @ git+https://github.com/satorchi/mypy@master',
-    'scipy',
-    'bottleneck',
-    'scikit-learn',
-    'schwimmbad',
-    'imageio'
+	     'numpy',
+	     'astropy',
+             'camb',
+             'corner',
+             'emcee',
+             'GetDist',
+             'healpy',
+             'iminuit',
+             'pandas',
+             'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
+             'progressbar',
+             'py-cpuinfo',
+             'pyoperators[fft]>=0.13.18',
+             'pysimulators>=1.2.3',
+             'pysm3',
+             'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
+             'satorchipy @ git+https://github.com/satorchi/mypy@master',
+             'scipy',
+             'bottleneck',
+             'scikit-learn',
+             'schwimmbad',
+             'imageio'
 ]
 dynamic = ['version']
-
 
 [project.optional-dependencies]
 mpi = ['mpi4py']
@@ -90,21 +88,16 @@ exclude_lines = [
 show_missing = true
 skip_covered = true
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.setuptools.dynamic]
+version = {attr = "qubic.__version__"}
+
 [tool.pytest.ini_options]
-addopts = "-ra --cov=qubic"
-testpaths = [
-    "tests",
-]
-markers = [
-    "mpi: mark tests to be run using mpirun.",
+addopts = [
+    "--import-mode=importlib",
 ]
 
-[tool.setuptools.packages]
-find = {}
-
-[tool.setuptools.package-data]
-'*' = ['*']
-
-[tool.setuptools_scm]
-version_scheme = 'post-release'
-fallback_version = '0.0.0'
+[tool.hatch.version]
+path = "qubic/__init__.py"

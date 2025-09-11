@@ -329,7 +329,7 @@ class GPStools:
             Last observation index, by default -1
         """
 
-        fig, ax1 = plt.subplots(figsize=(15, 5))
+        fig, ax1 = plt.subplots(figsize=(15, 5), dpi=300)
 
         color_a = "tab:pink"
         color_r = "tab:red"
@@ -337,8 +337,8 @@ class GPStools:
         color_d = "tab:green"
         color_c = "tab:brown"
 
-        ax1.set_xlabel("Date")
-        ax1.set_ylabel("Position Vector Components (m)", color=color_r)
+        ax1.set_xlabel("Date", fontsize=18)
+        ax1.set_ylabel("Position Vector Components (m)", color=color_r, fontsize=18)
         ax1.plot(self._datetime[index_start:index_stop], self.rpN[index_start:index_stop], color=color_r, label="North component")
         ax1.plot(self._datetime[index_start:index_stop], self.rpE[index_start:index_stop], color=color_b, label="East component")
         ax1.plot(self._datetime[index_start:index_stop], self.rpD[index_start:index_stop], color=color_d, label="Up component")
@@ -347,12 +347,12 @@ class GPStools:
 
         ax2.plot(self._datetime[index_start:index_stop], self.roll[index_start:index_stop], color=color_a, label="Roll angle")
         ax2.plot(self._datetime[index_start:index_stop], self.yaw[index_start:index_stop], color=color_c, label="Yaw angle")
-        ax2.set_xlabel("Date")
-        ax2.set_ylabel("Angles (rad)", color=color_a)
+        ax2.set_xlabel("Date", fontsize=18)
+        ax2.set_ylabel("Angles (rad)", color=color_a, fontsize=18)
 
         fig.tight_layout()
-        ax1.set_title("GPS Data")
-        fig.legend(bbox_to_anchor=(1, 1), loc="upper left")
+        ax1.set_title("GPS Data", fontsize=25)
+        fig.legend(bbox_to_anchor=(0.8, 0.9), fontsize=15)
         if position_limit is not None:
             ax1.set_ylim(position_limit)
         if angle_limit is not None:

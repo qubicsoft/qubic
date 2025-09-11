@@ -1,9 +1,10 @@
-import numpy as np
 import healpy as hp
-from scipy import sparse
-from pygsp import graphs
-import torch
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from pygsp import graphs
+from scipy import sparse
+
 from qubic.lib.AnalyticalSolution.utils import get_high_coverage_indexes
 
 
@@ -45,7 +46,7 @@ def healpix_weightmatrix(nside=16, nest=True, indexes=None, dtype=np.float32):
         row_index = [inv_map[el] for el, k in zip(row_index, keep) if k]
 
     coords = np.asarray(coords, dtype=dtype)
-    distances = np.sum((coords[row_index] - coords[col_index])**2, axis=1)
+    distances = np.sum((coords[row_index] - coords[col_index]) ** 2, axis=1)
     kernel_width = float(np.mean(distances))
     weights = np.exp(-distances / (2 * kernel_width)).astype(dtype)
 
@@ -57,7 +58,7 @@ def healpix_graph(nside=16, nest=True, lap_type="normalized", indexes=None, dtyp
 
     if indexes is None:
         indexes = range(12 * nside**2)
-    
+
     all_pix = range(hp.nside2npix(nside))
     x, y, z = hp.pix2vec(nside, all_pix, nest=nest)
     coords = np.vstack([x, y, z]).T[indexes]
@@ -78,7 +79,7 @@ def get_high_coverage_indexes(cov_map, threshold=0.15):
     """Ring-ordered pixel indices with coverage ≥ threshold · max(coverage)."""
 
     cov = np.asarray(cov_map)
-    unseen = (cov == hp.UNSEEN)
+    unseen = cov == hp.UNSEEN
     vmax = np.nanmax(cov[~unseen]) if (~unseen).any() else 0.0
     if vmax <= 0:
         return np.array([], dtype=int)
@@ -124,12 +125,15 @@ def plot_sky_3d(graph_map, elev=10, azim=0, edges=False, vmin=None, vmax=None):
     fig = plt.figure(figsize=[8, 6])
     ax = fig.add_subplot(111, projection="3d")
     graph_map.plot_signal(sig, show_edges=edges, ax=ax, limits=[vmin, vmax])
-    ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
     ax.view_init(elev=elev, azim=azim)
     plt.show()
 
 
 # ---------- Multi-feature variants (I,Q,U,Coverage) ----------
+
 
 def healpix_weightmatrix_multifeature(nside=16, nest=True, indexes=None, dtype=np.float32):
     """Adjacency for multi-feature graphs (same as scalar case)."""
@@ -137,12 +141,12 @@ def healpix_weightmatrix_multifeature(nside=16, nest=True, indexes=None, dtype=n
     return healpix_weightmatrix(nside=nside, nest=nest, indexes=indexes, dtype=dtype)
 
 
-def healpix_graph_multifeature(nside=16, nest=True, lap_type="normalized", indexes=None,  dtype=np.float32):
+def healpix_graph_multifeature(nside=16, nest=True, lap_type="normalized", indexes=None, dtype=np.float32):
     """Pygsp Graph with signal shape (N,4): [I,Q,U,Coverage]."""
 
     if indexes is None:
         indexes = range(12 * nside**2)
-    
+
     all_pix = range(hp.nside2npix(nside))
     x, y, z = hp.pix2vec(nside, all_pix, nest=nest)
     coords = np.vstack([x, y, z]).T[indexes]
@@ -181,6 +185,8 @@ def plot_sky_3d_multifeature(graph_map, feature_index=0, elev=10, azim=0, edges=
     fig = plt.figure(figsize=[8, 6])
     ax = fig.add_subplot(111, projection="3d")
     graph_map.plot_signal(sig, show_edges=edges, ax=ax, limits=[vmin, vmax])
-    ax.set_xticks([]); ax.set_yticks([]); ax.set_zticks([])
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
     ax.view_init(elev=elev, azim=azim)
     plt.show()

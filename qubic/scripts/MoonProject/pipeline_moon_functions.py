@@ -33,6 +33,7 @@ from astropy.time import Time
 from astropy.coordinates import EarthLocation, AltAz, get_moon
 
 #### QUBIC IMPORT
+import qubicpack as qp
 from qubicpack.qubicfp import qubicfp
 import qubicpack.pixel_translation as pt
 import qubic.lib.Calibration.Qfiber as ft
@@ -159,6 +160,29 @@ def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
     mapcount[unseen] = unseen_val
     mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
     return mymap, mapcount
+
+# Function to go from QubicSoft (Sims) indices (0-247) to QubicPack (data) indices (0-255)
+### The 8 thermometers are not in QubicSoft
+
+def iQS2iQP(indexQS):
+    qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
+    return qpnumi+(qpasici-1)*128-1
+
+def iQP2iQS(indexQP):
+    QStesnum = qp.pix2tes.tes2pix(indexQP%128+1, indexQP//128+1)
+    return QStesnum-1
+
+def get_ObsSite(name):
+    if name == "salta":
+        Salta_CNEA = {'lat':-24.731358*u.deg,
+                    'lon':-65.409535*u.deg,
+                    'height':1152*u.m,
+                    'UTC_Offset':-3*u.hour}
+        Obs_Site = Salta_CNEA
+    else:
+        raise ValueError("Site name '{}' is unknown. Only 'salta' is implemented for now.")
+    return Obs_Site
+
 
 def sparse_2d_to_fullmap(mymap, ipos_grid, jpos_grid):
     # time_0 = time.time()
@@ -1127,8 +1151,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
             for i in range(3):
                 axs[i].set_xlabel('Azimuth [degrees]')
             axs[2].set_title('Residuals')
-    
-    if doplot:
         axs = pmp.plot_fit_img(mapij, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=m.values[1], jfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
         return m, fitted, axs
     return m, fitted
@@ -1495,16 +1517,21 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
     if data is None: # first read the data from disk if needed
         ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
         FPidentity = pt.make_id_focalplane()
-        QPidx = np.array([FPidentity[fp_idx].QPindex for fp_idx in range(len(FPidentity)) if FPidentity[fp_idx].quadrant == 3]).reshape(17, 17) # TD quadrant = 3
-        QPidx[11:15, 0] = np.array([4, 36, 68, 100]) - 1 # thermometers
-        QPidx[-1, 2:6] = np.array([132, 164, 196, 228]) - 1 # thermometers
+        quadrant = 3
+        QPidx = np.array([FPidentity[fp_idx].QPindex for fp_idx in range(len(FPidentity)) if FPidentity[fp_idx].quadrant == quadrant]).reshape(17, 17)
+        if quadrant == 3: # TD quadrant = 3
+            QPidx[11:15, 0] = np.array([4, 36, 68, 100]) - 1 # thermometers of quadrant 3
+            QPidx[-1, 2:6] = np.array([132, 164, 196, 228]) - 1 # thermometers of quadrant 3
+        elif quadrant == 2:
+            QPidx[2:6, 0] = np.array([4, 36, 68, 100]) - 1 # thermometers (might not be the right numbers at the right place)
+            QPidx[0, 11:15] = np.array([132, 164, 196, 228]) - 1 # thermometers
         QPidx_old = QPidx.flatten()[QPidx.flatten()>=0]
         QPidx = np.flip(np.flip(QPidx, axis=0).T, axis=0)
         QPidx = QPidx.flatten()
         QPidx = QPidx[QPidx>=0]
         sort_idx_old = np.argsort(QPidx_old)
         QPidx = QPidx[sort_idx_old]
-        QPidx = QPidx_old # if want old
+        # QPidx = QPidx_old # if want old
         tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False)
         # az = -az - np.max(np.abs(az)) # the map doesn't look great, there probably isn't an azimuth inversion then?
         az += az_qubic

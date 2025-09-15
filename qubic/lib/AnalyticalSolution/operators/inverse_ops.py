@@ -1,4 +1,3 @@
-# qubic/lib/AnalyticalSolution/operators/inverse_ops.py
 import math
 
 import numpy as np
@@ -83,24 +82,23 @@ class InverseTransmissionTrainable(nn.Module):
         self.dtype = dtype
 
         self.T_optics = float(np.prod(qubic_instrument.optics.components["transmission"]))
-        eta = np.array(qubic_instrument.detector.efficiency, dtype=float)  # (D,)
-        D = eta.size
+        eta = np.array(qubic_instrument.detector.efficiency, dtype=float)
 
         if mode == "global_eta":
             # initialize at mean efficiency
             self.eta = nn.Parameter(_as_tensor(float(eta.mean()), dtype=dtype, device=device))
         elif mode == "per_detector_eta":
-            self.eta_vec = nn.Parameter(_as_tensor(eta, dtype=dtype, device=device))  # (D,)
+            self.eta_vec = nn.Parameter(_as_tensor(eta, dtype=dtype, device=device))
         else:  # direct_invT
             invT0 = 1.0 / (self.T_optics * eta)
-            self.invT_vec = nn.Parameter(_as_tensor(invT0, dtype=dtype, device=device))  # (D,)
+            self.invT_vec = nn.Parameter(_as_tensor(invT0, dtype=dtype, device=device))
 
     def forward(self, x):
         if self.mode == "global_eta":
-            invT_det = 1.0 / (self.T_optics * self.eta)  # scalar
+            invT_det = 1.0 / (self.T_optics * self.eta)
             return x * invT_det
         elif self.mode == "per_detector_eta":
-            invT_det = 1.0 / (self.T_optics * self.eta_vec)  # (D,)
+            invT_det = 1.0 / (self.T_optics * self.eta_vec)
             return _broadcast_det(x, invT_det)
         else:
             return _broadcast_det(x, self.invT_vec)

@@ -321,17 +321,43 @@ def get_new_azel(azt, elt, azmoon, elmoon):
     return newazt, newelt
 
 
-def spherical2cartesian(rho, theta, phi):
+def spherical2cartesian(rho, theta, phi, coord="spherical", axis="first"):
+    if coord == "horizontal":
+        theta_ = theta.copy()
+        theta = np.pi/2 - np.radians(phi.copy())
+        phi = np.radians(theta_)
+        # theta, phi = np.pi/2 - np.radians(phi), np.radians(theta)
+    elif coord != "spherical":
+        raise ValueError("Argument coord = {} not understood.".format(coord))
     x = rho * np.sin(theta) * np.cos(phi)
     y = rho * np.sin(theta) * np.sin(phi)
     z = rho * np.cos(theta)
-    return x, y, z
+    res = np.array([x, y, z])
+    if axis == "first":
+        return res
+    elif axis == "last":
+        return np.moveaxis(res, 0, -1)
+    else:
+        raise ValueError("Argument axis = {} not understood.".format(axis))
 
-def cartesian2spherical(x, y, z):
+def cartesian2spherical(x, y, z, coord="spherical", axis="first"):
     rho = np.sqrt(x**2 + y**2 + z**2)
     theta = np.arccos(z/rho)
     phi = np.arctan2(y, x)
-    return rho, theta, phi
+    if coord == "horizontal":
+        theta_ = theta.copy()
+        theta = np.degrees(phi).copy()
+        phi = 90 - np.degrees(theta_)
+        # theta, phi = np.degrees(phi), 90 - np.degrees(theta)
+    elif coord != "spherical":
+        raise ValueError("Argument coord = {} not understood.".format(coord))
+    res = np.array([rho, theta, phi])
+    if axis == "first":
+        return res
+    elif axis == "last":
+        return np.moveaxis(res, 0, -1)
+    else:
+        raise ValueError("Argument axis = {} not understood.".format(axis))
 
 def get_perp_vect(point_A, point_B, point_C): # get the vector perpendicular to the plane with these three points
     if len(np.shape(point_A)) == 2:
@@ -407,7 +433,7 @@ def get_simple_rotation_matrix(axis, angle):
     return R
 
 
-def get_new_azel_v2(azt, elt, azmoon, elmoon):
+def get_new_azel_v2(azt, elt, azmoon, elmoon): # 2 rotations
     rho_sphere = 1
     moon_sph = np.radians(np.array([90 - elmoon, azmoon]))
     moon_pos = spherical2cartesian(rho_sphere, moon_sph[0], moon_sph[1])
@@ -466,7 +492,8 @@ def get_new_azel_v2(azt, elt, azmoon, elmoon):
     print(np.shape(new_los_pos))
     x, y, z = new_los_pos
     print(np.shape(x), np.shape(y), np.shape(z))
-    rho, theta, phi = cartesian2spherical(x, y, z)
+    res = cartesian2spherical(x, y, z)
+    rho, theta, phi = res[..., 0], res[..., 1], res[..., 2]
     if not np.all(np.isclose(rho, 1)):
         raise ValueError("The radius of the sphere is not one.")
     
@@ -475,7 +502,7 @@ def get_new_azel_v2(azt, elt, azmoon, elmoon):
     return newazt, newelt
 
 
-def get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr):
+def get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr): # this was to get the position of each detector separately I guess
     newazt_ = (azt - azmoon) * np.cos(np.radians(elt))
     newelt_ = (elt - elmoon)
     newelt = newelt_[:, None] - det_pos[..., 1]
@@ -493,6 +520,60 @@ def get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr):
 
     # newazt = (azt - azmoon - det_pos[..., 0]) * np.cos(np.radians(elt))
     # newelt = (elt - elmoon - det_pos[..., 1])
+    return newazt, newelt
+
+def get_circle_values(A, B, C):
+    # https://stackoverflow.com/questions/20314306/find-arc-circle-equation-given-three-points-in-space-3d
+    # get circle centre and radius from 3 points in cartesian coordinates
+    # note that a is the distance of the side opposite to A (i.e. BC)
+    a = np.linalg.norm(C - B, axis=-1) # we use only the last dimension for norm
+    b = np.linalg.norm(C - A, axis=-1)
+    c = np.linalg.norm(B - A, axis=-1)
+    s = (a + b + c) / 2
+    R = a*b*c / 4 / np.sqrt(s * (s - a) * (s - b) * (s - c)) # radius
+    b1 = a*a * (b*b + c*c - a*a)
+    b2 = b*b * (a*a + c*c - b*b)
+    b3 = c*c * (a*a + b*b - c*c)
+    P = np.einsum("ijk,ik->ij", np.stack((A, B, C), axis=-1), np.stack((b1, b2, b3), axis=-1)) # much faster than np.dot
+    # P = np.stack((A, B, C), axis=-1).dot(np.stack((b1, b2, b3), axis=0)) # np.dot is dot product on last axis of first array and second to last of second array
+    P /= (b1 + b2 + b3)[:, None] # circle centre (renormalised here because above formula works for normalised positions)
+    return P, R
+
+
+def get_new_azel_v4(azt, elt, azmoon, elmoon): # trying to get a conversion that keeps angles and distances
+    rho = 1
+    pointing_pos = spherical2cartesian(rho, azt, elt, coord="horizontal", axis="last") #B
+    moon_pos = spherical2cartesian(rho, azmoon, elmoon, coord="horizontal", axis="last") #A
+    opp_moon_pos = spherical2cartesian(rho, azmoon - 180, elmoon, coord="horizontal", axis="last") # the point opposite from the Moon on the horizontal small circle going through the Moon
+    centres, radii = get_circle_values(pointing_pos, moon_pos, opp_moon_pos) # centres #C of the small circle that contains the Moon position and the pointing position
+
+    vec_A = moon_pos - centres
+    vec_B = pointing_pos - centres
+    print("shapes vec_A, vec_B", np.shape(vec_A), np.shape(vec_B))
+
+    angle_small_circle = np.arccos(np.einsum("ij,ij->i", vec_A, vec_B)/(np.linalg.norm(vec_A, axis=-1) * np.linalg.norm(vec_B, axis=-1))) # compute the angle between CA and CB
+    print("angle", np.shape(angle_small_circle), np.min(angle_small_circle), np.max(angle_small_circle))
+    # dist_pointing = radii * angle_small_circle # it might be bette t keep the angle rather than the distance
+    # print("dist_pointing", np.shape(dist_pointing))
+    # perp_vec_horiz_plane = np.array([0, 0, 1]) # This vector is the perpendicular vector to the plane parallel to horizon with the Moon
+    perp_vec_pointing_plane = centres # origin of coordinate system is (0, 0, 0) here. This vector is the perpendicular vector to the plane with pointing and Moon
+    # angle_between_planes = np.arccos(np.einsum("j,ij->i", perp_vec_horiz_plane, perp_vec_pointing_plane)/(np.linalg.norm(perp_vec_horiz_plane) * np.linalg.norm(perp_vec_pointing_plane, axis=-1))) # compute the angle between the plane that holds the horizontal small circle with the Moon and the plane that holds the small circle going through the pointing and the Moon
+    
+    vec_horizon_moon = np.array([1, 0, 0]) # vector position of the Moon in the newazt, newelt system
+    other_vec = np.cross(vec_horizon_moon, perp_vec_pointing_plane)
+    print(np.shape(other_vec))
+    # angle_final_great_circle = dist_pointing/rho # the angular distance to keep the same length for the circle arc
+    angle_final_great_circle = angle_small_circle
+    new_pointing = rho * (np.cos(angle_final_great_circle[:, None]) * vec_horizon_moon + np.sin(angle_final_great_circle[:, None]) * other_vec) # get the geodesic on the sphere between the two points
+    
+    res = cartesian2spherical(new_pointing[:, 0], new_pointing[:, 1], new_pointing[:, 2], coord="horizontal", axis="last")
+    rho, newazt, newelt = res[..., 0], res[..., 1], res[..., 2]
+    
+    print("azt", np.min(azt), np.max(azt))
+    print("newazt", np.min(newazt), np.max(newazt))
+    print("elt", np.min(elt), np.max(elt))
+    print("newelt", np.min(newelt), np.max(newelt))
+
     return newazt, newelt
 
 
@@ -1577,7 +1658,7 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         # aze
         ### Identify scan types and numbers
         scantype_hk, azt, elt, scantype, vmean = identify_scans(thk, az, el, 
-                                                                    tt=tt, doplot=True, 
+                                                                    tt=tt, doplot=False, 
                                                                     plotrange=[0, 2000], 
                                                                     thr_speedmin=speedmin)
         
@@ -1588,6 +1669,7 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos)
+        newazt, newelt = get_new_azel_v4(azt, elt, azmoon, elmoon)
         
         # fig, axs = plt.subplots(1, 2, figsize=(15, 5))
         # ax = axs[0]
@@ -2171,7 +2253,7 @@ def get_great_circle_traj(point_A, point_B, sphere_centre, sphere_radius, npoint
     ang_dist_rad = np.radians(ang_dist_deg) # the length of the line is fixed (ang_dist_deg + 2*delta_angle_deg)
     delta_angle_rad = np.radians(delta_angle_deg)
     plane = get_plane(point_A, point_B, sphere_centre, offset=offset) # compute the equation of the plane with A, B and the sphere centre C
-    vec_1, vec_2 = get_vect_plane(plane, point_A, sphere_centre, offset=offset) # create two orthogonal vectors, one pointing at A
+    vec_1, vec_2 = get_vect_plane(plane, point_A, sphere_centre, offset=offset) # create two orthogonal vectors on the plane, vec_1 pointing at A
     # vec_A = point_A - sphere_centre
     # vec_B = point_B - sphere_centre
     # angle = np.arccos(np.dot(vec_A, vec_B)/(np.linalg.norm(vec_A) * np.linalg.norm(vec_B))) # compute the angle between CA and CB

@@ -542,37 +542,96 @@ def get_circle_values(A, B, C):
 
 def get_new_azel_v4(azt, elt, azmoon, elmoon): # trying to get a conversion that keeps angles and distances
     rho = 1
+    origin = np.array([0, 0, 0])
+    # azt = azmoon + 1e-10
+    # elt = elmoon + np.linspace(-30, 20, len(elmoon))
+    # azt = azmoon + np.linspace(-30, 20, len(elmoon))
+    # elt = elmoon
     pointing_pos = spherical2cartesian(rho, azt, elt, coord="horizontal", axis="last") #B
     moon_pos = spherical2cartesian(rho, azmoon, elmoon, coord="horizontal", axis="last") #A
     opp_moon_pos = spherical2cartesian(rho, azmoon - 180, elmoon, coord="horizontal", axis="last") # the point opposite from the Moon on the horizontal small circle going through the Moon
-    centres, radii = get_circle_values(pointing_pos, moon_pos, opp_moon_pos) # centres #C of the small circle that contains the Moon position and the pointing position
 
-    vec_A = moon_pos - centres
-    vec_B = pointing_pos - centres
+    # we apply a first rotation around the z axis to put the Moon on the y=0 plane
+    # this rotation shoudn't distort the image
+    rotation_matrix1 = get_simple_rotation_matrix("z", np.radians(azmoon))
+    new_pointing_pos = np.einsum("li,ikl->lk", pointing_pos, rotation_matrix1)
+    new_moon_pos = np.einsum("li,ikl->lk", moon_pos, rotation_matrix1)
+    new_opp_moon_pos = np.einsum("li,ikl->lk", opp_moon_pos, rotation_matrix1)
+
+    centres, radii = get_circle_values(new_pointing_pos, new_moon_pos, new_opp_moon_pos) # centres #C of the small circle that contains the Moon position and the pointing position
+
+    vec_A = new_moon_pos - centres
+    vec_B = new_pointing_pos - centres
     print("shapes vec_A, vec_B", np.shape(vec_A), np.shape(vec_B))
 
     angle_small_circle = np.arccos(np.einsum("ij,ij->i", vec_A, vec_B)/(np.linalg.norm(vec_A, axis=-1) * np.linalg.norm(vec_B, axis=-1))) # compute the angle between CA and CB
+    sign_angle = np.sign(np.cross(vec_A, vec_B, axis=-1)[..., 2]) # the sign of the z component should give us the sign of the angle
+    print("sign_angle", sign_angle)
+    angle_small_circle *= sign_angle
     print("angle", np.shape(angle_small_circle), np.min(angle_small_circle), np.max(angle_small_circle))
-    # dist_pointing = radii * angle_small_circle # it might be bette t keep the angle rather than the distance
-    # print("dist_pointing", np.shape(dist_pointing))
-    # perp_vec_horiz_plane = np.array([0, 0, 1]) # This vector is the perpendicular vector to the plane parallel to horizon with the Moon
-    perp_vec_pointing_plane = centres # origin of coordinate system is (0, 0, 0) here. This vector is the perpendicular vector to the plane with pointing and Moon
+    dist_pointing = radii * angle_small_circle # it might be better to keep the distance rather than the angle
+    print("radii", np.min(radii), np.max(radii), radii)
+    print("dist_pointing", np.shape(dist_pointing), np.min(dist_pointing), np.max(dist_pointing), dist_pointing)
+    print("norm centres", np.min(np.linalg.norm(centres, axis=-1)), np.max(np.linalg.norm(centres, axis=-1)))
+    perp_vec_pointing_plane = (centres - origin)/np.linalg.norm(centres - origin, axis=-1)[:, None] # origin of coordinate system is (0, 0, 0) here. This vector is the perpendicular vector to the plane with pointing and Moon
     # angle_between_planes = np.arccos(np.einsum("j,ij->i", perp_vec_horiz_plane, perp_vec_pointing_plane)/(np.linalg.norm(perp_vec_horiz_plane) * np.linalg.norm(perp_vec_pointing_plane, axis=-1))) # compute the angle between the plane that holds the horizontal small circle with the Moon and the plane that holds the small circle going through the pointing and the Moon
     
-    vec_horizon_moon = np.array([1, 0, 0]) # vector position of the Moon in the newazt, newelt system
-    other_vec = np.cross(vec_horizon_moon, perp_vec_pointing_plane)
+    vec_horizon_moon = (np.array([1, 0, 0]) - origin)/np.linalg.norm(np.array([1, 0, 0]) - origin, axis=-1) # vector position of the Moon in the newazt, newelt system
+    other_vec = np.cross(perp_vec_pointing_plane, vec_horizon_moon)
+    print("norm perp_vec_pointing_plane", np.min(np.linalg.norm(perp_vec_pointing_plane, axis=-1)), np.max(np.linalg.norm(perp_vec_pointing_plane, axis=-1)))
+    print("norm vec_horizon_moon", np.min(np.linalg.norm(vec_horizon_moon)), np.max(np.linalg.norm(vec_horizon_moon)))
+    print("np.linalg.norm(other_vec, axis=-1)", np.min(np.linalg.norm(other_vec, axis=-1)), np.max(np.linalg.norm(other_vec, axis=-1)))
+    other_vec /= np.linalg.norm(other_vec, axis=-1)[:, None] # get rid of norm(sin(angle(perp_vec, vec_horiz)))
+    print("other_vec", other_vec)
+    print("norm other_vec", np.linalg.norm(other_vec, axis=-1))
     print(np.shape(other_vec))
-    # angle_final_great_circle = dist_pointing/rho # the angular distance to keep the same length for the circle arc
-    angle_final_great_circle = angle_small_circle
+    angle_final_great_circle = dist_pointing/rho # the angular distance to keep the same length for the circle arc
+    # angle_final_great_circle = angle_small_circle
     new_pointing = rho * (np.cos(angle_final_great_circle[:, None]) * vec_horizon_moon + np.sin(angle_final_great_circle[:, None]) * other_vec) # get the geodesic on the sphere between the two points
     
+    ax = plt.figure().add_subplot(projection='3d')
+
+    # draw sphere
+    u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
+    x = np.cos(u)*np.sin(v)
+    y = np.sin(u)*np.sin(v)
+    z = np.cos(v)
+    ax.plot_wireframe(x, y, z, color="r")
+
+    # Prepare arrays x, y, z
+    theta = np.linspace(-2 * np.pi, 2 * np.pi, 100)
+    for i in range(1):
+        direction = rho * (np.cos(theta[:, None]) * vec_horizon_moon + np.sin(theta[:, None]) * other_vec[i*100])
+        print(np.linalg.norm(vec_horizon_moon))
+        print(np.linalg.norm(other_vec[i*100]))
+        print(rho)
+        print(np.linalg.norm(direction, axis=-1))
+        x, y, z = direction[..., 0], direction[..., 1], direction[..., 2]
+        ax.scatter(x, y, z, label="{}".format(i*100))
+    plt.legend()
+    plt.ylim([-1, 1])
+
+    # draw a vector
+    ax.quiver(0, 0, 0, vec_horizon_moon[0], vec_horizon_moon[1], vec_horizon_moon[2], length=1.0, color="k")
+    ax.quiver(0, 0, 0, other_vec[0, 0], other_vec[0, 1], other_vec[0, 2], length=1.0, color="orange")
+    ax.quiver(0, 0, 0, perp_vec_pointing_plane[0, 0], perp_vec_pointing_plane[0, 1], perp_vec_pointing_plane[0, 2], length=1.0, color="green")
+    direction = rho * (np.cos(angle_final_great_circle[0]) * vec_horizon_moon + np.sin(angle_final_great_circle[0]) * other_vec[0])
+    ax.quiver(0, 0, 0, direction[0], direction[1], direction[2], length=1.0)
+    plt.show()
+
+    # sys.exit()
+
+
     res = cartesian2spherical(new_pointing[:, 0], new_pointing[:, 1], new_pointing[:, 2], coord="horizontal", axis="last")
     rho, newazt, newelt = res[..., 0], res[..., 1], res[..., 2]
     
     print("azt", np.min(azt), np.max(azt))
     print("newazt", np.min(newazt), np.max(newazt))
-    print("elt", np.min(elt), np.max(elt))
+    newazt_ = (azt - azmoon) * np.cos(np.radians(elt))
+    print("newazt_", np.min(newazt_), np.max(newazt_))
     print("newelt", np.min(newelt), np.max(newelt))
+    newelt_ = (elt - elmoon)
+    print("newelt_", np.min(newelt_), np.max(newelt_))
 
     return newazt, newelt
 

@@ -27,7 +27,6 @@ from pyoperators import (
 from pyoperators.utils.mpi import as_mpi
 from pysimulators import (
     Acquisition,
-    FitsArray,
 )
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysimulators.noises import (
@@ -510,38 +509,43 @@ class PlanckAcquisition:
         self.band = band
         self.nside = self.scene.nside
 
-        if band == 30:
-            filename = "Variance_Planck30GHz_Kcmb2_ns256.fits"
-            var = np.zeros((12 * self.scene.nside**2, 3))
-            for i in range(3):
-                var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-            sigma = np.sqrt(var)
-        elif band == 44:
-            filename = "Variance_Planck44GHz_Kcmb2_ns256.fits"
-            var = np.zeros((12 * self.scene.nside**2, 3))
-            for i in range(3):
-                var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-            sigma = np.sqrt(var)
-        elif band == 70:
-            filename = "Variance_Planck70GHz_Kcmb2_ns256.fits"
-            var = np.zeros((12 * self.scene.nside**2, 3))
-            for i in range(3):
-                var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-            sigma = np.sqrt(var)
-        elif band == 143:
-            filename = "Variance_Planck143GHz_Kcmb2_ns256.fits"
-            self.var = np.array(FitsArray(PATH + filename))
-            sigma = np.sqrt(self.var)
-        elif band == 217:
-            filename = "Variance_Planck217GHz_Kcmb2_ns256.fits"
-            self.var = np.array(FitsArray(PATH + filename))
-            sigma = np.sqrt(self.var)
-        else:
-            filename = "Variance_Planck353GHz_Kcmb2_ns256.fits"
-            var = np.zeros((12 * self.scene.nside**2, 3))
-            for i in range(3):
-                var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-            sigma = np.sqrt(var)
+        # if band == 30:
+        #     filename = "Variance_Planck30GHz_Kcmb2_ns256.fits"
+        #     var = np.zeros((12 * self.scene.nside**2, 3))
+        #     for i in range(3):
+        #         var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
+        #     sigma = np.sqrt(var)
+        # elif band == 44:
+        #     filename = "Variance_Planck44GHz_Kcmb2_ns256.fits"
+        #     var = np.zeros((12 * self.scene.nside**2, 3))
+        #     for i in range(3):
+        #         var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
+        #     sigma = np.sqrt(var)
+        # elif band == 70:
+        #     filename = "Variance_Planck70GHz_Kcmb2_ns256.fits"
+        #     var = np.zeros((12 * self.scene.nside**2, 3))
+        #     for i in range(3):
+        #         var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
+        #     sigma = np.sqrt(var)
+        # elif band == 143:
+        #     filename = "Variance_Planck143GHz_Kcmb2_ns256.fits"
+        #     self.var = np.array(FitsArray(PATH + filename))
+        #     sigma = np.sqrt(self.var)
+        # elif band == 217:
+        #     filename = "Variance_Planck217GHz_Kcmb2_ns256.fits"
+        #     self.var = np.array(FitsArray(PATH + filename))
+        #     sigma = np.sqrt(self.var)
+        # else:
+        #     filename = "Variance_Planck353GHz_Kcmb2_ns256.fits"
+        #     var = np.zeros((12 * self.scene.nside**2, 3))
+        #     for i in range(3):
+        #         var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
+        #     sigma = np.sqrt(var)
+        filename = f"Variance_Planck{band}GHz_Kcmb2_ns256.fits"
+        var = np.zeros((12 * self.scene.nside**2, 3))
+        for i in range(3):
+            var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
+        sigma = np.sqrt(var)
 
         if scene.kind == "I":
             sigma = sigma[:, 0]
@@ -1058,7 +1062,7 @@ class OtherDataParametric:
         R = ReshapeOperator(invN.shapeout, invN.shape[0])
         return R(invN(R.T))
 
-    def get_operator(self, A, fwhm=None, nu_co=None, comm=None):
+    def get_operator(self, A, fwhm=None, comm=None):
         R2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
 
         Operator = []
@@ -1085,7 +1089,7 @@ class OtherDataParametric:
 
         return BlockColumnOperator(Operator, axisout=0)
 
-    def get_noise(self, seed=None, fact=None, seenpix=None):
+    def get_noise(self, planck_ntot, seed=None, fact=None, seenpix=None):
         state = np.random.get_state()
         np.random.seed(seed)
         out = np.zeros((len(self.nus), self.npix, 3))
@@ -1101,35 +1105,101 @@ class OtherDataParametric:
         if seenpix is not None:
             out[:, seenpix, :] = 0
         np.random.set_state(state)
-        return R2tod(out)
+        return out * planck_ntot
 
 
 class PlanckAcquisitionTest:
-    def __init__(self, nus, nside, comps, nsub_planck=2, use_pysm=False):
+    def __init__(self, nus, nside, comps=None, nsub_planck=1, use_pysm=False):
+        self.nus = nus
+        self.nside = nside
+        self.comps = comps
         self.nsub_planck = nsub_planck
         self.use_pysm = use_pysm
 
-        self.nus = nus
-        self.nside = nside
         self.npix = 12 * self.nside**2
-        self.bandwith = []
         self.noise = []
         self.fwhm = []
+        self.sigma = []
+        self.bandwidth = []
+
         for nu in self.nus:
             _planckData = pickle.load(open(PATH + f"Planck{nu}GHz.pkl", "rb"))
+
+            self.sigma.append(hp.ud_grade(_planckData[f"noise{nu}"].T, self.nside).T)
             self.noise.append(_planckData[f"noise{nu}"])
             self.fwhm.append(_planckData[f"fwhm{nu}"])
+            self.bandwidth.append(_planckData[f"bw{nu}"])
 
-            if nsub_planck == 1:
-                self.bandwith.append(0)
+        if self.nsub_planck == 1:
+            self.allnus = nus
+        else:
+            self.allnus = []
+            for inu, nu in enumerate(self.nus):
+                self.allnus += list(np.linspace(nu - self.bandwidth[inu] / 2, nu + self.bandwidth[inu] / 2, self.nsub_planck))
+            self.allnus = np.array(self.allnus)
+
+    def get_maps(self):
+        return 0
+
+    def get_noise(self, planck_ntot, seed=None, fact=None, seenpix=None):
+        state = np.random.get_state()
+        np.random.seed(seed)
+        out = np.zeros((len(self.nus), self.npix, 3))
+
+        for inu in range(len(self.nus)):
+            if fact is None:
+                f = 1
             else:
-                self.bandwith.append(_planckData[f"bw{nu}"])
+                f = fact[inu]
+            sigma = f * self.sigma[inu]
+            out[inu] = np.random.standard_normal((self.npix, 3)) * sigma
+        if seenpix is not None:
+            out[:, seenpix, :] = 0
+        np.random.set_state(state)
 
-        self.comps = comps
-        self.allnus = []
-        for inu, nu in enumerate(self.nus):
-            self.allnus += list(np.linspace(nu - self.bandwith[inu] / 2, nu + self.bandwith[inu] / 2, self.nsub_planck))
-        self.allnus = np.array(self.allnus)
+        return out * planck_ntot
+
+    def get_invntt_operator(self, planck_ntot, fact=None, mask=None, beam_correction=0):
+        #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
+
+        invntt_operator_shapein = 3 * len(self.nus) * 12 * self.nside**2
+
+        if planck_ntot == 0:
+            return IdentityOperator(shapein=invntt_operator_shapein)
+
+        # Create an empty array to store the values of sigma
+        allsigma = np.array([])
+
+        # Iterate through the frequency values
+        for inu in range(len(self.nus)):
+            # Determine the scaling factor for the noise
+            if fact is None:
+                f = 1
+            else:
+                f = fact[inu]
+
+            # Get the noise value for the current frequency and upsample to the desired nside
+            sigma = f * self.sigma[inu]
+
+            if mask is not None:
+                sigma /= np.array([mask, mask, mask]).T
+
+            # Append the noise value to the list of all sigmas
+            allsigma = np.append(allsigma, sigma.ravel())
+
+        if beam_correction != 0:
+            #! Tom: I don't know if these computations are correct or not, and I don't know where the numerical factors come from
+            factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.nside)) ** 2)
+            new_variance = hp.smoothing((sigma**2).T, fwhm=beam_correction / np.sqrt(2)) / factor
+            allsigma = np.sqrt(new_variance.T)
+
+        # Flatten the list of sigmas and multiply by Planck noise level, then create a diagonal operator
+        allsigma = allsigma.ravel().copy() * planck_ntot
+        invN = DiagonalOperator(1 / allsigma**2, broadcast="leftward", shapein=invntt_operator_shapein)
+
+        # Create reshape operator and apply it to the diagonal operator
+        R = ReshapeOperator(invN.shapeout, invN.shape[0])
+        return R(invN(R.T))
 
     def _get_mixing_matrix(self, nus, beta):
         """
@@ -1218,83 +1288,29 @@ class PlanckAcquisitionTest:
 
         return BlockColumnOperator(Operator, axisout=0)
 
-    def get_invntt_operator(self, planck_ntot, fact=None, mask=None):
-        invntt_operator_shapein = 3 * len(self.nus) * 12 * self.nside**2
-
-        if planck_ntot == 0:
-            return IdentityOperator(shapein=invntt_operator_shapein)
-
-        # Create an empty array to store the values of sigma
-        allsigma = np.array([])
-
-        # Iterate through the frequency values
-        for inu in range(len(self.nus)):
-            # Determine the scaling factor for the noise
-            if fact is None:
-                f = 1
-            else:
-                f = fact[inu]
-
-            # Get the noise value for the current frequency and upsample to the desired nside
-            sigma = f * hp.ud_grade(self.noise[inu].T, self.nside).T
-
-            if mask is not None:
-                sigma /= np.array([mask, mask, mask]).T
-
-            # Append the noise value to the list of all sigmas
-            allsigma = np.append(allsigma, sigma.ravel())
-
-        # Flatten the list of sigmas and multiply by Planck noise level, then create a diagonal operator
-        allsigma = allsigma.ravel().copy() * planck_ntot
-        invN = DiagonalOperator(1 / allsigma**2, broadcast="leftward", shapein=invntt_operator_shapein)
-
-        # Create reshape operator and apply it to the diagonal operator
-        R = ReshapeOperator(invN.shapeout, invN.shape[0])
-        return R(invN(R.T))
-
-    def get_noise(self, seed=None, fact=None, seenpix=None):
-        state = np.random.get_state()
-        np.random.seed(seed)
-        out = np.zeros((len(self.nus), self.npix, 3))
-
-        for inu in range(len(self.nus)):
-            if fact is None:
-                f = 1
-            else:
-                f = fact[inu]
-            sigma = f * hp.ud_grade(self.noise[inu].T, self.nside).T
-            out[inu] = np.random.standard_normal((self.npix, 3)) * sigma
-        if seenpix is not None:
-            out[:, seenpix, :] = 0
-        np.random.set_state(state)
-        return out
-
-    def get_maps(self):
-        return 0
-
 
 class JointAcquisitionFrequencyMapMaking:
-    def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=2):
+    def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False):
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
-
+        self.is_external_data = is_external_data
         ### Select the instrument model
         self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None)
-
         self.scene = self.qubic.scene
-        # self.pl143 = PlanckAcquisition(143, self.scene)
-        # self.pl217 = PlanckAcquisition(217, self.scene)
-        self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
-        self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
-        self.planck_acquisition = [self.pl143, self.pl217]
-        #! Tom: we should use the following here, but it is not working right now, one will need to adjust the shape and the way invN is used
-        # self.planck_acquisition = PlanckAcquisitionTest(nus=[143, 217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+
+        if self.is_external_data:
+            # self.pl143 = PlanckAcquisition(143, self.scene)
+            # self.pl217 = PlanckAcquisition(217, self.scene)
+            self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+            self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+            self.planck_acquisition = [self.pl143, self.pl217]
+            #! Tom: we should use the following here, but it is not working right now, one will need to adjust the shape and the way invN is used
+            # self.planck_acquisition = PlanckAcquisitionTest(nus=[143, 217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
 
     def get_operator(self, fwhm=None, seenpix=None):
         ### nstokes is hardcoded to nstokes = 3
         ### We could retrieve it in the shape of H if we want to implement a different nstokes case
-        # nstokes = H_qubic.shapein[-1] # might not work for nstokes = 1
         nstokes = 3
 
         ### The operator that allows the focus on seenpix:
@@ -1333,20 +1349,24 @@ class JointAcquisitionFrequencyMapMaking:
 
         invNq = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)  # add weight of Qubic detector and photon noise
         R = ReshapeOperator(invNq.shapeout, invNq.shape[0])
-        invNq = [R(invNq(R.T))]
-        invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, mask=mask)
-        invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, mask=mask)
+        invN = [R(invNq(R.T))]
 
-        R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
+        if self.is_external_data:
+            invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, mask=mask)
+            invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, mask=mask)
 
-        invN_143 = R_planck(invntt_planck143(R_planck.T))
-        invN_217 = R_planck(invntt_planck217(R_planck.T))
-        if self.Nrec == 1:
-            invNe = [invN_143, invN_217]
-        else:
-            invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
+            R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
 
-        return BlockDiagonalOperator(invNq + invNe, axisout=0)
+            invN_143 = R_planck(invntt_planck143(R_planck.T))
+            invN_217 = R_planck(invntt_planck217(R_planck.T))
+            if self.Nrec == 1:
+                invNe = [invN_143, invN_217]
+            else:
+                invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
+
+            invN += invNe
+
+        return BlockDiagonalOperator(invN, axisout=0)
 
 
 class JointAcquisitionComponentsMapMaking:
@@ -1377,7 +1397,7 @@ class JointAcquisitionComponentsMapMaking:
         except Exception:
             mpidist = None
 
-        He = self.external.get_operator(A=Ap, fwhm=fwhm, comm=mpidist, nu_co=nu_co)
+        He = self.external.get_operator(A=Ap, fwhm=fwhm, comm=mpidist)  # , nu_co=nu_co)
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 

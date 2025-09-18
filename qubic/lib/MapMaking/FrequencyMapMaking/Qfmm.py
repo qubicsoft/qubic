@@ -88,6 +88,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nsub_in"],
             self.params["QUBIC"]["nsub_in"],
             H=None,
+            is_external_data=self.params["PLANCK"]["external_data"],
         )
 
         ### Joint acquisition
@@ -102,6 +103,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nrec"],
             self.params["QUBIC"]["nsub_out"],
             H=H,
+            is_external_data=self.params["PLANCK"]["external_data"],
         )
 
         ### Ensure that all processors have the same external dataset
@@ -149,6 +151,7 @@ class PipelineFrequencyMapMaking:
         self.get_H()
 
         ### Inverse noise covariance matrix
+        #! Tom: No need for this condition, should be done inside PlanckAcq
         if self.params["PLANCK"]["external_data"]:
             self.invN = self.joint.get_invntt_operator(
                 mask=self.mask,
@@ -163,12 +166,10 @@ class PipelineFrequencyMapMaking:
             self.invN = R(self.invN(R.T))
 
         ### Noises
-        rng_noise_planck = np.random.default_rng(self.params["PLANCK"]["seed_noise"])
+        rng_noise_planck = np.random.default_rng(seed=self.params["PLANCK"]["seed_noise"])
         self.noise_planck = []
         for i in range(2):
-            # self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
-
-            self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(seed=self.params["PLANCK"]["seed_noise"]) * self.params["PLANCK"]["level_noise_planck"])
+            self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"]))
 
         qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
 
@@ -493,7 +494,6 @@ class PipelineFrequencyMapMaking:
 
         # To handle the case nrec == 1, even if it is broken because of the way compute_freq is used in QubicMultiAcquisitions
         TOD_PLANCK = np.zeros((max(self.params["QUBIC"]["nrec"], 2), 12 * self.params["SKY"]["nside"] ** 2, 3))
-
         for irec in range(self.params["QUBIC"]["nrec"]):
             if irec < self.params["QUBIC"]["nrec"] / 2:  # choose between the two levels of noise
                 noise = self.noise_planck[0]

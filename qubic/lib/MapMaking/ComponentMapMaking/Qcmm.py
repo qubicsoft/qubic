@@ -815,6 +815,7 @@ class Pipeline:
                                 "components_in": self.preset.comp.components_in,
                                 "components_in_convolved": self.preset.acquisition.components_in_convolved,
                                 "components_iter": self.preset.comp.components_iter,
+                                "residual": self.preset.acquisition.components_in_convolved - self.preset.comp.components_iter,
                                 "beta": self.preset.acquisition.allbeta,
                                 "beta_true": self.preset.mixingmatrix.beta_in,
                                 "index_beta": self.preset.mixingmatrix._index_seenpix_beta,

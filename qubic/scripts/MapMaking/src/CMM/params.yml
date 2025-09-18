@@ -15,8 +15,8 @@ Foregrounds:
 
     ### Thermal Dust emission
     Dust:
-        Dust_in: True
-        Dust_out: True
+        Dust_in: False
+        Dust_out: False
 
         type: "parametric"                                                    # Reconstruction method
         model: "d0"
@@ -87,7 +87,7 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
 
-    level_noise_planck: 1                                                     # Noise level for Planck data
+    level_noise_planck: 0                                                     # Noise level for Planck data
     nsub_planck: 10                                                       # Number of integration step for Planck data
     weight_planck: 0                                                          # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                     # FWHM for apodized QUBIC patch
@@ -149,5 +149,5 @@ Plots:
 
 save_iter: 1                                                                  # Save every 'save_iter' iteration
 foldername: "test_planck"                                                      # Name of the saved folder
-filename: "file"                                                              # Name of the saved file
+filename: "new_planck_acq"                                                              # Name of the saved file
 lastite: True                                                                 # Keep only the last iteration

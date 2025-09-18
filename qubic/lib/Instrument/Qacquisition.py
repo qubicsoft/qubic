@@ -1109,7 +1109,31 @@ class OtherDataParametric:
 
 
 class PlanckAcquisitionTest:
+    """
+    Class to add Planck information to both FMM and CMM
+    """
+
     def __init__(self, nus, nside, comps=None, nsub_planck=1, use_pysm=False):
+        """
+
+        Parameters
+        ----------
+        nus : ndarray
+            Planck frequencies to add to the Map-Making. Be careful, FMM uses only 143 and 217 GHz bands by default, while you can add every Planck bands in the CMM (30, 44, 70, 100, 143, 217, 353) GHz.
+        nside : int
+            Nside value for Healpy
+        comps : ndarray, optional
+            Components array build from FGbuster, by default None
+        nsub_planck : int, optional
+            Number of sub-acquisition for Planck, by default 1
+        use_pysm : bool, optional
+            Boolean to decide betwenn generating Planck maps at Qubic frequencies (True) or at Planck frequencies (False), by default False
+            
+        Remarks
+        -------
+        For FMM, band is either 143 or 217, while it is an array of Planck bands for CMM. We should be able to build [143, 217] for the FMM but it is not working yet. This would need some work which are not a priority, as we do not aim to use the other Planck bands at MapMaking level (we only want to use them at spectrum level). For posterity, one should correct this to build a more general class, but it is not a priority now.
+        """
+        
         self.nus = nus
         self.nside = nside
         self.comps = comps
@@ -1142,6 +1166,26 @@ class PlanckAcquisitionTest:
         return 0
 
     def get_noise(self, planck_ntot, seed=None, fact=None, seenpix=None):
+        """Planck Noise
+
+        Method to build Planck noise. It uses sigma values computed during initialisation of the classe.
+
+        Parameters
+        ----------
+        planck_ntot : float
+            Multiplicative factor for the noise.
+        seed : int, optional
+            Seed for random noise generation, by default None
+        fact : array, optional
+            Array of lenght the number of Planck bands considered, which can be used to add a multiplicative factor to specific bands, by default None
+        seenpix : array, optional
+            Array of pixels seen by QUBIC, by default None
+
+        Returns
+        -------
+        array
+            Array containing noise for Planck TOD
+        """
         state = np.random.get_state()
         np.random.seed(seed)
         out = np.zeros((len(self.nus), self.npix, 3))
@@ -1160,6 +1204,26 @@ class PlanckAcquisitionTest:
         return out * planck_ntot
 
     def get_invntt_operator(self, planck_ntot, fact=None, mask=None, beam_correction=0):
+        """Planck inverse noise covariance matrix.
+
+        Method to build Planck inverse noise covariance matrix, using sigma computed during the initialisation of the class.
+
+        Parameters
+        ----------
+        planck_ntot : float
+            Multiplicative factor for the noise
+        fact : array, optional
+            Array of lenght the number of Planck bands considered, which can be used to add a multiplicative factor to specific bands, by default None
+        mask : array, optional
+            Array to mask some sky regions if wanted, by default None
+        beam_correction : float, optional
+            Correction factor for the beam, by default 0
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
 
         invntt_operator_shapein = 3 * len(self.nus) * 12 * self.nside**2
@@ -1202,13 +1266,23 @@ class PlanckAcquisitionTest:
         return R(invN(R.T))
 
     def _get_mixing_matrix(self, nus, beta):
-        """
+        """Planck Mixing Matrix.
 
-        Method to return mixing matrix.
-
+        Method to compute Planck Mixing Matrix, which will be used lated to build the Planck acquisition operator.
         If beta has shape (ncomp), then the mixing matrix will have shape (nfreq, ncomp).
         If beta has shape (npix, ncomp), the the elements of the mxing matrix vary across the sky, it will have shape (npix, nfreq, ncomp)
 
+        Parameters
+        ----------
+        nus : array
+            Frequencies of the Mixing Matrix.
+        beta : array
+            _description_
+
+        Returns
+        -------
+        array
+            Planck Mixing Matrix
         """
 
         ### Define Mixing Matrix with FGB classes
@@ -1229,9 +1303,20 @@ class PlanckAcquisitionTest:
         return np.round(mixing_matrix, 6)
 
     def _get_mixing_operator(self, A):
-        """
+        """Planck Mixing Operator.
+
         Method to define an operator like object for a given frequency nu, the input A should be for one frequency.
         The type of operator depends on the shape of input A.
+
+        Parameters
+        ----------
+        A : array
+            Planck Mixing Matrix.
+
+        Returns
+        -------
+        BlockDiagonalOperator
+            Mixing operator.
         """
 
         if A.ndim == 1:  ### If constant beta across the sky
@@ -1259,6 +1344,26 @@ class PlanckAcquisitionTest:
         return D
 
     def get_operator(self, A=None, fwhm=None, comm=None, nu_co=None):
+        """Planck Acquisition Operator.
+        
+        Method to build the acquisition operator for Planck. This operator is composed at first by a convolution operator at Planck FWHM. Then, for the Component MapMaking, a Mixing Operator is added. Finally, we have the operator to turn maps into TOD.
+
+        Parameters
+        ----------
+        A : array, optional
+            Mixing Matrix of Planck. If None, the Mixing Operator will be the Identity (FMM case), not None, the Mixing Operator will be computated and then added (CMM case), by default None
+        fwhm : array, optional
+            Array of lenght the number of Planck bands considered containing Planck FWHM. If None, the Convolution Operator will be Identity (case without convolution), if not None, the Convolution Operator will be computed and then added, by default None
+        comm : MPI communicator, optional
+            MPI communicator from pyoperators, by default None
+        nu_co : bool, optional
+            Bool to add Carbon Oxyde emission line, not supported yet, by default None
+
+        Returns
+        -------
+        BlockColumnOperator
+            Planck Acquisition Operator.
+        """        
         Rmap2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
 
         Operator = []
@@ -1325,14 +1430,17 @@ class JointAcquisitionFrequencyMapMaking:
             U = IdentityOperator()
 
         ### Get QUBIC H operator
-        H_qubic = self.qubic.get_operator(fwhm=fwhm)
-        R_planck = ReshapeOperator((12 * self.qubic.scene.nside**2, nstokes), (12 * self.qubic.scene.nside**2 * nstokes))
-        H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0)
-        # It is necessary to change the shape of H_planck_ in order to stack it with H_qubic
-        R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
-        H_planck = R_diag(H_planck_)
+        H = [self.qubic.get_operator(fwhm=fwhm)]
+        
+        if self.is_external_data:
+            R_planck = ReshapeOperator((12 * self.qubic.scene.nside**2, nstokes), (12 * self.qubic.scene.nside**2 * nstokes))
+            H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0)
+            # It is necessary to change the shape of H_planck_ in order to stack it with H_qubic
+            R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
+            H_planck = R_diag(H_planck_)
+            H.append(H_planck)
 
-        return BlockColumnOperator([H_qubic, H_planck], axisout=0) * U
+        return BlockColumnOperator(H, axisout=0) * U
 
     def get_invntt_operator(  # We stack the invNqubic and invN_planck on top of eachother
         self,

@@ -15,8 +15,8 @@ Foregrounds:
 
     ### Thermal Dust emission
     Dust:
-        Dust_in: False
-        Dust_out: False
+        Dust_in: True
+        Dust_out: True
 
         type: "parametric"                                                    # Reconstruction method
         model: "d0"
@@ -56,7 +56,7 @@ QUBIC:
     npointings: 1000                                                          # Number of time samples
     nsub_in: 8                                                                # Number of sub-acquisitions
     nsub_out: 8                                                               # Number of sub-acquisitions for the reconstruction
-    convolution_in: False                                                     # Angular resolution in the input TOD
+    convolution_in: True                                                     # Angular resolution in the input TOD
     convolution_out: False                                                    # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:
@@ -149,5 +149,5 @@ Plots:
 
 save_iter: 1                                                                  # Save every 'save_iter' iteration
 foldername: "test_planck"                                                      # Name of the saved folder
-filename: "new_planck_acq"                                                              # Name of the saved file
+filename: "test"                                                              # Name of the saved file
 lastite: True                                                                 # Keep only the last iteration

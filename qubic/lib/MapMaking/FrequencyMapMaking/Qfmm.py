@@ -152,27 +152,34 @@ class PipelineFrequencyMapMaking:
 
         ### Inverse noise covariance matrix
         #! Tom: No need for this condition, should be done inside PlanckAcq
-        if self.params["PLANCK"]["external_data"]:
-            self.invN = self.joint.get_invntt_operator(
+        # if self.params["PLANCK"]["external_data"]:
+        #     self.invN = self.joint.get_invntt_operator(
+        #         mask=self.mask,
+        #         qubic_ndet=self.params["QUBIC"]["NOISE"]["ndet"],
+        #         qubic_npho150=self.params["QUBIC"]["NOISE"]["npho150"],
+        #         qubic_npho220=self.params["QUBIC"]["NOISE"]["npho220"],
+        #         planck_ntot=self.params["PLANCK"]["level_noise_planck"],
+        #     )
+        # else:
+        #     self.invN = self.joint.qubic.get_invntt_operator(self.params["QUBIC"]["NOISE"]["ndet"], self.params["QUBIC"]["NOISE"]["npho150"], self.params["QUBIC"]["NOISE"]["npho220"])
+        #     R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
+        #     self.invN = R(self.invN(R.T))
+        self.invN = self.joint.get_invntt_operator(
                 mask=self.mask,
                 qubic_ndet=self.params["QUBIC"]["NOISE"]["ndet"],
                 qubic_npho150=self.params["QUBIC"]["NOISE"]["npho150"],
                 qubic_npho220=self.params["QUBIC"]["NOISE"]["npho220"],
                 planck_ntot=self.params["PLANCK"]["level_noise_planck"],
             )
-        else:
-            self.invN = self.joint.qubic.get_invntt_operator(self.params["QUBIC"]["NOISE"]["ndet"], self.params["QUBIC"]["NOISE"]["npho150"], self.params["QUBIC"]["NOISE"]["npho220"])
-            R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
-            self.invN = R(self.invN(R.T))
 
         ### Noises
-        rng_noise_planck = np.random.default_rng(seed=self.params["PLANCK"]["seed_noise"])
-        self.noise_planck = []
-        for i in range(2):
-            self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"]))
+        if self.params["PLANCK"]["external_data"]:
+            rng_noise_planck = np.random.default_rng(seed=self.params["PLANCK"]["seed_noise"])
+            self.noise_planck = []
+            for i in range(2):
+                self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"]))
 
         qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
-
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],
             self.params["QUBIC"]["NOISE"]["npho150"],

@@ -1,5 +1,5 @@
 path_out: "planck/"
-datafilename: "new"
+datafilename: "test_wo_planck"
 
 CMB:
     cmb: True

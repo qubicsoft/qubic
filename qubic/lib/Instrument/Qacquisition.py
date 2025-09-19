@@ -589,12 +589,6 @@ class PlanckAcquisition:
         np.random.set_state(state)
         return out
 
-    def get_noise(self, rng_noise):
-        state = np.random.get_state()
-        out = rng_noise.standard_normal(np.ones((12 * self.nside**2, 3)).shape) * self.sigma
-        np.random.set_state(state)
-        return out
-
 
 class QubicMultiAcquisitions:
     """
@@ -1167,9 +1161,6 @@ class PlanckAcquisitionTest:
                 self.allnus += list(np.linspace(nu - self.bandwidth[inu] / 2, nu + self.bandwidth[inu] / 2, self.nsub_planck))
             self.allnus = np.array(self.allnus)
 
-    def get_maps(self):
-        return 0
-
     def get_noise(self, planck_ntot, seed=None, fact=None, seenpix=None):
         """Planck Noise
 
@@ -1410,10 +1401,10 @@ class JointAcquisitionFrequencyMapMaking:
         self.scene = self.qubic.scene
 
         if self.is_external_data:
-            self.pl143 = PlanckAcquisition(143, self.scene)
-            self.pl217 = PlanckAcquisition(217, self.scene)
-            # self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
-            # self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+            # self.pl143 = PlanckAcquisition(143, self.scene)
+            # self.pl217 = PlanckAcquisition(217, self.scene)
+            self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+            self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
             self.planck_acquisition = [self.pl143, self.pl217]
             #! Tom: we should use the following here, but it is not working right now, one will need to adjust the shape and the way invN is used
             # self.planck_acquisition = PlanckAcquisitionTest(nus=[143, 217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)

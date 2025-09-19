@@ -21,7 +21,7 @@ QUBIC:
     nsub_out: 8
     nrec: 2                      # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-    convolution_in: False        # Angular resolution in the input TOD
+    convolution_in: True        # Angular resolution in the input TOD
     convolution_out: False       # Angular resolution in the reconstruction
     bandpass_correction: True    # Correction to keep the edges of the integration band constant
     NOISE:                          

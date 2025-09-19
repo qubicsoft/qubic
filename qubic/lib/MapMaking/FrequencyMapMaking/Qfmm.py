@@ -177,8 +177,8 @@ class PipelineFrequencyMapMaking:
             rng_noise_planck = np.random.default_rng(seed=self.params["PLANCK"]["seed_noise"])
             self.noise_planck = []
             for i in range(2):
-                self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
-                # self.noise_planck.append(object=self.joint.planck_acquisition[i].get_noise(planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"]))
+                # self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
+                self.noise_planck.append(object=self.joint.planck_acquisition[i].get_noise(planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"]))
 
         qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
         self.noiseq = qubic_noise.total_noise(

@@ -27,6 +27,7 @@ from pyoperators import (
 from pyoperators.utils.mpi import as_mpi
 from pysimulators import (
     Acquisition,
+    FitsArray,
 )
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysimulators.noises import (
@@ -542,10 +543,8 @@ class PlanckAcquisition:
         #         var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
         #     sigma = np.sqrt(var)
         filename = f"Variance_Planck{band}GHz_Kcmb2_ns256.fits"
-        var = np.zeros((12 * self.scene.nside**2, 3))
-        for i in range(3):
-            var[:, i] = hp.ud_grade(hp.fitsfunc.read_map(filename, field=i), self.scene.nside)
-        sigma = np.sqrt(var)
+        self.var = np.array(FitsArray(PATH + filename))
+        sigma = np.sqrt(self.var)
 
         if scene.kind == "I":
             sigma = sigma[:, 0]
@@ -583,6 +582,12 @@ class PlanckAcquisition:
         myweight = 1 / (self.sigma**2)
 
         return DiagonalOperator(myweight, broadcast="leftward", shapein=myweight.shape)
+
+    def get_noise(self, rng_noise):
+        state = np.random.get_state()
+        out = rng_noise.standard_normal(np.ones((12 * self.nside**2, 3)).shape) * self.sigma
+        np.random.set_state(state)
+        return out
 
     def get_noise(self, rng_noise):
         state = np.random.get_state()
@@ -1128,12 +1133,12 @@ class PlanckAcquisitionTest:
             Number of sub-acquisition for Planck, by default 1
         use_pysm : bool, optional
             Boolean to decide betwenn generating Planck maps at Qubic frequencies (True) or at Planck frequencies (False), by default False
-            
+
         Remarks
         -------
         For FMM, band is either 143 or 217, while it is an array of Planck bands for CMM. We should be able to build [143, 217] for the FMM but it is not working yet. This would need some work which are not a priority, as we do not aim to use the other Planck bands at MapMaking level (we only want to use them at spectrum level). For posterity, one should correct this to build a more general class, but it is not a priority now.
         """
-        
+
         self.nus = nus
         self.nside = nside
         self.comps = comps
@@ -1345,7 +1350,7 @@ class PlanckAcquisitionTest:
 
     def get_operator(self, A=None, fwhm=None, comm=None, nu_co=None):
         """Planck Acquisition Operator.
-        
+
         Method to build the acquisition operator for Planck. This operator is composed at first by a convolution operator at Planck FWHM. Then, for the Component MapMaking, a Mixing Operator is added. Finally, we have the operator to turn maps into TOD.
 
         Parameters
@@ -1363,7 +1368,7 @@ class PlanckAcquisitionTest:
         -------
         BlockColumnOperator
             Planck Acquisition Operator.
-        """        
+        """
         Rmap2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
 
         Operator = []
@@ -1405,10 +1410,10 @@ class JointAcquisitionFrequencyMapMaking:
         self.scene = self.qubic.scene
 
         if self.is_external_data:
-            # self.pl143 = PlanckAcquisition(143, self.scene)
-            # self.pl217 = PlanckAcquisition(217, self.scene)
-            self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
-            self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+            self.pl143 = PlanckAcquisition(143, self.scene)
+            self.pl217 = PlanckAcquisition(217, self.scene)
+            # self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+            # self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
             self.planck_acquisition = [self.pl143, self.pl217]
             #! Tom: we should use the following here, but it is not working right now, one will need to adjust the shape and the way invN is used
             # self.planck_acquisition = PlanckAcquisitionTest(nus=[143, 217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
@@ -1431,7 +1436,7 @@ class JointAcquisitionFrequencyMapMaking:
 
         ### Get QUBIC H operator
         H = [self.qubic.get_operator(fwhm=fwhm)]
-        
+
         if self.is_external_data:
             R_planck = ReshapeOperator((12 * self.qubic.scene.nside**2, nstokes), (12 * self.qubic.scene.nside**2 * nstokes))
             H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0)

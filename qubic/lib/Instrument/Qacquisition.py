@@ -1503,7 +1503,6 @@ class JointAcquisitionComponentsMapMaking:
         ### Select the instrument model
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
         self.scene = self.qubic.scene
-        # self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nsub_planck)
         self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_planck_at_qubic_freq=use_planck_at_qubic_freq)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 

@@ -128,8 +128,7 @@ class PresetAcquisition:
 
         #! Tom : check this part
         self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
-
-        C = HealpixConvolutionGaussianOperator(self.fwhm_tod[-1])
+        C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_tod))
         for icomp, _ in enumerate(self.preset_comp.components_name_out):
             self.components_in_convolved[icomp] = C(self.preset_comp.components_in[icomp])
             # comp_nsub = np.zeros((self.preset_tools.params["QUBIC"]["nsub_in"], 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))

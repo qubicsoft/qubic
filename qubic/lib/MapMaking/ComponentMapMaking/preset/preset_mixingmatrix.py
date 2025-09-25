@@ -342,16 +342,12 @@ class PresetMixingMatrix:
 
                     ### Multiply the right element once even with multiple processors
                     if self.preset_tools.rank == 0:
-                        # print(self.Amm_in)
-                        # print(Adeco)
-                        # stop
                         self.Amm_in *= Adeco
                     else:
                         self.Amm_in = None
                     self.Amm_in = self.preset_tools.comm.bcast(self.Amm_in, root=0)
 
                 elif self.preset_comp.params_foregrounds["Dust"]["model"] == "d1":
-                    # self.Amm_in = None
                     self.beta_in = np.zeros(
                         (
                             len(self.preset_comp.components_in) - 1,

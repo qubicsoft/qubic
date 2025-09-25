@@ -118,7 +118,7 @@ class Pipeline:
             center=self.preset.sky.center,
             reso=self.preset.tools.params["PCG"]["reso_plot"],
             fwhm_plot=self.preset.tools.params["PCG"]["fwhm_plot"],
-            input=self.preset.comp.components_out,
+            input=self.preset.acquisition.components_in_convolved,
             iter_init=self._steps * num_iter,
             is_planck=True,
         )["x"]
@@ -227,8 +227,8 @@ class Pipeline:
                 self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
             )
         )
-        print(self.preset.comp.components_iter.shape)
-        raise ValueError("Tom : is it correct to use this H here ?")
+
+        #! raise ValueError("Tom : is it correct to use this H here ?")
 
         for i in range(len(self.preset.comp.components_name_out)):
             for j in range(self.preset.qubic.joint_out.qubic.nsub):

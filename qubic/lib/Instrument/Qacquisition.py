@@ -1108,12 +1108,10 @@ class OtherDataParametric:
 
 
 class PlanckAcquisitionTest:
-    """
-    Class to add Planck information to both FMM and CMM
-    """
+    def __init__(self, nus, nside, comps=None, nsub_planck=1, use_planck_at_qubic_freq=False):
+        """Planck Acquisition.
 
-    def __init__(self, nus, nside, comps=None, nsub_planck=1, use_pysm=False):
-        """
+        Class to add Planck information to both FMM and CMM.
 
         Parameters
         ----------
@@ -1125,8 +1123,6 @@ class PlanckAcquisitionTest:
             Components array build from FGbuster, by default None
         nsub_planck : int, optional
             Number of sub-acquisition for Planck, by default 1
-        use_pysm : bool, optional
-            Boolean to decide betwenn generating Planck maps at Qubic frequencies (True) or at Planck frequencies (False), by default False
 
         Remarks
         -------
@@ -1137,29 +1133,41 @@ class PlanckAcquisitionTest:
         self.nside = nside
         self.comps = comps
         self.nsub_planck = nsub_planck
-        self.use_pysm = use_pysm
+        self.use_planck_at_qubic_freq = use_planck_at_qubic_freq
 
         self.npix = 12 * self.nside**2
         self.noise = []
         self.fwhm = []
         self.sigma = []
         self.bandwidth = []
+        self.allnus = []
 
         for nu in self.nus:
             _planckData = pickle.load(open(PATH + f"Planck{nu}GHz.pkl", "rb"))
 
             self.sigma.append(hp.ud_grade(_planckData[f"noise{nu}"].T, self.nside).T)
             self.noise.append(_planckData[f"noise{nu}"])
-            self.fwhm.append(_planckData[f"fwhm{nu}"])
+            # self.fwhm.append(_planckData[f"fwhm{nu}"])
             self.bandwidth.append(_planckData[f"bw{nu}"])
 
-        if self.nsub_planck == 1:
-            self.allnus = nus
+        if use_planck_at_qubic_freq:
+            self.nus = [150, 220]
+            for f_band in self.nus:
+                ### Compute frequencies on the edges
+                _, _, nus, _, _, _ = compute_freq(f_band, Nfreq=int(self.nsub_planck / len(self.nus)), relative_bandwidth=0.25)
+
+                self.allnus += list(nus)
         else:
-            self.allnus = []
-            for inu, nu in enumerate(self.nus):
-                self.allnus += list(np.linspace(nu - self.bandwidth[inu] / 2, nu + self.bandwidth[inu] / 2, self.nsub_planck))
-            self.allnus = np.array(self.allnus)
+            if self.nsub_planck == 1:
+                self.allnus = nus
+            else:
+                for inu, nu in enumerate(self.nus):
+                    self.allnus += list(np.linspace(nu - self.bandwidth[inu] / 2, nu + self.bandwidth[inu] / 2, self.nsub_planck))
+                self.allnus = np.array(self.allnus)
+                self.fwhm = self.get_fwhm(self.allnus)
+
+    def get_fwhm(self, nus, fwhm143=0.002094):
+        return fwhm143 * (143 / nus)
 
     def get_noise(self, planck_ntot, seed=None, fact=None, seenpix=None):
         """Planck Noise
@@ -1193,8 +1201,10 @@ class PlanckAcquisitionTest:
                 f = fact[inu]
             sigma = f * self.sigma[inu]
             out[inu] = np.random.standard_normal((self.npix, 3)) * sigma
+
         if seenpix is not None:
             out[:, seenpix, :] = 0
+
         np.random.set_state(state)
 
         return out * planck_ntot
@@ -1363,23 +1373,30 @@ class PlanckAcquisitionTest:
         Rmap2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
 
         Operator = []
+        # if np.array_equal(fwhm, np.zeros(fwhm.shape)):
+        #     fwhm = None
+        # else:
+        #     if self.use_planck_at_qubic_freq:
+        #         fwhm_planck = fwhm
+        #     else:
+        #         fwhm_planck = self.fwhm
 
         k = 0
-        for ii, _ in enumerate(self.nus):
+        for _ in self.nus:
             ope_i = []
-            if fwhm is not None:
-                C = HealpixConvolutionGaussianOperator(fwhm=fwhm[ii], lmax=3 * self.nside - 1)
-            else:
-                C = IdentityOperator()
+            # for _ in range(self.nsub_planck):
+            for i in range(int(self.nsub_planck / len(self.nus))):
+                if fwhm is not None:
+                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
+                else:
+                    C = IdentityOperator()
 
-            for _ in range(self.nsub_planck):
                 if A is not None:
                     D = self._get_mixing_operator(A=A[k])
                 else:
                     D = IdentityOperator()
 
                 ope_i += [C * D]
-
                 k += 1
 
             if comm is not None:
@@ -1391,18 +1408,15 @@ class PlanckAcquisitionTest:
 
 
 class JointAcquisitionFrequencyMapMaking:
-    def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False):
+    def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False, sampling=None):
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
         self.is_external_data = is_external_data
-        ### Select the instrument model
-        self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None)
+        self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None, sampling=sampling)
         self.scene = self.qubic.scene
 
         if self.is_external_data:
-            # self.pl143 = PlanckAcquisition(143, self.scene)
-            # self.pl217 = PlanckAcquisition(217, self.scene)
             self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
             self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
             self.planck_acquisition = [self.pl143, self.pl217]
@@ -1474,19 +1488,23 @@ class JointAcquisitionFrequencyMapMaking:
 
 
 class JointAcquisitionComponentsMapMaking:
-    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None):
+    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None, use_planck_at_qubic_freq=False):
         self.d = d
         self.Nsub = Nsub
         self.comp = comp
-        self.nus_external = nus_external
-        self.nsub_planck = nsub_planck
+
+        if use_planck_at_qubic_freq:
+            self.nus_external = [143, 217]
+            self.nsub_planck = Nsub
+        else:
+            self.nus_external = nus_external
+            self.nsub_planck = nsub_planck
 
         ### Select the instrument model
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
-
         self.scene = self.qubic.scene
         # self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nsub_planck)
-        self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_pysm=False)
+        self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_planck_at_qubic_freq=use_planck_at_qubic_freq)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):
@@ -1501,7 +1519,7 @@ class JointAcquisitionComponentsMapMaking:
         except Exception:
             mpidist = None
 
-        He = self.external.get_operator(A=Ap, fwhm=fwhm, comm=mpidist)  # , nu_co=nu_co)
+        He = self.external.get_operator(A=Ap, fwhm=None, comm=mpidist)  # , nu_co=nu_co)
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 

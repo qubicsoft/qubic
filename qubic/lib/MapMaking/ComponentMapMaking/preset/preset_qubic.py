@@ -61,6 +61,7 @@ class PresetQubic:
             preset_external.external_nus,
             preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
+            use_planck_at_qubic_freq=preset_external.params_external["use_planck_at_qubic_freq"],
         )
 
         if self.params_qubic["nsub_in"] == self.params_qubic["nsub_out"]:
@@ -76,6 +77,7 @@ class PresetQubic:
             preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
             H=H_tojoint,
+            use_planck_at_qubic_freq=preset_external.params_external["use_planck_at_qubic_freq"],
         )
 
     def get_dict(self):

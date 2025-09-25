@@ -98,7 +98,7 @@ class Chi2InstrumentType:
                 ### Separe QUBIC and Planck
                 Aext = A[self.nfreq :].copy()
 
-                H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext, convolution=False)
+                H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext, fwhm=self.preset.acquisition.fwhm_mapmaking)
 
                 ### Compute Planck part of the chi^2
                 mycomp = self.preset.comp.components_iter.copy()

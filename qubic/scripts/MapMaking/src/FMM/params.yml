@@ -1,5 +1,5 @@
 path_out: "planck/"
-datafilename: "test"
+datafilename: "test_nsub"
 
 CMB:
     cmb: True
@@ -16,7 +16,7 @@ QUBIC:
 
     instrument: "DB"             # Instrumental design (MB, DB or UWB)
     configuration: "FI"          # Instrumental configuration (TD or FI)
-    npointings: 500             # Number of time samples
+    npointings: 1000             # Number of time samples
     nsub_in: 8                   # Number of sub-acquisitions
     nsub_out: 8
     nrec: 2                      # Number of reconstructed fr
@@ -52,7 +52,7 @@ PLANCK:
     level_noise_planck: 0        # Noise level for Planck data
     seed_noise: 22222
     bandwidth_planck: 0.2        # Multiplicative factor to define the bandwidth of Planck's data
-    nsub_planck: 10              # Number of sub acquisitions for Planck's data
+    nsub_planck: 1              # Number of sub acquisitions for Planck's data
 
 Pipeline:
     mapmaking: True              # Run MapMaking Pipeline

@@ -134,7 +134,7 @@ class InputMaps(Maps):
 
 
 class PlanckMaps(Maps):
-    def __init__(self, skyconfig, nus, nrec, nside=256, r=0, Alens=1):  # nside, r=0, Alens=1):
+    def __init__(self, skyconfig, nus, nrec, nside=256, r=0, Alens=1):
         Maps.__init__(self, skyconfig, nus, nrec, nside=nside)
         self.experiments = {
             "Planck": {
@@ -150,7 +150,7 @@ class PlanckMaps(Maps):
         self.Alens = Alens
         self.nside = nside
 
-    def _get_ave_map(self, r, Alens, skyconfig, central_nu, bw, nb=100):
+    def _get_ave_map(self, r, Alens, skyconfig, central_nu, bw, nsub=100):
         is_cmb = False
         model = []
         for key in skyconfig.keys():
@@ -165,8 +165,8 @@ class PlanckMaps(Maps):
             sky = pysm3.Sky(nside=self.nside, preset_strings=model)
             edges_min = central_nu - bw / 2
             edges_max = central_nu + bw / 2
-            bandpass_frequencies = np.linspace(edges_min, edges_max, nb)
-            print(f"Integrating bandpass from {edges_min} GHz to {edges_max} GHz with {nb} frequencies.")
+            bandpass_frequencies = np.linspace(edges_min, edges_max, nsub)
+            print(f"Integrating bandpass from {edges_min} GHz to {edges_max} GHz with {nsub} frequencies.")
             mysky += np.array(sky.get_emission(bandpass_frequencies * u.GHz, None) * utils.bandpass_unit_conversion(bandpass_frequencies * u.GHz, None, u.uK_CMB)).T / self.corrected_factor_bicep
 
         if is_cmb:
@@ -190,7 +190,7 @@ class PlanckMaps(Maps):
         out = np.random.standard_normal(np.ones((12 * self.nside**2, 3)).shape) * sigma
         return out
 
-    def run(self, use_fwhm=False, number_of_band_integration=100):
+    def run(self, use_fwhm=False, nsub=100):
         """
 
         Method that create global variables such as :
@@ -205,8 +205,7 @@ class PlanckMaps(Maps):
         self.fwhm_ext = []
         for inu, nu in enumerate(self.experiments["Planck"]["frequency"]):
             bandwidth = self.experiments["Planck"]["bw"][inu]
-            maps[inu] = self._get_ave_map(self.r, self.Alens, self.skyconfig, nu, nu * bandwidth, nb=number_of_band_integration)
-
+            maps[inu] = self._get_ave_map(self.r, self.Alens, self.skyconfig, nu, nu * bandwidth, nsub=nsub)
             n = self._get_noise(nu)
             maps[inu] += n
             maps_noise[inu] += n

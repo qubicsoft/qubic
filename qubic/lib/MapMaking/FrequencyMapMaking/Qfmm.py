@@ -109,7 +109,7 @@ class PipelineFrequencyMapMaking:
         ### Ensure that all processors have the same external dataset
         self.externaldata = PlanckMaps(self.skyconfig, self.joint_tod.qubic.allnus, self.params["QUBIC"]["nrec"], nside=self.params["SKY"]["nside"])
         if self.rank == 0:
-            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(use_fwhm=self.params["QUBIC"]["convolution_in"])
+            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(use_fwhm=self.params["QUBIC"]["convolution_in"], nsub=self.params["PLANCK"]["nsub_planck"])
         else:
             self.externaldata.maps = None
             self.externaldata.maps_noise = None
@@ -178,7 +178,7 @@ class PipelineFrequencyMapMaking:
             self.noise_planck = []
             for i in range(2):
                 # self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
-                self.noise_planck.append(object=self.joint.planck_acquisition[i].get_noise(planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"]))
+                self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"]))
 
         qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
         self.noiseq = qubic_noise.total_noise(

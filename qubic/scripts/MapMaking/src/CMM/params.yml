@@ -30,8 +30,8 @@ Foregrounds:
 
     ### Synchrotron emission
     Synchrotron:
-        Synchrotron_in: True
-        Synchrotron_out: True
+        Synchrotron_in: False
+        Synchrotron_out: False
 
 
         type: "blind"                                                         # Reconstruction method
@@ -57,7 +57,7 @@ QUBIC:
     nsub_in: 8                                                                # Number of sub-acquisitions
     nsub_out: 8                                                                # Number of sub-acquisitions for the reconstruction
     convolution_in: True                                                     # Angular resolution in the input TOD
-    convolution_out: True                                                    # Angular resolution in the reconstruction
+    convolution_out: False                                                    # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:
         ndet: 0                                                               # Level of detector noise
@@ -88,8 +88,8 @@ PLANCK:
     ### This section define which external data are we using
     use_planck_at_qubic_freq: False
     level_noise_planck: 0                                                     # Noise level for Planck data
-    nsub_planck: 14                                                       # Number of integration step for Planck data
-    weight_planck: 1                                                          # Weight of Planck data within the QUBIC patch
+    nsub_planck: 2                                                       # Number of integration step for Planck data
+    weight_planck: 0                                                          # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                     # FWHM for apodized QUBIC patch
     30GHz: False
     44GHz: False
@@ -97,7 +97,7 @@ PLANCK:
     100GHz: False
     143GHz: True
     217GHz: True
-    353GHz: True
+    353GHz: False 
     seed_noise: 22222
 
 PCG:

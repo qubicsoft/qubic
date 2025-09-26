@@ -63,7 +63,7 @@ PCG:
 
     n_iter_pcg: 50               # Number of PCG iterations #100
     tol_pcg: 1.0e-25             # Tolerance for PCG
-    preconditioner: True
+    preconditioner: False
     initial_guess_intensity_to_zero: True
     gif: True
     resolution_plot: 15

@@ -5,7 +5,7 @@ import torch
 from pygsp import graphs
 from scipy import sparse
 
-from qubic.lib.AnalyticalSolution.utils import get_high_coverage_indexes
+from qubic.lib.NeuralNetworkMapMaking.utils import get_high_coverage_indexes
 
 
 def healpix_weightmatrix(nside=16, nest=True, indexes=None, dtype=np.float32):

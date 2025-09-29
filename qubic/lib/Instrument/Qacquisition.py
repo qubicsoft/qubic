@@ -1165,7 +1165,7 @@ class PlanckAcquisitionTest:
     def get_maps(self):
         return 0
 
-    def get_noise(self, planck_ntot, seed=None, fact=None):
+    def get_noise(self, planck_ntot, weight_planck = 0, seenpix = None, seed = None):
         """Planck Noise
 
         Method to build Planck noise. It uses sigma values computed during initialisation of the classe.
@@ -1176,8 +1176,6 @@ class PlanckAcquisitionTest:
             Multiplicative factor for the noise.
         seed : int, optional
             Seed for random noise generation, by default None
-        fact : array, optional
-            Array of lenght the number of Planck bands considered, which can be used to add a multiplicative factor to specific bands, by default None
         seenpix : array, optional
             Array of pixels seen by QUBIC, by default None
 
@@ -1190,18 +1188,16 @@ class PlanckAcquisitionTest:
         np.random.seed(seed)
         out = np.zeros((1, self.npix, 3))
 
-        if fact is None:
-            f = 1
-        else:
-            f = fact
-        sigma = f * self.sigma[0]
+        sigma = self.sigma[0]
         out[0,:,:] = np.random.standard_normal((self.npix, 3)) * sigma
 
         np.random.set_state(state)
 
+        out[:, seenpix, :] = weight_planck * out[:, seenpix, :] #Add the same amount of noise as information inside the patch
+
         return out * planck_ntot
 
-    def get_invntt_operator(self, planck_ntot, fact=None, mask=None, beam_correction=0):
+    def get_invntt_operator(self, planck_ntot, weight_planck = 1.0, seenpix = None, beam_correction=0):
         """Planck inverse noise covariance matrix.
 
         Method to build Planck inverse noise covariance matrix, using sigma computed during the initialisation of the class.
@@ -1210,10 +1206,10 @@ class PlanckAcquisitionTest:
         ----------
         planck_ntot : float
             Multiplicative factor for the noise
-        fact : array, optional
-            Array of lenght the number of Planck bands considered, which can be used to add a multiplicative factor to specific bands, by default None
-        mask : array, optional
-            Array to mask some sky regions if wanted, by default None
+        weight_planck : float, optional
+            Weight of Planck information inside the QUBIC patch, by default 1.0
+        seenpix : array, optional
+            Array of pixels seen by QUBIC, by default None
         beam_correction : float, optional
             Correction factor for the beam, by default 0
 
@@ -1224,7 +1220,6 @@ class PlanckAcquisitionTest:
         """
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
 
-        nb = np.array(self.sigma).shape[0]
         npix = hp.nside2npix(self.nside)
         sigma = self.sigma.copy()  # (1 because we go over each planck band separately, npix, 3)
 
@@ -1237,53 +1232,18 @@ class PlanckAcquisitionTest:
             varnew = hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
             sigma = 1e6 * np.sqrt(varnew.T) * planck_ntot
 
-        if fact is not None:
-            fact = np.asarray(fact)
-            if fact.shape[0] != nb:
-                raise ValueError(f"`fact` must have length {nb}, got {fact.shape[0]}")
-            sigma = np.stack([sigma[inu] * fact[inu] for inu in range(nb)], axis=0)
+        base_weight = np.zeros_like(sigma) if planck_ntot == 0 else 1.0 / ((sigma * planck_ntot) ** 2) #this is invN before correcting for the patch
+        
+        beta = np.ones(npix)
+        if seenpix is not None:
+            beta[seenpix] = weight_planck # reweight
 
-        if mask is not None:
-            m = np.asarray(mask)
-            if m.ndim == 1:
-                m = m[:, None]                                    # (npix, 1)
-            # broadcast to (nb, npix, 3)
-            sigma = sigma / m[None, :, :]
-            
-        sigma = sigma * planck_ntot
-        self.sigma = sigma
-        weight = 1 / (sigma**2)
+        weight = np.zeros_like(base_weight)
+        beta_pos = beta > 0 #if weight_planck = 0, beta is 0 in seenpix, avoid division by zero
+        weight[beta_pos, :] = base_weight[beta_pos, :] / (beta[beta_pos, None] ** 2)
 
         return DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
     
-        
-
-        if planck_ntot == 0:
-            return IdentityOperator(shapein=(nb, npix, 3))
-
-        if fact is None:
-            sigma = np.stack([self.sigma[inu] for inu in range(nb)], axis=0).copy()
-        else:
-            fact = np.asarray(fact)
-            if fact.shape[0] != nb:
-                raise ValueError(f"`fact` must have length {nb}, got {fact.shape[0]}")
-            sigma = np.stack([self.sigma[inu] * fact[inu] for inu in range(nb)], axis=0)
-
-        if beam_correction != 0:
-            factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2
-            # print(f'corrected by {factor}')
-            varnew = hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
-            sigma = 1e6 * np.sqrt(varnew.T)
-
-        if mask is not None:
-            for i in range(sigma.shape[1]):
-                sigma[:, i] /= mask.copy()
-
-        sigma = sigma * planck_ntot
-        self.sigma = sigma
-
-        weight = 1.0 / (sigma ** 2)          # (nb, npix, 3)
-        return DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
 
     def _get_mixing_matrix(self, nus, beta):
         """Planck Mixing Matrix.
@@ -1415,7 +1375,7 @@ class PlanckAcquisitionTest:
 
 
 class JointAcquisitionFrequencyMapMaking:
-    def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False, oldcode_Planck=True):
+    def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False):
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
@@ -1425,12 +1385,8 @@ class JointAcquisitionFrequencyMapMaking:
         self.scene = self.qubic.scene
 
         if self.is_external_data:
-            if oldcode_Planck:
-                self.pl143 = PlanckAcquisition(143, self.scene)
-                self.pl217 = PlanckAcquisition(217, self.scene)
-            else:
-                self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
-                self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+            self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
+            self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
             self.planck_acquisition = [self.pl143, self.pl217]
             #! Tom: we should use the following here, but it is not working right now, one will need to adjust the shape and the way invN is used
             # self.planck_acquisition = PlanckAcquisitionTest(nus=[143, 217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
@@ -1469,10 +1425,10 @@ class JointAcquisitionFrequencyMapMaking:
         qubic_ndet,
         qubic_npho150,
         qubic_npho220,
-        planck_ntot,  # noise weights of QUBIC and Planck
+        planck_ntot,  
+        seenpix,
         weight_planck=1,
         beam_correction=None,
-        mask=None,
     ):
         if beam_correction is None:
             beam_correction = [0] * self.Nrec
@@ -1482,8 +1438,8 @@ class JointAcquisitionFrequencyMapMaking:
         invN = [R(invNq(R.T))]
 
         if self.is_external_data:
-            invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, mask=mask)
-            invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, mask=mask)
+            invntt_planck143 = self.pl143.get_invntt_operator(planck_ntot, weight_planck = weight_planck, seenpix=seenpix)
+            invntt_planck217 = self.pl217.get_invntt_operator(planck_ntot, weight_planck = weight_planck, seenpix=seenpix)
 
             R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
 
@@ -1500,7 +1456,7 @@ class JointAcquisitionFrequencyMapMaking:
 
 
 class JointAcquisitionComponentsMapMaking:
-    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None):
+    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, oldcode_Planck = True, nu_co=None, H=None):
         self.d = d
         self.Nsub = Nsub
         self.comp = comp
@@ -1511,8 +1467,10 @@ class JointAcquisitionComponentsMapMaking:
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
 
         self.scene = self.qubic.scene
-        # self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nsub_planck)
-        self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_pysm=False)
+        if oldcode_Planck:
+            self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nsub_planck)
+        else:
+            self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_pysm=False)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):

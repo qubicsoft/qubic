@@ -1169,7 +1169,7 @@ class PlanckAcquisitionTest:
     def get_fwhm(self, nus, fwhm143=0.002094):
         return fwhm143 * (143 / nus)
 
-    def get_noise(self, planck_ntot, seed=None, fact=None, seenpix=None):
+    def get_noise(self, planck_ntot, weight_planck=0, seenpix=None, seed=None):
         """Planck Noise
 
         Method to build Planck noise. It uses sigma values computed during initialisation of the classe.
@@ -1180,8 +1180,6 @@ class PlanckAcquisitionTest:
             Multiplicative factor for the noise.
         seed : int, optional
             Seed for random noise generation, by default None
-        fact : array, optional
-            Array of lenght the number of Planck bands considered, which can be used to add a multiplicative factor to specific bands, by default None
         seenpix : array, optional
             Array of pixels seen by QUBIC, by default None
 
@@ -1192,24 +1190,18 @@ class PlanckAcquisitionTest:
         """
         state = np.random.get_state()
         np.random.seed(seed)
-        out = np.zeros((len(self.nus), self.npix, 3))
+        out = np.zeros((1, self.npix, 3))
 
-        for inu in range(len(self.nus)):
-            if fact is None:
-                f = 1
-            else:
-                f = fact[inu]
-            sigma = f * self.sigma[inu]
-            out[inu] = np.random.standard_normal((self.npix, 3)) * sigma
-
-        if seenpix is not None:
-            out[:, seenpix, :] = 0
+        sigma = self.sigma[0]
+        out[0, :, :] = np.random.standard_normal((self.npix, 3)) * sigma
 
         np.random.set_state(state)
 
+        out[:, seenpix, :] = weight_planck * out[:, seenpix, :]  # Add the same amount of noise as information inside the patch
+
         return out * planck_ntot
 
-    def get_invntt_operator(self, planck_ntot, fact=None, mask=None, beam_correction=0):
+    def get_invntt_operator(self, planck_ntot, weight_planck=1.0, seenpix=None, beam_correction=0):
         """Planck inverse noise covariance matrix.
 
         Method to build Planck inverse noise covariance matrix, using sigma computed during the initialisation of the class.
@@ -1218,10 +1210,10 @@ class PlanckAcquisitionTest:
         ----------
         planck_ntot : float
             Multiplicative factor for the noise
-        fact : array, optional
-            Array of lenght the number of Planck bands considered, which can be used to add a multiplicative factor to specific bands, by default None
-        mask : array, optional
-            Array to mask some sky regions if wanted, by default None
+        weight_planck : float, optional
+            Weight of Planck information inside the QUBIC patch, by default 1.0
+        seenpix : array, optional
+            Array of pixels seen by QUBIC, by default None
         beam_correction : float, optional
             Correction factor for the beam, by default 0
 
@@ -1232,44 +1224,29 @@ class PlanckAcquisitionTest:
         """
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
 
-        invntt_operator_shapein = 3 * len(self.nus) * 12 * self.nside**2
+        npix = hp.nside2npix(self.nside)
+        sigma = self.sigma.copy()  # (1 because we go over each planck band separately, npix, 3)
 
         if planck_ntot == 0:
-            return IdentityOperator(shapein=invntt_operator_shapein)
-
-        # Create an empty array to store the values of sigma
-        allsigma = np.array([])
-
-        # Iterate through the frequency values
-        for inu in range(len(self.nus)):
-            # Determine the scaling factor for the noise
-            if fact is None:
-                f = 1
-            else:
-                f = fact[inu]
-
-            # Get the noise value for the current frequency and upsample to the desired nside
-            sigma = f * self.sigma[inu]
-
-            if mask is not None:
-                sigma /= np.array([mask, mask, mask]).T
-
-            # Append the noise value to the list of all sigmas
-            allsigma = np.append(allsigma, sigma.ravel())
+            return IdentityOperator(shapein=(npix, 3))
 
         if beam_correction != 0:
-            #! Tom: I don't know if these computations are correct or not, and I don't know where the numerical factors come from
-            factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.nside)) ** 2)
-            new_variance = hp.smoothing((sigma**2).T, fwhm=beam_correction / np.sqrt(2)) / factor
-            allsigma = np.sqrt(new_variance.T)
+            factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2
+            # print(f'corrected by {factor}')
+            varnew = hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
+            sigma = 1e6 * np.sqrt(varnew.T) * planck_ntot
 
-        # Flatten the list of sigmas and multiply by Planck noise level, then create a diagonal operator
-        allsigma = allsigma.ravel().copy() * planck_ntot
-        invN = DiagonalOperator(1 / allsigma**2, broadcast="leftward", shapein=invntt_operator_shapein)
+        base_weight = np.zeros_like(sigma) if planck_ntot == 0 else 1.0 / ((sigma * planck_ntot) ** 2)  # this is invN before correcting for the patch
 
-        # Create reshape operator and apply it to the diagonal operator
-        R = ReshapeOperator(invN.shapeout, invN.shape[0])
-        return R(invN(R.T))
+        beta = np.ones(npix)
+        if seenpix is not None:
+            beta[seenpix] = weight_planck  # reweight
+
+        weight = np.zeros_like(base_weight)
+        beta_pos = beta > 0  # if weight_planck = 0, beta is 0 in seenpix, avoid division by zero
+        weight[beta_pos, :] = base_weight[beta_pos, :] / (beta[beta_pos, None] ** 2)
+
+        return DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
 
     def _get_mixing_matrix(self, nus, beta):
         """Planck Mixing Matrix.
@@ -1457,10 +1434,10 @@ class JointAcquisitionFrequencyMapMaking:
         qubic_ndet,
         qubic_npho150,
         qubic_npho220,
-        planck_ntot,  # noise weights of QUBIC and Planck
+        planck_ntot,
+        seenpix,
         weight_planck=1,
         beam_correction=None,
-        mask=None,
     ):
         if beam_correction is None:
             beam_correction = [0] * self.Nrec
@@ -1470,8 +1447,8 @@ class JointAcquisitionFrequencyMapMaking:
         invN = [R(invNq(R.T))]
 
         if self.is_external_data:
-            invntt_planck143 = weight_planck * self.pl143.get_invntt_operator(planck_ntot, mask=mask)
-            invntt_planck217 = weight_planck * self.pl217.get_invntt_operator(planck_ntot, mask=mask)
+            invntt_planck143 = self.pl143.get_invntt_operator(planck_ntot, weight_planck=weight_planck, seenpix=seenpix)
+            invntt_planck217 = self.pl217.get_invntt_operator(planck_ntot, weight_planck=weight_planck, seenpix=seenpix)
 
             R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
 

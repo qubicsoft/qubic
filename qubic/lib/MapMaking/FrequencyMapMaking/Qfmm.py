@@ -8,6 +8,7 @@ import numpy as np
 import yaml
 from fgbuster.component_model import CMB, Dust, Synchrotron
 from pyoperators import BlockDiagonalOperator, DiagonalOperator
+from pysimulators import ProjectionOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
 
@@ -165,20 +166,23 @@ class PipelineFrequencyMapMaking:
         #     R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
         #     self.invN = R(self.invN(R.T))
         self.invN = self.joint.get_invntt_operator(
-            mask=self.mask,
             qubic_ndet=self.params["QUBIC"]["NOISE"]["ndet"],
             qubic_npho150=self.params["QUBIC"]["NOISE"]["npho150"],
             qubic_npho220=self.params["QUBIC"]["NOISE"]["npho220"],
             planck_ntot=self.params["PLANCK"]["level_noise_planck"],
+            weight_planck=self.params["PLANCK"]["weight_planck"],
+            seenpix=self.seenpix,
         )
 
         ### Noises
         if self.params["PLANCK"]["external_data"]:
-            rng_noise_planck = np.random.default_rng(seed=self.params["PLANCK"]["seed_noise"])
             self.noise_planck = []
             for i in range(2):
-                # self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(rng_noise_planck) * self.params["PLANCK"]["level_noise_planck"])
-                self.noise_planck.append(self.joint.planck_acquisition[i].get_noise(planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"]))
+                self.noise_planck.append(
+                    self.joint.planck_acquisition[i].get_noise(
+                        planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"], weight_planck=self.params["PLANCK"]["weight_planck"], seenpix=self.seenpix
+                    )
+                )
 
         qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
         self.noiseq = qubic_noise.total_noise(
@@ -542,8 +546,17 @@ class PipelineFrequencyMapMaking:
             for j_fsub in range(fsub):
                 H_single = H_qubic[irec * fsub + j_fsub]
 
-                D = H_single.operands[1]
-                P = H_single.operands[-1]
+                D = None
+                # D = H_single.operands[1]
+                for op in H_single.operands:
+                    if isinstance(op, DiagonalOperator):
+                        D = op
+                        break
+                P = None
+                for op in H_single.operands:
+                    if isinstance(op, ProjectionOperator):
+                        P = op
+                        break
                 sh = P.matrix.data.index.shape
 
                 point_per_det = sh[0] // no_det

@@ -1,5 +1,5 @@
-path_out: "test_master/"
-datafilename: "test"
+path_out: "center_left/"
+datafilename: "sky_noise"
 
 CMB:
     cmb: True
@@ -9,45 +9,49 @@ CMB:
 
 Foregrounds:
     Dust: True               # Thermal Dust emission
-    Synchrotron: False        # Synchrotron emission
+    Synchrotron: False     # Synchrotron emission
 
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "UWB"          # Instrumental design (MB, DB or UWB)
-    configuration: "FI"       # Instrumental configuration (TD or FI)
+    instrument: "MB"          # Instrumental design (MB, DB or UWB)
+    configuration: "TD"       # Instrumental configuration (TD or FI)
     npointings: 1000          # Number of time samples
     nsub_in: 8                # Number of sub-acquisitions
     nsub_out: 8
-    nrec: 2                                 # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-    convolution_in: False                    # Angular resolution in the input TOD
-    convolution_out: False                  # Angular resolution in the reconstruction
+    nrec: 2                             # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
+    convolution_in: True                   # Angular resolution in the input TOD
+    convolution_out: False               # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
-        ndet: 0                             # Level of detector noise            # randomness not fixed for det and photon noise, to be checked
-        npho150: 0                          # Level of photon noise at 150 GHz
+        ndet: 1                            # Level of detector noise            # randomness not fixed for det and photon noise, to be checked
+        npho150: 1                          # Level of photon noise at 150 GHz
         npho220: 0                          # Level of photon noise at 220 GHz
-        detector_nep: 4.7e-17                 # NEP of detector noise # do two different parameters?
+        detector_nep: 2.05e-16                 # NEP of detector noise # do two different parameters?
+        duration_150: 1                    # Effective duration at 150 GHz
+        duration_220: 1                    # Effective duration at 220 GHz
         seed_noise: 11111
     SYNTHBEAM:
         synthbeam_kmax: 1     # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
         synthbeam_fraction: 1
     dtheta: 15                # Angle for coverage
+    duration150: 1
+    duration220: 0
 
 SKY:
     ### This section control the reconstructed sky
 
     nside: 128                # Nside of components
     coverage_cut: 0.1         # Define a cut where the coverage is too low
-    RA_center: 0
-    DEC_center: -57
+    RA_center: 319.77
+    DEC_center: 26.77
 
 PLANCK:
     ### This section define which external data are we using
 
     external_data: True                    
     weight_planck: 0                            # Weight of Planck data within the QUBIC patch
-    level_noise_planck: 0                       # Noise level for Planck data
+    level_noise_planck: 1                       # Noise level for Planck data
     seed_noise: 22222
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
@@ -59,7 +63,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_iter_pcg: 50            # Number of PCG iterations #100
+    n_iter_pcg: 100            # Number of PCG iterations #100
     tol_pcg: 1.0e-08          # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: True

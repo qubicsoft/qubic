@@ -7,7 +7,8 @@ from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineEnd2End
 ### Common MPI arguments
 comm = MPI.COMM_WORLD
 
-parameters_file = str(sys.argv[1])
+#parameters_file = str(sys.argv[1])
+parameters_file = '/home/mattia/qubic/qubic/scripts/MapMaking/src/FMM/params.yml'
 
 try:
     file_spectrum = str(sys.argv[2])

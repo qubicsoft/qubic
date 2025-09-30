@@ -327,11 +327,8 @@ class PipelineFrequencyMapMaking:
             "photon_noise": True,
             "nhwp_angles": 3,
             #'effective_duration':3,
-            "effective_duration150": 3,
-            "effective_duration220": 3,
-            "filter_relative_bandwidth": 0.25,
-            "type_instrument": "wide",  # ?
-            "TemperatureAtmosphere150": None,
+            "effective_duration150": self.params["QUBIC"]["NOISE"]["duration_150"],
+            "effective_duration220": self.params["QUBIC"]["NOISE"]["duration_220"],
             "TemperatureAtmosphere220": None,
             "EmissivityAtmosphere150": None,
             "EmissivityAtmosphere220": None,
@@ -422,7 +419,7 @@ class PipelineFrequencyMapMaking:
                 def fun(nu):
                     return np.abs(fraction - f_dust.eval(nu))
             else:
-                f_cmb = CMB()
+                f_ = CMB()
                 weight_factor = f_cmb.eval(self.joint.qubic.allnus)
 
                 def fun(nu):

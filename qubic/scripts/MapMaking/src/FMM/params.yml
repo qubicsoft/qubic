@@ -1,14 +1,14 @@
-path_out: "center_left/"
-datafilename: "sky_noise"
+path_out: "center_right/"
+datafilename: "noise6"
 
 CMB:
-    cmb: True
+    cmb: False
     seed: 1                   # CMB realization
     r: 0
     Alens: 1
 
 Foregrounds:
-    Dust: True               # Thermal Dust emission
+    Dust: False               # Thermal Dust emission
     Synchrotron: False     # Synchrotron emission
 
 QUBIC:
@@ -16,26 +16,26 @@ QUBIC:
 
     instrument: "MB"          # Instrumental design (MB, DB or UWB)
     configuration: "TD"       # Instrumental configuration (TD or FI)
-    npointings: 1000          # Number of time samples
+    npointings: 8000          # Number of time samples
     nsub_in: 8                # Number of sub-acquisitions
     nsub_out: 8
     nrec: 2                             # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-    convolution_in: True                   # Angular resolution in the input TOD
+    convolution_in: False                  # Angular resolution in the input TOD
     convolution_out: False               # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
-        ndet: 1                            # Level of detector noise            # randomness not fixed for det and photon noise, to be checked
+        ndet: 1                           # Level of detector noise            # randomness not fixed for det and photon noise, to be checked
         npho150: 1                          # Level of photon noise at 150 GHz
         npho220: 0                          # Level of photon noise at 220 GHz
         detector_nep: 2.05e-16                 # NEP of detector noise # do two different parameters?
         duration_150: 1                    # Effective duration at 150 GHz
         duration_220: 1                    # Effective duration at 220 GHz
-        seed_noise: 11111
+        seed_noise: 111116
     SYNTHBEAM:
         synthbeam_kmax: 1     # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
         synthbeam_fraction: 1
     dtheta: 15                # Angle for coverage
-    duration150: 1
+    duration150: 0.27
     duration220: 0
 
 SKY:
@@ -43,8 +43,8 @@ SKY:
 
     nside: 128                # Nside of components
     coverage_cut: 0.1         # Define a cut where the coverage is too low
-    RA_center: 319.77
-    DEC_center: 26.77
+    RA_center: 245
+    DEC_center: -61.45
 
 PLANCK:
     ### This section define which external data are we using
@@ -52,7 +52,7 @@ PLANCK:
     external_data: True                    
     weight_planck: 0                            # Weight of Planck data within the QUBIC patch
     level_noise_planck: 1                       # Noise level for Planck data
-    seed_noise: 22222
+    seed_noise: 222226
     bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100                            # Number of sub acquisitions for Planck's data
 
@@ -65,7 +65,7 @@ PCG:
 
     n_iter_pcg: 100            # Number of PCG iterations #100
     tol_pcg: 1.0e-08          # Tolerance for PCG
-    preconditioner: True
+    preconditioner: False
     initial_guess_intensity_to_zero: True
     gif: True
     resolution_plot: 15

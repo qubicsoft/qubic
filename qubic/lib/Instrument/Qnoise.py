@@ -36,7 +36,7 @@ class QubicNoise:
         # get_pointing(self.dict) and QubicScene(self.dict) don't depend on the params modified here, they can be computed outside the class
         self.acq = QubicAcquisition(QubicInstrument(self.dict), sampling, scene, self.dict)
 
-        print(f"Duration at at {band} GHz is {duration} yrs")
+        print(f"Duration at {band} GHz is {duration} yrs")
 
     def get_noise(self, det_noise, pho_noise):
         if det_noise:
@@ -80,7 +80,6 @@ class QubicTotNoise:
         elif self.type == "MB":
             self.band_used = [150]
             self.duration = [d["effective_duration150"]]
-            print('---------------------------', self.duration, '--------------------------')
         else:
             raise ValueError("Instrument type {} is not implemented.".format(self.type))
 

@@ -19,6 +19,8 @@ class QubicNoise:
 
         if band != 150 and band != 220:
             raise TypeError("Unknown band '{}'.".format(band))
+        
+        print(band, duration)
 
         self.rng_noise = rng_noise
 
@@ -58,6 +60,7 @@ class QubicNoise:
         return n
 
     def photon_noise(self, wpho=1):
+        print("photon_noise wpho", wpho)
         if wpho == 0:
             return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
         else:
@@ -66,6 +69,7 @@ class QubicNoise:
             )
 
     def detector_noise(self, wdet=1):
+        print("detector_noise wdet", wdet)
         if wdet == 0:
             return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
         else:
@@ -112,15 +116,16 @@ class QubicTotNoise:
         ndet = []
         
         for i, band in enumerate(self.band_used):
+            print("band", band)
             QnoiseBand = QubicNoise(
-            self.d,
-            band,
-            self.sampling,
-            self.scene,
-            rng_noise=rng_noise,
-            duration=self.duration[i],
-            comm=self.d["comm"],
-            size=self.d["nprocs_instrument"],
+                self.d,
+                band,
+                self.sampling,
+                self.scene,
+                rng_noise=rng_noise,
+                duration=self.duration[i],
+                comm=self.d["comm"],
+                size=self.d["nprocs_instrument"],
             )
             npho.append(QnoiseBand.photon_noise(wpho[i]))
             ndet.append(QnoiseBand.detector_noise(wdet))

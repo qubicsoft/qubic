@@ -343,8 +343,8 @@ class PipelineFrequencyMapMaking:
             "photon_noise": True,
             "nhwp_angles": 3,
             #'effective_duration':3,
-            "effective_duration150": self.params["NOISE"]["duration_150"],
-            "effective_duration220": self.params["NOISE"]["duration_220"],
+            "effective_duration150": self.params["QUBIC"]["NOISE"]["duration_150"],
+            "effective_duration220": self.params["QUBIC"]["NOISE"]["duration_220"],
             "filter_relative_bandwidth": 0.25,
             "type_instrument": "wide", #?
             "TemperatureAtmosphere150": None,

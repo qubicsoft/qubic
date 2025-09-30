@@ -50,6 +50,7 @@ def show_lines(maps, nums, min=None, max=None):
 def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=None, remove=None,
                 fitted_directory=None):
     themap = np.array(FitsArray(directory + '/Flat/imgflat_TESNum_{}.fits'.format(TESNum)))
+    # print(np.shape(themap))
     az = np.array(FitsArray(directory + '/Flat/azimuth.fits'.format(TESNum)))
     el = np.array(FitsArray(directory + '/Flat/elevation.fits'.format(TESNum)))
     if azmin is None:
@@ -65,6 +66,7 @@ def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=Non
     okel = (el >= elmin) & (el <= elmax)
     el = el[okel]
     themap = themap[:, okaz][okel, :]
+    # print(np.shape(themap))
     if remove is not None:
         mm = np.mean(remove)
         ss = np.std(remove)
@@ -662,6 +664,7 @@ class SbModelIndepPeaks:
         newxxyy[0, :] += xc + dx
         newxxyy[1, :] += yc + dy
         if ~(np.product(np.isfinite(newxxyy)).astype(bool)):
+            print("Failed fit.")
             stop
 
         ### Peak amplitudes and resulting map #######################

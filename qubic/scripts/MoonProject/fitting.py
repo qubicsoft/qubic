@@ -13,6 +13,8 @@ class Data:
         self.y = y
         self.model = model
         self.cov = cov
+        print(np.shape(x), np.shape(cov))
+        print(np.prod(np.shape(x)), np.prod(np.shape(cov)))
         if np.prod(np.shape(x)) == np.prod(np.shape(cov)):
             self.diag = True
             self.errors = cov

@@ -30,6 +30,8 @@ QUBIC:
         npho150: 0                          # Level of photon noise at 150 GHz
         npho220: 0                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise # do two different parameters?
+        duration_150: 3                    # Effective duration at 150 GHz
+        duration_220: 3                    # Effective duration at 220 GHz
         seed_noise: 11111
     SYNTHBEAM:
         synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)

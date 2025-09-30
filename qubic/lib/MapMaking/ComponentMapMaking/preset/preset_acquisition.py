@@ -474,10 +474,10 @@ class PresetAcquisition:
                 self.preset_qubic.dict,
                 self.preset_qubic.joint_out.qubic.sampling,
                 self.preset_qubic.joint_out.qubic.scene,
-                duration=[
-                        self.preset_qubic.params_qubic["NOISE"]["duration_150"],
-                        self.preset_qubic.params_qubic["NOISE"]["duration_220"],
-                    ],
+                # duration=[                                                        # duration is read from the params.yml file and then implemented in self.preset_qubic.dict, so no need for these lines
+                #         self.preset_qubic.params_qubic["NOISE"]["duration_150"],
+                #         self.preset_qubic.params_qubic["NOISE"]["duration_220"],
+                #     ],
             )
 
         return noise.total_noise(

@@ -99,7 +99,7 @@ def plot_fit_img(mapij, axs, ipos, jpos, iguess, jguess, ifit, jfit, vmin, vmax,
     ax.set_ylabel('Degrees')
     # ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=3, label='Guess') # j = -azt = x, i = elt = y
     # ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
-    ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=3, label='Guess') # j = azt, i = -elt
+    ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=5, label='Guess') # j = azt, i = -elt
     ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
     ax.legend()
     cax = axs[-1]

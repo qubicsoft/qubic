@@ -245,9 +245,11 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
         if verbose: print('Fitting with Minuit')
         ver = sys.version_info
         if ver.major < 3:
+                print("ver.major > 3")
                 theargs = dict(theguess.items() + dfix.items() + dstep.items())
                 if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
         else:
+                print("ver.major <= 3")
                 for k in dfix.keys():
                         theguess[k] = dfix[k]
                 theargs = theguess
@@ -255,22 +257,26 @@ def do_minuit(x, y, covarin, guess, functname=thepolynomial, fixpars=None, chi2=
                         for k in drng.keys():
                                 theguess[k] = drng[k]
                 theargs.update(theguess)
-
+        print("theargs", theargs, flush=True)
         if isinstance(chi2, MyChi2):
+                print("a")
                 m = iminuit.Minuit(chi2, name=parnames, errordef=0.1, print_level=print_level, **theargs)
                 m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
 
         elif isinstance(chi2, Chi2Implement):
-                #if verbose:
-                #       print("Minimizer object: ", chi2.__dict__)
-                #       print("Guess: ", *guess)
-                #       print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)     
+                print("b")
+                if True:
+                      print("Minimizer object: ", chi2.__dict__)
+                      print("Guess: ", *guess)
+                      print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)     
                 # if iminuit.version==2.2
-                #m = iminuit.Minuit(chi2, *guess)
-                #m.migrad(ncall = ncallmax * nsplit)
+                # m = iminuit.Minuit(chi2, *guess)
+                # m = iminuit.Minuit(chi2, *guess)
+                m = iminuit.Minuit(chi2, name=parnames, *guess)
+                m.migrad(ncall = ncallmax * nsplit)
                 #if iminuit.version==1.3
-                m  = iminuit.Minuit(chi2, name=parnames, errordef=0.1, print_level=print_level, **theargs)
-                m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
+                # m  = iminuit.Minuit(chi2, name=parnames, errordef=0.1, print_level=print_level, **theargs)
+                # m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
         # print('Migrad Done')
         if minos:
                 try:

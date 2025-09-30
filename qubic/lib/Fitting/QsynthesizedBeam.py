@@ -450,6 +450,7 @@ class SbModelIndepPeaksAmpFWHM:
         # Move to actual center
         newxxyy[0, :] += xc
         newxxyy[1, :] += yc
+        print(newxxyy, flush=True)
         if ~(np.product(np.isfinite(newxxyy)).astype(bool)):
             stop
 
@@ -723,10 +724,10 @@ def fit_sb(flatmap_init, az_init, el_init, model, newsize=70, dmax=5., az_center
         el = np.array(el_init)
     az2d, el2d = np.meshgrid(az * np.cos(np.radians(el_center)), np.flip(el))
 
-    # if verbose:
-    # 	print('fit_sb: Model Name = ',model.name)
-    # 	print('Initial Parameters:')
-    # 	model.print_start()
+    # if True:
+    #     print('fit_sb: Model Name = ',model.name)
+    #     print('Initial Parameters:')
+    #     model.print_start()
 
     ### First find the location of the maximum closest to the center
     distance_max = dmax
@@ -760,14 +761,19 @@ def fit_sb(flatmap_init, az_init, el_init, model, newsize=70, dmax=5., az_center
             parsinit[9 + 4 * i] = maxval
             ranges[9 + 4 * i, 1] = np.abs(maxval) * 2
 
+    myparsinit = np.array([parsinit]) # in order for it to have the same shape as params
     ### Run the fitting
     x = [az2d, el2d]
     mm, ss = ft.meancut(flatmap, 3)
     if verbose:
-        print('Running Minuit with model: {}'.format(model.name))
+        print('Running Minuit with model: {}'.format(model.name), flush=True)
         model.print_start()
-    mychi2 = ft.MyChi2_nocov(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, model)
-    fit = ft.do_minuit(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, parsinit,
+    # mychi2 = ft.MyChi2_nocov(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, model)
+    mychi2 = ft.MyChi2_nocov(x, np.ravel(flatmap), model)
+    # fit = ft.do_minuit(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, parsinit,
+    #                    functname=model, chi2=mychi2, rangepars=ranges, fixpars=fixpars,
+    #                    force_chi2_ndf=False, verbose=False, nohesse=True, precision=precision)
+    fit = ft.do_minuit(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, myparsinit,
                        functname=model, chi2=mychi2, rangepars=ranges, fixpars=fixpars,
                        force_chi2_ndf=False, verbose=False, nohesse=True, precision=precision)
     fitpars = fit[1]

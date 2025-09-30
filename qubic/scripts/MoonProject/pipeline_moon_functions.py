@@ -429,7 +429,7 @@ def get_simple_rotation_matrix(axis, angle):
                       [np.sin(angle), np.cos(angle), zero],
                       [zero, zero, one]])
     else:
-        raise ValueError("{} is not a goid axis.".format(axis))
+        raise ValueError("{} is not a good axis.".format(axis))
     return R
 
 
@@ -633,6 +633,78 @@ def get_new_azel_v4(azt, elt, azmoon, elmoon): # trying to get a conversion that
     # newelt_ = (elt - elmoon)
     # print("newelt_", np.min(newelt_), np.max(newelt_))
 
+    return newazt, newelt
+
+
+def get_new_azel_v5(azt, elt, azmoon, elmoon, delta_moon_pos_fit): # second round: when Moon position in known, do the rotations from scratch?
+    # We have to run a loop on all TES in order for the kernel not to crash!
+    if delta_moon_pos_fit.ndim == 1:
+        ndets = 1
+    elif delta_moon_pos_fit.ndim == 2:
+        ndets = len(delta_moon_pos_fit)
+    else:
+        raise ValueError("delta_moon_pos_fit.ndim = {}".format(delta_moon_pos_fit.ndim))
+    ntimes = len(azt)
+    new_los_pos_all = np.zeros((3, ndets, ntimes))
+    ndet_per_loop = 10 # by batches of 10?
+    print(delta_moon_pos_fit)
+    for iloop in range(len(delta_moon_pos_fit)//ndet_per_loop + 1):
+        max_idx = min((iloop + 1)*ndet_per_loop, len(delta_moon_pos_fit))
+        print("iloop", iloop, max_idx)
+        moon_pos_loop = delta_moon_pos_fit[iloop*ndet_per_loop:max_idx]
+        shape_pos = np.shape(moon_pos_loop)
+        moon_pos_flat = moon_pos_loop.reshape(np.prod(shape_pos))
+        moon_pos_flat[np.isnan(moon_pos_flat)] = 0
+        moon_pos_ = np.reshape(moon_pos_flat, shape_pos)
+        rho_sphere = 1
+        azmoon_ = azmoon[None, :] + moon_pos_[..., 0, None] # we add a correction for each detector
+        elmoon_ = elmoon[None, :] + moon_pos_[..., 1, None]
+        # shape = (ndets, ntimes)
+        # moon_sph = np.radians(np.array([90 - elmoon_, azmoon_]))
+        # moon_pos = spherical2cartesian(rho_sphere, moon_sph[0], moon_sph[1])
+        los_sph = np.radians(np.array([90 - elt[None, :], azt[None, :]]))
+        los_pos = spherical2cartesian(rho_sphere, los_sph[0], los_sph[1])
+        # shape = (3, ndets, ntimes)
+
+        ### simpler code
+        rotation_matrix1 = get_simple_rotation_matrix("z", np.radians(azmoon_))
+        rotation_matrix2 = get_simple_rotation_matrix("y", np.radians(-elmoon_))
+
+        # print("shape los_sph", np.shape(los_pos))
+        # print("shape rotation_matrix", np.shape(rotation_matrix))
+        # new_los_pos = np.einsum("il,ikl->kl", los_pos, rotation_matrix) # computation working!
+        # print("shape rotation_matrix", np.shape(rotation_matrix1), np.shape(rotation_matrix2))
+        new_los_pos = np.einsum("ijl,ikjl->kjl", los_pos, rotation_matrix1)
+        new_los_pos = np.einsum("ijl,ikjl->kjl", new_los_pos, rotation_matrix2)
+
+        ### to see if we get always (0, 0, 0) for the Moon positions
+        # for i in range(3):
+        #     print(moon_pos[i])
+        # new_moon_pos = np.einsum("ijl,ikjl->kjl", moon_pos, rotation_matrix1)
+        # print("First rotation")
+        # for i in range(3):
+        #     print(new_moon_pos[i])
+        # new_moon_pos = np.einsum("ijl,ikjl->kjl", new_moon_pos, rotation_matrix2)
+        # print("Second rotation")
+        # for i in range(3):
+        #     print(new_moon_pos[i])
+        # print(np.allclose(new_moon_pos[1], np.zeros_like(new_moon_pos[1])))
+        # print(np.allclose(new_moon_pos[2], np.zeros_like(new_moon_pos[2])))
+        # print(np.shape(new_los_pos))
+        # new_los_pos_all[:, iloop*ndet_per_loop:(iloop + 1)*ndet_per_loop] = new_los_pos # doesn't raise an error because if slicing goes too high it is just ignored??
+        new_los_pos_all[:, iloop*ndet_per_loop:max_idx] = new_los_pos
+    print("idx range = ", iloop*ndet_per_loop, (iloop + 1)*ndet_per_loop)
+    print(np.shape(new_los_pos_all))
+    x, y, z = new_los_pos_all
+    # print(np.shape(x), np.shape(y), np.shape(z))
+    res = cartesian2spherical(x, y, z)
+    rho, theta, phi = res[0], res[1], res[2]
+    if not np.all(np.isclose(rho, 1)):
+        raise ValueError("The radius of the sphere is not one.")
+        
+    newazt = np.degrees(phi)
+    newelt = 90 - np.degrees(theta)
+    print("shapes newazt, newelt = ", np.shape(newazt), np.shape(newelt))
     return newazt, newelt
 
 
@@ -903,7 +975,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     if det_pos is None:
         center=[np.mean(newazt), np.mean(newelt)]
     else:
-        center=[0, 0]
+        # center = det_pos
+        center = [0, 0] # because of the rotation applied, the Moon is supposed to be at the centre
 
     final_tod = mytod_4 # good filter
     # final_tod = mytod # no filter
@@ -911,6 +984,11 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
     mask_scan = scantype != 0
     mask_map = mask_scan# * mask_elt
+    print(np.shape(mask_map))
+    print(np.shape(newazt))
+    print(np.shape(newelt))
+    print(np.shape(final_tod))
+
     mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
 
     # To compare the map created with only forth scans with the map created with only back scans
@@ -1226,7 +1304,7 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     
     ### Displays the image as an array
-    mm, ss = ft.meancut(mapij, 3)
+    mm, ss = ft.meancut(mapij[mapij>1e-3], 3)
     if mini is None:
         mini = mm-nsig*ss
     if maxi is None:
@@ -1724,12 +1802,13 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
 
         # New coordinates centered on the Moon
-        # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon)
+        newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
         # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
-        # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon)
-        # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos)
-        newazt, newelt = get_new_azel_v4(azt, elt, azmoon, elmoon)
-        
+        # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon) # great circle
+        # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos) # ?
+        # newazt, newelt = get_new_azel_v4(azt, elt, azmoon, elmoon) # small circle
+        # newazt, newelt = get_new_azel_v5(azt, elt, azmoon, elmoon, moon_pos_fit=det_pos)
+
         # fig, axs = plt.subplots(1, 2, figsize=(15, 5))
         # ax = axs[0]
         # ax.plot(newazt, label="newazt = (azt - azmoon)*cos(elt)")
@@ -1770,7 +1849,8 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
     ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
     azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
     # for each detector, we get a different set of azimuth elevation
-    allnewazt, allnewelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr)
+    # allnewazt, allnewelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr) # order of dimensions chenged in v5, be careful!
+    allnewazt, allnewelt = get_new_azel_v5(azt, elt, azmoon, elmoon, det_pos)
     return tt, tinit, alltod, QPidx, azt, elt, allnewazt, allnewelt, scantype, Tbath
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, 
@@ -1802,12 +1882,15 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             # tod = alltod[iTES, :]
             tod = alltod[iTES == QPidx][0] # order of TES not well-imlpemented before
             if det_pos is not None:
-                if np.shape(newazt_)[1] == 1:
-                    newazt = newazt_[:, 0]
-                    newelt = newelt_[:, 0]
+                if np.shape(newazt_)[0] == 1:
+                    newazt = newazt_[0]
+                    newelt = newelt_[0]
+                    # det_pos_i = det_pos
                 else:
-                    newazt = newazt_[:, iTES]
-                    newelt = newelt_[:, iTES]
+                    newazt = newazt_[iTES]
+                    newelt = newelt_[iTES]
+                    # det_pos_i = det_pos[iTES]
+            print("shape pos", np.shape(det_pos))
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                              TES_number=TESNum, nside=nside, 
                                                              doplot=doplot, check_back_forth=check_back_forth, det_pos=det_pos)
@@ -1815,7 +1898,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
         ### Note that this code has been generated using ChatGPT
-        def process_TES(i, TESNum, allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot):
+        def process_TES(i, TESNum, allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot, det_pos_i):
             # Create a lock for each process to ensure safe access to shared memory
             lock = Lock()
             
@@ -1841,7 +1924,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
                     Parallel(n_jobs=-1)(delayed(process_TES)(i, allTESNum[i], allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot)
                                         for i in range(len(allTESNum)))
                 else:
-                    Parallel(n_jobs=-1)(delayed(process_TES)(i, allTESNum[i], allmaps, alltod, tt, azt, elt, scantype, newazt[:, i], newelt[:, i], nside, doplot)
+                    Parallel(n_jobs=-1)(delayed(process_TES)(i, allTESNum[i], allmaps, alltod, tt, azt, elt, scantype, newazt[i], newelt[i], nside, doplot)
                                         for i in range(len(allTESNum)))
         
                 # Convert the manager list back to a NumPy array (this ensures allmaps is a numpy array of arrays)

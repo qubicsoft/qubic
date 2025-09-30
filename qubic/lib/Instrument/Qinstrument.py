@@ -292,6 +292,21 @@ class QubicInstrument(Instrument):
         layout.area = surface_simple_polygon(layout.vertex[0, :, :2])
         layout.ncorr = ncorr
         layout.ngrids = ngrids
+        modif = 3 # 3 is good, 0 is no modif
+        if modif == 1:
+            print("correction = {}".format([-6, -16, 0]))
+            layout.center += np.array([0.003*(-6), 0.003*(-16), 0.003*0]) # fit unflipped numerotation? no
+        # rotation_center = Rotation3dOperator("XYZ", 0, 0, 5, degrees=True, shapein=np.shape(layout.center))
+        # layout.center = rotation_center(layout.center)
+        elif modif == 2:
+            print("correction = {}".format([-1, 8, 0]))
+            layout.center += np.array([0.003*(-1), 0.003*(+8), 0.003*0]) # fit flipped numerotation? no
+        elif modif == 3:
+            correction = [1, -8]
+            print("correction = {}".format(correction))
+            layout.center += np.array([0.003*correction[0], 0.003*correction[1], 0.003*0]) # fit flipped numerotation? yes
+        print(layout.center)
+        # aze
         return layout
 
     def _init_beams(self, primary, secondary, filter_nu):

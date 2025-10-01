@@ -1165,7 +1165,7 @@ class PlanckAcquisitionTest:
     def get_maps(self):
         return 0
 
-    def get_noise(self, planck_ntot, weight_planck = 0, seenpix = None, seed = None):
+    def get_noise(self, planck_ntot, weight_planck = 1., seenpix = None, seed = None):
         """Planck Noise
 
         Method to build Planck noise. It uses sigma values computed during initialisation of the classe.
@@ -1184,12 +1184,15 @@ class PlanckAcquisitionTest:
         array
             Array containing noise for Planck TOD
         """
+        nus = np.asarray(self.nus)
+
         state = np.random.get_state()
         np.random.seed(seed)
-        out = np.zeros((1, self.npix, 3))
+        out = np.zeros((len(nus), self.npix, 3))
 
-        sigma = self.sigma[0]
-        out[0,:,:] = np.random.standard_normal((self.npix, 3)) * sigma
+        for inu in range(len(self.nus)):
+            sigma = self.sigma[inu]
+            out[inu,:,:] = np.random.standard_normal((self.npix, 3)) * sigma
 
         np.random.set_state(state)
 
@@ -1220,11 +1223,14 @@ class PlanckAcquisitionTest:
         """
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
 
-        npix = hp.nside2npix(self.nside)
-        sigma = self.sigma.copy()  # (1 because we go over each planck band separately, npix, 3)
+        sigma = np.asarray(self.sigma)               
+        
+        if sigma.ndim == 2:                          
+            sigma = sigma[None, ...]
+        nb, npix, _ = sigma.shape
 
         if planck_ntot == 0:
-            return IdentityOperator(shapein=(npix, 3))
+            return IdentityOperator(shapein=(3 * nb * npix))
 
         if beam_correction != 0:
             factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2
@@ -1232,17 +1238,22 @@ class PlanckAcquisitionTest:
             varnew = hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
             sigma = 1e6 * np.sqrt(varnew.T) * planck_ntot
 
-        base_weight = np.zeros_like(sigma) if planck_ntot == 0 else 1.0 / ((sigma * planck_ntot) ** 2) #this is invN before correcting for the patch
+        base_weight = 1.0 / ((sigma * planck_ntot) ** 2) #this is invN before correcting for the patch
         
-        beta = np.ones(npix)
+        beta = np.ones(npix)          
         if seenpix is not None:
-            beta[seenpix] = weight_planck # reweight
+            beta[seenpix] = weight_planck 
 
-        weight = np.zeros_like(base_weight)
-        beta_pos = beta > 0 #if weight_planck = 0, beta is 0 in seenpix, avoid division by zero
-        weight[beta_pos, :] = base_weight[beta_pos, :] / (beta[beta_pos, None] ** 2)
+        scale = np.zeros(npix) # we add a mask so to not divide by zero 
+        beta_pos = beta > 0  
+        scale[beta_pos] = 1.0 / (beta[beta_pos] ** 2)                  
 
-        return DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
+        weight = base_weight * scale[None, :, None]
+
+        invN = DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
+
+        R = ReshapeOperator(invN.shapeout, invN.shape[0])
+        return R(invN(R.T))
     
 
     def _get_mixing_matrix(self, nus, beta):
@@ -1388,8 +1399,6 @@ class JointAcquisitionFrequencyMapMaking:
             self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
             self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
             self.planck_acquisition = [self.pl143, self.pl217]
-            #! Tom: we should use the following here, but it is not working right now, one will need to adjust the shape and the way invN is used
-            # self.planck_acquisition = PlanckAcquisitionTest(nus=[143, 217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck, use_pysm=False)
 
     def get_operator(self, fwhm=None, seenpix=None):
         ### nstokes is hardcoded to nstokes = 3
@@ -1456,22 +1465,25 @@ class JointAcquisitionFrequencyMapMaking:
 
 
 class JointAcquisitionComponentsMapMaking:
-    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, oldcode_Planck = True, nu_co=None, H=None):
+    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None, weight_planck=1., coverage_cut = 0.15):
         self.d = d
         self.Nsub = Nsub
         self.comp = comp
         self.nus_external = nus_external
         self.nsub_planck = nsub_planck
+        self.weight_planck = weight_planck
 
         ### Select the instrument model
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
 
         self.scene = self.qubic.scene
-        if oldcode_Planck:
-            self.external = OtherDataParametric(self.nus_external, self.scene.nside, self.comp, self.nsub_planck)
-        else:
-            self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_pysm=False)
+        
+        self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_pysm=False)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
+
+        coverage = self.qubic.subacqs[0].get_coverage() 
+        self.seenpix = coverage / coverage.max() > coverage_cut
+
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):
         Aq = A[: self.Nsub]
@@ -1489,10 +1501,10 @@ class JointAcquisitionComponentsMapMaking:
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 
-    def get_invntt_operator(self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot, fact=None, mask=None):
+    def get_invntt_operator(self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot):
         invNq = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)
         R = ReshapeOperator(invNq.shapeout, invNq.shape[0])
 
-        invNe = self.external.get_invntt_operator(planck_ntot, fact=fact, mask=mask)
+        invNe = self.external.get_invntt_operator(planck_ntot, weight_planck = self.weight_planck, seenpix = self.seenpix)
 
         return BlockDiagonalOperator([R(invNq(R.T)), invNe], axisout=0)

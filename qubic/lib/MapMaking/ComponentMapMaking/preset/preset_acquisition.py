@@ -119,7 +119,6 @@ class PresetAcquisition:
             self.preset_tools.params["QUBIC"]["NOISE"]["npho150"],
             self.preset_tools.params["QUBIC"]["NOISE"]["npho220"],
             self.preset_tools.params["PLANCK"]["level_noise_planck"],
-            mask=self.preset_sky.mask,
         )
 
         ### Get convolution
@@ -382,7 +381,7 @@ class PresetAcquisition:
 
         ### Build noise variables
         noise_external = self.preset_qubic.joint_in.external.get_noise(
-            planck_ntot=self.preset_tools.params["PLANCK"]["level_noise_planck"], seed=self.seed_noise_planck
+            planck_ntot=self.preset_tools.params["PLANCK"]["level_noise_planck"], weight_planck = self.preset_tools.params["PLANCK"]['weight_planck'], seenpix =  self.preset_sky.seenpix, seed=self.seed_noise_planck
         )  # * self.preset_tools.params["PLANCK"]["level_noise_planck"]
         noise_qubic = self.get_noise()
 

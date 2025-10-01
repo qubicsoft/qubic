@@ -1188,6 +1188,8 @@ class PlanckAcquisitionTest:
         array
             Array containing noise for Planck TOD
         """
+        nus = np.asarray(self.nus)
+
         state = np.random.get_state()
         np.random.seed(seed)
         out = np.zeros((1, self.npix, 3))

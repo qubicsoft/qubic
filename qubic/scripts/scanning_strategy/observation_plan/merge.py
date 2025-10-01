@@ -1,12 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
-Merged script combining:
-  - QubicObservation: simulates telescope azimuth/altitude sweeps with ramps & pauses
-  - sofia_plan: observation-planning using Abstract Source classes with constraints,
-    including writing out realistic telescope trajectories via QubicObservation
-  - Diagnostic plotting of pointing: az/time, el/time, az/el, az speed/time, and RA/DEC
+This merged script integrates:
+- Simulation of telescope azimuth/altitude sweeps with ramps and pauses
+- Observation planning 
+- Diagnostic plotting of pointing data, including azimuth vs. time, elevation vs. time, azimuth vs. elevation, azimuth speed vs. time, and RA/DEC
 
 This final version uses the user‐specified sample_params for all QubicObservation calls,
 and it saves all plots and tables to disk (under per‐source subdirectories) without interactive display.

@@ -62,7 +62,6 @@ class PresetQubic:
             preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
             weight_planck=preset_external.params_external["weight_planck"],
-            coverage_cut=self.preset_tools.params["SKY"]["coverage_cut"],
         )
 
         if self.params_qubic["nsub_in"] == self.params_qubic["nsub_out"]:
@@ -79,7 +78,6 @@ class PresetQubic:
             nu_co=nu_co,
             H=H_tojoint,
             weight_planck=preset_external.params_external["weight_planck"],
-            coverage_cut=self.preset_tools.params["SKY"]["coverage_cut"],
         )
 
     def get_dict(self):

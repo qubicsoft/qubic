@@ -1474,7 +1474,7 @@ class JointAcquisitionFrequencyMapMaking:
 
 
 class JointAcquisitionComponentsMapMaking:
-    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None, weight_planck=1.0, coverage_cut=0.15):
+    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None, weight_planck=1.0):
         self.d = d
         self.Nsub = Nsub
         self.comp = comp
@@ -1486,11 +1486,8 @@ class JointAcquisitionComponentsMapMaking:
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
         self.scene = self.qubic.scene
 
-        self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck, use_pysm=False)
+        self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
-
-        coverage = self.qubic.subacqs[0].get_coverage()
-        self.seenpix = coverage / coverage.max() > coverage_cut
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):
         Aq = A[: self.Nsub]
@@ -1508,10 +1505,10 @@ class JointAcquisitionComponentsMapMaking:
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 
-    def get_invntt_operator(self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot):
+    def get_invntt_operator(self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot, seenpix=None):
         invNq = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)
         R = ReshapeOperator(invNq.shapeout, invNq.shape[0])
 
-        invNe = self.external.get_invntt_operator(planck_ntot, weight_planck=self.weight_planck, seenpix=self.seenpix)
+        invNe = self.external.get_invntt_operator(planck_ntot, weight_planck=self.weight_planck, seenpix=seenpix)
 
         return BlockDiagonalOperator([R(invNq(R.T)), invNe], axisout=0)

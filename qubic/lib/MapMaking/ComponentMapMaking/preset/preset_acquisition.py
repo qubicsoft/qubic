@@ -172,68 +172,39 @@ class PresetAcquisition:
 
         ncomp = len(self.preset_comp.components_model_out)
         nside = self.preset_sky.params_sky["nside"]
-        npix = 12 * nside**2
-        nsub = self.preset_qubic.params_qubic["nsub_out"]
-        no_det = len(self.preset_qubic.joint_out.qubic.multiinstrument[0].detector)
+        npix = 12* nside**2
+        #nsub = self.preset_qubic.params_qubic["nsub_out"]
+        #no_det = len(self.preset_qubic.joint_out.qubic.multiinstrument[0].detector)
 
-        H_qubic = self.preset_qubic.joint_out.qubic.operator
+        H_i = self.preset.qubic.joint_out.get_operator(
+            A=self.preset.acquisition.Amm_iter,
+            gain=self.preset.gain.gain_iter,
+            fwhm=self.preset.acquisition.fwhm_mapmaking,
+            nu_co=self.preset.comp.nu_co)
 
-        stacked_dptdp_inv = np.empty((ncomp, npix))
+        # we only need the first element because for CMM the H.T H is almost flat! 
+        sky_shape=(ncomp, npix, 3)
+        diagonal = np.zeros(sky_shape)
+        for comp in range(sky_shape[0]):
+            for pixel in range(1):
+                for stokes in range(1):
+                    basis_vector = np.zeros(sky_shape)
+                    basis_vector[comp, pixel, stokes] = 1  
+                    Hv = H_i.T(H_i)(basis_vector)
+                    diagonal[comp, pixel, stokes] = Hv[comp, pixel, stokes]
 
-        # Pre-fetch Planck diagonals if needed
-        # Diag_planck_143 = self.preset_qubic.joint_out.pl143.get_invntt_operator().data[:, 0]
-        # Diag_planck_217 = self.preset_qubic.joint_out.pl217.get_invntt_operator().data[:, 0]
-        # planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
+        stacked_matrix = np.array([
+            np.full((npix, 3), diagonal[comp, 0, 0])
+            for comp in range(ncomp)])
 
-        if self.preset_tools.params["PLANCK"]["level_noise_planck"] != 0:
-            planck_diag_sum = (
-                self.preset_qubic.joint_out.external.get_invntt_operator(planck_ntot=self.preset_tools.params["PLANCK"]["level_noise_planck"]).data.reshape(
-                    len(self.preset_qubic.joint_out.external.allnus) // self.preset_tools.params["PLANCK"]["nintegr_planck"], npix, 3
-                )[..., 0]
-                ** 2
-            ).sum(axis=0)
-        else:
-            planck_diag_sum = 0
+        stacked_matrix_inv = 1.0 / stacked_matrix
 
-        for icomp in range(ncomp):
-            stacked_dptdp_inv_nsub = np.empty((nsub, npix))
+        preconditioner_simpleinv = BlockDiagonalOperator(
+            [DiagonalOperator(comp, broadcast='rightward') for comp in stacked_matrix_inv],
+            new_axisin=0
+        )
 
-            for j_nsub in range(nsub):
-                H_single = H_qubic[j_nsub]
-
-                D = H_single.operands[1]
-                P = H_single.operands[4]
-                sh = P.matrix.data.index.shape
-
-                point_per_det = sh[0] // no_det
-                mapPtP_perdet_seq = np.empty((no_det, npix))
-
-                for det in range(no_det):
-                    start, end = det * point_per_det, (det + 1) * point_per_det
-                    indices = P.matrix.data.index[start:end, :]
-                    weights = P.matrix.data.r11[start:end, :]
-                    flat_indices = indices.ravel()
-                    flat_weights = weights.ravel()
-
-                    mapPitPi = np.bincount(flat_indices, weights=flat_weights**2, minlength=npix)
-                    mapPtP_perdet_seq[det, :] = mapPitPi
-
-                D_sq = D.data**2
-                mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
-                dptdp = mapPtP_seq_scaled.sum(axis=0)
-                dptdp = dptdp + planck_diag_sum
-
-                # Safe inversion
-                dptdp_inv = np.zeros_like(dptdp)
-                nonzero = dptdp != 0
-                dptdp_inv[nonzero] = 1.0 / dptdp[nonzero]
-                stacked_dptdp_inv_nsub[j_nsub] = dptdp_inv
-
-            stacked_dptdp_inv[icomp] = stacked_dptdp_inv_nsub.sum(axis=0)
-
-            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.preset_sky.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
-
-        return preconditioner
+        return preconditioner_simpleinv
 
     def _get_scalar_acquisition_operator(self):
         """

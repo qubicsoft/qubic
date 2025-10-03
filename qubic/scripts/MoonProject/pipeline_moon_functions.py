@@ -74,6 +74,9 @@ AU_meters = 149597870700 # m
 #     endtime = time.time()
 #     return endtime - starttime
 
+def centre_coord_at_0(coord):
+    return np.mod(coord - 180, 360) - 180
+
 def timer(f, *args):
     """
     wrap a function to monitor its runtime and compile time:

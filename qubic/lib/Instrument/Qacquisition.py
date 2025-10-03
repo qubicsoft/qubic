@@ -561,12 +561,25 @@ class QubicMultiAcquisitions:
             f_bands = [150, 220]
         for i, f_band in enumerate(f_bands):
             ### Compute frequencies on the edges
-            _, _, nus_subbands_i, _, _, _ = compute_freq(f_band, Nfreq=int(self.nsub / len(f_bands)), relative_bandwidth=self.dict["filter_relative_bandwidth"])
+            _, _, nus_subbands_i, _, _, _ = compute_freq(
+                f_band,
+                Nfreq=int(self.nsub / len(f_bands)),
+                relative_bandwidth=self.dict["filter_relative_bandwidth"],
+            )
 
             ### Compute the effective reconstructed frequencies if FMM is applied
-            _, _, nus_i, _, _, _ = compute_freq(f_band, Nfreq=int(self.nrec / len(f_bands)), relative_bandwidth=self.dict["filter_relative_bandwidth"])
-
-            ### Joint 150 and 220 GHz band if needed
+            if nrec == 1:
+                if f_band == f_bands[0]:
+                    nus_i = [np.mean(f_bands)]
+                else:
+                    nus_i = []
+            else:
+                _, _, nus_i, _, _, _ = compute_freq(
+                    f_band,
+                    Nfreq=int(self.nrec / len(f_bands)),
+                    relative_bandwidth=self.dict["filter_relative_bandwidth"],
+                )
+            ### Join 150 and 220 GHz band if needed
             self.allnus += list(nus_subbands_i)
             self.allnus_rec += list(nus_i)
 
@@ -1174,12 +1187,14 @@ class JointAcquisitionFrequencyMapMaking:
 
             invN_143 = R_planck(invntt_planck143(R_planck.T))
             invN_217 = R_planck(invntt_planck217(R_planck.T))
-            if self.Nrec == 1:
-                invNe = [invN_143, invN_217]
-            else:
-                invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
 
-            invN += invNe
+        if self.Nrec == 1:
+            # invNe = [invN_143, invN_217]
+            invNe = [invN_143]
+        else:
+            invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
+
+        invN += invNe
 
         return BlockDiagonalOperator(invN, axisout=0)
 

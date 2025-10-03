@@ -96,7 +96,7 @@ PLANCK:
     100GHz: False
     143GHz: True
     217GHz: True
-    353GHz: True
+    353GHz: False
     seed_noise: 22222
 
 PCG:

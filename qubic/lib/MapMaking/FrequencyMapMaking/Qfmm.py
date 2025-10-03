@@ -152,19 +152,6 @@ class PipelineFrequencyMapMaking:
         self.get_H()
 
         ### Inverse noise covariance matrix
-        #! Tom: No need for this condition, should be done inside PlanckAcq
-        # if self.params["PLANCK"]["external_data"]:
-        #     self.invN = self.joint.get_invntt_operator(
-        #         mask=self.mask,
-        #         qubic_ndet=self.params["QUBIC"]["NOISE"]["ndet"],
-        #         qubic_npho150=self.params["QUBIC"]["NOISE"]["npho150"],
-        #         qubic_npho220=self.params["QUBIC"]["NOISE"]["npho220"],
-        #         planck_ntot=self.params["PLANCK"]["level_noise_planck"],
-        #     )
-        # else:
-        #     self.invN = self.joint.qubic.get_invntt_operator(self.params["QUBIC"]["NOISE"]["ndet"], self.params["QUBIC"]["NOISE"]["npho150"], self.params["QUBIC"]["NOISE"]["npho220"])
-        #     R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
-        #     self.invN = R(self.invN(R.T))
         self.invN = self.joint.get_invntt_operator(
             qubic_ndet=self.params["QUBIC"]["NOISE"]["ndet"],
             qubic_npho150=self.params["QUBIC"]["NOISE"]["npho150"],
@@ -337,8 +324,9 @@ class PipelineFrequencyMapMaking:
             "nprocs_instrument": self.size,
             "photon_noise": True,
             "nhwp_angles": 3,
-            "effective_duration150": 3,
-            "effective_duration220": 3,
+            #'effective_duration':3,
+            "effective_duration150": self.params["QUBIC"]["NOISE"]["duration_150"],
+            "effective_duration220": self.params["QUBIC"]["NOISE"]["duration_220"],
             "filter_relative_bandwidth": 0.25,
             "type_instrument": "wide",
             "TemperatureAtmosphere150": None,
@@ -513,10 +501,9 @@ class PipelineFrequencyMapMaking:
                 noise = self.noise_planck[1]
             TOD_PLANCK[irec] = self.maps_input_convolved[irec] + noise
 
-        if self.params["QUBIC"]["nrec"] == 1:  # To handle the case nrec == 1, TOD_PLANCK[0] alreay computed above
-            TOD_PLANCK[1] = self.maps_input_convolved[1] + noise[1]
+        TOD_PLANCK = TOD_PLANCK.ravel()
 
-        TOD = np.r_[TOD_QUBIC, TOD_PLANCK.ravel()]
+        TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
         return TOD
 
     def get_preconditioner(self):
@@ -666,10 +653,12 @@ class PipelineFrequencyMapMaking:
 
         self.mpi._barrier()
 
-        if self.params["QUBIC"]["nrec"] == 1:
-            solution_qubic_planck["x"]["x"] = np.array([solution_qubic_planck["x"]["x"]])
+        # if self.params["QUBIC"]["nrec"] == 1: # was causing an error with the shape of solution_qubic_planck["x"]["x"]
+        #     solution_qubic_planck["x"]["x"] = np.array(
+        #         [solution_qubic_planck["x"]["x"]]
+        #     )
 
-        solution = np.ones(self.maps_input.shape) * hp.UNSEEN
+        solution = np.ones(self.m_nu_in.shape) * hp.UNSEEN
         if self.params["PLANCK"]["external_data"]:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
         else:

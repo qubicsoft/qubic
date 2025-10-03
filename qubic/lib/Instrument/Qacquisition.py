@@ -1143,8 +1143,7 @@ class JointAcquisitionFrequencyMapMaking:
         ### shapeout: (self.Nrec, npix, nstokes)
         if seenpix is not None:
             U = (
-                ReshapeOperator((self.Nrec * sum(seenpix) * nstokes), (self.Nrec, sum(seenpix), nstokes))
-                * PackOperator(np.broadcast_to(seenpix[None, :, None], (self.Nrec, seenpix.size, nstokes)).copy())
+                ReshapeOperator((self.Nrec * sum(seenpix) * nstokes), (self.Nrec, sum(seenpix), nstokes)) * PackOperator(np.broadcast_to(seenpix[:, None], (self.Nrec, seenpix.size, nstokes)).copy())
             ).T
         else:
             U = IdentityOperator()
@@ -1155,7 +1154,7 @@ class JointAcquisitionFrequencyMapMaking:
         if self.is_external_data:
             R_planck = ReshapeOperator((12 * self.qubic.scene.nside**2, nstokes), (12 * self.qubic.scene.nside**2 * nstokes))
             H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0)
-            # It is necessary to change the shape of H_planck_ in order to stack it with H_qubic
+            print("Planck", H_planck_.shapein, H_planck_.shapeout)
             R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
             H_planck = R_diag(H_planck_)
             H.append(H_planck)
@@ -1188,13 +1187,13 @@ class JointAcquisitionFrequencyMapMaking:
             invN_143 = R_planck(invntt_planck143(R_planck.T))
             invN_217 = R_planck(invntt_planck217(R_planck.T))
 
-        if self.Nrec == 1:
-            # invNe = [invN_143, invN_217]
-            invNe = [invN_143]
-        else:
-            invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
+            if self.Nrec == 1:
+                # invNe = [invN_143, invN_217]
+                invNe = [invN_143]
+            else:
+                invNe = [invN_143] * int(self.Nrec / 2) + [invN_217] * int(self.Nrec / 2)
 
-        invN += invNe
+            invN += invNe
 
         return BlockDiagonalOperator(invN, axisout=0)
 

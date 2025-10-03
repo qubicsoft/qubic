@@ -582,7 +582,6 @@ class PipelineFrequencyMapMaking:
             preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
         else:
             preconditioner = BlockDiagonalOperator([DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
-
         return preconditioner
 
     def call_pcg(self, d, x0, seenpix):
@@ -613,6 +612,9 @@ class PipelineFrequencyMapMaking:
 
         if self.params["PLANCK"]["external_data"]:
             x_planck = self.maps_input_convolved * (1 - seenpix[None, :, None])
+            print(self.H_out_all_pix.shapein, self.H_out_all_pix.shapeout)
+            print(x_planck.shape)
+            print(d.shape)
             b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck))
         else:
             b = self.H_out.T * self.invN * d
@@ -658,7 +660,7 @@ class PipelineFrequencyMapMaking:
         #         [solution_qubic_planck["x"]["x"]]
         #     )
 
-        solution = np.ones(self.m_nu_in.shape) * hp.UNSEEN
+        solution = np.ones(self.maps_input.shape) * hp.UNSEEN
         if self.params["PLANCK"]["external_data"]:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
         else:

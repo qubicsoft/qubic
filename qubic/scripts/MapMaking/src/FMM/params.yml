@@ -1,5 +1,5 @@
-path_out: "planck/"
-datafilename: "test_nsub"
+path_out: "test/"
+datafilename: "test"
 
 CMB:
     cmb: True
@@ -8,18 +8,18 @@ CMB:
     Alens: 1
 
 Foregrounds:
-    Dust: True                   # Thermal Dust emission
+    Dust: False                   # Thermal Dust emission
     Synchrotron: False           # Synchrotron emission
 
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "DB"             # Instrumental design (MB, DB or UWB)
+    instrument: "UWB"             # Instrumental design (MB, DB or UWB)
     configuration: "FI"          # Instrumental configuration (TD or FI)
     npointings: 1000             # Number of time samples
     nsub_in: 8                   # Number of sub-acquisitions
     nsub_out: 8
-    nrec: 2                      # Number of reconstructed fr
+    nrec: 1                      # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
     convolution_in: True        # Angular resolution in the input TOD
     convolution_out: False       # Angular resolution in the reconstruction
@@ -30,6 +30,8 @@ QUBIC:
         npho150: 0               # Level of photon noise at 150 GHz
         npho220: 0               # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17    # NEP of detector noise 
+        duration_150: 3                    # Effective duration at 150 GHz
+        duration_220: 3                    # Effective duration at 220 GHz
         seed_noise: 11111
     SYNTHBEAM:
         synthbeam_kmax: 1        # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
@@ -52,7 +54,7 @@ PLANCK:
     level_noise_planck: 0        # Noise level for Planck data
     seed_noise: 22222
     bandwidth_planck: 0.2        # Multiplicative factor to define the bandwidth of Planck's data
-    nsub_planck: 1              # Number of sub acquisitions for Planck's data
+    nsub_planck: 100              # Number of sub acquisitions for Planck's data
 
 Pipeline:
     mapmaking: True              # Run MapMaking Pipeline

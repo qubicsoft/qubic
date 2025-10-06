@@ -96,12 +96,18 @@ class PipelineFrequencyMapMaking:
         else:
             H = None
 
+        if self.params["QUBIC"]["POINTINGS"]["scanning_strategy"] == True:
+            sampling = None # calculate pointings:
+        else: 
+            sampling = None
+
         self.joint = JointAcquisitionFrequencyMapMaking(
             self.dict_out,
             # self.params["QUBIC"]["instrument"],
             self.params["QUBIC"]["nrec"],
             self.params["QUBIC"]["nsub_out"],
             H=H,
+            sampling = sampling
         )
 
         ### Ensure that all processors have the same external dataset
@@ -339,6 +345,9 @@ class PipelineFrequencyMapMaking:
             "interp_projection": False,
             "instrument_type": self.params["QUBIC"]["instrument"],
             "config": self.params["QUBIC"]["configuration"],
+            "random_pointing": self.params["QUBIC"]["POINTINGS"]["random_pointing"],
+            "sweeping_pointing": self.params["QUBIC"]["POINTINGS"]["sweeping_pointing"],
+            "repeat_pointing": self.params["QUBIC"]["POINTINGS"]["repeat_pointing"]
         }
 
         ### Get the default dictionary

@@ -1113,13 +1113,13 @@ class OtherDataParametric:
 
 
 class JointAcquisitionFrequencyMapMaking:
-    def __init__(self, d, Nrec, Nsub, H=None):
+    def __init__(self, d, Nrec, Nsub, H=None, sampling=None):
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
 
         ### Select the instrument model
-        self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None)
+        self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None, sampling=sampling)
 
         self.scene = self.qubic.scene
         self.pl143 = PlanckAcquisition(143, self.scene)

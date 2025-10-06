@@ -19,7 +19,7 @@ QUBIC:
     npointings: 1000             # Number of time samples
     nsub_in: 8                   # Number of sub-acquisitions
     nsub_out: 8
-    nrec: 1                      # Number of reconstructed fr
+    nrec: 2                      # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
     convolution_in: True        # Angular resolution in the input TOD
     convolution_out: False       # Angular resolution in the reconstruction
@@ -65,7 +65,7 @@ PCG:
 
     n_iter_pcg: 50               # Number of PCG iterations #100
     tol_pcg: 1.0e-25             # Tolerance for PCG
-    preconditioner: True
+    preconditioner: False
     initial_guess_intensity_to_zero: True
     gif: True
     resolution_plot: 15

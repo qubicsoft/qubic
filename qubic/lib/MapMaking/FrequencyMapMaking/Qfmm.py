@@ -3,7 +3,6 @@ import os
 import pickle
 import time
 
-import healpy as hp
 import numpy as np
 import yaml
 from fgbuster.component_model import CMB, Dust, Synchrotron
@@ -612,9 +611,6 @@ class PipelineFrequencyMapMaking:
 
         if self.params["PLANCK"]["external_data"]:
             x_planck = self.maps_input_convolved * (1 - seenpix[None, :, None])
-            print(self.H_out_all_pix.shapein, self.H_out_all_pix.shapeout)
-            print(x_planck.shape)
-            print(d.shape)
             b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck))
         else:
             b = self.H_out.T * self.invN * d
@@ -660,7 +656,7 @@ class PipelineFrequencyMapMaking:
         #         [solution_qubic_planck["x"]["x"]]
         #     )
 
-        solution = np.ones(self.maps_input.shape) * hp.UNSEEN
+        solution = np.ones(self.maps_input.shape)  # * hp.UNSEEN
         if self.params["PLANCK"]["external_data"]:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
         else:

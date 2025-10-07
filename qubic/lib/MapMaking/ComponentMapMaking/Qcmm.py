@@ -89,9 +89,8 @@ class Pipeline:
 
         """
 
-        if not self.preset_tools.params["QUBIC"]["preconditioner"]:
+        if not self.preset.tools.params["QUBIC"]["preconditioner"]:
             return None
-
 
         ncomp = len(self.preset_comp.components_model_out)
         nside = self.preset_sky.params_sky["nside"]
@@ -148,7 +147,8 @@ class Pipeline:
             self.plots._display_allcomponents(seenpix, ki=-1)
 
         ### Initialize PCG starting point
-        initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
+        w = self.preset.tools.params["PLANCK"]["weight_planck"]
+        initial_maps = (self.preset.comp.components_iter - w * self.preset.comp.components_out)[:, seenpix, :].copy()
 
         ### Update the preconditioner M
         self.preset.acquisition.M = self.get_preconditioner()
@@ -189,7 +189,7 @@ class Pipeline:
         )["x"]
 
         ### Update components
-        self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy()
+        self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
         self.preset.acquisition.convergence.append(np.array(results["convergence"].copy()))
 
         ### Plot if asked
@@ -242,9 +242,11 @@ class Pipeline:
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
-        x_planck = self.preset.comp.components_out * (1 - seenpix[None, :, None])
-
-        self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck)))
+        
+        w = self.preset.tools.params["PLANCK"]["weight_planck"]
+        seen_mask = seenpix[None, :, None]
+        x_planck_full = self.preset.comp.components_out * ((1.0 - seen_mask) + w * seen_mask)
+        self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck_full)))
 
         # TO BE REMOVED
         ### Update components when intensity maps are fixed

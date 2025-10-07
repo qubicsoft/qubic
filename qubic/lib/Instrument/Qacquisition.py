@@ -980,6 +980,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
             subacq = QubicAcquisition(inst, self.sampling, self.scene, d)
             invn_list.append(subacq.get_invntt_operator(det_noise=det_noise[iband], photon_noise=photon_noise[iband]))
         self.invn150 = invn_list[0] # used in PresetAcquisition.get_approx_hth
+        self.invn220 = invn_list[1] # usedd in PipelineFrequencyMapMaking.get_preconditioner (could be removed by directly calling invn_list there)
         if self.dict["instrument_type"] == "UWB":
             self.invN = np.sum(invn_list)
         else:

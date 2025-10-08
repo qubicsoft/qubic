@@ -8,16 +8,16 @@ authors = [
     {name = 'Pierre Chanial', email = 'chanial@apc.in2p3.fr'},
     {name = 'Jean-Christophe Hamilton', email = 'hamilton@apc.in2p3.fr'},
     {name = 'Mikhail Stolpovskiy', email = 'mikhail.stolpovskiy@apc.univ-paris7.fr'},
-    {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
     {name = 'Alexandre Huchet', email = 'huchet@apc.in2p3.fr'},
     {name = 'Tom Laclavere', email = 'laclavere@apc.in2p3.fr'},
     {name = 'Louise Mousset', email = 'mousset@apc.in2p3.fr'},
     {name = 'Mathias Régnier', email = 'mathias.p.regnier@gmail.com'},
+    {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
 ]
 maintainers = [
-    {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
     {name = 'Alexandre Huchet', email = 'huchet@apc.in2p3.fr'},
     {name = 'Tom Laclavere', email = 'laclavere@apc.in2p3.fr'},
+    {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
 ]
 description = 'Simulation and map-making tools for the QUBIC experiment.'
 readme = 'README.md'
@@ -26,11 +26,6 @@ keywords = [
 ]
 classifiers = [
     'Programming Language :: Python',
-    'Programming Language :: Python :: 3.8',
-    'Programming Language :: Python :: 3.9',
-    'Programming Language :: Python :: 3.10',
-    'Programming Language :: Python :: 3.11',
-    'Programming Language :: Python :: 3.12',
     'Programming Language :: Fortran',
     'Development Status :: 5 - Production/Stable',
     'Intended Audience :: Science/Research',
@@ -53,7 +48,7 @@ dependencies = [
              'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
              'progressbar',
              'py-cpuinfo',
-             'pyoperators[fft]>=0.13.18',
+             'pyoperators[fft] @ git+https://github.com/qubicsoft/pyoperators@numpy-2',
              'pysimulators>=1.2.3',
              'pysm3',
              'qubicpack @ git+https://github.com/satorchi/qubicpack@master',

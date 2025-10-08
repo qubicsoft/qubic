@@ -342,16 +342,12 @@ class PresetMixingMatrix:
 
                     ### Multiply the right element once even with multiple processors
                     if self.preset_tools.rank == 0:
-                        # print(self.Amm_in)
-                        # print(Adeco)
-                        # stop
                         self.Amm_in *= Adeco
                     else:
                         self.Amm_in = None
                     self.Amm_in = self.preset_tools.comm.bcast(self.Amm_in, root=0)
 
                 elif self.preset_comp.params_foregrounds["Dust"]["model"] == "d1":
-                    # self.Amm_in = None
                     self.beta_in = np.zeros(
                         (
                             len(self.preset_comp.components_in) - 1,
@@ -368,9 +364,6 @@ class PresetMixingMatrix:
 
                     self.Amm_in = self.get_mixingmatrix(self.nus_eff_in, self.beta_in)
                     self.Amm_in = np.transpose(self.Amm_in, (1, 0, 2))
-                    # print(self.Amm_in.shape)
-                    # stop
-
                 else:
                     raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model']} is not yet implemented...")
 

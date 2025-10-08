@@ -1,4 +1,4 @@
-path_am_files: "/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/"
+path_am_files: "/home/laclavere/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/"
 # Physical parameters
 
 correlation_length: 1000           # Atmospheric correlation maximum lenght in m
@@ -14,7 +14,7 @@ temp_ground: 280                  # Average ground temperature on the observati
 pressure_atm: 550                 # Atmopsheric pressure in hPa
 #! rho_0 should be computed using pwv in a more advanced version
 pwv: 1                             # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, mm
-sigma_pwv: 1                    # Variance of PWV in mm^-1
+sigma_wv: 1                    # Variance of PWV in mm^-1
 sigma_rho: 0.25                    # Variance of water vapor density in g/m³
 adjust: True
 
@@ -36,6 +36,6 @@ dtheta: 15
 seed: 1
 
 # Qubic parameters
-npointings: 7000
+npointings: 5000
 kmax: 1
 synthbeam_fraction: 1

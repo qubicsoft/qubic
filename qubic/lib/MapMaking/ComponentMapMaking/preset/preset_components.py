@@ -77,7 +77,7 @@ class PresetComponents:
 
         self.components_in = self.get_components(self.skyconfig_in)
         self.components_out = self.get_components(self.skyconfig_out)
-        self.components_iter = self.components_out
+        self.components_iter = self.components_out.copy()
 
         ### Monochromatic emission
         if self.preset_tools.params["Foregrounds"]["CO"]["CO_in"]:

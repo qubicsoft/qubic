@@ -844,7 +844,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         return self.invN
 
 
-class PlanckAcquisitionTest:
+class PlanckAcquisition:
     def __init__(self, nus, nside, comps=None, nsub_planck=1):
         """Planck Acquisition.
 
@@ -1129,8 +1129,8 @@ class JointAcquisitionFrequencyMapMaking:
         self.scene = self.qubic.scene
 
         if self.is_external_data:
-            self.pl143 = PlanckAcquisitionTest(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck)
-            self.pl217 = PlanckAcquisitionTest(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck)
+            self.pl143 = PlanckAcquisition(nus=[143], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck)
+            self.pl217 = PlanckAcquisition(nus=[217], nside=self.scene.nside, comps=None, nsub_planck=nsub_planck)
             self.planck_acquisition = [self.pl143, self.pl217]
 
     def get_operator(self, fwhm=None, seenpix=None):
@@ -1211,7 +1211,7 @@ class JointAcquisitionComponentsMapMaking:
         self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
         self.scene = self.qubic.scene
 
-        self.external = PlanckAcquisitionTest(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck)
+        self.external = PlanckAcquisition(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 
     def get_operator(self, A, gain=None, fwhm=None, nu_co=None):

@@ -1,6 +1,5 @@
 import numpy as np
 from fgbuster import component_model as c
-from pyoperators import BlockDiagonalOperator, DiagonalOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 from qubic.lib.Instrument.Qnoise import QubicTotNoise
@@ -143,68 +142,6 @@ class PresetAcquisition:
         ### Compute initial guess for PCG
         self.preset_tools.mpi._print_message("    => Initializing starting point")
         self.get_x0()
-
-    def get_preconditioner(self):
-        """Preconditioner for PCG algorithm.
-
-        Calculates and returns the preconditioner matrix for the optimization process.
-
-        Parameters
-        ----------
-        A_qubic : array_like
-            QUBIC mixing matrix.
-        A_ext : array_like
-            Planck mixing matrix.
-        precond : bool, optional
-            Tells if you want a precontioner or not, by default True
-        thr : int, optional
-            Threshold to define the pixels seen by QUBIC, by default 0
-
-        Returns
-        -------
-        M: DiagonalOperator
-            Preconditioner for PCG algorithm.
-
-        """
-
-        if not self.preset_tools.params["QUBIC"]["preconditioner"]:
-            return None
-
-        ncomp = len(self.preset_comp.components_model_out)
-        nside = self.preset_sky.params_sky["nside"]
-        npix = 12* nside**2
-        #nsub = self.preset_qubic.params_qubic["nsub_out"]
-        #no_det = len(self.preset_qubic.joint_out.qubic.multiinstrument[0].detector)
-
-        H_i = self.preset.qubic.joint_out.get_operator(
-            A=self.preset.acquisition.Amm_iter,
-            gain=self.preset.gain.gain_iter,
-            fwhm=self.preset.acquisition.fwhm_mapmaking,
-            nu_co=self.preset.comp.nu_co)
-
-        # we only need the first element because for CMM the H.T H is almost flat! 
-        sky_shape=(ncomp, npix, 3)
-        diagonal = np.zeros(sky_shape)
-        for comp in range(sky_shape[0]):
-            for pixel in range(1):
-                for stokes in range(1):
-                    basis_vector = np.zeros(sky_shape)
-                    basis_vector[comp, pixel, stokes] = 1  
-                    Hv = H_i.T(H_i)(basis_vector)
-                    diagonal[comp, pixel, stokes] = Hv[comp, pixel, stokes]
-
-        stacked_matrix = np.array([
-            np.full((npix, 3), diagonal[comp, 0, 0])
-            for comp in range(ncomp)])
-
-        stacked_matrix_inv = 1.0 / stacked_matrix
-
-        preconditioner_simpleinv = BlockDiagonalOperator(
-            [DiagonalOperator(comp, broadcast='rightward') for comp in stacked_matrix_inv],
-            new_axisin=0
-        )
-
-        return preconditioner_simpleinv
 
     def _get_scalar_acquisition_operator(self):
         """

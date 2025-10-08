@@ -6,7 +6,7 @@ from functools import partial
 import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
-from pyoperators import MPI, PackOperator, ReshapeOperator
+from pyoperators import MPI, BlockDiagonalOperator, DiagonalOperator, PackOperator, ReshapeOperator
 from pyoperators import pcg as pcg_op
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import fmin_l_bfgs_b, minimize
@@ -65,7 +65,6 @@ class Pipeline:
 
         self.convergence = []
 
-
     def get_preconditioner(self):
         """Preconditioner for PCG algorithm.
 
@@ -92,42 +91,32 @@ class Pipeline:
         if not self.preset.tools.params["QUBIC"]["preconditioner"]:
             return None
 
-        ncomp = len(self.preset_comp.components_model_out)
-        nside = self.preset_sky.params_sky["nside"]
-        npix = 12* nside**2
-        #nsub = self.preset_qubic.params_qubic["nsub_out"]
-        #no_det = len(self.preset_qubic.joint_out.qubic.multiinstrument[0].detector)
+        ncomp = len(self.preset.comp.components_model_out)
+        nside = self.preset.sky.params_sky["nside"]
+        npix = 12 * nside**2
+        # nsub = self.preset_qubic.params_qubic["nsub_out"]
+        # no_det = len(self.preset_qubic.joint_out.qubic.multiinstrument[0].detector)
 
-        H_i = self.preset.qubic.joint_out.get_operator(
-            A=self.preset.acquisition.Amm_iter,
-            gain=self.preset.gain.gain_iter,
-            fwhm=self.preset.acquisition.fwhm_mapmaking,
-            nu_co=self.preset.comp.nu_co)
+        H_i = self.preset.qubic.joint_out.get_operator(A=self.preset.acquisition.Amm_iter, gain=self.preset.gain.gain_iter, fwhm=self.preset.acquisition.fwhm_mapmaking, nu_co=self.preset.comp.nu_co)
 
-        # we only need the first element because for CMM the H.T H is almost flat! 
-        sky_shape=(ncomp, npix, 3)
+        # we only need the first element because for CMM the H.T H is almost flat!
+        sky_shape = (ncomp, npix, 3)
         diagonal = np.zeros(sky_shape)
         for comp in range(sky_shape[0]):
             for pixel in range(1):
                 for stokes in range(1):
                     basis_vector = np.zeros(sky_shape)
-                    basis_vector[comp, pixel, stokes] = 1  
+                    basis_vector[comp, pixel, stokes] = 1
                     Hv = H_i.T(H_i)(basis_vector)
                     diagonal[comp, pixel, stokes] = Hv[comp, pixel, stokes]
 
-        stacked_matrix = np.array([
-            np.full((npix, 3), diagonal[comp, 0, 0])
-            for comp in range(ncomp)])
+        stacked_matrix = np.array([np.full((npix, 3), diagonal[comp, 0, 0]) for comp in range(ncomp)])
 
         stacked_matrix_inv = 1.0 / stacked_matrix
 
-        preconditioner_simpleinv = BlockDiagonalOperator(
-            [DiagonalOperator(comp, broadcast='rightward') for comp in stacked_matrix_inv],
-            new_axisin=0
-        )
+        preconditioner_simpleinv = BlockDiagonalOperator([DiagonalOperator(comp, broadcast="rightward") for comp in stacked_matrix_inv], new_axisin=0)
 
         return preconditioner_simpleinv
-
 
     def call_pcg(self, max_iterations, seenpix):
         """Precontioned Conjugate Gradiant algorithm.
@@ -242,7 +231,7 @@ class Pipeline:
 
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
-        
+
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
         seen_mask = seenpix[None, :, None]
         x_planck_full = self.preset.comp.components_out * ((1.0 - seen_mask) + w * seen_mask)

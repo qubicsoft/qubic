@@ -121,16 +121,19 @@ def get_pointing(d):
     center = (d["RA_center"], d["DEC_center"])
 
     if d["random_pointing"] is True:
+        print('-------------- Random pointing ------------------')
         return create_random_pointings(
             center, d["npointings"], d["dtheta"], d["hwp_stepsize"], date_obs=d["date_obs"], period=d["period"], latitude=d["latitude"], longitude=d["longitude"], seed=d["seed"]
         )
 
     elif d["repeat_pointing"] is True:
+        print('-------------- repeat pointing ------------------')
         return create_repeat_pointings(
             center, d["npointings"], d["dtheta"], d["nhwp_angles"], date_obs=d["date_obs"], period=d["period"], latitude=d["latitude"], longitude=d["longitude"], seed=d["seed"]
         )
 
     elif d["sweeping_pointing"] is True:
+        print('-------------- sweeping pointing ------------------')
         return create_sweeping_pointings(
             center,
             d["duration"],

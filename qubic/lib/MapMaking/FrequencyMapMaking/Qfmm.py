@@ -23,6 +23,8 @@ from qubic.lib.Qmpi_tools import MpiTools
 from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Qspectra import Spectra
 
+from qubic.scripts.Scanning_Strategy import Sky_Dips_Sim
+
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
 
 
@@ -81,6 +83,25 @@ class PipelineFrequencyMapMaking:
         self.dict_out = self.get_dict(key="out")
         # change config and detector_nep
 
+
+        if self.params["QUBIC"]["POINTINGS"]["scanning_strategy"] == True:
+            print('-----------------scanning strategy---------------')
+            sample_params = {
+                        'latitude': -24.1844,
+                        'longitude': -66.8714,
+                        'RA_center': -34.667,
+                        'DEC_center': -8.016,
+                        'date_obs': '2026-01-01 00:00:00',
+                        'duration': 24,  # in hours
+                        'angspeed': 1,  # deg/s
+                        'delta_az': 20.0,  # deg
+                        'nsweeps_per_elevation': 25,
+                        'period': 1,  # s
+            }
+            sampling = Sky_Dips_Sim.QubicObservation(sample_params).get_samplings()
+        else: 
+            sampling = None
+
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
             self.dict_in,
@@ -88,6 +109,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nsub_in"],
             self.params["QUBIC"]["nsub_in"],
             H=None,
+            sampling=sampling
         )
 
         ### Joint acquisition
@@ -95,11 +117,6 @@ class PipelineFrequencyMapMaking:
             H = self.joint_tod.qubic.H
         else:
             H = None
-
-        if self.params["QUBIC"]["POINTINGS"]["scanning_strategy"] == True:
-            sampling = None # calculate pointings:
-        else: 
-            sampling = None
 
         self.joint = JointAcquisitionFrequencyMapMaking(
             self.dict_out,
@@ -288,7 +305,7 @@ class PipelineFrequencyMapMaking:
         for j in self.params["Foregrounds"]:
             if j == "Dust":
                 if self.params["Foregrounds"][j]:
-                    dict_sky["dust"] = "d0"
+                    dict_sky["dust"] = "d1"
             elif j == "Synchrotron":
                 if self.params["Foregrounds"][j]:
                     dict_sky["synchrotron"] = "s0"

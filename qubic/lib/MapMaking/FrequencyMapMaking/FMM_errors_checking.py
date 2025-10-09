@@ -25,10 +25,18 @@ class ErrorChecking:
         if self.params["QUBIC"]["instrument"] not in ["DB", "UWB", "MB"]:
             raise TypeError("You must choose DB, UWB or MB instrument")
 
+        if self.params["QUBIC"]["nrec"] == 1 and self.params["PLANCK"]["external_data"]:
+            raise TypeError("Adding Planck for Nrec=1 case is not yet implemented")
+
+        if self.params["QUBIC"]["instrument"] == "DB" and self.params["QUBIC"]["nrec"] == 1:
+            raise TypeError("You can't reconstruct one map in Dual Band configuration")
+
         if self.params["QUBIC"]["instrument"] != "MB":  # We might want to build odd nsub with "MB"
             # Check if nsub_in is even
             if self.params["QUBIC"]["nsub_in"] % 2 != 0:
                 raise TypeError("The argument nsub_in should be even")
+            if self.params["QUBIC"]["nrec"] % 2 != 0 and self.params["QUBIC"]["nrec"] > 2:
+                raise TypeError("The argument nrec should be even")
 
             # Check if nsub_out is even
             if self.params["QUBIC"]["nsub_out"] % 2 != 0:

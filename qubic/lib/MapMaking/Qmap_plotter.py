@@ -37,8 +37,8 @@ def _plot_reconstructed_maps(
     for inu in range(_shape[0]):
         _m = C(maps[inu])
         _r = C(res[inu])
-        _m[~seenpix, :] = hp.UNSEEN
-        _r[~seenpix, :] = hp.UNSEEN
+        # _m[~seenpix, :] = hp.UNSEEN
+        # _r[~seenpix, :] = hp.UNSEEN
         for istk in range(_shape[-1]):
             hp.gnomview(
                 _m[:, istk],
@@ -208,8 +208,8 @@ class PlotsFMM:
         self.seenpix = seenpix
 
     def plot_frequency_maps(self, m_in, m_out, center, reso=15, nsig=3, filename=None, figsize=(10, 8)):
-        m_in[:, ~self.seenpix, :] = hp.UNSEEN
-        m_out[:, ~self.seenpix, :] = hp.UNSEEN
+        # m_in[:, ~self.seenpix, :] = hp.UNSEEN
+        # m_out[:, ~self.seenpix, :] = hp.UNSEEN
         res = m_out - m_in
         nf, _, _ = m_out.shape
 
@@ -267,8 +267,8 @@ class PlotsFMM:
         nsig=3,
         name="signal",
     ):
-        m_in[:, ~seenpix, :] = hp.UNSEEN
-        m_out[:, ~seenpix, :] = hp.UNSEEN
+        # m_in[:, ~seenpix, :] = hp.UNSEEN
+        # m_out[:, ~seenpix, :] = hp.UNSEEN
 
         plt.figure(figsize=figsize)
 
@@ -296,7 +296,7 @@ class PlotsFMM:
             )
 
             res = m_in[i, :, istk] - m_out[i, :, istk]
-            res[~seenpix] = hp.UNSEEN
+            # res[~seenpix] = hp.UNSEEN
 
             hp.gnomview(
                 res,
@@ -482,7 +482,7 @@ class PlotsCMM:
             plt.figure(figsize=figsize)
             k = 0
             r = self.preset.A(map_i) - self.preset.b
-            map_res = np.ones(self.preset.comp.components_iter.shape) * hp.UNSEEN
+            map_res = np.ones(self.preset.comp.components_iter.shape)  # * hp.UNSEEN
             map_res[:, seenpix, :] = r
 
             for istk in range(3):
@@ -536,12 +536,12 @@ class PlotsCMM:
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
 
                     # map_in = C[icomp](self.preset.comp.components_out[icomp, :, istk]).copy() # why?
-                    map_in = self.preset.acquisition.components_convolved_recon[icomp, :, istk].copy()
+                    map_in = self.preset.acquisition.components_in_convolved[icomp, :, istk].copy()
                     map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
 
                     # sig = np.std(self.preset.comp.components_out[icomp, seenpix, istk])
-                    map_in[~seenpix] = hp.UNSEEN
-                    map_out[~seenpix] = hp.UNSEEN
+                    # map_in[~seenpix] = hp.UNSEEN
+                    # map_out[~seenpix] = hp.UNSEEN
 
                     # else:
                     #     if self.preset.qubic.params_qubic['convolution_in']:
@@ -615,7 +615,7 @@ class PlotsCMM:
                 for icomp in range(len(self.preset.comp.components_name_out)):
                     # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
                     if self.preset.qubic.params_qubic["convolution_in"]:
-                        map_in = self.preset.acquisition.components_convolved_recon[icomp, :, istk].copy()
+                        map_in = self.preset.acquisition.components_in_convolved[icomp, :, istk].copy()
                         map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
                     else:
                         map_in = self.preset.comp.components_out[icomp, :, istk].copy()
@@ -630,10 +630,10 @@ class PlotsCMM:
                     #         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()
 
                     sig = np.std(map_in[seenpix])
-                    map_in[~seenpix] = hp.UNSEEN
-                    map_out[~seenpix] = hp.UNSEEN
+                    # map_in[~seenpix] = hp.UNSEEN
+                    # map_out[~seenpix] = hp.UNSEEN
                     r = map_in - map_out
-                    r[~seenpix] = hp.UNSEEN
+                    # r[~seenpix] = hp.UNSEEN
                     if icomp == 0:
                         if istk > 0:
                             rms_i[0, istk - 1] = np.std(r[seenpix])

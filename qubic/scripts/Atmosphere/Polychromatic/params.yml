@@ -1,41 +1,41 @@
-path_am_files: "/home/laclavere/Documents/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/"
+path_am_files: "/home/laclavere/Thesis/qubic/qubic/scripts/Atmosphere/absorption_coefficient/"
 # Physical parameters
 
-correlation_length: 300 # Atmospheric correlation maximum lenght in m
-altitude_atm_2d: 1000 # Altitude of the atmosphere above QUBIC for 2D model in m
-rho_0: 40 # Reference water vapor density in g/m³
-h_h2o: 835 # Water vapor half-height in m
-h_temp: 35000 # Typical height that depends on the observation site, in m
-temp_ground: 280 # Average ground temperature on the observation site, in K
+correlation_length: 1000             # Atmospheric correlation maximum lenght in m
+altitude_atm_2d: 1000                # Altitude of the atmosphere above QUBIC for 2D model in m
+rho_0: 40                            # Reference water vapor density in g/m³
+h_h2o: 835                           # Water vapor half-height in m
+h_temp: 35000                        # Typical height that depends on the observation site, in m
+temp_ground: 280                     # Average ground temperature on the observation site, in K
 
 #! Not sure to use that now
 #! temp_atm: 280                     # Average atm temperature on the observation site, in K
 
-pressure_atm: 550 # Atmopsheric pressure in hPa
+pressure_atm: 550                    # Atmopsheric pressure in hPa
 #! rho_0 should be computed using pwv in a more advanced version
-pwv: 1 # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, mm
-sigma_pwv: 1 # Variance of PWV in mm^-²
-sigma_rho: 0.25 # Variance of water vapor density in g²/m⁶
+pwv: 1                               # Precipitable Water Vapor, ie the integrale of water vapor density along an atm column, mm
+sigma_wv: 0.52                      # STD of PWV in mm
+sigma_rho: 0.25                      # STD of water vapor density in g/m³
 adjust: True
 
 # Simulation parameters
 
-n_grid: 1000 # Number of squares in the grid
-h_grid: 1 # Number of sqares for the altitude, i for 2d model
-h_qubic: 4869 # QUBIC altitude in m
-size_atm: 8000 # Lenght of the atm in m
-nsub_in: 8 # Number of sub-acquisitions used to integrate over the atm spectrum
-nrec: 2
-2d: True # Determine if you want to simulate a 2d atm
+n_grid: 1000                         # Number of squares in the grid
+h_grid: 1                            # Number of sqares for the altitude, 1 for 2d model
+h_qubic: 4869                        # QUBIC altitude in m
+size_atm: 8000                       # Lenght of the atm in m
+nsub_in: 4                           # Number of sub-acquisitions used to integrate over the atm spectrum
+nrec: 4
+2d: True                             # Determine if you want to simulate a 2d atm
 nside: 128
 n_theta: 10000
 normalization: 1
 flat: False
-coverage_cut: 0.1
+coverage_cut: 0.2
 dtheta: 15
 seed: 1
 
 # Qubic parameters
-npointings: 1000
+npointings: 5000
 kmax: 1
 synthbeam_fraction: 1

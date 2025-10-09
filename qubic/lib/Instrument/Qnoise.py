@@ -53,7 +53,7 @@ class QubicTotNoise:
     ### Gives Qubic noise for all bands: for UWB, they are coadded; for DB it returns two values
     ### For MB, it returns only the 150 band noise
 
-    def __init__(self, d, sampling, scene, duration=3):
+    def __init__(self, d, sampling, scene):
         # we ask for the sampling and scene, as they are already determined when the noise is called
         self.type = d["instrument_type"]
         self.d = d
@@ -62,20 +62,23 @@ class QubicTotNoise:
         self.detector_nep = d["detector_nep"]
         if self.type == "DB":  # this will later be implemented at a dictionary level!
             self.band_used = [150, 220]
+            self.duration = [d["effective_duration150"], d["effective_duration220"]]
         elif self.type == "UWB":
             self.band_used = [150, 220]
-        elif self.type == "MB":
+            self.duration = [d["effective_duration150"], d["effective_duration220"]]
+        elif self.type == "MB":  # MonoBand will be the 150 GHz band until further modifications
             self.band_used = [150]
+            self.duration = [d["effective_duration150"]]
         else:
             raise ValueError("Instrument type {} is not implemented.".format(self.type))
 
-        # if only one duration is given, then it means that both focal planes (if they are two) observed for the same time
-        if isinstance(duration, (int, float)):
-            self.duration = [duration] * len(self.band_used)
-        else:
-            if self.type == "UWB" and (duration[0] != duration[1]):
-                raise TypeError("The duration for bands 150 and 220 has to be the same for the UWB instrument.")
-            self.duration = duration
+        # # if only one duration is given, then it means that both focal planes (if they are two) observed for the same time
+        # if isinstance(duration, (int, float)):
+        #     self.duration = [duration] * len(self.band_used)
+        # else:
+        #     if self.type == "UWB" and (duration[0] != duration[1]):
+        #         raise TypeError("The duration for bands 150 and 220 has to be the same for the UWB instrument.")
+        #     self.duration = duration
 
     def total_noise(self, wdet, wpho150, wpho220, seed_noise=None):
         rng_noise = np.random.default_rng(seed=seed_noise)  # The way the randomness is treated is NOT GOOD, if doing more than one run (in parallel for example)

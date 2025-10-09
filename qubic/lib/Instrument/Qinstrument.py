@@ -1888,7 +1888,6 @@ class QubicMultibandInstrument:
 
         self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
         self.d = d
-        d1 = d.copy()
 
         self.subinstruments = []
         if d["instrument_type"] == "MB":
@@ -1901,6 +1900,7 @@ class QubicMultibandInstrument:
             delta_nu_over_nu = deltas / filter_nus
 
             for i in range(len(filter_nus)):
+                d1 = d.copy()
                 d1["filter_nu"] = filter_nus[i] * 1e9
                 d1["filter_relative_bandwidth"] = delta_nu_over_nu[i]
                 if d["debug"]:

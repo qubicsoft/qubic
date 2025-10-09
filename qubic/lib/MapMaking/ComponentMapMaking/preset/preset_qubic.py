@@ -59,8 +59,9 @@ class PresetQubic:
             components_fgb_in,
             self.params_qubic["nsub_in"],
             preset_external.external_nus,
-            preset_external.params_external["nintegr_planck"],
+            preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
+            weight_planck=preset_external.params_external["weight_planck"],
         )
 
         if self.params_qubic["nsub_in"] == self.params_qubic["nsub_out"]:
@@ -73,9 +74,10 @@ class PresetQubic:
             components_fgb_out,
             self.params_qubic["nsub_out"],
             preset_external.external_nus,
-            preset_external.params_external["nintegr_planck"],
+            preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
             H=H_tojoint,
+            weight_planck=preset_external.params_external["weight_planck"],
         )
 
     def get_dict(self):
@@ -111,7 +113,6 @@ class PresetQubic:
             "noiseless": False,
             "comm": self.comm,
             "kind": "IQU",
-            "config": "FI",
             "verbose": False,
             "dtheta": self.params_qubic["dtheta"],
             "nprocs_sampling": 1,
@@ -132,6 +133,7 @@ class PresetQubic:
             "synthbeam_fraction": self.params_qubic["SYNTHBEAM"]["synthbeam_fraction"],
             "interp_projection": False,
             "instrument_type": self.params_qubic["instrument"],
+            "config": self.params_qubic["configuration"],
         }
 
         ### Get the default dictionary

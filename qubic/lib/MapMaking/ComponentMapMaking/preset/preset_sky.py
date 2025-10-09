@@ -67,7 +67,7 @@ class PresetSky:
         self.seenpix_015 = self.coverage / self.max_coverage > 0.15
 
         # Pixels seen enough by QUBIC, according to the threshold defined in params.yml. The others will be replaced by Planck
-        self.seenpix = self.coverage / self.max_coverage > self.preset_tools.params["PLANCK"]["thr_planck"]
+        self.seenpix = self.coverage / self.max_coverage > self.preset_tools.params["SKY"]["coverage_cut"]
 
         ### Define the map of betas across the patch if 'nside_beta_out' != 0
         if self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"] != 0:

@@ -3,7 +3,7 @@ datafilename: "test"
 
 CMB:
     cmb: True
-    seed: 1                   # CMB realization
+    seed: 1                      # CMB realization
     r: 0
     Alens: 1
 
@@ -32,7 +32,7 @@ QUBIC:
         duration_220: 1                    # Effective duration at 220 GHz
         seed_noise: 11111
     SYNTHBEAM:
-        synthbeam_kmax: 1     # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+        synthbeam_kmax: 1        # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
         synthbeam_fraction: 1
     dtheta: 11.5               # Angle for coverage
     POINTINGS:
@@ -53,15 +53,15 @@ PLANCK:
     ### This section define which external data are we using
 
     external_data: True                    
-    weight_planck: 0                            # Weight of Planck data within the QUBIC patch
-    level_noise_planck: 0                       # Noise level for Planck data
+    weight_planck: 0             # Weight of Planck data within the QUBIC patch
+    level_noise_planck: 0        # Noise level for Planck data
     seed_noise: 22222
-    bandwidth_planck: 0.2                       # Multiplicative factor to define the bandwidth of Planck's data
-    nsub_planck: 100                            # Number of sub acquisitions for Planck's data
+    bandwidth_planck: 0.2        # Multiplicative factor to define the bandwidth of Planck's data
+    nsub_planck: 100              # Number of sub acquisitions for Planck's data
 
 Pipeline:
-    mapmaking: True           # Run MapMaking Pipeline
-    spectrum: False           # Compute Power Spectra of the frequency maps
+    mapmaking: True              # Run MapMaking Pipeline
+    spectrum: False              # Compute Power Spectra of the frequency maps
 
 PCG:
     ### This section control PCG parameters

@@ -1,7 +1,6 @@
 import os
 import time
 
-import healpy as hp
 import numpy as np
 from pyoperators.core import IdentityOperator, asoperator
 from pyoperators.iterative.core import AbnormalStopIteration, IterativeAlgorithm
@@ -164,12 +163,17 @@ class PCGAlgorithm(IterativeAlgorithm):
             self.x[...] = 0
             self.convergence = np.array([])
             raise StopIteration("RHS is zero.")
+
         self.r[...] = self.b
         self.r -= self.A(self.x)
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)
         if self.error < self.tol:
             raise StopIteration("Solver reached maximum tolerance.")
-        self.M(self.r, self.d)
+
+        if self.r.shape[0] == 1:
+            self.M(self.r[0], self.d[0])
+        else:
+            self.M(self.r, self.d)
         self.delta = self.dot(self.r, self.d)
 
     def iteration(self):
@@ -181,20 +185,16 @@ class PCGAlgorithm(IterativeAlgorithm):
 
         map_i = self.x.copy()
         if self.is_planck:
-            map_i = np.ones(self.input.shape) * hp.UNSEEN
+            map_i = np.ones(self.input.shape)  # * hp.UNSEEN
             map_i[:, self.seenpix, :] = self.x.copy()
 
-        if len(map_i.shape) == 2:
-            _r = map_i[self.seenpix, :] - self.input[self.seenpix, :]
-        else:
-            _r = map_i[:, self.seenpix, :] - self.input[:, self.seenpix, :]
+        _r = map_i[:, self.seenpix, :] - self.input[:, self.seenpix, :]
         self.rms = np.std(_r, axis=1)
 
         if self.gif is not None:
             if self.comm.Get_rank() == 0:
                 nsig = 2
                 min, max = -nsig * np.std(self.input[0, self.seenpix], axis=0), nsig * np.std(self.input[0, self.seenpix], axis=0)
-
                 _plot_reconstructed_maps(
                     map_i,
                     self.input,
@@ -208,14 +208,27 @@ class PCGAlgorithm(IterativeAlgorithm):
                     fwhm=self.fwhm,
                     iter=self.niterations,
                 )
+
         self.r -= alpha * self.q
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)
         self.convergence = np.append(self.convergence, self.error)
+
         if self.error < self.tol:
             raise StopIteration("Solver reached maximum tolerance.")
-        self.M(self.r, self.s)
+
+        # Store old delta before updating s
         delta_old = self.delta
+
+        # Apply preconditioner to get s
+        if self.r.shape[0] == 1:
+            self.M(self.r[0], self.s[0])
+        else:
+            self.M(self.r, self.s)
+
+        # Update delta using s
         self.delta = self.dot(self.r, self.s)
+
+        # Compute beta and update d
         beta = self.delta / delta_old
         self.d *= beta
         self.d += self.s

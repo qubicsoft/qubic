@@ -109,7 +109,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nsub_in"],
             self.params["QUBIC"]["nsub_in"],
             H=None,
-            sampling=sampling
+            sampling=sampling,
             is_external_data=self.params["PLANCK"]["external_data"],
         )
 
@@ -125,7 +125,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nrec"],
             self.params["QUBIC"]["nsub_out"],
             H=H,
-            sampling = sampling
+            sampling = sampling,
             is_external_data=self.params["PLANCK"]["external_data"],
         )
 

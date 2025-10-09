@@ -1120,14 +1120,12 @@ class PlanckAcquisition:
 
 
 class JointAcquisitionFrequencyMapMaking:
-    def __init__(self, d, Nrec, Nsub, H=None):
+    def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False, sampling=None):
         self.d = d
         self.Nrec = Nrec
         self.Nsub = Nsub
-
-        ### Select the instrument model
-        self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None)
-
+        self.is_external_data = is_external_data
+        self.qubic = QubicInstrumentType(self.d, self.Nsub, self.Nrec, comps=[], H=H, nu_co=None, sampling=sampling)
         self.scene = self.qubic.scene
 
         if self.is_external_data:

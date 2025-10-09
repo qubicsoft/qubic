@@ -14,12 +14,12 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "UWB"             # Instrumental design (MB, DB or UWB)
+    instrument: "DB"             # Instrumental design (MB, DB or UWB)
     configuration: "FI"          # Instrumental configuration (TD or FI)
     npointings: 1000             # Number of time samples
     nsub_in: 8                   # Number of sub-acquisitions
     nsub_out: 8
-    nrec: 2                      # Number of reconstructed fr
+    nrec: 1                      # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
     convolution_in: True        # Angular resolution in the input TOD
     convolution_out: False       # Angular resolution in the reconstruction
@@ -49,7 +49,7 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
 
-    external_data: True                    
+    external_data: False                    
     weight_planck: 0             # Weight of Planck data within the QUBIC patch
     level_noise_planck: 0        # Noise level for Planck data
     seed_noise: 22222

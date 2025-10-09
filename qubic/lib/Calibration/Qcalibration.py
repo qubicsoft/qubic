@@ -56,8 +56,10 @@ class QubicCalibration(object):
         else:
             nu_str = "%03i" % self.nu
         for key in ["detarray", "hornarray", "optics", "primbeam", "synthbeam"]:
-            calfile = d[key].replace("_CC", "_%s" % d["config"]).replace("_FFF", "_%s" % nu_str)
-            calfile_fullpath = find_file(os.path.join(self.path, calfile), verbosity=1)
+            calfile_fullpath = None
+            if d[key]:
+                calfile = d[key].replace("_CC", "_%s" % d["config"]).replace("_FFF", "_%s" % nu_str)
+                calfile_fullpath = find_file(os.path.join(self.path, calfile), verbosity=1)
             if calfile_fullpath is None:
                 cmd = "self.%s = None" % key
             else:
@@ -68,10 +70,17 @@ class QubicCalibration(object):
 
             exec(cmd)
         if d["debug"]:
-            print("self.synthbeam = %s" % self.synthbeam)
+            print("self.synthbeam = %s\n" % self.synthbeam)
 
     def __str__(self):
-        state = [("path", self.path), ("detarray", self.detarray), ("hornarray", self.hornarray), ("optics", self.optics), ("primbeam", self.primbeam), ("synthbeam", self.synthbeam)]
+        state = [
+            ("path", self.path),
+            ("detarray", self.detarray),
+            ("hornarray", self.hornarray),
+            ("optics", self.optics),
+            ("primbeam", self.primbeam),
+            ("synthbeam", self.synthbeam),
+        ]
         return "\n".join([a + ": " + repr(v) for a, v in state])
 
     __repr__ = __str__
@@ -123,7 +132,9 @@ class QubicCalibration(object):
                 yreflection = h["yreflection"]
                 radius = h["radius"]
                 selection = ~hdus[1].data.view(bool)
-                layout = LayoutGrid(removed.shape, spacing, selection=selection, radius=radius, xreflection=xreflection, yreflection=yreflection, open=None)
+                layout = LayoutGrid(
+                    removed.shape, spacing, selection=selection, radius=radius, xreflection=xreflection, yreflection=yreflection, open=None
+                )
             else:
                 h = hdus[1].header
                 spacing = h["spacing"]
@@ -133,7 +144,18 @@ class QubicCalibration(object):
                 radius = h["radius"]
                 selection = ~hdus[2].data.view(bool)
                 shape = selection.shape
-                layout = HornLayout(shape, spacing, selection=selection, radius=radius, xreflection=xreflection, yreflection=yreflection, angle=angle, startswith1=True, id=None, open=None)
+                layout = HornLayout(
+                    shape,
+                    spacing,
+                    selection=selection,
+                    radius=radius,
+                    xreflection=xreflection,
+                    yreflection=yreflection,
+                    angle=angle,
+                    startswith1=True,
+                    id=None,
+                    open=None,
+                )
                 layout.id = np.arange(len(layout))
             layout.center = np.concatenate([layout.center, np.full_like(layout.center[..., :1], 0)], -1)
             layout.open = np.ones(len(layout), bool)

@@ -1,8 +1,12 @@
 import numpy as np
 from pyoperators import (
-    HomothetyOperator, DiagonalOperator, IdentityOperator,
-    Rotation2dOperator, Rotation3dOperator, ReshapeOperator,
     DenseBlockDiagonalOperator,
+    DiagonalOperator,
+    HomothetyOperator,
+    IdentityOperator,
+    ReshapeOperator,
+    Rotation2dOperator,
+    Rotation3dOperator,
 )
 from pysimulators import ConvolutionTruncatedExponentialOperator, ProjectionOperator
 
@@ -15,14 +19,13 @@ class ForwardOps:
     """
 
     def __init__(self, qubic_instrument, qubic_acquisition=None, qubic_scene=None):
-        self.qi  = qubic_instrument
+        self.qi = qubic_instrument
         self.acq = qubic_acquisition
         self.scn = qubic_scene
 
-
     def op_bolometer_response(self, tau=None):
         """Bolometer response as truncated-exponential convolution on TOD."""
-        
+
         if self.acq is None:
             raise ValueError("op_bolometer_response needs qubic_acquisition.")
         if tau is None:
@@ -36,24 +39,21 @@ class ForwardOps:
     def op_transmission(self):
         """Diagonal throughput: optics transmission and detector efficiency."""
 
-        transmission = (
-            np.prod(self.qi.optics.components['transmission'])
-            * self.qi.detector.efficiency
-        )
-        return DiagonalOperator(transmission, broadcast='rightward')
+        transmission = np.prod(self.qi.optics.components["transmission"]) * self.qi.detector.efficiency
+        return DiagonalOperator(transmission, broadcast="rightward")
 
     def op_detector_integration(self):
         """Detector solid angle times secondary beam transmission."""
 
-        pos  = self.qi.detector.center
+        pos = self.qi.detector.center
         area = self.qi.detector.area
         secb = self.qi.secondary_beam
-        theta = np.arctan2(np.sqrt((pos[..., :2]**2).sum(-1)), pos[..., 2])
-        phi   = np.arctan2(pos[..., 1], pos[..., 0])
-        sr_det  = -area / pos[..., 2]**2 * np.cos(theta)**3
+        theta = np.arctan2(np.sqrt((pos[..., :2] ** 2).sum(-1)), pos[..., 2])
+        phi = np.arctan2(pos[..., 1], pos[..., 0])
+        sr_det = -area / pos[..., 2] ** 2 * np.cos(theta) ** 3
         sr_beam = secb.solid_angle
-        gain    = secb(theta, phi)
-        return DiagonalOperator(sr_det / sr_beam * gain, broadcast='rightward')
+        gain = secb(theta, phi)
+        return DiagonalOperator(sr_det / sr_beam * gain, broadcast="rightward")
 
     def op_polarizer(self):
         """Polarizer grid (if there is no polarizer it is 1 for I only)."""
@@ -63,16 +63,15 @@ class ForwardOps:
         nd = len(self.qi)
         nt = len(self.acq.sampling)
         grid = (self.qi.detector.quadrant - 1) // 4
-        if self.scn.kind == 'I':
+        if self.scn.kind == "I":
             if self.qi.optics.polarizer:
-                return HomothetyOperator(1/2)
-            return DiagonalOperator(1 - grid, shapein=(nd, nt), broadcast='rightward')
+                return HomothetyOperator(1 / 2)
+            return DiagonalOperator(1 - grid, shapein=(nd, nt), broadcast="rightward")
         if not self.qi.optics.polarizer:
-            raise NotImplementedError('Polarized input without polarizer.')
+            raise NotImplementedError("Polarized input without polarizer.")
         z = np.zeros(nd)
         data = np.array([z + 0.5, 0.5 - grid, z]).T[:, None, None, :]  # (nd,1,1,3)
-        return ReshapeOperator((nd, nt, 1), (nd, nt)) * \
-               DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
+        return ReshapeOperator((nd, nt, 1), (nd, nt)) * DenseBlockDiagonalOperator(data, shapein=(nd, nt, 3))
 
     def op_hwp(self):
         """Rotation matrix of the halfwave plate."""
@@ -81,11 +80,11 @@ class ForwardOps:
             raise ValueError("op_hwp needs acquisition and scene.")
         shape = (len(self.qi), len(self.acq.sampling))
         ang = -4 * self.acq.sampling.angle_hwp
-        if self.scn.kind == 'I':
+        if self.scn.kind == "I":
             return IdentityOperator(shapein=shape)
-        if self.scn.kind == 'QU':
+        if self.scn.kind == "QU":
             return Rotation2dOperator(ang, degrees=True, shapein=shape + (2,))
-        return Rotation3dOperator('X', ang, degrees=True, shapein=shape + (3,))
+        return Rotation3dOperator("X", ang, degrees=True, shapein=shape + (3,))
 
     def op_filter(self):
         """Band integration (or identity if zero bandwidth)."""
@@ -93,7 +92,7 @@ class ForwardOps:
         return IdentityOperator() if bw == 0 else HomothetyOperator(bw)
 
     def op_aperture_integration(self):
-        """    Integrate flux density in the telescope aperture."""
+        """Integrate flux density in the telescope aperture."""
 
         nhorns = np.sum(self.qi.horn.open)
         return HomothetyOperator(nhorns * np.pi * self.qi.horn.radeff**2)

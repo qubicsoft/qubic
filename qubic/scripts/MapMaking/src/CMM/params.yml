@@ -51,7 +51,7 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "UWB"                                                          # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
+    instrument: "DB"                                                          # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                       # Instrumental configuration (TD or FI) # to be implemented in the code
     npointings: 1000                                                          # Number of time samples
     nsub_in: 8                                                                # Number of sub-acquisitions
@@ -110,7 +110,7 @@ PCG:
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                           # Fixing pixels outside QUBIC patch
     fixI: False                                                               # Fix the intensity during the map-making
-    reso_plot: 8
+    reso_plot: 15
     fwhm_plot: 0
     do_gif: True
     seed_start: 33333

@@ -67,14 +67,15 @@ class PresetInitialisation:
                 self.tools.params["foldername"] = (
                     f"{self.tools.params['Foregrounds']['Dust']['type']}_{self.tools.params['Foregrounds']['Dust']['model']}_{self.tools.params['QUBIC']['instrument']}_"
                     + self.tools.params["foldername"]
+                    + f"_{self.job_id}"
                 )
-                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/maps/")
+                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Dict/")
             if self.tools.params["Plots"]["maps"] or self.tools.params["Plots"]["conv_beta"]:
-                create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/I")
-                create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/Q")
-                create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/U")
-                create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/allcomps")
-                create_folder_if_not_exists(self.comm, f"CMM/jobs/{self.job_id}/A_iter")
+                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/I")
+                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/Q")
+                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/U")
+                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/allcomps")
+                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/A_iter")
 
         self.tools.mpi._print_message("========= External Data =========")
         self.external = PresetExternal(self.tools)

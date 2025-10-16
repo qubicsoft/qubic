@@ -391,11 +391,11 @@ class PlotsCMM:
             plt.ylim(eps_min, eps_max)
             plt.yscale("log")
 
-            plt.savefig(f"CMM/jobs/{self.job_id}/A_iter/A_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    os.remove(f"CMM/jobs/{self.job_id}/A_iter/A_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki}.png")
 
             plt.close()
 
@@ -445,10 +445,10 @@ class PlotsCMM:
                 for i in range(beta.shape[1]):
                     plt.plot(alliter, abs(truth[i] - beta[:, i]), "-k", alpha=0.3)
             plt.yscale("log")
-            plt.savefig(f"CMM/jobs/{self.job_id}/A_iter/beta_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki + 1}.png")
 
             if ki > 0:
-                os.remove(f"CMM/jobs/{self.job_id}/A_iter/beta_iter{ki}.png")
+                os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki}.png")
             plt.close()
 
     def _display_allresiduals(self, map_i, seenpix, figsize=(14, 10), ki=0):
@@ -491,7 +491,7 @@ class PlotsCMM:
                     k += 1
 
             plt.tight_layout()
-            plt.savefig(f"CMM/jobs/{self.job_id}/allcomps/allres_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/allcomps/allres_iter{ki + 1}.png")
 
             # if self.preset.tools.rank == 0:
             #    if ki > 0:
@@ -570,11 +570,11 @@ class PlotsCMM:
                     k += 1
 
             plt.tight_layout()
-            plt.savefig(f"CMM/jobs/{self.job_id}/allcomps/allcomps_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/allcomps/allcomps_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    os.remove(f"CMM/jobs/{self.job_id}/allcomps/allcomps_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/allcomps/allcomps_iter{ki}.png")
             plt.close()
 
     def display_maps(self, seenpix, figsize=(14, 8), nsig=6, ki=0, view="gnomview"):
@@ -692,11 +692,11 @@ class PlotsCMM:
                     k += 3
 
                 plt.tight_layout()
-                plt.savefig(f"CMM/jobs/{self.job_id}/{s}/maps_iter{ki + 1}.png")
+                plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki + 1}.png")
 
                 if self.preset.tools.rank == 0:
                     if ki > 0:
-                        os.remove(f"CMM/jobs/{self.job_id}/{s}/maps_iter{ki}.png")
+                        os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki}.png")
 
                 plt.close()
             self.preset.acquisition.rms_plot = np.concatenate((self.preset.acquisition.rms_plot, rms_i), axis=0)
@@ -738,11 +738,11 @@ class PlotsCMM:
             plt.xlim(-0.1, 0.1)
             plt.ylim(0, 100)
             plt.axvline(0, ls="--", color="black")
-            plt.savefig(f"CMM/jobs/{self.job_id}/gain_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/gain_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0:
-                    os.remove(f"CMM/jobs/{self.job_id}/gain_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/gain_iter{ki}.png")
 
             plt.close()
 
@@ -756,10 +756,10 @@ class PlotsCMM:
             plt.yscale("log")
 
             plt.tight_layout()
-            plt.savefig(f"CMM/jobs/{self.job_id}/rms_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0:
-                    os.remove(f"CMM/jobs/{self.job_id}/rms_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki}.png")
 
             plt.close()

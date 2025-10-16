@@ -7,7 +7,7 @@ CMB:
 Foregrounds:
     ### This section define the in/out foregrounds contribution
 
-    fit_spectral_index: True                                                  # If False, the beta reconstruction is skipped
+    fit_spectral_index: False                                                  # If False, the beta reconstruction is skipped
     bin_mixing_matrix: 4
     blind_method:
         "minimize"                                                            # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 

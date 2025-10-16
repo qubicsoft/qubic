@@ -962,7 +962,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         Method to compute the inverse noise covariance matrix in time-domain.
 
         """
-
+        
         if wdet == 0 and wpho150 == 0 and wpho220 == 0:
             shapein = (self.nFocalPlanes, len(self.multiinstrument[0]), len(self.sampling))
             return IdentityOperator(shapein=shapein)

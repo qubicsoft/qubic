@@ -160,13 +160,13 @@ class PipelineFrequencyMapMaking:
                 qubic_npho150=self.params["QUBIC"]["NOISE"]["npho150"],
                 qubic_npho220=self.params["QUBIC"]["NOISE"]["npho220"],
                 planck_ntot=self.params["PLANCK"]["level_noise_planck"],
-                )
+            )
         else:
             self.invN = self.joint.qubic.get_invntt_operator(
                 self.params["QUBIC"]["NOISE"]["ndet"],
                 self.params["QUBIC"]["NOISE"]["npho150"],
                 self.params["QUBIC"]["NOISE"]["npho220"]
-                )
+            )
             R = ReshapeOperator(self.invN.shapeout, self.invN.shape[0])
             self.invN = R(self.invN(R.T))
         
@@ -606,12 +606,15 @@ class PipelineFrequencyMapMaking:
             )
             vec = np.ones(self.joint.qubic.H[0].shapein)
 
+            
             for i in range(self.params["QUBIC"]["nsub_out"]):
-                
-                if i < int(self.params["QUBIC"]["nrec"]/2):
-                    approx_hth[i] = (self.joint.qubic.H[i].T * self.joint.qubic.invn150 * self.joint.qubic.H[i](vec)) # should be simplified by using self.joint.qubic.invn_list
+                if self.params["QUBIC"]["NOISE"]["ndet"] == 0 and self.params["QUBIC"]["NOISE"]["npho150"] == 0 and self.params["QUBIC"]["NOISE"]["npho220"] == 0:
+                    approx_hth[i] = (self.joint.qubic.H[i].T * self.joint.qubic.H[i](vec))
                 else:
-                    approx_hth[i] = (self.joint.qubic.H[i].T * self.joint.qubic.invn220 * self.joint.qubic.H[i](vec))
+                    if i < int(self.params["QUBIC"]["nrec"]/2):
+                        approx_hth[i] = (self.joint.qubic.H[i].T * self.joint.qubic.invn150 * self.joint.qubic.H[i](vec)) # should be simplified by using self.joint.qubic.invn_list
+                    else:
+                        approx_hth[i] = (self.joint.qubic.H[i].T * self.joint.qubic.invn220 * self.joint.qubic.H[i](vec))
 
             for irec in range(self.params["QUBIC"]["nrec"]):
                 imin = irec * self.fsub_out

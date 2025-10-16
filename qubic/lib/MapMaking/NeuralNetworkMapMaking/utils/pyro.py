@@ -8,6 +8,7 @@ import torch
 from pyro.infer import SVI, Predictive, Trace_ELBO
 from pyro.nn import PyroModule, PyroSample
 from pyro.optim import Adam
+from scipy.stats import norm
 
 from qubic.lib.Instrument.Qacquisition import QubicAcquisition
 from qubic.lib.Instrument.Qinstrument import QubicInstrument
@@ -19,56 +20,68 @@ from qubic.lib.Qscene import QubicScene
 class InvTransmissionPyro(PyroModule):
     """Pyro module defining per-sample inverse transmission efficiency."""
 
-    def __init__(self, prior_mean=0.0, prior_sigma=0.2):
+    def __init__(self, prior_mean, prior_sigma):
         super().__init__()
         self.log_eta = PyroSample(dist.Normal(prior_mean, prior_sigma))
+        self.id = "transmission"
 
-    def forward(self, tod_det, transmission):
+    def forward(self, tod_det, op_parameters):
+        transmission = op_parameters
         eta = torch.exp(self.log_eta)[:, None, None]
         Tprod = transmission.to(tod_det.device, dtype=tod_det.dtype).prod()
         return tod_det / (Tprod * eta)
 
 
-class InvTransmissionEstimator:
+class InvDetIntegrationPyro(PyroModule):
+    def __init__(self, prior_mean, prior_sigma):
+        super.__init__()
+        self.log_solid_angle = PyroSample(dist.Normal(prior_mean, prior_sigma))
+        self.id = "det_integration"
+
+    def forward(self, tod_det, op_parameters):
+        pos, area, sec_beam = op_parameters
+
+        solid_angle = torch.exp(self.log_solid_angle)[:, None, None]
+        theta = np.arctan2(np.sqrt((pos[..., :2] ** 2).sum(-1)), pos[..., 2])
+        phi = np.arctan2(pos[..., 1], pos[..., 0])
+        sr_det = -area / pos[..., 2] ** 2 * np.cos(theta) ** 3
+        gain = sec_beam(theta, phi)
+
+        return tod_det * solid_angle / torch.tensor((sr_det[None, :, None] * gain[None, :, None]))
+
+
+class InvEstimatorPyro:
     """
     Bayesian inference for inverse transmission operator calibration using Pyro.
+
+    Goal: pass layer as an argument, to transform the class into a general method to propagate error through any inv operator. I will need to define a method to extract parameters(ex : transmission) and unknowns (ex : eta) for each Inv Operators.
     """
 
-    def __init__(self, qubic_dict, eta=None, transmission=None, prior_mean=0.0, prior_sigma=0.2, lr=3e-3, sigma_noise=1e-18, checkpoint="invT_svi_ckpt.pt", device=None, dtype=torch.float32):
+    def __init__(self, qubic_dict, layer, lr=3e-3, sigma_noise=1e-18, checkpoint="invT_svi_ckpt.pt", device=None, dtype=torch.float32):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = dtype
 
+        self.layer = layer
         self.qubic_dict = qubic_dict
         self.pointing = get_pointing(qubic_dict)
         self.scene = QubicScene(qubic_dict)
         self.instrument = QubicInstrument(qubic_dict)
         self.acquisition = QubicAcquisition(self.instrument, self.pointing, self.scene, self.qubic_dict)
+        self.forward_ops = ForwardOps(self.instrument, self.acquisition, self.scene)
 
-        # If the user provides an eta array / scalar, set detector efficiency
-        if eta is not None:
-            eta_arr = np.asarray(eta) * np.ones(self.instrument.detector.efficiency.shape)
-            self.instrument.detector.efficiency = eta_arr
-
-        # Transmission as a torch tensor on the requested device/dtype
-        if transmission is not None:
-            T = np.asarray(transmission) * np.ones(self.instrument.optics.components["transmission"].shape)
-            self.transmission = torch.tensor(T, dtype=self.dtype, device=self.device) if isinstance(T, np.ndarray) else torch.tensor([T], dtype=self.dtype, device=self.device)
-        else:
-            self.transmission = torch.tensor(np.asarray(self.instrument.optics.components["transmission"]), dtype=self.dtype, device=self.device)
-
-        print("True eta (mean) =", float(self.instrument.detector.efficiency.mean()))
-        print("Transmission =", self.transmission)
+        # Inverse operator parameter(s)
+        if self.layer.id == "transmission":
+            self.operators_parameters = torch.tensor(self.instrument.optics.components["transmission"], dtype=self.dtype, device=self.device)
+        if self.layer.id == "det_integration":
+            pos = self.instrument.detector.center
+            area = self.instrument.detector.area
+            sec_beam = self.instrument.__annotations__
+            self.operators_parameters = torch.tensor([pos, area, sec_beam])
 
         # hyperparams
-        self.prior_mean = float(prior_mean)
-        self.prior_sigma = float(prior_sigma)
         self.lr = float(lr)
         self.sigma_noise = float(sigma_noise)
         self.ckpt_file = checkpoint
-
-        # forward ops and deterministic layer
-        self.forward_ops = ForwardOps(self.instrument, self.acquisition, self.scene)
-        self.layer = InvTransmissionPyro()
 
         # placeholders set in build_model
         self.model_built = False
@@ -87,7 +100,7 @@ class InvTransmissionEstimator:
         convolution = self.acquisition.get_convolution_peak_operator()
         return convolution(sky_map)
 
-    def compute_data_from_sky(self, sky_map, N_samples=2):
+    def compute_data_from_sky(self, sky_map, unknowns):
         """Compute learning datasets.
 
         Compute learning datasets from a sky map by applying the Qubic operators to obtain tod before and after applying the TransmissionOperator.
@@ -113,10 +126,18 @@ class InvTransmissionEstimator:
         HPFATUs = self.forward_ops.op_hwp()(PFATUs)
         PHPFATUs = self.forward_ops.op_polarizer()(HPFATUs)
         APHPFATUs = self.forward_ops.op_detector_integration()(PHPFATUs)
-        TAPHPFATUs = self.forward_ops.op_transmission()(APHPFATUs)
+        tod_before = APHPFATUs
 
-        tod_before_list = [APHPFATUs for _ in range(N_samples)]
-        tod_after_list = [TAPHPFATUs for _ in range(N_samples)]
+        tod_before_list, tod_after_list = [], []
+        N_samples = unknowns.shape[0]
+        for i in range(N_samples):
+            self.instrument.detector.efficiency = unknowns[i]
+
+            forward_ops = ForwardOps(self.instrument, self.acquisition, self.scene)
+            tod_after = forward_ops.op_transmission()(tod_before)
+
+            tod_before_list.append(tod_before)
+            tod_after_list.append(tod_after)
 
         tod_before = torch.tensor(tod_before_list, dtype=self.dtype, device=self.device)
         tod_after = torch.tensor(tod_after_list, dtype=self.dtype, device=self.device)
@@ -128,7 +149,7 @@ class InvTransmissionEstimator:
             # tod_before: (N, D, Nt)
             batch = tod_det.size(0)
             with pyro.plate("batch", batch):
-                sky_hat = self.layer(tod_det, self.transmission)
+                sky_hat = self.layer(tod_det, self.operators_parameters)
                 pyro.sample("obs", dist.Normal(sky_hat, self.sigma_noise).to_event(2), obs=tod_sky)
 
         self.model = model
@@ -181,7 +202,7 @@ class InvTransmissionEstimator:
 
         pred = Predictive(self.model, guide=self.guide, num_samples=num_samples, return_sites=[sample_site])
         post = pred(tod_det, tod_sky=None)
-        eta_samples = torch.exp(post["log_eta"])
+        eta_samples = torch.exp(post[sample_site])
 
         eta_mean = eta_samples.mean(0).cpu()
         eta_std = eta_samples.std(0).cpu()
@@ -200,21 +221,15 @@ class InvTransmissionEstimator:
         plt.title("Posterior mean ±1σ per training TOD")
         plt.show()
 
-    def posterior_mean_std_and_samples(self, model, guide, det_tod, n_draw=60, num_samples=10, sample_site="log_eta", keep_draws=False):
-        """
-        Same as before, but optionally returns a tensor of all stored draws.
-        Set keep_draws=True if you want to keep them (this may be large! depends on the choice of size of sempling sets!).
-        """
-        assert n_draw % num_samples == 0
+    def posterior_mean_std_and_samples(self, eta_samples, n_draws=50, keep_draws=False):
+        num_samples, _ = eta_samples.shape
+
         mean = m2 = None
         n_seen = 0
         all_draws = [] if keep_draws else None
 
-        pred = Predictive(model, guide=guide, num_samples=num_samples, return_sites=[sample_site])
-
-        for _ in range(n_draw // num_samples):
-            post = pred(det_tod, self.transmission, sky=None)
-            draws = torch.exp(post[sample_site]).mean(1)  # (chunk, N_det)
+        for _ in range(n_draws // num_samples):
+            draws = torch.exp(eta_samples).mean(1)  # (chunk, N_det)
 
             if keep_draws:
                 all_draws.append(draws.cpu())
@@ -228,13 +243,112 @@ class InvTransmissionEstimator:
                 mean += delta / n_seen
                 m2 += delta * (x - mean)
 
-            del post, draws
-
         std = torch.sqrt(m2 / (n_seen - 1))
         if keep_draws:
-            all_draws = torch.cat(all_draws, dim=0)  # (n_draw, N_det)
+            all_draws = torch.cat(all_draws, dim=0)
             return mean.cpu(), std.cpu(), all_draws
         return mean.cpu(), std.cpu()
+
+    def plot_posterior(self, draws, nbins=40, credible_interval=0.68, ax=None, show=True, savepath=None):
+        """
+        Plot posterior samples with Gaussian fit and ±1σ (or custom credible interval).
+
+        Parameters
+        ----------
+        draws : torch.Tensor or np.ndarray
+            Posterior samples for one detector.
+        bins : int, optional
+            Number of histogram bins.
+        credible_interval : float, optional
+            Width of shaded credible region (default 68%).
+        ax : matplotlib.axes.Axes, optional
+            Axis to plot on.
+        show : bool, optional
+            Whether to display the figure.
+        savepath : str, optional
+            Path to save the figure.
+        """
+
+        if torch.is_tensor(draws):
+            draws = draws.detach().cpu().numpy()
+
+        mu, sigma = np.mean(draws), np.std(draws)
+        lower, upper = np.quantile(draws, [(1 - credible_interval) / 2, 1 - (1 - credible_interval) / 2])
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Histogram of samples
+        ax.hist(draws, bins=nbins, density=True, alpha=0.25, color="C0", label="Posterior samples")
+
+        # Normal fit
+        xs = np.linspace(draws.min(), draws.max(), 300)
+        ax.plot(xs, norm.pdf(xs, mu, sigma), "k--", lw=1.5, label=r"$\mathcal{N}(\mu,\sigma)$ fit")
+
+        # Mean and credible interval
+        ax.axvline(mu, color="k", lw=1.5, label=f"Mean = {mu:.3f}")
+        ax.axvspan(lower, upper, alpha=0.15, color="orange", label=f"{int(credible_interval * 100)}% CI")
+
+        ax.set_xlabel(r"Mean detector efficiency $\eta$")
+        ax.set_ylabel("Density")
+        ax.set_title("Posterior distribution per detector")
+        ax.legend(frameon=False)
+        ax.grid(alpha=0.2)
+        plt.tight_layout()
+
+        if savepath:
+            plt.savefig(savepath, dpi=200, bbox_inches="tight")
+        if show:
+            plt.show()
+
+    def plot_corrected_tod(self, tod_det, tod_sky, draws, det_id=0, ax=None, show=True, savepath=None):
+        """
+        Plot Time-Ordered Data (TOD) before and after detector efficiency correction.
+
+        Parameters
+        ----------
+        tod_det : torch.Tensor
+            Observed TOD per detector [batch, det, time].
+        tod_sky : torch.Tensor
+            True sky TOD per detector [batch, det, time].
+        draws : torch.Tensor
+            Posterior samples for efficiency η.
+        det_id : int, optional
+            Detector index to plot.
+        ax : matplotlib.axes.Axes, optional
+            Axis to plot on.
+        show : bool, optional
+            Whether to display the figure.
+        savepath : str, optional
+            Path to save the figure.
+        """
+
+        mu_det = draws.mean().item()
+
+        tod_det = tod_det[0, det_id].detach().cpu().numpy()
+        tod_true = tod_sky[0, det_id].detach().cpu().numpy()
+        tod_corr = tod_det * mu_det
+
+        t = np.arange(len(tod_det))
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.plot(t, tod_det, lw=0.8, alpha=0.5, color="C0", label="Attenuated detector TOD")
+        ax.plot(t, tod_corr, lw=1.0, alpha=0.7, color="C3", label=f"Corrected TOD (× {mu_det:.3f})")
+        ax.plot(t, tod_true, "--", lw=1.0, color="k", alpha=0.6, label="True sky TOD")
+
+        ax.set_xlabel("Time sample")
+        ax.set_ylabel("Power")
+        ax.set_title(f"Detector {det_id} – before / after correction")
+        ax.legend(frameon=False)
+        ax.grid(alpha=0.2)
+        plt.tight_layout()
+
+        if savepath:
+            plt.savefig(savepath, dpi=200, bbox_inches="tight")
+        if show:
+            plt.show()
 
     def run(self, sky_map):
         """Should we define a run method ??"""

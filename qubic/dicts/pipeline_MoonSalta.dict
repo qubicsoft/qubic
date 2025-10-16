@@ -1,7 +1,7 @@
 ############################################# Instrument ################################
 debug = False #False/True # Boolean
 
-config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
+config = 'TD' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150e9 # 150e9 or 220e9 Hz
 filter_relative_bandwidth = 0.25 
 beam_shape = 'gaussian' # 'gaussian', 'fitted_beam', 'multi_freq'
@@ -25,7 +25,8 @@ detector_tau=0.01
 polarizer=True
 synthbeam_fraction=1.
 synthbeam_kmax=1
-synthbeam_peak150_fwhm=0.39268176 # in degree
+#synthbeam_peak150_fwhm=0.39268176 # in degree
+synthbeam_peak150_fwhm=0.68 # in degree
 ripples=False
 nripples=0
 focal_length=0.3

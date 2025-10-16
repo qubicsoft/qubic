@@ -1,5 +1,5 @@
 path_out: "test/"
-datafilename: "test_gif"
+datafilename: "test_plot"
 
 CMB:
     cmb: True
@@ -14,21 +14,21 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "DB"             # Instrumental design (MB, DB or UWB)
+    instrument: "UWB"             # Instrumental design (MB, DB or UWB)
     configuration: "FI"          # Instrumental configuration (TD or FI)
-    npointings: 8000             # Number of time samples
-    nsub_in: 12                   # Number of sub-acquisitions
-    nsub_out: 12
+    npointings: 1000             # Number of time samples
+    nsub_in: 8                   # Number of sub-acquisitions
+    nsub_out: 8
     nrec: 2                      # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
     convolution_in: True        # Angular resolution in the input TOD
     convolution_out: False       # Angular resolution in the reconstruction
     bandpass_correction: True    # Correction to keep the edges of the integration band constant
     NOISE:                          
-        ndet: 1                  # Level of detector noise
+        ndet: 0                  # Level of detector noise
                                  # randomness not fixed for det and photon noise, to be checked
-        npho150: 1               # Level of photon noise at 150 GHz
-        npho220: 1               # Level of photon noise at 220 GHz
+        npho150: 0               # Level of photon noise at 150 GHz
+        npho220: 0               # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17    # NEP of detector noise 
         duration_150: 3                    # Effective duration at 150 GHz
         duration_220: 3                    # Effective duration at 220 GHz
@@ -51,7 +51,7 @@ PLANCK:
 
     external_data: True                    
     weight_planck: 0             # Weight of Planck data within the QUBIC patch
-    level_noise_planck: 1        # Noise level for Planck data
+    level_noise_planck: 0        # Noise level for Planck data
     seed_noise: 22222
     bandwidth_planck: 0.2        # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100              # Number of sub acquisitions for Planck's data
@@ -63,7 +63,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_iter_pcg: 100               # Number of PCG iterations #100
+    n_iter_pcg: 50               # Number of PCG iterations #100
     tol_pcg: 1.0e-25             # Tolerance for PCG
     preconditioner: False
     initial_guess_intensity_to_zero: True

@@ -67,11 +67,11 @@ class PipelineFrequencyMapMaking:
         self.fsub_out = int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])
 
         self.file = file
-        self.plot_folder = "FMM/" + self.params["path_out"] + "png/"
+        self.plot_folder = "FMM/" + self.params["path_out"] + "Plots/"
 
         ### Create folders
-        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "maps/")
-        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "png/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Dict/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Plots/")
 
         ### Center of the QUBIC patch
         self.center = equ2gal(self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"])
@@ -625,7 +625,7 @@ class PipelineFrequencyMapMaking:
         M = self.get_preconditioner()
 
         if self.params["PCG"]["gif"]:
-            gif_folder = self.plot_folder + f"{self.job_id}/iter/"
+            gif_folder = self.plot_folder + f"{self.job_id}/PCG/"
         else:
             gif_folder = None
 
@@ -694,7 +694,6 @@ class PipelineFrequencyMapMaking:
         ### Wait for all processes
         self.mpi._barrier()
 
-
         if self.params["PLANCK"]["external_data"]:
             # if Planck is added inside the patch, PCG is reconstructing the DIFFERENCE to Planck, so the start shoud be 0
             if self.params["PLANCK"]["weight_planck"] == 1.0:
@@ -744,13 +743,13 @@ class PipelineFrequencyMapMaking:
                 self.nus_rec = np.array(list(self.nus_Q) + list(self.externaldata.experiments["Planck"]["frequency"]))
                 self.fwhm_rec = np.array(list(self.fwhm_rec) + list(fwhm_ext))
             self.plots.plot_frequency_maps(
-                self.maps_input[: len(self.nus_Q)],
+                self.maps_input_convolved[: len(self.nus_Q)],
                 self.s_hat[: len(self.nus_Q)],
                 self.center,
+                self.nus_Q,
                 reso=15,
                 nsig=3,
-                filename=self.plot_folder + "/all_maps.png",
-                figsize=(10, 5),
+                filename=self.plot_folder + "/Reconstructed_maps.png",
             )
 
             mapmaking_time = time.time() - self.mapmaking_time_0
@@ -799,9 +798,9 @@ class PipelineEnd2End:
         self.comm = comm
         self.job_id = os.environ.get("SLURM_JOB_ID")
 
-        self.folder = "FMM/" + self.params["path_out"] + "maps/"
+        self.folder = "FMM/" + self.params["path_out"] + "Dict/"
         self.file = self.folder + self.params["datafilename"] + f"_{self.job_id}.pkl"
-        self.file_spectrum = "FMM/" + self.params["path_out"] + "spectrum/" + "spectrum_" + self.params["datafilename"] + f"_{self.job_id}.pkl"
+        self.file_spectrum = "FMM/" + self.params["path_out"] + "Spectrum/" + "spectrum_" + self.params["datafilename"] + f"_{self.job_id}.pkl"
         self.mapmaking = None
 
     def main(self, specific_file=None):
@@ -821,7 +820,7 @@ class PipelineEnd2End:
                 raise ValueError("lmax should be lower than 2*nside - 1")
 
             if self.comm.Get_rank() == 0:
-                create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "spectrum/")
+                create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/")
 
                 if self.mapmaking is not None:
                     self.spectrum = Spectra(self.file)

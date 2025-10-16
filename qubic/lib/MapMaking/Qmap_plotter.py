@@ -14,11 +14,9 @@ def _plot_reconstructed_maps(
     seenpix,
     name_file,
     center,
+    max,
+    min,
     reso=15,
-    figsize=(12, 10),
-    fwhm=0,
-    min=-8,
-    max=8,
     iter=0,
 ):
     """
@@ -27,43 +25,40 @@ def _plot_reconstructed_maps(
 
     """
     stk = ["I", "Q", "U"]
-    plt.figure(figsize=figsize)
 
-    _shape = maps.shape
-    C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=3 * hp.npix2nside(m_in.shape[1]) - 1)
+    Nmaps, _, Nstk = maps.shape
     res = maps - m_in
-    res
+
     k = 0
-    for inu in range(_shape[0]):
-        _m = C(maps[inu])
-        _r = C(res[inu])
-        _m[~seenpix, :] = hp.UNSEEN
-        _r[~seenpix, :] = hp.UNSEEN
-        for istk in range(_shape[-1]):
+    plt.figure(figsize=(12, 3 * Nmaps))
+    for imaps in range(Nmaps):
+        maps[imaps, ~seenpix, :] = hp.UNSEEN
+        res[imaps, ~seenpix, :] = hp.UNSEEN
+        for istk in range(Nstk):
             hp.gnomview(
-                _m[:, istk],
+                maps[imaps, :, istk],
                 rot=center,
                 reso=reso,
                 cmap="jet",
-                sub=(_shape[0], _shape[-1] * 2, k + 1),
+                sub=(Nmaps, Nstk * 2, k + 1),
                 notext=True,
-                min=min[istk],
-                max=max[istk],
+                max=max[imaps, istk],
+                min=min[imaps, istk],
                 title=f"Output - {stk[istk]}",
             )
             hp.gnomview(
-                _r[:, istk],
+                res[imaps, :, istk],
                 rot=center,
                 reso=reso,
                 cmap="jet",
-                sub=(_shape[0], _shape[-1] * 2, k + 2),
+                sub=(Nmaps, Nstk * 2, k + 2),
                 notext=True,
-                min=min[istk],
-                max=max[istk],
+                max=max[imaps, istk],
+                min=min[imaps, istk],
                 title=f"Residuals - {stk[istk]}",
             )
             k += 2
-    # plt.suptitle(f'Iteration #{iter}', fontsize=15, y=1.01)
+    plt.suptitle(f"Iteration #{iter}", fontsize=15)
     plt.tight_layout()
     plt.savefig(name_file)
     plt.close()
@@ -207,28 +202,25 @@ class PlotsFMM:
         self.stk = ["I", "Q", "U"]
         self.seenpix = seenpix
 
-    def plot_frequency_maps(self, m_in, m_out, center, reso=15, nsig=3, filename=None, figsize=(10, 8)):
-        m_in[:, ~self.seenpix, :] = hp.UNSEEN
-        m_out[:, ~self.seenpix, :] = hp.UNSEEN
+    def plot_frequency_maps(self, m_in, m_out, center, nus, reso=15, nsig=3, filename=None):
+        Nf, _, Nstk = m_in.shape
         res = m_out - m_in
-        nf, _, _ = m_out.shape
 
-        plt.figure(figsize=figsize)
-
+        plt.figure(figsize=(15, 3.3 * Nf))
         k = 1
-        for inu in range(nf):
-            for istk in range(3):
-                sig = np.std(m_out[0, self.seenpix, istk])
-
+        for inu in range(Nf):
+            for istk in range(Nstk):
+                max_out = np.max(np.abs(m_out[inu, self.seenpix, istk]))
+                max_res = np.max(np.abs(res[inu, self.seenpix, istk]))
                 hp.gnomview(
                     m_out[inu, :, istk],
                     rot=center,
                     reso=reso,
                     cmap="jet",
-                    min=-nsig * sig,
-                    max=nsig * sig,
-                    sub=(nf, 6, k),
-                    title=f"Output {self.stk[istk]}",
+                    min=-max_out,
+                    max=max_out,
+                    sub=(Nf, 6, k),
+                    title=f"{nus[inu]:.1f} GHz - Output {self.stk[istk]}",
                     notext=True,
                 )
 
@@ -237,18 +229,13 @@ class PlotsFMM:
                     rot=center,
                     reso=reso,
                     cmap="jet",
-                    min=-nsig * sig,
-                    max=nsig * sig,
-                    sub=(nf, 6, k + 1),
-                    title=f"Residuals {self.stk[istk]}",
+                    min=-max_res,
+                    max=max_res,
+                    sub=(Nf, 6, k + 1),
+                    title=f"{nus[inu]:.1f} GHz - Residuals {self.stk[istk]}",
                     notext=True,
                 )
-
-                # plt.suptitle(r'$\nu$ = '+f'{nus[inu]:.1f} GHz', x=0.5, y=1 - inu/10)
-
                 k += 2
-            # plt.text(-2.3, 1 - inu/10, r'$\nu$ = '+f'{nus[inu]:.1f} GHz', fontsize=15,
-            #        horizontalalignment='center')
 
         if filename is not None:
             plt.savefig(filename)

@@ -83,22 +83,14 @@ class PipelineFrequencyMapMaking:
         self.dict_out = self.get_dict(key="out")
         # change config and detector_nep
 
-
+        ### Samplings
         if self.params["QUBIC"]["POINTINGS"]["scanning_strategy"] == True:
             print('-----------------scanning strategy---------------')
-            sample_params = {
-                        'latitude': -24.1844,
-                        'longitude': -66.8714,
-                        'RA_center': -34.667,
-                        'DEC_center': -8.016,
-                        'date_obs': '2026-01-01 00:00:00',
-                        'duration': 24,  # in hours
-                        'angspeed': 1,  # deg/s
-                        'delta_az': 20.0,  # deg
-                        'nsweeps_per_elevation': 25,
-                        'period': 1,  # s
-            }
-            sampling = Sky_Dips_Sim.QubicObservation(sample_params).get_samplings()
+            self.dict_out['angspeed'] = 1                   # deg/s
+            self.dict_out['delta_az'] = 20.0                # deg
+            self.dict_out['nsweeps_per_elevation'] = 25
+    
+            sampling = Sky_Dips_Sim.QubicObservation(self.dict_out).get_samplings()
         else: 
             sampling = None
 
@@ -363,7 +355,8 @@ class PipelineFrequencyMapMaking:
             "config": self.params["QUBIC"]["configuration"],
             "random_pointing": self.params["QUBIC"]["POINTINGS"]["random_pointing"],
             "sweeping_pointing": self.params["QUBIC"]["POINTINGS"]["sweeping_pointing"],
-            "repeat_pointing": self.params["QUBIC"]["POINTINGS"]["repeat_pointing"]
+            "repeat_pointing": self.params["QUBIC"]["POINTINGS"]["repeat_pointing"],
+            "duration": self.params["QUBIC"]["POINTINGS"]["duration"]
         }
 
         ### Get the default dictionary
@@ -511,7 +504,6 @@ class PipelineFrequencyMapMaking:
             Simulated TOD :math:`(N_{rec}, 12 \times N^{2}_{side}, N_{stk})`.
 
         """
-
         TOD_QUBIC = self.H_in_qubic(self.input_maps.m_nu).ravel() + self.noiseq
 
         if not self.params["PLANCK"]["external_data"]:

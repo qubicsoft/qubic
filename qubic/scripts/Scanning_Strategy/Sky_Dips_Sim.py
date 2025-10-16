@@ -96,24 +96,22 @@ class QubicObservation:
         P = np.vstack(all_pts)
 
         npointings = P.shape[0]
-        hwp_stepsize = 15              # da modificare
+        hwp_stepsize = 15              # modify 
         time = np.array(P[:,0])
         azimuth = np.array(P[:,1], dtype=np.float32)
         elevation = np.array(P[:,2], dtype=np.float32)
     
-        r = np.random.RandomState(seed=42)   # da  modificare
+        r = np.random.RandomState(seed=42)   # modify 
 
         samplings = QubicSampling(npointings, date_obs=self.dict['date_obs'], period=self.dict['period'], 
                                 latitude=self.dict['latitude'], longitude=self.dict['longitude'])
 
-
-        #samplings.hor2gal(azimuth, elevation, time, date_obs=self.dict['date_obs'],  
-                            #latitude=self.dict['latitude'], longitude=self.dict['longitude'])
         samplings.azimuth = azimuth
         samplings.elevation = elevation
-        samplings.pitch = r.rand(npointings) * 360         # da modificare
-        samplings.angle_hwp = r.randint(0, int(90 / hwp_stepsize + 1), npointings) * hwp_stepsize       # da modificare
-        samplings.fix_az = False
+        samplings.pitch = r.rand(npointings) * 360         # modify
+        samplings.angle_hwp = r.randint(0, int(90 / hwp_stepsize + 1), npointings) * hwp_stepsize       # modify
+        samplings.fix_az = False      # check what it does
+        samplings.time = np.array([(t - samplings.date_obs).sec for t in time]).ravel()
 
         return samplings
 

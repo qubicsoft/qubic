@@ -185,7 +185,7 @@ class InvEstimatorPyro:
         # ensure tensors are on correct device/dtype
         tod_det = tod_det.to(dtype=self.dtype, device=self.device)
         tod_sky = tod_sky.to(dtype=self.dtype, device=self.device)
-        
+
         start = self.load_checkpoint() if use_checkpoint else start
         for step in range(start, start + n_steps):
             loss = self.svi.step(tod_det, tod_sky)
@@ -208,13 +208,25 @@ class InvEstimatorPyro:
 
         pred = Predictive(self.model, guide=self.guide, num_samples=num_samples, return_sites=[self.layer.param_name])
         post = pred(tod_det, tod_sky=None)
-        eta_samples = torch.exp(post[self.layer.param_name])
+        samples = torch.exp(post[self.layer.param_name])
 
-        eta_mean = eta_samples.mean(0).cpu()
-        eta_std = eta_samples.std(0).cpu()
+        mean = samples.mean(0).cpu()
+        std = samples.std(0).cpu()
         if return_samples:
-            return eta_mean, eta_std, eta_samples.cpu()
-        return eta_mean, eta_std
+            return mean, std, samples.cpu()
+        return mean, std
+
+    def plot_results(self, samples):
+        N_samples = samples.shape[1]
+        mean, std = samples.mean(0), samples.std(0)
+
+        plt.figure()
+        plt.errorbar(range(N_samples), mean, yerr=std, fmt="o", capsize=3, color="tab:blue")
+        plt.axhline(self.true_value, ls="--", c="k", lw=1)
+        plt.ylabel("mean detector efficiency η")
+        plt.xlabel("TOD sample ID")
+        plt.title("Posterior mean ±1σ per training TOD")
+        plt.show()
 
     def posterior_mean_std_and_samples(self, samples, n_draws=50, keep_draws=False):
         num_samples, _ = samples.shape
@@ -224,7 +236,7 @@ class InvEstimatorPyro:
         all_draws = [] if keep_draws else None
 
         for _ in range(n_draws // num_samples):
-            draws = torch.exp(samples).mean(1)  # (chunk, N_det)
+            draws = samples.mean(1)  # (chunk, N_det)
 
             if keep_draws:
                 all_draws.append(draws.cpu())

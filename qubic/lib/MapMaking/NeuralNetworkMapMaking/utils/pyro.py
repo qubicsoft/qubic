@@ -24,6 +24,7 @@ class InvTransmissionPyro(PyroModule):
         super().__init__()
         self.log_eta = PyroSample(dist.Normal(prior_mean, prior_sigma))
         self.id = "transmission"
+        self.param_name = "log_eta"
 
     def forward(self, tod_det, op_parameters):
         transmission = op_parameters
@@ -37,6 +38,7 @@ class InvDetIntegrationPyro(PyroModule):
         super.__init__()
         self.log_solid_angle = PyroSample(dist.Normal(prior_mean, prior_sigma))
         self.id = "det_integration"
+        self.param_name = "log_solid_angle"
 
     def forward(self, tod_det, op_parameters):
         pos, area, sec_beam = op_parameters
@@ -72,11 +74,14 @@ class InvEstimatorPyro:
         # Inverse operator parameter(s)
         if self.layer.id == "transmission":
             self.operators_parameters = torch.tensor(self.instrument.optics.components["transmission"], dtype=self.dtype, device=self.device)
+            self.true_value = self.instrument.detector.efficiency.mean()
         if self.layer.id == "det_integration":
             pos = self.instrument.detector.center
             area = self.instrument.detector.area
             sec_beam = self.instrument.__annotations__
             self.operators_parameters = torch.tensor([pos, area, sec_beam])
+            self.true_value = self.instrument.secondary_beam.solid_angle
+        self.op_index = self.id_to_index(self.layer)
 
         # hyperparams
         self.lr = float(lr)
@@ -100,24 +105,32 @@ class InvEstimatorPyro:
         convolution = self.acquisition.get_convolution_peak_operator()
         return convolution(sky_map)
 
-    def compute_data_from_sky(self, sky_map, unknowns):
-        """Compute learning datasets.
+    def id_to_index(self, layer):
+        if layer.id == "unit_conversion":
+            op_index = 1
+        if layer.id == "atmosphere":
+            op_index = 2
+        if layer.id == "aperture":
+            op_index = 3
+        if layer.id == "filter":
+            op_index = 4
+        if layer.id == "projection":
+            op_index = 5
+        if layer.id == "hwp":
+            op_index = 6
+        if layer.id == "polarizer":
+            op_index = 7
+        if layer.id == "det_integration":
+            op_index = 8
+        if layer.id == "transmission":
+            op_index = 9
+        if layer.id == "bol_response":
+            op_index = 10
 
-        Compute learning datasets from a sky map by applying the Qubic operators to obtain tod before and after applying the TransmissionOperator.
+        return op_index
 
-        Parameters
-        ----------
-        sky_map : ndarray
-            Map of the sky, shape : (Npix, Nstk)
-
-        Returns
-        -------
-        tod_before : ndarray
-            TOD before TransmissionOperator, shape : (Ndet, Npointing, Nstk)
-        tod_after : ndarray
-            TOD after TransmissionOperator, shape : (Ndet, Npointing)
-        """
-
+    def compute_tod_list(self, sky_map):
+        s = sky_map
         Us = self.forward_ops.op_unit_conversion()(sky_map)
         TUs = Us
         ATUs = self.forward_ops.op_aperture_integration()(TUs)
@@ -126,27 +139,21 @@ class InvEstimatorPyro:
         HPFATUs = self.forward_ops.op_hwp()(PFATUs)
         PHPFATUs = self.forward_ops.op_polarizer()(HPFATUs)
         APHPFATUs = self.forward_ops.op_detector_integration()(PHPFATUs)
-        tod_before = APHPFATUs
+        TAPHPFATUs = self.forward_ops.op_transmission()(APHPFATUs)
+        RTAPHPFATUs = self.forward_ops.op_bolometer_response()(TAPHPFATUs)
 
-        tod_before_list, tod_after_list = [], []
-        N_samples = unknowns.shape[0]
-        for i in range(N_samples):
-            self.instrument.detector.efficiency = unknowns[i]
+        return [s, Us, TUs, ATUs, FATUs, PFATUs, HPFATUs, PHPFATUs, APHPFATUs, TAPHPFATUs, RTAPHPFATUs]
 
-            forward_ops = ForwardOps(self.instrument, self.acquisition, self.scene)
-            tod_after = forward_ops.op_transmission()(tod_before)
+    def build_dataset(self, sky_map, N_samples=5):
+        tod_list = self.compute_tod_list(sky_map)
 
-            tod_before_list.append(tod_before)
-            tod_after_list.append(tod_after)
-
-        tod_before = torch.tensor(tod_before_list, dtype=self.dtype, device=self.device)
-        tod_after = torch.tensor(tod_after_list, dtype=self.dtype, device=self.device)
+        tod_before = torch.tensor([tod_list[self.op_index - 1] for _ in range(N_samples)], device=self.device, dtype=self.dtype)
+        tod_after = torch.tensor([tod_list[self.op_index] for _ in range(N_samples)], device=self.device, dtype=self.dtype)
 
         return tod_before, tod_after
 
     def build_model(self):
         def model(tod_det, tod_sky=None):
-            # tod_before: (N, D, Nt)
             batch = tod_det.size(0)
             with pyro.plate("batch", batch):
                 sky_hat = self.layer(tod_det, self.operators_parameters)
@@ -178,11 +185,10 @@ class InvEstimatorPyro:
         # ensure tensors are on correct device/dtype
         tod_det = tod_det.to(dtype=self.dtype, device=self.device)
         tod_sky = tod_sky.to(dtype=self.dtype, device=self.device)
-
+        
         start = self.load_checkpoint() if use_checkpoint else start
         for step in range(start, start + n_steps):
             loss = self.svi.step(tod_det, tod_sky)
-
             if save_every != 0 and step % save_every == 0:
                 torch.save(
                     {
@@ -195,14 +201,14 @@ class InvEstimatorPyro:
                 print(f"step {step:5d} | ELBO {loss:8.3g}  ➜ checkpoint saved")
         print("Training complete ✔")
 
-    def posterior(self, tod_det, num_samples=100, sample_site="log_eta", return_samples=False):
+    def posterior(self, tod_det, num_samples=100, return_samples=False):
         """Compute posterior mean, std, and samples."""
         assert self.model_built, "Call build_model() first."
         tod_det = tod_det.to(dtype=self.dtype, device=self.device)
 
-        pred = Predictive(self.model, guide=self.guide, num_samples=num_samples, return_sites=[sample_site])
+        pred = Predictive(self.model, guide=self.guide, num_samples=num_samples, return_sites=[self.layer.param_name])
         post = pred(tod_det, tod_sky=None)
-        eta_samples = torch.exp(post[sample_site])
+        eta_samples = torch.exp(post[self.layer.param_name])
 
         eta_mean = eta_samples.mean(0).cpu()
         eta_std = eta_samples.std(0).cpu()
@@ -210,26 +216,15 @@ class InvEstimatorPyro:
             return eta_mean, eta_std, eta_samples.cpu()
         return eta_mean, eta_std
 
-    def plot_results(self, eta_mean, eta_std, N_samples):
-        plt.figure()
-        print(eta_mean.shape)
-        plt.errorbar(range(N_samples), eta_mean, yerr=eta_std, fmt="o", capsize=3, color="tab:blue")
-
-        plt.axhline(self.instrument.detector.efficiency.mean(), ls="--", c="k", lw=1)
-        plt.ylabel("mean detector efficiency η")
-        plt.xlabel("TOD sample ID")
-        plt.title("Posterior mean ±1σ per training TOD")
-        plt.show()
-
-    def posterior_mean_std_and_samples(self, eta_samples, n_draws=50, keep_draws=False):
-        num_samples, _ = eta_samples.shape
+    def posterior_mean_std_and_samples(self, samples, n_draws=50, keep_draws=False):
+        num_samples, _ = samples.shape
 
         mean = m2 = None
         n_seen = 0
         all_draws = [] if keep_draws else None
 
         for _ in range(n_draws // num_samples):
-            draws = torch.exp(eta_samples).mean(1)  # (chunk, N_det)
+            draws = torch.exp(samples).mean(1)  # (chunk, N_det)
 
             if keep_draws:
                 all_draws.append(draws.cpu())
@@ -249,7 +244,7 @@ class InvEstimatorPyro:
             return mean.cpu(), std.cpu(), all_draws
         return mean.cpu(), std.cpu()
 
-    def plot_posterior(self, draws, nbins=40, credible_interval=0.68, ax=None, show=True, savepath=None):
+    def plot_parameter_posteriors(self, draws, nbins=40, credible_interval=0.68, ax=None, show=True, savepath=None):
         """
         Plot posterior samples with Gaussian fit and ±1σ (or custom credible interval).
 
@@ -350,6 +345,48 @@ class InvEstimatorPyro:
         if show:
             plt.show()
 
-    def run(self, sky_map):
-        """Should we define a run method ??"""
-        return None
+    def run(self, sky_map, start=0, n_steps=400, save_every=20, use_checkpoint=True, num_samples=200, return_samples=True):
+        """
+        Run the error propagation from a the given layer over a sky map.
+
+        Parameters
+        ----------
+        sky_map : np.ndarray
+            Input sky map
+        start : int, optional
+            Starting step (default: 0)
+        n_steps : int, optional
+            Number of training steps (default: 400)
+        save_every : int, optional
+            Save checkpoint every n steps (default: 20)
+        use_checkpoint : bool, optional
+            Whether to use checkpointing (default: True)
+        num_samples : int, optional
+            Number of posterior samples (default: 200)
+        return_samples : bool, optional
+            Whether to return samples (default: True)
+
+        Returns
+        -------
+        mean, std, samples (if return_samples)
+        """
+
+        ### Build dataset
+        tod_det, tod_sky = self.build_dataset(sky_map)
+
+        ### Build model
+        self.build_model()
+
+        ### Train model
+        self.train(
+            tod_det,
+            tod_sky,
+            start=start,
+            n_steps=n_steps,
+            save_every=save_every,
+        )
+
+        ### Compute posterior
+        post = self.posterior(tod_det, num_samples, return_samples)
+
+        return post

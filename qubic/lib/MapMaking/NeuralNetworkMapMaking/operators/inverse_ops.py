@@ -244,10 +244,10 @@ class InverseUnitConversion(nn.Module):
     def __init__(self, qubic_instrument, qubic_scene, dtype=torch.float32, device=None):
         super().__init__()
         nu = float(qubic_instrument.filter.nu)  # Hz
-        Ω = float(qubic_scene.solid_angle)
+        solid_angle = float(qubic_scene.solid_angle)
         self.absolute = bool(qubic_scene.absolute)
 
-        a = 2.0 * Ω * h * nu**3 / c**2  # common factor
+        a = 2.0 * solid_angle * h * nu**3 / c**2  # common factor
         if not self.absolute:
             T = float(qubic_scene.temperature)
             x = h * nu / (k * T)

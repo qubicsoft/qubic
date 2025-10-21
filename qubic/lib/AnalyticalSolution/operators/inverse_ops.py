@@ -191,7 +191,7 @@ class InverseFilter(nn.Module):
         return x * self.inv_bw
 
 
-# 4) APERTURE INTEGRATION  — sky space
+# 4) APERTURE INTEGRATION  - sky space
 
 
 class InverseApertureIntegration(nn.Module):
@@ -208,7 +208,7 @@ class InverseApertureIntegration(nn.Module):
         return x * self.inv_ap
 
 
-# 5) ATMOSPHERE (simple scalar transmission) — TOD space or sky, depending on usage
+# 5) ATMOSPHERE (simple scalar transmission) 
 
 class InverseAtmosphere(nn.Module):
     """
@@ -223,7 +223,7 @@ class InverseAtmosphere(nn.Module):
         return x * self.inv_tau
 
 
-# 6) UNIT CONVERSION (brightness temp into power) — sky space
+# 6) UNIT CONVERSION (brightness temp into power) - sky space
 
 class InverseUnitConversion(nn.Module):
     """
@@ -234,10 +234,10 @@ class InverseUnitConversion(nn.Module):
     def __init__(self, qubic_instrument, qubic_scene, dtype=torch.float32, device=None):
         super().__init__()
         nu = float(qubic_instrument.filter.nu)  # Hz
-        Ω  = float(qubic_scene.solid_angle)
+        omega  = float(qubic_scene.solid_angle)
         self.absolute = bool(qubic_scene.absolute)
 
-        a = 2.0 * Ω * h * nu**3 / c**2  # common factor
+        a = 2.0 * omega * h * nu**3 / c**2  # common factor
         if not self.absolute:
             T  = float(qubic_scene.temperature)
             x  = h * nu / (k * T)

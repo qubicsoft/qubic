@@ -133,7 +133,7 @@ class Pipeline:
         """
 
         if self._steps == 0:
-            self.plots._display_allcomponents(seenpix, ki=-1)
+            self.plots._display_allcomponents(ki=-1, reso=self.preset.tools.params["PCG"]["reso_plot"])
 
         ### Initialize PCG starting point
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
@@ -190,7 +190,7 @@ class Pipeline:
                     output="animation.gif",
                 )
             self.plots.display_maps(seenpix, ki=self._steps)
-            self.plots._display_allcomponents(seenpix, ki=self._steps, gif=self.preset.tools.params["PCG"]["do_gif"], reso=self.preset.tools.params["PCG"]["reso_plot"])
+            self.plots._display_allcomponents(ki=self._steps, gif=self.preset.tools.params["PCG"]["do_gif"], reso=self.preset.tools.params["PCG"]["reso_plot"])
             self.plots.plot_rms_iteration(self.preset.acquisition.rms_plot, ki=self._steps)
 
     def update_components(self, seenpix):

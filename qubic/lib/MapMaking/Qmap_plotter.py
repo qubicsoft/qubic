@@ -451,7 +451,7 @@ class PlotsCMM:
                 os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki}.png")
             plt.close()
 
-    def _display_allresiduals(self, map_i, seenpix, figsize=(14, 10), ki=0):
+    def _display_allresiduals(self, map_i, seenpix, ki=0):
         """
         Display all components of the Healpix map with Gaussian convolution.
 
@@ -464,41 +464,40 @@ class PlotsCMM:
         for each component and Stokes parameter (I, Q, U). The maps are convolved using
         a Gaussian operator and displayed using Healpix's gnomview function.
         """
+        Nmaps, _, Nstk = map_i.shape
+
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
-            plt.figure(figsize=figsize)
+            plt.figure(figsize=(10, 5 * Nmaps))
             k = 0
             r = self.preset.A(map_i) - self.preset.b
             map_res = np.ones(self.preset.comp.components_iter.shape) * hp.UNSEEN
             map_res[:, seenpix, :] = r
 
-            for istk in range(3):
+            for istk in range(Nstk):
                 for icomp in range(len(self.preset.comp.components_name_out)):
-                    _reso = 15
+                    reso = 15
                     nsig = 3
 
                     hp.gnomview(
                         map_res[icomp, :, istk],
                         rot=self.preset.sky.center,
-                        reso=_reso,
+                        reso=reso,
                         notext=True,
                         title=f"{self.preset.comp.components_name_out[icomp]} - {stk[istk]} - r = A x - b",
                         cmap="jet",
-                        sub=(3, len(self.preset.comp.components_out), k + 1),
+                        sub=(Nstk, len(self.preset.comp.components_out), k + 1),
                         min=-nsig * np.std(r[icomp, :, istk]),
                         max=nsig * np.std(r[icomp, :, istk]),
                     )
                     k += 1
 
             plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/allcomps/allres_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allres_iter{ki + 1}.png")
 
-            # if self.preset.tools.rank == 0:
-            #    if ki > 0:
-            #        os.remove(f'jobs/{self.job_id}/allcomps/allres_iter{ki}.png')
             plt.close()
 
-    def _display_allcomponents(self, seenpix, figsize=(14, 10), ki=0, gif=True, reso=15):
+    def _display_allcomponents(self, ki=0, gif=True, reso=15):
         """
         Display all components of the Healpix map with Gaussian convolution.
 
@@ -511,73 +510,49 @@ class PlotsCMM:
         for each component and Stokes parameter (I, Q, U). The maps are convolved using
         a Gaussian operator and displayed using Healpix's gnomview function.
         """
-        # C = [HealpixConvolutionGaussianOperator(
-        #     fwhm=self.preset.acquisition.fwhm_rec[i],
-        #     lmax=3 * self.params["SKY"]["nside"]) for i in range(len(self.preset.comp.components_name_out))]
+
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
-            plt.figure(figsize=figsize)
+            maps_in = self.preset.acquisition.components_in_convolved
+            maps_rec = self.preset.comp.components_iter
+            maps_res = maps_rec - maps_in
+
+            Nmaps, _, Nstk = maps_res.shape
             k = 0
-            for istk in range(3):
+
+            plt.figure(figsize=(5 * Nmaps, 10))
+            for istk in range(Nstk):
                 for icomp in range(len(self.preset.comp.components_name_out)):
-                    # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
-
-                    # map_in = C[icomp](self.preset.comp.components_out[icomp, :, istk]).copy() # why?
-                    map_in = self.preset.acquisition.components_in_convolved[icomp, :, istk].copy()
-                    map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
-
-                    # sig = np.std(self.preset.comp.components_out[icomp, seenpix, istk])
-                    # map_in[~seenpix] = hp.UNSEEN
-                    # map_out[~seenpix] = hp.UNSEEN
-
-                    # else:
-                    #     if self.preset.qubic.params_qubic['convolution_in']:
-                    #         map_in = self.preset.comp.components_convolved_out[icomp, :, istk].copy()
-                    #         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()
-                    #         sig = np.std(self.preset.comp.components_convolved_out[icomp, seenpix, istk])
-                    #     else:
-                    #         map_in = self.preset.comp.components_out[istk, :, icomp].copy()
-                    #         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()
-                    #         sig = np.std(self.preset.comp.components_out[istk, seenpix, icomp])
-                    #     map_in[~seenpix] = hp.UNSEEN
-                    #     map_out[~seenpix] = hp.UNSEEN
-
-                    r = map_in - map_out
-                    # nsig = 2
                     hp.gnomview(
-                        map_out,
+                        maps_rec[icomp, :, istk],
                         rot=self.preset.sky.center,
                         reso=reso,
                         notext=True,
                         title=f"{self.preset.comp.components_name_out[icomp]} - {stk[istk]} - Output",
                         cmap="jet",
-                        sub=(3, len(self.preset.comp.components_out) * 2, k + 1),
-                        # min=-nsig * sig,
-                        # max=nsig * sig,
+                        sub=(Nstk, len(self.preset.comp.components_out) * 2, k + 1),
                     )
                     k += 1
                     hp.gnomview(
-                        r,
+                        maps_res[icomp, :, istk],
                         rot=self.preset.sky.center,
                         reso=reso,
                         notext=True,
                         title=f"{self.preset.comp.components_name_out[icomp]} - {stk[istk]} - Residual",
                         cmap="jet",
-                        sub=(3, len(self.preset.comp.components_out) * 2, k + 1),
-                        # min=-nsig * np.std(r[seenpix]),
-                        # max=nsig * np.std(r[seenpix]),
+                        sub=(Nstk, len(self.preset.comp.components_out) * 2, k + 1),
                     )
                     k += 1
 
             plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/allcomps/allcomps_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki + 1}.png")
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/allcomps/allcomps_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki}.png")
             plt.close()
 
-    def display_maps(self, seenpix, figsize=(14, 8), nsig=6, ki=0, view="gnomview"):
+    def display_maps(self, seenpix, ki=0, reso=15, view="gnomview"):
         """
 
         Method to display maps at given iteration.
@@ -594,100 +569,75 @@ class PlotsCMM:
             stk = ["I", "Q", "U"]
             rms_i = np.zeros((1, 2))
 
-            for istk, s in enumerate(stk):
-                plt.figure(figsize=figsize)
+            maps_in = self.preset.acquisition.components_in_convolved
+            maps_rec = self.preset.comp.components_iter
+            maps_res = maps_rec - maps_in
 
+            maps_in[:, ~seenpix, :] = hp.UNSEEN
+            maps_rec[:, ~seenpix, :] = hp.UNSEEN
+            maps_res[:, ~seenpix, :] = hp.UNSEEN
+
+            Nmaps, _, Nstk = maps_res.shape
+            k = 0
+
+            for istk, s in enumerate(stk):
+                plt.figure(figsize=(9, 10))
                 k = 0
 
                 for icomp in range(len(self.preset.comp.components_name_out)):
-                    # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
-                    if self.preset.qubic.params_qubic["convolution_in"]:
-                        map_in = self.preset.acquisition.components_in_convolved[icomp, :, istk].copy()
-                        map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
-                    else:
-                        map_in = self.preset.comp.components_out[icomp, :, istk].copy()
-                        map_out = self.preset.comp.components_iter[icomp, :, istk].copy()
-
-                    # else:
-                    #     if self.preset.qubic.params_qubic['convolution_in']:
-                    #         map_in = self.preset.comp.components_convolved_out[icomp, :, istk].copy()
-                    #         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()
-                    #     else:
-                    #         map_in = self.preset.comp.components_out[istk, :, icomp].copy()
-                    #         map_out = self.preset.comp.components_iter[istk, :, icomp].copy()
-
-                    sig = np.std(map_in[seenpix])
-                    map_in[~seenpix] = hp.UNSEEN
-                    map_out[~seenpix] = hp.UNSEEN
-                    r = map_in - map_out
-                    r[~seenpix] = hp.UNSEEN
                     if icomp == 0:
                         if istk > 0:
-                            rms_i[0, istk - 1] = np.std(r[seenpix])
+                            rms_i[0, istk - 1] = np.std(maps_res[icomp, seenpix, istk])
 
-                    _reso = 15
-                    nsig = 3
                     if view == "gnomview":
                         hp.gnomview(
-                            map_in,
+                            maps_in[icomp, :, istk],
                             rot=self.preset.sky.center,
-                            reso=_reso,
+                            reso=reso,
                             notext=True,
                             title="",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 1),
-                            min=-nsig * sig,
-                            max=nsig * sig,
                         )
                         hp.gnomview(
-                            map_out,
+                            maps_rec[icomp, :, istk],
                             rot=self.preset.sky.center,
-                            reso=_reso,
+                            reso=reso,
                             notext=True,
                             title="",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 2),
-                            min=-nsig * sig,
-                            max=nsig * sig,
                         )
                         hp.gnomview(
-                            r,
+                            maps_res[icomp, :, istk],
                             rot=self.preset.sky.center,
-                            reso=_reso,
+                            reso=reso,
                             notext=True,
-                            title=f"{np.std(r[seenpix]):.3e}",
+                            title=f"{np.std(maps_res[icomp, seenpix, istk]):.3e}",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 3),
-                            min=-nsig * sig,
-                            max=nsig * sig,
                         )
                     elif view == "mollview":
                         hp.mollview(
-                            map_in,
+                            maps_in,
                             notext=True,
-                            title="",
+                            title="Input",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 1),
-                            min=-nsig * sig,
-                            max=nsig * sig,
                         )
                         hp.mollview(
-                            map_out,
+                            maps_rec,
                             notext=True,
-                            title="",
+                            title="Output",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 2),
-                            min=-nsig * sig,
-                            max=nsig * sig,
                         )
                         hp.mollview(
-                            r,
+                            maps_rec,
                             notext=True,
-                            title=f"{np.std(r[seenpix]):.3e}",
+                            title=f"Residual - Std = {np.std(maps_rec[icomp, seenpix, istk]):.3e}",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 3),
-                            min=-nsig * sig,
-                            max=nsig * sig,
                         )
                     k += 3
 

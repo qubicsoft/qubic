@@ -1,7 +1,8 @@
 from fgbuster import component_model as c
-from .. import Qcomponent_model as model_co
-from ....Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
-from ....Qdictionary import qubicDict
+
+from qubic.lib.Instrument.Qacquisition import JointAcquisitionComponentsMapMaking
+from qubic.lib.MapMaking.ComponentMapMaking import Qcomponent_model as model_co
+from qubic.lib.Qdictionary import qubicDict
 
 
 class PresetQubic:
@@ -47,7 +48,7 @@ class PresetQubic:
         components_fgb_out, _ = self.get_components_fgb(key="out")
 
         if self.preset_tools.params["Foregrounds"]["CO"]["CO_in"]:
-            nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"]
+            nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0"]
         else:
             nu_co = None
 
@@ -58,8 +59,9 @@ class PresetQubic:
             components_fgb_in,
             self.params_qubic["nsub_in"],
             preset_external.external_nus,
-            preset_external.params_external["nintegr_planck"],
+            preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
+            weight_planck=preset_external.params_external["weight_planck"],
         )
 
         if self.params_qubic["nsub_in"] == self.params_qubic["nsub_out"]:
@@ -72,9 +74,10 @@ class PresetQubic:
             components_fgb_out,
             self.params_qubic["nsub_out"],
             preset_external.external_nus,
-            preset_external.params_external["nintegr_planck"],
+            preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
             H=H_tojoint,
+            weight_planck=preset_external.params_external["weight_planck"],
         )
 
     def get_dict(self):
@@ -110,7 +113,6 @@ class PresetQubic:
             "noiseless": False,
             "comm": self.comm,
             "kind": "IQU",
-            "config": "FI",
             "verbose": False,
             "dtheta": self.params_qubic["dtheta"],
             "nprocs_sampling": 1,
@@ -129,7 +131,7 @@ class PresetQubic:
             "detector_nep": float(self.params_qubic["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params_qubic["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params_qubic["SYNTHBEAM"]["synthbeam_fraction"],
-            "interp_projection" : False,
+            "interp_projection": False,
             "instrument_type": self.params_qubic["instrument"],
             "config": self.params_qubic["configuration"],
         }
@@ -168,28 +170,24 @@ class PresetQubic:
         if self.preset_tools.params["Foregrounds"]["Dust"][f"Dust_{key}"]:
             components += [
                 c.Dust(
-                    nu0=self.preset_tools.params["Foregrounds"]["Dust"]["nu0_d"],
+                    nu0=self.preset_tools.params["Foregrounds"]["Dust"]["nu0"],
                     temp=20,
                 )
             ]
             components_name += ["Dust"]
 
         if self.preset_tools.params["Foregrounds"]["Synchrotron"][f"Synchrotron_{key}"]:
-            components += [
-                c.Synchrotron(
-                    nu0=self.preset_tools.params["Foregrounds"]["Synchrotron"]["nu0_s"]
-                )
-            ]
+            components += [c.Synchrotron(nu0=self.preset_tools.params["Foregrounds"]["Synchrotron"]["nu0"])]
             components_name += ["Synchrotron"]
 
         if self.preset_tools.params["Foregrounds"]["CO"][f"CO_{key}"]:
             components += [
-                #c.COLine(
-                #    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
+                # c.COLine(
+                #    nu=self.preset_tools.params["Foregrounds"]["CO"]["nu0"],
                 #    active=False,
-                #)
+                # )
                 model_co.Monochromatic(
-                    nu0=self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"],
+                    nu0=self.preset_tools.params["Foregrounds"]["CO"]["nu0"],
                 )
             ]
             components_name += ["CO"]

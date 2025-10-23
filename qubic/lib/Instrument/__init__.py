@@ -1,5 +1,3 @@
-from .Qacquisition import *
-from .Qnoise import *
-from .Qinstrument import *
-
-
+from qubic.lib.Instrument.Qacquisition import *
+from qubic.lib.Instrument.Qinstrument import *
+from qubic.lib.Instrument.Qnoise import *

@@ -2,8 +2,8 @@ import healpy as hp
 import numpy as np
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
-from ....Fitting import Qnamaster as nam
-from ....Qsamplings import equ2gal
+from qubic.lib.Fitting import Qnamaster as nam
+from qubic.lib.Qsamplings import equ2gal
 
 
 class PresetSky:
@@ -52,9 +52,7 @@ class PresetSky:
 
         ### Center of the QUBIC patch
         self.preset_tools.mpi._print_message("    => Getting center of the QUBIC patch")
-        self.center = equ2gal(
-            self.params_sky["RA_center"], self.params_sky["DEC_center"]
-        )
+        self.center = equ2gal(self.params_sky["RA_center"], self.params_sky["DEC_center"])
 
         ### Compute coverage map
         self.preset_tools.mpi._print_message("    => Computing coverage")
@@ -69,10 +67,7 @@ class PresetSky:
         self.seenpix_015 = self.coverage / self.max_coverage > 0.15
 
         # Pixels seen enough by QUBIC, according to the threshold defined in params.yml. The others will be replaced by Planck
-        self.seenpix = (
-            self.coverage / self.max_coverage
-            > self.preset_tools.params["PLANCK"]["thr_planck"]
-        )
+        self.seenpix = self.coverage / self.max_coverage > self.preset_tools.params["SKY"]["coverage_cut"]
 
         ### Define the map of betas across the patch if 'nside_beta_out' != 0
         if self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"] != 0:
@@ -92,7 +87,7 @@ class PresetSky:
         self.mask[self.seenpix] = self.preset_tools.params["PLANCK"]["weight_planck"]
         C = HealpixConvolutionGaussianOperator(
             fwhm=self.preset_tools.params["PLANCK"]["fwhm_weight_planck"],
-            lmax=3 * self.params_sky["nside"],
+            lmax=3 * self.params_sky["nside"] - 1,
         )
         self.mask = C(self.mask)
 
@@ -120,23 +115,15 @@ class PresetSky:
         vec_pix = np.array(
             hp.pix2vec(
                 self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"],
-                np.arange(
-                    12
-                    * self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"]
-                    ** 2
-                ),
+                np.arange(12 * self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"] ** 2),
             )
         )
 
         angle = np.arccos(np.dot(vec_center, vec_pix))
         indices = np.argsort(angle)
 
-        mask = np.zeros(
-            12 * self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"] ** 2
-        )
-        pix_inside_patch = indices[
-            : self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_in"]
-        ]
+        mask = np.zeros(12 * self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"] ** 2)
+        pix_inside_patch = indices[: self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_in"]]
         mask[pix_inside_patch] = 1
 
         return mask
@@ -154,11 +141,9 @@ class PresetSky:
         self.namaster = nam.Namaster(
             self.seenpix,
             lmin=self.preset_tools.params["SPECTRUM"]["lmin"],
-            lmax=3 * self.preset_tools.params["SKY"]["nside"],
+            lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
             delta_ell=self.preset_tools.params["SPECTRUM"]["dl"],
             aposize=self.preset_tools.params["SPECTRUM"]["aposize"],
         )
-        self.ell, _ = self.namaster.get_binning(
-            self.preset_tools.params["SKY"]["nside"]
-        )
+        self.ell, _ = self.namaster.get_binning(self.preset_tools.params["SKY"]["nside"])
         self.cl2dl = self.ell * (self.ell + 1) / (2 * np.pi)

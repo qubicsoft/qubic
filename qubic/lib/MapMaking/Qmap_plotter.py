@@ -577,11 +577,11 @@ class PlotsCMM:
             maps_rec[:, ~seenpix, :] = hp.UNSEEN
             maps_res[:, ~seenpix, :] = hp.UNSEEN
 
-            Nmaps, _, Nstk = maps_res.shape
+            Nmaps, _, _ = maps_res.shape
             k = 0
 
             for istk, s in enumerate(stk):
-                plt.figure(figsize=(9, 10))
+                plt.figure(figsize=(3.5 * Nmaps, 12))
                 k = 0
 
                 for icomp in range(len(self.preset.comp.components_name_out)):
@@ -595,7 +595,7 @@ class PlotsCMM:
                             rot=self.preset.sky.center,
                             reso=reso,
                             notext=True,
-                            title="",
+                            title=f"Input {stk[istk]}",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 1),
                         )
@@ -604,7 +604,7 @@ class PlotsCMM:
                             rot=self.preset.sky.center,
                             reso=reso,
                             notext=True,
-                            title="",
+                            title=f"Output {stk[istk]}",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 2),
                         )
@@ -613,7 +613,7 @@ class PlotsCMM:
                             rot=self.preset.sky.center,
                             reso=reso,
                             notext=True,
-                            title=f"{np.std(maps_res[icomp, seenpix, istk]):.3e}",
+                            title=f"Residual {stk[istk]} - Std = {np.std(maps_res[icomp, seenpix, istk]):.3e}",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 3),
                         )
@@ -621,21 +621,21 @@ class PlotsCMM:
                         hp.mollview(
                             maps_in,
                             notext=True,
-                            title="Input",
+                            title=f"Input {stk[istk]}",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 1),
                         )
                         hp.mollview(
                             maps_rec,
                             notext=True,
-                            title="Output",
+                            title=f"Output {stk[istk]}",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 2),
                         )
                         hp.mollview(
                             maps_rec,
                             notext=True,
-                            title=f"Residual - Std = {np.std(maps_rec[icomp, seenpix, istk]):.3e}",
+                            title=f"Residual {stk[istk]} - Std = {np.std(maps_rec[icomp, seenpix, istk]):.3e}",
                             cmap="jet",
                             sub=(len(self.preset.comp.components_out), 3, k + 3),
                         )

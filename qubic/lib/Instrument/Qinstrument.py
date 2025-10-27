@@ -219,7 +219,7 @@ class QubicInstrument(Instrument):
             self.sbeam_fits = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
             d["synthbeam"] = "CalQubic_Synthbeam_Calibrated_Multifreq_FI.fits"
             print("There is no fits file given in this dictionary. Using analytical model of beam parameters")
-            use_file = False
+            self.use_file = False
         else:
             self.sbeam_fits = d["synthbeam"]
 
@@ -232,16 +232,17 @@ class QubicInstrument(Instrument):
             d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], "3")
             primary_shape = "fitted_beam"
             secondary_shape = "fitted_beam"
-        else:
+        elif d["beam_shape"] == "multi_freq":
             d["primbeam"] = d["primbeam"].replace(d["primbeam"][-6], "4")
             primary_shape = "multi_freq"
             secondary_shape = "multi_freq"
+        else:
+            raise ValueError("Unknown beam shape '{}'.".format(d["beam_shape"]))
         if self.debug:
             print("primary_shape", primary_shape)
             print("d['primbeam']", d["primbeam"])
         self.config = d["config"]
-        calibration = QubicCalibration(d)
-        self.calibration = calibration
+        self.calibration = QubicCalibration(d)
 
         self.ripples = ripples
         self.nripples = nripples
@@ -1507,6 +1508,20 @@ class QubicInstrument(Instrument):
         val *= solid_angle / scene.solid_angle * len(horn)
         return theta, phi, val
 
+    def _peak_angles_unsorted(self, scene, nu, position, synthbeam, horn, primary_beam):
+        """
+        Compute the angles and intensity of the synthetic beam peaks.
+
+        """
+        theta, phi = QubicInstrument._peak_angles_kmax(
+            synthbeam.kmax, horn.spacing, horn.angle, nu, position)
+        val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
+        val[~np.isfinite(val)] = 0
+
+        solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
+        val *= solid_angle / scene.solid_angle * len(horn)
+        return theta, phi, val
+    
     @staticmethod
     def _peak_angles_kmax(kmax, horn_spacing, angle, nu, position):
         """

@@ -1324,13 +1324,18 @@ class QubicInstrument(Instrument):
             # Fuse
             ValueError("'use_file is True' case not implemented for the interpolated projection operator.")
 
-        ndetectors = position.shape[0]
-        ntimes = rotation.data.shape[0]
-        nside = scene.nside
+        # ndetectors = position.shape[0]
+        # ntimes = rotation.data.shape[0]
+        # nside = scene.nside
+
+        # test, to skip most arguments
+        ndetectors = 248
+        ntimes = 1000
+        nside = 512
 
         if use_file:
-            isfreq = int(np.floor(nu / 1e9))
-            frq = len(str(freqs[0]))
+            # isfreq = int(np.floor(nu / 1e9))
+            # frq = len(str(freqs[0]))
 
             # do an interpolation! not the freqid thing
             # wouldn't it be more clever to create one Akima1DInterpolator object for all frequencies?
@@ -1347,15 +1352,16 @@ class QubicInstrument(Instrument):
                 thetas, phis, vals = thetafits, phifits, valfits
 
             else:
+                nu_GHz = nu*1e-9
                 # thetafits = thetafits[freqid].reshape((np.shape(thetafits)[1], np.shape(thetafits)[2]))
                 # phifits = phifits[freqid].reshape((np.shape(phifits)[1], np.shape(phifits)[2]))
                 # valfits = valfits[freqid].reshape((np.shape(valfits)[1], np.shape(valfits)[2]))
-                print(nu, freqs) # see if the same format
+                print(nu_GHz, freqs) # see if the same format
                 print(thetafits.shape)
                 interp_data = []
                 for data in [thetafits, phifits, valfits]:
                     interpolator = Akima1DInterpolator(freqs, data, axis=0)
-                    interp_data.append(interpolator(nu))
+                    interp_data.append(interpolator(nu_GHz))
                 thetas, phis, vals = interp_data[0], interp_data[1], interp_data[2]
                 print(thetas.shape)
                 sys.exit()

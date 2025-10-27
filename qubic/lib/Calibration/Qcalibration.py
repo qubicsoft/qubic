@@ -202,6 +202,7 @@ class QubicCalibration(object):
             freqs = hdu[3].data
 
             return theta, phi, val, freqs, header
+        
         elif name == "synthbeam_jc":
             hdu = fits.open(self.synthbeam)
             header = hdu[0].header

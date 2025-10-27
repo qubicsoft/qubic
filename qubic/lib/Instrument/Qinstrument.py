@@ -1,6 +1,7 @@
 # coding: utf-8
 import copy
 
+import sys
 import healpy as hp
 import numexpr as ne
 import numpy as np
@@ -31,6 +32,7 @@ from pysimulators.interfaces.healpy import (
 from pysimulators.sparse import FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMatrix
 from scipy.constants import c, h, k, sigma
 from scipy.integrate import quad
+from scipy.interpolate import Akima1DInterpolator
 
 from qubic import _flib as flib
 from qubic.lib.Calibration.Qcalibration import QubicCalibration
@@ -209,6 +211,9 @@ class QubicInstrument(Instrument):
         ripples = d["ripples"]
         nripples = d["nripples"]
 
+        # test
+        d['synthbeam'] = "CalQubic_SynthBeam_TD_150.fits"
+        d["use_synthbeam_fits_file"] = True
         # check if synthetic beam peaks are from file or calculated in peak_angles
         use_file = d.get(("use_synthbeam_fits_file"))
         self.use_file = bool(use_file)
@@ -1327,22 +1332,35 @@ class QubicInstrument(Instrument):
             isfreq = int(np.floor(nu / 1e9))
             frq = len(str(freqs[0]))
 
-            if frq <= 4:
-                freqid = np.where(freqs == isfreq)
-            else:
-                freqid = np.where(freqs == nu)
+            # do an interpolation! not the freqid thing
+            # wouldn't it be more clever to create one Akima1DInterpolator object for all frequencies?
+            # maybe in Qcalibration? Called only once?
+
+            # if frq <= 4:
+            #     freqid = np.where(freqs == isfreq)
+            # else:
+            #     freqid = np.where(freqs == nu)
 
             importshape = np.shape(np.shape(thetafits))
 
-            if importshape[0] <= 2:
+            if importshape[0] <= 2: # used if we have a different calfile for each frequency? we might want to have only one file for all freqs and remove this
                 thetas, phis, vals = thetafits, phifits, valfits
 
             else:
-                thetafits = thetafits[freqid].reshape((np.shape(thetafits)[1], np.shape(thetafits)[2]))
-                phifits = phifits[freqid].reshape((np.shape(phifits)[1], np.shape(phifits)[2]))
-                valfits = valfits[freqid].reshape((np.shape(valfits)[1], np.shape(valfits)[2]))
+                # thetafits = thetafits[freqid].reshape((np.shape(thetafits)[1], np.shape(thetafits)[2]))
+                # phifits = phifits[freqid].reshape((np.shape(phifits)[1], np.shape(phifits)[2]))
+                # valfits = valfits[freqid].reshape((np.shape(valfits)[1], np.shape(valfits)[2]))
+                print(nu, freqs) # see if the same format
+                print(thetafits.shape)
+                interp_data = []
+                for data in [thetafits, phifits, valfits]:
+                    interpolator = Akima1DInterpolator(freqs, data, axis=0)
+                    interp_data.append(interpolator(nu))
+                thetas, phis, vals = interp_data[0], interp_data[1], interp_data[2]
+                print(thetas.shape)
+                sys.exit()
 
-                (thetas, phis, vals) = thetafits, phifits, valfits
+                # (thetas, phis, vals) = thetafits, phifits, valfits
                 print("Getting Thetas from Fits File")
 
             thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas, phis, vals, synthbeam)
@@ -1903,6 +1921,10 @@ class QubicMultibandInstrument:
 
         self.FRBW = d["filter_relative_bandwidth"]  # initial Full Relative Band Width
         self.d = d
+
+        # ah: We could add here the creation of the Akima1DInterpolator object used for all subinstruments
+        # This means doing some calibration initialisation here, is it worth it?
+        # For now I will put it in the QubicInstrument object, that means it will be created for each subinstrument but at least it is not code duplication
 
         self.subinstruments = []
         if d["instrument_type"] == "MB":

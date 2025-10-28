@@ -197,7 +197,7 @@ class PCGAlgorithm(IterativeAlgorithm):
                     map_i,
                     self.input,
                     self.seenpix,
-                    self.gif + f"iter_{self.niterations + self.iter_init}.png",
+                    self.gif + f"iter_{self.niterations + self.iter_init}.svg",
                     self.center,
                     max,
                     -max,

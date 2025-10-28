@@ -22,7 +22,7 @@ def _plot_reconstructed_maps(
 ):
     """
 
-    Save a PNG with the actual maps at iteration i. It assumes that maps is 3-dimensional
+    Save a svg with the actual maps at iteration i. It assumes that maps is 3-dimensional
 
     """
     stk = ["I", "Q", "U"]
@@ -409,7 +409,7 @@ class Plots:
             plt.ylabel(self.names[i], fontsize=12)
 
         plt.xlabel("Iterations", fontsize=12)
-        plt.savefig(f"allplots_{job_id}/Convergence_chain.png")
+        plt.savefig(f"allplots_{job_id}/Convergence_chain.svg")
         plt.close()
 
     def get_triangle(self, chain, names, labels, job_id):
@@ -437,7 +437,7 @@ class Plots:
             title_limit=self.params["Sampler"]["title_limit"],
         )
         # title_limit=1)
-        plt.savefig(f"allplots_{job_id}/triangle_plot.png")
+        plt.savefig(f"allplots_{job_id}/triangle_plot.svg")
         plt.close()
 
     def get_Dl_plot(self, ell, Dl, Dl_err, nus, job_id, figsize=(10, 10), model=None):
@@ -455,7 +455,7 @@ class Plots:
                 k += 1
 
         plt.tight_layout()
-        plt.savefig(f"allplots_{job_id}/Dl_plot.png")
+        plt.savefig(f"allplots_{job_id}/Dl_plot.svg")
         plt.close()
 
 
@@ -558,7 +558,7 @@ class PlotsFMM:
             )
 
             k += 3
-        plt.savefig(f"FMM/allplots_{job_id}/frequency_maps_{self.stk[istk]}_{name}.png")
+        plt.savefig(f"FMM/allplots_{job_id}/frequency_maps_{self.stk[istk]}_{name}.svg")
         plt.close()
 
     def plot_FMM_mollview(self, m_in, m_out, nus, job_id, figsize=(10, 8), istk=1, nsig=3, fwhm=0):
@@ -594,7 +594,7 @@ class PlotsFMM:
             )
 
             k += 3
-        plt.savefig(f"allplots_{job_id}/frequency_maps_{self.stk[istk]}_moll.png")
+        plt.savefig(f"allplots_{job_id}/frequency_maps_{self.stk[istk]}_moll.svg")
         plt.close()
 
 
@@ -618,7 +618,7 @@ class PlotsCMM:
 
     def plot_sed(self, nus_in, A_in, nus_out, A_out, figsize=(8, 6), ki=0, gif=False):
         """
-        Plots the Spectral Energy Distribution (SED) and saves the plot as a PNG file.
+        Plots the Spectral Energy Distribution (SED) and saves the plot as a svg file.
 
         Parameters:
         nus (array-like): Array of frequency values.
@@ -653,11 +653,11 @@ class PlotsCMM:
             plt.ylim(eps_min, eps_max)
             plt.yscale("log")
 
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki + 1}.svg")
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki}.svg")
 
             plt.close()
 
@@ -707,10 +707,10 @@ class PlotsCMM:
                 for i in range(beta.shape[1]):
                     plt.plot(alliter, abs(truth[i] - beta[:, i]), "-k", alpha=0.3)
             plt.yscale("log")
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki + 1}.svg")
 
             if ki > 0:
-                os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki}.png")
+                os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki}.svg")
             plt.close()
 
     def _display_allresiduals(self, map_i, seenpix, ki=0):
@@ -755,7 +755,7 @@ class PlotsCMM:
                     k += 1
 
             plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allres_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allres_iter{ki + 1}.svg")
 
             plt.close()
 
@@ -807,11 +807,11 @@ class PlotsCMM:
                     k += 1
 
             plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki + 1}.svg")
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki}.svg")
             plt.close()
 
     def display_maps(self, seenpix, ki=0, reso=15, view="gnomview"):
@@ -822,7 +822,7 @@ class PlotsCMM:
         Arguments:
         ----------
             - seenpix : array containing the id of seen pixels.
-            - ngif    : Int number to create GIF with ngif PNG image.
+            - ngif    : Int number to create GIF with ngif svg image.
             - figsize : Tuple to control size of plots.
             - nsig    : Int number to compute errorbars.
 
@@ -904,11 +904,11 @@ class PlotsCMM:
                     k += 3
 
                 plt.tight_layout()
-                plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki + 1}.png")
+                plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki + 1}.svg")
 
                 if self.preset.tools.rank == 0:
                     if ki > 0:
-                        os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki}.png")
+                        os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki}.svg")
 
                 plt.close()
             self.preset.acquisition.rms_plot = np.concatenate((self.preset.acquisition.rms_plot, rms_i), axis=0)
@@ -950,11 +950,11 @@ class PlotsCMM:
             plt.xlim(-0.1, 0.1)
             plt.ylim(0, 100)
             plt.axvline(0, ls="--", color="black")
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/gain_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/gain_iter{ki + 1}.svg")
 
             if self.preset.tools.rank == 0:
                 if ki > 0:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/gain_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/gain_iter{ki}.svg")
 
             plt.close()
 
@@ -968,10 +968,10 @@ class PlotsCMM:
             plt.yscale("log")
 
             plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki + 1}.png")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki + 1}.svg")
 
             if self.preset.tools.rank == 0:
                 if ki > 0:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki}.png")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki}.svg")
 
             plt.close()

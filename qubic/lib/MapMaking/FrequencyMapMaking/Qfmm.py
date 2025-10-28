@@ -749,7 +749,7 @@ class PipelineFrequencyMapMaking:
                 self.nus_Q,
                 reso=15,
                 nsig=3,
-                filename=self.plot_folder + "/Reconstructed_maps.png",
+                filename=self.plot_folder + "/Reconstructed_maps.svg",
             )
 
             mapmaking_time = time.time() - self.mapmaking_time_0
@@ -846,7 +846,6 @@ class PipelineEnd2End:
                     "Nls": DlBB_noise,
                     "parameters": self.params,
                 }
-
                 if self.params["Spectrum"]["plot_spectrum"]:
                     self.plots = PlotsFMM(self.spectrum.seenpix)
                     create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/Plots/")
@@ -859,11 +858,9 @@ class PipelineEnd2End:
                         Dl_err=DlBB_noise[:N, :N],
                         ymodel=None,
                         nrec=N,
-                        figsize=(12, 10),
                         title=" (QUBIC only)",
                         name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_{self.job_id}.svg",
                     )
-
                     ### Planck only plots
                     plot_cross_spectrum(
                         nus=self.spectrum.dictionary["nus"][N:],
@@ -873,11 +870,8 @@ class PipelineEnd2End:
                         ymodel=None,
                         nrec=0,
                         title=" (Planck only)",
-                        figsize=(25, 25),
-                        dpi=1000,
                         name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"Planck_{self.job_id}.svg",
                     )
-
                     ### QUBIC + Planck plots
                     plot_cross_spectrum(
                         nus=self.spectrum.dictionary["nus"],
@@ -886,10 +880,7 @@ class PipelineEnd2End:
                         Dl_err=DlBB_noise,
                         ymodel=None,
                         nrec=N,
-                        figsize=(30, 30),
-                        dpi=1000,
                         title=" (QUBIC + Planck)",
                         name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_Planck_{self.job_id}.svg",
                     )
-
                 self.mapmaking._save_data(self.file_spectrum, dict_solution)

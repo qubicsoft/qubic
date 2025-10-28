@@ -15,7 +15,7 @@ from qubic.lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking
 from qubic.lib.Instrument.Qnoise import QubicTotNoise
 from qubic.lib.MapMaking.FrequencyMapMaking.FMM_errors_checking import ErrorChecking
 from qubic.lib.MapMaking.Qcg import pcg
-from qubic.lib.MapMaking.Qmap_plotter import PlotsFMM
+from qubic.lib.MapMaking.Qmap_plotter import PlotsFMM, plot_cross_spectrum
 from qubic.lib.MapMaking.Qmaps import InputMaps, PlanckMaps
 from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
@@ -828,17 +828,68 @@ class PipelineEnd2End:
                     self.spectrum = Spectra(specific_file)
 
                 ### Signal
+                print("\n===============================================")
+                print("========= Cross-spectra with Sky =============")
+                print("===============================================\n")
                 DlBB_maps = self.spectrum.run(maps=self.spectrum.maps)
 
                 ### Noise
+                print("\n===============================================")
+                print("========= Cross-spectra with Residual =========")
+                print("===============================================\n")
                 DlBB_noise = self.spectrum.run(maps=self.spectrum.dictionary["maps_noise"])
 
                 dict_solution = {
                     "nus": self.spectrum.dictionary["nus"],
                     "ell": self.spectrum.ell,
                     "Dls": DlBB_maps,
-                    "Nl": DlBB_noise,
+                    "Nls": DlBB_noise,
                     "parameters": self.params,
                 }
+
+                if self.params["Spectrum"]["plot_spectrum"]:
+                    self.plots = PlotsFMM(self.spectrum.seenpix)
+                    create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/Plots/")
+                    ### QUBIC only plots
+                    N = len(self.spectrum.dictionary["nus"]) - 7
+                    plot_cross_spectrum(
+                        nus=self.spectrum.dictionary["nus"][:N],
+                        ell=self.spectrum.ell,
+                        Dl=DlBB_maps[:N, :N],
+                        Dl_err=DlBB_noise[:N, :N],
+                        ymodel=None,
+                        nrec=N,
+                        figsize=(12, 10),
+                        title=" (QUBIC only)",
+                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_{self.job_id}.svg",
+                    )
+
+                    ### Planck only plots
+                    plot_cross_spectrum(
+                        nus=self.spectrum.dictionary["nus"][N:],
+                        ell=self.spectrum.ell,
+                        Dl=DlBB_maps[N:, N:],
+                        Dl_err=DlBB_noise[N:, N:],
+                        ymodel=None,
+                        nrec=0,
+                        title=" (Planck only)",
+                        figsize=(25, 25),
+                        dpi=1000,
+                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"Planck_{self.job_id}.svg",
+                    )
+
+                    ### QUBIC + Planck plots
+                    plot_cross_spectrum(
+                        nus=self.spectrum.dictionary["nus"],
+                        ell=self.spectrum.ell,
+                        Dl=DlBB_maps,
+                        Dl_err=DlBB_noise,
+                        ymodel=None,
+                        nrec=N,
+                        figsize=(30, 30),
+                        dpi=1000,
+                        title=" (QUBIC + Planck)",
+                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_Planck_{self.job_id}.svg",
+                    )
 
                 self.mapmaking._save_data(self.file_spectrum, dict_solution)

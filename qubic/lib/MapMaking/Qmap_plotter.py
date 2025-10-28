@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from getdist import MCSamples, plots
+from matplotlib.gridspec import GridSpec
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 
@@ -62,6 +63,267 @@ def _plot_reconstructed_maps(
     plt.tight_layout()
     plt.savefig(name_file)
     plt.close()
+
+
+def Dl2Cl(ell, Dl):
+    """
+    Convert angular power spectrum from D_ell to C_ell.
+
+    Formula
+    -------
+    C_ell = D_ell * 2*pi / (ell * (ell + 1))
+
+    Parameters
+    ----------
+    ell : array_like
+        Multipole moments (1D). Values must be > 0 (division by zero otherwise).
+    Dl : array_like
+        D_ell values. Can be scalar, 1D (same length as `ell`) or broadcastable to `ell`.
+        Typical shape in this module: (n_nus, n_nus, n_bins).
+
+    Returns
+    -------
+    ndarray
+        C_ell values with the same shape as the broadcast result of `Dl` and `ell`.
+
+    Notes
+    -----
+    - Uses elementwise broadcasting; ensure `ell` and `Dl` shapes are compatible.
+    - No guard is performed for ell == 0; caller must avoid or mask such entries.
+    """
+    return Dl * 2 * np.pi / (ell * (ell + 1))
+
+
+def Cl2BK(ell, Cl):
+    """
+    Convert C_ell to the bandpower-like quantity 100 * ell * C_ell / (2*pi).
+
+    Formula
+    -------
+    result = 100 * ell * C_ell / (2*pi)
+
+    Parameters
+    ----------
+    ell : array_like
+        Multipole moments (1D). Should match or broadcast with `Cl`.
+    Cl : array_like
+        C_ell values. Can be scalar, 1D or broadcastable to `ell`.
+        Typical shape in this module: (n_nus, n_nus, n_bins).
+
+    Returns
+    -------
+    ndarray
+        Transformed bandpower values with shape equal to the broadcasted inputs.
+    """
+    return 100 * ell * Cl / (2 * np.pi)
+
+
+def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", nbins=None, nrec=2, mode="Dl", figsize=None, title=None, name=None, dpi=300):
+    """
+    Plot the upper-triangle matrix of cross-angular power spectra D_ell (and optional model).
+
+    The function arranges a len(nus) x len(nus) grid and fills only the upper triangle
+    (including diagonal) with small subplots labelled by the frequency pair `nus[i] x nus[j]`.
+    It draws data errorbars, an optional second series (Dl - noise if `Dl_err` provided),
+    and a model line (from `ymodel`) either in D_ell units or transformed to the
+    "100 * ell * C_ell / (2*pi)" units depending on `mode`.
+
+    Parameters
+    ----------
+    nus : array_like
+        1D array of frequency identifiers (used for subplot annotations). Length = n_nus.
+    ell : array_like
+        1D array of multipole moments. Length >= nbins (if nbins provided).
+        Must be > 0 to avoid division-by-zero in conversions.
+    Dl : ndarray
+        Data D_ell values, expected shape (n_nus, n_nus, n_ell) or broadcastable to that.
+    Dl_err : ndarray or None
+        Errors on Dl with same shape as `Dl` (or broadcastable). If provided, an additional
+        series `Dl - Dl_err` will be plotted where applicable. Errors are absolute-valued
+        (the function applies np.abs).
+    ymodel : ndarray or None
+        Model values for plotting. Expected shape (n_nus, n_nus, n_ell) (or broadcastable).
+        If None, no model line is drawn.
+    label_model : str, optional
+        Legend label for the model line (default: "CMB + Dust").
+    nbins : int or None, optional
+        Number of ell bins to plot. If None (default) uses len(ell).
+    nrec : int, optional
+        Number of "recon" channels used to choose subplot background color and styling.
+        Default is 2.
+    mode : {"Dl", ...}, optional
+        If "Dl" the data are plotted in D_ell units. Otherwise the model/data are
+        transformed via `_Dl2Cl` and `_Cl2BK` before plotting (matching original behaviour).
+    ft_nus : int, optional
+        Font size for the subplot frequency annotations (default: 10).
+    figsize : tuple, optional
+        Matplotlib figure size (default: (10, 8)).
+    title : str or None, optional
+        Suptitle appended to the fixed prefix "Angular Cross-Power Spectra".
+        If None, only the prefix is used.
+    name : str or None, optional
+        If provided, the figure is saved to this filename as a PDF.
+
+    Side effects
+    ------------
+    - Creates a matplotlib figure, shows it with plt.show() and optionally saves it.
+    - Does not return the figure (returns None). If you need the figure object, modify the
+    function to `return fig` after creation.
+
+    Notes
+    -----
+    - The function preserves exact plotting order, labels and colours of the original code.
+    - The caller must ensure shapes of `nus`, `ell`, `Dl`, `Dl_err`, and `ymodel` are compatible.
+    """
+
+    n = len(nus)
+    if figsize is None:
+        figsize = (2.2 * n, 2.2 * n)
+
+    # Dynamic font scaling based on figure height
+    count_factor = 1 / np.sqrt(n)
+    scale_factor = (figsize[1] / 8.0) * count_factor
+
+    ft_axis = max(int(13 * scale_factor), 7)
+    ft_nus = max(int(15 * scale_factor), 8)
+    ft_title = max(int(32 * np.sqrt(scale_factor)), 14)
+
+    # defaults & preproc (preserve original behavior)
+    if nbins is None:
+        nbins = len(ell)
+
+    # Dl2 := Dl - Dl_err (only if Dl_err provided)
+    Dl2 = Dl - Dl_err if Dl_err is not None else None
+
+    # keep absolute-valued errors as in original
+    Dl_err = np.abs(Dl_err) if Dl_err is not None else None
+    Dl2_err = np.abs(Dl2) if Dl2 is not None else None
+
+    ell_sel = ell[:nbins]
+
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    gs = GridSpec(len(nus), len(nus), figure=fig)
+
+    kp = 0  # subplot counter (used to control first-plot labelling)
+
+    def _model_plot(ax, i, j, kp):
+        """Plot model lines respecting the original oddity:
+        - if kp == 0: plot *only* the mode-specific model (with label)
+        - else: if ymodel exists, plot both Dl model and transformed Cl model (no label)
+        """
+        if ymodel is None:
+            return
+
+        y = ymodel[i, j, :nbins]
+        if kp == 0:
+            if mode == "Dl":
+                ax.plot(ell_sel, y, "--r", label=label_model)
+            else:
+                ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r", label=label_model)
+        else:
+            # replicate original behavior: plot Dl model and (always) transformed model if ymodel present
+            ax.plot(ell_sel, y, "--r")
+            ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r")
+
+    def _plot_errorbars(ax, i, j, color_main, color_second=None, label_main=None, label_second=None):
+        """Add errorbars in either 'Dl' or transformed mode."""
+        main = Dl[i, j, :nbins]
+        main_err = Dl_err[i, j, :nbins] if Dl_err is not None else None
+
+        # plot main series
+        if mode == "Dl":
+            ax.errorbar(ell_sel, main, yerr=main_err, capsize=5, color=color_main, fmt="-o", label=label_main)
+        else:
+            y_main = Cl2BK(ell_sel, Dl2Cl(ell_sel, main))
+            yerr_main = Cl2BK(ell_sel, Dl2Cl(ell_sel, main_err)) if main_err is not None else None
+            ax.errorbar(ell_sel, y_main, yerr=yerr_main, capsize=5, color=color_main, fmt="-o", label=label_main)
+
+        # optional second series (Dl - noise)
+        if Dl2 is not None:
+            sec = Dl2[i, j, :nbins]
+            sec_err = Dl2_err[i, j, :nbins] if Dl2_err is not None else None
+            if mode == "Dl":
+                ax.errorbar(ell_sel, sec, yerr=sec_err, capsize=5, color=color_second or "orange", fmt="-o", label=label_second)
+            else:
+                y_sec = Cl2BK(ell_sel, Dl2Cl(ell_sel, sec))
+                yerr_sec = Cl2BK(ell_sel, Dl2Cl(ell_sel, sec_err)) if sec_err is not None else None
+                ax.errorbar(ell_sel, y_sec, yerr=yerr_sec, capsize=5, color=color_second or "orange", fmt="-o", label=label_second)
+
+    # iterate over upper triangle (including diagonal)
+    for i in range(len(nus)):
+        for j in range(i, len(nus)):
+            ax = fig.add_subplot(gs[i, j])
+
+            # labels (preserve font sizes)
+            if i == j:
+                ax.set_xlabel(r"$\ell$", fontsize=2 * ft_axis)
+                if mode == "Dl":
+                    ax.set_ylabel(r"$\mathcal{D}_{\ell}$", fontsize=2 * ft_axis)
+                else:
+                    ax.set_ylabel(r"100 $ \frac{\ell \mathcal{C}_{\ell}}{2 \pi}$", fontsize=2 * ft_axis)
+            else:
+                ax.tick_params(axis="x", labelrotation=30)
+                ax.tick_params(axis="y", labelrotation=-45)
+
+            # model plotting (keeps original behavior/oddity)
+            _model_plot(ax, i, j, kp)
+
+            ax.patch.set_alpha(0.2)
+            ax.annotate(f"{nus[i]:.0f}x{nus[j]:.0f}", xy=(0.1, 0.9), fontsize=ft_nus, xycoords="axes fraction", color="black", weight="bold")
+
+            # facecolor + plotting choices exactly as original
+            if i < nrec and j < nrec:
+                ax.set_facecolor("blue")
+                if kp == 0:
+                    _plot_errorbars(
+                        ax,
+                        i,
+                        j,
+                        color_main="darkblue",
+                        color_second="orange",
+                        label_main=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2}$",
+                        label_second=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2} - \mathcal{N}_{\ell}^{\nu_1 \times \nu_2}$",
+                    )
+                else:
+                    _plot_errorbars(
+                        ax,
+                        i,
+                        j,
+                        color_main="darkblue",
+                        color_second="orange",
+                    )
+            elif i < nrec and j >= nrec:
+                ax.set_facecolor("skyblue")
+                _plot_errorbars(ax, i, j, color_main="blue", color_second="orange")
+            else:
+                ax.set_facecolor("green")
+                if kp == 0:
+                    _plot_errorbars(
+                        ax,
+                        i,
+                        j,
+                        color_main="blue",
+                        color_second="orange",
+                        label_main=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2}$",
+                        label_second=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2} - \mathcal{N}_{\ell}^{\nu_1 \times \nu_2}$",
+                    )
+                else:
+                    _plot_errorbars(ax, i, j, color_main="blue", color_second="orange")
+
+            kp += 1
+            plt.xticks(fontsize=ft_axis)
+            plt.yticks(fontsize=ft_axis)
+
+    # title / legend / save / show
+    if title is not None:
+        title = "Angular Cross-Power Spectra" + title
+    else:
+        title = "Angular Cross-Power Spectra"
+    fig.suptitle(title, fontsize=ft_title, fontweight="bold", y=0.96)
+    fig.subplots_adjust(left=0.05, right=0.98, bottom=0.05, top=0.9, wspace=0.25, hspace=0.30)
+    fig.legend(fontsize=ft_title, bbox_to_anchor=(0.4, 0.4))
+    if name is not None:
+        plt.savefig(name)
 
 
 class Plots:

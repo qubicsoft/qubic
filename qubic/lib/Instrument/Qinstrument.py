@@ -1333,18 +1333,11 @@ class QubicInstrument(Instrument):
         ntimes = 1000
         nside = 512
 
-        if use_file:
-            # isfreq = int(np.floor(nu / 1e9))
-            # frq = len(str(freqs[0]))
+        if use_file: # ah: the calibration file has to have the right number of peaks (kmax) to mimic what we would get with calibration
+                     # made on real data
 
-            # do an interpolation! not the freqid thing
-            # wouldn't it be more clever to create one Akima1DInterpolator object for all frequencies?
+            # ah: could it be more clever to create one Akima1DInterpolator object for all frequencies?
             # maybe in Qcalibration? Called only once?
-
-            # if frq <= 4:
-            #     freqid = np.where(freqs == isfreq)
-            # else:
-            #     freqid = np.where(freqs == nu)
 
             importshape = np.shape(np.shape(thetafits))
 
@@ -1364,12 +1357,18 @@ class QubicInstrument(Instrument):
                     interp_data.append(interpolator(nu_GHz))
                 thetas, phis, vals = interp_data[0], interp_data[1], interp_data[2]
                 print(thetas.shape)
-                sys.exit()
 
                 # (thetas, phis, vals) = thetafits, phifits, valfits
                 print("Getting Thetas from Fits File")
 
             thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas, phis, vals, synthbeam)
+
+            thetas_theo, phis_theo, vals_theo = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+
+            print("thetas", thetas[0], thetas_theo[0])
+            print("phis", phis[0], phis_theo[0])
+            print("vals", vals[0], vals_theo[0])
+            sys.exit()
 
         else:
             # We get info on synthbeam
@@ -1479,15 +1478,26 @@ class QubicInstrument(Instrument):
         """
         return DiagonalOperator(np.product(self.optics.components["transmission"]) * self.detector.efficiency, broadcast="rightward")
 
+    @staticmethod
     def remove_significant_peaks(thetas, phis, vals, synthbeam):
         # now remove insignificant peaks
+
         vals[~np.isfinite(vals)] = 0
         index = _argsort_reverse(vals)
+
         thetas = thetas[tuple(index)]
         phis = phis[tuple(index)]
         vals = vals[tuple(index)]
+
         cumval = np.cumsum(vals, axis=-1)
         imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None], axis=-1) + 1
+        imax = max(imaxs)
+
+        # slice initial arrays to discard the non-significant peaks
+        thetas = thetas[:, :imax]
+        phis = phis[:, :imax]
+        vals = vals[:, :imax]
+
         # remove additional per-detector non-significant peaks
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
@@ -1506,30 +1516,16 @@ class QubicInstrument(Instrument):
         """
         theta, phi = QubicInstrument._peak_angles_kmax(synthbeam.kmax, horn.spacing, horn.angle, nu, position)
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
-        val[~np.isfinite(val)] = 0
-        index = _argsort_reverse(val)
 
-        theta = theta[tuple(index)]
-        phi = phi[tuple(index)]
-        val = val[tuple(index)]
-
-        cumval = np.cumsum(val, axis=-1)
-        imaxs = np.argmax(cumval >= synthbeam.fraction * cumval[:, -1, None], axis=-1) + 1
-        imax = max(imaxs)
-
-        # slice initial arrays to discard the non-significant peaks
-        theta = theta[:, :imax]
-        phi = phi[:, :imax]
-        val = val[:, :imax]
-
-        # remove additional per-detector non-significant peaks
-        # and remove potential NaN in theta, phi
-        for idet, imax_ in enumerate(imaxs):
-            val[idet, imax_:] = 0
-            theta[idet, imax_:] = np.pi / 2  # XXX 0 fails in polarization.f90.src (en2ephi and en2etheta_ephi)
-            phi[idet, imax_:] = 0
+        # ah: moved the following two lines before the significant peaks selection to follow the same order as
+        # with the calibration files
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
         val *= solid_angle / scene.solid_angle * len(horn)
+
+        # ah: created the static method QubicInstrument.remove_significant_peaks in order to remove code duplication in
+        # QubicInstrument._get_projection_operator when using the calibration files
+        theta, phi, val = QubicInstrument.remove_significant_peaks(theta, phi, val, synthbeam)
+
         return theta, phi, val
 
     def _peak_angles_unsorted(self, scene, nu, position, synthbeam, horn, primary_beam):

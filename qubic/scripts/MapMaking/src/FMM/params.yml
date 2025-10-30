@@ -34,14 +34,14 @@ QUBIC:
         duration_220: 3                    # Effective duration at 220 GHz
         seed_noise: 11111
     SYNTHBEAM:
-        synthbeam_kmax: 1        # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
-        synthbeam_fraction: 1
+        synthbeam_kmax: 3        # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+        synthbeam_fraction: 0.99
     dtheta: 15                   # Angle for coverage
 
 SKY:
     ### This section control the reconstructed sky
 
-    nside: 128                   # Nside of components
+    nside: 512                   # Nside of components
     coverage_cut: 0.15           # Define a cut where the coverage is too low
     RA_center: 0
     DEC_center: -57

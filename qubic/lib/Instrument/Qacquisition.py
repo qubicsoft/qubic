@@ -146,6 +146,7 @@ class QubicAcquisition(Acquisition):
         ndetectors = self.comm.allreduce(len(self.instrument))
         nsamplings = self.sampling.comm.allreduce(len(self.sampling))
         out *= ndetectors * nsamplings * self.sampling.period / np.sum(out)
+
         return out
 
     def get_hitmap(self, nside=None):  # ?
@@ -321,6 +322,7 @@ class QubicAcquisition(Acquisition):
             if self.effective_duration is not None:
                 nsamplings = self.sampling.comm.allreduce(len(self.sampling))
                 out /= nsamplings * self.sampling.period / (self.effective_duration * 31557600)
+
             return out
 
         sampling_frequency = 1 / self.sampling.period
@@ -841,6 +843,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
             self.invN = np.sum(invn_list)
         else:
             self.invN = BlockDiagonalOperator(invn_list, axisout=0)
+
         return self.invN
 
 

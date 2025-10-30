@@ -25,7 +25,7 @@ detector_tau=0.01
 polarizer=True
 synthbeam_fraction=1.
 synthbeam_kmax=1
-synthbeam_peak150_fwhm=0.39268176 # in degree
+synthbeam_peak150_fwhm= 0.68 # TD 0.39268176 # FI # in degree
 ripples=False
 nripples=0
 focal_length=0.3
@@ -50,7 +50,7 @@ summer=False
 RA_center= 0. #deg
 DEC_center=-57. #deg
 period=1. #s
-date_obs='2016-01-01 00:00:00'
+date_obs='2026-01-01 00:00:00'
 
 latitude= -(24 + 11. / 60)   #ARGENTINA
 longitude= -(66 + 28. / 60)   #ARGENTINA

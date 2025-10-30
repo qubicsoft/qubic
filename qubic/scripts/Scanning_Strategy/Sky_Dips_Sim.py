@@ -91,31 +91,22 @@ class QubicObservation:
     def get_samplings(self):
         self.centers = self.get_centers()
         print(f"*********** {len(self.centers)-1} recenterings performed ***********")
-        all_pts = [self.AzimuthSweep(cen, idx)
-                   for idx, cen in enumerate(self.centers)]
+        all_pts = [self.AzimuthSweep(cen, idx) for idx, cen in enumerate(self.centers)]
         P = np.vstack(all_pts)
 
         npointings = P.shape[0]
-        hwp_stepsize = 15              # modify 
-        time = np.array(P[:,0])
-        azimuth = np.array(P[:,1], dtype=np.float32)
-        elevation = np.array(P[:,2], dtype=np.float32)
-    
-        r = np.random.RandomState(seed=42)   # modify 
 
-        samplings = QubicSampling(npointings, date_obs=self.dict['date_obs'], period=self.dict['period'], 
-                                latitude=self.dict['latitude'], longitude=self.dict['longitude'])
-
-        samplings.azimuth = azimuth
-        samplings.elevation = elevation
-        samplings.pitch = r.rand(npointings) * 360         # modify
-        samplings.angle_hwp = r.randint(0, int(90 / hwp_stepsize + 1), npointings) * hwp_stepsize       # modify
+        d = self.dict    
+        samplings = QubicSampling(npointings, date_obs=d['date_obs'], period=d['period'], 
+                                latitude=d['latitude'], longitude=d['longitude'])
+        samplings.azimuth = P[:,1]
+        samplings.elevation = P[:,2]
+        samplings.pitch = np.zeros(npointings)        
+        samplings.angle_hwp = np.zeros(npointings)       
         samplings.fix_az = False      # check what it does
-        samplings.time = np.array([(t - samplings.date_obs).sec for t in time]).ravel()
+        samplings.time = P[:,0]-samplings.date_obs.unix
 
         return samplings
-
-
 
 
     def get_centers(self):
@@ -133,41 +124,44 @@ class QubicObservation:
         starts = np.append(0, ends[:-1]+1)
         durations = unix[ends] - unix[starts]
 
-        rec_times = []
-        for s, dur in zip(starts, durations):
+        dt_sec = self.dt_centers.to_value(u.s)
+        n_steps = np.ceil(durations / dt_sec).astype(int)
+        rec = np.empty(np.sum(n_steps), dtype=np.float32)
+
+        idx = 0
+        for s, n in zip(starts, n_steps):
             offset = unix[s] - unix[0]
-            steps = np.arange(0, dur, self.dt_centers.to_value(u.s))
-            rec_times.append(offset + steps)
-        rec = np.concatenate(rec_times) * u.s
+            rec[idx:idx+n] = offset + np.arange(n) * dt_sec
+            idx += n
+        rec *= u.s
 
         return self.gal.transform_to(
             AltAz(obstime=vis.obstime[0] + rec,
                   location=self.earth_location))
 
+
     def AzimuthSweep(self, center, idx):
         
         # Build back-and-forth azimuths sweeps
         
-        sequences = []
         base = center.az.value
         half = self.az_step.cumsum()
         L = self.delta_az.to_value(u.deg)
-        for i in range(self.nsweeps_per_elevation):
-            if (self.nsweep_even or i % 2 == 0):  # forward on even
-                seq = base - L + half
-            else:                                 # backward on odd
-                seq = base + L - half
-            sequences.append(seq)
-        AZ = np.concatenate(sequences)
+
+        signs = np.ones(self.nsweeps_per_elevation)
+        if not self.nsweep_even:
+            signs[1::2] = -1
+        sweeps = base - signs[:, np.newaxis] * L + signs[:, np.newaxis] * half[np.newaxis, :]
+        AZ = sweeps.ravel()
 
         # Timestamp around center
         
-        t0 = center.obstime - self.t_sweep/2
-        times = t0 + np.arange(len(AZ)) * self.step_s * u.s
+        t0 = (center.obstime - self.t_sweep/2).unix    # seconds
+        times = t0 + np.arange(len(AZ)) * self.step_s
 
         # Assembling the data
         
-        data = np.empty((len(AZ),3),object)
+        data = np.empty((len(AZ),3), dtype=np.float32)
         data[:,0] = times
         data[:,1] = AZ
         data[:,2] = center.alt.value

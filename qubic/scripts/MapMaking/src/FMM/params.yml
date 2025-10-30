@@ -1,5 +1,5 @@
 path_out: "test/"
-datafilename: "test"
+datafilename: "test3"
 
 CMB:
     cmb: False
@@ -20,15 +20,15 @@ QUBIC:
     nsub_in: 8                # Number of sub-acquisitions
     nsub_out: 8
     nrec: 1                             # Number of reconstructed frequency maps # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-    convolution_in: False                  # Angular resolution in the input TOD
-    convolution_out: False              # Angular resolution in the reconstruction
+    convolution_in: True                  # Angular resolution in the input TOD
+    convolution_out: True              # Angular resolution in the reconstruction
     bandpass_correction: True               # Correction to keep the edges of the integration band constant
     NOISE:                          
         ndet: 1                           # Level of detector noise            # randomness not fixed for det and photon noise, to be checked
-        npho150: 0                         # Level of photon noise at 150 GHz
+        npho150: 1                         # Level of photon noise at 150 GHz
         npho220: 0                          # Level of photon noise at 220 GHz
         detector_nep: 2.05e-16                 # NEP of detector noise # do two different parameters?
-        duration_150: 0.273972603                     # Effective duration at 150 GHz
+        duration_150: #0.273972603                     # Effective duration at 150 GHz
         duration_220: 1                    # Effective duration at 220 GHz
         seed_noise: 11111
     SYNTHBEAM:
@@ -40,12 +40,13 @@ QUBIC:
         sweeping_pointing: False
         repeat_pointing: False
         scanning_strategy: True
-        duration: 12              # hours
+        duration: 10             # hours
+        pointings_file: test_pointings.pkl
         
 SKY:
     ### This section control the reconstructed sky
 
-    nside: 64                # Nside of components
+    nside: 128                # Nside of components
     coverage_cut: 0.1         # Define a cut where the coverage is too low
     RA_center: 245
     DEC_center: -61.45

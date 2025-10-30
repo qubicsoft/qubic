@@ -85,12 +85,17 @@ class PipelineFrequencyMapMaking:
 
         ### Samplings
         if self.params["QUBIC"]["POINTINGS"]["scanning_strategy"] == True:
-            print('-----------------scanning strategy---------------')
-            self.dict_out['angspeed'] = 1                   # deg/s
-            self.dict_out['delta_az'] = 20.0                # deg
-            self.dict_out['nsweeps_per_elevation'] = 25
-    
-            sampling = Sky_Dips_Sim.QubicObservation(self.dict_out).get_samplings()
+            if self.params["QUBIC"]["POINTINGS"]["pointings_file"] is None:
+                print('-----------------scanning strategy-----------------')
+                self.dict_out['angspeed'] = 1                   # deg/s
+                self.dict_out['delta_az'] = 20.0                # deg
+                self.dict_out['nsweeps_per_elevation'] = 25
+        
+                sampling = Sky_Dips_Sim.QubicObservation(self.dict_out).get_samplings()
+            else:
+                print('-----------------loading pointings from file-----------------')
+                with open(self.params["QUBIC"]["POINTINGS"]["pointings_file"], "rb") as f:
+                    sampling = pickle.load(f)
         else: 
             sampling = None
 

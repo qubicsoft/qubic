@@ -1,0 +1,367 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.17.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+import healpy as hp
+import pickle
+```
+
+```{python}
+def give_cl_cmb(ell, r=0, Alens=1.):
+        
+    power_spectrum = hp.read_cl('/home/nahue-ofi/CMM-Pipeline/src/data/Cls_Planck2018_lensed_scalar.fits')[:,:4000]
+    if Alens != 1.:
+        power_spectrum[2] *= Alens
+    if r:
+        power_spectrum += r * hp.read_cl('/home/nahue-ofi/CMM-Pipeline/src/data/Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
+    return np.interp(ell, np.arange(1, 4001, 1), power_spectrum[2])
+
+with open('/home/nahue-ofi/CMM-Pipeline/src/autospectrum_cmbseed1_100reals_d0.pkl', 'rb') as f:
+    data = pickle.load(f)
+
+with open('/home/nahue-ofi/CMM-Pipeline/src/autospectrum_cmbseed1_50reals_nofg.pkl', 'rb') as f:
+    datanofg = pickle.load(f)
+
+_f = data['ell'] * (data['ell'] + 1) / (2 * np.pi)
+```
+
+```{python}
+plt.figure()
+
+for i in range(data['Dl'].shape[0]):
+    # plt.plot( data['ell'], data['Dl'][i, 0] - np.mean(data['Dl_1x1'],axis=0),'.')
+    plt.plot( data['ell'], data['Dl'][i, 0] - data['Dl_1x1'][i], '.')
+    # plt.plot( data['ell'], data['Dl_1x1'][i], '.')
+    # plt.plot(data['ell'], data['Dl_1x1'][i],'.')#[i],'.')#, 'k.')
+
+
+# plt.plot( data['ell'], data['Dl'][-1, 0] - np.mean(data['Dl_1x1'][:-1],axis=0),'.')
+# plt.plot( data['ell'], data['Dl'][-1, 0] - data['Dl_1x1'][-1],'.')
+# plt.plot( data['ell'], np.mean(data['Dl'][:, 0] - data['Dl_1x1'][:],axis=0),'o',color='C1')
+
+plt.plot(data['ell'], np.mean(data['Dl'][:, 0],axis=0),'x')
+
+plt.errorbar(data['ell'], np.mean(data['Dl'][:, 0] - np.mean(data['Dl_1x1'],axis=0), axis=0),
+             yerr=np.std(data['Dl'][:, 0] - data['Dl_1x1'], axis=0), fmt='or', capsize=3)
+
+plt.errorbar(data['ell'], _f * give_cl_cmb(data['ell'], 0, 1), fmt='-k')
+
+# plt.xlim(40, 300)
+plt.yscale('log')
+# plt.ylim(5e-6, 1)
+plt.show()
+
+plt.figure()
+for i in range(datanofg['Dl'].shape[0]):
+    plt.plot( data['ell'], datanofg['Dl'][i, 0] - datanofg['Dl_1x1'][i], '.')
+
+plt.errorbar(data['ell'], np.mean(datanofg['Dl'][:, 0], axis=0) - np.mean(datanofg['Dl_1x1'], axis=0),
+             yerr=np.std(datanofg['Dl'][:, 0] - datanofg['Dl_1x1'], axis=0), fmt='ob', capsize=3)
+
+plt.errorbar(data['ell'], _f * give_cl_cmb(data['ell'], 0, 1), fmt='-k')
+
+plt.plot(data['ell'], np.mean(datanofg['Dl'][:, 0],axis=0),'x')
+
+# plt.plot( data['ell'], np.mean(datanofg['Dl'][:, 0] - datanofg['Dl_1x1'][:],axis=0),'o',color='C1')
+
+
+
+# plt.xlim(40, 300)
+plt.yscale('log')
+# plt.ylim(5e-6, 1)
+plt.show()
+```
+
+```{python}
+# power_spectrum = hp.read_cl('/home/oem/CMM-Pipeline/src/data/Cls_Planck2018_lensed_scalar.fits')[:,:4000]
+# power_spectrum_2 = hp.read_cl('/home/oem/CMM-Pipeline/src/data/Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits')[:,:4000]
+# print(power_spectrum.shape)
+# print(power_spectrum_2.shape)
+
+# l = np.arange(1,4001)
+# f_cltodl = (l*(l+1))/2*np.pi
+# print(l)
+# plt.figure()
+# # plt.plot(power_spectrum[0])
+# # plt.plot(power_spectrum[1])
+# plt.plot(f_cltodl*power_spectrum[2])
+# # plt.plot(power_spectrum[3])
+# # plt.yscale('log')
+# # plt.xscale('log')
+
+# # plt.figure()
+# # plt.plot(power_spectrum_2[0])
+# # plt.plot(power_spectrum_2[1])
+# plt.plot(l,f_cltodl*power_spectrum_2[2])
+# # plt.plot(power_spectrum[3])
+# plt.plot(l,f_cltodl*(power_spectrum_2[2]+power_spectrum[2]))
+# plt.yscale('log')
+# plt.xscale('log')
+```
+
+```{python}
+# print(datanofg['Dl_1x1'].shape)
+# print(datanofg['Dl'][:, 0].shape)
+
+print(data['Dl_1x1'].shape)
+print(data['Dl'][:, 0].shape)
+```
+
+```{python}
+cov_cc = np.cov(data['Dl'][:, 0] - data['Dl_1x1'][:], data['Dl'][:, 0] - data['Dl_1x1'][:], rowvar=False)[:16, :16]
+# cov_cc = np.cov(data['Dl'][:-1, 0] - data['Dl_1x1'][:-1], data['Dl'][:-1, 0] - data['Dl_1x1'][:-1], rowvar=False)[:16, :16]
+cov_cc = np.cov(data['Dl'][:, 0] - np.mean(data['Dl_1x1'],axis=0), rowvar=False)
+cov = np.zeros((16,16))
+np.fill_diagonal(cov, np.std(data['Dl'][:,0]-np.mean(data['Dl_1x1'],axis=0), axis=0)**2)
+# np.fill_diagonal(cov, np.std(data['Dl'][:,0]-data['Dl_1x1'], axis=0)**2)
+# np.fill_diagonal(cov, np.std(data['Dl'][:,0]-data['Dl_1x1'][:], axis=0)[0]**2)
+
+
+# cov_cc_nofg = np.cov(datanofg['Dl'][:, 0] - datanofg['Dl_1x1'][:], datanofg['Dl'][:, 0] - datanofg['Dl_1x1'][:], rowvar=False)[:16, :16]
+# cov_cc_nofg = np.cov(datanofg['Dl'][:-1, 0] - datanofg['Dl_1x1'][:-1], datanofg['Dl'][:-1, 0] - datanofg['Dl_1x1'][:-1], rowvar=False)[:16, :16]
+# cov_cc_nofg = np.cov(datanofg['Dl'][:, 0] - np.mean(datanofg['Dl_1x1'],axis=0), rowvar=False)
+# cov_nofg = np.zeros((16,16))
+# np.fill_diagonal(cov_nofg, np.std(datanofg['Dl'], axis=0)**2)
+# np.fill_diagonal(cov_nofg, np.std(datanofg['Dl'], axis=0)[0]**2)
+
+#cov_dd = np.cov(data['Dl'][:, 1] - data['Dl_2x2'], data['Dl'][:, 1] - data['Dl_2x2'], rowvar=False)[16:32, 16:32]
+#cov_dc = np.cov(data['Dl'][:, 1] - data['Dl_2x2'], data['Dl'][:, 0] - data['Dl_1x1'], rowvar=False)[16:32, :16]
+#cov_cd = np.cov(data['Dl'][:, 0] - data['Dl_1x1'], data['Dl'][:, 1] - data['Dl_2x2'], rowvar=False)[:16, 16:32]
+
+# cov_cc = np.cov(data['Dl'][:, 0] - (np.mean(data['Dl_1x1'],axis=0) + 0*np.random.normal(loc=0,scale=np.std(data['Dl_1x1'],axis=0))), rowvar=False)
+#cov_dd = np.cov(data['Dl'][:, 1] - data['Dl_2x2'], rowvar=False)
+#cov_dc = np.cov(data['Dl'][:, 1] - data['Dl_2x2'], data['Dl'][:, 0] - data['Dl_1x1'], rowvar=False)[16:32, :16]
+#cov_cd = np.cov(data['Dl'][:, 0] - data['Dl_1x1'], data['Dl'][:, 1] - data['Dl_2x2'], rowvar=False)[:16, 16:32]
+
+#cov_cc = np.cov(data['Dl'][:, 0], rowvar=False)
+#cov_dd = np.cov(data['Dl'][:, 1], rowvar=False)
+#cov_dc = np.cov(data['Dl'][:, 1], data['Dl'][:, 0], rowvar=False)[16:32, :16]
+#cov_cd = np.cov(data['Dl'][:, 0], data['Dl'][:, 1], rowvar=False)[:16, 16:32]
+
+# cov_cc = np.cov(data['Dl'][:, 0], rowvar=False)
+#cov_dd = np.cov(data['Dl'][:, 1], rowvar=False)
+```
+
+```{python}
+plt.figure()
+vmax = np.max(np.abs(cov_cc[:, :]))
+plt.imshow(cov_cc[:, :], vmin=-vmax, vmax=vmax, cmap='bwr')
+# plt.title('Covariance pixel 0')
+plt.colorbar()
+
+plt.figure()
+vmax = np.max(np.abs(cov[:, :]))
+plt.imshow(cov[:, :], vmin=-vmax, vmax=vmax, cmap='bwr')
+# plt.title('Covariance pixel 0')
+plt.colorbar()
+
+# plt.figure()
+# vmax = np.max(np.abs(cov_cc_nofg[:, :]))
+# plt.imshow(cov_cc_nofg[:, :], vmin=-vmax, vmax=vmax, cmap='bwr')
+# # plt.title('Covariance pixel 0')
+# plt.colorbar()
+
+# plt.figure()
+# vmax = np.max(np.abs(cov_nofg[:, :]))
+# plt.imshow(cov_nofg[:, :], vmin=-vmax, vmax=vmax, cmap='bwr')
+# # plt.title('Covariance pixel 0')
+# plt.colorbar()
+```
+
+```{python}
+def foregrounds(ell, A, alpha):
+    return A * (ell/80)**alpha
+    
+def log_prior(x):
+    r, Alens = x
+    if r > 1 or r < -1:
+        return -np.inf
+
+    if Alens < 0.1 or Alens > 1.9:
+        return -np.inf
+
+    #if A < 0:
+    #    return -np.inf
+
+    #if alpha > 0 or alpha < -1:
+    #    return -np.inf
+    return 0
+
+def like(x):
+
+    r, Alens = x
+
+    ymodel = np.array([_f * give_cl_cmb(data['ell'], r, Alens)])#, foregrounds(data['ell'], A, alpha)])
+    #yobs = np.array([_f * give_cl_cmb(data['ell'], 0, 1)])#, foregrounds(data['ell'], 0.06, -0.1)])
+    # yobs = np.array([ np.mean(data['Dl'][:,0] - data['Dl_1x1'][:], axis=0)])
+    yobs = np.array([ data['Dl'][-1,0] - np.mean(data['Dl_1x1'][:-1], axis=0)])#,
+                     #np.mean(data['Dl'], axis=0)[1] - np.mean(data['Dl_2x2'], axis=0)])
+
+    # yobs = np.array([ np.mean(datanofg['Dl'][:,0] - datanofg['Dl_1x1'][:], axis=0)])
+    # yobs = yobs #np.array([ data['Dl'][-1,0] - np.mean(data['Dl_1x1'][:-1], axis=0)])#,
+                     #np.mean(data['Dl'], axis=0)[1] - np.mean(data['Dl_2x2'], axis=0)])
+
+    
+    res = ymodel - yobs
+    lp = log_prior(x)
+
+    # L_cmb_cmb = lp - 0.5 * ((res[0].T @ np.linalg.inv(cov_cc) @ res[0]))
+    L_cmb_cmb = lp - 0.5 * ((res[0].T @ np.linalg.inv(cov) @ res[0]))
+    # L_cmb_cmb = lp - 0.5 * ((res[0].T @ np.linalg.inv(cov_cc_nofg) @ res[0]))
+    # L_cmb_cmb = lp - 0.5 * ((res[0].T @ np.linalg.inv(cov_nofg) @ res[0]))
+
+    
+    #L_dust_cmb = lp - 0.5 * (res[1].T @ np.linalg.inv(cov_dc) @ res[1])
+    #L_cmb_dust = lp - 0.5 * (res[0].T @ np.linalg.inv(cov_cd) @ res[0])
+    #L_dust_dust = lp - 0.5 * (res[1].T @ np.linalg.inv(cov_dd) @ res[1])
+
+    L = L_cmb_cmb# + L_dust_dust + L_dust_cmb + L_cmb_dust
+    
+    return L
+```
+
+```{python}
+import emcee
+from multiprocess import Pool
+from getdist import plots, MCSamples
+
+nwalkers = 30
+```
+
+```{python}
+x0 = np.zeros((nwalkers, 2))
+
+x0[:, 0] = np.random.normal(0.036, 0.01, (nwalkers))
+x0[:, 1] = np.random.normal(1, 0.01, (nwalkers))
+#x0[:, 2] = np.random.normal(-0.1, 0.001, (nwalkers))
+#x0[:, 3] = np.random.normal(-0.1, 0.001, (nwalkers))
+#x0[:, 2] = np.random.normal(-0.5, 0.001, (nwalkers))
+print(x0.shape)
+```
+
+```{python}
+from multiprocess import Pool
+
+with Pool() as pool:
+    sampler = emcee.EnsembleSampler(nwalkers, x0.shape[1], like, pool=pool)
+    sampler.run_mcmc(x0, 500, progress=True)
+```
+
+```{python}
+chainflat = sampler.get_chain(discard=300, thin=15, flat=True)
+chains = sampler.get_chain()
+```
+
+```{python}
+for i in range(nwalkers):
+    plt.plot(chains[:, i, 0], '-k', alpha=0.05)
+plt.plot(np.mean(chains, axis=1)[:, 0], '-r')
+plt.plot(np.std(chains, axis=1)[:, 0], '-b')
+# plt.axhline(0, ls='--', color='black')
+# plt.axhline(0.015, ls='--', color='green')
+# plt.xlim(0, chains.shape[0])
+# plt.ylim(-0.05, 0.1)
+```
+
+```{python}
+labels = []
+names = []
+
+for i in range(chains.shape[2]):
+    names += [f'sig_{i}']
+    labels += [f'\sigma_{i}']
+            
+s = MCSamples(samples=chainflat, names=names, labels=labels, label=r'', ranges={'sig_0':(0, None)})
+
+plt.figure(figsize=(12, 8))
+
+# Triangle plot
+g = plots.get_subplot_plotter(width_inch=8)
+g.triangle_plot([s], filled=True, title_limit=1)
+plt.savefig('d0 - diagonal cov corrected')
+plt.show()
+```
+
+```{python}
+
+```
+
+# Results ($A_{lens}$ free)
+
+## NO FG
+  - CMB cov corrected     :  0.0000 +- 0.0100
+  - CMB cov not corrected :  0.0000 +- 0.0430
+ 
+## FG 
+  - CMB cov corrected     : -0.0023 +- 0.0100
+  - CMB cov not corrected : -0.0010 +- 0.0430
+
+```{python}
+print(np.mean(chainflat, axis=0))
+print(np.std(chainflat, axis=0))
+```
+
+```{python}
+# plt.figure()
+
+# plt.errorbar(data['ell'], np.mean(datanofg['Dl'][:, 0], axis=0) - np.mean(datanofg['Dl_1x1'], axis=0),
+#              yerr=np.std(datanofg['Dl'][:, 0] - datanofg['Dl_1x1'], axis=0), fmt='or', capsize=3)
+
+# #plt.errorbar(data['ell'], np.mean(datanofg['Dl'][:, 0], axis=0) - np.mean(datanofg['Dl_1x1'], axis=0),
+# #             yerr=np.std(datanofg['Dl'][:, 0] - datanofg['Dl_1x1'], axis=0), fmt='ob', capsize=3)
+
+# plt.errorbar(data['ell'], _f * give_cl_cmb(datanofg['ell'], 0, 1), fmt='-k')
+# #plt.errorbar(data['ell'], _f * give_cl_cmb(data['ell'], *np.mean(chainflat, axis=0)), fmt='-g')
+# plt.errorbar(data['ell'], _f * give_cl_cmb(datanofg['ell'], 0.01, 1), fmt='-m')
+
+# plt.xlim(40, 250)
+# plt.yscale('log')
+# plt.ylim(5e-4, 5e-2)
+# plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

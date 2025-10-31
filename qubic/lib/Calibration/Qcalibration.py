@@ -56,6 +56,8 @@ class QubicCalibration(object):
             nu_str = "%03i" % self.nu
         for key in ["detarray", "hornarray", "optics", "primbeam", "synthbeam"]:
             calfile = d[key].replace("_CC", "_%s" % d["config"]).replace("_FFF", "_%s" % nu_str)
+            if key == "synthbeam":
+                calfile = calfile.replace("_nsideNNN", "_nside%s" % d["nside"])
             calfile_fullpath = find_file(os.path.join(self.path, calfile), verbosity=1)
             if calfile_fullpath is None:
                 cmd = "self.%s = None" % key

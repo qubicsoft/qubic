@@ -212,8 +212,8 @@ class QubicInstrument(Instrument):
         nripples = d["nripples"]
 
         # test
-        d['synthbeam'] = "CalQubic_SynthBeam_TD_150.fits"
-        d["use_synthbeam_fits_file"] = True
+        # d['synthbeam'] = "CalQubic_SynthBeam_TD_150.fits"
+        # d["use_synthbeam_fits_file"] = True
         # check if synthetic beam peaks are from file or calculated in peak_angles
         use_file = d.get(("use_synthbeam_fits_file"))
         self.use_file = bool(use_file)
@@ -247,7 +247,7 @@ class QubicInstrument(Instrument):
             print("primary_shape", primary_shape)
             print("d['primbeam']", d["primbeam"])
         self.config = d["config"]
-        self.calibration = QubicCalibration(d)
+        self.calibration = QubicCalibration(d) # initialised for each subinstrument
 
         self.ripples = ripples
         self.nripples = nripples
@@ -331,11 +331,11 @@ class QubicInstrument(Instrument):
 
     def synthbeam_file(self, d):
         # read in beam peak locations from a fits file
-        thetafits, phifits, valfits, freqs, mheader = self.calibration.get("synthbeam")
+        thetafits, phifits, valfits, freqfits, mheader = self.calibration.get("synthbeam")
         self.thetafits = thetafits
         self.phifits = phifits
         self.valfits = valfits
-        self.freqs = freqs
+        self.freqfits = freqfits
         self.numpeaks = np.zeros(10)
 
     def _init_synthbeam(self, dtype, synthbeam_peak150_fwhm):
@@ -1309,29 +1309,29 @@ class QubicInstrument(Instrument):
             self.synthbeam,
             horn,
             primary_beam,
+            self.freqfits,
             self.thetafits,
             self.phifits,
             self.valfits,
             self.use_file,
-            self.freqs,
             interp_projection=interp_projection,
             verbose=verbose,
         )
 
     @staticmethod
-    def _get_projection_operator(rotation, scene, nu, position, synthbeam, horn, primary_beam, thetafits, phifits, valfits, use_file, freqs, interp_projection=False, verbose=True):
+    def _get_projection_operator(rotation, scene, nu, position, synthbeam, horn, primary_beam, freqfits, thetafits, phifits, valfits, use_file, interp_projection=False, verbose=True):
         if use_file and interp_projection:
             # Fuse
             ValueError("'use_file is True' case not implemented for the interpolated projection operator.")
 
-        # ndetectors = position.shape[0]
-        # ntimes = rotation.data.shape[0]
-        # nside = scene.nside
+        ndetectors = position.shape[0]
+        ntimes = rotation.data.shape[0]
+        nside = scene.nside
 
         # test, to skip most arguments
-        ndetectors = 248
-        ntimes = 1000
-        nside = 512
+        # ndetectors = 248
+        # ntimes = 1000
+        # nside = 512
 
         if use_file: # ah: the calibration file has to have the right number of peaks (kmax) to mimic what we would get with calibration
                      # made on real data
@@ -1349,30 +1349,78 @@ class QubicInstrument(Instrument):
                 # thetafits = thetafits[freqid].reshape((np.shape(thetafits)[1], np.shape(thetafits)[2]))
                 # phifits = phifits[freqid].reshape((np.shape(phifits)[1], np.shape(phifits)[2]))
                 # valfits = valfits[freqid].reshape((np.shape(valfits)[1], np.shape(valfits)[2]))
-                print(nu_GHz, freqs) # see if the same format
-                print(thetafits.shape)
+                # print(nu_GHz, freqs) # see if the same format
+                # print(thetafits.shape)
                 interp_data = []
                 for data in [thetafits, phifits, valfits]:
-                    interpolator = Akima1DInterpolator(freqs, data, axis=0)
+                    interpolator = Akima1DInterpolator(freqfits, data, axis=0)
                     interp_data.append(interpolator(nu_GHz))
-                thetas, phis, vals = interp_data[0], interp_data[1], interp_data[2]
-                print(thetas.shape)
+                thetas_, phis_, vals_ = interp_data[0], interp_data[1], interp_data[2]
+                # print(thetas.shape)
+                print("Interpolated thetas, phis, vals from fits file with {} frequencies.".format(len(thetafits)))
 
-                # (thetas, phis, vals) = thetafits, phifits, valfits
-                print("Getting Thetas from Fits File")
-
-            thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas, phis, vals, synthbeam)
+            thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas_, phis_, vals_, synthbeam)
 
             thetas_theo, phis_theo, vals_theo = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
 
-            print("thetas", thetas[0], thetas_theo[0])
-            print("phis", phis[0], phis_theo[0])
-            print("vals", vals[0], vals_theo[0])
-            sys.exit()
+            i_det = 63
+            print("thetas", thetas[i_det], thetas_theo[i_det])
+            print("phis", phis[i_det], phis_theo[i_det])
+            print("vals", vals[i_det], vals_theo[i_det])
+
+            if False:
+                index = _argsort_reverse(vals_)
+                thetafits_sorted = thetafits[:, tuple(index[0]), tuple(index[1])]
+                phifits_sorted = phifits[:, tuple(index[0]), tuple(index[1])]
+                valfits_sorted = valfits[:, tuple(index[0]), tuple(index[1])]
+                idet = i_det
+                import matplotlib.pyplot as plt
+
+                for i_peak in range(len(thetafits[0, 0])):
+                    plt.figure()
+                    plt.plot(freqfits, thetafits_sorted[:, i_det, i_peak])
+                    plt.scatter(nu_GHz, thetas[i_det, i_peak], label="thetas")
+                    plt.scatter(nu_GHz, thetas_theo[i_det, i_peak], label="thetas_theo")
+                    plt.legend()
+                    plt.show()
+                    plt.figure()
+                    plt.plot(freqfits, phifits_sorted[:, i_det, i_peak])
+                    plt.scatter(nu_GHz, phis[i_det, i_peak], label="phis")
+                    plt.scatter(nu_GHz, phis_theo[i_det, i_peak], label="phis_theo")
+                    plt.legend()
+                    plt.show()
+                    plt.figure()
+                    plt.plot(freqfits, valfits_sorted[:, i_det, i_peak])
+                    plt.scatter(nu_GHz, vals[i_det, i_peak], label="vals")
+                    plt.scatter(nu_GHz, vals_theo[i_det, i_peak], label="vals_theo")
+                    plt.legend()
+                    plt.show()
+
+                # for idet in [63, 76, 90, 119, 135, 151, 167, 183, 199, 215, 231]:
+                #     hp.gnomview(np.zeros(12 * nside**2) + hp.UNSEEN, rot=[0,90], reso=20, min=-5, max=0, title="det {}".format(idet))
+                #     hp.projscatter(thetas[idet,:], phis[idet,:], c=vals[idet,:]/np.max(vals[idet,:]), 
+                #                 marker='x', cmap='Reds')
+                #     hp.projscatter(thetas_theo[idet,:], phis_theo[idet,:], c=vals_theo[idet,:]/np.max(vals[idet,:]), 
+                #                 marker='+', cmap='Reds')
+                #     plt.tight_layout()
+                #     plt.show()
+                sys.exit()
+            # for i_det in range(len(thetas)):
+            #     test_theta = np.allclose(thetas[i_det], thetas_theo[i_det], rtol=1e-04, atol=1)
+            #     test_phi = np.allclose(phis[i_det], phis_theo[i_det], rtol=1e-04, atol=1)
+            #     test_val = np.allclose(vals[i_det], vals_theo[i_det], rtol=1e-04, atol=1)
+            #     test = test_theta * test_phi * test_val
+            #     if not test:
+            #         print("i_det", i_det)
+            #         print(test_theta)
+            #         print(test_phi)
+            #         print(test_val)
+            # sys.exit()
 
         else:
             # We get info on synthbeam
             thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+            print("Theoretical thetas, phis, vals computed.")
         # shape(vals)   : (ndetectors, npeaks)
         # shape(thetas) : (ndetectors, npeaks)
 
@@ -1514,13 +1562,9 @@ class QubicInstrument(Instrument):
         accounts for a specified energy fraction.
 
         """
-        theta, phi = QubicInstrument._peak_angles_kmax(synthbeam.kmax, horn.spacing, horn.angle, nu, position)
-        val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
-
-        # ah: moved the following two lines before the significant peaks selection to follow the same order as
-        # with the calibration files
-        solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
-        val *= solid_angle / scene.solid_angle * len(horn)
+        # ah: created the static method QubicInstrument._peak_angles_unsorted to remove code duplication
+        # as it is needed to get the unsorted peaks for the analytical calibration files creation.
+        theta, phi, val = QubicInstrument._peak_angles_unsorted(scene, nu, position, synthbeam, horn, primary_beam)
 
         # ah: created the static method QubicInstrument.remove_significant_peaks in order to remove code duplication in
         # QubicInstrument._get_projection_operator when using the calibration files
@@ -1528,17 +1572,19 @@ class QubicInstrument(Instrument):
 
         return theta, phi, val
 
-    def _peak_angles_unsorted(self, scene, nu, position, synthbeam, horn, primary_beam):
+    @staticmethod
+    def _peak_angles_unsorted(scene, nu, position, synthbeam, horn, primary_beam):
         """
-        Compute the angles and intensity of the synthetic beam peaks.
+        Compute the angles and intensity of the synthetic beam peaks. All peaks kept
+        in the original order and no selection is made on their energy fraction.
 
         """
-        theta, phi = QubicInstrument._peak_angles_kmax(
-            synthbeam.kmax, horn.spacing, horn.angle, nu, position)
+        theta, phi = QubicInstrument._peak_angles_kmax(synthbeam.kmax, horn.spacing, horn.angle, nu, position)
         val = np.array(primary_beam(theta, phi), dtype=float, copy=False)
         val[~np.isfinite(val)] = 0
 
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
+        # bear in mind that the normalisation depends on NSIDE
         val *= solid_angle / scene.solid_angle * len(horn)
         return theta, phi, val
     

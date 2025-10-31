@@ -1,57 +1,50 @@
-import qubic.lib.Calibration.Qfiber as ft
-import qubic.lib.Qplotters as p
-import qubic.lib.Calibration.Qlinearity as ll
-import qubic
-
-from pysimulators import FitsArray
-import numpy as np
-from matplotlib.pyplot import *
-import matplotlib.mlab as mlab
-import scipy.ndimage.filters as f
-import glob
-import string
-import scipy.signal as scsig
-from scipy import interpolate
-import datetime as dt
-import sys
-import healpy as hp
-import time
-import numexpr as ne
+import os
 import pickle
+import time
+
+import healpy as hp
+import matplotlib.pyplot as plt
+import numexpr as ne
+import numpy as np
+import scipy.ndimage.filters as f
+import scipy.signal as scsig
+from pysimulators import FitsArray
+
+import qubic
+import qubic.lib.Calibration.Qfiber as ft
 
 
 def get_hpmap(TESNum, directory):
-    return np.array(qubic.io.read_map(directory + '/Healpix/healpix_TESNum_{}.fits'.format(TESNum)))
+    return np.array(qubic.io.read_map(directory + "/Healpix/healpix_TESNum_{}.fits".format(TESNum)))
 
 
 def get_lines(lines, directory):
     nn = len(lines)
-    hpmaps = np.zeros((nn, 4, 12 * 256 ** 2))
+    hpmaps = np.zeros((nn, 4, 12 * 256**2))
     nums = np.zeros((nn, 4), dtype=int)
-    for l in range(nn):
+    for line in range(nn):
         for i in range(4):
-            if lines[l] < 33:
-                nums[l, i] = int(lines[l] + 32 * i)
+            if lines[line] < 33:
+                nums[line, i] = int(lines[line] + 32 * i)
             else:
-                nums[l, i] = int(lines[l] - 32 + 32 * i) + 128
-            hpmaps[l, i, :] = get_hpmap(nums[l, i], directory)
+                nums[line, i] = int(lines[line] - 32 + 32 * i) + 128
+            hpmaps[line, i, :] = get_hpmap(nums[line, i], directory)
     return hpmaps, nums
 
 
 def show_lines(maps, nums, min=None, max=None):
     sh = np.shape(maps)
     nl = sh[0]
-    for l in range(nl):
+    for line in range(nl):
         for i in range(4):
-            hp.gnomview(maps[l, i, :], reso=10, min=min, max=max, sub=(nl, 4, l * 4 + i + 1), title=nums[l, i])
-    tight_layout()
+            hp.gnomview(maps[line, i, :], reso=10, min=min, max=max, sub=(nl, 4, line * 4 + i + 1), title=nums[line, i])
+    plt.tight_layout()
 
 
-def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=None, remove=None,
-                fitted_directory=None):
-    themap = np.array(FitsArray(directory + '/Flat/imgflat_TESNum_{}.fits'.format(TESNum)))
-    az = np.array(FitsArray(directory + '/Flat/azimuth.fits'.format(TESNum)))
-    el = np.array(FitsArray(directory + '/Flat/elevation.fits'.format(TESNum)))
+def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=None, remove=None, fitted_directory=None):
+    themap = np.array(FitsArray(directory + "/Flat/imgflat_TESNum_{}.fits".format(TESNum)))
+    az = np.array(FitsArray(directory + "/Flat/azimuth.fits"))
+    el = np.array(FitsArray(directory + "/Flat/elevation.fits"))
     if azmin is None:
         azmin = np.min(az)
     if azmax is None:
@@ -68,9 +61,8 @@ def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=Non
     if remove is not None:
         mm = np.mean(remove)
         ss = np.std(remove)
-        xc, yval, dx, dy, others = ft.profile(remove, themap, rng=[mm - 2 * ss, mm + 2 * ss], mode=True,
-                                              nbins=20, cutbad=True, plot=False, dispersion=False, clip=3)
-        bla = np.polyfit(xc, yval, 1, w=1. / dy ** 2)
+        xc, yval, dx, dy, others = ft.profile(remove, themap, rng=[mm - 2 * ss, mm + 2 * ss], mode=True, nbins=20, cutbad=True, plot=False, dispersion=False, clip=3)
+        bla = np.polyfit(xc, yval, 1, w=1.0 / dy**2)
         pp = np.poly1d(bla)
         themap -= pp(remove)
 
@@ -78,8 +70,8 @@ def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=Non
         return themap, az, el
     else:
         ### Read fitted synthesized beam
-        thefile = open(fitted_directory + '/fit-TES{}.pk'.format(TESNum), 'rb')
-        fitpars = pickle.load(thefile, encoding='latin1')
+        thefile = open(fitted_directory + "/fit-TES{}.pk".format(TESNum), "rb")
+        fitpars = pickle.load(thefile, encoding="latin1")
         thefile.close()
         sbfitmodel = SbModelIndepPeaks(nrings=2, common_fwhm=True, no_xy_shift=False, distortion=False)
         x = np.meshgrid(az * np.cos(np.radians(50)), np.flip(el))
@@ -89,14 +81,12 @@ def get_flatmap(TESNum, directory, azmin=None, azmax=None, elmin=None, elmax=Non
 
 def show_flatmap(directory, TESNum, vmin=None, vmax=None, cbar=False):
     flatmap, az, el = get_flatmap(TESNum, directory)
-    imshow(flatmap, extent=[np.min(az) * np.cos(np.radians(50)),
-                            np.max(az) * np.cos(np.radians(50)),
-                            np.min(el), np.max(el)], vmin=vmin, vmax=vmax)
-    title('TES #{}'.format(TESNum))
-    xlabel('Az angle')
-    ylabel('El')
+    plt.imshow(flatmap, extent=[np.min(az) * np.cos(np.radians(50)), np.max(az) * np.cos(np.radians(50)), np.min(el), np.max(el)], vmin=vmin, vmax=vmax)
+    plt.title("TES #{}".format(TESNum))
+    plt.xlabel("Az angle")
+    plt.ylabel("El")
     if cbar:
-        colorbar()
+        plt.colorbar()
 
 
 def show_flatmaps_list(directory, TESNums, vmin=None, vmax=None, cbar=False, nx=5, tight=True):
@@ -104,16 +94,17 @@ def show_flatmaps_list(directory, TESNums, vmin=None, vmax=None, cbar=False, nx=
     ny = nn / nx + 1
     ii = 1
     for nn in TESNums:
-        subplot(ny, nx, ii)
+        plt.subplot(ny, nx, ii)
         show_flatmap(directory, nn, vmin=vmin, vmax=vmax, cbar=cbar)
         ii += 1
     if tight:
-        tight_layout()
+        plt.tight_layout()
 
 
 def beeps(nbeeps):
-    import os
-    beep = lambda x: os.system("echo -n '\a';sleep 0.2;" * x)
+    def beep(x):
+        os.system("echo -n '\a';sleep 0.2;" * x)
+
     beep(nbeeps)
 
 
@@ -124,14 +115,16 @@ def thph2uv(th, ph):
     cph = np.cos(ph)
     return np.array([sth * cph, sth * sph, cth])
 
+
 def ang_dist(thph0, thph1):
     uv0 = thph2uv(thph0[0], thph0[1])
     uv1 = thph2uv(thph1[0], thph1[1])
-    ang = np.arccos(np.sum(uv0*uv1))
+    ang = np.arccos(np.sum(uv0 * uv1))
     return ang
 
+
 def uv2thph(uv):
-    r = np.sum(uv ** 2, axis=0)
+    r = np.sum(uv**2, axis=0)
     th = np.nan_to_num(np.arccos(uv[2] / r))
     ph = np.arctan2(uv[1], uv[0])
     return np.array([th, ph])
@@ -159,7 +152,7 @@ def rotmatZ(th):
 
 
 ### Rotation from QUBIC reference frame to the measurement one
-def rotate_q2m(thin, phin, angs=np.radians(np.array([0., 90., 0.])), inverse=False):
+def rotate_q2m(thin, phin, angs=np.radians(np.array([0.0, 90.0, 0.0])), inverse=False):
     #### All Angles in Radians
     uvecin = thph2uv(thin, phin)
     ### First rotation: pitch angle around optical axis
@@ -207,22 +200,20 @@ class SimpleSbModel:
 
     def __init__(self, startpars=None, ranges=None, fixpars=None, nrings=2, extra_args=None):
         ### Preparing the grid of peaks
-        self.name = 'SimpleSbModel'
+        self.name = "SimpleSbModel"
         self.nrings = nrings
         self.npeaks_line = 2 * nrings - 1
-        self.npeaks = self.npeaks_line ** 2
-        x = (np.arange(self.npeaks_line) - (self.nrings - 1))
+        self.npeaks = self.npeaks_line**2
+        x = np.arange(self.npeaks_line) - (self.nrings - 1)
         xx, yy = np.meshgrid(x, x)
         self.xxyy = np.array([np.ravel(xx), np.ravel(yy)])
 
         ### Parameters names
         self.npars = 13
-        self.parnames = ['AzCenter', 'ElCenter', 'PeakDist', 'Angle', 'XDistAmp', 'XDistPow', 'YDistAmp', 'YDistPow',
-                         'FWHMPeaks',
-                         'PrimAmp', 'PrimAzCenter', 'PrimElCenter', 'PrimFWHM']
+        self.parnames = ["AzCenter", "ElCenter", "PeakDist", "Angle", "XDistAmp", "XDistPow", "YDistAmp", "YDistPow", "FWHMPeaks", "PrimAmp", "PrimAzCenter", "PrimElCenter", "PrimFWHM"]
         ### Default parameters
         if startpars is None:
-            self.startpars = np.array([0., 50., 8., 45., 0.0, 2., 0.0, 2., 0.9, 1e5, 0., 50., 13.])
+            self.startpars = np.array([0.0, 50.0, 8.0, 45.0, 0.0, 2.0, 0.0, 2.0, 0.9, 1e5, 0.0, 50.0, 13.0])
         else:
             self.startpars = startpars
 
@@ -234,8 +225,7 @@ class SimpleSbModel:
 
         ### Range allowed for fitting
         if ranges is None:
-            self.ranges = np.array([[-5., 45., 7., 40., 0.0, 0., 0.0, 0., 0.5, 0.0, -3., 47., 10.],
-                                    [5., 55., 9., 50., 0.1, 4., 0.1, 4., 1.5, 1e6, 3., 53., 16.]])
+            self.ranges = np.array([[-5.0, 45.0, 7.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, -3.0, 47.0, 10.0], [5.0, 55.0, 9.0, 50.0, 0.1, 4.0, 0.1, 4.0, 1.5, 1e6, 3.0, 53.0, 16.0]])
         else:
             self.ranges = ranges
 
@@ -244,7 +234,6 @@ class SimpleSbModel:
 
     def __call__(self, x, pars, return_peaks=False):
         x2d = x[0]  # The Azimuth values of the pixels
-        y2d = x[1]  # The elevation values of the pixels
         # The parameters ##########################################
         xc = pars[0]
         yc = pars[1]
@@ -282,8 +271,7 @@ class SimpleSbModel:
         themap = np.zeros(x2d.shape)
         amps = np.zeros(self.npeaks)
         for i in range(self.npeaks):
-            amp = ampgauss * np.exp(
-                -0.5 * ((xcgauss - newxxyy[0, i]) ** 2 + (ycgauss - newxxyy[1, i]) ** 2) / (fwhmgauss / 2.35) ** 2)
+            amp = ampgauss * np.exp(-0.5 * ((xcgauss - newxxyy[0, i]) ** 2 + (ycgauss - newxxyy[1, i]) ** 2) / (fwhmgauss / 2.35) ** 2)
             x0 = newxxyy[0, i]
             y0 = newxxyy[1, i]
             sig = fwhmpeaks / 2.35
@@ -298,18 +286,14 @@ class SimpleSbModel:
             return np.ravel(themap)
 
     def print_start(self):
-        print('|---------------------------------------------------------------------|')
-        print('|-------------------- Initial Parameters -----------------------------|')
-        print('|---------------------------------------------------------------------|')
-        print('|Parameter        | init-value | range0      | range1      |  fixed   |')
-        print('|---------------------------------------------------------------------|')
+        print("|---------------------------------------------------------------------|")
+        print("|-------------------- Initial Parameters -----------------------------|")
+        print("|---------------------------------------------------------------------|")
+        print("|Parameter        | init-value | range0      | range1      |  fixed   |")
+        print("|---------------------------------------------------------------------|")
         for i in range(self.npars):
-            print('|{0:<16} | {1:>10.3f} |{2:>13.3f}|{3:>13.3f}|    {4:^3}   |'.format(self.parnames[i],
-                                                                                       self.startpars[i],
-                                                                                       self.ranges[0, i],
-                                                                                       self.ranges[1, i],
-                                                                                       self.fixpars[i]))
-        print('|---------------------------------------------------------------------|')
+            print("|{0:<16} | {1:>10.3f} |{2:>13.3f}|{3:>13.3f}|    {4:^3}   |".format(self.parnames[i], self.startpars[i], self.ranges[0, i], self.ranges[1, i], self.fixpars[i]))
+        print("|---------------------------------------------------------------------|")
 
 
 #######################################################################################################################################
@@ -343,37 +327,35 @@ class SbModelIndepPeaksAmpFWHM:
     [9+2*ipeak+1]: Delta FWHM of each peak to be added to the average one [deg]
     """
 
-    def __init__(self, startpars=None, ranges=None, fixpars=None, nrings=2, extra_args=None, verbose=False,
-                 common_fwhm=False):
+    def __init__(self, startpars=None, ranges=None, fixpars=None, nrings=2, extra_args=None, verbose=False, common_fwhm=False):
         ### Preparing the grid of peaks
-        self.name = 'SbModelIndepPeaksAmpFWHM'
+        self.name = "SbModelIndepPeaksAmpFWHM"
         self.common_fwhm = common_fwhm
         self.nrings = nrings
         self.npeaks_line = 2 * nrings - 1
-        self.npeaks = self.npeaks_line ** 2
-        x = (np.arange(self.npeaks_line) - (self.nrings - 1))
+        self.npeaks = self.npeaks_line**2
+        x = np.arange(self.npeaks_line) - (self.nrings - 1)
         xx, yy = np.meshgrid(x, x)
         self.xxyy = np.array([np.ravel(xx), np.ravel(yy)])
 
         npars = 9 + self.npeaks * 2
         self.npars = npars
         ### Parameters names
-        self.parnames = np.repeat('              ', npars)
-        firstparnames = ['AzCenter', 'ElCenter', 'PeakDist', 'Angle', 'XDistAmp', 'XDistPow', 'YDistAmp', 'YDistPow',
-                         'FWHMPeaksAv']
+        self.parnames = np.repeat("              ", npars)
+        firstparnames = ["AzCenter", "ElCenter", "PeakDist", "Angle", "XDistAmp", "XDistPow", "YDistAmp", "YDistPow", "FWHMPeaksAv"]
         for i in range(9):
             self.parnames[i] = firstparnames[i]
         for i in range(self.npeaks):
-            self.parnames[9 + 2 * i] = 'AmpPeak{}'.format(i)
-            self.parnames[9 + 2 * i + 1] = 'DeltaFWHMPeak{}'.format(i)
+            self.parnames[9 + 2 * i] = "AmpPeak{}".format(i)
+            self.parnames[9 + 2 * i + 1] = "DeltaFWHMPeak{}".format(i)
 
         ### Default parameters
         if startpars is None:
-            self.startpars = np.zeros(npars) * 1.
-            self.startpars[0:9] = np.array([0., 50., 8., 45., 0.0, 2., 0.0, 2., 0.9])
+            self.startpars = np.zeros(npars) * 1.0
+            self.startpars[0:9] = np.array([0.0, 50.0, 8.0, 45.0, 0.0, 2.0, 0.0, 2.0, 0.9])
             for i in range(self.npeaks):
                 self.startpars[9 + 2 * i] = 1e5
-                self.startpars[9 + 2 * i + 1] = 0.
+                self.startpars[9 + 2 * i + 1] = 0.0
         else:
             self.startpars = startpars
 
@@ -394,10 +376,9 @@ class SbModelIndepPeaksAmpFWHM:
         ### Range allowed for fitting
         if ranges is None:
             self.ranges = np.zeros((2, npars))
-            self.ranges[:, 0:9] = np.array([[-5., 45., 7., 40., 0.0, 0., 0.0, 0., 0.5],
-                                            [5., 55., 9., 50., 0.1, 4., 0.1, 4., 1.5]])
+            self.ranges[:, 0:9] = np.array([[-5.0, 45.0, 7.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.5], [5.0, 55.0, 9.0, 50.0, 0.1, 4.0, 0.1, 4.0, 1.5]])
             for i in range(self.npeaks):
-                self.ranges[0, 9 + 2 * i] = 0.
+                self.ranges[0, 9 + 2 * i] = 0.0
                 self.ranges[1, 9 + 2 * i] = 1e6
                 self.ranges[0, 9 + 2 * i + 1] = -0.5
                 self.ranges[1, 9 + 2 * i + 1] = 0.5
@@ -407,7 +388,8 @@ class SbModelIndepPeaksAmpFWHM:
         ### Possible extra-arguments
         self.extra_args = extra_args
 
-        if verbose: self.print_start()
+        if verbose:
+            self.print_start()
 
     def __call__(self, x, pars, return_peaks=False):
         x2d = x[0]  # The Azimuth values of the pixels
@@ -438,7 +420,8 @@ class SbModelIndepPeaksAmpFWHM:
         sinang = np.sin(np.radians(angle))
         rotmat = np.array([[cosang, -sinang], [sinang, cosang]])
         newxxyy = np.zeros((4, self.npeaks))
-        for i in range(self.npeaks): newxxyy[0:2, i] = np.dot(rotmat, self.xxyy[:, i])
+        for i in range(self.npeaks):
+            newxxyy[0:2, i] = np.dot(rotmat, self.xxyy[:, i])
         # Scale it wit interpeak distance
         newxxyy *= dist
         # Apply Distorsions
@@ -451,7 +434,7 @@ class SbModelIndepPeaksAmpFWHM:
         newxxyy[0, :] += xc
         newxxyy[1, :] += yc
         if ~(np.product(np.isfinite(newxxyy)).astype(bool)):
-            stop
+            raise ValueError("Invalid value encountered in newxxyy.")
 
         ### Peak amplitudes and resulting map #######################
         # themap = np.zeros(x2d.shape)
@@ -474,19 +457,15 @@ class SbModelIndepPeaksAmpFWHM:
             return np.ravel(themap)
 
     def print_start(self):
-        print('|---------------------------------------------------------------------|')
-        print('|-------------------- Initial Parameters -----------------------------|')
-        print('|            Important: common_fwhm = {0:}                            |'.format(self.common_fwhm))
-        print('|---------------------------------------------------------------------|')
-        print('|Parameter        | init-value | range0      | range1      |  fixed   |')
-        print('|---------------------------------------------------------------------|')
+        print("|---------------------------------------------------------------------|")
+        print("|-------------------- Initial Parameters -----------------------------|")
+        print("|            Important: common_fwhm = {0:}                            |".format(self.common_fwhm))
+        print("|---------------------------------------------------------------------|")
+        print("|Parameter        | init-value | range0      | range1      |  fixed   |")
+        print("|---------------------------------------------------------------------|")
         for i in range(self.npars):
-            print('|{0:<16} | {1:>10.3f} |{2:>13.3f}|{3:>13.3f}|    {4:^3}   |'.format(self.parnames[i],
-                                                                                       self.startpars[i],
-                                                                                       self.ranges[0, i],
-                                                                                       self.ranges[1, i],
-                                                                                       self.fixpars[i].astype(int)))
-        print('|---------------------------------------------------------------------|')
+            print("|{0:<16} | {1:>10.3f} |{2:>13.3f}|{3:>13.3f}|    {4:^3}   |".format(self.parnames[i], self.startpars[i], self.ranges[0, i], self.ranges[1, i], self.fixpars[i].astype(int)))
+        print("|---------------------------------------------------------------------|")
 
 
 #######################################################################################################################################
@@ -526,43 +505,41 @@ class SbModelIndepPeaks:
     [9+4*ipeak+3]: Y shift of the peak [deg]
     """
 
-    def __init__(self, startpars=None, ranges=None, fixpars=None, nrings=2, extra_args=None, verbose=False,
-                 common_fwhm=False, no_xy_shift=False, distortion=True):
+    def __init__(self, startpars=None, ranges=None, fixpars=None, nrings=2, extra_args=None, verbose=False, common_fwhm=False, no_xy_shift=False, distortion=True):
         ### Preparing the grid of peaks
-        self.name = 'SbModelIndepPeaks'
+        self.name = "SbModelIndepPeaks"
         self.common_fwhm = common_fwhm
         self.no_xy_shift = no_xy_shift
         self.distortion = distortion
         self.nrings = nrings
         self.npeaks_line = 2 * nrings - 1
-        self.npeaks = self.npeaks_line ** 2
-        x = (np.arange(self.npeaks_line) - (self.nrings - 1))
+        self.npeaks = self.npeaks_line**2
+        x = np.arange(self.npeaks_line) - (self.nrings - 1)
         xx, yy = np.meshgrid(x, x)
         self.xxyy = np.array([np.ravel(xx), np.ravel(yy)])
 
         npars = 9 + self.npeaks * 4
         self.npars = npars
         ### Parameters names
-        self.parnames = np.repeat('              ', npars)
-        firstparnames = ['AzCenter', 'ElCenter', 'PeakDist', 'Angle', 'XDistAmp', 'XDistPow', 'YDistAmp', 'YDistPow',
-                         'FWHMPeaksAv']
+        self.parnames = np.repeat("              ", npars)
+        firstparnames = ["AzCenter", "ElCenter", "PeakDist", "Angle", "XDistAmp", "XDistPow", "YDistAmp", "YDistPow", "FWHMPeaksAv"]
         for i in range(9):
             self.parnames[i] = firstparnames[i]
         for i in range(self.npeaks):
-            self.parnames[9 + 4 * i] = 'AmpPeak{}'.format(i)
-            self.parnames[9 + 4 * i + 1] = 'DeltaFWHMPeak{}'.format(i)
-            self.parnames[9 + 4 * i + 2] = 'DeltaXPeak{}'.format(i)
-            self.parnames[9 + 4 * i + 3] = 'DeltaYPeak{}'.format(i)
+            self.parnames[9 + 4 * i] = "AmpPeak{}".format(i)
+            self.parnames[9 + 4 * i + 1] = "DeltaFWHMPeak{}".format(i)
+            self.parnames[9 + 4 * i + 2] = "DeltaXPeak{}".format(i)
+            self.parnames[9 + 4 * i + 3] = "DeltaYPeak{}".format(i)
 
         ### Default parameters
         if startpars is None:
-            self.startpars = np.zeros(npars) * 1.
-            self.startpars[0:9] = np.array([0., 50., 8., 45., 0.0, 2., 0.0, 2., 0.9])
+            self.startpars = np.zeros(npars) * 1.0
+            self.startpars[0:9] = np.array([0.0, 50.0, 8.0, 45.0, 0.0, 2.0, 0.0, 2.0, 0.9])
             for i in range(self.npeaks):
                 self.startpars[9 + 4 * i] = 1e5
-                self.startpars[9 + 4 * i + 1] = 0.
-                self.startpars[9 + 4 * i + 2] = 0.
-                self.startpars[9 + 4 * i + 3] = 0.
+                self.startpars[9 + 4 * i + 1] = 0.0
+                self.startpars[9 + 4 * i + 2] = 0.0
+                self.startpars[9 + 4 * i + 3] = 0.0
         else:
             self.startpars = startpars
 
@@ -593,10 +570,9 @@ class SbModelIndepPeaks:
         ### Range allowed for fitting
         if ranges is None:
             self.ranges = np.zeros((2, npars))
-            self.ranges[:, 0:9] = np.array([[-5., 45., 7., 40., 0.0, 0., 0.0, 0., 0.5],
-                                            [5., 55., 9., 50., 0.1, 4., 0.1, 4., 1.5]])
+            self.ranges[:, 0:9] = np.array([[-5.0, 45.0, 7.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.5], [5.0, 55.0, 9.0, 50.0, 0.1, 4.0, 0.1, 4.0, 1.5]])
             for i in range(self.npeaks):
-                self.ranges[0, 9 + 4 * i] = 0.
+                self.ranges[0, 9 + 4 * i] = 0.0
                 self.ranges[1, 9 + 4 * i] = 1e6
                 self.ranges[0, 9 + 4 * i + 1] = -0.5
                 self.ranges[1, 9 + 4 * i + 1] = 0.5
@@ -615,7 +591,7 @@ class SbModelIndepPeaks:
         if verbose:
             self.print_start()
 
-    def __call__(self, x, mypars, return_peaks=False, extra_args = None):
+    def __call__(self, x, mypars, return_peaks=False, extra_args=None):
         # t0 = time.time()
         # self.ncalls += 1
         # print('Call #{0} - {1:5.2f} ms '.format(self.ncalls, 1000*(t0-self.time)))
@@ -648,7 +624,8 @@ class SbModelIndepPeaks:
         sinang = np.sin(np.radians(angle))
         rotmat = np.array([[cosang, -sinang], [sinang, cosang]])
         newxxyy = np.zeros((4, self.npeaks))
-        for i in range(self.npeaks): newxxyy[0:2, i] = np.dot(rotmat, self.xxyy[:, i])
+        for i in range(self.npeaks):
+            newxxyy[0:2, i] = np.dot(rotmat, self.xxyy[:, i])
         # Scale it wit interpeak distance
         newxxyy *= dist
         # Apply Distorsions
@@ -661,7 +638,7 @@ class SbModelIndepPeaks:
         newxxyy[0, :] += xc + dx
         newxxyy[1, :] += yc + dy
         if ~(np.product(np.isfinite(newxxyy)).astype(bool)):
-            stop
+            raise ValueError("Invalid value encountered in newxxyy.")
 
         ### Peak amplitudes and resulting map #######################
         # themap = np.zeros(np.shape(x2d))
@@ -687,30 +664,41 @@ class SbModelIndepPeaks:
             return np.ravel(themap)
 
     def print_start(self):
-        print('|---------------------------------------------------------------------|')
-        print('|-------------------- Initial Parameters -----------------------------|')
-        print('|            Important: common_fwhm = {0:}                            |'.format(self.common_fwhm))
-        print('|            Important: no_xy_shift = {0:}                            |'.format(self.no_xy_shift))
-        print('|---------------------------------------------------------------------|')
-        print('|Parameter        | init-value | range0      | range1      |  fixed   |')
-        print('|---------------------------------------------------------------------|')
+        print("|---------------------------------------------------------------------|")
+        print("|-------------------- Initial Parameters -----------------------------|")
+        print("|            Important: common_fwhm = {0:}                            |".format(self.common_fwhm))
+        print("|            Important: no_xy_shift = {0:}                            |".format(self.no_xy_shift))
+        print("|---------------------------------------------------------------------|")
+        print("|Parameter        | init-value | range0      | range1      |  fixed   |")
+        print("|---------------------------------------------------------------------|")
         for i in range(self.npars):
-            print('|{0:<16} | {1:>10.3f} |{2:>13.3f}|{3:>13.3f}|    {4:^3}   |'.format(self.parnames[i],
-                                                                                       self.startpars[i],
-                                                                                       self.ranges[0, i],
-                                                                                       self.ranges[1, i],
-                                                                                       self.fixpars[i].astype(int)))
-        print('|---------------------------------------------------------------------|')
+            print("|{0:<16} | {1:>10.3f} |{2:>13.3f}|{3:>13.3f}|    {4:^3}   |".format(self.parnames[i], self.startpars[i], self.ranges[0, i], self.ranges[1, i], self.fixpars[i].astype(int)))
+        print("|---------------------------------------------------------------------|")
 
 
 #######################################################################################################################################
 # ######################################################################################################################################
 
 
-def fit_sb(flatmap_init, az_init, el_init, model, newsize=70, dmax=5., az_center=0., el_center=50.,
-           doplot=False,
-           resample=False, verbose=False, extra_title='', return_fitted=False, precision=None, nsiglo=1., nsighi=3.,
-           figsave=None):
+def fit_sb(
+    flatmap_init,
+    az_init,
+    el_init,
+    model,
+    newsize=70,
+    dmax=5.0,
+    az_center=0.0,
+    el_center=50.0,
+    doplot=False,
+    resample=False,
+    verbose=False,
+    extra_title="",
+    return_fitted=False,
+    precision=None,
+    nsiglo=1.0,
+    nsighi=3.0,
+    figsave=None,
+):
     #### If requested, resample the iage in order to speedup the fitting
     if resample:
         ### Resample input map to have less pixels to deal with for fitting
@@ -732,7 +720,7 @@ def fit_sb(flatmap_init, az_init, el_init, model, newsize=70, dmax=5., az_center
     distance_max = dmax
     mask = np.array(np.sqrt((az2d - az_center) ** 2 + (el2d - el_center) ** 2) < distance_max).astype(int)
     ### We use a smoothed version of the map in order to avoid glitches
-    smoothed_flatmap = f.gaussian_filter(flatmap, 2.)
+    smoothed_flatmap = f.gaussian_filter(flatmap, 2.0)
     wmax = np.where((smoothed_flatmap * mask) == np.max(smoothed_flatmap * mask))
     maxval = flatmap[wmax][0]
     # print('Maximum of map is {0:5.2g} and was found at: az={1:5.2f}, el={2:5.2f}'.format(maxval,az2d[wmax][0], el2d[wmax][0]))
@@ -748,14 +736,14 @@ def fit_sb(flatmap_init, az_init, el_init, model, newsize=70, dmax=5., az_center
     parsinit[0] = az2d[wmax][0]
     parsinit[1] = el2d[wmax][0]
     parsinit[9] = maxval
-    if model.name == 'SbModelIndepPeaksAmp':
+    if model.name == "SbModelIndepPeaksAmp":
         parsinit[9:] = maxval
         ranges[9:, 1] = maxval * 2
-    elif model.name == 'SbModelIndepPeaksAmpFWHM':
+    elif model.name == "SbModelIndepPeaksAmpFWHM":
         for i in range(model.npeaks):
             parsinit[9 + 2 * i] = maxval
             ranges[9 + 2 * i, 1] = maxval * 2
-    elif model.name == 'SbModelIndepPeaks':
+    elif model.name == "SbModelIndepPeaks":
         for i in range(model.npeaks):
             parsinit[9 + 4 * i] = maxval
             ranges[9 + 4 * i, 1] = np.abs(maxval) * 2
@@ -764,119 +752,114 @@ def fit_sb(flatmap_init, az_init, el_init, model, newsize=70, dmax=5., az_center
     x = [az2d, el2d]
     mm, ss = ft.meancut(flatmap, 3)
     if verbose:
-        print('Running Minuit with model: {}'.format(model.name))
+        print("Running Minuit with model: {}".format(model.name))
         model.print_start()
     mychi2 = ft.MyChi2_nocov(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, model)
-    fit = ft.do_minuit(x, np.ravel(flatmap), np.zeros_like(np.ravel(flatmap)) + ss, parsinit,
-                       functname=model, chi2=mychi2, rangepars=ranges, fixpars=fixpars,
-                       force_chi2_ndf=False, verbose=False, nohesse=True, precision=precision)
+    fit = ft.do_minuit(
+        x,
+        np.ravel(flatmap),
+        np.zeros_like(np.ravel(flatmap)) + ss,
+        parsinit,
+        functname=model,
+        chi2=mychi2,
+        rangepars=ranges,
+        fixpars=fixpars,
+        force_chi2_ndf=False,
+        verbose=False,
+        nohesse=True,
+        precision=precision,
+    )
     fitpars = fit[1]
     fiterrs = fit[2]
 
     ### Get the peaks positions and amplitudes
     themap, newxxyy = model(x, fitpars, return_peaks=True)
     ### Put the fitted amplitude values to zero when needed (when peak ouside the input image)
-    if model.name == 'SbModelIndepPeaksAmp':
+    if model.name == "SbModelIndepPeaksAmp":
         xmin = np.min(az2d)
         xmax = np.max(az2d)
         ymin = np.min(el2d)
         ymax = np.max(el2d)
         for i in range(model.npeaks):
-            if (((newxxyy[0, i] < xmin) or (newxxyy[0, i] > xmax)) or (
-                    (newxxyy[1, i] < ymin) or (newxxyy[1, i] > ymax))):
+            if ((newxxyy[0, i] < xmin) or (newxxyy[0, i] > xmax)) or ((newxxyy[1, i] < ymin) or (newxxyy[1, i] > ymax)):
                 fitpars[9 + i] = 0
                 fiterrs[9 + i] = 0
         ### Now get the map again with updated parameters
         themap, newxxyy = model(x, fitpars, return_peaks=True)
-    elif model.name == 'SbModelIndepPeaksAmpFWHM':
+    elif model.name == "SbModelIndepPeaksAmpFWHM":
         xmin = np.min(az2d)
         xmax = np.max(az2d)
         ymin = np.min(el2d)
         ymax = np.max(el2d)
         for i in range(model.npeaks):
-            if (((newxxyy[0, i] < xmin) or (newxxyy[0, i] > xmax)) or (
-                    (newxxyy[1, i] < ymin) or (newxxyy[1, i] > ymax))):
+            if ((newxxyy[0, i] < xmin) or (newxxyy[0, i] > xmax)) or ((newxxyy[1, i] < ymin) or (newxxyy[1, i] > ymax)):
                 fitpars[9 + 2 * i] = 0
                 fiterrs[9 + 2 * i] = 0
         ### Now get the map again with updated parameters
         themap, newxxyy = model(x, fitpars, return_peaks=True)
-    elif model.name == 'SbModelIndepPeaks':
+    elif model.name == "SbModelIndepPeaks":
         xmin = np.min(az2d)
         xmax = np.max(az2d)
         ymin = np.min(el2d)
         ymax = np.max(el2d)
         for i in range(model.npeaks):
-            if (((newxxyy[0, i] < xmin) or (newxxyy[0, i] > xmax)) or (
-                    (newxxyy[1, i] < ymin) or (newxxyy[1, i] > ymax))):
+            if ((newxxyy[0, i] < xmin) or (newxxyy[0, i] > xmax)) or ((newxxyy[1, i] < ymin) or (newxxyy[1, i] > ymax)):
                 fitpars[9 + 4 * i] = 0
                 fiterrs[9 + 4 * i] = 0
 
     if verbose:
-        print('===========================================================')
-        print('Fitted values:')
-        print('-----------------------------------------------------------')
+        print("===========================================================")
+        print("Fitted values:")
+        print("-----------------------------------------------------------")
         for i in range(len(parsinit)):
-            print('{0:<20}: {1:>12.6f} +/- {2:>12.6f}'.format(model.parnames[i], fitpars[i], fiterrs[i]))
-        print('-----------------------------------------------------------')
-        print('Residuals**2/pix : {0:^8.5g}'.format(np.sum((flatmap - themap) ** 2) / np.size(flatmap)))
-        print('===========================================================')
+            print("{0:<20}: {1:>12.6f} +/- {2:>12.6f}".format(model.parnames[i], fitpars[i], fiterrs[i]))
+        print("-----------------------------------------------------------")
+        print("Residuals**2/pix : {0:^8.5g}".format(np.sum((flatmap - themap) ** 2) / np.size(flatmap)))
+        print("===========================================================")
 
     if doplot:
-        rc('figure', figsize=(18, 4))
+        plt.rc("figure", figsize=(18, 4))
         sh = np.shape(newxxyy)
         mm, ss = ft.meancut(flatmap, 3)
 
-        subplot(1, 4, 1)
-        imshow(themap, extent=[np.min(az) * np.cos(np.radians(50)),
-                               np.max(az) * np.cos(np.radians(50)),
-                               np.min(el), np.max(el)],
-               vmin=mm - ss, vmax=mm + 10 * ss)
-        colorbar()
-        title('Fitted Map ' + extra_title)
-        xlabel('Angle in Az direction [deg.]')
-        ylabel('Elevation [deg.]')
+        plt.subplot(1, 4, 1)
+        plt.imshow(themap, extent=[np.min(az) * np.cos(np.radians(50)), np.max(az) * np.cos(np.radians(50)), np.min(el), np.max(el)], vmin=mm - ss, vmax=mm + 10 * ss)
+        plt.colorbar()
+        plt.title("Fitted Map " + extra_title)
+        plt.xlabel("Angle in Az direction [deg.]")
+        plt.ylabel("Elevation [deg.]")
 
         mm, ss = ft.meancut(flatmap - themap, 3)
-        subplot(1, 4, 2)
-        imshow(flatmap, extent=[np.min(az) * np.cos(np.radians(50)),
-                                np.max(az) * np.cos(np.radians(50)),
-                                np.min(el), np.max(el)],
-               vmin=mm - nsiglo * ss, vmax=mm + nsighi * ss)
-        xlim(np.min(az) * np.cos(np.radians(50)), np.max(az) * np.cos(np.radians(50)))
-        ylim(np.min(el), np.max(el))
-        colorbar()
+        plt.subplot(1, 4, 2)
+        plt.imshow(flatmap, extent=[np.min(az) * np.cos(np.radians(50)), np.max(az) * np.cos(np.radians(50)), np.min(el), np.max(el)], vmin=mm - nsiglo * ss, vmax=mm + nsighi * ss)
+        plt.xlim(np.min(az) * np.cos(np.radians(50)), np.max(az) * np.cos(np.radians(50)))
+        plt.ylim(np.min(el), np.max(el))
+        plt.colorbar()
 
         for i in range(sh[1]):
-            ax = plot(newxxyy[0, i], newxxyy[1, i], 'r.')
-        title('Input Map ' + extra_title)
-        xlabel('Angle in Az direction [deg.]')
-        ylabel('Elevation [deg.]')
+            plt.plot(newxxyy[0, i], newxxyy[1, i], "r.")
+        plt.title("Input Map " + extra_title)
+        plt.xlabel("Angle in Az direction [deg.]")
+        plt.ylabel("Elevation [deg.]")
 
-        subplot(1, 4, 3)
-        imshow(themap, extent=[np.min(az) * np.cos(np.radians(50)),
-                               np.max(az) * np.cos(np.radians(50)),
-                               np.min(el), np.max(el)],
-               vmin=mm - nsiglo * ss, vmax=mm + nsighi * ss)
-        colorbar()
-        title('Fitted Map ' + extra_title)
-        xlabel('Angle in Az direction [deg.]')
-        ylabel('Elevation [deg.]')
+        plt.subplot(1, 4, 3)
+        plt.imshow(themap, extent=[np.min(az) * np.cos(np.radians(50)), np.max(az) * np.cos(np.radians(50)), np.min(el), np.max(el)], vmin=mm - nsiglo * ss, vmax=mm + nsighi * ss)
+        plt.colorbar()
+        plt.title("Fitted Map " + extra_title)
+        plt.xlabel("Angle in Az direction [deg.]")
+        plt.ylabel("Elevation [deg.]")
 
-        subplot(1, 4, 4)
-        imshow(flatmap - themap, extent=[np.min(az) * np.cos(np.radians(50)),
-                                         np.max(az) * np.cos(np.radians(50)),
-                                         np.min(el), np.max(el)],
-               vmin=mm - nsiglo * ss, vmax=mm + nsighi * ss)
-        colorbar()
-        title('Residual Map ' + extra_title)
-        xlabel('Angle in Az direction [deg.]')
-        ylabel('Elevation [deg.]')
-        tight_layout()
+        plt.subplot(1, 4, 4)
+        plt.imshow(flatmap - themap, extent=[np.min(az) * np.cos(np.radians(50)), np.max(az) * np.cos(np.radians(50)), np.min(el), np.max(el)], vmin=mm - nsiglo * ss, vmax=mm + nsighi * ss)
+        plt.colorbar()
+        plt.title("Residual Map " + extra_title)
+        plt.xlabel("Angle in Az direction [deg.]")
+        plt.ylabel("Elevation [deg.]")
+        plt.tight_layout()
 
         if figsave:
-            savefig(figsave)
-        show()
-
+            plt.savefig(figsave)
+        plt.show()
     if return_fitted:
         return fit, newxxyy, themap
     else:

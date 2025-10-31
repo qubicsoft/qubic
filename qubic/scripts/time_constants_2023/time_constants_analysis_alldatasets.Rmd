@@ -1,6 +1,7 @@
 ---
 jupyter:
   jupytext:
+    formats: Rmd,ipynb
     text_representation:
       extension: .Rmd
       format_name: rmarkdown
@@ -112,7 +113,9 @@ dicts_to_delete = np.array([ '/media/nahue/files_hdd/heavy-data/alldatasets_to_m
 
 for dict_to_delete in dicts_to_delete:
     thedicts = np.delete(thedicts, np.where(thedicts == dict_to_delete)[0])
+print(f'We are analyzing {len(thedicts)} datasets')
 print(thedicts)
+
 ```
 
 ### Load the dictionaries
@@ -291,8 +294,8 @@ tight_layout
 figure()
 
 tes_to_plot = [96]
-Vbias_selected = 2.8
-delta_Vbias = 0.1
+Vbias_selected = 3
+delta_Vbias = 0.05
 
 ax = axes()
 ax.set_axisbelow(True)

@@ -97,6 +97,6 @@ verbose=True
 ####################################### Synthetic Beam #####################################
 
 #if True, use imported fits. if False, use theoretical theta,phi,val calculated in instrument.py
-use_synthbeam_fits_file=False
+use_synthbeam_fits_file=True
 
 get_many_frequencies_analytically=False

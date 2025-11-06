@@ -331,7 +331,11 @@ class QubicInstrument(Instrument):
 
     def synthbeam_file(self, d):
         # read in beam peak locations from a fits file
-        thetafits, phifits, valfits, freqfits, mheader = self.calibration.get("synthbeam")
+        # thetafits, phifits, valfits, freqfits, mheader = self.calibration.get("synthbeam")
+        if self.use_file:
+            thetafits, phifits, valfits, freqfits, mheader = self.calibration.get("synthbeam")
+        else: # no need to have a working synthbeam calfile
+            thetafits, phifits, valfits, freqfits, mheader = None, None, None, None, None
         self.thetafits = thetafits
         self.phifits = phifits
         self.valfits = valfits
@@ -1361,12 +1365,43 @@ class QubicInstrument(Instrument):
 
             thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas_, phis_, vals_, synthbeam)
 
+            # names = ["thetas", "phis", "vals"]
+            # for i, data in enumerate([thetas, phis, vals]):
+            #     np.savetxt("test_{}.txt".format(names[i]), data)
+            
             thetas_theo, phis_theo, vals_theo = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
 
             i_det = 63
-            print("thetas", thetas[i_det], thetas_theo[i_det])
-            print("phis", phis[i_det], phis_theo[i_det])
-            print("vals", vals[i_det], vals_theo[i_det])
+            # print("thetas", thetas[i_det], thetas_theo[i_det])
+            # print("phis", phis[i_det], phis_theo[i_det])
+            # print("vals", vals[i_det], vals_theo[i_det])
+
+            # thetas = float('%.1g' % 1234)
+            thetas = np.round(thetas, 4)
+            phis = np.round(phis, 4)
+            vals = np.round(vals, 4)
+
+            thetas_theo = np.round(thetas_theo, 4)
+            phis_theo = np.round(phis_theo, 4)
+            vals_theo = np.round(vals_theo, 4)
+
+            list_tuples = [(thetas[i, j], phis[i, j], vals[i, j]) for i in range(len(thetas)) for j in range(len(thetas[0]))]
+
+            list_tuples_theo = [(thetas_theo[i, j], phis_theo[i, j], vals_theo[i, j]) for i in range(len(thetas)) for j in range(len(thetas[0]))]
+
+            for tup in list_tuples_theo:
+                if tup not in list_tuples:
+                    print(tup)
+                    # raise ValueError("Not the same!!")
+            print("alright")
+            # sys.exit()
+
+            # if use_file:
+            #     pass
+            # else:
+            #     thetas = thetas_theo.copy()
+            #     phis = phis_theo.copy()
+            #     vals = vals_theo.copy()
 
             if False:
                 index = _argsort_reverse(vals_)
@@ -1396,7 +1431,7 @@ class QubicInstrument(Instrument):
                     plt.legend()
                     plt.show()
 
-                # for idet in [63, 76, 90, 119, 135, 151, 167, 183, 199, 215, 231]:
+                # for idet in range(249):#[63, 76, 90, 119, 135, 151, 167, 183, 199, 215, 231]:
                 #     hp.gnomview(np.zeros(12 * nside**2) + hp.UNSEEN, rot=[0,90], reso=20, min=-5, max=0, title="det {}".format(idet))
                 #     hp.projscatter(thetas[idet,:], phis[idet,:], c=vals[idet,:]/np.max(vals[idet,:]), 
                 #                 marker='x', cmap='Reds')
@@ -1419,7 +1454,8 @@ class QubicInstrument(Instrument):
 
         else:
             # We get info on synthbeam
-            thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+            # thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+            thetas, phis, vals = np.genfromtxt("test_thetas_phis_vals.txt")
             print("Theoretical thetas, phis, vals computed.")
         # shape(vals)   : (ndetectors, npeaks)
         # shape(thetas) : (ndetectors, npeaks)

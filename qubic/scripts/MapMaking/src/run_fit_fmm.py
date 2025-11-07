@@ -104,7 +104,7 @@ dict = {"samples": samples, "samples_flat": samples_flat, "parameters": files._r
 with open(folder_save + "mcmc.pkl", "wb") as handle:
     pkl.dump(dict, handle, protocol=pkl.HIGHEST_PROTOCOL)
 
-### Plot
+### Plot MCMC
 plt.figure()
 for iparam in range(samples.shape[-1]):
     plt.subplot(samples.shape[-1], 1, iparam + 1)
@@ -116,3 +116,5 @@ print()
 print(f"Average : {np.mean(samples_flat, axis=0)}")
 print(f"Error : {np.std(samples_flat, axis=0)}")
 print()
+
+### Triangle Plot

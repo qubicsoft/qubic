@@ -1,3 +1,24 @@
+simulation_path: "FMM/test"
+
+Spectrum:
+  nbins: 7                                                      # Number of multipole (minimum is fixed at what you defined during the map-making)
+  sample_variance: True                                         # Add sample-variance correction in the correlation matrix
+  diagonal: False                                               # Consider only the diagonal of the noise correlation matrix
+  fsky: 0.015                                                   # Sky fraction value
+  dl: 30                                                        # Interval between two multipole
+
+MCMC:
+  nus_qubic: [True, True]                                       # QUBIC frequencies used for fitting. It should match Nrec value put in simulations !!!
+  nus_planck: [False, False, False, False, False, False, False] # Planck frequencies used for fitting. It should match 7 !!!
+  discard: 100                                                  # Number of iterations discarded
+  nwalkers: 10                                                  # Number of MCMC walkers
+  nsteps: 200                                                   # Number of MCMC iterations
+  verbose: False                                                # Print values
+
+# For each components' parameters : 
+# - put fit: True => mcmc will fit this parameter
+# - put fit: value => will fix the parameter to value
+# WARNING : fit: False will not work !! If you don't wont to fit a parameter, you need to give it's value !!!
 cmb:
   r:
     fit: True

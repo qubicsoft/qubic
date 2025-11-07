@@ -2,7 +2,6 @@ import os
 
 import emcee
 import numpy as np
-import yaml
 from multiprocess import Pool
 from schwimmbad import MPIPool
 
@@ -16,8 +15,7 @@ class FitEllSpace:
         self.yerr = yerr
         self.model = model
 
-        with open(parameters_file, "r") as tf:
-            self.params = yaml.safe_load(tf)
+        self.params = parameters_file
 
         ### Check if the user is giving the right dimensions
         self._check_shapein()
@@ -105,6 +103,8 @@ class FitEllSpace:
         keys = self.params.keys()
 
         for key in keys:
+            if key not in ["cmb", "dust", "synchrotron", "correlation"]:
+                continue
             params = self.params[key]
             for param in params:
                 ### Check if the user define the parameter as free and not fixed at given value
@@ -129,6 +129,8 @@ class FitEllSpace:
         keys = self.params.keys()
         count = 0
         for key in keys:
+            if key not in ["cmb", "dust", "synchrotron", "correlation"]:
+                continue
             params = self.params[key].keys()
             for param in params:
                 if x[count] > self.params[key][param]["bound_max"] or x[count] < self.params[key][param]["bound_min"]:
@@ -142,6 +144,8 @@ class FitEllSpace:
         comps = self.params.keys()
         count = 0
         for key in comps:
+            if key not in ["cmb", "dust", "synchrotron", "correlation"]:
+                continue
             params = self.params[key].keys()
             for param in params:
                 ### Add values of the fixed parameters only if there is no True in the params.yaml file

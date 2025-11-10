@@ -23,3 +23,4 @@ ruff.toml
 *.pt
 *.pkl
 *.gif
+*.log

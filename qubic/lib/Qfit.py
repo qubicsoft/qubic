@@ -29,6 +29,20 @@ class FitEllSpace:
         ### Compute the noise covariance matrix
         self._get_noise_covariance_matrix(sample_variance=sample_variance, fsky=fsky, dl=dl, diagonal=diagonal)
 
+    def get_fitting_parameters_names(self):
+        fit_param_names = []
+
+        for comp in ["cmb", "dust", "synchrotron", "correlation"]:
+            if comp not in self.params:
+                continue
+
+            for param_name, param_info in self.params[comp].items():
+                # Only add if "fit" key exists and is True
+                if isinstance(param_info, dict) and param_info.get("fit") is True:
+                    fit_param_names.append(param_name)
+
+        return np.array(fit_param_names)
+
     def _reshape_spectra_model(self, data):
         data_reshaped = np.zeros((self.nspecs, self.nbins))
 

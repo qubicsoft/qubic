@@ -11,14 +11,15 @@ MCMC:
   nus_qubic: [True, True]                                       # QUBIC frequencies used for fitting. It should match Nrec value put in simulations !!!
   nus_planck: [False, False, False, False, False, False, False] # Planck frequencies used for fitting. It should match 7 !!!
   discard: 100                                                  # Number of iterations discarded
-  nwalkers: 10                                                  # Number of MCMC walkers
-  nsteps: 200                                                   # Number of MCMC iterations
+  nwalkers: 30                                                  # Number of MCMC walkers
+  nsteps: 150                                                   # Number of MCMC iterations
   verbose: False                                                # Print values
 
 # For each components' parameters : 
 # - put fit: True => mcmc will fit this parameter
 # - put fit: value => will fix the parameter to value
 # WARNING : fit: False will not work !! If you don't wont to fit a parameter, you need to give it's value !!!
+# ADVICE : if there is no dust/synchroton, we have to write fit: 0 to the value of Ad/As, to ensure that the spectrum is null.
 cmb:
   r:
     fit: True

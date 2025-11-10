@@ -29,7 +29,7 @@ with open(fit_parameters_path, "r") as f:
 ### Folder where spectrum should be stored
 folder = fit_params["simulation_path"]
 folder_spectrum = folder + "/Spectrum/"
-folder_save = folder + "/Fit/"
+folder_save = folder + "/Fit/" + fit_params["name"] + "/"
 create_folder_if_not_exists(comm, folder_save)
 
 ### Import Spectrum parameters
@@ -106,7 +106,16 @@ samples, samples_flat = fit.run(nsteps, nwalkers, discard=discard, comm=comm)
 fit_parameters_names = fit.get_fitting_parameters_names()
 
 ### Plot MCMC
-fig, axes = plt.subplots(samples.shape[-1], 1, figsize=(12, 3 * samples.shape[-1]))
+n_params = samples.shape[-1]
+
+# Handle case: 1 parameter → axes is a single object
+fig, axes = plt.subplots(
+    n_params, 1, figsize=(12, 3 * n_params)
+)
+
+if n_params == 1:
+    axes = [axes]  # wrap in list for uniform iteration
+
 fig.suptitle("MCMC Chain Evolution", fontsize=14)
 
 for iparam, ax in enumerate(axes):
@@ -114,28 +123,30 @@ for iparam, ax in enumerate(axes):
     for walker in range(nwalkers):
         ax.plot(samples[:, walker, iparam], alpha=0.5, color="k")
 
-    # Plot mean and std
+    # Compute stats
     mean = np.mean(samples[..., iparam])
-    std = np.std(samples[..., iparam])
+    std  = np.std(samples[..., iparam])
+
+    # Mean and ±1σ lines
     ax.axhline(mean, color="r", linestyle="--", label=f"Mean: {mean:.3f}")
     ax.axhline(mean + std, color="b", linestyle=":", label=f"±1σ: {std:.3f}")
     ax.axhline(mean - std, color="b", linestyle=":")
 
-    # Add vertical line for burn-in
+    # Burn-in line
     if discard > 0:
         ax.axvline(discard, color="g", linestyle="--", alpha=0.5, label="Burn-in")
 
-    # Customize each subplot
+    # Labels & formatting
     ax.set_ylabel(fit_parameters_names[iparam])
     ax.set_xlim(0, nsteps)
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="right", bbox_to_anchor=(1.2, 0.5))
 
-    # Only show x-label for the bottom plot
-    if iparam == samples.shape[-1] - 1:
+    # Put legend outside
+    ax.legend(loc="right", bbox_to_anchor=(1.25, 0.5))
+
+    if iparam == n_params - 1:
         ax.set_xlabel("Step number")
 
-# Adjust layout
 plt.tight_layout()
 plt.savefig(folder_save + "mcmc_samples.svg", bbox_inches="tight", dpi=300)
 plt.close()
@@ -143,104 +154,117 @@ plt.close()
 ### Triangle Plots
 means = np.mean(samples_flat, axis=0)
 stds = np.std(samples_flat, axis=0)
+n_params = len(fit_parameters_names)
 
-### Triangle Plot - Corner
-corner_kwargs = dict(
-    labels=[rf"${p}$" for p in fit_parameters_names],  # LaTeX labels
-    show_titles=True,
-    title_fmt=".3f",
-    quantiles=[0.16, 0.5, 0.84],
-    title_kwargs={"fontsize": 12},
-    label_kwargs={"fontsize": 14},
-    color="black",
-    hist_kwargs={"density": True, "lw": 1.5},
-    smooth=1.0,
-)
+##############################
+# --------- CORNER --------- #
+##############################
 
-fig = corner.corner(samples_flat, **corner_kwargs)
-fig.suptitle("Posterior Triangle — Corner", fontsize=16, fontweight="bold", y=1.01)
+if n_params == 1:
+    # Corner cannot do a triangle with one param → do 1D posterior
+    fig = plt.figure(figsize=(5, 4))
+    ax = fig.add_subplot(111)
+    ax.hist(samples_flat[:, 0], bins=40, density=True, alpha=0.6)
+    ax.axvline(means[0], linestyle="--", lw=1.5)
+    ax.axvline(means[0] - stds[0], linestyle=":", lw=1)
+    ax.axvline(means[0] + stds[0], linestyle=":", lw=1)
+    ax.set_xlabel(fit_parameters_names[0])
+    ax.set_ylabel("Density")
+    ax.text(0.05, 0.95, rf"$\mu={means[0]:.3f}$"+"\n"+rf"$\sigma={stds[0]:.3f}$",
+            transform=ax.transAxes, ha="left", va="top", bbox=dict(facecolor="white", alpha=0.8))
+    fig.suptitle("Posterior — Corner (1D)", fontsize=16, fontweight="bold", y=1.01)
+else:
+    corner_kwargs = dict(
+        labels=[rf"${p}$" for p in fit_parameters_names],
+        show_titles=True,
+        title_fmt=".3f",
+        quantiles=[0.16, 0.5, 0.84],
+        title_kwargs={"fontsize": 12},
+        label_kwargs={"fontsize": 14},
+        color="black",
+        hist_kwargs={"density": True, "lw": 1.5},
+        smooth=1.0,
+    )
 
-axes = np.array(fig.axes).reshape(len(fit_parameters_names), len(fit_parameters_names))
-for i, (mean, std) in enumerate(zip(means, stds)):
-    ax = axes[i, i]
-    txt = rf"$\mu = {mean:.3f}$" + "\n" + rf"$\sigma = {std:.3f}$"
-    ax.text(0.05, 0.95, txt, transform=ax.transAxes, ha="left", va="top", fontsize=9, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
+    fig = corner.corner(samples_flat, **corner_kwargs)
+    fig.suptitle("Posterior Triangle — Corner", fontsize=16, fontweight="bold", y=1.01)
+
+    axes = np.array(fig.axes).reshape(n_params, n_params)
+    for i, (mean, std) in enumerate(zip(means, stds)):
+        ax = axes[i, i]
+        txt = rf"$\mu = {mean:.3f}$" + "\n" + rf"$\sigma = {std:.3f}$"
+        ax.text(0.05, 0.95, txt,
+                transform=ax.transAxes, ha="left", va="top",
+                fontsize=9, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
 
 out_svg = os.path.join(folder_save, "triangle_corner.svg")
 fig.savefig(out_svg, bbox_inches="tight", dpi=300)
 plt.close(fig)
-
 print(f"[OK] Corner plot saved: {out_svg}")
 
-### Triangle Plot - GetDist
+
+###############################
+# --------- GETDIST --------- #
+###############################
+
 gds_samples = MCSamples(
     samples=samples_flat,
     names=fit_parameters_names,
     labels=[p.replace("_", r"\_") for p in fit_parameters_names],
-    settings={
-        "smooth_scale_1D": 0.5,
-        "smooth_scale_2D": 0.6,
-        "mult_bias_correction_order": 0,
-    },
+    settings={"smooth_scale_1D": 0.5, "smooth_scale_2D": 0.6,
+              "mult_bias_correction_order": 0},
 )
 
-g = plots.get_subplot_plotter()
-g.settings.num_plot_contours = 2
-g.settings.alpha_filled_add = 0.6
-g.settings.linewidth = 2
-g.settings.figure_legend_frame = False
-g.settings.axes_fontsize = 12
-g.settings.axes_labelsize = 14
-g.settings.legend_fontsize = 12
-g.settings.title_limit_fontsize = 12
+g = plots.get_single_plotter() if n_params == 1 else plots.get_subplot_plotter()
 
-# Create the triangle plot
-g.triangle_plot(
-    gds_samples,
-    params=fit_parameters_names,
-    filled=True,
-)
+if n_params == 1:
+    g.plot_1d(gds_samples, fit_parameters_names[0], filled=True)
+    ax = g.fig.axes[0]
+    ax.axvline(means[0], linestyle="--", lw=1.5)
+    ax.axvline(means[0] - stds[0], linestyle=":", lw=1)
+    ax.axvline(means[0] + stds[0], linestyle=":", lw=1)
+    ax.text(0.5, 1.01, rf"${means[0]:.3f} \pm {stds[0]:.3f}$",
+            transform=ax.transAxes, ha="center", va="bottom",
+            fontsize=10)
+    plt.suptitle("Posterior — GetDist", fontsize=16, fontweight="bold", y=1.03)
 
-# Get the figure and its axes
-fig = g.fig
-axes = g.subplots
+else:
+    g.settings.num_plot_contours = 2
+    g.settings.alpha_filled_add = 0.6
+    g.settings.linewidth = 2
+    g.settings.figure_legend_frame = False
+    g.settings.axes_fontsize = 12
+    g.settings.axes_labelsize = 14
+    g.settings.legend_fontsize = 12
+    g.settings.title_limit_fontsize = 12
 
-# Add lines and text to each subplot
-n = len(fit_parameters_names)
-for i in range(n):
-    for j in range(i + 1):  # Only lower triangle
-        ax = axes[i, j]
-        if ax is not None:  # Check if the axis exists
-            # Add vertical lines
-            ax.axvline(means[j], color="red", linestyle="--", lw=1.5)
-            ax.axvline(means[j] - stds[j], color="blue", linestyle=":", lw=1)
-            ax.axvline(means[j] + stds[j], color="blue", linestyle=":", lw=1)
+    g.triangle_plot(gds_samples, params=fit_parameters_names, filled=True)
 
-            # Add horizontal lines (for non-diagonal plots)
-            if i != j:
-                ax.axhline(means[i], color="red", linestyle="--", lw=1.5)
-                ax.axhline(means[i] - stds[i], color="blue", linestyle=":", lw=1)
-                ax.axhline(means[i] + stds[i], color="blue", linestyle=":", lw=1)
-
-            # Add text only on diagonal plots
+    axes = g.subplots
+    for i in range(n_params):
+        for j in range(i + 1):
+            ax = axes[i, j]
             if i == j:
-                ax.text(
-                    0.5,
-                    1.08,
-                    rf"{fit_parameters_names[i]}: ${means[i]:.3f} \pm {stds[i]:.3f}$",
-                    transform=ax.transAxes,
-                    ha="center",
-                    va="top",
-                    fontsize=10,
-                )
+                ax.axvline(means[j], linestyle="--", lw=1.5)
+                ax.axvline(means[j] - stds[j], linestyle=":", lw=1)
+                ax.axvline(means[j] + stds[j], linestyle=":", lw=1)
+                ax.text(0.5, 1.02, rf"${means[j]:.3f} \pm {stds[j]:.3f}$",
+                        transform=ax.transAxes, ha="center", va="bottom",
+                        fontsize=10, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
+            else:
+                ax.axhline(means[i], linestyle="--", lw=1.5)
+                ax.axhline(means[i] - stds[i], linestyle=":", lw=1)
+                ax.axhline(means[i] + stds[i], linestyle=":", lw=1)
+                ax.axvline(means[j], linestyle="--", lw=1.5)
+                ax.axvline(means[j] - stds[j], linestyle=":", lw=1)
+                ax.axvline(means[j] + stds[j], linestyle=":", lw=1)
 
-plt.suptitle("Posterior Triangle — GetDist", fontsize=16, fontweight="bold", y=1.03)
-
+    plt.suptitle("Posterior Triangle — GetDist", fontsize=16, fontweight="bold", y=1.03)
+    
 out_svg = os.path.join(folder_save, "triangle_getdist.svg")
 plt.savefig(out_svg, bbox_inches="tight", dpi=300)
 plt.close()
-del g  # prevent destructor warning
-
+del g
 print(f"[OK] GetDist plot saved: {out_svg}")
 
 ### Save Pickle

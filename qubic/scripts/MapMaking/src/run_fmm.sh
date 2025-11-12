@@ -11,7 +11,7 @@
 #SBATCH --mem=50G
 #SBATCH --time=0-05:00:00
 #SBATCH --output=mulitple_jobs_%j.log
-#SBATCH --array=1-100
+#SBATCH --array=1-10
 
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 

@@ -1,6 +1,7 @@
 import os
 import pickle as pkl
 import sys
+from copy import deepcopy
 
 import corner
 import matplotlib.pyplot as plt
@@ -62,8 +63,21 @@ mpi._print_message(f"Number of realizations : {files.number_of_realizations}")
 ### Check if all files have the same parameters
 mpi._print_message("    => Checking that all spectrum are from simulations with same parameters")
 parameters_all_files = files._reads_all_files("parameters", verbose=verbose)
-parameters = parameters_all_files[0]
-test_all_same = np.all(parameters_all_files == parameters)
+
+# Remove the seed before comparison
+def remove_seed(p):
+    p = deepcopy(p)  # avoid modifying original dict
+    try:
+        del p["QUBIC"]["NOISE"]["seed_noise"]
+    except KeyError:
+        pass
+    return p
+
+parameters_all_clean = [remove_seed(p) for p in parameters_all_files]
+parameters = parameters_all_clean[0]
+
+test_all_same = all(p == parameters for p in parameters_all_clean)
+
 if test_all_same:
     mpi._print_message("    => All Parameters are the same !")
 else:

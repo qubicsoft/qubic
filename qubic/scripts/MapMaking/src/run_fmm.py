@@ -1,6 +1,5 @@
 import argparse
 
-import yaml
 from pyoperators import MPI
 from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineEnd2End
 
@@ -15,13 +14,20 @@ if __name__ == "__main__":
 
     # Set seed if provided
     if args.seed is not None:
-        with open(args.parameters_file, "r") as f:
-            params = yaml.safe_load(f)
+        from ruamel.yaml import YAML
+
+        yaml = YAML()
+        yaml.preserve_quotes = True
+
+        with open(args.parameters_file) as f:
+            params = yaml.load(f)
 
         params["QUBIC"]["NOISE"]["seed_noise"] = args.seed
 
         with open(args.parameters_file, "w") as f:
-            yaml.safe_dump(params, f, sort_keys=False)
+            yaml.dump(params, f)
+            
+        print(f"INFO Using SEED={args.seed}")
 
     # Initialize and run the pipeline
     pipeline = PipelineEnd2End(comm, parameters_path=args.parameters_file)

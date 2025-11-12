@@ -8,7 +8,6 @@ import numpy as np
 import yaml
 from getdist import MCSamples, plots
 from pyoperators import MPI
-
 from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import SkySpectra
 from qubic.lib.Qfit import FitEllSpace
 from qubic.lib.Qfoldertools import MergeAllFiles, create_folder_if_not_exists
@@ -109,9 +108,7 @@ fit_parameters_names = fit.get_fitting_parameters_names()
 n_params = samples.shape[-1]
 
 # Handle case: 1 parameter → axes is a single object
-fig, axes = plt.subplots(
-    n_params, 1, figsize=(12, 3 * n_params)
-)
+fig, axes = plt.subplots(n_params, 1, figsize=(12, 3 * n_params))
 
 if n_params == 1:
     axes = [axes]  # wrap in list for uniform iteration
@@ -125,7 +122,7 @@ for iparam, ax in enumerate(axes):
 
     # Compute stats
     mean = np.mean(samples[..., iparam])
-    std  = np.std(samples[..., iparam])
+    std = np.std(samples[..., iparam])
 
     # Mean and ±1σ lines
     ax.axhline(mean, color="r", linestyle="--", label=f"Mean: {mean:.3f}")
@@ -170,8 +167,7 @@ if n_params == 1:
     ax.axvline(means[0] + stds[0], linestyle=":", lw=1)
     ax.set_xlabel(fit_parameters_names[0])
     ax.set_ylabel("Density")
-    ax.text(0.05, 0.95, rf"$\mu={means[0]:.3f}$"+"\n"+rf"$\sigma={stds[0]:.3f}$",
-            transform=ax.transAxes, ha="left", va="top", bbox=dict(facecolor="white", alpha=0.8))
+    ax.text(0.05, 0.95, rf"$\mu={means[0]:.3f}$" + "\n" + rf"$\sigma={stds[0]:.3f}$", transform=ax.transAxes, ha="left", va="top", bbox=dict(facecolor="white", alpha=0.8))
     fig.suptitle("Posterior — Corner (1D)", fontsize=16, fontweight="bold", y=1.01)
 else:
     corner_kwargs = dict(
@@ -187,15 +183,13 @@ else:
     )
 
     fig = corner.corner(samples_flat, **corner_kwargs)
-    fig.suptitle("Posterior Triangle — Corner", fontsize=16, fontweight="bold", y=1.01)
+    fig.suptitle("Posterior Triangle — Corner", fontsize=16, fontweight="bold")
 
     axes = np.array(fig.axes).reshape(n_params, n_params)
     for i, (mean, std) in enumerate(zip(means, stds)):
         ax = axes[i, i]
         txt = rf"$\mu = {mean:.3f}$" + "\n" + rf"$\sigma = {std:.3f}$"
-        ax.text(0.05, 0.95, txt,
-                transform=ax.transAxes, ha="left", va="top",
-                fontsize=9, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
+        ax.text(0.05, 0.95, txt, transform=ax.transAxes, ha="left", va="top", fontsize=9, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
 
 out_svg = os.path.join(folder_save, "triangle_corner.svg")
 fig.savefig(out_svg, bbox_inches="tight", dpi=300)
@@ -211,8 +205,7 @@ gds_samples = MCSamples(
     samples=samples_flat,
     names=fit_parameters_names,
     labels=[p.replace("_", r"\_") for p in fit_parameters_names],
-    settings={"smooth_scale_1D": 0.5, "smooth_scale_2D": 0.6,
-              "mult_bias_correction_order": 0},
+    settings={"smooth_scale_1D": 0.5, "smooth_scale_2D": 0.6, "mult_bias_correction_order": 0},
 )
 
 g = plots.get_single_plotter() if n_params == 1 else plots.get_subplot_plotter()
@@ -223,10 +216,8 @@ if n_params == 1:
     ax.axvline(means[0], linestyle="--", lw=1.5)
     ax.axvline(means[0] - stds[0], linestyle=":", lw=1)
     ax.axvline(means[0] + stds[0], linestyle=":", lw=1)
-    ax.text(0.5, 1.01, rf"${means[0]:.3f} \pm {stds[0]:.3f}$",
-            transform=ax.transAxes, ha="center", va="bottom",
-            fontsize=10)
-    plt.suptitle("Posterior — GetDist", fontsize=16, fontweight="bold", y=1.03)
+    ax.text(0.5, 1.0, rf"${means[0]:.3f} \pm {stds[0]:.3f}$", transform=ax.transAxes, ha="center", va="bottom", fontsize=12)
+    plt.suptitle("Posterior — GetDist", fontsize=16, fontweight="bold", y=1.05)
 
 else:
     g.settings.num_plot_contours = 2
@@ -248,9 +239,7 @@ else:
                 ax.axvline(means[j], linestyle="--", lw=1.5)
                 ax.axvline(means[j] - stds[j], linestyle=":", lw=1)
                 ax.axvline(means[j] + stds[j], linestyle=":", lw=1)
-                ax.text(0.5, 1.02, rf"${means[j]:.3f} \pm {stds[j]:.3f}$",
-                        transform=ax.transAxes, ha="center", va="bottom",
-                        fontsize=10, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
+                ax.text(0.5, 1.02, rf"${means[j]:.3f} \pm {stds[j]:.3f}$", transform=ax.transAxes, ha="center", va="bottom", fontsize=10, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
             else:
                 ax.axhline(means[i], linestyle="--", lw=1.5)
                 ax.axhline(means[i] - stds[i], linestyle=":", lw=1)
@@ -259,8 +248,8 @@ else:
                 ax.axvline(means[j] - stds[j], linestyle=":", lw=1)
                 ax.axvline(means[j] + stds[j], linestyle=":", lw=1)
 
-    plt.suptitle("Posterior Triangle — GetDist", fontsize=16, fontweight="bold", y=1.03)
-    
+    plt.suptitle("Posterior Triangle — GetDist", fontsize=16, fontweight="bold", y=1.05)
+
 out_svg = os.path.join(folder_save, "triangle_getdist.svg")
 plt.savefig(out_svg, bbox_inches="tight", dpi=300)
 plt.close()

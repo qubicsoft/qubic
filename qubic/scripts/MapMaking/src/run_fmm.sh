@@ -17,4 +17,11 @@ export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 
 module load mpich
 
-mpirun -np $SLURM_NTASKS python run_fmm.py $1 $2
+# Unique seed base for this job submission
+# (current epoch time in seconds mod 100000)
+SEED_BASE=$(( $(date +%s) % 100000 ))
+
+# Combine job array ID and base offset
+SEED=$(( SEED_BASE + SLURM_ARRAY_TASK_ID ))
+
+mpirun -np $SLURM_NTASKS python run_fmm.py $1 $2 --seed "$SEED"

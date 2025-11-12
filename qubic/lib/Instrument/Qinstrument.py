@@ -1206,13 +1206,20 @@ class QubicInstrument(Instrument):
         phi = np.arctan2(position[..., 1], position[..., 0])
         sr_det = -area / position[..., 2] ** 2 * np.cos(theta) ** 3
         sr_beam = secondary_beam.solid_angle
-        sec = secondary_beam(theta, phi)
+        
 
+        # print("sr_beam", sr_beam)
+        # print(np.mean(theta), np.mean(phi))
+        # print(np.max(sec))
+
+        
         if use_file:
-            return DiagonalOperator(sr_det / sr_beam, broadcast="rightward")
+            return DiagonalOperator(sr_det / sr_beam, broadcast="rightward") # ah: we have to include the secondary beam in the creation of the analytical calfile
         else:
             sec = secondary_beam(theta, phi)
             return DiagonalOperator(sr_det / sr_beam * sec, broadcast="rightward")
+        # test
+        # return DiagonalOperator(sr_det / sr_beam * sec, broadcast="rightward")
 
     def get_detector_response_operator(self, sampling, tau=None):
         """
@@ -1363,99 +1370,123 @@ class QubicInstrument(Instrument):
                 # print(thetas.shape)
                 print("Interpolated thetas, phis, vals from fits file with {} frequencies.".format(len(thetafits)))
 
-            thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas_, phis_, vals_, synthbeam)
-
-            # names = ["thetas", "phis", "vals"]
-            # for i, data in enumerate([thetas, phis, vals]):
-            #     np.savetxt("test_{}.txt".format(names[i]), data)
-            
-            thetas_theo, phis_theo, vals_theo = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
-
-            i_det = 63
-            # print("thetas", thetas[i_det], thetas_theo[i_det])
-            # print("phis", phis[i_det], phis_theo[i_det])
-            # print("vals", vals[i_det], vals_theo[i_det])
-
-            # thetas = float('%.1g' % 1234)
-            thetas = np.round(thetas, 4)
-            phis = np.round(phis, 4)
-            vals = np.round(vals, 4)
-
-            thetas_theo = np.round(thetas_theo, 4)
-            phis_theo = np.round(phis_theo, 4)
-            vals_theo = np.round(vals_theo, 4)
-
-            list_tuples = [(thetas[i, j], phis[i, j], vals[i, j]) for i in range(len(thetas)) for j in range(len(thetas[0]))]
-
-            list_tuples_theo = [(thetas_theo[i, j], phis_theo[i, j], vals_theo[i, j]) for i in range(len(thetas)) for j in range(len(thetas[0]))]
-
-            for tup in list_tuples_theo:
-                if tup not in list_tuples:
-                    print(tup)
-                    # raise ValueError("Not the same!!")
-            print("alright")
-            # sys.exit()
-
-            # if use_file:
-            #     pass
-            # else:
-            #     thetas = thetas_theo.copy()
-            #     phis = phis_theo.copy()
-            #     vals = vals_theo.copy()
+            thetas, phis, vals = QubicInstrument.remove_significant_peaks(thetas_, phis_, vals_, synthbeam) # ah: not working the same as for theory anymore, as we have already miltiplied the secondary beam here
 
             if False:
-                index = _argsort_reverse(vals_)
-                thetafits_sorted = thetafits[:, tuple(index[0]), tuple(index[1])]
-                phifits_sorted = phifits[:, tuple(index[0]), tuple(index[1])]
-                valfits_sorted = valfits[:, tuple(index[0]), tuple(index[1])]
-                idet = i_det
+                
+                print(np.max(vals))
+                aze
+
+                thetas_theo, phis_theo, vals_theo = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
+
+                i_det = 63
+                # print("thetas", thetas[i_det], thetas_theo[i_det])
+                # print("phis", phis[i_det], phis_theo[i_det])
+                # print("vals", vals[i_det], vals_theo[i_det])
+
+                # thetas = float('%.1g' % 1234)
+                thetas = np.round(thetas, 4)
+                phis = np.round(phis, 4)
+                vals = np.round(vals, 4)
+
+                thetas_theo = np.round(thetas_theo, 4)
+                phis_theo = np.round(phis_theo, 4)
+                vals_theo = np.round(vals_theo, 4)
+
+                list_tuples = [(thetas[i, j], phis[i, j], vals[i, j]) for i in range(len(thetas)) for j in range(len(thetas[0]))]
+
+                list_tuples_theo = [(thetas_theo[i, j], phis_theo[i, j], vals_theo[i, j]) for i in range(len(thetas)) for j in range(len(thetas[0]))]
+
                 import matplotlib.pyplot as plt
 
-                for i_peak in range(len(thetafits[0, 0])):
-                    plt.figure()
-                    plt.plot(freqfits, thetafits_sorted[:, i_det, i_peak])
-                    plt.scatter(nu_GHz, thetas[i_det, i_peak], label="thetas")
-                    plt.scatter(nu_GHz, thetas_theo[i_det, i_peak], label="thetas_theo")
-                    plt.legend()
-                    plt.show()
-                    plt.figure()
-                    plt.plot(freqfits, phifits_sorted[:, i_det, i_peak])
-                    plt.scatter(nu_GHz, phis[i_det, i_peak], label="phis")
-                    plt.scatter(nu_GHz, phis_theo[i_det, i_peak], label="phis_theo")
-                    plt.legend()
-                    plt.show()
-                    plt.figure()
-                    plt.plot(freqfits, valfits_sorted[:, i_det, i_peak])
-                    plt.scatter(nu_GHz, vals[i_det, i_peak], label="vals")
-                    plt.scatter(nu_GHz, vals_theo[i_det, i_peak], label="vals_theo")
-                    plt.legend()
-                    plt.show()
+                remove_theo = np.ones(len(list_tuples_theo), dtype=bool)
+                for itup, tup in enumerate(list_tuples_theo):
+                    try:
+                        itup_cal = list_tuples.index(tup)
+                        list_tuples.pop(itup_cal)
+                        remove_theo[itup] = False
+                    except ValueError:
+                        print("{} not in list_tuples".format(tup))
+                        continue
 
-                # for idet in range(249):#[63, 76, 90, 119, 135, 151, 167, 183, 199, 215, 231]:
-                #     hp.gnomview(np.zeros(12 * nside**2) + hp.UNSEEN, rot=[0,90], reso=20, min=-5, max=0, title="det {}".format(idet))
-                #     hp.projscatter(thetas[idet,:], phis[idet,:], c=vals[idet,:]/np.max(vals[idet,:]), 
-                #                 marker='x', cmap='Reds')
-                #     hp.projscatter(thetas_theo[idet,:], phis_theo[idet,:], c=vals_theo[idet,:]/np.max(vals[idet,:]), 
-                #                 marker='+', cmap='Reds')
-                #     plt.tight_layout()
-                #     plt.show()
-                sys.exit()
-            # for i_det in range(len(thetas)):
-            #     test_theta = np.allclose(thetas[i_det], thetas_theo[i_det], rtol=1e-04, atol=1)
-            #     test_phi = np.allclose(phis[i_det], phis_theo[i_det], rtol=1e-04, atol=1)
-            #     test_val = np.allclose(vals[i_det], vals_theo[i_det], rtol=1e-04, atol=1)
-            #     test = test_theta * test_phi * test_val
-            #     if not test:
-            #         print("i_det", i_det)
-            #         print(test_theta)
-            #         print(test_phi)
-            #         print(test_val)
-            # sys.exit()
+                hp.gnomview(np.zeros(12 * nside**2) + hp.UNSEEN, rot=[0,90], reso=20, min=-5, max=0)
+
+                list_tuples_theo = [list_tuples_theo[i] for i in np.arange(len(list_tuples_theo))[remove_theo]]
+                for itup in range(len(list_tuples)):
+                    tup = list_tuples[itup]
+                    theta_tup, phi_tup, val_tup = tup
+                    hp.projscatter(theta_tup, phi_tup, c=1, 
+                                marker='x', cmap='Reds')
+                    
+                for itup in range(len(list_tuples_theo)):
+                    tup = list_tuples_theo[itup]
+                    theta_tup, phi_tup, val_tup = tup
+                    hp.projscatter(theta_tup, phi_tup, c=1, 
+                                marker='+', cmap='Reds')
+                plt.tight_layout()
+                plt.show()
+                print("alright")
+                # sys.exit()
+
+                # if use_file:
+                #     pass
+                # else:
+                #     thetas = thetas_theo.copy()
+                #     phis = phis_theo.copy()
+                #     vals = vals_theo.copy()
+
+                if False:
+                    index = _argsort_reverse(vals_)
+                    thetafits_sorted = thetafits[:, tuple(index[0]), tuple(index[1])]
+                    phifits_sorted = phifits[:, tuple(index[0]), tuple(index[1])]
+                    valfits_sorted = valfits[:, tuple(index[0]), tuple(index[1])]
+                    idet = i_det
+                    import matplotlib.pyplot as plt
+
+                    for i_peak in range(len(thetafits[0, 0])):
+                        plt.figure()
+                        plt.plot(freqfits, thetafits_sorted[:, i_det, i_peak])
+                        plt.scatter(nu_GHz, thetas[i_det, i_peak], label="thetas")
+                        plt.scatter(nu_GHz, thetas_theo[i_det, i_peak], label="thetas_theo")
+                        plt.legend()
+                        plt.show()
+                        plt.figure()
+                        plt.plot(freqfits, phifits_sorted[:, i_det, i_peak])
+                        plt.scatter(nu_GHz, phis[i_det, i_peak], label="phis")
+                        plt.scatter(nu_GHz, phis_theo[i_det, i_peak], label="phis_theo")
+                        plt.legend()
+                        plt.show()
+                        plt.figure()
+                        plt.plot(freqfits, valfits_sorted[:, i_det, i_peak])
+                        plt.scatter(nu_GHz, vals[i_det, i_peak], label="vals")
+                        plt.scatter(nu_GHz, vals_theo[i_det, i_peak], label="vals_theo")
+                        plt.legend()
+                        plt.show()
+
+                    # for idet in range(249):#[63, 76, 90, 119, 135, 151, 167, 183, 199, 215, 231]:
+                    #     hp.gnomview(np.zeros(12 * nside**2) + hp.UNSEEN, rot=[0,90], reso=20, min=-5, max=0, title="det {}".format(idet))
+                    #     hp.projscatter(thetas[idet,:], phis[idet,:], c=vals[idet,:]/np.max(vals[idet,:]), 
+                    #                 marker='x', cmap='Reds')
+                    #     hp.projscatter(thetas_theo[idet,:], phis_theo[idet,:], c=vals_theo[idet,:]/np.max(vals[idet,:]), 
+                    #                 marker='+', cmap='Reds')
+                    #     plt.tight_layout()
+                    #     plt.show()
+                    sys.exit()
+                # for i_det in range(len(thetas)):
+                #     test_theta = np.allclose(thetas[i_det], thetas_theo[i_det], rtol=1e-04, atol=1)
+                #     test_phi = np.allclose(phis[i_det], phis_theo[i_det], rtol=1e-04, atol=1)
+                #     test_val = np.allclose(vals[i_det], vals_theo[i_det], rtol=1e-04, atol=1)
+                #     test = test_theta * test_phi * test_val
+                #     if not test:
+                #         print("i_det", i_det)
+                #         print(test_theta)
+                #         print(test_phi)
+                #         print(test_val)
+                # sys.exit()
 
         else:
             # We get info on synthbeam
-            # thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
-            thetas, phis, vals = np.genfromtxt("test_thetas_phis_vals.txt")
+            thetas, phis, vals = QubicInstrument._peak_angles(scene, nu, position, synthbeam, horn, primary_beam)
             print("Theoretical thetas, phis, vals computed.")
         # shape(vals)   : (ndetectors, npeaks)
         # shape(thetas) : (ndetectors, npeaks)

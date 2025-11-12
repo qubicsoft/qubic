@@ -488,6 +488,15 @@ class PipelineFrequencyMapMaking:
 
         TOD_QUBIC = self.H_in_qubic(self.input_maps.m_nu).ravel() + self.noiseq
 
+        # # test
+        # print("TOD_QUBIC")
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # plt.plot(TOD_QUBIC)
+        # plt.show()
+
+        # sys.exit()
+
         if not self.params["PLANCK"]["external_data"]:
             return TOD_QUBIC
 

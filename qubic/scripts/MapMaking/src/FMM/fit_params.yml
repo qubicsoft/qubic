@@ -1,5 +1,5 @@
 simulation_path: "FMM/test"
-name: "test"
+name: "test_qubic_only"
 
 Spectrum:
   nbins: 7                                                      # Number of multipole (minimum is fixed at what you defined during the map-making)
@@ -13,7 +13,7 @@ MCMC:
   nus_planck: [False, False, False, False, False, False, False] # Planck frequencies used for fitting. It should match 7 !!!
   discard: 100                                                  # Number of iterations discarded
   nwalkers: 50                                                  # Number of MCMC walkers
-  nsteps: 150                                                   # Number of MCMC iterations
+  nsteps: 300                                                   # Number of MCMC iterations
   verbose: False                                                # Print values
 
 # For each components' parameters : 

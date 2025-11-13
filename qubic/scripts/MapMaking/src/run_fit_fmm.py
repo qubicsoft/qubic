@@ -230,7 +230,7 @@ if n_params == 1:
     ax.axvline(means[0], linestyle="--", lw=1.5)
     ax.axvline(means[0] - stds[0], linestyle=":", lw=1)
     ax.axvline(means[0] + stds[0], linestyle=":", lw=1)
-    ax.text(0.5, 1.0, rf"${means[0]:.3f} \pm {stds[0]:.3f}$", transform=ax.transAxes, ha="center", va="bottom", fontsize=12)
+    ax.text(0.5, 1.0, fit_parameters_names[0] + rf" = ${means[0]:.3f} \pm {stds[0]:.3f}$", transform=ax.transAxes, ha="center", va="bottom", fontsize=12)
     plt.suptitle("Posterior — GetDist", fontsize=16, fontweight="bold", y=1.05)
 
 else:
@@ -253,7 +253,7 @@ else:
                 ax.axvline(means[j], linestyle="--", lw=1.5)
                 ax.axvline(means[j] - stds[j], linestyle=":", lw=1)
                 ax.axvline(means[j] + stds[j], linestyle=":", lw=1)
-                ax.text(0.5, 1.02, rf"${means[j]:.3f} \pm {stds[j]:.3f}$", transform=ax.transAxes, ha="center", va="bottom", fontsize=10, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
+                ax.text(0.5, 1.02, fit_parameters_names[i] + rf" $ = {means[j]:.3f} \pm {stds[j]:.3f}$", transform=ax.transAxes, ha="center", va="bottom", fontsize=10, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
             else:
                 ax.axhline(means[i], linestyle="--", lw=1.5)
                 ax.axhline(means[i] - stds[i], linestyle=":", lw=1)

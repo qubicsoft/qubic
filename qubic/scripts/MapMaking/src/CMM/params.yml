@@ -7,18 +7,18 @@ CMB:
 Foregrounds:
     ### This section define the in/out foregrounds contribution
 
-    fit_spectral_index: False                                                  # If False, the beta reconstruction is skipped
+    fit_spectral_index: True                                                  # If False, the beta reconstruction is skipped
     bin_mixing_matrix: 4
     blind_method:
-        "minimize"                                                            # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
-                                                                              # 'alternate' or 'minimize'
+        "alternate"                                                            # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
+                                                                              # 'alternate' 'minimize' or 'PCG'
 
     ### Thermal Dust emission
     Dust:
         Dust_in: True
         Dust_out: True
 
-        type: "parametric"                                                    # Reconstruction method
+        type: "blind"                                                    # Reconstruction method
         model: "d0"
         beta_init: [1.54, 0., 10000000]                                         # PySM model
         nside_beta_in: 0                                                      # Input pixelization for beta_d (in a case of d1 model)
@@ -51,7 +51,7 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "DB"                                                          # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
+    instrument: "UWB"                                                          # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                       # Instrumental configuration (TD or FI) # to be implemented in the code
     npointings: 1000                                                          # Number of time samples
     nsub_in: 8                                                                # Number of sub-acquisitions
@@ -102,7 +102,7 @@ PLANCK:
 PCG:
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 150
+    n_init_iter_pcg: 15
     n_iter_pcg: 25                                                             # Number of PCG iterations
     tol_pcg: 1.0e-20                                                          # Tolerance for PCG
     n_iter_loop: 1                                                            # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)

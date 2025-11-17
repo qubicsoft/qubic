@@ -1,4 +1,4 @@
-simulation_path: "FMM/test"
+simulation_path: "FMM/test_qubic_only"
 name: "test_qubic_only"
 
 Spectrum:

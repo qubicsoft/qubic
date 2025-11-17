@@ -1,5 +1,5 @@
-path_out: "test/"
-datafilename: "test_fit"
+path_out: "test_qubic_only/"
+datafilename: "test"
 
 CMB:
   cmb: true
@@ -32,7 +32,7 @@ QUBIC:
     detector_nep: 4.7e-17        # NEP of detector noise 
     duration_150: 3                        # Effective duration at 150 GHz
     duration_220: 3                        # Effective duration at 220 GHz
-    seed_noise: 63269
+    seed_noise: 13507563295
   SYNTHBEAM:
     synthbeam_kmax: 1            # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1
@@ -49,10 +49,10 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
 
-  external_data: true
+  external_data: false
   weight_planck: 0               # Weight of Planck data within the QUBIC patch
   level_noise_planck: 1          # Noise level for Planck data
-  seed_noise: 22222
+  seed_noise: 13507563295
   bandwidth_planck: 0.2          # Multiplicative factor to define the bandwidth of Planck's data
   nsub_planck: 100                # Number of sub acquisitions for Planck's data
 
@@ -64,7 +64,7 @@ PCG:
     ### This section control PCG parameters
 
   n_iter_pcg: 300                 # Number of PCG iterations #100
-  tol_pcg: 1.0e-15               # Tolerance for PCG
+  tol_pcg: 1.0e-25               # Tolerance for PCG
   preconditioner: true
   initial_guess_intensity_to_zero: true
   gif: true

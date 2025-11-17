@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=FMM
+#SBATCH --job-name=Fit-FMM
 
 # we ask for n MPI tasks with N cores each on c nodes
 
@@ -10,8 +10,10 @@
 #SBATCH --cpus-per-task=10        # N
 #SBATCH --mem=10G
 #SBATCH --time=0-02:00:00
-#SBATCH --output=mulitple_jobs_%j.log
+#SBATCH --output=FMM/slurm_logs/multiple_jobs_%A_%a.log
 ###SBATCH --array=1-1
+
+mkdir -p FMM/slurm_logs
 
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 

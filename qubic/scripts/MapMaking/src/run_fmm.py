@@ -23,6 +23,7 @@ if __name__ == "__main__":
             params = yaml.load(f)
 
         params["QUBIC"]["NOISE"]["seed_noise"] = args.seed
+        params["PLANCK"]["seed_noise"] = args.seed
 
         with open(args.parameters_file, "w") as f:
             yaml.dump(params, f)

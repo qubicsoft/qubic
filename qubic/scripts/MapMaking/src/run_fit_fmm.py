@@ -69,6 +69,7 @@ def remove_seed(p):
     p = deepcopy(p)  # avoid modifying original dict
     try:
         del p["QUBIC"]["NOISE"]["seed_noise"]
+        del p["PLANCK"]["seed_noise"]
     except KeyError:
         pass
     return p

@@ -21,3 +21,5 @@ ruff.toml
 *.png
 *.pkl
 *.gif
+*.svg
+*.pt

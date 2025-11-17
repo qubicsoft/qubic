@@ -64,6 +64,7 @@ dependencies = [
     'schwimmbad',
     'imageio',
     "ruamel.yaml",
+    "jq",
 ]
 dynamic = ['version']
 

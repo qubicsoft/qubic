@@ -16,6 +16,7 @@ class FitEllSpace:
         self.model = model
 
         self.params = parameters_file
+        self.list_components = ["cmb", "dust", "synchrotron", "correlation"]
 
         ### Check if the user is giving the right dimensions
         self._check_shapein()
@@ -32,7 +33,7 @@ class FitEllSpace:
     def get_fitting_parameters_names(self):
         fit_param_names = []
 
-        for comp in ["cmb", "dust", "synchrotron", "correlation"]:
+        for comp in self.list_components:
             if comp not in self.params:
                 continue
 
@@ -117,7 +118,7 @@ class FitEllSpace:
         keys = self.params.keys()
 
         for key in keys:
-            if key not in ["cmb", "dust", "synchrotron", "correlation"]:
+            if key not in self.list_components:
                 continue
             params = self.params[key]
             for param in params:
@@ -143,7 +144,7 @@ class FitEllSpace:
         keys = self.params.keys()
         count = 0
         for key in keys:
-            if key not in ["cmb", "dust", "synchrotron", "correlation"]:
+            if key not in self.list_components:
                 continue
             params = self.params[key].keys()
             for param in params:
@@ -158,7 +159,7 @@ class FitEllSpace:
         comps = self.params.keys()
         count = 0
         for key in comps:
-            if key not in ["cmb", "dust", "synchrotron", "correlation"]:
+            if key not in self.list_components:
                 continue
             params = self.params[key].keys()
             for param in params:

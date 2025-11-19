@@ -44,6 +44,7 @@ class PresetInitialisation:
         self.external = None
         self.sky = None
         self.mixingmatrix = None
+        files_list = ["I", "Q", "U", "allcomps", "A_iter"]
 
     def initialize(self, parameters_file):
         """Initialization.
@@ -71,11 +72,8 @@ class PresetInitialisation:
                 )
                 create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Dict/")
             if self.tools.params["Plots"]["maps"] or self.tools.params["Plots"]["conv_beta"]:
-                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/I")
-                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/Q")
-                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/U")
-                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/allcomps")
-                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Plots/A_iter")
+                for file_name in self.files_list:
+                    create_folder_if_not_exists(self.comm, "CMM/{}/Plots/{}".format(self.tools.params["foldername"], file_name))
 
         self.tools.mpi._print_message("========= External Data =========")
         self.external = PresetExternal(self.tools)

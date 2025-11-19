@@ -199,8 +199,8 @@ class PCGAlgorithm(IterativeAlgorithm):
                     self.seenpix,
                     self.gif + f"iter_{self.niterations + self.iter_init}.svg",
                     self.center,
-                    max,
-                    -max,
+                    max=max,
+                    min=-max,
                     reso=self.reso,
                     iter=self.niterations,
                 )

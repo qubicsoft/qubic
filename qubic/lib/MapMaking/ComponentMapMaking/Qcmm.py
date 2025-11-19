@@ -133,7 +133,7 @@ class Pipeline:
         """
 
         if self._steps == 0:
-            self.plots._display_allcomponents(seenpix, ki=-1)
+            self.plots._display_allcomponents(ki=-1, reso=self.preset.tools.params["PCG"]["reso_plot"])
 
         ### Initialize PCG starting point
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
@@ -151,9 +151,9 @@ class Pipeline:
             maxiter = max_iterations
 
         if self.preset.tools.params["PCG"]["do_gif"]:
-            gif_folder = f"CMM/jobs/{self.preset.job_id}/iter/"
+            self.gif_folder = "CMM/" + self.preset.tools.params["foldername"] + "/Plots/"
         else:
-            gif_folder = None
+            self.gif_folder = None
 
         ### PCG
         results = pcg(
@@ -165,7 +165,7 @@ class Pipeline:
             tol=self.preset.tools.params["PCG"]["tol_pcg"],
             disp=True,
             maxiter=maxiter,
-            gif_folder=gif_folder,
+            gif_folder=self.gif_folder,
             job_id=self.preset.job_id,
             seenpix=seenpix,
             seenpix_plot=self.preset.sky.seenpix,
@@ -185,12 +185,12 @@ class Pipeline:
         if self.preset.tools.rank == 0:
             if self.preset.tools.params["PCG"]["do_gif"]:
                 do_gif(
-                    f"CMM/jobs/{self.preset.job_id}/iter/",
+                    self.gif_folder,
                     "iter_",
                     output="animation.gif",
                 )
             self.plots.display_maps(seenpix, ki=self._steps)
-            self.plots._display_allcomponents(seenpix, ki=self._steps, gif=self.preset.tools.params["PCG"]["do_gif"], reso=self.preset.tools.params["PCG"]["reso_plot"])
+            self.plots._display_allcomponents(ki=self._steps, gif=self.preset.tools.params["PCG"]["do_gif"], reso=self.preset.tools.params["PCG"]["reso_plot"])
             self.plots.plot_rms_iteration(self.preset.acquisition.rms_plot, ki=self._steps)
 
     def update_components(self, seenpix):
@@ -643,7 +643,7 @@ class Pipeline:
 
                 if self.preset.tools.params["PCG"]["do_gif"]:
                     do_gif(
-                        f"CMM/jobs/{self.preset.job_id}/A_iter/",
+                        self.gif_folder,
                         "A_iter",
                         output="animation_A_iter.gif",
                     )
@@ -853,7 +853,7 @@ class Pipeline:
                             os.remove(
                                 "CMM/"
                                 + self.preset.tools.params["foldername"]
-                                + "/maps/"
+                                + "/Dict/"
                                 + self.preset.tools.params["filename"]
                                 + f"_seed{str(self.preset.tools.params['CMB']['seed'])}_{str(self.preset.job_id)}_k{step - 1}.pkl"
                             )
@@ -861,7 +861,7 @@ class Pipeline:
                     with open(
                         "CMM/"
                         + self.preset.tools.params["foldername"]
-                        + "/maps/"
+                        + "/Dict/"
                         + self.preset.tools.params["filename"]
                         + f"_seed{str(self.preset.tools.params['CMB']['seed'])}_{str(self.preset.job_id)}_k{step}.pkl",
                         "wb",

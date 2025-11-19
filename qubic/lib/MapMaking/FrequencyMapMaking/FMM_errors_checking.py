@@ -29,7 +29,7 @@ class ErrorChecking:
             raise TypeError("Adding Planck for Nrec=1 case is not yet implemented")
 
         if self.params["QUBIC"]["instrument"] == "DB" and self.params["QUBIC"]["nrec"] == 1:
-            raise TypeError("You can't reconstruct one map in Dual Band configuration")
+            raise TypeError("You can't reconstruct one map in Dual Bands configuration")
 
         if self.params["QUBIC"]["instrument"] != "MB":  # We might want to build odd nsub with "MB"
             # Check if nsub_in is even

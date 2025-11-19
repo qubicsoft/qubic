@@ -40,7 +40,6 @@ class PCGAlgorithm(IterativeAlgorithm):
         reso=15,
         fwhm_plot=0,
         input=None,
-        fwhm=0,
         iter_init=0,
         is_planck=False,
     ):
@@ -193,19 +192,16 @@ class PCGAlgorithm(IterativeAlgorithm):
 
         if self.gif is not None:
             if self.comm.Get_rank() == 0:
-                nsig = 2
-                min, max = -nsig * np.std(self.input[0, self.seenpix], axis=0), nsig * np.std(self.input[0, self.seenpix], axis=0)
+                max = np.max(np.abs(self.input[:, self.seenpix, :]), axis=1)
                 _plot_reconstructed_maps(
                     map_i,
                     self.input,
                     self.seenpix,
-                    self.gif + f"iter_{self.niterations + self.iter_init}.png",
+                    self.gif + f"iter_{self.niterations + self.iter_init}.svg",
                     self.center,
-                    reso=self.reso,
-                    figsize=(12, 2.7 * map_i.shape[0]),
-                    min=min,
                     max=max,
-                    fwhm=self.fwhm,
+                    min=-max,
+                    reso=self.reso,
                     iter=self.niterations,
                 )
 
@@ -330,7 +326,6 @@ def pcg(
         reso=reso,
         fwhm_plot=fwhm_plot,
         input=input,
-        fwhm=fwhm,
         iter_init=iter_init,
         is_planck=is_planck,
     )

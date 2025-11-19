@@ -17,6 +17,7 @@ authors = [
     {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
     {name = 'Louise Mousset', email = 'mousset@apc.in2p3.fr'},
     {name = 'Mathias Régnier', email = 'mathias.p.regnier@gmail.com'},
+    {name = "Tom Laclavère", email = "laclaver@apc.in2p3.fr"},
 ]
 maintainers = [
     {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
@@ -61,7 +62,9 @@ dependencies = [
     'bottleneck',
     'scikit-learn',
     'schwimmbad',
-    'imageio'
+    'imageio',
+    "ruamel.yaml",
+    "jq",
 ]
 dynamic = ['version']
 

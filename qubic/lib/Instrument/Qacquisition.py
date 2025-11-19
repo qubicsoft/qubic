@@ -1154,7 +1154,6 @@ class JointAcquisitionFrequencyMapMaking:
         if self.is_external_data:
             R_planck = ReshapeOperator((12 * self.qubic.scene.nside**2, nstokes), (12 * self.qubic.scene.nside**2 * nstokes))
             H_planck_ = BlockDiagonalOperator([R_planck] * self.Nrec, new_axisout=0)
-            print("Planck", H_planck_.shapein, H_planck_.shapeout)
             R_diag = ReshapeOperator(H_planck_.shapeout, H_planck_.shape[0])
             H_planck = R_diag(H_planck_)
             H.append(H_planck)

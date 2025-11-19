@@ -1,4 +1,5 @@
 import numpy as np
+from fgbuster.mixingmatrix import MixingMatrix
 from pyoperators import (
     DenseBlockDiagonalOperator,
     DiagonalOperator,
@@ -126,6 +127,9 @@ class ForwardOps:
         if hasattr(self.acq, "subacqs") and self.acq.subacqs is not None:
             return [sub.get_projection_operator() for sub in self.acq.subacqs]
         raise TypeError("Acquisition does not expose projection operators.")
+
+    def op_mixing_matrix(self, nus, beta, comp):
+        return MixingMatrix(*comp).eval(nus, *beta)
 
     @staticmethod
     def extract_projection_operators(H_list):

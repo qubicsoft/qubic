@@ -58,7 +58,7 @@ class QubicCalibration(object):
             calfile = d[key].replace("_CC", "_%s" % d["config"]).replace("_FFF", "_%s" % nu_str)
             if key == "synthbeam":
                 calfile = calfile.replace("_nsideNNN", "_nside%s" % d["nside"])
-                calfile = calfile.replace("_kmax", "_kmax%s" % d["synthbeam_kmax"])
+                calfile = calfile.replace("_kmaxK", "_kmax%s" % d["synthbeam_kmax"])
             calfile_fullpath = find_file(os.path.join(self.path, calfile), verbosity=1)
             if calfile_fullpath is None:
                 cmd = "self.%s = None" % key

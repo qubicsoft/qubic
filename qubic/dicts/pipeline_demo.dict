@@ -38,7 +38,7 @@ detarray='CalQubic_DetArray_v4_CC.fits' # This can be used for TD and FI with th
 hornarray='CalQubic_HornArray_CC.fits'
 # synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits'
 # synthbeam='CalQubic_Synthbeam_Analytical_nsideNNN_CC_FFF.fits'
-synthbeam='CalQubic_Synthbeam_Analytical_nsideNNN_CC_FFF_kmax.fits'
+synthbeam='CalQubic_Synthbeam_Analytical_nsideNNN_CC_FFF_kmaxK.fits'
 
 ############################################# Scene ################################
 nside=256
@@ -98,6 +98,6 @@ verbose=True
 ####################################### Synthetic Beam #####################################
 
 #if True, use imported fits. if False, use theoretical theta,phi,val calculated in instrument.py
-use_synthbeam_fits_file=True
+use_synthbeam_fits_file=False
 
 get_many_frequencies_analytically=False

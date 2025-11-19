@@ -14,8 +14,8 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "MB"             # Instrumental design (MB, DB or UWB)
-    configuration: "TD"          # Instrumental configuration (TD or FI)
+    instrument: "DB"             # Instrumental design (MB, DB or UWB)
+    configuration: "FI"          # Instrumental configuration (TD or FI)
     npointings: 1000             # Number of time samples
     nsub_in: 8                   # Number of sub-acquisitions
     nsub_out: 8
@@ -25,10 +25,10 @@ QUBIC:
     convolution_out: False       # Angular resolution in the reconstruction
     bandpass_correction: True    # Correction to keep the edges of the integration band constant
     NOISE:                          
-        ndet: 0                  # Level of detector noise
+        ndet: 1                  # Level of detector noise
                                  # randomness not fixed for det and photon noise, to be checked
-        npho150: 0               # Level of photon noise at 150 GHz
-        npho220: 0               # Level of photon noise at 220 GHz
+        npho150: 1               # Level of photon noise at 150 GHz
+        npho220: 1               # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17    # NEP of detector noise 
         duration_150: 3                    # Effective duration at 150 GHz
         duration_220: 3                    # Effective duration at 220 GHz
@@ -49,9 +49,9 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
 
-    external_data: False                    
+    external_data: True                    
     weight_planck: 0             # Weight of Planck data within the QUBIC patch
-    level_noise_planck: 0        # Noise level for Planck data
+    level_noise_planck: 1        # Noise level for Planck data
     seed_noise: 22222
     bandwidth_planck: 0.2        # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100              # Number of sub acquisitions for Planck's data
@@ -63,7 +63,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_iter_pcg: 50               # Number of PCG iterations #100
+    n_iter_pcg: 300               # Number of PCG iterations #100
     tol_pcg: 1.0e-25             # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: True

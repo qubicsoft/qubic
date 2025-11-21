@@ -3,6 +3,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+from fgbuster.mixingmatrix import MixingMatrix
 from scipy.constants import c, h, k
 
 
@@ -21,6 +22,82 @@ def _broadcast_det(x, det_vector):
         raise ValueError("det_vector must be 1D (D,).")
     view = (1, -1, 1)
     return x * det_vector.view(*view)
+
+
+def get_nus(multiinstrument):
+    nus = []
+    for instrument in multiinstrument:
+        nus.append(instrument.filter.nu)
+
+    return np.array(nus)
+
+
+class InverseMixingMatrixDeterministic(nn.Module):
+    def __init__(self, multiinstrument, beta, comps, dtype=torch.float32, device=None):
+        super.__init__()
+        self.multiinstrument = multiinstrument
+        self.beta = beta
+        self.comps = comps
+        self.nus = get_nus(multiinstrument)
+
+        self.Amm = MixingMatrix(*self.comps).eval(self.nus, *self.beta)
+        self.inv_Amm = torch.linalg.pinv(self.Amm)
+        self.register_bugger("inv_amm", _as_tensor(self.inv_Amm, dtype=dtype, device=device))
+
+    def forward(self, x):
+        return torch.einsum("ca,apb->cpb", self.inv_Amm, x)
+
+
+class InverseMixingMatrixTrainable(nn.Module):
+    def __init__(self, multiinstrument, comps, beta=1.54, dtype=torch.float32, device=None):
+        super().__init__()
+        self.multiinstrument = multiinstrument
+        self.comps = comps
+        self.nus = get_nus(multiinstrument)
+        self.dtype = dtype
+        self.device = device
+
+        self.beta = nn.Parameter(_as_tensor([beta]), dtype=self.dtype, device=self.device)
+
+    def forward(self, x):
+        amm = MixingMatrix(*self.comps).eval(self.nus, *self.beta)
+        inv_amm = torch.linalg.pinv(amm)
+        return torch.einsum("ca,apv->cpb", inv_amm, x)
+
+    # ----- trainer ---------
+    @torch.no_grad()
+    def _infer_device(self, *tensors):
+        for t in tensors:
+            if isinstance(t, torch.Tensor):
+                return t.device
+        return None
+
+    def fit(self, tod_after, tod_before, lr=5e-3, epochs=200, weight_decay=0.0, print_every=50):
+        device = self._infer_device(tod_after, tod_before) or torch.device("cpu")
+        self.to(device)
+        tod_after = tod_after.to(device)
+        tod_before = tod_before.to(device)
+
+        params = [p for p in self.parameters() if p.requires_grad]
+        opt = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
+        loss_hist = []
+
+        for e in range(1, epochs + 1):
+            opt.zero_grad()
+            pred = self.forward(tod_after)
+            loss = torch.mean((pred - tod_before) ** 2)
+            loss.backward()
+            opt.step()
+            loss_hist.append(loss.item())
+            if (print_every is not None) and (e % print_every == 0):
+                print(f"[InverseMixingMatrixTrainable] epoch {e:4d}  MSE={loss.item():.3e}")
+
+        return {"loss_history": loss_hist}
+
+    @torch.no_grad
+    def curring_invMM(self):
+        amm = MixingMatrix(*self.comps).eval(self.nus, *self.beta)
+        return torch.linalg.pinv(amm)
 
 
 # 1) TRANSMISSION ( product(optics) * efficiency)

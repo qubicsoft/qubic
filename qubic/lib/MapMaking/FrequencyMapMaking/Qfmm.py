@@ -847,6 +847,7 @@ class PipelineEnd2End:
                     "Dls": DlBB_maps,
                     "Nls": DlBB_noise,
                     "parameters": self.params,
+                    "delta_ell": self.params["SPECTRUM"]["dl"],
                     "fsky": self.mapmaking.fsky,
                 }
 

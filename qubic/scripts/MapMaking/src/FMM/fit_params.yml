@@ -4,7 +4,6 @@ name: "test_fsky"
 Spectrum:
   sample_variance: True                                         # Add sample-variance correction in the correlation matrix
   diagonal: False                                               # Consider only the diagonal of the noise correlation matrix
-  dl: 30                                                        # Interval between two multipole
   nbins: null                                                      # Number of power-spectrum points to keep, if null, keep all values
 
 MCMC:

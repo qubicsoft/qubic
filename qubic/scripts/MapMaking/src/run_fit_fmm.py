@@ -38,7 +38,6 @@ create_folder_if_not_exists(comm, folder_save)
 nbins = fit_params["Spectrum"]["nbins"]
 sample_variance = fit_params["Spectrum"]["sample_variance"]
 diagonal = fit_params["Spectrum"]["diagonal"]
-dl = fit_params["Spectrum"]["dl"]
 
 ### Import MCMC parameters
 # Frequency used for fitting
@@ -95,6 +94,7 @@ if nus_planck.__len__() != 7:
 ### Multipoles
 mpi._print_message("    => Reading multipoles")
 ell = files._reads_one_file(0, "ell")[:nbins]
+dl = files._reads_one_file(0, "delta_ell")
 
 ### Frequencies
 mpi._print_message("    => Reading frequencies")

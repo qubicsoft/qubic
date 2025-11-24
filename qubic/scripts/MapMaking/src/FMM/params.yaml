@@ -1,4 +1,4 @@
-path_out: "test_qubic_only/"
+path_out: "test_fsky/"
 datafilename: "test"
 
 CMB:
@@ -32,7 +32,7 @@ QUBIC:
     detector_nep: 4.7e-17        # NEP of detector noise 
     duration_150: 3                        # Effective duration at 150 GHz
     duration_220: 3                        # Effective duration at 220 GHz
-    seed_noise: 1357563295
+    seed_noise: 155057459
   SYNTHBEAM:
     synthbeam_kmax: 1            # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1
@@ -42,29 +42,29 @@ SKY:
     ### This section control the reconstructed sky
 
   nside: 128                     # Nside of components
-  coverage_cut: 0.01             # Define a cut where the coverage is too low
+  coverage_cut: 0.1             # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57
 
 PLANCK:
     ### This section define which external data are we using
 
-  external_data: False
+  external_data: true
   weight_planck: 0               # Weight of Planck data within the QUBIC patch
   level_noise_planck: 1          # Noise level for Planck data
-  seed_noise: 1357563295
+  seed_noise: 155057459
   bandwidth_planck: 0.2          # Multiplicative factor to define the bandwidth of Planck's data
   nsub_planck: 100                # Number of sub acquisitions for Planck's data
 
 Pipeline:
   mapmaking: true                # Run MapMaking Pipeline
-  spectrum: False                # Compute Power Spectra of the frequency maps
+  spectrum: true                # Compute Power Spectra of the frequency maps
 
 PCG:
     ### This section control PCG parameters
 
-  n_iter_pcg: 300                 # Number of PCG iterations #100
-  tol_pcg: 1.0e-25               # Tolerance for PCG
+  n_iter_pcg: 200                 # Number of PCG iterations #100
+  tol_pcg: 1.0e-20               # Tolerance for PCG
   preconditioner: true
   initial_guess_intensity_to_zero: true
   gif: true

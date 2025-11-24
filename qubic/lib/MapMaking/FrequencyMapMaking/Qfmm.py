@@ -125,7 +125,7 @@ class PipelineFrequencyMapMaking:
         self.seenpix_qubic = self.coverage / self.coverage.max() > 0
         self.mask = np.ones(12 * self.params["SKY"]["nside"] ** 2)
         self.mask[self.seenpix] = self.params["PLANCK"]["weight_planck"]
-        self.fsky = np.sum(self.seenpix) / self.seenpix.shape[1]
+        self.fsky = np.sum(self.seenpix) / self.seenpix.shape[0]
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()

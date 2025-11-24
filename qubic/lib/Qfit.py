@@ -9,7 +9,7 @@ __path__ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class FitEllSpace:
-    def __init__(self, x, y, yerr, model, parameters_file, sample_variance=True, fsky=0.015, dl=30, diagonal=False):
+    def __init__(self, x, y, yerr, model, parameters_file, sample_variance=True, fsky=None, dl=30, diagonal=False):
         self.x = x
         self.y = y
         self.yerr = yerr

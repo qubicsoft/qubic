@@ -9,6 +9,7 @@ import numpy as np
 import yaml
 from getdist import MCSamples, plots
 from pyoperators import MPI
+
 from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import SkySpectra
 from qubic.lib.Qfit import FitEllSpace
 from qubic.lib.Qfoldertools import MergeAllFiles, create_folder_if_not_exists
@@ -37,8 +38,6 @@ create_folder_if_not_exists(comm, folder_save)
 nbins = fit_params["Spectrum"]["nbins"]
 sample_variance = fit_params["Spectrum"]["sample_variance"]
 diagonal = fit_params["Spectrum"]["diagonal"]
-# TODO: compute fsky from coverage
-fsky = fit_params["Spectrum"]["fsky"]
 dl = fit_params["Spectrum"]["dl"]
 
 ### Import MCMC parameters
@@ -64,6 +63,7 @@ mpi._print_message(f"Number of realizations : {files.number_of_realizations}")
 mpi._print_message("    => Checking that all spectrum are from simulations with same parameters")
 parameters_all_files = files._reads_all_files("parameters", verbose=verbose)
 
+
 # Remove the seed before comparison
 def remove_seed(p):
     p = deepcopy(p)  # avoid modifying original dict
@@ -73,6 +73,7 @@ def remove_seed(p):
     except KeyError:
         pass
     return p
+
 
 parameters_all_clean = [remove_seed(p) for p in parameters_all_files]
 parameters = parameters_all_clean[0]
@@ -114,6 +115,7 @@ sky = SkySpectra(ell, nus)
 
 ### Fit of cosmological parameters
 mpi._print_message("    => Fitting parameters")
+fsky = files._reads_all_files("fsky").mean()
 fit = FitEllSpace(ell, BBsignal, BBnoise, model=sky.model, parameters_file=fit_params, sample_variance=sample_variance, fsky=fsky, dl=dl, diagonal=diagonal)
 samples, samples_flat = fit.run(nsteps, nwalkers, discard=discard, comm=comm)
 
@@ -254,7 +256,16 @@ else:
                 ax.axvline(means[j], linestyle="--", lw=1.5)
                 ax.axvline(means[j] - stds[j], linestyle=":", lw=1)
                 ax.axvline(means[j] + stds[j], linestyle=":", lw=1)
-                ax.text(0.5, 1.02, fit_parameters_names[i] + rf" $ = {means[j]:.3f} \pm {stds[j]:.3f}$", transform=ax.transAxes, ha="center", va="bottom", fontsize=10, bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"))
+                ax.text(
+                    0.5,
+                    1.02,
+                    fit_parameters_names[i] + rf" $ = {means[j]:.3f} \pm {stds[j]:.3f}$",
+                    transform=ax.transAxes,
+                    ha="center",
+                    va="bottom",
+                    fontsize=10,
+                    bbox=dict(facecolor="white", alpha=0.8, edgecolor="none"),
+                )
             else:
                 ax.axhline(means[i], linestyle="--", lw=1.5)
                 ax.axhline(means[i] - stds[i], linestyle=":", lw=1)

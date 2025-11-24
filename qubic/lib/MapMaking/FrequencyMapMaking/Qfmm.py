@@ -125,6 +125,7 @@ class PipelineFrequencyMapMaking:
         self.seenpix_qubic = self.coverage / self.coverage.max() > 0
         self.mask = np.ones(12 * self.params["SKY"]["nside"] ** 2)
         self.mask[self.seenpix] = self.params["PLANCK"]["weight_planck"]
+        self.fsky = np.sum(self.seenpix) / self.seenpix.shape[1]
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()
@@ -774,6 +775,7 @@ class PipelineFrequencyMapMaking:
                 "fwhm_out": self.fwhm_out,
                 "fwhm_rec": self.fwhm_rec,
                 "seenpix": self.seenpix,
+                "fsky": self.fsky,
                 "duration": mapmaking_time,
                 "qubic_dict": {k: v for k, v in self.dict_out.items() if k != "comm"},  # I have to remove the MPI communicator, which is not supported by pickle
             }
@@ -845,7 +847,9 @@ class PipelineEnd2End:
                     "Dls": DlBB_maps,
                     "Nls": DlBB_noise,
                     "parameters": self.params,
+                    "fsky": self.mapmaking.fsky,
                 }
+
                 if self.params["Spectrum"]["plot_spectrum"]:
                     self.plots = PlotsFMM(self.spectrum.seenpix)
                     create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/Plots/")

@@ -783,6 +783,97 @@ class PipelineFrequencyMapMaking:
         ### Wait for all processors
         self.mpi._barrier()
 
+class GibbsSampler(PipelineFrequencyMapMaking):
+    
+    def __init__(self, comm, file, parameters_dict):
+        
+        PipelineFrequencyMapMaking.__init__(self, comm, file, parameters_dict)
+        print("Gibbs sampling initialized!")
+        
+        
+        self.rootinvN = self.joint.get_invntt_operator(mask=self.mask)
+        self.rootinvN.operands[0].operands[1] = self.rootinvN.operands[0].operands[1]**0.5
+        self.rootinvN.operands[1].operands[1] = self.rootinvN.operands[1].operands[1]**0.5
+        self.rootinvN.operands[2].operands[1] = self.rootinvN.operands[2].operands[1]**0.5
+        self.rootinvN.operands[3].operands[1] = self.rootinvN.operands[3].operands[1]**0.5
+
+    def step(self, x0, M=None):
+        
+        w1 = np.random.normal(0, 1, self.invN.shapein)
+        A = self.H_out.T * self.invN * self.H_out
+        b = (self.H_out.T * self.invN * self.TOD) + (self.H_out.T * self.rootinvN(w1))
+        
+        
+        ### PCG
+        solution = pcgPyOp(
+            A=A,
+            b=b,
+            x0=x0,
+            M=M,
+            tol=1e-10,
+            disp=False,
+            maxiter=10,
+        )
+        
+        return solution['x']
+        
+    def run(self, maxstep=500):
+        
+        self.mpi._print_message("\n=========== Map-Making ===========\n")
+
+        ### Get simulated data
+        self.TOD = self.get_tod()
+        M = None#self.get_preconditioner()
+        solution = self.m_nu_in.copy() * 0 + -10#np.zeros(self.H_out.shapein)
+        chains = np.zeros(self.H_out.shapein)[np.newaxis]
+        chains[0] = solution.copy()
+
+        for s in range(maxstep):
+            
+            self.mpi._print_message(f"=========== Iteration {s+1} / {maxstep} ===========")
+            
+            
+            if s == 0:
+                x0 = solution.copy()
+            else:
+                x0 = np.nanmean(chains[int(chains.shape[0]/2):], axis=0)
+            
+            solution = self.step(x0=x0, M=M)
+            
+            chains = np.concatenate((chains, np.array([solution])), axis=0)
+            l, b = equ2gal(0, -57)
+            th = np.pi/2 - np.deg2rad(b)
+            ph = np.deg2rad(l)
+            
+            reso=15
+            err=3
+            plt.figure(figsize=(15, 5))
+            hp.gnomview(hp.smoothing(self.m_nu_in[0, :, 1], fwhm=np.radians(1)), cmap='jet', sub=(141), min=-err, max=err, rot=equ2gal(0, -57), reso=reso)
+            hp.gnomview(hp.smoothing(chains[-1, 0, :, 1], fwhm=np.radians(1)), cmap='jet', sub=(142), min=-err, max=err, rot=equ2gal(0, -57), reso=reso)
+            hp.gnomview(hp.smoothing(chains[-1, 0, :, 1], fwhm=np.radians(1)) - hp.smoothing(self.m_nu_in[0, :, 1], fwhm=np.radians(1)), cmap='jet', sub=(143), min=-err, max=err, rot=equ2gal(0, -57), reso=reso)
+            hp.gnomview(chains[int(maxstep/2):, 0, :, 1].std(axis=0), cmap='binary', sub=(144), min=0, max=err, rot=equ2gal(0, -57), reso=reso)
+            hp.projscatter(th, ph)
+            plt.savefig(f"map150.png")
+            plt.close()
+            plt.figure(figsize=(15, 5))
+            hp.gnomview(hp.smoothing(self.m_nu_in[1, :, 1], fwhm=np.radians(0.27)), cmap='jet', sub=(141), min=-err, max=err, rot=equ2gal(0, -57), reso=reso)
+            hp.gnomview(hp.smoothing(chains[-1, 1, :, 1], fwhm=np.radians(0.27)), cmap='jet', sub=(142), min=-err, max=err, rot=equ2gal(0, -57), reso=reso)
+            hp.gnomview(hp.smoothing(chains[-1, 1, :, 1], fwhm=np.radians(0.27)) - hp.smoothing(self.m_nu_in[0, :, 1], fwhm=np.radians(0.27)), cmap='jet', sub=(143), min=-err, max=err, rot=equ2gal(0, -57), reso=reso)
+            hp.gnomview(chains[int(maxstep/2):, 0, :, 1].std(axis=0), cmap='binary', sub=(144), min=0, max=err, rot=equ2gal(0, -57), reso=reso)
+            hp.projscatter(th, ph)
+            plt.savefig(f"map220.png")
+            plt.close()
+            
+            ipix = hp.ang2pix(hp.npix2nside(self.m_nu_in[0, :, 1].shape[0]), th, ph)
+            
+            plt.figure()
+            plt.plot(chains[:, 0, ipix, 1], '-b')
+            plt.axhline(self.m_nu_in[0, ipix, 1], color='blue')
+            plt.plot(chains[:, 1, ipix, 1], '-r')
+            plt.axhline(self.m_nu_in[1, ipix, 1], color='red')
+            plt.xlim(0, None)#maxstep)
+            plt.savefig(f"chains.png")
+            plt.close()
 
 class PipelineEnd2End:
     """FMM Pipeline.
@@ -884,3 +975,5 @@ class PipelineEnd2End:
                         name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_Planck_{self.job_id}.svg",
                     )
                 self.mapmaking._save_data(self.file_spectrum, dict_solution)
+
+

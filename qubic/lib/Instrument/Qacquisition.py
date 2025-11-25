@@ -843,281 +843,135 @@ class QubicInstrumentType(QubicMultiAcquisitions):
             self.invN = BlockDiagonalOperator(invn_list, axisout=0)
         return self.invN
 
-
 class PlanckAcquisition:
-    def __init__(self, nus, nside, comps=None, nsub_planck=1):
-        """Planck Acquisition.
 
-        Class to add Planck information to both FMM and CMM.
+    def __init__(self, band, scene):
+        if band not in (30, 44, 70, 143, 217, 353):
+            raise ValueError("Invalid band '{}'.".format(band))
+        self.scene = scene
+        self.band = band
+        self.nside = self.scene.nside
 
-        Parameters
-        ----------
-        nus : ndarray
-            Planck frequencies to add to the Map-Making. Be careful, FMM uses only 143 and 217 GHz bands by default, while you can add every Planck bands in the CMM (30, 44, 70, 100, 143, 217, 353) GHz.
-        nside : int
-            Nside value for Healpy
-        comps : ndarray, optional
-            Components array build from FGbuster, by default None
-        nsub_planck : int, optional
-            Number of sub-acquisition for Planck, by default 1
-
-        Remarks
-        -------
-        For FMM, band is either 143 or 217, while it is an array of Planck bands for CMM. We should be able to build [143, 217] for the FMM but it is not working yet. This would need some work which are not a priority, as we do not aim to use the other Planck bands at MapMaking level (we only want to use them at spectrum level). For posterity, one should correct this to build a more general class, but it is not a priority now.
-        """
-
-        self.nus = nus
-        self.nside = nside
-        self.comps = comps
-        self.nsub_planck = nsub_planck
-
-        self.npix = 12 * self.nside**2
-        self.noise = []
-        self.fwhm = []
-        self.sigma = []
-        self.bandwidth = []
-        self.allnus = []
-
-        for nu in self.nus:
-            _planckData = pickle.load(open(PATH + f"Planck{nu}GHz.pkl", "rb"))
-
-            self.sigma.append(hp.ud_grade(_planckData[f"noise{nu}"].T, self.nside).T)
-            self.noise.append(_planckData[f"noise{nu}"])
-            self.fwhm.append(_planckData[f"fwhm{nu}"])
-            self.bandwidth.append(_planckData[f"bw{nu}"])
-
-        if self.nsub_planck == 1:
-            self.allnus = nus
+        if band == 30:
+            filename = "Variance_Planck30GHz_Kcmb2_ns256.fits"
+            var = np.zeros((12 * self.scene.nside**2, 3))
+            for i in range(3):
+                var[:, i] = hp.ud_grade(
+                    hp.fitsfunc.read_map(filename, field=i), self.scene.nside
+                )
+            sigma = np.sqrt(var)
+        elif band == 44:
+            filename = "Variance_Planck44GHz_Kcmb2_ns256.fits"
+            var = np.zeros((12 * self.scene.nside**2, 3))
+            for i in range(3):
+                var[:, i] = hp.ud_grade(
+                    hp.fitsfunc.read_map(filename, field=i), self.scene.nside
+                )
+            sigma = np.sqrt(var)
+        elif band == 70:
+            filename = "Variance_Planck70GHz_Kcmb2_ns256.fits"
+            var = np.zeros((12 * self.scene.nside**2, 3))
+            for i in range(3):
+                var[:, i] = hp.ud_grade(
+                    hp.fitsfunc.read_map(filename, field=i), self.scene.nside
+                )
+            sigma = np.sqrt(var)
+        elif band == 143:
+            #filename = "Variance_Planck143GHz_Kcmb2_ns256.fits"
+            filename = "ffp10_noise_variance_143_217_nside256.npy"
+            self.var = np.load(PATH + filename)[0]#np.array(FitsArray(PATH + filename))
+            sigma = np.sqrt(self.var) * 1e-6
+        elif band == 217:
+            #filename = "Variance_Planck217GHz_Kcmb2_ns256.fits"
+            filename = "ffp10_noise_variance_143_217_nside256.npy"
+            self.var = np.load(PATH + filename)[1]#np.array(FitsArray(PATH + filename))
+            #print(np.array(FitsArray(PATH + "Variance_Planck217GHz_Kcmb2_ns256.fits")))
+            #print(self.var)
+            sigma = np.sqrt(self.var) * 1e-6
         else:
-            for inu, nu in enumerate(self.nus):
-                self.allnus += list(np.linspace(nu - self.bandwidth[inu] / 2, nu + self.bandwidth[inu] / 2, self.nsub_planck))
-            self.allnus = np.array(self.allnus)
+            filename = "Variance_Planck353GHz_Kcmb2_ns256.fits"
+            var = np.zeros((12 * self.scene.nside**2, 3))
+            for i in range(3):
+                var[:, i] = hp.ud_grade(
+                    hp.fitsfunc.read_map(filename, field=i), self.scene.nside
+                )
+            sigma = np.sqrt(var)
 
-    def get_noise(self, planck_ntot, weight_planck=1.0, seenpix=None, seed=None):
-        """Planck Noise
+        if scene.kind == "I":
+            sigma = sigma[:, 0]
+        elif scene.kind == "QU":
+            sigma = sigma[:, :2]
+        if self.nside != 256:
+            sigma = np.array(hp.ud_grade(sigma, self.nside, power=1), copy=False).T
+        
+        self.sigma = sigma * 1e6
 
-        Method to build Planck noise. It uses sigma values computed during initialisation of the classe.
+    def get_operator(self, nintegr=1):
+        Hp = DiagonalOperator(
+            np.ones((12 * self.nside**2, 3)),
+            broadcast="rightward",
+            shapein=self.scene.shape,
+            shapeout=np.ones((12 * self.nside**2, 3)).ravel().shape,
+        )
 
-        Parameters
-        ----------
-        planck_ntot : float
-            Multiplicative factor for the noise.
-        seed : int, optional
-            Seed for random noise generation, by default None
-        seenpix : array, optional
-            Array of pixels seen by QUBIC, by default None
+        if nintegr == 1:
+            return Hp
 
-        Returns
-        -------
-        array
-            Array containing noise for Planck TOD
-        """
-        nus = np.asarray(self.nus)
-
-        state = np.random.get_state()
-        np.random.seed(seed)
-        out = np.zeros((len(nus), self.npix, 3))
-
-        for inu in range(len(self.nus)):
-            sigma = self.sigma[inu]
-            out[inu, :, :] = np.random.standard_normal((self.npix, 3)) * sigma
-
-        np.random.set_state(state)
-
-        out[:, seenpix, :] = weight_planck * out[:, seenpix, :]  # Add the same amount of noise as information inside the patch
-
-        return out * planck_ntot
-
-    def get_invntt_operator(self, planck_ntot, weight_planck=1.0, seenpix=None, beam_correction=0):
-        """Planck inverse noise covariance matrix.
-
-        Method to build Planck inverse noise covariance matrix, using sigma computed during the initialisation of the class.
-
-        Parameters
-        ----------
-        planck_ntot : float
-            Multiplicative factor for the noise
-        weight_planck : float, optional
-            Weight of Planck information inside the QUBIC patch, by default 1.0
-        seenpix : array, optional
-            Array of pixels seen by QUBIC, by default None
-        beam_correction : float, optional
-            Correction factor for the beam, by default 0
-
-        Returns
-        -------
-        _type_
-            _description_
-        """
-        #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
-
-        sigma = np.asarray(self.sigma)
-
-        if sigma.ndim == 2:
-            sigma = sigma[None, ...]
-        nb, npix, _ = sigma.shape
-
-        if planck_ntot == 0:
-            return IdentityOperator(shapein=(3 * nb * npix))
+    def get_invntt_operator(self, beam_correction=0, mask=None, seenpix=None):
 
         if beam_correction != 0:
-            factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2
+            factor = (
+                4
+                * np.pi
+                * (
+                    np.rad2deg(beam_correction)
+                    / 2.35
+                    / np.degrees(hp.nside2resol(self.scene.nside))
+                )
+                ** 2
+            )
             # print(f'corrected by {factor}')
-            varnew = hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
-            sigma = 1e6 * np.sqrt(varnew.T) * planck_ntot
+            varnew = (
+                hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
+            )
+            self.sigma = 1e6 * np.sqrt(varnew.T)
 
-        base_weight = 1.0 / ((sigma * planck_ntot) ** 2)  # this is invN before correcting for the patch
+        if mask is not None:
+            for i in range(3):
+                self.sigma[:, i] /= mask.copy()
 
-        beta = np.ones(npix)
-        if seenpix is not None:
-            beta[seenpix] = weight_planck
+        myweight = 1 / (self.sigma**2)
+        print("scale factoring!")
+        return DiagonalOperator(myweight, broadcast="leftward", shapein=myweight.shape)
 
-        scale = np.zeros(npix)  # we add a mask so to not divide by zero
-        beta_pos = beta > 0
-        scale[beta_pos] = 1.0 / (beta[beta_pos] ** 2)
+    def get_noise(self, seed):
+        state = np.random.get_state()
+        np.random.seed(seed)
+        out = (
+            np.random.standard_normal(np.ones((12 * self.nside**2, 3)).shape)
+            * self.sigma
+        )
+        np.random.set_state(state)
+        return out
 
-        weight = base_weight * scale[None, :, None]
+    def get_map(self, nu_min, nu_max, Nintegr, sky_config, d, fwhm=None):
 
-        invN = DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
-
-        R = ReshapeOperator(invN.shapeout, invN.shape[0])
-        return R(invN(R.T))
-
-    def _get_mixing_matrix(self, nus, beta):
-        """Planck Mixing Matrix.
-
-        Method to compute Planck Mixing Matrix, which will be used lated to build the Planck acquisition operator.
-        If beta has shape (ncomp), then the mixing matrix will have shape (nfreq, ncomp).
-        If beta has shape (npix, ncomp), the the elements of the mxing matrix vary across the sky, it will have shape (npix, nfreq, ncomp)
-
-        Parameters
-        ----------
-        nus : array
-            Frequencies of the Mixing Matrix.
-        beta : array
-            _description_
-
-        Returns
-        -------
-        array
-            Planck Mixing Matrix
-        """
-
-        ### Define Mixing Matrix with FGB classes
-        mm = MixingMatrix(*self.comps)
-
-        ### Compute them using the eval method at each frequency nus
-        mixing_matrix_elements = mm.eval(nus, *beta)
-
-        _sh = mixing_matrix_elements.shape
-        if _sh[0] != 1:
-            beta = hp.ud_grade(beta, self.nside)
-            mixing_matrix_elements = mm.eval(nus, *beta)
-
-            mixing_matrix = np.transpose(mixing_matrix_elements, (1, 0, 2))
+        print(f"Integration from {nu_min:.2f} to {nu_max:.2f} GHz with {Nintegr} steps")
+        obj = QubicIntegrated(d, Nsub=Nintegr, Nrec=Nintegr)
+        if Nintegr == 1:
+            allnus = np.array([np.mean([nu_min, nu_max])])
         else:
-            mixing_matrix = mixing_matrix_elements[0]
+            allnus = np.linspace(nu_min, nu_max, Nintegr)
+        m = obj.get_PySM_maps(sky_config, nus=allnus)
 
-        return np.round(mixing_matrix, 6)
+        if fwhm is None:
+            fwhm = [0] * Nintegr
 
-    def _get_mixing_operator(self, A):
-        """Planck Mixing Operator.
+        for i in range(Nintegr):
+            C = HealpixConvolutionGaussianOperator(fwhm=fwhm, lmax=2 * self.nside)
+            m[i] = C(m[i])
 
-        Method to define an operator like object for a given frequency nu, the input A should be for one frequency.
-        The type of operator depends on the shape of input A.
-
-        Parameters
-        ----------
-        A : array
-            Planck Mixing Matrix.
-
-        Returns
-        -------
-        BlockDiagonalOperator
-            Mixing operator.
-        """
-
-        if A.ndim == 1:  ### If constant beta across the sky
-            r = ReshapeOperator((1, self.npix, 3), (self.npix, 3))
-            D = r * DenseOperator(A, broadcast="rightward", shapein=(A.shape[0], self.npix, 3), shapeout=(1, self.npix, 3))
-
-        else:  ### If varying beta across the sky
-            r = ReshapeOperator((self.npix, 1, 3), (self.npix, 3))
-            _, nc = A.shape
-
-            def reshape_fct(vec, out):
-                out[...] = vec.T
-
-            R = Operator(direct=reshape_fct, transpose=reshape_fct, shapein=(nc, self.npix, 3), shapeout=(3, self.npix, nc), flags="linear")
-
-            ### if pixelization of A is lower than the one of components
-            if hp.npix2nside(A.shape[0]) != self.nside:
-                A = hp.ud_grade(A.T, self.nside).T
-
-            d = DenseBlockDiagonalOperator(A[:, np.newaxis, :], broadcast="rightward", shapein=(self.npix, nc))
-
-            ### Multiply by 3 to create A matrix for I, Q and U
-            D = r * BlockDiagonalOperator([d] * 3, new_axisin=0, new_axisout=2) * R
-
-        return D
-
-    def get_operator(self, A=None, fwhm=None, comm=None, nu_co=None):
-        """Planck Acquisition Operator.
-
-        Method to build the acquisition operator for Planck. This operator is composed at first by a convolution operator at Planck FWHM. Then, for the Component MapMaking, a Mixing Operator is added. Finally, we have the operator to turn maps into TOD.
-
-        Parameters
-        ----------
-        A : array, optional
-            Mixing Matrix of Planck. If None, the Mixing Operator will be the Identity (FMM case), not None, the Mixing Operator will be computated and then added (CMM case), by default None
-        fwhm : array, optional
-            Array of lenght the number of Planck bands considered containing Planck FWHM. If None, the Convolution Operator will be Identity (case without convolution), if not None, the Convolution Operator will be computed and then added, by default None
-        comm : MPI communicator, optional
-            MPI communicator from pyoperators, by default None
-        nu_co : bool, optional
-            Bool to add Carbon Oxyde emission line, not supported yet, by default None
-
-        Returns
-        -------
-        BlockColumnOperator
-            Planck Acquisition Operator.
-        """
-        Rmap2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
-
-        Operator = []
-        # if np.array_equal(fwhm, np.zeros(fwhm.shape)):
-        #     fwhm = None
-        # else:
-        #     if self.use_planck_at_qubic_freq:
-        #         fwhm_planck = fwhm
-        #     else:
-        #         fwhm_planck = self.fwhm
-
-        k = 0
-        for _ in self.nus:
-            ope_i = []
-            # for _ in range(self.nsub_planck):
-            for i in range(int(self.nsub_planck / len(self.nus))):
-                if fwhm is not None:
-                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
-                else:
-                    C = IdentityOperator()
-
-                if A is not None:
-                    D = self._get_mixing_operator(A=A[k])
-                else:
-                    D = IdentityOperator()
-
-                ope_i += [C * D]
-                k += 1
-
-            if comm is not None:
-                Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
-            else:
-                Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
-
-        return BlockColumnOperator(Operator, axisout=0)
-
+        return np.mean(m, axis=0)
 
 class JointAcquisitionFrequencyMapMaking:
     def __init__(self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False, sampling=None):

@@ -7,7 +7,7 @@ from qubic.lib.Fitting import Qnamaster as nam
 
 
 class Spectra:
-    def __init__(self, filename, covcut=0.2):
+    def __init__(self, filename):
         self.filename = filename
 
         ### Get the job ID
@@ -16,7 +16,7 @@ class Spectra:
         self.dictionary = self.open_file()
         self.maps = self.dictionary["maps"].copy()
 
-        self.seenpix = self.dictionary["coverage"] / self.dictionary["coverage"].max() > covcut
+        self.seenpix = self.dictionary["seenpix"]
         self.fwhm = self.dictionary["fwhm_rec"]
 
         ### Initiate namaster from qubic soft
@@ -68,6 +68,8 @@ class Spectra:
                     C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
                     map1 = C(maps[irec])
                     map2 = maps[jrec]
+                print("map1 : ", map1.shape)
+                print("map2 : ", map2.shape)
                 BBspectra[irec, jrec, :] = self._get_BB_spectra(map=map1.T, map2=map2.T, fwhm=fwhm)
 
                 if irec != jrec:

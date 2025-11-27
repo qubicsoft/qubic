@@ -1,4 +1,4 @@
-path_out: "test_fsky/"
+path_out: "test_spectra/"
 datafilename: "test"
 
 CMB:
@@ -57,7 +57,7 @@ PLANCK:
   nsub_planck: 100                # Number of sub acquisitions for Planck's data
 
 Pipeline:
-  mapmaking: true                # Run MapMaking Pipeline
+  mapmaking: false                # Run MapMaking Pipeline
   spectrum: true                # Compute Power Spectra of the frequency maps
 
 PCG:

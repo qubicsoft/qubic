@@ -49,7 +49,7 @@ dependencies = [
     'GetDist',
     'healpy',
     'iminuit',
-    'pandas',
+    'pandas==2.1.4',
     'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
     'progressbar',
     'py-cpuinfo',

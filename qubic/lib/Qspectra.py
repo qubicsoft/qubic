@@ -68,8 +68,7 @@ class Spectra:
                     C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
                     map1 = C(maps[irec])
                     map2 = maps[jrec]
-                print("map1 : ", map1.shape)
-                print("map2 : ", map2.shape)
+
                 BBspectra[irec, jrec, :] = self._get_BB_spectra(map=map1.T, map2=map2.T, fwhm=fwhm)
 
                 if irec != jrec:

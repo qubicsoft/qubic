@@ -26,6 +26,16 @@ from qubic.lib.Qspectra import Spectra
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
 
 
+def _save_data(name, d):
+    """
+    Method to save data using pickle convention.
+
+    """
+
+    with open(name, "wb") as handle:
+        pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
 class PipelineFrequencyMapMaking:
     """
     Instance to reconstruct frequency maps using QUBIC abilities.
@@ -671,15 +681,6 @@ class PipelineFrequencyMapMaking:
 
         return solution
 
-    def _save_data(self, name, d):
-        """
-        Method to save data using pickle convention.
-
-        """
-
-        with open(name, "wb") as handle:
-            pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
     def run(self):
         """Run the FMM Pipeline.
 
@@ -780,7 +781,7 @@ class PipelineFrequencyMapMaking:
                 "qubic_dict": {k: v for k, v in self.dict_out.items() if k != "comm"},  # I have to remove the MPI communicator, which is not supported by pickle
             }
 
-            self._save_data(self.file, dict_solution)
+            _save_data(self.file, dict_solution)
 
         ### Wait for all processors
         self.mpi._barrier()
@@ -818,8 +819,8 @@ class PipelineEnd2End:
 
         ### Execute spectrum
         if self.params["Pipeline"]["spectrum"]:
-            if self.params["Spectrum"]["lmax"] > 2 * self.params["SKY"]["nside"] - 1:
-                raise ValueError("lmax should be lower than 2*nside - 1")
+            # if self.params["Spectrum"]["lmax"] > 2 * self.params["SKY"]["nside"] - 1:
+            #     raise ValueError("lmax should be lower than 2*nside - 1")
 
             if self.comm.Get_rank() == 0:
                 create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/")
@@ -847,8 +848,8 @@ class PipelineEnd2End:
                     "Dls": DlBB_maps,
                     "Nls": DlBB_noise,
                     "parameters": self.params,
-                    "delta_ell": self.params["SPECTRUM"]["dl"],
-                    "fsky": self.mapmaking.fsky,
+                    "delta_ell": self.params["Spectrum"]["dl"],
+                    "fsky": self.spectrum.dictionary["fsky"],
                 }
 
                 if self.params["Spectrum"]["plot_spectrum"]:
@@ -888,4 +889,4 @@ class PipelineEnd2End:
                         title=" (QUBIC + Planck)",
                         name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_Planck_{self.job_id}.svg",
                     )
-                self.mapmaking._save_data(self.file_spectrum, dict_solution)
+                _save_data(self.file_spectrum, dict_solution)

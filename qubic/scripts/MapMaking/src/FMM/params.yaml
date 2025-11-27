@@ -16,7 +16,7 @@ QUBIC:
 
   instrument: "DB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
-  npointings: 1000               # Number of time samples
+  npointings: 500               # Number of time samples
   nsub_in: 8                     # Number of sub-acquisitions
   nsub_out: 8
   nrec: 2                        # Number of reconstructed fr
@@ -63,9 +63,9 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-  n_iter_pcg: 200                 # Number of PCG iterations #100
+  n_iter_pcg: 20                 # Number of PCG iterations #100
   tol_pcg: 1.0e-20               # Tolerance for PCG
-  preconditioner: true
+  preconditioner: false
   initial_guess_intensity_to_zero: true
   gif: true
   resolution_plot: 15

@@ -68,6 +68,7 @@ class PresetSky:
 
         # Pixels seen enough by QUBIC, according to the threshold defined in params.yml. The others will be replaced by Planck
         self.seenpix = self.coverage / self.max_coverage > self.preset_tools.params["SKY"]["coverage_cut"]
+        self.fsky = np.sum(self.seenpix) / self.seenpix.shape[0]
 
         ### Define the map of betas across the patch if 'nside_beta_out' != 0
         if self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"] != 0:
@@ -134,16 +135,16 @@ class PresetSky:
         Initializes the Namaster object and computes the ell and cl2dl arrays.
 
         This method sets up the Namaster object using parameters from the preset_tools
-        and computes the ell array and cl2dl conversion factor for power spectrum analysis.
+        and computes the ell array and cl2dl conversion factor for power Spectrum analysis.
 
         """
 
         self.namaster = nam.Namaster(
             self.seenpix,
-            lmin=self.preset_tools.params["SPECTRUM"]["lmin"],
+            lmin=self.preset_tools.params["Spectrum"]["lmin"],
             lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
-            delta_ell=self.preset_tools.params["SPECTRUM"]["dl"],
-            aposize=self.preset_tools.params["SPECTRUM"]["aposize"],
+            delta_ell=self.preset_tools.params["Spectrum"]["dl"],
+            aposize=self.preset_tools.params["Spectrum"]["aposize"],
         )
         self.ell, _ = self.namaster.get_binning(self.preset_tools.params["SKY"]["nside"])
         self.cl2dl = self.ell * (self.ell + 1) / (2 * np.pi)

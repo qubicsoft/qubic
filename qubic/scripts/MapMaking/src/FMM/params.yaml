@@ -1,5 +1,5 @@
-path_out: "test_spectra/"
-datafilename: "test"
+foldername: "test_spectra"
+filename: "test"
 
 CMB:
   cmb: true

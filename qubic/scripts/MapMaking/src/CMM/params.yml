@@ -1,3 +1,8 @@
+save_iter: 1                                                                    # Save every 'save_iter' iteration
+foldername: "test_spectra"                                                              # Name of the saved folder
+filename: "test"                                                                # Name of the saved file
+lastite: True                                                                   # Keep only the last iteration
+
 CMB:
     cmb: True
     seed: 1                                                                     # CMB realization
@@ -30,8 +35,8 @@ Foregrounds:
 
     ### Synchrotron emission
     Synchrotron:
-        Synchrotron_in: True
-        Synchrotron_out: True
+        Synchrotron_in: False
+        Synchrotron_out: False
 
 
         type: "blind"                                                           # Reconstruction method
@@ -56,7 +61,7 @@ QUBIC:
     npointings: 1000                                                            # Number of time samples
     nsub_in: 8                                                                  # Number of sub-acquisitions
     nsub_out: 8                                                                 # Number of sub-acquisitions for the reconstruction
-    convolution_in: False                                                       # Angular resolution in the input TOD
+    convolution_in: True                                                       # Angular resolution in the input TOD
     convolution_out: False                                                      # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:
@@ -99,13 +104,17 @@ PLANCK:
     353GHz: False
     seed_noise: 22222
 
+Pipeline:
+    mapmaking: false
+    spectrum: true
+
 PCG:
     ### This section control PCG parameters
 
     n_init_iter_pcg: 5
     n_iter_pcg: 10                                                              # Number of PCG iterations
     tol_pcg: 1.0e-20                                                            # Tolerance for PCG
-    n_iter_loop: 2                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+    n_iter_loop: 1                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
     ites_to_converge: 1                                                         # should be less than n_iter_loop
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                             # Fixing pixels outside QUBIC patch
@@ -134,18 +143,15 @@ INITIAL:
     qubic_patch_P_sync: 1                                                       # Multiplicative factor of initial Sync within the QUBIC patch
     qubic_patch_P_co: 1                                                         # Multiplicative factor of initial CO within the QUBIC patch
 
-SPECTRUM:
-    lmin: 40
+Spectrum:
     dl: 30
+    lmin: 40
+    lmax: 255
     aposize: 10
+    plot_spectrum: true
 
 Plots:
     conv_beta: True                                                             # Plot spectral indices convergence
     conv_gain: False                                                            # Plot gain convergence
     conv_rms: True                                                              # Plot RMS convergence
     maps: True                                                                  # Plot maps convergence
-
-save_iter: 1                                                                    # Save every 'save_iter' iteration
-foldername: "test"                                                              # Name of the saved folder
-filename: "test"                                                                # Name of the saved file
-lastite: True                                                                   # Keep only the last iteration

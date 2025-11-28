@@ -6,6 +6,7 @@ from functools import partial
 import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
+import yaml
 from pyoperators import MPI, BlockDiagonalOperator, DiagonalOperator, PackOperator, ReshapeOperator
 from pyoperators import pcg as pcg_op
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
@@ -17,14 +18,16 @@ from qubic.lib.MapMaking.ComponentMapMaking.Qcostfunc import (
     Chi2InstrumentType,
     Chi2Parametric_alt,
 )
+from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import _save_data
 from qubic.lib.MapMaking.Qcg import pcg
-from qubic.lib.MapMaking.Qmap_plotter import PlotsCMM
-from qubic.lib.Qfoldertools import do_gif
+from qubic.lib.MapMaking.Qmap_plotter import PlotsCMM, plot_cross_spectrum
+from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
 from qubic.lib.Qmpi_tools import join_data
 from qubic.lib.QskySim import get_angular_profile
+from qubic.lib.Qspectra import Spectra
 
 
-class Pipeline:
+class PipelineComponentMapMaking:
     """
     Instance to reconstruct component maps using QUBIC abilities.
 
@@ -151,7 +154,7 @@ class Pipeline:
             maxiter = max_iterations
 
         if self.preset.tools.params["PCG"]["do_gif"]:
-            self.gif_folder = "CMM/" + self.preset.tools.params["foldername"] + "/Plots/"
+            self.gif_folder = "CMM/" + self.preset.tools.params["foldername"] + "//Plots/"
         else:
             self.gif_folder = None
 
@@ -850,28 +853,19 @@ class Pipeline:
                 if (step + 1) % self.preset.tools.params["save_iter"] == 0:
                     if self.preset.tools.params["lastite"]:
                         if step != 0:
-                            os.remove(
-                                "CMM/"
-                                + self.preset.tools.params["foldername"]
-                                + "/Dict/"
-                                + self.preset.tools.params["filename"]
-                                + f"_seed{str(self.preset.tools.params['CMB']['seed'])}_{str(self.preset.job_id)}_k{step - 1}.pkl"
-                            )
+                            os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Dict/" + self.preset.tools.params["filename"] + f"_{str(self.preset.job_id)}.pkl")
 
                     with open(
-                        "CMM/"
-                        + self.preset.tools.params["foldername"]
-                        + "/Dict/"
-                        + self.preset.tools.params["filename"]
-                        + f"_seed{str(self.preset.tools.params['CMB']['seed'])}_{str(self.preset.job_id)}_k{step}.pkl",
+                        "CMM/" + self.preset.tools.params["foldername"] + "/Dict/" + self.preset.tools.params["filename"] + f"_{str(self.preset.job_id)}.pkl",
                         "wb",
                     ) as handle:
                         pickle.dump(
                             {
-                                "components_in": self.preset.comp.components_in,
-                                "components_in_convolved": self.preset.acquisition.components_in_convolved,
-                                "components_iter": self.preset.comp.components_iter,
-                                "residual": self.preset.acquisition.components_in_convolved - self.preset.comp.components_iter,
+                                "maps_in": self.preset.comp.components_in,
+                                "maps_in_convolved": self.preset.acquisition.components_in_convolved,
+                                "maps": self.preset.comp.components_iter,
+                                "maps_noise": self.preset.acquisition.components_in_convolved - self.preset.comp.components_iter,
+                                "comps_name": self.preset.comp.components_name_out,
                                 "beta": self.preset.acquisition.allbeta,
                                 "beta_true": self.preset.mixingmatrix.beta_in,
                                 "index_beta": self.preset.mixingmatrix._index_seenpix_beta,
@@ -886,6 +880,7 @@ class Pipeline:
                                 "center": self.preset.sky.center,
                                 "coverage": self.preset.sky.coverage,
                                 "seenpix": self.preset.sky.seenpix,
+                                "fsky": self.preset.sky.fsky,
                                 "fwhm_in": self.preset.acquisition.fwhm_tod,
                                 "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
                                 "fwhm_rec": self.preset.acquisition.fwhm_rec,
@@ -978,7 +973,7 @@ class Pipeline:
 
         self._steps += 1
 
-    def main(self):
+    def run(self):
         """Pipeline.
 
         Method to run the pipeline by following :
@@ -1021,3 +1016,104 @@ class Pipeline:
 
             ### Stop the loop when self._steps > k
             self._stop_condition()
+
+
+class PipelineEnd2End:
+    """
+    CMM Pipeline.
+
+    Wrapper for End-to-End pipeline.
+    """
+
+    def __init__(self, comm, parameters_path):
+        self.comm = comm
+        self.parameters_path = parameters_path
+        with open(self.parameters_path, "r") as tf:
+            self.params = yaml.safe_load(tf)
+
+        self.job_id = os.environ.get("SLURM_JOB_ID")
+
+        self.folder = (
+            "CMM/" + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_" + self.params["foldername"] + "/Dict/"
+        )
+        self.file = self.folder + self.params["filename"] + f"_{self.job_id}.pkl"
+        self.file_spectrum = (
+            "CMM/"
+            + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_"
+            + self.params["foldername"]
+            + "/Spectrum/"
+            + "spectrum_"
+            + self.params["filename"]
+            + f"_{self.job_id}.pkl"
+        )
+
+        self.mapmaking = None
+
+    def main(self, specific_file=None):
+        if self.params["Pipeline"]["mapmaking"]:
+            self.mapmaking = PipelineComponentMapMaking(self.comm, self.parameters_path)
+
+            self.mapmaking.run()
+
+        if self.params["Pipeline"]["spectrum"]:
+            if self.comm.Get_rank() == 0:
+                create_folder_if_not_exists(
+                    self.comm,
+                    "CMM/"
+                    + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_"
+                    + self.params["foldername"]
+                    + "/Spectrum/",
+                )
+
+            if self.mapmaking is not None:
+                self.spectrum = Spectra(self.file)
+            else:
+                self.spectrum = Spectra(specific_file)
+
+            ### Signal
+            print("\n===============================================")
+            print("========= Cross-spectra with Sky =============")
+            print("===============================================\n")
+            DlBB_maps = self.spectrum.run(maps=self.spectrum.maps)
+
+            ### Noise
+            print("\n===============================================")
+            print("========= Cross-spectra with Residual =========")
+            print("===============================================\n")
+            DlBB_noise = self.spectrum.run(maps=self.spectrum.dictionary["maps_noise"])
+
+            dict_solution = {
+                "comp": self.spectrum.dictionary["comps_name"],
+                "ell": self.spectrum.ell,
+                "Dls": DlBB_maps,
+                "Nls": DlBB_noise,
+                "parameters": self.params,
+                "delta_ell": self.params["Spectrum"]["dl"],
+                "fsky": self.spectrum.dictionary["fsky"],
+            }
+
+            if self.params["Spectrum"]["plot_spectrum"]:
+                create_folder_if_not_exists(
+                    self.comm,
+                    "CMM/"
+                    + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_"
+                    + self.params["foldername"]
+                    + "/Spectrum/Plots/",
+                )
+                ### QUBIC only plots
+                N = len(self.spectrum.dictionary["comps_name"])
+                plot_cross_spectrum(
+                    nus=self.spectrum.dictionary["comps_name"],
+                    ell=self.spectrum.ell,
+                    Dl=DlBB_maps,
+                    Dl_err=DlBB_noise,
+                    ymodel=None,
+                    nrec=N,
+                    figsize=(30, 30),
+                    name="CMM/"
+                    + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_"
+                    + self.params["foldername"]
+                    + "/Spectrum/Plots/"
+                    + f"QUBIC_{self.job_id}.svg",
+                )
+            _save_data(self.file_spectrum, dict_solution)

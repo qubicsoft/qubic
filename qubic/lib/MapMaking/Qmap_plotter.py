@@ -185,7 +185,7 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
     scale_factor = (figsize[1] / 8.0) * count_factor
 
     ft_axis = max(int(13 * scale_factor), 7)
-    ft_nus = max(int(15 * scale_factor), 8)
+    ft_nus = max(int(10 * scale_factor), 8)
     ft_title = max(int(32 * np.sqrt(scale_factor)), 14)
 
     # defaults & preproc (preserve original behavior)
@@ -269,7 +269,7 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
             _model_plot(ax, i, j, kp)
 
             ax.patch.set_alpha(0.2)
-            ax.annotate(f"{nus[i]:.0f}x{nus[j]:.0f}", xy=(0.1, 0.9), fontsize=ft_nus, xycoords="axes fraction", color="black", weight="bold")
+            ax.annotate(f"{nus[i]}x{nus[j]}", xy=(0.1, 0.9), fontsize=ft_nus, xycoords="axes fraction", color="black", weight="bold")
 
             # facecolor + plotting choices exactly as original
             if i < nrec and j < nrec:

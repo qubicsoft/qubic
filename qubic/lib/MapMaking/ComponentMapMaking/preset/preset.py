@@ -44,7 +44,7 @@ class PresetInitialisation:
         self.external = None
         self.sky = None
         self.mixingmatrix = None
-        files_list = ["I", "Q", "U", "allcomps", "A_iter"]
+        self.files_list = ["I", "Q", "U", "allcomps", "A_iter"]
 
     def initialize(self, parameters_file):
         """Initialization.
@@ -68,7 +68,6 @@ class PresetInitialisation:
                 self.tools.params["foldername"] = (
                     f"{self.tools.params['Foregrounds']['Dust']['type']}_{self.tools.params['Foregrounds']['Dust']['model']}_{self.tools.params['QUBIC']['instrument']}_"
                     + self.tools.params["foldername"]
-                    + f"_{self.job_id}"
                 )
                 create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Dict/")
             if self.tools.params["Plots"]["maps"] or self.tools.params["Plots"]["conv_beta"]:

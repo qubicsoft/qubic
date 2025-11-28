@@ -77,11 +77,11 @@ class PipelineFrequencyMapMaking:
         self.fsub_out = int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])
 
         self.file = file
-        self.plot_folder = "FMM/" + self.params["path_out"] + "Plots/"
+        self.plot_folder = "FMM/" + self.params["foldername"] + "/Plots/"
 
         ### Create folders
-        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Dict/")
-        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Plots/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Dict/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Plots/")
 
         ### Center of the QUBIC patch
         self.center = equ2gal(self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"])
@@ -801,9 +801,9 @@ class PipelineEnd2End:
         self.comm = comm
         self.job_id = os.environ.get("SLURM_JOB_ID")
 
-        self.folder = "FMM/" + self.params["path_out"] + "Dict/"
-        self.file = self.folder + self.params["datafilename"] + f"_{self.job_id}.pkl"
-        self.file_spectrum = "FMM/" + self.params["path_out"] + "Spectrum/" + "spectrum_" + self.params["datafilename"] + f"_{self.job_id}.pkl"
+        self.folder = "FMM/" + self.params["foldername"] + "/Dict/"
+        self.file = self.folder + self.params["filename"] + f"_{self.job_id}.pkl"
+        self.file_spectrum = "FMM/" + self.params["foldername"] + "/Spectrum/" + "spectrum_" + self.params["filename"] + f"_{self.job_id}.pkl"
         self.mapmaking = None
 
     def main(self, specific_file=None):
@@ -823,7 +823,7 @@ class PipelineEnd2End:
             #     raise ValueError("lmax should be lower than 2*nside - 1")
 
             if self.comm.Get_rank() == 0:
-                create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/")
+                create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Spectrum/")
 
                 if self.mapmaking is not None:
                     self.spectrum = Spectra(self.file)
@@ -843,7 +843,7 @@ class PipelineEnd2End:
                 DlBB_noise = self.spectrum.run(maps=self.spectrum.dictionary["maps_noise"])
 
                 dict_solution = {
-                    "nus": self.spectrum.dictionary["nus"],
+                    "nus": self.spectrum.dictionary["nus"].round(0),
                     "ell": self.spectrum.ell,
                     "Dls": DlBB_maps,
                     "Nls": DlBB_noise,
@@ -853,40 +853,40 @@ class PipelineEnd2End:
                 }
 
                 if self.params["Spectrum"]["plot_spectrum"]:
-                    self.plots = PlotsFMM(self.spectrum.seenpix)
-                    create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/Plots/")
+                    create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Spectrum/Plots/")
                     ### QUBIC only plots
-                    N = len(self.spectrum.dictionary["nus"]) - 7
+                    N = len(self.spectrum.dictionary["nus"].round(0)) - 7
                     plot_cross_spectrum(
-                        nus=self.spectrum.dictionary["nus"][:N],
+                        nus=self.spectrum.dictionary["nus"].round(0)[:N],
                         ell=self.spectrum.ell,
                         Dl=DlBB_maps[:N, :N],
                         Dl_err=DlBB_noise[:N, :N],
                         ymodel=None,
                         nrec=N,
+                        figsize=(25, 25),
                         title=" (QUBIC only)",
-                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_{self.job_id}.svg",
+                        name="FMM/" + self.params["foldername"] + "/Spectrum/Plots/" + f"QUBIC_{self.job_id}.svg",
                     )
                     ### Planck only plots
                     plot_cross_spectrum(
-                        nus=self.spectrum.dictionary["nus"][N:],
+                        nus=self.spectrum.dictionary["nus"].round(0)[N:],
                         ell=self.spectrum.ell,
                         Dl=DlBB_maps[N:, N:],
                         Dl_err=DlBB_noise[N:, N:],
                         ymodel=None,
                         nrec=0,
                         title=" (Planck only)",
-                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"Planck_{self.job_id}.svg",
+                        name="FMM/" + self.params["foldername"] + "/Spectrum/Plots/" + f"Planck_{self.job_id}.svg",
                     )
                     ### QUBIC + Planck plots
                     plot_cross_spectrum(
-                        nus=self.spectrum.dictionary["nus"],
+                        nus=self.spectrum.dictionary["nus"].round(0),
                         ell=self.spectrum.ell,
                         Dl=DlBB_maps,
                         Dl_err=DlBB_noise,
                         ymodel=None,
                         nrec=N,
                         title=" (QUBIC + Planck)",
-                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_Planck_{self.job_id}.svg",
+                        name="FMM/" + self.params["foldername"] + "/Spectrum/Plots/" + f"QUBIC_Planck_{self.job_id}.svg",
                     )
                 _save_data(self.file_spectrum, dict_solution)

@@ -23,6 +23,7 @@ class Spectra:
         self._init_namaster()
 
     def open_file(self):
+        print("filename : ", self.filename)
         with open(self.filename, "rb") as f:
             dictionary = pickle.load(f)
 

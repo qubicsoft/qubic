@@ -517,13 +517,7 @@ class PipelineFrequencyMapMaking:
         return TOD
 
     def get_preconditioner(self):
-        """PCG Preconditioner.
-
-        Returns
-        -------
-        M: DiagonalOperator
-            Preconditioner for PCG algorithm.
-        """
+        """PCG Preconditioner."""
         if not self.params["PCG"]["preconditioner"]:
             return None
 
@@ -535,63 +529,71 @@ class PipelineFrequencyMapMaking:
         no_det = len(self.joint.qubic.multiinstrument[0].detector)
         H_qubic = self.joint.qubic.operator
 
-        stacked_dptdp_inv = np.empty((nrec, npix))
+        stacked_dptdp_inv = np.empty((nrec, npix), dtype=float)
+
+        # convenience vars used below
+        planck_external = self.params["PLANCK"]["external_data"]
+        seenpix = getattr(self, "seenpix", None)
 
         for irec in range(nrec):
-            stacked_dptdp_inv_fsub = np.empty((fsub, npix))
+            # will accumulate over fsub entries
+            stacked_dptdp_inv_fsub = np.zeros((fsub, npix), dtype=float)
 
             for j_fsub in range(fsub):
                 H_single = H_qubic[irec * fsub + j_fsub]
 
+                # find D and P in one pass through operands
                 D = None
-                # D = H_single.operands[1]
-                for op in H_single.operands:
-                    if isinstance(op, DiagonalOperator):
-                        D = op
-                        break
                 P = None
                 for op in H_single.operands:
-                    if isinstance(op, ProjectionOperator):
+                    if D is None and isinstance(op, DiagonalOperator):
+                        D = op
+                    if P is None and isinstance(op, ProjectionOperator):
                         P = op
+                    if D is not None and P is not None:
                         break
-                sh = P.matrix.data.index.shape
+                if D is None or P is None:
+                    raise RuntimeError("Expected both DiagonalOperator and ProjectionOperator in H_single.operands")
 
-                point_per_det = sh[0] // no_det
-                mapPtP_perdet_seq = np.empty((no_det, npix))
+                indices = P.matrix.data.index  # shape (no_det * point_per_det, ncol)
+                weights = P.matrix.data.r11  # same shape as indices
+                total_rows, ncols = indices.shape
+                point_per_det = total_rows // no_det
 
-                for det in range(no_det):
-                    start, end = det * point_per_det, (det + 1) * point_per_det
-                    indices = P.matrix.data.index[start:end, :]
-                    weights = P.matrix.data.r11[start:end, :]
-                    flat_indices = indices.ravel()
-                    flat_weights = weights.ravel()
+                flat_idx = indices.ravel()
+                flat_w = weights.ravel()
+                per_det_count = point_per_det * ncols
+                det_ids = np.repeat(np.arange(no_det), per_det_count)
 
-                    mapPitPi = np.bincount(flat_indices, weights=flat_weights**2, minlength=npix)
-                    mapPtP_perdet_seq[det, :] = mapPitPi
+                # build combined index = det_id * npix + pixel_index
+                combined_index = det_ids * npix + flat_idx
+                weights_squared = flat_w * flat_w
 
-                D_sq = D.data**2
-                mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
-                dptdp = mapPtP_seq_scaled.sum(axis=0)
+                # bincount over combined index to get per-det contributions
+                minlength = no_det * npix
+                per_det_flat = np.bincount(combined_index, weights=weights_squared, minlength=minlength)
+                mapPtP_perdet_seq = per_det_flat.reshape((no_det, npix))
 
-                # # Pre-fetch Planck diagonals if needed
-                # if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
-                #     Diag_planck_143 = self.joint.pl143.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data  # [:, 0]
-                #     Diag_planck_217 = self.joint.pl217.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data  # [:, 0]
-                #     planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
-                #     dptdp = dptdp + planck_diag_sum
+                # scale per-det sums by diagonal D squared
+                D_sq = (D.data**2).astype(float)
 
-                # Safe inversion
-                dptdp_inv = np.zeros_like(dptdp)
-                nonzero = dptdp != 0
-                dptdp_inv[nonzero] = 1.0 / dptdp[nonzero]
-                stacked_dptdp_inv_fsub[j_fsub] = dptdp_inv
+                # scale and sum across detectors to compute dptdp
+                dptdp = (D_sq[:, np.newaxis] * mapPtP_perdet_seq).sum(axis=0)
 
-            stacked_dptdp_inv[irec] = stacked_dptdp_inv_fsub.sum(axis=0)
+                # safe inversion
+                dptdp_inv = np.zeros_like(dptdp, dtype=float)
+                np.divide(1.0, dptdp, out=dptdp_inv, where=(dptdp != 0))
 
-        if self.params["PLANCK"]["external_data"]:
-            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+                stacked_dptdp_inv_fsub[j_fsub, :] = dptdp_inv
+
+            stacked_dptdp_inv[irec, :] = stacked_dptdp_inv_fsub.sum(axis=0)
+
+        if planck_external and seenpix is not None:
+            blocks = [DiagonalOperator(ci[seenpix], broadcast="rightward") for ci in stacked_dptdp_inv]
         else:
-            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+            blocks = [DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv]
+
+        preconditioner = BlockDiagonalOperator(blocks, new_axisin=0)
         return preconditioner
 
     def call_pcg(self, d, x0, seenpix):
@@ -633,7 +635,9 @@ class PipelineFrequencyMapMaking:
             b = self.H_out.T * self.invN * d
 
         ### Preconditionning
+        print("Compute preconditioner")
         M = self.get_preconditioner()
+        print("Preconditioner computed")
 
         if self.params["PCG"]["gif"]:
             gif_folder = self.plot_folder + f"{self.job_id}/PCG/"

@@ -635,9 +635,7 @@ class PipelineFrequencyMapMaking:
             b = self.H_out.T * self.invN * d
 
         ### Preconditionning
-        print("Compute preconditioner")
         M = self.get_preconditioner()
-        print("Preconditioner computed")
 
         if self.params["PCG"]["gif"]:
             gif_folder = self.plot_folder + f"{self.job_id}/PCG/"
@@ -835,15 +833,15 @@ class PipelineEnd2End:
                     self.spectrum = Spectra(specific_file)
 
                 ### Signal
-                print("\n===============================================")
-                print("========= Cross-spectra with Sky =============")
-                print("===============================================\n")
+                print("\n==============================================")
+                print("=========== Cross-spectra with Sky ===========")
+                print("==============================================\n")
                 DlBB_maps = self.spectrum.run(maps=self.spectrum.maps)
 
                 ### Noise
-                print("\n===============================================")
-                print("========= Cross-spectra with Residual =========")
-                print("===============================================\n")
+                print("\n==============================================")
+                print("======== Cross-spectra with Residual =========")
+                print("==============================================\n")
                 DlBB_noise = self.spectrum.run(maps=self.spectrum.dictionary["maps_noise"])
 
                 dict_solution = {
@@ -859,7 +857,7 @@ class PipelineEnd2End:
                 if self.params["Spectrum"]["plot_spectrum"]:
                     create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Spectrum/Plots/")
                     ### QUBIC only plots
-                    N = len(self.spectrum.dictionary["nus"].round(0)) - 7
+                    N = len(self.spectrum.dictionary["nus"].round(0)) - 7  # Remove the 7 Planck maps at the end to have the number of QUBIC maps
                     plot_cross_spectrum(
                         nus=self.spectrum.dictionary["nus"].round(0)[:N],
                         ell=self.spectrum.ell,

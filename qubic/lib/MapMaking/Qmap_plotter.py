@@ -181,12 +181,20 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
         figsize = (2.2 * n, 2.2 * n)
 
     # Dynamic font scaling based on figure height
-    count_factor = 1 / np.sqrt(n)
-    scale_factor = (figsize[1] / 8.0) * count_factor
+    # Guard against n <= 0 and large figsize values. Compute a scale factor
+    # that decreases with number of subplots and increases with figure height.
+    count_factor = 1.0 / np.sqrt(max(1, n))
+    scale_factor = (float(figsize[1]) / 8.0) * count_factor
 
-    ft_axis = max(int(13 * scale_factor), 7)
-    ft_nus = max(int(10 * scale_factor), 8)
-    ft_title = max(int(32 * np.sqrt(scale_factor)), 14)
+    # Clamp sizes to reasonable readable bounds so very large figures (e.g.
+    # figsize=(25,25)) don't produce oversized fonts. Ranges chosen to keep
+    # ticks and small labels readable while preventing overlap.
+    # ft_axis: tick label size (6..16)
+    # ft_nus: small subtitle/annotation size (8..14)
+    # ft_title: suptitle size (12..28)
+    ft_axis = int(np.clip(13.0 * scale_factor, 6, 16))
+    ft_nus = int(np.clip(10.0 * scale_factor, 8, 14))
+    ft_title = int(np.clip(32.0 * np.sqrt(max(scale_factor, 0.1)), 12, 28))
 
     # defaults & preproc (preserve original behavior)
     if nbins is None:
@@ -261,9 +269,10 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
                     ax.set_ylabel(r"$\mathcal{D}_{\ell}$", fontsize=2 * ft_axis)
                 else:
                     ax.set_ylabel(r"100 $ \frac{\ell \mathcal{C}_{\ell}}{2 \pi}$", fontsize=2 * ft_axis)
-            else:
-                ax.tick_params(axis="x", labelrotation=30)
-                ax.tick_params(axis="y", labelrotation=-45)
+            # set tick label rotation and size per-axis so small/large figures
+            # and varying `n` use the computed `ft_axis` consistently
+            ax.tick_params(axis="x", labelrotation=30, labelsize=ft_axis)
+            ax.tick_params(axis="y", labelrotation=-45, labelsize=ft_axis)
 
             # model plotting (keeps original behavior/oddity)
             _model_plot(ax, i, j, kp)
@@ -311,8 +320,6 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
                     _plot_errorbars(ax, i, j, color_main="blue", color_second="orange")
 
             kp += 1
-            plt.xticks(fontsize=ft_axis)
-            plt.yticks(fontsize=ft_axis)
 
     # title / legend / save / show
     if title is not None:

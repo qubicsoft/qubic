@@ -5,8 +5,6 @@ import torch
 from pygsp import graphs
 from scipy import sparse
 
-from qubic.lib.MapMaking.NeuralNetworkMapMaking.utils import get_high_coverage_indexes
-
 
 def healpix_weightmatrix(nside=16, nest=True, indexes=None, dtype=np.float32):
     """Sparse adjacency for a HEALPix graph (8-neighbour connectivity)."""
@@ -124,7 +122,7 @@ def plot_sky_3d(graph_map, elev=10, azim=0, edges=False, vmin=None, vmax=None):
     graph_map.plotting.update(vertex_size=0.6)
     fig = plt.figure(figsize=[8, 6])
     ax = fig.add_subplot(111, projection="3d")
-    graph_map.plot_signal(sig, show_edges=edges, ax=ax, limits=[vmin, vmax])
+    graph_map.plot(sig, edges=edges, ax=ax, limits=[vmin, vmax])
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])
@@ -184,7 +182,7 @@ def plot_sky_3d_multifeature(graph_map, feature_index=0, elev=10, azim=0, edges=
     graph_map.plotting.update(vertex_size=0.6)
     fig = plt.figure(figsize=[8, 6])
     ax = fig.add_subplot(111, projection="3d")
-    graph_map.plot_signal(sig, show_edges=edges, ax=ax, limits=[vmin, vmax])
+    graph_map.plot_signal(sig, edges=edges, ax=ax, limits=[vmin, vmax])
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])

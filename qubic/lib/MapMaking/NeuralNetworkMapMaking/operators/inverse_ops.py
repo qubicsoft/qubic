@@ -27,25 +27,29 @@ def _broadcast_det(x, det_vector):
 def get_nus(multiinstrument):
     nus = []
     for instrument in multiinstrument:
-        nus.append(instrument.filter.nu)
+        nus.append(instrument.filter.nu / 1e9)
 
     return np.array(nus)
 
 
 class InverseMixingMatrixDeterministic(nn.Module):
     def __init__(self, multiinstrument, beta, comps, dtype=torch.float32, device=None):
-        super.__init__()
+        super().__init__()
         self.multiinstrument = multiinstrument
         self.beta = beta
         self.comps = comps
         self.nus = get_nus(multiinstrument)
+        # TODO : ask Leonora, should we use torch instead of numpy for linalg.pinv and einsum ?
 
         self.Amm = MixingMatrix(*self.comps).eval(self.nus, *self.beta)
-        self.inv_Amm = torch.linalg.pinv(self.Amm)
-        self.register_bugger("inv_amm", _as_tensor(self.inv_Amm, dtype=dtype, device=device))
+        print(self.nus)
+        print(self.Amm)
+        print(np.shape(self.Amm))
+        self.inv_Amm = np.linalg.pinv(self.Amm)
+        self.register_buffer("inv_amm", _as_tensor(self.inv_Amm, dtype=dtype, device=device))
 
     def forward(self, x):
-        return torch.einsum("ca,apb->cpb", self.inv_Amm, x)
+        return np.einsum("ca,apb->cpb", self.inv_Amm, x)
 
 
 class InverseMixingMatrixTrainable(nn.Module):
@@ -57,12 +61,17 @@ class InverseMixingMatrixTrainable(nn.Module):
         self.dtype = dtype
         self.device = device
 
-        self.beta = nn.Parameter(_as_tensor([beta]), dtype=self.dtype, device=self.device)
+        self.beta = nn.Parameter(_as_tensor([beta], dtype=self.dtype, device=self.device))
 
     def forward(self, x):
-        amm = MixingMatrix(*self.comps).eval(self.nus, *self.beta)
+        beta_vals = [float(p.detach().cpu()) for p in self.beta]
+        amm_np = MixingMatrix(*self.comps).eval(self.nus, *beta_vals)
+        amm = torch.tensor(amm_np, dtype=self.dtype, device=self.device)
         inv_amm = torch.linalg.pinv(amm)
-        return torch.einsum("ca,apv->cpb", inv_amm, x)
+        x = torch.tensor(x, dtype=self.dtype, device=self.device)
+        print(inv_amm.shape)
+        print(x.shape)
+        return torch.einsum("ca,apb->cpb", inv_amm, x)
 
     # ----- trainer ---------
     @torch.no_grad()

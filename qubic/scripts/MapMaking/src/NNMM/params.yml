@@ -54,8 +54,8 @@ QUBIC:
     instrument: "DB"                                                          # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                       # Instrumental configuration (TD or FI) # to be implemented in the code
     npointings: 1000                                                          # Number of time samples
-    nsub_in: 8                                                                # Number of sub-acquisitions
-    nsub_out: 8                                                               # Number of sub-acquisitions for the reconstruction
+    nsub_in: 4                                                                # Number of sub-acquisitions
+    nsub_out: 4                                                               # Number of sub-acquisitions for the reconstruction
     convolution_in: False                                                     # Angular resolution in the input TOD
     convolution_out: False                                                    # Angular resolution in the reconstruction
     preconditioner: False

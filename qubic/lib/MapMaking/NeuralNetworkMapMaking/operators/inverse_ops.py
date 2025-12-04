@@ -52,61 +52,147 @@ class InverseMixingMatrixDeterministic(nn.Module):
         return np.einsum("ca,apb->cpb", self.inv_Amm, x)
 
 
+class MixingMatrixFunction(torch.autograd.Function):
+    """
+    Custom autograd function that builds a mixing matrix M(beta) from external
+    (non-PyTorch) numerical code, FGBuster (https://github.com/fgbuster/fgbuster), and provides a backward pass by finite-difference
+    differentiation with respect to beta.
+    """
+
+    @staticmethod
+    def forward(ctx, beta_tensor, comps, nus, dtype, device):
+        # Extract beta as a plain float
+        beta = float(beta_tensor.item())
+
+        # Compute the mixing matrix using external MixingMatrix code (FGBuster)
+        mat_np = MixingMatrix(*comps).eval(nus, beta)
+
+        # Convert the NumPy output to a PyTorch tensor
+        mat_torch = torch.tensor(mat_np, dtype=dtype, device=device)
+
+        # Save everything needed for backward
+        ctx.comps = comps
+        ctx.nus = nus
+        ctx.dtype = dtype
+        ctx.device = device
+        ctx.save_for_backward(beta_tensor)
+
+        return mat_torch
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        """
+        Computes dL/dbeta using the chain rule:
+
+            dL/dbeta = ⟨ ∂L/∂M , ∂M/∂beta ⟩
+
+        The derivative ∂M/∂beta is obtained numerically via finite differences.
+        """
+
+        # Retrieve beta
+        (beta_tensor,) = ctx.saved_tensors
+        beta = float(beta_tensor.item())
+
+        # Small step for numerical derivative
+        eps = 1e-6
+
+        # Forward finite differences on the external (NumPy) mixing matrix code
+        mat_plus = MixingMatrix(*ctx.comps).eval(ctx.nus, beta + eps)
+        mat_minus = MixingMatrix(*ctx.comps).eval(ctx.nus, beta - eps)
+        dMdBeta_np = (mat_plus - mat_minus) / (2 * eps)
+
+        # Convert derivative to torch
+        dMdBeta = torch.tensor(dMdBeta_np, dtype=ctx.dtype, device=ctx.device)
+
+        # Chain rule: contraction of upstream gradient with dM/dbeta
+        grad_beta = torch.sum(grad_output * dMdBeta)
+
+        # Only beta requires a gradient; others return None
+        return grad_beta.reshape(1), None, None, None, None
+
+
 class InverseMixingMatrixTrainable(nn.Module):
     def __init__(self, multiinstrument, comps, beta=1.54, dtype=torch.float32, device=None):
         super().__init__()
         self.multiinstrument = multiinstrument
         self.comps = comps
         self.nus = get_nus(multiinstrument)
+
         self.dtype = dtype
         self.device = device
 
-        self.beta = nn.Parameter(_as_tensor([beta], dtype=self.dtype, device=self.device))
+        # beta is trainable by gradient descent
+        self.beta = nn.Parameter(torch.tensor([beta], dtype=dtype, device=device))
+
+    def _compute_inv_amm(self, beta_tensor):
+        """
+        Compute the pseudo-inverse of the mixing matrix:
+            inv_M = pinv(M(beta))
+        """
+        M = MixingMatrixFunction.apply(beta_tensor, self.comps, self.nus, self.dtype, self.device)
+        inv_M = torch.linalg.pinv(M)
+        return inv_M
 
     def forward(self, x):
-        beta_vals = [float(p.detach().cpu()) for p in self.beta]
-        amm_np = MixingMatrix(*self.comps).eval(self.nus, *beta_vals)
-        amm = torch.tensor(amm_np, dtype=self.dtype, device=self.device)
-        inv_amm = torch.linalg.pinv(amm)
-        x = torch.tensor(x, dtype=self.dtype, device=self.device)
-        print(inv_amm.shape)
-        print(x.shape)
-        return torch.einsum("ca,apb->cpb", inv_amm, x)
+        """
+        Apply the inverse mixing matrix to the data using Einstein summation:
+            output[c,p,b] = Σ_a inv_M[c,a] * x[a,p,b]
+        """
+        x = x.to(self.device, dtype=self.dtype)
+        inv_M = self._compute_inv_amm(self.beta)
+        return torch.einsum("ca,apb->cpb", inv_M, x)
+
+    @torch.no_grad()
+    def curring_invMM(self):
+        """Return the inverse mixing matrix without tracking gradients."""
+        return self._compute_inv_amm(self.beta)
 
     # ----- trainer ---------
+
     @torch.no_grad()
     def _infer_device(self, *tensors):
+        """Detect the device from provided tensors (fallback: CPU)."""
         for t in tensors:
             if isinstance(t, torch.Tensor):
                 return t.device
         return None
 
     def fit(self, tod_after, tod_before, lr=5e-3, epochs=200, weight_decay=0.0, print_every=50):
+        """
+        Train beta by minimizing:
+            loss = mean( (M(beta)^+ * tod_after - tod_before)^2 )
+
+        Arguments:
+            tod_after  : input data
+            tod_before : target data
+            lr         : learning rate for Adam
+            epochs     : number of iterations
+        """
+
         device = self._infer_device(tod_after, tod_before) or torch.device("cpu")
         self.to(device)
         tod_after = tod_after.to(device)
         tod_before = tod_before.to(device)
 
-        params = [p for p in self.parameters() if p.requires_grad]
-        opt = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
-        loss_hist = []
+        opt = torch.optim.Adam([self.beta], lr=lr, weight_decay=weight_decay)
+        history = []
 
         for e in range(1, epochs + 1):
             opt.zero_grad()
+
             pred = self.forward(tod_after)
+
+            # Reconstruction MSE loss
             loss = torch.mean((pred - tod_before) ** 2)
             loss.backward()
             opt.step()
-            loss_hist.append(loss.item())
-            if (print_every is not None) and (e % print_every == 0):
+
+            history.append(loss.item())
+
+            if print_every and (e % print_every == 0):
                 print(f"[InverseMixingMatrixTrainable] epoch {e:4d}  MSE={loss.item():.3e}")
 
-        return {"loss_history": loss_hist}
-
-    @torch.no_grad
-    def curring_invMM(self):
-        amm = MixingMatrix(*self.comps).eval(self.nus, *self.beta)
-        return torch.linalg.pinv(amm)
+        return {"loss_history": history}
 
 
 # 1) TRANSMISSION ( product(optics) * efficiency)

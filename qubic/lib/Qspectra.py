@@ -40,7 +40,7 @@ class Spectra:
             delta_ell=self.spectrum["dl"],
         )
 
-        self.ell = self.namaster.get_binning(self.sky["nside"])[0]
+        self.ell = self.namaster.ell_binned
         self.nbins = len(self.ell)
 
     def _get_BB_spectra(self, map, map2=None, fwhm=0):

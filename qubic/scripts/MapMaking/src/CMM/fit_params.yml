@@ -1,4 +1,4 @@
-simulation_path: "CMM/parametric_d0_DB_test_fit"
+simulation_path: "CMM/parametric_d0_DB_test_noise"
 name: "test"
 
 Spectrum:

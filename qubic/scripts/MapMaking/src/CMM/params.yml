@@ -1,5 +1,5 @@
 save_iter: 1                                                                    # Save every 'save_iter' iteration
-foldername: "test_spectra"                                                              # Name of the saved folder
+foldername: "test_cmm"                                                              # Name of the saved folder
 filename: "test"                                                                # Name of the saved file
 lastite: True                                                                   # Keep only the last iteration
 
@@ -65,9 +65,9 @@ QUBIC:
     convolution_out: False                                                      # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:
-        ndet: 0                                                                 # Level of detector noise
-        npho150: 0                                                              # Level of photon noise at 150 GHz
-        npho220: 0                                                              # Level of photon noise at 220 GHz
+        ndet: 1                                                                 # Level of detector noise
+        npho150: 1                                                              # Level of photon noise at 150 GHz
+        npho220: 1                                                              # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                                                   # NEP of detector noise
         duration_150: 3                                                         # Effective duration at 150 GHz
         duration_220: 3                                                         # Effective duration at 220 GHz
@@ -91,9 +91,9 @@ SKY:
 
 PLANCK:
     ### This section define which external data are we using
-    level_noise_planck: 0                                                       # Noise level for Planck data
+    level_noise_planck: 1                                                       # Noise level for Planck data
     nsub_planck: 20                                                             # Number of integration step for Planck data
-    weight_planck: 1                                                            # Weight of Planck data within the QUBIC patch
+    weight_planck: 0                                                            # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                       # FWHM for apodized QUBIC patch
     30GHz: False
     44GHz: False
@@ -105,13 +105,13 @@ PLANCK:
     seed_noise: 22222
 
 Pipeline:
-    mapmaking: true
+    mapmaking: false
     spectrum: true
 
 PCG:
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 5
+    n_init_iter_pcg: 300
     n_iter_pcg: 10                                                              # Number of PCG iterations
     tol_pcg: 1.0e-20                                                            # Tolerance for PCG
     n_iter_loop: 1                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)

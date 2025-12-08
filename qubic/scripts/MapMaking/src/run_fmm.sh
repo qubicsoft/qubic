@@ -7,7 +7,7 @@
 #SBATCH --mem=50G
 #SBATCH --time=0-05:00:00
 #SBATCH --output=FMM/slurm_logs/multiple_jobs_%A_%a.log
-#SBATCH --array=1-100
+#SBATCH --array=1-300
 
 mkdir -p FMM/slurm_logs
 

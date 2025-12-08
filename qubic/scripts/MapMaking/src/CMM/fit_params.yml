@@ -1,4 +1,4 @@
-simulation_path: "CMM/parametric_d0_DB_test_noise"
+simulation_path: "CMM/parametric_d0_DB_test_noiseless"
 name: "test"
 
 Spectrum:
@@ -8,9 +8,9 @@ Spectrum:
 
 MCMC:
   comp_qubic: [True, True]                                      # Comp used for fitting. It should match Ncomp value put in simulations !!!
-  discard: 100                                                  # Number of iterations discarded
+  discard: 150                                                  # Number of iterations discarded
   nwalkers: 50                                                  # Number of MCMC walkers
-  nsteps: 300                                                   # Number of MCMC iterations
+  nsteps: 400                                                   # Number of MCMC iterations
   verbose: False                                                # Print values
 
 # For each components' parameters : 
@@ -36,15 +36,15 @@ dust:
   Ad:
     fit: True 
     bound_min: 0
-    bound_max: 10
-    init_average: 1
-    init_std: 0.1
+    bound_max: 100
+    init_average: 5
+    init_std: 1
   alphad:
     fit: True
     bound_min: -10
     bound_max: 10
     init_average: -1
-    init_std: 0.1
+    init_std: 0.5
   betad:
     fit: 1.54
     bound_min: 0

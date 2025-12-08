@@ -1,5 +1,5 @@
 simulation_path: "FMM/test_fsky"
-name: "test_fsky"
+name: "test"
 
 Spectrum:
   sample_variance: True                                         # Add sample-variance correction in the correlation matrix
@@ -35,13 +35,13 @@ cmb:
 
 dust:
   Ad:
-    fit: 0
+    fit: True
     bound_min: 0
     bound_max: 10
     init_average: 1
     init_std: 0.1
   alphad:
-    fit: 0
+    fit: True
     bound_min: -10
     bound_max: 10
     init_average: -1

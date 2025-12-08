@@ -229,9 +229,10 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
             else:
                 ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r", label=label_model)
         else:
-            # replicate original behavior: plot Dl model and (always) transformed model if ymodel present
-            ax.plot(ell_sel, y, "--r")
-            ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r")
+            if mode == "Dl":
+                ax.plot(ell_sel, y, "--r")
+            else:
+                ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r")
 
     def _plot_errorbars(ax, i, j, color_main, color_second=None, label_main=None, label_second=None):
         """Add errorbars in either 'Dl' or transformed mode."""
@@ -275,7 +276,7 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
             ax.tick_params(axis="y", labelrotation=-45, labelsize=ft_axis)
 
             # model plotting (keeps original behavior/oddity)
-            _model_plot(ax, i, j, 0)
+            _model_plot(ax, i, j, kp)
 
             ax.patch.set_alpha(0.2)
             ax.annotate(f"{nus[i]}x{nus[j]}", xy=(0.1, 0.9), fontsize=ft_nus, xycoords="axes fraction", color="black", weight="bold")

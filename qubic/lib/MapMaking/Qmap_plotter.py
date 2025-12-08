@@ -275,7 +275,7 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
             ax.tick_params(axis="y", labelrotation=-45, labelsize=ft_axis)
 
             # model plotting (keeps original behavior/oddity)
-            _model_plot(ax, i, j, kp)
+            _model_plot(ax, i, j, 0)
 
             ax.patch.set_alpha(0.2)
             ax.annotate(f"{nus[i]}x{nus[j]}", xy=(0.1, 0.9), fontsize=ft_nus, xycoords="axes fraction", color="black", weight="bold")

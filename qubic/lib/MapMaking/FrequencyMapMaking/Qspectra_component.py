@@ -158,16 +158,17 @@ class SkySpectra:
 
         return Dl_model
 
-    def modelCMM(self, r, Alens, Ad, alphad, As, alphas):
+    def modelCMM(self, r, Alens, Ad, alphad, betad, As, alphas, betas, eps):
+        # TODO : remove unnused args
         Dl_model = np.zeros((self.nspectra, self.nspectra, self.nbins))
 
         for i in range(self.nspectra):
             if self.comp[i] == "CMB":
-                Dl_model[i] = self.model_cmb(r, Alens)
+                Dl_model[i, i] = self.model_cmb(r, Alens)[0, 0]
             elif self.comp[i] == "Dust":
-                Dl_model[i] = Ad * (self.ell / 80) ** alphad
+                Dl_model[i, i] = Ad * (self.ell / 80) ** alphad
             elif self.comp[i] == "Sync":
-                Dl_model[i] = As * (self.ell / 80) ** alphas
+                Dl_model[i, i] = As * (self.ell / 80) ** alphas
             else:
                 raise ValueError(f"The component model {self.comp[i]} is not implement. Please use a known component.")
 

@@ -97,10 +97,10 @@ mpi._print_message("    => Reading multipoles")
 ell = files._reads_one_file(0, "ell")[:nbins]
 dl = files._reads_one_file(0, "delta_ell")
 
-### Frequencies
-mpi._print_message("    => Reading frequencies")
-nus = files._reads_one_file(0, "nus")[comp_index]
-mpi._print_message(f"nus : {nus}")
+# ### Frequencies
+# mpi._print_message("    => Reading frequencies")
+# nus = files._reads_one_file(0, "nus")[comp_index]
+# mpi._print_message(f"nus : {nus}")
 
 ### Compute mean of signal and noise
 mpi._print_message("    => Averaging signal and noise power spectra")
@@ -112,7 +112,8 @@ mpi._print_message("    => Removing noise bias")
 BBsignal -= np.mean(BBnoise, axis=0)
 
 ### Define sky model in ell space
-sky = SkySpectra(ell, nus)
+nus = np.array([150, 150])
+sky = SkySpectra(ell, nus, comp=np.array(["CMB", "Dust"]))
 
 ### Fit of cosmological parameters
 mpi._print_message("    => Fitting parameters")

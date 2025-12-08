@@ -212,6 +212,7 @@ class Namaster(object):
         """
         nside = hp.npix2nside(len(map[0]))
         self.ell_binned, b = self.get_binning(nside)
+        mask_binned = np.where(self.ell_binned >= self.lmin)
 
         if mask_apo is None:
             mask_apo = self.mask_apo
@@ -265,7 +266,7 @@ class Namaster(object):
             spectra[:, 2] /= pwb[1] ** 2  # BB
             spectra[:, 3] /= pwb[0] * pwb[1]  # TE
 
-        return self.ell_binned, spectra, w
+        return self.ell_binned[mask_binned], spectra[mask_binned], w
 
     def get_pixwin_correction(self, nside):
         """Return the binned pixel window function multiplied by 2pi/(l(l+1))

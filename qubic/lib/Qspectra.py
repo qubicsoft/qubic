@@ -39,7 +39,7 @@ class Spectra:
             lmax=self.spectrum["lmax"],
             delta_ell=self.spectrum["dl"],
         )
-
+        self.namaster.get_binning(self.sky["nside"])
         self.ell = self.namaster.ell_binned
         self.nbins = len(self.ell)
 

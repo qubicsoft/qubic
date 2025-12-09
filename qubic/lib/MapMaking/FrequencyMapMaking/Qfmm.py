@@ -700,7 +700,7 @@ class PipelineFrequencyMapMaking:
             if self.params["PLANCK"]["weight_planck"] == 1.0:
                 starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
 
-            # in every other case, we can start from Planck
+            # in every other case, we can start from 0 or Planck as the PCG is solving for the actual maps
             else:
                 starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
                 if self.params["PCG"]["initial_guess_intensity_to_zero"] is False:

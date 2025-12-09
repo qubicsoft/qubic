@@ -137,7 +137,11 @@ class Pipeline:
 
         ### Initialize PCG starting point
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
-        initial_maps = (self.preset.comp.components_iter - w * self.preset.comp.components_out)[:, seenpix, :].copy()
+        if w == 1.0:
+            initial_maps = np.zeros_like(self.preset.comp.components_iter[:, seenpix, :])
+        else:
+            initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
+        #initial_maps = (self.preset.comp.components_iter - w * self.preset.comp.components_out)[:, seenpix, :].copy()
 
         ### Update the preconditioner M
         self.preset.acquisition.M = self.get_preconditioner()
@@ -178,6 +182,7 @@ class Pipeline:
         )["x"]
 
         ### Update components
+        
         self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
         self.preset.acquisition.convergence.append(np.array(results["convergence"].copy()))
 

@@ -1,4 +1,4 @@
-foldername: "test_noise"
+foldername: "test_"
 filename: "test"
 
 CMB:
@@ -17,18 +17,18 @@ QUBIC:
   instrument: "DB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
   npointings: 8000               # Number of time samples
-  nsub_in: 12                     # Number of sub-acquisitions
-  nsub_out: 12
+  nsub_in: 8                     # Number of sub-acquisitions
+  nsub_out: 8
   nrec: 2                        # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
   convolution_in: true          # Angular resolution in the input TOD
   convolution_out: false         # Angular resolution in the reconstruction
   bandpass_correction: true      # Correction to keep the edges of the integration band constant
   NOISE:
-    ndet: 1                      # Level of detector noise
+    ndet: 0                      # Level of detector noise
                                  # randomness not fixed for det and photon noise, to be checked
-    npho150: 1                   # Level of photon noise at 150 GHz
-    npho220: 1                   # Level of photon noise at 220 GHz
+    npho150: 0                   # Level of photon noise at 150 GHz
+    npho220: 0                   # Level of photon noise at 220 GHz
     detector_nep: 4.7e-17        # NEP of detector noise 
     duration_150: 3                        # Effective duration at 150 GHz
     duration_220: 3                        # Effective duration at 220 GHz
@@ -41,7 +41,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-  nside: 256                     # Nside of components
+  nside: 128                     # Nside of components
   coverage_cut: 0.1             # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57
@@ -58,14 +58,14 @@ PLANCK:
 
 Pipeline:
   mapmaking: true                # Run MapMaking Pipeline
-  spectrum: true                # Compute Power Spectra of the frequency maps
+  spectrum: false                # Compute Power Spectra of the frequency maps
 
 PCG:
     ### This section control PCG parameters
 
-  n_iter_pcg: 300                 # Number of PCG iterations #100
+  n_iter_pcg: 15                 # Number of PCG iterations #100
   tol_pcg: 1.0e-20               # Tolerance for PCG
-  preconditioner: true
+  preconditioner: false
   initial_guess_intensity_to_zero: true
   gif: true
   resolution_plot: 15

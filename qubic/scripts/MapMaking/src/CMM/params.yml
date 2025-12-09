@@ -1,6 +1,5 @@
 save_iter: 1                                                                    # Save every 'save_iter' iteration
 foldername: "test_noise"                                                              # Name of the saved folder
-foldername: "test_cmm"                                                              # Name of the saved folder
 filename: "test"                                                                # Name of the saved file
 lastite: true                                                                   # Keep only the last iteration
 
@@ -118,11 +117,11 @@ PCG:
     ites_to_converge: 1                                                         # should be less than n_iter_loop
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                             # Fixing pixels outside QUBIC patch
-  fixI: false                                                                   # Fix the intensity during the map-making
-  reso_plot: 15
-  fwhm_plot: 0
-  do_gif: true
-  seed_start: 33333
+    fixI: false                                                                   # Fix the intensity during the map-making
+    reso_plot: 15
+    fwhm_plot: 0
+    do_gif: true
+    seed_start: 33333
 
 INITIAL:
 

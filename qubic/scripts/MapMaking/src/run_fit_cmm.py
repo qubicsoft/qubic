@@ -34,16 +34,12 @@ folder_save = folder + "/Fit/" + fit_params["name"] + "/"
 create_folder_if_not_exists(comm, folder_save)
 
 ### Import Spectrum parameters
-# TODO: should we really modify these values
 nbins = fit_params["Spectrum"]["nbins"]
 sample_variance = fit_params["Spectrum"]["sample_variance"]
 diagonal = fit_params["Spectrum"]["diagonal"]
 
 ### Import MCMC parameters
-# # Frequency used for fitting
-# nus_qubic = fit_params["MCMC"]["nus_qubic"]
-# nus_planck = fit_params["MCMC"]["nus_planck"]
-# comp_index = np.array(nus_qubic + nus_planck)
+# Component used for fitting
 comp_index = fit_params["MCMC"]["comp_qubic"]
 
 discard = fit_params["MCMC"]["discard"]
@@ -85,22 +81,10 @@ if test_all_same:
 else:
     raise ValueError("All Parameters aren't the same ! Check your simulations !!!")
 
-### Check if frequencies that you want to fit have the correct size
-# mpi._print_message("    => Checking frequencies used for fitting")
-# if nus_qubic.__len__() != parameters["QUBIC"]["nrec"]:
-#     raise ValueError("QUBIC frequencies are wrongly defined, it must match Nrec value !")
-# if nus_planck.__len__() != 7:
-#     raise ValueError("Planck frequencies are wrongly defined, it must be only 7 frequencies !")
-
 ### Multipoles
 mpi._print_message("    => Reading multipoles")
 ell = files._reads_one_file(0, "ell")[:nbins]
 dl = files._reads_one_file(0, "delta_ell")
-
-# ### Frequencies
-# mpi._print_message("    => Reading frequencies")
-# nus = files._reads_one_file(0, "nus")[comp_index]
-# mpi._print_message(f"nus : {nus}")
 
 ### Compute mean of signal and noise
 mpi._print_message("    => Averaging signal and noise power spectra")
@@ -111,9 +95,12 @@ BBnoise = files._reads_all_files("Nls")[:, :, comp_index, :nbins][:, comp_index,
 mpi._print_message("    => Removing noise bias")
 BBsignal -= np.mean(BBnoise, axis=0)
 
-### Define sky model in ell space
+### Define sky model in ell space!
+# TODO: function to build that from reference frequencies
 nus = np.array([150, 150])
-sky = SkySpectra(ell, nus, comp=np.array(["CMB", "Dust"]))
+# TODO: function to build that from components out
+comp = np.array(["CMB", "Dust"])
+sky = SkySpectra(ell, nus, comp=comp)
 
 ### Fit of cosmological parameters
 mpi._print_message("    => Fitting parameters")

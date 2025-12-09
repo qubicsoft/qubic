@@ -1,4 +1,4 @@
-simulation_path: "FMM/test_fsky"
+simulation_path: "FMM/test_noise"
 name: "test"
 
 Spectrum:

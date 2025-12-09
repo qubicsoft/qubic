@@ -118,13 +118,13 @@ def Cl2BK(ell, Cl):
     return 100 * ell * Cl / (2 * np.pi)
 
 
-def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", nbins=None, nrec=2, mode="Dl", figsize=None, title=None, name=None, dpi=300):
+def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, label_model="CMB + Dust", nbins=None, nrec=2, mode="Dl", figsize=None, title=None, name=None, dpi=300):
     """
     Plot the upper-triangle matrix of cross-angular power spectra D_ell (and optional model).
 
     The function arranges a len(nus) x len(nus) grid and fills only the upper triangle
     (including diagonal) with small subplots labelled by the frequency pair `nus[i] x nus[j]`.
-    It draws data errorbars, an optional second series (Dl - noise if `Dl_err` provided),
+    It draws data errorbars, an optional second series (Dl - noise if `Dl_noise` provided),
     and a model line (from `ymodel`) either in D_ell units or transformed to the
     "100 * ell * C_ell / (2*pi)" units depending on `mode`.
 
@@ -137,9 +137,9 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
         Must be > 0 to avoid division-by-zero in conversions.
     Dl : ndarray
         Data D_ell values, expected shape (n_nus, n_nus, n_ell) or broadcastable to that.
-    Dl_err : ndarray or None
+    Dl_noise : ndarray or None
         Errors on Dl with same shape as `Dl` (or broadcastable). If provided, an additional
-        series `Dl - Dl_err` will be plotted where applicable. Errors are absolute-valued
+        series `Dl - Dl_noise` will be plotted where applicable. Errors are absolute-valued
         (the function applies np.abs).
     ymodel : ndarray or None
         Model values for plotting. Expected shape (n_nus, n_nus, n_ell) (or broadcastable).
@@ -173,7 +173,7 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
     Notes
     -----
     - The function preserves exact plotting order, labels and colours of the original code.
-    - The caller must ensure shapes of `nus`, `ell`, `Dl`, `Dl_err`, and `ymodel` are compatible.
+    - The caller must ensure shapes of `nus`, `ell`, `Dl`, `Dl_noise`, and `ymodel` are compatible.
     """
 
     n = len(nus)
@@ -196,16 +196,12 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
     ft_nus = int(np.clip(10.0 * scale_factor, 8, 14))
     ft_title = int(np.clip(32.0 * np.sqrt(max(scale_factor, 0.1)), 12, 28))
 
-    # defaults & preproc (preserve original behavior)
+    # defaults & preproc
     if nbins is None:
         nbins = len(ell)
 
-    # Dl2 := Dl - Dl_err (only if Dl_err provided)
-    Dl2 = Dl - Dl_err if Dl_err is not None else None
-
     # keep absolute-valued errors as in original
     Dl_err = np.abs(Dl_err) if Dl_err is not None else None
-    Dl2_err = np.abs(Dl2) if Dl2 is not None else None
 
     ell_sel = ell[:nbins]
 
@@ -448,14 +444,14 @@ class Plots:
         plt.savefig(f"allplots_{job_id}/triangle_plot.svg")
         plt.close()
 
-    def get_Dl_plot(self, ell, Dl, Dl_err, nus, job_id, figsize=(10, 10), model=None):
+    def get_Dl_plot(self, ell, Dl, Dl_noise, nus, job_id, figsize=(10, 10), model=None):
         plt.figure(figsize=figsize)
 
         k = 0
         for i in range(len(nus)):
             for j in range(len(nus)):
                 plt.subplot(len(nus), len(nus), k + 1)
-                plt.errorbar(ell, Dl[k], yerr=Dl_err[k], fmt="or")
+                plt.errorbar(ell, Dl[k], yerr=Dl_noise[k], fmt="or")
                 if model is not None:
                     plt.errorbar(ell, model[k], fmt="-k")
                 plt.title(f"{nus[i]:.0f}x{nus[j]:.0f}")

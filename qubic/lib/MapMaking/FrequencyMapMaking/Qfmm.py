@@ -713,11 +713,11 @@ class PipelineFrequencyMapMaking:
 
         s_hat_temp = self.call_pcg(self.TOD, x0=starting_point, seenpix=self.seenpix)
 
-        if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["weight_planck"] == 1.0:
-            # if weight_planck is 1 PCG is solving the difference to Planck which has to be added back (just inside seenpix)
-            s_hat_temp[:, self.seenpix, :] += self.maps_input_convolved[:, self.seenpix, :]
-        self.s_hat = s_hat_temp
-
+        if self.params["PLANCK"]["external_data"]: # add back Planck contribution weighted!
+            w = self.params["PLANCK"]["weight_planck"]
+            s_hat_temp[:, self.seenpix, :] += w * self.maps_input_convolved[:, self.seenpix, :]
+        self.s_hat = s_hat_temp.copy()
+        
         ### Wait for all processes
         self.mpi._barrier()
 

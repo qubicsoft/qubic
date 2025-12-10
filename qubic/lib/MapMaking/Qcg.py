@@ -185,7 +185,8 @@ class PCGAlgorithm(IterativeAlgorithm):
         map_i = self.x.copy()
         if self.is_planck:
             map_i = np.ones(self.input.shape)  # * hp.UNSEEN
-            map_i[:, self.seenpix, :] = self.x.copy()
+            # map_i[:, self.seenpix, :] = self.x.copy()
+            map_i = self.x.copy()
 
         _r = map_i[:, self.seenpix, :] - self.input[:, self.seenpix, :]
         self.rms = np.std(_r, axis=1)

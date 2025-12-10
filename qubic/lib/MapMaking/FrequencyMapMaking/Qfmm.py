@@ -229,8 +229,9 @@ class PipelineFrequencyMapMaking:
         self.H_in_qubic = self.joint_tod.qubic.get_operator(fwhm=self.fwhm_in)
         ### Pointing matrix for reconstruction
         if self.params["PLANCK"]["external_data"]:
-            self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
-            self.H_out = self.joint.get_operator(fwhm=self.fwhm_out, seenpix=self.seenpix)
+            # self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
+            # self.H_out = self.joint.get_operator(fwhm=self.fwhm_out, seenpix=self.seenpix)
+            self.H_out = self.joint.get_operator(fwhm=self.fwhm_out)
         else:
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
 
@@ -630,7 +631,7 @@ class PipelineFrequencyMapMaking:
             # define a weight mask: 0 outside seenpix, weight inside seenpix, this will create what we want (outside based on boolean external_data, inside based on weight_planck)
             weight_mask = np.where(seenpix[None, :, None], weight_planck, 1.0)
             x_planck_weighted = x_planck * weight_mask
-            b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck_weighted))
+            b = self.H_out.T * self.invN * (d - self.H_out(x_planck_weighted))
         else:
             b = self.H_out.T * self.invN * d
 
@@ -677,7 +678,8 @@ class PipelineFrequencyMapMaking:
 
         solution = np.ones(self.maps_input.shape)  # * hp.UNSEEN
         if self.params["PLANCK"]["external_data"]:
-            solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
+            # solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
+            solution = solution_qubic_planck["x"]["x"].copy()
         else:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"][:, seenpix, :].copy()
 
@@ -701,13 +703,13 @@ class PipelineFrequencyMapMaking:
         if self.params["PLANCK"]["external_data"]:
             # if Planck is added inside the patch, PCG is reconstructing the DIFFERENCE to Planck, so the start shoud be 0
             if self.params["PLANCK"]["weight_planck"] == 1.0:
-                starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
+                starting_point = np.zeros(self.maps_input[:, :, :].shape)
 
             # in every other case, we can start from Planck
             else:
-                starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
+                starting_point = np.zeros(self.maps_input[:, :, :].shape)
                 if self.params["PCG"]["initial_guess_intensity_to_zero"] is False:
-                    starting_point[..., 0] = self.maps_input[:, self.seenpix, 0].copy()
+                    starting_point[..., 0] = self.maps_input[:, :, 0].copy()
         else:
             # no external data at all: previous behavior
             starting_point = np.zeros(self.maps_input.shape)
@@ -718,7 +720,7 @@ class PipelineFrequencyMapMaking:
 
         if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["weight_planck"] == 1.0:
             # if weight_planck is 1 PCG is solving the difference to Planck which has to be added back (just inside seenpix)
-            s_hat_temp[:, self.seenpix, :] += self.maps_input_convolved[:, self.seenpix, :]
+            s_hat_temp += self.maps_input_convolved
         self.s_hat = s_hat_temp
 
         ### Wait for all processes
@@ -728,16 +730,16 @@ class PipelineFrequencyMapMaking:
         self.s_hat_noise = self.s_hat - self.maps_input_convolved
 
         ### Ensure that non seen pixels is 0 for spectrum computation
-        self.s_hat[:, ~self.seenpix, :] = 0
-        self.s_hat_noise[:, ~self.seenpix, :] = 0
+        # self.s_hat[:, ~self.seenpix, :] = 0
+        # self.s_hat_noise[:, ~self.seenpix, :] = 0
 
         ### Plots and saving
         if self.rank == 0:
             self.external_maps = self.externaldata.maps.copy()
-            self.external_maps[:, ~self.seenpix, :] = 0
+            # self.external_maps[:, ~self.seenpix, :] = 0
 
             self.external_maps_noise = self.externaldata.maps_noise.copy()
-            self.external_maps_noise[:, ~self.seenpix, :] = 0
+            # self.external_maps_noise[:, ~self.seenpix, :] = 0
 
             self.nus_rec = self.nus_Q.copy()
             if len(self.externaldata.experiments["Planck"]["frequency"]) != 0:

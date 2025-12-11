@@ -96,14 +96,7 @@ mpi._print_message("    => Removing noise bias")
 BBsignal -= np.mean(BBnoise, axis=0)
 
 ### Define sky model in ell space!
-# TODO: function to build that from reference frequencies
-nus = np.array([150, 150])
-# TODO: function to build that from components out
-comp = np.array(["CMB", "Dust"])
-print(nus, comp)
 nus, comp = files.get_frequency_comp(0)
-print(nus, comp)
-stop
 sky = SkySpectra(ell, nus, comp=comp)
 
 ### Fit of cosmological parameters

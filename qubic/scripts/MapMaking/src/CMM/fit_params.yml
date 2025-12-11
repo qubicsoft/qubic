@@ -1,4 +1,4 @@
-simulation_path: "CMM/parametric_d0_DB_test"
+simulation_path: "CMM/parametric_d0_DB_test_noiseless"
 name: "test"
 
 Spectrum:

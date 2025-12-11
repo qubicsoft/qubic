@@ -120,10 +120,10 @@ class MergeAllFiles:
         return arr
 
     def get_frequency_comp(self, i):
-        d = open_data(self.foldername + self.list_files[i])
+        d = open_data(self.foldername + self.list_files[i])["parameters"]
 
         nus, comp = [], []
-
+        print(d.keys())
         if d["CMB"]["cmb"]:
             nus.append(150)
             comp.append("CMB")

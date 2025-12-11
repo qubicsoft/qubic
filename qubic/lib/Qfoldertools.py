@@ -118,3 +118,23 @@ class MergeAllFiles:
         arr = np.array(arr)
         arr = np.delete(arr, list_not_readed_files, axis=0)
         return arr
+
+    def get_frequency_comp(self, i):
+        d = open_data(self.foldername + self.list_files[i])
+
+        nus, comp = [], []
+
+        if d["CMB"]["cmb"]:
+            nus.append(150)
+            comp.append("CMB")
+        if d["Foregrounds"]["Dust"]["Dust_out"]:
+            nus.append(d["Foregrounds"]["Dust"]["nu0"])
+            comp.append("Dust")
+        if d["Foregrounds"]["Synchrotron"]["Synchrotron_out"]:
+            nus.append(d["Foregrounds"]["Synchrotron"]["nu0"])
+            comp.append("Synchrotron")
+        if d["Foregrounds"]["CO"]["CO_out"]:
+            nus.append(d["Foregrounds"]["CO"]["nu0"])
+            comp.append("CO")
+
+        return np.array(nus), np.array(comp)

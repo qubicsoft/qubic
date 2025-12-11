@@ -1,5 +1,5 @@
 save_iter: 1                                                                    # Save every 'save_iter' iteration
-foldername: "test_noise"                                                              # Name of the saved folder
+foldername: "test"                                                              # Name of the saved folder
 filename: "test"                                                                # Name of the saved file
 lastite: true                                                                   # Keep only the last iteration
 
@@ -83,7 +83,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-  nside: 256                                                                    # Nside of components
+  nside: 128                                                                    # Nside of components
   coverage_cut: 0.15                                                            # Percent of coverage to keep the pixels seen enough by QUBIC
   RA_center: 0
   DEC_center: -57
@@ -104,13 +104,13 @@ PLANCK:
     seed_noise: 22222
 
 Pipeline:
-    mapmaking: false
-    spectrum: true
+    mapmaking: true
+    spectrum: false
 
 PCG:
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 300
+    n_init_iter_pcg: 10
     n_iter_pcg: 10                                                              # Number of PCG iterations
     tol_pcg: 1.0e-20                                                            # Tolerance for PCG
     n_iter_loop: 1                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)

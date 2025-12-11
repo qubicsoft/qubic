@@ -100,6 +100,10 @@ BBsignal -= np.mean(BBnoise, axis=0)
 nus = np.array([150, 150])
 # TODO: function to build that from components out
 comp = np.array(["CMB", "Dust"])
+print(nus, comp)
+nus, comp = files.get_frequency_comp(0)
+print(nus, comp)
+stop
 sky = SkySpectra(ell, nus, comp=comp)
 
 ### Fit of cosmological parameters

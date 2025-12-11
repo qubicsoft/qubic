@@ -41,7 +41,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-  nside: 128                     # Nside of components
+  nside: 256                     # Nside of components
   coverage_cut: 0.1             # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57

@@ -24,15 +24,37 @@ class HDF5Dict:
         self.compression_opts = compression_opts
 
     # --- Public API -----------------------------------------------------
-    def save(self, filename: str, data: Dict[str, Any], mode: str = "w") -> None:
+    def save_dict(self, filename: str, data: Dict[str, Any], mode: str = "w") -> None:
         """Write the top-level dict `data` into `filename`."""
         with h5py.File(filename, mode) as h5f:
             self._write_group(h5f, data)
 
-    def load(self, filename: str) -> Dict[str, Any]:
+    def save_array(self, filename: str, data: Any, mode: str = "w") -> None:
+        """Write a single array `data` into `filename`."""
+        with h5py.File(filename, mode) as h5f:
+            self._write_item(h5f, "data", data)
+
+    def load_dict(self, filename: str) -> Dict[str, Any]:
         """Load the HDF5 file and return a Python dict containing original data."""
         with h5py.File(filename, "r") as h5f:
             return self._read_group(h5f)
+
+    def load_array(self, filename: str) -> Any:
+        """Load a single array stored under the key 'data' in the HDF5 file."""
+        with h5py.File(filename, "r") as h5f:
+            obj = h5f["data"]
+            if isinstance(obj, h5py.Dataset):
+                val = obj[()]
+                if isinstance(val, bytes):
+                    try:
+                        val = val.decode("utf-8")
+                    except Exception:
+                        pass
+                if isinstance(val, np.ndarray) and val.shape == ():
+                    val = val.tolist()
+                return val
+            else:
+                raise ValueError("The key 'data' does not correspond to a dataset.")
 
     # --- Internal helpers -----------------------------------------------
     def _write_group(self, h5group: h5py.Group, data: Dict[str, Any]) -> None:

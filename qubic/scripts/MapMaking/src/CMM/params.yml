@@ -105,7 +105,7 @@ PLANCK:
 
 Pipeline:
     mapmaking: true
-    spectrum: false
+    spectrum: true
 
 PCG:
     ### This section control PCG parameters
@@ -144,7 +144,7 @@ INITIAL:
 Spectrum:
   dl: 30
   lmin: 40
-  lmax: 511
+  lmax: 255
   aposize: 10
   plot_spectrum: true
 

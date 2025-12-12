@@ -1,9 +1,8 @@
-import pickle
-
 import numpy as np
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 from qubic.lib.Fitting import Qnamaster as nam
+from qubic.lib.Qhdf5 import HDF5Dict
 
 
 class Spectra:
@@ -23,10 +22,7 @@ class Spectra:
         self._init_namaster()
 
     def open_file(self):
-        print("filename : ", self.filename)
-        with open(self.filename, "rb") as f:
-            dictionary = pickle.load(f)
-
+        dictionary = HDF5Dict().load_dict(self.filename)
         self.spectrum = dictionary["parameters"]["Spectrum"]
         self.sky = dictionary["parameters"]["SKY"]
 

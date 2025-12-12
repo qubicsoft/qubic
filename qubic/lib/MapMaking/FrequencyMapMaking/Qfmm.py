@@ -1,6 +1,5 @@
 ### General packages
 import os
-import pickle
 import time
 
 import numpy as np
@@ -19,21 +18,12 @@ from qubic.lib.MapMaking.Qmap_plotter import PlotsFMM, plot_cross_spectrum
 from qubic.lib.MapMaking.Qmaps import InputMaps, PlanckMaps
 from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
+from qubic.lib.Qhdf5 import HDF5Dict
 from qubic.lib.Qmpi_tools import MpiTools
 from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Qspectra import Spectra
 
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
-
-
-def _save_data(name, d):
-    """
-    Method to save data using pickle convention.
-
-    """
-
-    with open(name, "wb") as handle:
-        pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 class PipelineFrequencyMapMaking:
@@ -783,7 +773,7 @@ class PipelineFrequencyMapMaking:
                 "qubic_dict": {k: v for k, v in self.dict_out.items() if k != "comm"},  # I have to remove the MPI communicator, which is not supported by pickle
             }
 
-            _save_data(self.file, dict_solution)
+            HDF5Dict().save_dict(self.file, dict_solution)
 
         ### Wait for all processors
         self.mpi._barrier()
@@ -804,8 +794,8 @@ class PipelineEnd2End:
         self.job_id = os.environ.get("SLURM_JOB_ID")
 
         self.folder = "FMM/" + self.params["foldername"] + "/Dict/"
-        self.file = self.folder + self.params["filename"] + f"_{self.job_id}.pkl"
-        self.file_spectrum = "FMM/" + self.params["foldername"] + "/Spectrum/" + "spectrum_" + self.params["filename"] + f"_{self.job_id}.pkl"
+        self.file = self.folder + self.params["filename"] + f"_{self.job_id}.h5"
+        self.file_spectrum = "FMM/" + self.params["foldername"] + "/Spectrum/" + "spectrum_" + self.params["filename"] + f"_{self.job_id}.h5"
         self.mapmaking = None
 
     def main(self, specific_file=None):
@@ -891,4 +881,4 @@ class PipelineEnd2End:
                         title=" (QUBIC + Planck)",
                         name="FMM/" + self.params["foldername"] + "/Spectrum/Plots/" + f"QUBIC_Planck_{self.job_id}.svg",
                     )
-                _save_data(self.file_spectrum, dict_solution)
+                HDF5Dict().save_dict(self.file_spectrum, dict_solution)

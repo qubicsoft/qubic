@@ -6,41 +6,105 @@ import numpy as np
 
 
 class HDF5Dict:
-    """
-    Save / load a Python dict to/from an HDF5 file.
-
-    Behavior:
-    - numpy arrays -> datasets (with optional compression)
-    - homogeneous numeric lists/tuples -> datasets
-    - homogeneous string lists/tuples -> datasets (variable-length UTF-8)
-    - scalar numbers / bool / short strings -> attributes on the parent group
-    - dict -> subgroup: subgroup.attrs['__json__'] stores the full dict as JSON for easy recovery;
-             then we also recursively try to store inner items (so both JSON and structured form exist)
-    - otherwise (mixed lists, custom objects) -> JSON-serialized into an attribute
-    """
-
     def __init__(self, compression: str | None = "gzip", compression_opts: int | None = 4):
+        """Save / load to/from HDF5 file.
+
+        Behaviour:
+        - numpy arrays : datasets (with optional compression)
+        - homogeneous numeric lists/tuples : datasets
+        - homogeneous string lists/tuples : datasets (variable-length UTF-8)
+        - scalar numbers / bool / short strings : attributes on the parent group
+        - dict : subgroup.attrs['__json__'] stores the full dict as JSON for easy recovery; then we also recursively try to store inner items (so both JSON and structured form exist)
+        - otherwise (mixed lists, custom objects) : JSON-serialised into an attribute
+
+        Parameters
+        ----------
+        compression : str | None, optional
+            compression filter, by default "gzip"
+        compression_opts : int | None, optional
+            options for the compression filter, by default 4
+        """
+
         self.compression = compression
         self.compression_opts = compression_opts
 
     # --- Public API -----------------------------------------------------
     def save_dict(self, filename: str, data: Dict[str, Any], mode: str = "w") -> None:
-        """Write the top-level dict `data` into `filename`."""
+        """Save dict into HDF5.
+
+        Write the top-level dict `data` into `filename`.
+
+        Parameters
+        ----------
+        filename : str
+            path where the file will be stored.
+        data : Dict[str, Any]
+            Python dictionary you want to save.
+        mode : str, optional
+            saving mode, by default "w"
+        """
+
         with h5py.File(filename, mode) as h5f:
             self._write_group(h5f, data)
 
-    def save_array(self, filename: str, data: Any, mode: str = "w") -> None:
-        """Write a single array `data` into `filename`."""
+    def save_array(self, filename: str, data: np.ndarray, mode: str = "w") -> None:
+        """Save array into HDF5.
+
+        Save a single array `data` into `filename`.
+
+        Parameters
+        ----------
+        filename : str
+            path where the file will be stored.
+        data : ndarray
+            array you want to save.
+        mode : str, optional
+            saving mode, by default "w"
+        """
+
         with h5py.File(filename, mode) as h5f:
             self._write_item(h5f, "data", data)
 
     def load_dict(self, filename: str) -> Dict[str, Any]:
-        """Load the HDF5 file and return a Python dict containing original data."""
+        """Load HDF5 into dict.
+
+        Load the HDF5 file and return a Python dict containing original data.
+
+        Parameters
+        ----------
+        filename : str
+            HDF5 file path.
+
+        Returns
+        -------
+        Dict[str, Any]
+            Python dictionary from HDF5 file.
+        """
+
         with h5py.File(filename, "r") as h5f:
             return self._read_group(h5f)
 
-    def load_array(self, filename: str) -> Any:
-        """Load a single array stored under the key 'data' in the HDF5 file."""
+    def load_array(self, filename: str) -> np.ndarray:
+        """Load HDF5 into array.
+
+        Load a single array stored under the key `data` in the HDF5 file.
+
+        Parameters
+        ----------
+        filename : str
+            HDF5 file path.
+
+        Returns
+        -------
+        ndarray
+            Array from HDF5 file.
+
+        Raises
+        ------
+        ValueError
+            Raise error if the key `data` does not correspond to a dataset.
+        """
+
         with h5py.File(filename, "r") as h5f:
             obj = h5f["data"]
             if isinstance(obj, h5py.Dataset):
@@ -57,13 +121,34 @@ class HDF5Dict:
                 raise ValueError("The key 'data' does not correspond to a dataset.")
 
     def load_item(self, filename: str, path: str) -> Any:
-        """
+        """load item from HDF5.
+
         Load a single item (dataset, group, or attribute) at the given HDF5 path.
-        Examples:
-            load_item("file.h5", "group/subgroup/dataset")
-            load_item("file.h5", "mygroup::myattr")   # attribute syntax
+
+        Parameters
+        ----------
+        filename : str
+            HDF5 file path.
+        path : str
+            Item path in the HDF5 you want to load.
+
+        Returns
+        -------
+        Any
+            item you loaded.
+
+        Raises
+        ------
+        ValueError
+            Raise error if the path is unknown.
+
+        Examples
+        --------
+        load_item("file.h5", "group/subgroup/dataset")
+        load_item("file.h5", "mygroup::myattr")   # attribute syntax
         """
-        # --- attribute syntax: path::attrname
+
+        ### attribute syntax: path::attrname
         if "::" in path:
             h5_path, attr_name = path.split("::", 1)
             with h5py.File(filename, "r") as h5f:
@@ -71,7 +156,7 @@ class HDF5Dict:
                 val = obj.attrs[attr_name]
                 return self._decode_attribute(val)
 
-        # --- otherwise dataset or group ---
+        ### otherwise dataset or group
         with h5py.File(filename, "r") as h5f:
             obj = h5f[path]
 
@@ -103,17 +188,17 @@ class HDF5Dict:
             self._write_item(h5group, key, value)
 
     def _write_item(self, h5group: h5py.Group, name: str, value: Any) -> None:
-        # numpy arrays
+        ### numpy arrays
         if isinstance(value, np.ndarray):
             h5group.create_dataset(name, data=value, compression=self.compression, compression_opts=self.compression_opts)
             return
 
-        # scalars: numbers and bools -> attributes
+        ### scalars: numbers and bools -> attributes
         if isinstance(value, (int, float, bool)):
             h5group.attrs[name] = value
             return
 
-        # lists / tuples
+        ### lists / tuples
         if isinstance(value, (list, tuple)):
             # empty -> store as JSON attribute
             if len(value) == 0:
@@ -139,7 +224,7 @@ class HDF5Dict:
                 h5group.attrs[name] = json.dumps([repr(x) for x in value])
             return
 
-        # dicts -> group (plus a JSON backup)
+        ### dicts -> group (plus a JSON backup)
         if isinstance(value, dict):
             subgroup = h5group.create_group(name)
             try:
@@ -152,7 +237,7 @@ class HDF5Dict:
                 self._write_item(subgroup, subgroup_key, v)
             return
 
-        # fallback for arbitrary objects
+        ### fallback for arbitrary objects
         try:
             h5group.attrs[name] = json.dumps(value)
         except TypeError:

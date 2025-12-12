@@ -56,6 +56,47 @@ class HDF5Dict:
             else:
                 raise ValueError("The key 'data' does not correspond to a dataset.")
 
+    def load_item(self, filename: str, path: str) -> Any:
+        """
+        Load a single item (dataset, group, or attribute) at the given HDF5 path.
+        Examples:
+            load_item("file.h5", "group/subgroup/dataset")
+            load_item("file.h5", "mygroup::myattr")   # attribute syntax
+        """
+        # --- attribute syntax: path::attrname
+        if "::" in path:
+            h5_path, attr_name = path.split("::", 1)
+            with h5py.File(filename, "r") as h5f:
+                obj = h5f[h5_path]
+                val = obj.attrs[attr_name]
+                return self._decode_attribute(val)
+
+        # --- otherwise dataset or group ---
+        with h5py.File(filename, "r") as h5f:
+            obj = h5f[path]
+
+            # dataset
+            if isinstance(obj, h5py.Dataset):
+                return self._decode_dataset(obj)
+
+            # group
+            if isinstance(obj, h5py.Group):
+                # check JSON backup first
+                if "__json__" in obj.attrs:
+                    raw = obj.attrs["__json__"]
+                    if isinstance(raw, bytes):
+                        raw = raw.decode("utf-8")
+                    try:
+                        parsed = json.loads(raw)
+                        return parsed
+                    except Exception:
+                        pass
+
+                # otherwise load only this minimal group
+                return self._read_group(obj)
+
+            raise ValueError(f"Unknown object type at path: {path}")
+
     # --- Internal helpers -----------------------------------------------
     def _write_group(self, h5group: h5py.Group, data: Dict[str, Any]) -> None:
         for key, value in data.items():
@@ -175,6 +216,32 @@ class HDF5Dict:
                 out[key] = sub
 
         return out
+
+    def _decode_attribute(self, val):
+        """Decode an HDF5 attribute according to your rules."""
+        if isinstance(val, bytes):
+            try:
+                val = val.decode("utf-8")
+            except Exception:
+                pass
+        if isinstance(val, str):
+            try:
+                return json.loads(val)
+            except Exception:
+                return val
+        return val
+
+    def _decode_dataset(self, ds):
+        """Decode dataset like in _read_group."""
+        val = ds[()]
+        if isinstance(val, bytes):
+            try:
+                val = val.decode("utf-8")
+            except Exception:
+                pass
+        if isinstance(val, np.ndarray) and val.shape == ():
+            return val.tolist()
+        return val
 
     @staticmethod
     def _get_key(key: str) -> str:

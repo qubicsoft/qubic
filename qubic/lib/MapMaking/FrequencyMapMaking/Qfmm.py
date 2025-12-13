@@ -361,7 +361,8 @@ class PipelineFrequencyMapMaking:
             "random_pointing": self.params["QUBIC"]["POINTINGS"]["random_pointing"],
             "sweeping_pointing": self.params["QUBIC"]["POINTINGS"]["sweeping_pointing"],
             "repeat_pointing": self.params["QUBIC"]["POINTINGS"]["repeat_pointing"],
-            "duration": self.params["QUBIC"]["POINTINGS"]["duration"]
+            "duration": self.params["QUBIC"]["POINTINGS"]["duration"],
+            "date_obs": self.params["QUBIC"]["POINTINGS"]["date_obs"],
         }
 
         ### Get the default dictionary

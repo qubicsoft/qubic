@@ -35,12 +35,13 @@ class QubicObservation:
         self.nsweeps_per_elevation = d['nsweeps_per_elevation']
         self.period = d['period'] * u.s
         self.nsweep_even = (self.nsweeps_per_elevation % 2 == 0)
+        self.hwp_stepsize = 15
 
         # Sweep shape parameters
         self.step_s = 0.1              # sampling interval [s]
         self.max_speed = 1.0           # [deg/s]
-        self.t_ramp = 1.0              # ramp duration [s]
-        self.pause_duration = 3.0      # pause at end [s]
+        self.t_ramp = 0.1 #1.0              # ramp duration [s]
+        self.pause_duration = 0.0 #3.0      # pause at end [s]
 
         # Compute segment counts
         self.n_ramp = int(self.t_ramp / self.step_s)
@@ -99,12 +100,13 @@ class QubicObservation:
         d = self.dict    
         samplings = QubicSampling(npointings, date_obs=d['date_obs'], period=d['period'], 
                                 latitude=d['latitude'], longitude=d['longitude'])
-        samplings.azimuth = P[:,1]
-        samplings.elevation = P[:,2]
+        samplings.azimuth = P[:,1].astype(float)
+        samplings.elevation = P[:,2].astype(float)
         samplings.pitch = np.zeros(npointings)        
-        samplings.angle_hwp = np.zeros(npointings)       
+        #samplings.angle_hwp = np.zeros(npointings)     
+        samplings.angle_hwp = P[:,3].astype(int)  
         samplings.fix_az = False      # check what it does
-        samplings.time = P[:,0]-samplings.date_obs.unix
+        samplings.time = (Time(P[:,0]) - samplings.date_obs).to_value('sec')  # -samplings.date_obs.unix
 
         return samplings
 
@@ -141,9 +143,9 @@ class QubicObservation:
 
 
     def AzimuthSweep(self, center, idx):
-        
+
         # Build back-and-forth azimuths sweeps
-        
+
         base = center.az.value
         half = self.az_step.cumsum()
         L = self.delta_az.to_value(u.deg)
@@ -155,16 +157,24 @@ class QubicObservation:
         AZ = sweeps.ravel()
 
         # Timestamp around center
-        
-        t0 = (center.obstime - self.t_sweep/2).unix    # seconds
-        times = t0 + np.arange(len(AZ)) * self.step_s
+        t0 = center.obstime - self.t_sweep/2  
+        times = t0 + np.arange(len(AZ)) * self.step_s * u.s
 
-        # Assembling the data
-        
-        data = np.empty((len(AZ),3), dtype=np.float32)
+        # HWP angles
+        hwp = np.zeros(len(AZ))
+        samples_per_sweep = len(AZ) // self.nsweeps_per_elevation
+
+        for i in range(self.nsweeps_per_elevation):
+            start = i * samples_per_sweep
+            end = (i+1) * samples_per_sweep
+            hwp[start:end] = self.hwp_stepsize * np.mod(i, int(90 / self.hwp_stepsize + 1))
+
+        # Data assembly
+        data = np.empty((len(AZ),4), object)
         data[:,0] = times
         data[:,1] = AZ
         data[:,2] = center.alt.value
+        data[:,3] = hwp
 
         # Down-sample by period
         idxs = np.arange(data.shape[0]) % int(self.period.to_value(u.s)/self.step_s) == 0

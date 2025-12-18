@@ -38,7 +38,7 @@ class Chi2:
             self.TOD_sim_fp.append(self.TOD_sim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.ncomp * self.nsub * npix, self.nsampling_ndet)))
         self.TOD_sim_fp = np.array(self.TOD_sim_fp)
 
-    def _fill_A(self, x):
+    def compute_mixing_matrix(self, x):
         """
         Blind case
         """
@@ -53,7 +53,7 @@ class Chi2:
     def __call__(self, x):
         ### If constant spectral index
         if self.TOD_sim.ndim == 3:
-            A = self._fill_A(x)
+            A = self.compute_mixing_matrix(x)
 
             ### Separe the mixing matrix element for 150 and 220 GHz if needed
             ysim = []

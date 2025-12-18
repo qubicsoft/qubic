@@ -12,16 +12,11 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import fmin_l_bfgs_b, minimize
 
 from qubic.lib.MapMaking.ComponentMapMaking.preset.preset import PresetInitialisation
-from qubic.lib.MapMaking.ComponentMapMaking.Qcostfunc import (
-    Chi2Blind,
-    Chi2InstrumentType,
-    Chi2Parametric_alt,
-)
+from qubic.lib.MapMaking.ComponentMapMaking.Qchi2MM import Chi2
 from qubic.lib.MapMaking.Qcg import pcg
 from qubic.lib.MapMaking.Qmap_plotter import PlotsCMM, plot_cross_spectrum
 from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
 from qubic.lib.Qhdf5 import HDF5Dict
-from qubic.lib.Qmpi_tools import join_data
 from qubic.lib.QskySim import get_angular_profile
 from qubic.lib.Qspectra import Spectra
 
@@ -54,10 +49,10 @@ class PipelineComponentMapMaking:
         ### Initialization
         self.preset = PresetInitialisation(comm).initialize(parameters_file)
         self.plots = PlotsCMM(self.preset, dogif=True)
-        if self.preset.comp.params_foregrounds["Dust"]["type"] == "blind" or self.preset.comp.params_foregrounds["Synchrotron"]["type"] == "blind":
-            self.chi2 = Chi2Blind(self.preset)
-        else:
-            pass
+        # if self.preset.comp.params_foregrounds["Dust"]["type"] == "blind" or self.preset.comp.params_foregrounds["Synchrotron"]["type"] == "blind":
+        #     self.chi2 = Chi2Blind(self.preset)
+        # else:
+        #     pass
 
         self.fsub = int(self.preset.qubic.joint_out.qubic.nsub / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
 
@@ -157,7 +152,7 @@ class PipelineComponentMapMaking:
             maxiter = max_iterations
 
         if self.preset.tools.params["PCG"]["do_gif"]:
-            self.gif_folder = "CMM/" + self.preset.tools.params["foldername"] + "//Plots/"
+            self.gif_folder = "CMM/" + self.preset.tools.params["foldername"] + "/Plots/"
         else:
             self.gif_folder = None
 
@@ -186,7 +181,6 @@ class PipelineComponentMapMaking:
         ### Update components
         self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
         self.preset.acquisition.convergence.append(np.array(results["convergence"].copy()))
-
         ### Plot if asked
         if self.preset.tools.rank == 0:
             if self.preset.tools.params["PCG"]["do_gif"]:
@@ -291,7 +285,6 @@ class PipelineComponentMapMaking:
         )
 
         #! raise ValueError("Tom : is it correct to use this H here ?")
-
         for i in range(len(self.preset.comp.components_name_out)):
             for j in range(self.preset.qubic.joint_out.qubic.nsub):
                 C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
@@ -403,7 +396,7 @@ class PipelineComponentMapMaking:
         """Update Mixing Matrix.
 
         Method to update the mixing matrix using the current fitted value of the beta parameter and the parametric model associated.
-        Only use when hybrid parametric-blind fit is selected !
+        Only used when hybrid parametric-blind fit is selected !
 
         Parameters
         ----------
@@ -422,11 +415,14 @@ class PipelineComponentMapMaking:
         """
 
         ### Build mixing matrix according to the choosen model and the beta parameter
-        mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_out)
-        model_mixingmatrix = mixingmatrix.eval(self.preset.qubic.joint_out.qubic.allnus, *beta)
+        model_mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_out).eval(self.preset.qubic.joint_out.qubic.allnus, *beta)
 
         ### Update the mixing matrix according to the one computed using the beta parameter
         updated_mixingmatrix = previous_mixingmatrix
+        print("test")
+        print(model_mixingmatrix.shape)
+        print(updated_mixingmatrix.shape)
+        stop
         for ii in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
             updated_mixingmatrix[ii * self.fsub : (ii + 1) * self.fsub, icomp] = model_mixingmatrix[ii * self.fsub : (ii + 1) * self.fsub, icomp]
 
@@ -458,10 +454,10 @@ class PipelineComponentMapMaking:
             ### Model without spatial variation of spectral index
             if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] == 0:
                 previous_beta = self.preset.acquisition.beta_iter.copy()
-                self.chi2 = Chi2InstrumentType(self.preset, tod_comp, parametric=True)
+                self.chi2 = Chi2(self.preset, tod_comp, parametric=True)
 
                 ### Fit using scipy.optimize.minimize
-                self.preset.acquisition.beta_iter = minimize(self.chi2, x0=self.preset.acquisition.beta_iter, method="BFGS", callback=self.callback, tol=1e-10).x
+                self.preset.acquisition.beta_iter = minimize(self.chi2, x0=self.preset.acquisition.beta_iter, method="CG", callback=self.callback, tol=1e-10).x
 
                 self.preset.acquisition.Amm_iter = self.chi2._get_mixingmatrix(nus=self.preset.qubic.joint_out.allnus, x=self.preset.acquisition.beta_iter)
 
@@ -470,8 +466,8 @@ class PipelineComponentMapMaking:
 
                 if self.preset.tools.rank == 0:
                     print(f"Iteration k     : {previous_beta}")
-                    print(f"Iteration k + 1 : {self.preset.acquisition.beta_iter.copy()}")
-                    print(f"Truth           : {self.preset.mixingmatrix.beta_in.copy()}")
+                    print(f"Iteration k + 1 : {self.preset.acquisition.beta_iter}")
+                    print(f"Truth           : {self.preset.mixingmatrix.beta_in}")
                     print(f"Residuals       : {self.preset.mixingmatrix.beta_in - self.preset.acquisition.beta_iter}")
 
                 self.preset.tools.comm.Barrier()
@@ -779,60 +775,60 @@ class PipelineComponentMapMaking:
 
         raise ValueError("The method Pipeline.update_gain is broken.")
 
-        self.H_i = self.preset.qubic.joint_out.get_operator(  # Amm is now called A
-            self.preset.acquisition.beta_iter,
-            Amm=self.preset.acquisition.Amm_iter,
-            gain=np.ones(self.preset.gain.gain_iter.shape),
-            fwhm=self.preset.acquisition.fwhm_mapmaking,
-            nu_co=self.preset.comp.nu_co,
-        )
-        self.nsampling = self.preset.qubic.joint_out.qubic.nsamples
-        self.ndets = self.preset.qubic.joint_out.qubic.ndets
+        # self.H_i = self.preset.qubic.joint_out.get_operator(  # Amm is now called A
+        #     self.preset.acquisition.beta_iter,
+        #     Amm=self.preset.acquisition.Amm_iter,
+        #     gain=np.ones(self.preset.gain.gain_iter.shape),
+        #     fwhm=self.preset.acquisition.fwhm_mapmaking,
+        #     nu_co=self.preset.comp.nu_co,
+        # )
+        # self.nsampling = self.preset.qubic.joint_out.qubic.nsamples
+        # self.ndets = self.preset.qubic.joint_out.qubic.ndets
 
-        # When (if) rewritten, the code will not have conditions on self.preset.qubic.params_qubic["instrument"] value
-        # Also, the shapes of inv, H_i and TOD were modified
+        # # When (if) rewritten, the code will not have conditions on self.preset.qubic.params_qubic["instrument"] value
+        # # Also, the shapes of inv, H_i and TOD were modified
 
-        if self.preset.qubic.params_qubic["instrument"] == "UWB":  # rewrite this?
-            _r = ReshapeOperator(
-                self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
-                (self.preset.qubic.joint_out.qubic.ndets, self.preset.qubic.joint_out.qubic.nsamples),
-            )
+        # if self.preset.qubic.params_qubic["instrument"] == "UWB":  # rewrite this?
+        #     _r = ReshapeOperator(
+        #         self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
+        #         (self.preset.qubic.joint_out.qubic.ndets, self.preset.qubic.joint_out.qubic.nsamples),
+        #     )
 
-            TODi_Q = self.preset.acquisition.invN.operands[0](self.H_i.operands[0](self.preset.comp.components_iter)[: self.ndets * self.nsampling])
-            print("invN", self.preset.acquisition.invN.operands[0].operands[1])
-            print("reshape", _r.shapein, _r.shapeout)
-            print("invN shape", self.preset.acquisition.invN.operands[0].operands[1].shapein, self.preset.acquisition.invN.operands[0].operands[1].shapeout)
-            print("TODi_Q", TODi_Q.shape)
-            self.preset.gain.gain_iter = self.give_intercal(TODi_Q, _r(self.preset.acquisition.TOD_qubic), self.preset.acquisition.invN.operands[0].operands[1])
-            self.preset.gain.gain_iter /= self.preset.gain.gain_iter[0]
-            self.preset.gain.all_gain = np.concatenate((self.preset.gain.all_gain, np.array([self.preset.gain.gain_iter])), axis=0)
+        #     TODi_Q = self.preset.acquisition.invN.operands[0](self.H_i.operands[0](self.preset.comp.components_iter)[: self.ndets * self.nsampling])
+        #     print("invN", self.preset.acquisition.invN.operands[0].operands[1])
+        #     print("reshape", _r.shapein, _r.shapeout)
+        #     print("invN shape", self.preset.acquisition.invN.operands[0].operands[1].shapein, self.preset.acquisition.invN.operands[0].operands[1].shapeout)
+        #     print("TODi_Q", TODi_Q.shape)
+        #     self.preset.gain.gain_iter = self.give_intercal(TODi_Q, _r(self.preset.acquisition.TOD_qubic), self.preset.acquisition.invN.operands[0].operands[1])
+        #     self.preset.gain.gain_iter /= self.preset.gain.gain_iter[0]
+        #     self.preset.gain.all_gain = np.concatenate((self.preset.gain.all_gain, np.array([self.preset.gain.gain_iter])), axis=0)
 
-        elif self.preset.qubic.params_qubic["instrument"] == "DB":
-            TODi_Q_150 = self.H_i.operands[0](self.preset.comp.components_iter)[: self.ndets * self.nsampling]
-            TODi_Q_220 = self.H_i.operands[0](self.preset.comp.components_iter)[self.ndets * self.nsampling : 2 * self.ndets * self.nsampling]
+        # elif self.preset.qubic.params_qubic["instrument"] == "DB":
+        #     TODi_Q_150 = self.H_i.operands[0](self.preset.comp.components_iter)[: self.ndets * self.nsampling]
+        #     TODi_Q_220 = self.H_i.operands[0](self.preset.comp.components_iter)[self.ndets * self.nsampling : 2 * self.ndets * self.nsampling]
 
-            g150 = self.give_intercal(
-                TODi_Q_150,
-                self.preset.acquisition.TOD_qubic[: self.ndets * self.nsampling],
-                self.preset.acquisition.invN.operands[0].operands[1].operands[0],
-            )
-            g220 = self.give_intercal(
-                TODi_Q_220,
-                self.preset.acquisition.TOD_qubic[self.ndets * self.nsampling : 2 * self.ndets * self.nsampling],
-                self.preset.acquisition.invN.operands[0].operands[1].operands[1],
-            )
+        #     g150 = self.give_intercal(
+        #         TODi_Q_150,
+        #         self.preset.acquisition.TOD_qubic[: self.ndets * self.nsampling],
+        #         self.preset.acquisition.invN.operands[0].operands[1].operands[0],
+        #     )
+        #     g220 = self.give_intercal(
+        #         TODi_Q_220,
+        #         self.preset.acquisition.TOD_qubic[self.ndets * self.nsampling : 2 * self.ndets * self.nsampling],
+        #         self.preset.acquisition.invN.operands[0].operands[1].operands[1],
+        #     )
 
-            self.preset.gain.gain_iter = np.array([g150, g220]).T
-            self.preset.Gi = join_data(self.preset.tools.comm, self.preset.gain.gain_iter)
-            print("gain_iter", self.preset.gain.gain_iter.shape, self.preset.Gi.shape)
-            print("all_gain", self.preset.gain.all_gain.shape)
-            print("all_gain_in", self.preset.gain.all_gain_in.shape)
-            self.preset.gain.all_gain = np.concatenate((self.preset.gain.all_gain, np.array(self.preset.gain.gain_iter)), axis=0)
+        #     self.preset.gain.gain_iter = np.array([g150, g220]).T
+        #     self.preset.Gi = join_data(self.preset.tools.comm, self.preset.gain.gain_iter)
+        #     print("gain_iter", self.preset.gain.gain_iter.shape, self.preset.Gi.shape)
+        #     print("all_gain", self.preset.gain.all_gain.shape)
+        #     print("all_gain_in", self.preset.gain.all_gain_in.shape)
+        #     self.preset.gain.all_gain = np.concatenate((self.preset.gain.all_gain, np.array(self.preset.gain.gain_iter)), axis=0)
 
-            print("all_gain", self.preset.gain.all_gain.shape)
-            if self.preset.tools.rank == 0:
-                print(np.mean(self.preset.gain.gain_iter - self.preset.gain.gain_in, axis=0))
-                print(np.std(self.preset.gain.gain_iter - self.preset.gain.gain_in, axis=0))
+        #     print("all_gain", self.preset.gain.all_gain.shape)
+        #     if self.preset.tools.rank == 0:
+        #         print(np.mean(self.preset.gain.gain_iter - self.preset.gain.gain_in, axis=0))
+        #         print(np.std(self.preset.gain.gain_iter - self.preset.gain.gain_in, axis=0))
 
         # self.plots.plot_gain_iteration(
         #     self.preset.gain.all_gain - self.preset.gain.all_gain_in, alpha=0.03, ki=self._steps

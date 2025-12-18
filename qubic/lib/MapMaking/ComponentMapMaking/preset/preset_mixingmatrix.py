@@ -333,7 +333,7 @@ class PresetMixingMatrix:
                 self.beta_in = np.array([float(i._REF_BETA) for i in self.preset_comp.components_model_in[1:-1]])
             else:
                 self.beta_in = np.array([float(i._REF_BETA) for i in self.preset_comp.components_model_in[1:]])
-
+            print("beta_in", self.beta_in)
             self.Amm_in = self.get_mixingmatrix(self.nus_eff_in, self.beta_in, key="in")
 
             if self.preset_comp.params_foregrounds["Dust"]["Dust_in"]:

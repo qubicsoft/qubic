@@ -1,5 +1,5 @@
 save_iter: 1                                                                    # Save every 'save_iter' iteration
-foldername: "test"                                                              # Name of the saved folder
+foldername: "test_MM"                                                              # Name of the saved folder
 filename: "test"                                                                # Name of the saved file
 lastite: true                                                                   # Keep only the last iteration
 
@@ -12,7 +12,7 @@ CMB:
 Foregrounds:
     ### This section define the in/out foregrounds contribution
 
-  fit_spectral_index: false                                                     # If False, the beta reconstruction is skipped
+  fit_spectral_index: true                                                     # If False, the beta reconstruction is skipped
   bin_mixing_matrix: 4
   blind_method: "minimize"                                                      # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
                                                                                 # 'alternate' or 'minimize'
@@ -24,7 +24,7 @@ Foregrounds:
 
     type: "parametric"                                                          # Reconstruction method
     model: "d0"
-    beta_init: [1.54, 0., 10000000]                                             # PySM model
+    beta_init: [1.54, 0.05, 10000000]                                             # PySM model
     nside_beta_in: 0                                                            # Input pixelization for beta_d (in a case of d1 model)
     nside_beta_out: 0                                                           # Output pixelization for beta_d (in a case of d1 model)
     nu0: 150.0                                                                  # Reference frequency (nu0_d)
@@ -34,11 +34,11 @@ Foregrounds:
 
     ### Synchrotron emission
   Synchrotron:
-    Synchrotron_in: false
-    Synchrotron_out: false
+    Synchrotron_in: False
+    Synchrotron_out: False
 
 
-    type: "blind"                                                               # Reconstruction method
+    type: "parametric"                                                               # Reconstruction method
     model: "s0"                                                                 # PySM model
     beta_init: [-3, 0]
     nu0: 150                                                                    # Reference frequency (nu0_s)
@@ -60,7 +60,7 @@ QUBIC:
     npointings: 1000                                                            # Number of time samples
     nsub_in: 8                                                                  # Number of sub-acquisitions
     nsub_out: 8                                                                 # Number of sub-acquisitions for the reconstruction
-    convolution_in: True                                                       # Angular resolution in the input TOD
+    convolution_in: False                                                       # Angular resolution in the input TOD
     convolution_out: False                                                      # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:
@@ -91,29 +91,29 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
     level_noise_planck: 1                                                       # Noise level for Planck data
-    nsub_planck: 20                                                             # Number of integration step for Planck data
+    nsub_planck: 6                                                             # Number of integration step for Planck data
     weight_planck: 0                                                            # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                       # FWHM for apodized QUBIC patch
     30GHz: False
     44GHz: False
     70GHz: False
     100GHz: False
-    143GHz: True
-    217GHz: True
-    353GHz: False
+    143GHz: true
+    217GHz: true
+    353GHz: True
     seed_noise: 22222
 
 Pipeline:
     mapmaking: true
-    spectrum: true
+    spectrum: false
 
 PCG:
     ### This section control PCG parameters
 
     n_init_iter_pcg: 10
-    n_iter_pcg: 10                                                              # Number of PCG iterations
-    tol_pcg: 1.0e-20                                                            # Tolerance for PCG
-    n_iter_loop: 1                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+    n_iter_pcg: 12                                                              # Number of PCG iterations
+    tol_pcg: 1.0e-15                                                            # Tolerance for PCG
+    n_iter_loop: 25                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
     ites_to_converge: 1                                                         # should be less than n_iter_loop
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                             # Fixing pixels outside QUBIC patch

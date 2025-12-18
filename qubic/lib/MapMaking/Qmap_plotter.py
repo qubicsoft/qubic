@@ -711,10 +711,10 @@ class PlotsCMM:
                 for i in range(beta.shape[1]):
                     plt.plot(alliter, abs(truth[i] - beta[:, i]), "-k", alpha=0.3)
             plt.yscale("log")
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki + 1}.svg")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/beta_iter{ki + 1}.svg")
 
             if ki > 0:
-                os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki}.svg")
+                os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/beta_iter{ki}.svg")
             plt.close()
 
     def _display_allresiduals(self, map_i, seenpix, ki=0):
@@ -838,10 +838,6 @@ class PlotsCMM:
             maps_in = self.preset.acquisition.components_in_convolved
             maps_rec = self.preset.comp.components_iter
             maps_res = maps_rec - maps_in
-
-            maps_in[:, ~seenpix, :] = hp.UNSEEN
-            maps_rec[:, ~seenpix, :] = hp.UNSEEN
-            maps_res[:, ~seenpix, :] = hp.UNSEEN
 
             Nmaps, _, _ = maps_res.shape
             k = 0

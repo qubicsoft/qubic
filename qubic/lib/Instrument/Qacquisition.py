@@ -1097,7 +1097,7 @@ class PlanckAcquisition:
         for _ in self.nus:
             ope_i = []
             # for _ in range(self.nsub_planck):
-            for i in range(int(self.nsub_planck / len(self.nus))):
+            for _ in range(int(self.nsub_planck / len(self.nus))):
                 if fwhm is not None:
                     C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
                 else:

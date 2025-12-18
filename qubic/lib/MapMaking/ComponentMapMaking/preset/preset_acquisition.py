@@ -300,7 +300,9 @@ class PresetAcquisition:
 
         ### Create external TOD
         self.TOD_external = self.H.operands[1](self.components_in_convolved) + noise_external.ravel()
-
+        self.TOD_external_zero_outside_patch = self.components_in_convolved.copy()
+        self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
+        self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         # _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
         # maps_external = _r(self.TOD_external)
@@ -327,7 +329,7 @@ class PresetAcquisition:
 
         ### Observed TOD (Planck is assumed on the full sky)
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
-        # self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch]
+        self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch.ravel()]
 
     def get_x0(self):
         """PCG starting point.
@@ -351,6 +353,7 @@ class PresetAcquisition:
         np.random.seed(self.seed_start_pcg)
 
         self.beta_iter, self.Amm_iter = self.preset_mixingmatrix._get_beta_iter()
+        print("beta_iter", self.beta_iter)
 
         # Build beta map for spatially varying spectral index
         self.allbeta = np.array([self.beta_iter])

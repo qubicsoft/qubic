@@ -63,6 +63,7 @@ dependencies = [
     'scikit-learn',
     'schwimmbad',
     'imageio',
+    "cairosvg",
     "ruamel.yaml",
     "jq",
 ]

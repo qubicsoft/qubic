@@ -44,7 +44,7 @@ class PresetInitialisation:
         self.external = None
         self.sky = None
         self.mixingmatrix = None
-        self.files_list = ["I", "Q", "U", "allcomps", "A_iter"]
+        self.files_list = ["I", "Q", "U", "allcomps", "A_iter", "maps_iter"]
 
     def initialize(self, parameters_file):
         """Initialization.

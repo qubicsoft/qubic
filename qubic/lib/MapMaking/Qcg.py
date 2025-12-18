@@ -117,7 +117,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         IterativeAlgorithm.__init__(
             self,
             x=x0,
-            convergence=np.array([]),
+            convergence=[],
             abnormal_stop_condition=abnormal_stop_condition,
             disp=disp,
             dtype=dtype,
@@ -156,11 +156,11 @@ class PCGAlgorithm(IterativeAlgorithm):
 
     def initialize(self):
         IterativeAlgorithm.initialize(self)
+        self.convergence = []
 
         if self.b_norm == 0:
             self.error = 0
             self.x[...] = 0
-            self.convergence = []
             raise StopIteration("RHS is zero.")
 
         self.r[...] = self.b

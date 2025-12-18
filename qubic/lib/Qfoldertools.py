@@ -1,6 +1,9 @@
 import os
 import pickle
+from io import BytesIO
+from pathlib import Path
 
+import cairosvg
 import imageio
 import numpy as np
 import yaml
@@ -71,24 +74,18 @@ def create_folder_if_not_exists(comm, folder_name):
             pass
 
 
-def do_gif(input_folder, filename, output="animation.gif", duration=0.01):
-    # Collect all the file paths for the images
-    file_paths = []
+def do_gif(svg_folder, output="animation.gif", fps=5):
+    svg_files = sorted(Path(svg_folder).glob("*.svg"))
+    images = []
 
-    for n in sorted(os.listdir(input_folder)):
-        if n.startswith(filename) and n.endswith(".png"):
-            file_paths.append(os.path.join(input_folder, n))
+    for svg_path in svg_files:
+        # convert SVG to PNG bytes in memory
+        png_bytes = cairosvg.svg2png(url=str(svg_path))
+        # read PNG into numpy array
+        images.append(imageio.imread(BytesIO(png_bytes)))
 
-    # Ensure the file_paths are sorted by the numerical part of the filenames
-    file_paths = sorted(file_paths, key=lambda x: int(x.split(filename)[-1].split(".png")[0]))
-
-    # Create the GIF
-    with imageio.get_writer(os.path.join(input_folder, output), mode="I", duration=duration) as writer:
-        for file_path in file_paths:
-            image = imageio.imread(file_path)
-            writer.append_data(image)
-
-    print(f"GIF saved at {os.path.join(input_folder, output)}")
+    imageio.mimsave(svg_folder + output, images, fps=fps)
+    print(f"GIF saved at {os.path.join(svg_folder, output)}")
 
 
 class MergeAllFiles:

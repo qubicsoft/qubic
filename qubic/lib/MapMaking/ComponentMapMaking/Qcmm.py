@@ -148,7 +148,7 @@ class PipelineComponentMapMaking:
             maxiter = max_iterations
 
         if self.preset.tools.params["PCG"]["do_gif"]:
-            self.gif_folder = "CMM/" + self.preset.tools.params["foldername"] + "/Plots/"
+            self.gif_folder = "CMM/" + self.preset.tools.params["foldername"] + "/Plots/maps_iter/"
         else:
             self.gif_folder = None
 
@@ -182,8 +182,6 @@ class PipelineComponentMapMaking:
             if self.preset.tools.params["PCG"]["do_gif"]:
                 do_gif(
                     self.gif_folder,
-                    "iter_",
-                    output="animation.gif",
                 )
             self.plots.display_maps(seenpix, ki=self._steps)
             self.plots._display_allcomponents(ki=self._steps, gif=self.preset.tools.params["PCG"]["do_gif"], reso=self.preset.tools.params["PCG"]["reso_plot"])

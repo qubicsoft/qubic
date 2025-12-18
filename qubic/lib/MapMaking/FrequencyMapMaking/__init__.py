@@ -1,2 +1,2 @@
-from .Qfmm import *
-from .Qspectra_component import *
+# from .Qfmm import *
+# from .Qspectra_component import *

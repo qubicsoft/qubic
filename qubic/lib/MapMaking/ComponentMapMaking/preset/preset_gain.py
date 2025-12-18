@@ -1,5 +1,6 @@
 import numpy as np
-from ....Qmpi_tools import join_data
+
+from qubic.lib.Qmpi_tools import join_data
 
 
 class PresetGain:
@@ -40,7 +41,7 @@ class PresetGain:
 
         """
 
-        np.random.seed(None)
+        np.random.seed(None) # rewrite randomness!
         if self.preset_qubic.params_qubic["instrument"] == "UWB":
             self.gain_in = np.random.normal(
                 1,

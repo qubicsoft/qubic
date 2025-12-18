@@ -1,15 +1,15 @@
 from __future__ import division, print_function
+
 import glob
 
 import healpy as hp
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from astropy.io import fits
 
 
 # =============== Save a simulation ==================
-def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
-                   save_dir, simu_name):
+def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved, save_dir, simu_name):
     """
     Save a complete simulation in a .fits file for one number of reconstructed subbands.
     Parameters
@@ -31,23 +31,25 @@ def save_simu_fits(maps_recon, cov, nus, nus_edge, maps_convolved,
 
     """
 
-    if save_dir[-1] != '/':
-        save_dir = save_dir + '/'
+    if save_dir[-1] != "/":
+        save_dir = save_dir + "/"
 
     hdu_primary = fits.PrimaryHDU()
-    hdu_recon = fits.ImageHDU(data=maps_recon, name='maps_recon')
-    hdu_cov = fits.ImageHDU(data=cov, name='coverage')
-    hdu_nus = fits.ImageHDU(data=nus, name='central_freq', )
-    hdu_nus_edge = fits.ImageHDU(data=nus_edge, name='edge_freq')
-    hdu_convolved = fits.ImageHDU(data=maps_convolved, name='maps_convolved')
+    hdu_recon = fits.ImageHDU(data=maps_recon, name="maps_recon")
+    hdu_cov = fits.ImageHDU(data=cov, name="coverage")
+    hdu_nus = fits.ImageHDU(
+        data=nus,
+        name="central_freq",
+    )
+    hdu_nus_edge = fits.ImageHDU(data=nus_edge, name="edge_freq")
+    hdu_convolved = fits.ImageHDU(data=maps_convolved, name="maps_convolved")
 
-    the_file = fits.HDUList([hdu_primary, hdu_recon, hdu_cov, hdu_nus,
-                             hdu_nus_edge, hdu_convolved])
-    the_file.writeto(save_dir + simu_name, 'warn')
+    the_file = fits.HDUList([hdu_primary, hdu_recon, hdu_cov, hdu_nus, hdu_nus_edge, hdu_convolved])
+    the_file.writeto(save_dir + simu_name, "warn")
 
 
 # =============== Read saved maps ==================
-def get_seenmap(file, badval=-1.6375e+30, rtol=1e-05, atol=1e-08):
+def get_seenmap(file, badval=-1.6375e30, rtol=1e-05, atol=1e-08):
     """
     Returns an array with the pixels seen or not.
     Parameters
@@ -68,12 +70,9 @@ def get_seenmap(file, badval=-1.6375e+30, rtol=1e-05, atol=1e-08):
         True inside the patch and False outside.
     """
     simu = fits.open(file)
-    map = simu['MAPS_RECON'].data
+    map = simu["MAPS_RECON"].data
     map_mean = np.mean(map, axis=(0, 2))
-    seenmap = hp.pixelfunc.mask_good(map_mean,
-                                     badval=badval,
-                                     rtol=rtol,
-                                     atol=atol)
+    seenmap = hp.pixelfunc.mask_good(map_mean, badval=badval, rtol=rtol, atol=atol)
     return seenmap
 
 
@@ -94,8 +93,8 @@ def get_maps(file):
 
     simu = fits.open(file)
 
-    maps_recon = simu['MAPS_RECON'].data
-    maps_convo = simu['MAPS_CONVOLVED'].data
+    maps_recon = simu["MAPS_RECON"].data
+    maps_convo = simu["MAPS_CONVOLVED"].data
 
     diff = maps_recon - maps_convo
 
@@ -104,21 +103,21 @@ def get_maps(file):
 
 def get_patch(file, seenmap):
     """
-        Returns the observed patch in the maps to save memory.
-        Parameters
-        ----------
-        file : str
-            A fits file saved from a simulation.
-        seenmap : array
-            Array of booleans of shape #pixels,
-            True inside the patch and False outside.
+    Returns the observed patch in the maps to save memory.
+    Parameters
+    ----------
+    file : str
+        A fits file saved from a simulation.
+    seenmap : array
+        Array of booleans of shape #pixels,
+        True inside the patch and False outside.
 
-        Returns
-        -------
-        Reconstructed patches, convolved patches and difference between both,
-        all with a shape (#subbands, #pixels_seen, 3).
+    Returns
+    -------
+    Reconstructed patches, convolved patches and difference between both,
+    all with a shape (#subbands, #pixels_seen, 3).
 
-        """
+    """
 
     maps_recon, maps_convo, diff = get_maps(file)
 
@@ -129,7 +128,7 @@ def get_patch(file, seenmap):
     return maps_recon_cut, maps_convo_cut, diff_cut
 
 
-def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e-08, verbose=True):
+def get_patch_many_files(rep_simu, name, badval=-1.6375e30, rtol=1e-05, atol=1e-08, verbose=True):
     """
     Get all the patches you want to analyze from many fits files.
     Parameters
@@ -155,7 +154,7 @@ def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e
     all_fits = glob.glob(rep_simu + name)
     nfiles = len(all_fits)
     if verbose:
-        print('{} files have been found.'.format(nfiles))
+        print("{} files have been found.".format(nfiles))
 
     seenmap = get_seenmap(all_fits[0], badval=badval, rtol=rtol, atol=atol)
 
@@ -163,19 +162,18 @@ def get_patch_many_files(rep_simu, name, badval=-1.6375e+30, rtol=1e-05, atol=1e
     all_patch_convo = []
     all_patch_diff = []
 
-    for i, fits in enumerate(all_fits):
-        patch_recon, patch_convo, patch_diff = get_patch(fits, seenmap)
+    for i, fit in enumerate(all_fits):
+        patch_recon, patch_convo, patch_diff = get_patch(fit, seenmap)
         if i == 0:
             right_shape = patch_recon.shape
         else:
             if patch_recon.shape != right_shape:
-                raise ValueError('You should take maps with identical shapes.')
+                raise ValueError("You should take maps with identical shapes.")
         all_patch_recon.append(patch_recon)
         all_patch_convo.append(patch_convo)
         all_patch_diff.append(patch_diff)
 
-    return all_fits, np.asarray(all_patch_recon), \
-           np.asarray(all_patch_convo), np.asarray(all_patch_diff)
+    return all_fits, np.asarray(all_patch_recon), np.asarray(all_patch_convo), np.asarray(all_patch_diff)
 
 
 def get_maps_many_files(rep_simu, name, verbose=True):
@@ -198,19 +196,19 @@ def get_maps_many_files(rep_simu, name, verbose=True):
     all_fits = glob.glob(rep_simu + name)
     nfiles = len(all_fits)
     if verbose:
-        print('{} files have been found.'.format(nfiles))
+        print("{} files have been found.".format(nfiles))
 
     all_maps_recon = []
     all_maps_convo = []
     all_maps_diff = []
 
-    for i, fits in enumerate(all_fits):
-        map_recon, map_convo, map_diff = get_maps(fits)
+    for i, fit in enumerate(all_fits):
+        map_recon, map_convo, map_diff = get_maps(fit)
         if i == 0:
             right_shape = map_recon.shape
         else:
             if map_recon.shape != right_shape:
-                raise ValueError('You should take maps with identical shapes.')
+                raise ValueError("You should take maps with identical shapes.")
         all_maps_recon.append(map_recon)
         all_maps_convo.append(map_convo)
         all_maps_diff.append(map_diff)
@@ -228,10 +226,10 @@ def pix2ang(ns, center, seenmap=None):
     v0 = hp.ang2vec(center[0], center[1], lonlat=True)
     if seenmap is not None:
         # Only pixel seen (in the patch)
-        ip = np.arange(12 * ns ** 2)[seenmap]
+        ip = np.arange(12 * ns**2)[seenmap]
     else:
         # all pixels
-        ip = np.arange(12 * ns ** 2)
+        ip = np.arange(12 * ns**2)
 
     # vectors associated to each pixel seen
     vpix = hp.pix2vec(ns, ip)
@@ -239,7 +237,7 @@ def pix2ang(ns, center, seenmap=None):
     return np.degrees(np.arccos(np.dot(v0, vpix)))
 
 
-def make_zones(patch, nzones, nside, center, seenmap, angle=False, dtheta=15., verbose=True, doplot=True):
+def make_zones(patch, nzones, nside, center, seenmap, angle=False, dtheta=15.0, verbose=True, doplot=True):
     """
     Mask a path to get different concentric zones.
 
@@ -281,14 +279,14 @@ def make_zones(patch, nzones, nside, center, seenmap, angle=False, dtheta=15., v
     elif angle:
         angles_zone = np.array([dtheta, np.max(ang)])
 
-    angles_zone = np.insert(angles_zone, 0, 0.)
+    angles_zone = np.insert(angles_zone, 0, 0.0)
 
     # Make a list with the masks
     allmask = [np.zeros_like(patch) for _ in range(nzones)]
     for pix in range(npixok):
         for a, angle in enumerate(angles_zone[1:]):
             if ang[pix] <= angle:
-                allmask[a][:, pix, :] = 1.
+                allmask[a][:, pix, :] = 1.0
                 break
     # for a, angle in enumerate(angles_zone[1:]):
     #    #print(a,angle)
@@ -309,17 +307,15 @@ def make_zones(patch, nzones, nside, center, seenmap, angle=False, dtheta=15., v
     # Compute the numbers of pixels in each zone
     pix_per_zone = [np.count_nonzero(m[0, :, 0]) for m in allmask]
     if verbose:
-        print('Number of pixels in each zones : {}. Angles limit for each zone: {}'.format(pix_per_zone, angles_zone))
+        print("Number of pixels in each zones : {}. Angles limit for each zone: {}".format(pix_per_zone, angles_zone))
 
     # Plot the patch masked
     if doplot:
         istokes = 0
-        plt.figure('Zones')
+        plt.figure("Zones")
         for i in range(nzones):
-            map = np.zeros((patch.shape[0], 12 * nside ** 2, 3))
+            map = np.zeros((patch.shape[0], 12 * nside**2, 3))
             map[:, seenmap, :] = allmaps_mask[i]
             map[:, ~seenmap, :] = hp.UNSEEN
-            hp.gnomview(map[0, :, istokes], sub=(1, nzones, i + 1),
-                        rot=center, reso=15,
-                        title='Zone {}, npix = {}, istokes = {}'.format(i, pix_per_zone[i], istokes))
+            hp.gnomview(map[0, :, istokes], sub=(1, nzones, i + 1), rot=center, reso=15, title="Zone {}, npix = {}, istokes = {}".format(i, pix_per_zone[i], istokes))
     return pix_per_zone, allmaps_mask

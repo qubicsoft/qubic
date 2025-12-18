@@ -1,15 +1,12 @@
-import numpy as np
-from pyoperators import asoperator, IdentityOperator, ReciprocalOperator
-from pysimulators.interfaces.healpy import SceneHealpixCMB
-from scipy.constants import c, h, k
 import scipy
+from pysimulators.interfaces.healpy import SceneHealpixCMB
 
-__all__ = ['QubicScene']
+__all__ = ["QubicScene"]
 
 
 class Atmosphere(object):
     def __init__(self, temperature, emissivity, transmission):
-        #print('   Using Atmosphere: T={} em={} Trans={}'.format(temperature, emissivity, transmission))
+        # print('   Using Atmosphere: T={} em={} Trans={}'.format(temperature, emissivity, transmission))
         self.temperature = temperature
         self.emissivity = emissivity
         self.transmission = transmission
@@ -38,30 +35,28 @@ class QubicScene(SceneHealpixCMB):
             atmosphere.
 
         """
-        nside=d['nside']
-        kind=d['kind']
-        absolute=d['absolute']
-        temperature=d['temperature']
-        summer=d['summer']
-        
+        nside = d["nside"]
+        kind = d["kind"]
+        absolute = d["absolute"]
+        temperature = d["temperature"]
+
         #################### Atmosphere emissivity - from JCH analysis of LLAMA site-testing data #############
         #### Atmosphere Temprature
-        if d['TemperatureAtmosphere150'] is None:
-            d['TemperatureAtmosphere150'] = 270.
-        if d['TemperatureAtmosphere220'] is None:
-            d['TemperatureAtmosphere220'] = 270.
-        fT = scipy.interpolate.interp1d([150., 220.], [d['TemperatureAtmosphere150'], d['TemperatureAtmosphere220']], fill_value="extrapolate")
+        if d["TemperatureAtmosphere150"] is None:
+            d["TemperatureAtmosphere150"] = 270.0
+        if d["TemperatureAtmosphere220"] is None:
+            d["TemperatureAtmosphere220"] = 270.0
+        fT = scipy.interpolate.interp1d([150.0, 220.0], [d["TemperatureAtmosphere150"], d["TemperatureAtmosphere220"]], fill_value="extrapolate")
 
         #### Atmosphere Emissivity
-        if d['EmissivityAtmosphere150'] is None:
-            d['EmissivityAtmosphere150'] = 0.081
-        if d['EmissivityAtmosphere220'] is None:
-            d['EmissivityAtmosphere220'] = 0.138
-        fE = scipy.interpolate.interp1d([150., 220.], [d['EmissivityAtmosphere150'], d['EmissivityAtmosphere220']], fill_value="extrapolate")
+        if d["EmissivityAtmosphere150"] is None:
+            d["EmissivityAtmosphere150"] = 0.081
+        if d["EmissivityAtmosphere220"] is None:
+            d["EmissivityAtmosphere220"] = 0.138
+        fE = scipy.interpolate.interp1d([150.0, 220.0], [d["EmissivityAtmosphere150"], d["EmissivityAtmosphere220"]], fill_value="extrapolate")
 
-        self.atmosphere = Atmosphere(fT(d['filter_nu']/1e9), fE(d['filter_nu']/1e9), 1.)
+        self.atmosphere = Atmosphere(fT(d["filter_nu"] / 1e9), fE(d["filter_nu"] / 1e9), 1.0)
         ########################################################################################################
-
 
         ################### Old code - Very wrong - Assumes an optimistic Dome C !!! ###########################
         # if summer:
@@ -70,5 +65,4 @@ class QubicScene(SceneHealpixCMB):
         #     self.atmosphere = Atmosphere(200., 0.015, 1.)
         ########################################################################################################
 
-        SceneHealpixCMB.__init__(self, nside, kind=kind, absolute=absolute,
-                                 temperature=temperature)
+        SceneHealpixCMB.__init__(self, nside, kind=kind, absolute=absolute, temperature=temperature)

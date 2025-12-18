@@ -17,7 +17,7 @@ QUBIC:
     ### This section control the parameters related to QUBIC
     
     instrument: 'DB'                        # Instrumental design (DB or UWB)
-    npointings: 10                        # Number of time samples
+    npointings: 1                        # Number of time samples
     nsub_in: 6                             # Number of sub-acquisitions
     nsub_out: 4
     nrec: 2                                # Number of reconstructed frequency maps
@@ -30,7 +30,7 @@ QUBIC:
         npho220: 0                          # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                 # NEP of detector noise
     SYNTHBEAM:
-        synthbeam_kmax: 2                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+        synthbeam_kmax: 1                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     dtheta: 15                             # Angle for coverage
 
 SKY:

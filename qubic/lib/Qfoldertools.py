@@ -1,5 +1,6 @@
 import os
 import pickle
+import re
 from io import BytesIO
 from pathlib import Path
 
@@ -74,18 +75,22 @@ def create_folder_if_not_exists(comm, folder_name):
             pass
 
 
-def do_gif(svg_folder, output="animation.gif", fps=5):
-    svg_files = sorted(Path(svg_folder).glob("*.svg"))
+def natural_key(s):
+    # split digits and non-digits for natural sorting
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", str(s))]
+
+
+def do_gif(svg_folder, output="animation.gif", fps=15):
+    svg_files = sorted(Path(svg_folder).glob("*.svg"), key=natural_key)
     images = []
 
     for svg_path in svg_files:
-        # convert SVG to PNG bytes in memory
         png_bytes = cairosvg.svg2png(url=str(svg_path))
-        # read PNG into numpy array
         images.append(imageio.imread(BytesIO(png_bytes)))
 
-    imageio.mimsave(svg_folder + output, images, fps=fps)
-    print(f"GIF saved at {os.path.join(svg_folder, output)}")
+    out_path = os.path.join(svg_folder, output)
+    imageio.mimsave(out_path, images, fps=fps)
+    print(f"GIF saved at {out_path}")
 
 
 class MergeAllFiles:

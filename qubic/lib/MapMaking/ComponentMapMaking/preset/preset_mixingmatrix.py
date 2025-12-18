@@ -374,7 +374,7 @@ class PresetMixingMatrix:
 
         """
 
-        if self.preset_comp.params_foregrounds["fit_spectral_index"]:
+        if self.preset_comp.params_foregrounds["fit_mixing_matrix"]:
             self._index_seenpix_beta = 0
         else:
             self._index_seenpix_beta = None

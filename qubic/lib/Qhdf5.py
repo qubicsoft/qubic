@@ -7,180 +7,51 @@ import numpy as np
 
 class HDF5Dict:
     def __init__(self, compression: str | None = "gzip", compression_opts: int | None = 4):
-        """Save / load to/from HDF5 file.
-
-        Behaviour:
-        - numpy arrays : datasets (with optional compression)
-        - homogeneous numeric lists/tuples : datasets
-        - homogeneous string lists/tuples : datasets (variable-length UTF-8)
-        - scalar numbers / bool / short strings : attributes on the parent group
-        - dict : subgroup.attrs['__json__'] stores the full dict as JSON for easy recovery; then we also recursively try to store inner items (so both JSON and structured form exist)
-        - otherwise (mixed lists, custom objects) : JSON-serialised into an attribute
-
-        Parameters
-        ----------
-        compression : str | None, optional
-            compression filter, by default "gzip"
-        compression_opts : int | None, optional
-            options for the compression filter, by default 4
-        """
-
         self.compression = compression
         self.compression_opts = compression_opts
 
     # --- Public API -----------------------------------------------------
     def save_dict(self, filename: str, data: Dict[str, Any], mode: str = "w") -> None:
-        """Save dict into HDF5.
-
-        Write the top-level dict `data` into `filename`.
-
-        Parameters
-        ----------
-        filename : str
-            path where the file will be stored.
-        data : Dict[str, Any]
-            Python dictionary you want to save.
-        mode : str, optional
-            saving mode, by default "w"
-        """
-
         with h5py.File(filename, mode) as h5f:
             self._write_group(h5f, data)
 
     def save_array(self, filename: str, data: np.ndarray, mode: str = "w") -> None:
-        """Save array into HDF5.
-
-        Save a single array `data` into `filename`.
-
-        Parameters
-        ----------
-        filename : str
-            path where the file will be stored.
-        data : ndarray
-            array you want to save.
-        mode : str, optional
-            saving mode, by default "w"
-        """
-
         with h5py.File(filename, mode) as h5f:
             self._write_item(h5f, "data", data)
 
     def load_dict(self, filename: str) -> Dict[str, Any]:
-        """Load HDF5 into dict.
-
-        Load the HDF5 file and return a Python dict containing original data.
-
-        Parameters
-        ----------
-        filename : str
-            HDF5 file path.
-
-        Returns
-        -------
-        Dict[str, Any]
-            Python dictionary from HDF5 file.
-        """
-
         with h5py.File(filename, "r") as h5f:
             return self._read_group(h5f)
 
     def load_array(self, filename: str) -> np.ndarray:
-        """Load HDF5 into array.
-
-        Load a single array stored under the key `data` in the HDF5 file.
-
-        Parameters
-        ----------
-        filename : str
-            HDF5 file path.
-
-        Returns
-        -------
-        ndarray
-            Array from HDF5 file.
-
-        Raises
-        ------
-        ValueError
-            Raise error if the key `data` does not correspond to a dataset.
-        """
-
         with h5py.File(filename, "r") as h5f:
             obj = h5f["data"]
-            if isinstance(obj, h5py.Dataset):
-                val = obj[()]
-                if isinstance(val, bytes):
-                    try:
-                        val = val.decode("utf-8")
-                    except Exception:
-                        pass
-                if isinstance(val, np.ndarray) and val.shape == ():
-                    val = val.tolist()
-                return val
-            else:
+            if not isinstance(obj, h5py.Dataset):
                 raise ValueError("The key 'data' does not correspond to a dataset.")
+            return self._decode_dataset(obj)
 
     def load_item(self, filename: str, path: str) -> Any:
-        """load item from HDF5.
-
-        Load a single item (dataset, group, or attribute) at the given HDF5 path.
-
-        Parameters
-        ----------
-        filename : str
-            HDF5 file path.
-        path : str
-            Item path in the HDF5 you want to load.
-
-        Returns
-        -------
-        Any
-            item you loaded.
-
-        Raises
-        ------
-        ValueError
-            Raise error if the path is unknown.
-
-        Examples
-        --------
-        load_item("file.h5", "group/subgroup/dataset")
-        load_item("file.h5", "mygroup::myattr")   # attribute syntax
-        """
-
-        ### attribute syntax: path::attrname
         if "::" in path:
             h5_path, attr_name = path.split("::", 1)
             with h5py.File(filename, "r") as h5f:
-                obj = h5f[h5_path]
-                val = obj.attrs[attr_name]
-                return self._decode_attribute(val)
+                return self._decode_attribute(h5f[h5_path].attrs[attr_name])
 
-        ### otherwise dataset or group
         with h5py.File(filename, "r") as h5f:
             obj = h5f[path]
-
-            # dataset
             if isinstance(obj, h5py.Dataset):
                 return self._decode_dataset(obj)
-
-            # group
             if isinstance(obj, h5py.Group):
-                # check JSON backup first
                 if "__json__" in obj.attrs:
-                    raw = obj.attrs["__json__"]
-                    if isinstance(raw, bytes):
-                        raw = raw.decode("utf-8")
                     try:
-                        parsed = json.loads(raw)
-                        return parsed
+                        raw = obj.attrs["__json__"]
+                        if isinstance(raw, bytes):
+                            raw = raw.decode("utf-8")
+                        return json.loads(raw)
                     except Exception:
                         pass
-
-                # otherwise load only this minimal group
                 return self._read_group(obj)
 
-            raise ValueError(f"Unknown object type at path: {path}")
+        raise ValueError(f"Unknown object type at path: {path}")
 
     # --- Internal helpers -----------------------------------------------
     def _write_group(self, h5group: h5py.Group, data: Dict[str, Any]) -> None:
@@ -188,43 +59,52 @@ class HDF5Dict:
             self._write_item(h5group, key, value)
 
     def _write_item(self, h5group: h5py.Group, name: str, value: Any) -> None:
-        ### numpy arrays
         if isinstance(value, np.ndarray):
             h5group.create_dataset(name, data=value, compression=self.compression, compression_opts=self.compression_opts)
             return
 
-        ### scalars: numbers and bools -> attributes
         if isinstance(value, (int, float, bool)):
             h5group.attrs[name] = value
             return
 
-        ### lists / tuples
         if isinstance(value, (list, tuple)):
-            # empty -> store as JSON attribute
+            if all(isinstance(x, np.ndarray) for x in value):
+                subgroup = h5group.create_group(name)
+                subgroup.attrs["__kind__"] = "sequence"
+                subgroup.attrs["__sequence_type__"] = "tuple" if isinstance(value, tuple) else "list"
+                subgroup.attrs["__length__"] = len(value)
+
+                for i, arr in enumerate(value):
+                    if isinstance(arr, np.ndarray) and arr.shape == ():
+                        # scalar dataset → NO compression allowed
+                        subgroup.create_dataset(str(i), data=arr)
+                    else:
+                        subgroup.create_dataset(
+                            str(i),
+                            data=arr,
+                            compression=self.compression,
+                            compression_opts=self.compression_opts,
+                        )
+
+                return
+
             if len(value) == 0:
                 h5group.attrs[name] = json.dumps(value)
                 return
 
-            # homogeneous numeric?
             if all(isinstance(x, (int, float, np.integer, np.floating)) for x in value):
                 arr = np.asarray(value)
                 h5group.create_dataset(name, data=arr, compression=self.compression, compression_opts=self.compression_opts)
                 return
 
-            # homogeneous strings?
             if all(isinstance(x, str) for x in value):
                 dt = h5py.string_dtype(encoding="utf-8")
                 h5group.create_dataset(name, data=np.array(value, dtype=object), dtype=dt, compression=self.compression, compression_opts=self.compression_opts)
                 return
 
-            # fallback: serialize to JSON attribute
-            try:
-                h5group.attrs[name] = json.dumps(value)
-            except TypeError:
-                h5group.attrs[name] = json.dumps([repr(x) for x in value])
+            h5group.attrs[name] = json.dumps(value, default=repr)
             return
 
-        ### dicts -> group (plus a JSON backup)
         if isinstance(value, dict):
             subgroup = h5group.create_group(name)
             try:
@@ -233,77 +113,54 @@ class HDF5Dict:
                 subgroup.attrs["__json__"] = json.dumps(self._safe_dict_for_json(value))
 
             for k, v in value.items():
-                subgroup_key = self._get_key(k)
-                self._write_item(subgroup, subgroup_key, v)
+                self._write_item(subgroup, self._get_key(k), v)
             return
 
-        ### fallback for arbitrary objects
-        try:
-            h5group.attrs[name] = json.dumps(value)
-        except TypeError:
-            h5group.attrs[name] = repr(value)
+        h5group.attrs[name] = json.dumps(value, default=repr)
 
     def _read_group(self, h5group: h5py.Group) -> Dict[str, Any]:
         out: Dict[str, Any] = {}
 
-        # first: attributes
-        for attr_key, attr_val in h5group.attrs.items():
-            if attr_key == "__json__":
+        for k, v in h5group.attrs.items():
+            if k == "__json__":
                 continue
-            if isinstance(attr_val, bytes):
-                try:
-                    attr_val = attr_val.decode("utf-8")
-                except Exception:
-                    pass
-            if isinstance(attr_val, str):
-                try:
-                    parsed = json.loads(attr_val)
-                    out[attr_key] = parsed
-                    continue
-                except Exception:
-                    out[attr_key] = attr_val
-                    continue
-            out[attr_key] = attr_val
+            out[k] = self._decode_attribute(v)
 
-        # second: datasets + subgroups
         for key in h5group:
             obj = h5group[key]
-            if isinstance(obj, h5py.Dataset):
-                val = obj[()]
-                if isinstance(val, bytes):
-                    try:
-                        val = val.decode("utf-8")
-                    except Exception:
-                        pass
-                if isinstance(val, np.ndarray) and val.shape == ():
-                    val = val.tolist()
-                out[key] = val
 
-            elif isinstance(obj, h5py.Group):
-                sub = self._read_group(obj)
+            if isinstance(obj, h5py.Dataset):
+                out[key] = self._decode_dataset(obj)
+                continue
+
+            if isinstance(obj, h5py.Group):
+                if obj.attrs.get("__kind__") == "sequence":
+                    length = obj.attrs["__length__"]
+                    seq = []
+                    for i in range(length):
+                        val = obj[str(i)][()]
+                        if isinstance(val, np.ndarray) and val.shape == ():
+                            val = val.tolist()
+                        seq.append(val)
+
+                    out[key] = tuple(seq) if obj.attrs["__sequence_type__"] == "tuple" else seq
+                    continue
 
                 if "__json__" in obj.attrs:
                     try:
-                        sub_json = obj.attrs["__json__"]
-                        if isinstance(sub_json, bytes):
-                            sub_json = sub_json.decode("utf-8")
-                        parsed = json.loads(sub_json)
-
-                        # --- FIX: unwrap {"key": {...}} so no double nesting ---
-                        if isinstance(parsed, dict) and len(parsed) == 1 and key in parsed:
-                            out[key] = parsed[key]
-                        else:
-                            out[key] = parsed
+                        raw = obj.attrs["__json__"]
+                        if isinstance(raw, bytes):
+                            raw = raw.decode("utf-8")
+                        out[key] = json.loads(raw)
                         continue
                     except Exception:
                         pass
 
-                out[key] = sub
+                out[key] = self._read_group(obj)
 
         return out
 
     def _decode_attribute(self, val):
-        """Decode an HDF5 attribute according to your rules."""
         if isinstance(val, bytes):
             try:
                 val = val.decode("utf-8")
@@ -317,7 +174,6 @@ class HDF5Dict:
         return val
 
     def _decode_dataset(self, ds):
-        """Decode dataset like in _read_group."""
         val = ds[()]
         if isinstance(val, bytes):
             try:
@@ -330,9 +186,7 @@ class HDF5Dict:
 
     @staticmethod
     def _get_key(key: str) -> str:
-        if not isinstance(key, str):
-            key = str(key)
-        return key.replace("/", "_").strip()
+        return str(key).replace("/", "_").strip()
 
     @staticmethod
     def _safe_dict_for_json(d: Dict[str, Any]) -> Dict[str, Any]:

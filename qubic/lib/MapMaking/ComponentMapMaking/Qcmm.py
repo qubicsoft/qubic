@@ -58,8 +58,6 @@ class PipelineComponentMapMaking:
         self._rms_noise_qubic_patch_per_ite = np.empty((self.preset.tools.params["PCG"]["ites_to_converge"], len(self.preset.comp.components_name_out)))
         self._rms_noise_qubic_patch_per_ite[:] = np.nan
 
-        self.convergence = []
-
     def get_preconditioner(self):
         """Preconditioner for PCG algorithm.
 
@@ -178,7 +176,7 @@ class PipelineComponentMapMaking:
 
         ### Update components
         self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
-        self.preset.acquisition.convergence.append(np.array(results["convergence"].copy()))
+        self.preset.acquisition.convergence.append(results["convergence"].copy())
         ### Plot if asked
         if self.preset.tools.rank == 0:
             if self.preset.tools.params["PCG"]["do_gif"]:
@@ -457,7 +455,7 @@ class PipelineComponentMapMaking:
                 ### Fit using scipy.optimize.minimize
                 self.preset.acquisition.beta_iter = minimize(self.chi2, x0=self.preset.acquisition.beta_iter, method="CG", callback=self.callback, tol=1e-10).x
 
-                self.preset.acquisition.Amm_iter = self.chi2._get_mixingmatrix(nus=self.preset.qubic.joint_out.allnus, x=self.preset.acquisition.beta_iter)
+                self.preset.acquisition.Amm_iter = self.chi2.compute_mixing_matrix_parametric(nus=self.preset.qubic.joint_out.allnus, x=self.preset.acquisition.beta_iter)
 
                 del tod_comp
                 gc.collect()
@@ -814,7 +812,7 @@ class PipelineComponentMapMaking:
             self.update_components(seenpix=self.preset.sky.seenpix)
 
             ### Update self.preset.acquisition.beta_iter^{k} -> self.preset.acquisition.beta_iter^{k+1}
-            if self.preset.comp.params_foregrounds["fit_spectral_index"]:
+            if self.preset.comp.params_foregrounds["fit_mixing_matrix"]:
                 self.update_spectral_index()
 
             ### Update self.gain.gain_iter^{k} -> self.gain.gain_iter^{k+1}

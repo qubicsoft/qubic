@@ -12,7 +12,7 @@ CMB:
 Foregrounds:
     ### This section define the in/out foregrounds contribution
 
-  fit_spectral_index: true                                                     # If False, the beta reconstruction is skipped
+  fit_mixing_matrix: false                                                     # If False, the beta reconstruction is skipped
   bin_mixing_matrix: 4
   blind_method: "minimize"                                                      # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
                                                                                 # 'alternate' or 'minimize'
@@ -22,7 +22,7 @@ Foregrounds:
     Dust_in: true
     Dust_out: true
 
-    type: "blind"                                                          # Reconstruction method
+    type: "parametric"                                                          # Reconstruction method
     model: "d0"
     beta_init: [1.54, 0.05, 10000000]                                             # PySM model
     nside_beta_in: 0                                                            # Input pixelization for beta_d (in a case of d1 model)
@@ -110,10 +110,10 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 5
-    n_iter_pcg: 12                                                              # Number of PCG iterations
+    n_init_iter_pcg: 3
+    n_iter_pcg: 5                                                            # Number of PCG iterations
     tol_pcg: 1.0e-15                                                            # Tolerance for PCG
-    n_iter_loop: 25                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+    n_iter_loop: 3                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
     ites_to_converge: 1                                                         # should be less than n_iter_loop
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                             # Fixing pixels outside QUBIC patch

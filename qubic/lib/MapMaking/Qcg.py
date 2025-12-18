@@ -160,7 +160,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         if self.b_norm == 0:
             self.error = 0
             self.x[...] = 0
-            self.convergence = np.array([])
+            self.convergence = []
             raise StopIteration("RHS is zero.")
 
         self.r[...] = self.b
@@ -207,7 +207,7 @@ class PCGAlgorithm(IterativeAlgorithm):
 
         self.r -= alpha * self.q
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)
-        self.convergence = np.append(self.convergence, self.error)
+        self.convergence.append(self.error)
 
         if self.error < self.tol:
             raise StopIteration("Solver reached maximum tolerance.")

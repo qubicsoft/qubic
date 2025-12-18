@@ -478,7 +478,79 @@ class PipelineComponentMapMaking:
                 raise ValueError("d1 model not implemented yet.")
 
         elif method == "blind":
-            raise ValueError("Blind is not implemented yet.")
+            previous_step = self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, 1:].copy()
+
+            if self._steps == 0:
+                self.allAmm_iter = np.array([self.preset.acquisition.Amm_iter])
+
+            ### Blind using scipy.optimize.minimize
+            if self.preset.comp.params_foregrounds["blind_method"] == "minimize":
+                # Neveer used? It won't work as it is for now
+                self.chi2 = Chi2(
+                    self.preset,
+                    tod_comp,
+                    parametric=False,
+                )
+                x0 = []
+                bnds = []
+                for inu in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
+                    for icomp in range(1, len(self.preset.comp.components_name_out)):
+                        x0 += [np.mean(self.preset.acquisition.Amm_iter[inu * self.fsub : (inu + 1) * self.fsub, icomp])]
+                        bnds += [(0, None)]
+
+                Ai = minimize(
+                    self.chi2,
+                    x0=x0,
+                    # bounds=bnds,
+                    method="L-BFGS-B",
+                    # constraints=self.get_constrains(),
+                    callback=self.callback,
+                    tol=1e-10,
+                ).x
+                Ai = self.chi2.compute_mixing_matrix_blind(Ai)
+
+                for inu in range(self.preset.qubic.joint_out.qubic.nsub):
+                    for icomp in range(1, len(self.preset.comp.components_name_out)):
+                        self.preset.acquisition.Amm_iter[inu, icomp] = Ai[inu, icomp]
+
+            ### Blind using PCG
+            elif self.preset.comp.params_foregrounds["blind_method"] == "PCG":
+                raise ValueError("Blind PCG is not implemtented yet.")
+
+            ### Blind using scipy.optimize.minimize in an alternate manner, with a loop over components
+            elif self.preset.comp.params_foregrounds["blind_method"] == "alternate":
+                raise ValueError("Blind alternate is not implemented yet.")
+            else:
+                raise TypeError(f"{self.preset.comp.params_foregrounds['blind_method']} is not yet implemented..")
+
+            self.allAmm_iter = np.concatenate((self.allAmm_iter, np.array([self.preset.acquisition.Amm_iter])), axis=0)
+
+            if self.preset.tools.rank == 0:
+                print(f"Iteration k     : {previous_step.ravel()}")
+                print(f"Iteration k + 1 : {self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}")
+                print(f"Truth           : {self.preset.mixingmatrix.Amm_in[: self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}")
+                print(
+                    f"Residuals       : {self.preset.mixingmatrix.Amm_in[: self.preset.qubic.joint_out.qubic.nsub, 1:].ravel() - self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, 1:].ravel()}"
+                )
+                self.plots.plot_sed(
+                    self.preset.qubic.joint_in.qubic.allnus,
+                    self.preset.mixingmatrix.Amm_in[: self.preset.qubic.joint_in.qubic.nsub, 1:],
+                    self.preset.qubic.joint_out.qubic.allnus,
+                    self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, 1:],
+                    ki=self._steps,
+                    gif=self.preset.tools.params["PCG"]["do_gif"],
+                )
+
+                if self.preset.tools.params["PCG"]["do_gif"]:
+                    do_gif(
+                        self.gif_folder,
+                        "A_iter",
+                        output="animation_A_iter.gif",
+                    )
+
+            del tod_comp
+            gc.collect()
+
         elif method == "parametric_blind":
             raise ValueError("Parametric_blind is not implemented yet.")
 

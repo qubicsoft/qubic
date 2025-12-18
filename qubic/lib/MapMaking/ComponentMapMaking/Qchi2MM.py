@@ -1,3 +1,4 @@
+import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
 from pyoperators import MPI
@@ -12,9 +13,10 @@ def _dot(x, y, comm):
 
 
 class Chi2:
-    def __init__(self, preset, TOD_sim, full_beta_map=None):
+    def __init__(self, preset, TOD_sim, parametric=True, full_beta_map=None):
         self.preset = preset
         self.TOD_sim = TOD_sim
+        self.parametric = parametric
         self.nus = self.preset.qubic.joint_out.allnus
         self.full_beta_map = full_beta_map
 
@@ -38,7 +40,14 @@ class Chi2:
             self.TOD_sim_fp.append(self.TOD_sim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.ncomp * self.nsub * npix, self.nsampling_ndet)))
         self.TOD_sim_fp = np.array(self.TOD_sim_fp)
 
-    def compute_mixing_matrix(self, x):
+    def compute_mixing_matrix_parametric(self, nus, x):
+        """
+        Parametric case
+        """
+        mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_model_out)
+        return mixingmatrix.eval(nus, *x)
+
+    def compute_mixing_matrix_blind(self, x):
         """
         Blind case
         """
@@ -53,7 +62,13 @@ class Chi2:
     def __call__(self, x):
         ### If constant spectral index
         if self.TOD_sim.ndim == 3:
-            A = self.compute_mixing_matrix(x)
+            # If parametric -> we compute the mixing matrix element according to the spectral index
+            if self.parametric:
+                A = self.compute_mixing_matrix_parametric(self.nus, x)
+
+            # If blind -> we treat the mixing matrix element as free parameters
+            else:
+                A = self.compute_mixing_matrix_blind(x)
 
             ### Separe the mixing matrix element for 150 and 220 GHz if needed
             ysim = []
@@ -63,64 +78,35 @@ class Chi2:
             ### Create simulated TOD
             ysim = np.concatenate(ysim, axis=0)
 
-            ### Separe QUBIC and Planck
-            Aext = A[self.nfreq :]
-
-            # TODO : should we convolve here ? Tom : I think we should if convolutin_out==True, but fwhm_mapmaking is not adapted for that, we need to compute specific fwhm for planck
-            H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext)
-
-            ### Compute Planck part of the chi^2
-            mycomp = self.preset.comp.components_iter.copy()
-            mycomp[:, ~self.preset.sky.seenpix] = 0
-
-            ysim_pl = H_planck(mycomp)
-
             ### Compute residuals in time domain
             _residuals = ysim - self.preset.acquisition.TOD_qubic
             self.Lqubic = 0.5 * _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
-
-            _residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
-
-            self.Lplanck = 0.5 * _dot(_residuals_pl.T, self.preset.acquisition.invN.operands[1](_residuals_pl), self.preset.comm)
-
-            return self.Lqubic + self.Lplanck
-
-        elif self.TOD_sim.ndim == 4:  # this implementation is exactly the same as for the DB, which feels wrong?
-            # It is broken anyway
-
-            x = x.reshape((self.ncomp - 1, self.npix))
-            A = self._get_mixingmatrix(self.nus, x)
-
-            ### Separe the mixing matrix element for 150 and 220 GHz
-            Aq150 = A[:, : self.nsub, :].reshape((self.ncomp * self.nsub * self.npix))
-            Aq220 = A[:, self.nsub : 2 * self.nsub, :].reshape((self.ncomp * self.nsub * self.npix))
-
-            ### Create simulated TOD
-            ysim = np.concatenate((Aq150 @ self.TOD_sim150, Aq220 @ self.TOD_sim220), axis=0)
+            self.Lplanck = 0
 
             if self.parametric:
-                ### Fill the full sky map of beta with the unknowns
-                full_map_beta = self.full_beta_map.copy()
-                x = x.reshape(((self.ncomp - 1) * self.npix))
-                full_map_beta[self.seenpix_beta] = x
+                # Note: We can use Planck in the Mixing Matrix only for the parametric case !
+                ### Separe QUBIC and Planck
+                Aext = A[self.nfreq :]
 
-                ### Compute the mixing matrix for the full sky
-                A = self._get_mixingmatrix(self.nus, full_map_beta)
-
-                ### Separe QUBIC and Planck and switch axes
-                Aext = np.transpose(A[:, 2 * self.nsub :, :], (1, 0, 2))
-
-                H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext, convolution=False)
+                # TODO : should we convolve here ? Tom : I think we should if convolutin_out==True, but fwhm_mapmaking is not adapted for that, we need to compute specific fwhm for planck
+                H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext)
 
                 ### Compute Planck part of the chi^2
-                ysim_pl = H_planck(self.preset.comp.components_iter)
+                mycomp = self.preset.comp.components_iter.copy()
+                mycomp[:, ~self.preset.sky.seenpix] = 0
 
-                ### Compute residuals in time domain
-                _residuals = np.r_[ysim, ysim_pl] - self.TOD_obs
+                ysim_pl = H_planck(mycomp)
 
-                return 0.5 * _dot(_residuals.T, self.preset.acquisition.invN(_residuals), self.preset.comm)
+                _residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
 
-            else:
-                raise TypeError("Varying mixing matrix along the LOS is not yet implemented")
+                self.Lplanck = 0.5 * _dot(_residuals_pl.T, self.preset.acquisition.invN.operands[1](_residuals_pl), self.preset.comm)
+
+            L = self.Lqubic + self.Lplanck
+
+            return L
+
+        elif self.TOD_sim.ndim == 4:
+            raise ValueError("d1 model is not implemented.")
+
         else:
             raise TypeError("dsim should have 3 or 4 dimensions.")

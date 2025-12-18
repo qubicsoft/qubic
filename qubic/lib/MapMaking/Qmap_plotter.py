@@ -657,11 +657,11 @@ class PlotsCMM:
             plt.ylim(eps_min, eps_max)
             plt.yscale("log")
 
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki + 1}.svg")
+            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/A_iter{ki + 1}.svg")
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki}.svg")
+                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/A_iter{ki}.svg")
 
             plt.close()
 

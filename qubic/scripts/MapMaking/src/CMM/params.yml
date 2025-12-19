@@ -1,5 +1,5 @@
 save_iter: 1                                                                    # Save every 'save_iter' iteration
-foldername: "test_planck_inside"                                                              # Name of the saved folder
+foldername: "test_planck_0"                                                              # Name of the saved folder
 filename: "test"                                                                # Name of the saved file
 lastite: true                                                                   # Keep only the last iteration
 
@@ -90,9 +90,9 @@ SKY:
 
 PLANCK:
     ### This section define which external data are we using
-    level_noise_planck: 1                                                       # Noise level for Planck data
+    level_noise_planck: 0                                                       # Noise level for Planck data
     nsub_planck: 6                                                             # Number of integration step for Planck data
-    weight_planck: 1                                                            # Weight of Planck data within the QUBIC patch
+    weight_planck: 0                                                            # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                       # FWHM for apodized QUBIC patch
     30GHz: False
     44GHz: False

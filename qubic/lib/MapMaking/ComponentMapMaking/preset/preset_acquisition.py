@@ -299,7 +299,7 @@ class PresetAcquisition:
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        self.TOD_external = self.H.operands[1](self.components_in_convolved) + noise_external.ravel()
+        self.TOD_external = self.H.operands[1](self.components_in) + noise_external.ravel()
         self.TOD_external_zero_outside_patch = self.components_in_convolved.copy()
         self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
         self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()

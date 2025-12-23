@@ -103,9 +103,9 @@ class QubicObservation:
         samplings.azimuth = P[:,1].astype(float)
         samplings.elevation = P[:,2].astype(float)
         samplings.pitch = np.zeros(npointings)        
-        #samplings.angle_hwp = np.zeros(npointings)     
+        #samplings.angle_hwp = np.full(npointings, 90)     
         samplings.angle_hwp = P[:,3].astype(int)  
-        samplings.fix_az = False      # check what it does
+        samplings.fix_az = False
         samplings.time = (Time(P[:,0]) - samplings.date_obs).to_value('sec')  # -samplings.date_obs.unix
 
         return samplings

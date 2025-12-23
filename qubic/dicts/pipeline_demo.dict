@@ -1,5 +1,5 @@
 ############################################# Instrument ################################
-debug = False #False/True # Boolean
+debug =False #False/True # Boolean
 
 config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150e9 # 150e9 or 220e9 Hz
@@ -40,7 +40,7 @@ synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits'
 
 ############################################# Scene ################################
 nside=256
-kind='IQU'
+kind='IQU'  
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
 summer=False

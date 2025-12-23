@@ -1,5 +1,5 @@
-path_out: "test"
-datafilename: "test"
+path_out: "test_hwp/"
+datafilename: "test90"
 
 CMB:
     cmb: True
@@ -37,9 +37,9 @@ QUBIC:
     dtheta: 11.5               # Angle for coverage
     POINTINGS:
         random_pointing: False     
-        sweeping_pointing: True
+        sweeping_pointing: False
         repeat_pointing: False
-        scanning_strategy: False
+        scanning_strategy: True
         duration: 10            # hours of observation starting from date_obs
         date_obs: '2026-01-01 00:00:00'
         pointings_file:         # pickle file containing pointings inside a QubicSampling class
@@ -57,7 +57,7 @@ PLANCK:
 
     external_data: True                    
     weight_planck: 0             # Weight of Planck data within the QUBIC patch
-    level_noise_planck: 0        # Noise level for Planck data
+    level_noise_planck: 1        # Noise level for Planck data
     seed_noise: 22222
     bandwidth_planck: 0.2        # Multiplicative factor to define the bandwidth of Planck's data
     nsub_planck: 100              # Number of sub acquisitions for Planck's data
@@ -69,7 +69,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_iter_pcg: 300            # Number of PCG iterations #100
+    n_iter_pcg: 50            # Number of PCG iterations #100
     tol_pcg: 1.0e-08          # Tolerance for PCG
     preconditioner: True
     initial_guess_intensity_to_zero: True

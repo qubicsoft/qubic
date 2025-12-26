@@ -2,7 +2,6 @@ import os
 
 import emcee
 import numpy as np
-import yaml
 from multiprocess import Pool
 from schwimmbad import MPIPool
 
@@ -16,8 +15,8 @@ class FitEllSpace:
         self.yerr = yerr
         self.model = model
 
-        with open(parameters_file, "r") as tf:
-            self.params = yaml.safe_load(tf)
+        self.params = parameters_file
+        self.list_components = ["cmb", "dust", "synchrotron", "correlation"]
 
         ### Check if the user is giving the right dimensions
         self._check_shapein()
@@ -30,6 +29,20 @@ class FitEllSpace:
 
         ### Compute the noise covariance matrix
         self._get_noise_covariance_matrix(sample_variance=sample_variance, fsky=fsky, dl=dl, diagonal=diagonal)
+
+    def get_fitting_parameters_names(self):
+        fit_param_names = []
+
+        for comp in self.list_components:
+            if comp not in self.params:
+                continue
+
+            for param_name, param_info in self.params[comp].items():
+                # Only add if "fit" key exists and is True
+                if isinstance(param_info, dict) and param_info.get("fit") is True:
+                    fit_param_names.append(param_name)
+
+        return np.array(fit_param_names)
 
     def _reshape_spectra_model(self, data):
         data_reshaped = np.zeros((self.nspecs, self.nbins))
@@ -105,6 +118,8 @@ class FitEllSpace:
         keys = self.params.keys()
 
         for key in keys:
+            if key not in self.list_components:
+                continue
             params = self.params[key]
             for param in params:
                 ### Check if the user define the parameter as free and not fixed at given value
@@ -129,6 +144,8 @@ class FitEllSpace:
         keys = self.params.keys()
         count = 0
         for key in keys:
+            if key not in self.list_components:
+                continue
             params = self.params[key].keys()
             for param in params:
                 if x[count] > self.params[key][param]["bound_max"] or x[count] < self.params[key][param]["bound_min"]:
@@ -142,6 +159,8 @@ class FitEllSpace:
         comps = self.params.keys()
         count = 0
         for key in comps:
+            if key not in self.list_components:
+                continue
             params = self.params[key].keys()
             for param in params:
                 ### Add values of the fixed parameters only if there is no True in the params.yaml file

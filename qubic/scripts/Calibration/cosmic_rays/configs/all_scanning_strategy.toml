@@ -3,13 +3,15 @@
 source = "/media/DataQubic/**/*(MoonScan, SkyScan, ScanFast, SkyDip, dome)*"
 
 [optional]
+exclude = ["IV", "2023"]
 destination = "cr_results"
-remove_drift = false
-mask = "../masks"
+mask = "masks"
 vertical_points = 3
 exponential_points = 6
+std_coeff = 2
 analysis_type = "all"
 tes = [-1]
 remove_files = true
-deconvolution = false
 dpi = 300
+
+

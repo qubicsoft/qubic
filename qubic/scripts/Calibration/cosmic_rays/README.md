@@ -71,3 +71,15 @@ detection process:
 Each parameter combination is evaluated independently, and the results are stored in separate output directories.
 
 
+### Standalone preprocessing and TOD comparison
+
+The preprocessing of the TODs can also be executed independently of the cosmic ray detection pipeline.
+Running only the `preprocessing.py` module allows one to directly compare the raw Time-Ordered Data (TOD) with the
+corresponding cleaned TOD, after baseline removal and decorrelation from azimuth and elevation effects.
+
+In particular, when applied to the dataset analyzed in the paper  
+(2022-07-14 23.54.19 MoonScan Speed VE14), this standalone preprocessing produces the raw-versus-cleaned TOD
+comparison shown in the publication.
+
+
+

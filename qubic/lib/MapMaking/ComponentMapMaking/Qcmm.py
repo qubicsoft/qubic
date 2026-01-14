@@ -53,6 +53,7 @@ class PipelineComponentMapMaking:
         #     pass
 
         self.fsub = int(self.preset.qubic.joint_out.qubic.nsub / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
+        self.beta_err = []
 
         ### Create variables for stopping condition
         self._rms_noise_qubic_patch_per_ite = np.empty((self.preset.tools.params["PCG"]["ites_to_converge"], len(self.preset.comp.components_name_out)))
@@ -413,10 +414,7 @@ class PipelineComponentMapMaking:
 
         ### Update the mixing matrix according to the one computed using the beta parameter
         updated_mixingmatrix = previous_mixingmatrix
-        print("test")
-        print(model_mixingmatrix.shape)
-        print(updated_mixingmatrix.shape)
-        stop
+
         for ii in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
             updated_mixingmatrix[ii * self.fsub : (ii + 1) * self.fsub, icomp] = model_mixingmatrix[ii * self.fsub : (ii + 1) * self.fsub, icomp]
 
@@ -451,7 +449,8 @@ class PipelineComponentMapMaking:
                 self.chi2 = Chi2(self.preset, tod_comp, parametric=True)
 
                 ### Fit using scipy.optimize.minimize
-                self.preset.acquisition.beta_iter = minimize(self.chi2, x0=self.preset.acquisition.beta_iter, method="CG", callback=self.callback, tol=1e-10).x
+                res = minimize(self.chi2, x0=self.preset.acquisition.beta_iter, method="L-BFGS-B", callback=self.callback, options={"maxiter": 1000, "ftol": 1e-9})
+                self.preset.acquisition.beta_iter = res.x
 
                 self.preset.acquisition.Amm_iter = self.chi2.compute_mixing_matrix_parametric(nus=self.preset.qubic.joint_out.allnus, x=self.preset.acquisition.beta_iter)
 
@@ -461,13 +460,14 @@ class PipelineComponentMapMaking:
                 if self.preset.tools.rank == 0:
                     print(f"Iteration k     : {previous_beta}")
                     print(f"Iteration k + 1 : {self.preset.acquisition.beta_iter}")
+                    print(f"Error           : {self.beta_err[-1]}")
                     print(f"Truth           : {self.preset.mixingmatrix.beta_in}")
                     print(f"Residuals       : {self.preset.mixingmatrix.beta_in - self.preset.acquisition.beta_iter}")
 
                 self.preset.tools.comm.Barrier()
                 self.preset.acquisition.allbeta = np.concatenate((self.preset.acquisition.allbeta, np.array([self.preset.acquisition.beta_iter])), axis=0)
 
-                self.plots.plot_beta_iteration(self.preset.acquisition.allbeta, truth=self.preset.mixingmatrix.beta_in, ki=self._steps)
+                self.plots.plot_beta_iteration(self.preset.acquisition.allbeta, truth=self.preset.mixingmatrix.beta_in, ki=self._steps, errors=self.beta_err)
 
             ### Model with spatial variation of spectral index
             else:
@@ -539,8 +539,7 @@ class PipelineComponentMapMaking:
 
                 if self.preset.tools.params["PCG"]["do_gif"]:
                     do_gif(
-                        self.gif_folder,
-                        "A_iter",
+                        "CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/",
                         output="animation_A_iter.gif",
                     )
 

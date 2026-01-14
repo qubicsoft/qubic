@@ -635,87 +635,118 @@ class PlotsCMM:
         None
         """
 
-        if self.params["Plots"]["conv_beta"]:
-            nf_in, nc_in = A_in.shape
-            nf_out, nc_out = A_out.shape
-            fsub = int(nf_in / nf_out)
-            plt.figure(figsize=figsize)
+        if not self.params["Plots"]["conv_beta"]:
+            return
 
-            for ic in range(nc_in):
-                plt.plot(nus_in, A_in[:, ic], "-k")
+        nf_in, nc_in = A_in.shape
+        nf_out, nc_out = A_out.shape
+        fsub = nf_in // nf_out
 
-            for inu in range(nf_out):
-                plt.errorbar(nus_out[inu], np.mean(A_in[inu * fsub : (inu + 1) * fsub]), fmt="og")
+        # label
+        label_plot = []
+        fg = self.preset.tools.params["Foregrounds"]
 
-            for ic in range(nc_out):
-                plt.errorbar(nus_out, A_out[:, ic], fmt="xb")
+        if fg["Dust"]["Dust_out"]:
+            label_plot.append(f"Dust {fg['Dust']['model']}")
+        if fg["Synchrotron"]["Synchrotron_out"]:
+            label_plot.append(f"Sync {fg['Synchrotron']['model']}")
 
-            plt.xlim(120, 260)
-            eps = 0.4
-            eps_max = A_in.max() * (1 + eps)
-            eps_min = A_in.min() * (1 - eps)
-            plt.ylim(eps_min, eps_max)
-            plt.yscale("log")
+        label_plot = " - ".join(label_plot)
 
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/A_iter{ki + 1}.svg")
+        plt.figure(figsize=figsize)
+        plt.title("Mixing matrix fitting using blind method")
 
-            if self.preset.tools.rank == 0:
-                if ki > 0 and gif is False:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/A_iter{ki}.svg")
+        # true curves
+        for ic in range(nc_in):
+            plt.plot(nus_in, A_in[:, ic], "-k", label=label_plot if ic == 0 else None)
 
-            plt.close()
+        # true binned points
+        for inu in range(nf_out):
+            mean_val = np.mean(A_in[inu * fsub : (inu + 1) * fsub])
+            plt.errorbar(nus_out[inu], mean_val, fmt="og", label="True" if inu == 0 else None)
 
-    def plot_beta_iteration(self, beta, figsize=(8, 6), truth=None, ki=0):
-        """
-        Method to plot beta as a function of iteration. Beta can have shape (niter) or (niter, nbeta).
+        # fitted
+        for ic in range(nc_out):
+            plt.errorbar(nus_out, A_out[:, ic], fmt="xb", label="Fitted" if ic == 0 else None)
 
-        Parameters:
-        beta : numpy.ndarray
-            Array containing beta values for each iteration. Can be 1D or 2D.
-        figsize : tuple, optional
-            Size of the figure to be plotted. Default is (8, 6).
-        truth : numpy.ndarray or float, optional
-            True value(s) of beta to be plotted as a reference line. Default is None.
-        ki : int, optional
-            Iteration index for saving the plot. Default is 0.
+        plt.xlim(120, 260)
+        plt.xlabel("Frequency (GHz)")
+        plt.ylabel("Mixing matrix element")
+        plt.yscale("log")
 
-        Returns:
-        None
-        """
+        eps = 0.4
+        plt.ylim(A_in.min() * (1 - eps), A_in.max() * (1 + eps))
 
-        if self.params["Plots"]["conv_beta"]:
-            niter = beta.shape[0]
-            alliter = np.arange(0, niter, 1)
+        plt.legend()
+        out = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki + 1}.svg"
+        plt.savefig(out)
 
-            plt.figure(figsize=figsize)
-            plt.subplot(2, 1, 1)
+        if self.preset.tools.rank == 0 and ki > 0 and not gif:
+            prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki}.svg"
+            if os.path.exists(prev):
+                os.remove(prev)
 
-            ### Constant beta on the sky
-            if np.ndim(beta) == 2:
-                plt.plot(alliter[1:] - 1, beta[1:])
-                if truth is not None:
-                    plt.axhline(truth, ls="--", color="red")
+        plt.close()
 
-            ### Varying beta on the sky
-            else:
-                for i in range(beta.shape[1]):
-                    plt.plot(alliter, beta[:, i], "-k", alpha=0.3)
-                    if truth is not None:
-                        for j in range(truth.shape[1]):
-                            plt.axhline(truth[i, j], ls="--", color="red")
+    def plot_beta_iteration(self, beta, figsize=(8, 6), truth=None, ki=0, errors=None):
+        if not self.params["Plots"]["conv_beta"]:
+            return
 
-            plt.subplot(2, 1, 2)
-            if np.ndim(beta) == 1:
-                plt.plot(alliter[1:] - 1, abs(truth - beta[1:]))
-            else:
-                for i in range(beta.shape[1]):
-                    plt.plot(alliter, abs(truth[i] - beta[:, i]), "-k", alpha=0.3)
-            plt.yscale("log")
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/beta_iter{ki + 1}.svg")
+        niter = beta.shape[0]
+        it = np.arange(niter)
 
-            if ki > 0:
-                os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/beta_iter{ki}.svg")
-            plt.close()
+        fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]})
+
+        ax_top, ax_bot = axes
+
+        # beta evolution
+
+        if beta.ndim == 1:
+            ax_top.plot(it, beta, lw=2, label=r"$\beta$")
+
+            if errors is not None:
+                ax_top.errorbar(it, beta, yerr=errors, fmt="none", ecolor="tab:blue", elinewidth=1.5, capsize=3, alpha=0.8, zorder=3, label=r"$1\sigma$")
+
+            if truth is not None:
+                ax_top.axhline(truth, ls="--", color="red", lw=1.5, label="Truth")
+
+        else:
+            for i in range(beta.shape[1]):
+                ax_top.plot(it, beta[:, i], color="k", alpha=0.3)
+
+            if truth is not None:
+                for val in np.ravel(truth):
+                    ax_top.axhline(val, ls="--", color="red", alpha=0.5)
+
+        ax_top.set_ylabel(r"$\beta$")
+        ax_top.legend()
+        ax_top.grid(alpha=0.3)
+
+        # convergence
+
+        if beta.ndim == 1 and truth is not None:
+            ax_bot.plot(it, np.abs(beta - truth))
+        elif beta.ndim > 1 and truth is not None:
+            for i in range(beta.shape[1]):
+                ax_bot.plot(it, np.abs(beta[:, i] - truth[i]), color="k", alpha=0.3)
+
+        ax_bot.set_yscale("log")
+        ax_bot.set_xlabel("Iteration")
+        ax_bot.set_ylabel(r"$|\beta - \beta_{\mathrm{true}}|$")
+        ax_bot.grid(alpha=0.3)
+
+        # Save / cleanup
+
+        fname = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/beta_iter{ki + 1}.svg"
+        fig.tight_layout()
+        fig.savefig(fname)
+
+        if ki > 0:
+            old = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/beta_iter{ki}.svg"
+            if os.path.exists(old):
+                os.remove(old)
+
+        plt.close(fig)
 
     def _display_allresiduals(self, map_i, seenpix, ki=0):
         """
@@ -820,98 +851,94 @@ class PlotsCMM:
 
     def display_maps(self, seenpix, ki=0, reso=15, view="gnomview"):
         """
-
-        Method to display maps at given iteration.
-
-        Arguments:
-        ----------
-            - seenpix : array containing the id of seen pixels.
-            - ngif    : Int number to create GIF with ngif svg image.
-            - figsize : Tuple to control size of plots.
-            - nsig    : Int number to compute errorbars.
-
+        Display input / output / residual maps at a given iteration.
         """
-        if self.params["Plots"]["maps"]:
-            stk = ["I", "Q", "U"]
-            rms_i = np.zeros((1, 2))
+        if not self.params["Plots"]["maps"]:
+            return
 
-            maps_in = self.preset.acquisition.components_in_convolved
-            maps_rec = self.preset.comp.components_iter
-            maps_res = maps_rec - maps_in
+        stk = ["I", "Q", "U"]
+        rms_i = np.zeros((1, 2))
 
-            Nmaps, _, _ = maps_res.shape
+        maps_in = self.preset.acquisition.components_in_convolved
+        maps_rec = self.preset.comp.components_iter
+        maps_res = maps_rec - maps_in
+
+        ncomp = len(self.preset.comp.components_name_out)
+
+        for istk, s in enumerate(stk):
+            plt.figure(figsize=(6 * ncomp, 12))
             k = 0
 
-            for istk, s in enumerate(stk):
-                plt.figure(figsize=(3.5 * Nmaps, 12))
-                k = 0
+            for icomp in range(ncomp):
+                if icomp == 0 and istk > 0:
+                    rms_i[0, istk - 1] = np.std(maps_res[icomp, seenpix, istk])
 
-                for icomp in range(len(self.preset.comp.components_name_out)):
-                    if icomp == 0:
-                        if istk > 0:
-                            rms_i[0, istk - 1] = np.std(maps_res[icomp, seenpix, istk])
+                if view == "gnomview":
+                    hp.gnomview(
+                        maps_in[icomp, :, istk],
+                        rot=self.preset.sky.center,
+                        reso=reso,
+                        notext=True,
+                        title=f"Input {s}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 1),
+                    )
+                    hp.gnomview(
+                        maps_rec[icomp, :, istk],
+                        rot=self.preset.sky.center,
+                        reso=reso,
+                        notext=True,
+                        title=f"Output {s}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 2),
+                    )
+                    hp.gnomview(
+                        maps_res[icomp, :, istk],
+                        rot=self.preset.sky.center,
+                        reso=reso,
+                        notext=True,
+                        title=f"Residual {s} - Std = {np.std(maps_res[icomp, seenpix, istk]):.3e}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 3),
+                    )
 
-                    if view == "gnomview":
-                        hp.gnomview(
-                            maps_in[icomp, :, istk],
-                            rot=self.preset.sky.center,
-                            reso=reso,
-                            notext=True,
-                            title=f"Input {stk[istk]}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 1),
-                        )
-                        hp.gnomview(
-                            maps_rec[icomp, :, istk],
-                            rot=self.preset.sky.center,
-                            reso=reso,
-                            notext=True,
-                            title=f"Output {stk[istk]}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 2),
-                        )
-                        hp.gnomview(
-                            maps_res[icomp, :, istk],
-                            rot=self.preset.sky.center,
-                            reso=reso,
-                            notext=True,
-                            title=f"Residual {stk[istk]} - Std = {np.std(maps_res[icomp, seenpix, istk]):.3e}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 3),
-                        )
-                    elif view == "mollview":
-                        hp.mollview(
-                            maps_in,
-                            notext=True,
-                            title=f"Input {stk[istk]}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 1),
-                        )
-                        hp.mollview(
-                            maps_rec,
-                            notext=True,
-                            title=f"Output {stk[istk]}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 2),
-                        )
-                        hp.mollview(
-                            maps_rec,
-                            notext=True,
-                            title=f"Residual {stk[istk]} - Std = {np.std(maps_rec[icomp, seenpix, istk]):.3e}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 3),
-                        )
-                    k += 3
+                elif view == "mollview":
+                    hp.mollview(
+                        maps_in[icomp, :, istk],
+                        notext=True,
+                        title=f"Input {s}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 1),
+                    )
+                    hp.mollview(
+                        maps_rec[icomp, :, istk],
+                        notext=True,
+                        title=f"Output {s}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 2),
+                    )
+                    hp.mollview(
+                        maps_res[icomp, :, istk],
+                        notext=True,
+                        title=f"Residual {s} - Std = {np.std(maps_res[icomp, seenpix, istk]):.3e}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 3),
+                    )
 
-                plt.tight_layout()
-                plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki + 1}.svg")
+                k += 3
 
-                if self.preset.tools.rank == 0:
-                    if ki > 0:
-                        os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki}.svg")
+            plt.tight_layout()
+            out = f"CMM/{self.preset.tools.params['foldername']}/Plots/{s}/maps_iter{ki + 1}.svg"
+            plt.savefig(out)
 
-                plt.close()
-            self.preset.acquisition.rms_plot = np.concatenate((self.preset.acquisition.rms_plot, rms_i), axis=0)
+            if self.preset.tools.rank == 0 and ki > 0:
+                prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/{s}/maps_iter{ki}.svg"
+                if os.path.exists(prev):
+                    os.remove(prev)
+
+            plt.close()
+
+        self.preset.acquisition.rms_plot = np.concatenate((self.preset.acquisition.rms_plot, rms_i), axis=0)
 
     def plot_gain_iteration(self, gain, figsize=(8, 6), ki=0):
         """
@@ -959,19 +986,28 @@ class PlotsCMM:
             plt.close()
 
     def plot_rms_iteration(self, rms, figsize=(8, 6), ki=0):
-        if self.params["Plots"]["conv_rms"]:
-            plt.figure(figsize=figsize)
+        if not self.params["Plots"]["conv_rms"]:
+            return
 
-            plt.plot(rms[1:, 0], "-b", label="Q")
-            plt.plot(rms[1:, 1], "-r", label="U")
+        plt.figure(figsize=figsize)
 
-            plt.yscale("log")
+        plt.plot(rms[1:, 0], "-b", label="Q")
+        plt.plot(rms[1:, 1], "-r", label="U")
 
-            plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki + 1}.svg")
+        plt.yscale("log")
+        plt.xlabel("Iteration")
+        plt.ylabel("RMS")
+        plt.title("RMS evolution")
+        plt.legend()
 
-            if self.preset.tools.rank == 0:
-                if ki > 0:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki}.svg")
+        plt.tight_layout()
 
-            plt.close()
+        out = f"CMM/{self.preset.tools.params['foldername']}/Plots/rms_iter{ki + 1}.svg"
+        plt.savefig(out)
+
+        if self.preset.tools.rank == 0 and ki > 0:
+            prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/rms_iter{ki}.svg"
+            if os.path.exists(prev):
+                os.remove(prev)
+
+        plt.close()

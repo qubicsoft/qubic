@@ -299,10 +299,11 @@ class PresetAcquisition:
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        self.TOD_external = self.H.operands[1](self.components_in) + noise_external.ravel()
+        self.TOD_external = self.H.operands[1](self.components_in_convolved) + noise_external.ravel()
         self.TOD_external_zero_outside_patch = self.components_in_convolved.copy()
         self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
         self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
+
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         # _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
         # maps_external = _r(self.TOD_external)
@@ -317,13 +318,13 @@ class PresetAcquisition:
         #     for i in range(maps_external.shape[0]):
         #         maps_external[i] = C(maps_external[i])
 
-        # if self.preset_tools.params["PCG"]["fix_pixels_outside_patch"]:
-        #     maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
-        #     self.TOD_external = _r.T(maps_external)
+        # # if self.preset_tools.params["PCG"]["fix_pixels_outside_patch"]:
+        # #     maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
+        # #     self.TOD_external = _r.T(maps_external)
 
-        #     self.seenpix_external = np.tile(self.preset_sky.seenpix_qubic, (maps_external.shape[0], 3, 1)).reshape(maps_external.shape)
+        # #     self.seenpix_external = np.tile(self.preset_sky.seenpix_qubic, (maps_external.shape[0], 3, 1)).reshape(maps_external.shape)
 
-        ### Planck dataset with 0 outside QUBIC patch (Planck is assumed on the full sky)
+        # ## Planck dataset with 0 outside QUBIC patch (Planck is assumed on the full sky)
         # maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
         # self.TOD_external_zero_outside_patch = _r.T(maps_external)
 

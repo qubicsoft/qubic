@@ -10,7 +10,7 @@ class HDF5Dict:
         self.compression = compression
         self.compression_opts = compression_opts
 
-    # --- Public API -----------------------------------------------------
+    # Utilities functions
     def save_dict(self, filename: str, data: Dict[str, Any], mode: str = "w") -> None:
         with h5py.File(filename, mode) as h5f:
             self._write_group(h5f, data)
@@ -53,7 +53,7 @@ class HDF5Dict:
 
         raise ValueError(f"Unknown object type at path: {path}")
 
-    # --- Internal helpers -----------------------------------------------
+    # Internal helpers
     def _write_group(self, h5group: h5py.Group, data: Dict[str, Any]) -> None:
         for key, value in data.items():
             self._write_item(h5group, key, value)

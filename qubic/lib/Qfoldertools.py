@@ -80,7 +80,7 @@ def natural_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", str(s))]
 
 
-def do_gif(svg_folder, output="animation.gif", fps=15):
+def do_gif(svg_folder, output="animation.gif", fps=5):
     svg_files = sorted(Path(svg_folder).glob("*.svg"), key=natural_key)
     images = []
 

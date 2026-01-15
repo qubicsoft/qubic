@@ -80,7 +80,6 @@ class Chi2:
 
             ### Compute residuals in time domain
             _residuals = ysim - self.preset.acquisition.TOD_qubic
-            _residuals /= self.preset.acquisition.TOD_qubic.std()
 
             self.Lqubic = 0.5 * _dot(_residuals.T, self.preset.acquisition.invN.operands[0](_residuals), self.preset.comm)
             self.Lplanck = 0
@@ -100,7 +99,6 @@ class Chi2:
                 ysim_pl = H_planck(mycomp)
 
                 _residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
-                _residuals_pl /= self.preset.acquisition.TOD_external_zero_outside_patch.std()
 
                 self.Lplanck = 0.5 * _dot(_residuals_pl.T, self.preset.acquisition.invN.operands[1](_residuals_pl), self.preset.comm)
 

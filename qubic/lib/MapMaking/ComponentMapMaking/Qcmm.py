@@ -53,7 +53,6 @@ class PipelineComponentMapMaking:
         #     pass
 
         self.fsub = int(self.preset.qubic.joint_out.qubic.nsub / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
-        self.beta_err = []
 
         ### Create variables for stopping condition
         self._rms_noise_qubic_patch_per_ite = np.empty((self.preset.tools.params["PCG"]["ites_to_converge"], len(self.preset.comp.components_name_out)))
@@ -460,14 +459,13 @@ class PipelineComponentMapMaking:
                 if self.preset.tools.rank == 0:
                     print(f"Iteration k     : {previous_beta}")
                     print(f"Iteration k + 1 : {self.preset.acquisition.beta_iter}")
-                    print(f"Error           : {self.beta_err[-1]}")
                     print(f"Truth           : {self.preset.mixingmatrix.beta_in}")
                     print(f"Residuals       : {self.preset.mixingmatrix.beta_in - self.preset.acquisition.beta_iter}")
 
                 self.preset.tools.comm.Barrier()
                 self.preset.acquisition.allbeta = np.concatenate((self.preset.acquisition.allbeta, np.array([self.preset.acquisition.beta_iter])), axis=0)
 
-                self.plots.plot_beta_iteration(self.preset.acquisition.allbeta, truth=self.preset.mixingmatrix.beta_in, ki=self._steps, errors=self.beta_err)
+                self.plots.plot_beta_iteration(self.preset.acquisition.allbeta, truth=self.preset.mixingmatrix.beta_in, ki=self._steps)
 
             ### Model with spatial variation of spectral index
             else:
@@ -478,6 +476,14 @@ class PipelineComponentMapMaking:
 
             if self._steps == 0:
                 self.allAmm_iter = np.array([self.preset.acquisition.Amm_iter])
+                self.plots.plot_sed(
+                    self.preset.qubic.joint_in.qubic.allnus,
+                    self.preset.mixingmatrix.Amm_in[: self.preset.qubic.joint_in.qubic.nsub, 1:],
+                    self.preset.qubic.joint_out.qubic.allnus,
+                    self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, 1:],
+                    ki=self._steps - 1,
+                    gif=self.preset.tools.params["PCG"]["do_gif"],
+                )
 
             ### Blind using scipy.optimize.minimize
             if self.preset.comp.params_foregrounds["blind_method"] == "minimize":
@@ -541,6 +547,7 @@ class PipelineComponentMapMaking:
                     do_gif(
                         "CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/",
                         output="animation_A_iter.gif",
+                        fps=1,
                     )
 
             del tod_comp

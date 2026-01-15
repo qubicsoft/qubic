@@ -654,7 +654,7 @@ class PlotsCMM:
         label_plot = " - ".join(label_plot)
 
         plt.figure(figsize=figsize)
-        plt.title("Mixing matrix fitting using blind method")
+        plt.title(f"Mixing matrix fitting using blind method - Iteration #{ki + 1}")
 
         # true curves
         for ic in range(nc_in):
@@ -696,47 +696,54 @@ class PlotsCMM:
         it = np.arange(niter)
 
         fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]})
-
         ax_top, ax_bot = axes
 
-        # beta evolution
+        # Colors variables
+        if beta.ndim > 1:
+            cmap = plt.get_cmap("tab10")
+            colors = cmap.colors
+        else:
+            colors = ["tab:blue"]
 
+        # Spectral index evolution
         if beta.ndim == 1:
-            ax_top.plot(it, beta, lw=2, label=r"$\beta$")
+            ax_top.plot(it, beta, lw=2, color=colors[0], label=r"$\beta$")
 
             if errors is not None:
-                ax_top.errorbar(it, beta, yerr=errors, fmt="none", ecolor="tab:blue", elinewidth=1.5, capsize=3, alpha=0.8, zorder=3, label=r"$1\sigma$")
+                ax_top.errorbar(it, beta, yerr=errors, fmt="none", ecolor=colors[0], elinewidth=1.5, capsize=3, alpha=0.8, label=r"$1\sigma$")
 
             if truth is not None:
                 ax_top.axhline(truth, ls="--", color="red", lw=1.5, label="Truth")
 
         else:
             for i in range(beta.shape[1]):
-                ax_top.plot(it, beta[:, i], color="k", alpha=0.3)
+                color = colors[i % len(colors)]
+                ax_top.plot(it, beta[:, i], color=color, lw=2, alpha=0.8, label=rf"$\beta_{{{self.preset.comp.components_name_out[i + 1]}}}$")
 
             if truth is not None:
-                for val in np.ravel(truth):
-                    ax_top.axhline(val, ls="--", color="red", alpha=0.5)
+                for i, val in enumerate(np.ravel(truth)):
+                    color = colors[i % len(colors)]
+                    ax_top.axhline(val, ls="--", color=color, alpha=0.6)
 
         ax_top.set_ylabel(r"$\beta$")
-        ax_top.legend()
+        ax_top.legend(ncol=2, fontsize=9)
         ax_top.grid(alpha=0.3)
 
-        # convergence
-
-        if beta.ndim == 1 and truth is not None:
-            ax_bot.plot(it, np.abs(beta - truth))
-        elif beta.ndim > 1 and truth is not None:
-            for i in range(beta.shape[1]):
-                ax_bot.plot(it, np.abs(beta[:, i] - truth[i]), color="k", alpha=0.3)
+        # Convergence
+        if truth is not None:
+            if beta.ndim == 1:
+                ax_bot.plot(it, np.abs(beta - truth), color=colors[0], lw=2)
+            else:
+                for i in range(beta.shape[1]):
+                    color = colors[i % len(colors)]
+                    ax_bot.plot(it, np.abs(beta[:, i] - truth[i]), color=color, lw=2, alpha=0.8)
 
         ax_bot.set_yscale("log")
         ax_bot.set_xlabel("Iteration")
         ax_bot.set_ylabel(r"$|\beta - \beta_{\mathrm{true}}|$")
         ax_bot.grid(alpha=0.3)
 
-        # Save / cleanup
-
+        # Save
         fname = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/beta_iter{ki + 1}.svg"
         fig.tight_layout()
         fig.savefig(fname)

@@ -137,11 +137,7 @@ class Pipeline:
 
         ### Initialize PCG starting point
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
-        if w == 1.0:
-            initial_maps = np.zeros_like(self.preset.comp.components_iter[:, seenpix, :])
-        else:
-            initial_maps = self.preset.comp.components_iter[:, seenpix, :].copy()
-        #initial_maps = (self.preset.comp.components_iter - w * self.preset.comp.components_out)[:, seenpix, :].copy()
+        initial_maps = np.zeros_like(self.preset.comp.components_iter[:, seenpix, :]) #we should always start from zero, if you wish to start from Planck simply do weight_planck = 1.
 
         ### Update the preconditioner M
         self.preset.acquisition.M = self.get_preconditioner()
@@ -182,7 +178,6 @@ class Pipeline:
         )["x"]
 
         ### Update components
-        
         self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
         self.preset.acquisition.convergence.append(np.array(results["convergence"].copy()))
 
@@ -238,28 +233,9 @@ class Pipeline:
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
 
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
-        seen_mask = seenpix[None, :, None]
-        x_planck_full = self.preset.comp.components_out * ((1.0 - seen_mask) + w * seen_mask)
+        weight_mask = np.where(seenpix[None, :, None], w, 1.0) #the 1.0 adds planck outside the patch, the weight_planck adds planck inside the patch
+        x_planck_full = self.preset.comp.components_out * weight_mask
         self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck_full)))
-
-        # TO BE REMOVED
-        ### Update components when intensity maps are fixed
-        # elif self.preset.tools.params['PCG']['fixI']:
-        #    mask = np.ones((len(self.preset.comp.components_name_out), 12*self.preset.sky.params_sky['nside']**2, 3))
-        #    mask[:, :, 0] = 0
-        #    P = (
-        #        ReshapeOperator(PackOperator(mask).shapeout, (len(self.preset.comp.components_name_out), 12*self.preset.sky.params_sky['nside']**2, 2)) *
-        #        PackOperator(mask)
-        #        ).T
-
-        #    xI = self.preset.comp.components_convolved_out * (1 - mask)
-        #    self.preset.A = P.T * H_i.T * self.preset.acquisition.invN * H_i * P
-        #    self.preset.b = P.T (H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(xI)))
-
-        ### Update components
-        # else:
-        # self.preset.A = H_i.T * self.preset.acquisition.invN * H_i
-        # self.preset.b = H_i.T * self.preset.acquisition.invN * self.preset.acquisition.TOD_obs
 
         ### Run PCG
         self.call_pcg(self.preset.tools.params["PCG"]["n_iter_pcg"], seenpix=seenpix)

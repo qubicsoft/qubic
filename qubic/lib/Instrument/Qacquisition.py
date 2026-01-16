@@ -913,15 +913,14 @@ class PlanckAcquisition:
         array
             Array containing noise for Planck TOD
         """
-
+        nus = np.asarray(self.nus)
         state = np.random.get_state()
         np.random.seed(seed)
-        out = np.zeros((1, self.npix, 3))
+        out = np.zeros((len(nus), self.npix, 3))
 
-        #print("sigma in planck_acquisition.get_noise:", self.sigma)
-        
-        sigma = self.sigma[0] # has an extra dimension due to bands
-        out[0, :, :] = np.random.standard_normal((self.npix, 3)) * sigma
+        for nu in range(len(nus)):
+            sigma = self.sigma[nu] 
+            out[nu, :, :] = np.random.standard_normal((self.npix, 3)) * sigma
 
         np.random.set_state(state)
 
@@ -953,17 +952,15 @@ class PlanckAcquisition:
             _description_
         """
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
-
-        sigma = np.asarray(self.sigma[0])
-
-        assert sigma.shape == (3,), f"sigma must be shape (3,), got {sigma.shape}"
+        sigma = np.asarray(self.sigma)
+        assert sigma.shape == (len(self.nus),3), f"sigma must be shape (nus,3), got {sigma.shape}"
 
         npix = self.npix
 
         if planck_ntot == 0:
-            return IdentityOperator(shapein=(3 * npix)) # no nb needed, invN is built per band
+            return IdentityOperator(shapein=(3 * len(self.nus) * npix)) # in FMM, len(self.nus) is always 1, in CMM it is over the range
 
-        sigma_perpix = np.broadcast_to(sigma[None, None, :], (1, npix, 3))
+        sigma_perpix = np.broadcast_to(sigma[:, None, :], (len(self.nus), npix, 3))
 
         if beam_correction != 0:
             factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2
@@ -982,7 +979,6 @@ class PlanckAcquisition:
         scale[beta_pos] = beta[beta_pos] ** 2  # previously 1.0 / (beta[beta_pos] ** 2)
 
         weight = base_weight * scale[None, :, None]
-        #print('weight: ', weight.shape)
         invN = DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
 
         R = ReshapeOperator(invN.shapeout, invN.shape[0])

@@ -123,8 +123,8 @@ class PipelineFrequencyMapMaking:
         self.coverage = self.joint.qubic.subacqs[0].get_coverage()
         self.seenpix = self.coverage / self.coverage.max() > self.params["SKY"]["coverage_cut"]
         self.seenpix_qubic = self.coverage / self.coverage.max() > 0
-        self.mask = np.ones(12 * self.params["SKY"]["nside"] ** 2)
-        self.mask[self.seenpix] = self.params["PLANCK"]["weight_planck"]
+        #self.mask = np.ones(12 * self.params["SKY"]["nside"] ** 2)
+        #self.mask[self.seenpix] = self.params["PLANCK"]["weight_planck"]
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()
@@ -615,7 +615,7 @@ class PipelineFrequencyMapMaking:
             weight_planck = self.params["PLANCK"]["weight_planck"]
 
             # define a weight mask: 0 outside seenpix, weight inside seenpix, this will create what we want (outside based on boolean external_data, inside based on weight_planck)
-            weight_mask = np.where(seenpix[None, :, None], weight_planck, 1.0)
+            weight_mask = np.where(seenpix[None, :, None], weight_planck, 1.0) #the 1.0 adds planck outside the patch, the weight_planck adds planck inside the patch
             x_planck_weighted = x_planck * weight_mask
             b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck_weighted))
         else:
@@ -665,6 +665,9 @@ class PipelineFrequencyMapMaking:
         solution = np.ones(self.maps_input.shape)  # * hp.UNSEEN
         if self.params["PLANCK"]["external_data"]:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
+
+            weight_planck = self.params["PLANCK"]["weight_planck"] # we also need to add back the Planck contribution weighted if we were solving for difference
+            solution[:, self.seenpix, :] += weight_planck * self.maps_input_convolved[:, self.seenpix, :]
         else:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"][:, seenpix, :].copy()
 
@@ -694,28 +697,26 @@ class PipelineFrequencyMapMaking:
         ### Wait for all processes
         self.mpi._barrier()
 
-
+        ### Define starting point for PCG depending on the presence of Planck
         if self.params["PLANCK"]["external_data"]:
             # if Planck is added inside the patch, PCG is reconstructing the DIFFERENCE to Planck, so the start shoud be 0
             if self.params["PLANCK"]["weight_planck"] == 1.0:
                 starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
-
-            # in every other case, we can start from 0 or Planck as the PCG is solving for the actual maps
-            else:
+            elif self.params["PLANCK"]["weight_planck"] == 0.0:
                 starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
                 if self.params["PCG"]["initial_guess_intensity_to_zero"] is False:
                     starting_point[..., 0] = self.maps_input[:, self.seenpix, 0].copy()
+            # in every other case, we can start from 0 
+            else:
+                starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
         else:
             # no external data at all: previous behavior
             starting_point = np.zeros(self.maps_input.shape)
             if self.params["PCG"]["initial_guess_intensity_to_zero"] is False:
                 starting_point[..., 0] = self.maps_input[..., 0].copy()
 
+        ### Solve the map-making equation with PCG
         s_hat_temp = self.call_pcg(self.TOD, x0=starting_point, seenpix=self.seenpix)
-
-        if self.params["PLANCK"]["external_data"]: # add back Planck contribution weighted!
-            w = self.params["PLANCK"]["weight_planck"]
-            s_hat_temp[:, self.seenpix, :] += w * self.maps_input_convolved[:, self.seenpix, :]
         self.s_hat = s_hat_temp.copy()
         
         ### Wait for all processes

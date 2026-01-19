@@ -1,0 +1,634 @@
+module polarization
+
+    use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
+    implicit none
+
+    type PointingElementRot2d_i4_r4
+        integer(int32) :: index
+        real(real32)   :: r11, r21
+    end type
+
+    type PointingElementRot2d_i8_r4
+        integer(int64) :: index
+        real(real32)   :: r11, r21
+    end type
+
+    type PointingElementRot2d_i4_r8
+        integer(int32) :: index
+        real(real64)   :: r11, r21
+    end type
+
+    type PointingElementRot2d_i8_r8
+        integer(int64) :: index
+        real(real64)   :: r11, r21
+    end type
+
+    type PointingElementRot3d_i4_r4
+        integer(int32) :: index
+        real(real32)   :: r11, r22, r32
+    end type
+
+    type PointingElementRot3d_i8_r4
+        integer(int64) :: index
+        real(real32)   :: r11, r22, r32
+    end type
+
+    type PointingElementRot3d_i4_r8
+        integer(int32) :: index
+        real(real64)   :: r11, r22, r32
+    end type
+
+    type PointingElementRot3d_i8_r8
+        integer(int64) :: index
+        real(real64)   :: r11, r22, r32
+    end type
+
+    ! 
+    ! 
+    ! 
+    ! 
+
+
+contains
+
+
+    subroutine en2ephi(en, ephi)
+        real(real64), intent(in)  :: en(3)
+        real(real64), intent(out) :: ephi(2)
+        real(real64) :: tmp
+
+        tmp = 1 / sqrt(1 - en(3)**2)
+        ephi(1) = -en(2) * tmp
+        ephi(2) = en(1) * tmp
+    end subroutine en2ephi
+
+
+    subroutine en2etheta_ephi(en, etheta, ephi)
+        real(real64), intent(in)  :: en(3)
+        real(real64), intent(out) :: etheta(3), ephi(2)
+        real(real64) :: x, y, z, tmp
+
+        x = en(1)
+        y = en(2)
+        z = en(3)
+        tmp = sqrt(1 - z**2)
+        etheta(3) = -tmp
+        tmp = 1 / tmp
+        ephi(1) = -y * tmp
+        ephi(2) = x * tmp
+        tmp = z * tmp
+        etheta(1) = x * tmp
+        etheta(2) = y * tmp
+    end subroutine en2etheta_ephi
+
+
+    subroutine rot_ephi(rot, ephi, out)
+        real(real64), intent(in)  :: rot(3,3) ! transpose of rotation matrix
+        real(real64), intent(in)  :: ephi(2)
+        real(real64), intent(out) :: out(3)
+
+        out(1) = rot(1,1) * ephi(1) + rot(2,1) * ephi(2)
+        out(2) = rot(1,2) * ephi(1) + rot(2,2) * ephi(2)
+        out(3) = rot(1,3) * ephi(1) + rot(2,3) * ephi(2)
+    end subroutine rot_ephi
+
+
+    subroutine rotinv_e(rot, e, rot_e)
+        real(real64), intent(in)  :: rot(3,3) ! transpose of rotation matrix
+        real(real64), intent(in)  :: e(3)
+        real(real64), intent(out) :: rot_e(3)
+
+        rot_e(1) = rot(1,1) * e(1) + rot(1,2) * e(2) + rot(1,3) * e(3)
+        rot_e(2) = rot(2,1) * e(1) + rot(2,2) * e(2) + rot(2,3) * e(3)
+        rot_e(3) = rot(3,1) * e(1) + rot(3,2) * e(2) + rot(3,3) * e(3)
+    end subroutine rotinv_e
+
+
+    subroutine eni2rotation(rot, ethetaf, ephif, eni, r23, r33)
+        real(real64), intent(in)  :: rot(3,3)
+        real(real64), intent(in)  :: ethetaf(3)
+        real(real64), intent(in)  :: ephif(2)
+        real(real64), intent(in)  :: eni(3)
+        real(real64), intent(out) :: r23, r33
+        real(real64) :: ephii(2), rot_ephii(3)
+
+        call en2ephi(eni, ephii)
+        call rot_ephi(rot, ephii, rot_ephii)
+        r23 = sum(ethetaf * rot_ephii)
+        r33 = sum(ephif * rot_ephii(1:2))
+
+    end subroutine eni2rotation
+
+
+    subroutine matrix_rot2d_i4_r4(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 4 + 2 * 4
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot2d_i4_r4), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real32)  :: direct
+
+        direct = -1._real32
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val*(r33**2 - r23**2), real32)
+                    matrix(ipixel,itime,idetector)%r21 = real(-val*2*r33*r23, real32)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine matrix_rot2d_i4_r4
+
+
+
+    subroutine matrix_rot2d_i8_r4(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 8 + 2 * 4
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot2d_i8_r4), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real32)  :: direct
+
+        direct = -1._real32
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val*(r33**2 - r23**2), real32)
+                    matrix(ipixel,itime,idetector)%r21 = real(-val*2*r33*r23, real32)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine matrix_rot2d_i8_r4
+
+
+
+    subroutine matrix_rot2d_i4_r8(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 4 + 2 * 8
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot2d_i4_r8), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real64)  :: direct
+
+        direct = -1._real64
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val*(r33**2 - r23**2), real64)
+                    matrix(ipixel,itime,idetector)%r21 = real(-val*2*r33*r23, real64)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine matrix_rot2d_i4_r8
+
+
+
+    subroutine matrix_rot2d_i8_r8(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 8 + 2 * 8
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot2d_i8_r8), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real64)  :: direct
+
+        direct = -1._real64
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val*(r33**2 - r23**2), real64)
+                    matrix(ipixel,itime,idetector)%r21 = real(-val*2*r33*r23, real64)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine matrix_rot2d_i8_r8
+
+
+
+
+    subroutine matrix_rot3d_i4_r4(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 4 + 3 * 4
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i4_r4), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real32)  :: direct
+
+        direct = -1._real32
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, real32)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), real32)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, real32)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine matrix_rot3d_i4_r4
+
+
+
+    subroutine matrix_rot3d_i8_r4(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 8 + 3 * 4
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i8_r4), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real32)  :: direct
+
+        direct = -1._real32
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, real32)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), real32)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, real32)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine matrix_rot3d_i8_r4
+
+
+
+    subroutine matrix_rot3d_i4_r8(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 4 + 3 * 8
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i4_r8), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real64)  :: direct
+
+        direct = -1._real64
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, real64)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), real64)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, real64)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine matrix_rot3d_i4_r8
+
+
+
+    subroutine matrix_rot3d_i8_r8(rot, enf, matrix, vals, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 8 + 3 * 8
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i8_r8), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real64)  :: direct
+
+        direct = -1._real64
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, real64)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), real64)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, real64)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine matrix_rot3d_i8_r8
+
+
+
+    subroutine weighted_matrix_rot3d_i4_r4(rot, enf, matrix, vals, weights, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 4 + 3 * 4
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: weights(npixels,ntimes,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i4_r4), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real32)  :: direct
+
+        direct = -1._real32
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)*weights(ipixel,itime,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, real32)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), real32)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, real32)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine weighted_matrix_rot3d_i4_r4
+
+
+    subroutine weighted_matrix_rot3d_i8_r4(rot, enf, matrix, vals, weights, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 8 + 3 * 4
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: weights(npixels,ntimes,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i8_r4), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real32)  :: direct
+
+        direct = -1._real32
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)*weights(ipixel,itime,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, real32)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), real32)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, real32)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine weighted_matrix_rot3d_i8_r4
+
+
+    subroutine weighted_matrix_rot3d_i4_r8(rot, enf, matrix, vals, weights, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 4 + 3 * 8
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: weights(npixels,ntimes,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i4_r8), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real64)  :: direct
+
+        direct = -1._real64
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)*weights(ipixel,itime,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, real64)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), real64)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, real64)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine weighted_matrix_rot3d_i4_r8
+
+
+    subroutine weighted_matrix_rot3d_i8_r8(rot, enf, matrix, vals, weights, npixels, &
+                                  ntimes, ndetectors)
+        integer, parameter          :: s = 8 + 3 * 8
+        integer(int64), intent(in)  :: npixels, ntimes, ndetectors
+        real(real64), intent(in)    :: rot(3,3,ntimes)
+        real(real64), intent(in)    :: vals(npixels,ndetectors)
+        real(real64), intent(in)    :: weights(npixels,ntimes,ndetectors)
+        real(real64), intent(in)    :: enf(3,npixels,ndetectors)
+        !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
+        type(PointingElementRot3d_i8_r8), intent(inout) ::         &
+            matrix(npixels,ntimes,ndetectors)
+        integer(int64) :: idetector, itime, ipixel
+        real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
+        real(real64)   :: val, r23, r33
+        real(real64)  :: direct
+
+        direct = -1._real64
+
+        !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
+        do idetector = 1, ndetectors
+            do ipixel = 1, npixels
+                call en2etheta_ephi(enf(:,ipixel,idetector), ethetaf(:,ipixel),&
+                                    ephif(:,ipixel))
+            end do
+            do itime = 1, ntimes
+                do ipixel = 1, npixels
+                    
+                    call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
+                    call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
+                                      ephif(:,ipixel), eni, r23, r33)
+                    r33 = direct * r33
+                    val = vals(ipixel,idetector)*weights(ipixel,itime,idetector)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, real64)
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), real64)
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, real64)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine weighted_matrix_rot3d_i8_r8
+
+
+
+
+end module polarization

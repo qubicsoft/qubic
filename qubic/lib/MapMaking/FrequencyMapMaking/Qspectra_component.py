@@ -1,9 +1,9 @@
 import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
+from fgbuster import Dust, Synchrotron
 
 from qubic.data import PATH as data_dir
-from qubic.lib.MapMaking.ComponentMapMaking import Qcomponent_model as c
 
 
 class CMBModel:
@@ -113,7 +113,7 @@ class SkySpectra:
         Function to compute the dust mixing matrix element, depending on the frequency
         """
 
-        comp = c.Dust(nu0=self.nu0_d, temp=temp, beta_d=betad)
+        comp = Dust(nu0=self.nu0_d, temp=temp, beta_d=betad)
         A = mm.MixingMatrix(comp).eval(self.nus)[:, 0]
 
         return A[None, :] * A[:, None]
@@ -123,16 +123,16 @@ class SkySpectra:
         Function to compute the dust mixing matrix element, depending on the frequency
         """
 
-        comp = c.Synchrotron(nu0=self.nu0_s, beta_pl=betas)
+        comp = Synchrotron(nu0=self.nu0_s, beta_pl=betas)
         A = mm.MixingMatrix(comp).eval(self.nus)[:, 0]
 
         return A[None, :] * A[:, None]
 
     def scale_dustsync(self, betad, betas, temp=20):
-        comp = c.Dust(nu0=self.nu0_d, temp=temp, beta_d=betad)
+        comp = Dust(nu0=self.nu0_d, temp=temp, beta_d=betad)
         Adust = mm.MixingMatrix(comp).eval(self.nus)[:, 0]
 
-        comp = c.Synchrotron(nu0=self.nu0_s, beta_pl=betas)
+        comp = Synchrotron(nu0=self.nu0_s, beta_pl=betas)
         Async = mm.MixingMatrix(comp).eval(self.nus)[:, 0]
 
         return Adust[None, :] * Async[:, None] + Adust[:, None] * Async[None, :]

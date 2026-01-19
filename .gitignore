@@ -19,5 +19,8 @@ flib/polarization.f90
 *.egg-info/
 ruff.toml
 *.png
+*.svg
+*.pt
 *.pkl
 *.gif
+*.log

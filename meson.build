@@ -56,5 +56,8 @@ endif
 # OpenMP support
 openmp_dep = dependency('openmp', language: 'fortran', required: true)
 
+# Compile Fortran extensions
+subdir('flib')
+
 # Install qubic package
 subdir('qubic')

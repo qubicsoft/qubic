@@ -1,21 +1,25 @@
-from __future__ import division
+from pathlib import Path
 
 import numpy as np
+import pytest
+
 from pyoperators.utils.testing import assert_same
 from pysimulators import FitsArray
-from qubic import Xpol
+from qubic.lib.obsolete import Xpol
+
+TEST_DATA = Path(__file__).parent / 'data'
 
 
-def test_xpol():
-    def func(lmax, n):
-        class XpolDummy(Xpol):
-            def __init__(self):
-                self.lmax = lmax
-                self.wl = np.ones(max(n+1, 1))
-        xpol = XpolDummy()
-        mll = xpol._get_Mll(binning=False)
-        expected = FitsArray('test/data/xpol_mll_{}_{}.fits'.format(lmax, n))
-        assert_same(mll, expected, atol=200)
-    for lmax in [0, 1, 2, 10]:
-        for n in [lmax-1, lmax, lmax+1]:
-            yield func, lmax, n
+@pytest.mark.parametrize('lmax', [0, 1, 2, 10])
+@pytest.mark.parametrize('delta', [-1, 0, 1])
+def test_xpol(lmax, delta):
+    class XpolDummy(Xpol):
+        def __init__(self):
+            self.lmax = lmax
+            self.wl = np.ones(max(n+1, 1))
+
+    n = lmax + delta
+    xpol = XpolDummy()
+    mll = xpol._get_Mll(binning=False)
+    expected = FitsArray(TEST_DATA / f'xpol_mll_{lmax}_{n}.fits')
+    assert_same(mll, expected, atol=200)

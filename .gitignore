@@ -4,15 +4,12 @@
 *.pyspy
 .idea/
 .coverage
-.f2py_f2cmap
 .venv*/
 .vscode/
 MANIFEST
 build
 dist
 htmlcov
-_flib*.so
-flib/polarization.f90
 .project
 .pydevproject
 .pytest_cache/

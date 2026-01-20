@@ -4,7 +4,7 @@ requires = [
     "meson-python>=0.15.0",
     "meson>=1.1.0",
     "ninja",
-    "numpy<2.3",
+    "numpy>=2.0.0",
     "setuptools_scm[toml]>=6.2",
     "Jinja2>=3.0",
 ]
@@ -26,9 +26,11 @@ readme = 'README.md'
 keywords = ['scientific computing']
 classifiers = [
     'Programming Language :: Python',
-    'Programming Language :: Python :: 3.8',
-    'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
+    'Programming Language :: Python :: 3.13',
+    'Programming Language :: Python :: 3.14',
     'Programming Language :: Fortran',
     'Development Status :: 5 - Production/Stable',
     'Intended Audience :: Science/Research',
@@ -37,7 +39,7 @@ classifiers = [
     'Topic :: Scientific/Engineering :: Astronomy',
     'Topic :: Scientific/Engineering :: Physics',
 ]
-requires-python = '>=3.12'
+requires-python = '>=3.10'
 dependencies = [
     'astropy',
     'camb',
@@ -49,11 +51,11 @@ dependencies = [
     'iminuit',
     'pandas',
     'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
-    'numpy<2.3',
+    'numpy>=2.0.0',
     'progressbar',
     'py-cpuinfo',
-    'pyoperators',
-    'pysimulators',
+    'pyoperators>=1.0.0b1',
+    'pysimulators>=1.3b3',
     'pysm3',
     'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
     'satorchipy @ git+https://github.com/satorchi/mypy@master',
@@ -87,7 +89,7 @@ show_missing = true
 skip_covered = true
 
 [tool.pytest.ini_options]
-addopts = "-ra --cov=qubic"
+addopts = "-ra"
 testpaths = ["tests"]
 markers = ["mpi: mark tests to be run using mpirun."]
 

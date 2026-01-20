@@ -1,52 +1,28 @@
+{# variables: ikind=int32,int64,int32,int64; isize=4,8,4,8; rkind=real32,real32,real64,real64; rsize=4,4,8,8; suffix=i4_r4,i8_r4,i4_r8,i8_r8 #}
 module polarization
 
     use, intrinsic :: iso_fortran_env, only : int32, int64, real32, real64
     implicit none
 
-    type PointingElementRot2d_i4_r4
-        integer(int32) :: index
-        real(real32)   :: r11, r21
+{% for combo in combinations %}
+    type PointingElementRot2d_{{ combo.suffix }}
+        integer({{ combo.ikind }}) :: index
+        real({{ combo.rkind }})    :: r11, r21
     end type
 
-    type PointingElementRot2d_i8_r4
-        integer(int64) :: index
-        real(real32)   :: r11, r21
+{% endfor %}
+
+{% for combo in combinations %}
+    type PointingElementRot3d_{{ combo.suffix }}
+        integer({{ combo.ikind }}) :: index
+        real({{ combo.rkind }})    :: r11, r22, r32
     end type
 
-    type PointingElementRot2d_i4_r8
-        integer(int32) :: index
-        real(real64)   :: r11, r21
-    end type
-
-    type PointingElementRot2d_i8_r8
-        integer(int64) :: index
-        real(real64)   :: r11, r21
-    end type
-
-    type PointingElementRot3d_i4_r4
-        integer(int32) :: index
-        real(real32)   :: r11, r22, r32
-    end type
-
-    type PointingElementRot3d_i8_r4
-        integer(int64) :: index
-        real(real32)   :: r11, r22, r32
-    end type
-
-    type PointingElementRot3d_i4_r8
-        integer(int32) :: index
-        real(real64)   :: r11, r22, r32
-    end type
-
-    type PointingElementRot3d_i8_r8
-        integer(int64) :: index
-        real(real64)   :: r11, r22, r32
-    end type
-
-    ! <ikind=int32,int64,int32,int64>
-    ! <isize=4,8,4,8>
-    ! <rkind=real32,real32,real64,real64>
-    ! <rsize=4,4,8,8>
+{% endfor %}
+    !
+    !
+    !
+    !
 
 
 contains
@@ -120,22 +96,23 @@ contains
     end subroutine eni2rotation
 
 
-    subroutine matrix_rot2d_i<isize>_r<rsize>(rot, enf, matrix, vals, npixels, &
+{% for combo in combinations %}
+    subroutine matrix_rot2d_{{ combo.suffix }}(rot, enf, matrix, vals, npixels, &
                                   ntimes, ndetectors)
-        integer, parameter          :: s = <isize> + 2 * <rsize>
+        integer, parameter          :: s = {{ combo.isize }} + 2 * {{ combo.rsize }}
         integer(int64), intent(in)  :: npixels, ntimes, ndetectors
         real(real64), intent(in)    :: rot(3,3,ntimes)
         real(real64), intent(in)    :: vals(npixels,ndetectors)
         real(real64), intent(in)    :: enf(3,npixels,ndetectors)
         !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
-        type(PointingElementRot2d_i<isize>_r<rsize>), intent(inout) ::         &
+        type(PointingElementRot2d_{{ combo.suffix }}), intent(inout) ::         &
             matrix(npixels,ntimes,ndetectors)
         integer(int64) :: idetector, itime, ipixel
         real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
         real(real64)   :: val, r23, r33
-        real(<rkind>)  :: direct
+        real({{ combo.rkind }})  :: direct
 
-        direct = -1._<rkind>
+        direct = -1._{{ combo.rkind }}
 
         !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
         do idetector = 1, ndetectors
@@ -150,32 +127,35 @@ contains
                                       ephif(:,ipixel), eni, r23, r33)
                     r33 = direct * r33
                     val = vals(ipixel,idetector)
-                    matrix(ipixel,itime,idetector)%r11 = real(val*(r33**2 - r23**2), <rkind>)
-                    matrix(ipixel,itime,idetector)%r21 = real(-val*2*r33*r23, <rkind>)
+                    matrix(ipixel,itime,idetector)%r11 = real(val*(r33**2 - r23**2), {{ combo.rkind }})
+                    matrix(ipixel,itime,idetector)%r21 = real(-val*2*r33*r23, {{ combo.rkind }})
                 end do
             end do
         end do
         !$omp end parallel do
 
-    end subroutine matrix_rot2d_i<isize>_r<rsize>
+    end subroutine matrix_rot2d_{{ combo.suffix }}
 
 
-    subroutine matrix_rot3d_i<isize>_r<rsize>(rot, enf, matrix, vals, npixels, &
+{% endfor %}
+
+{% for combo in combinations %}
+    subroutine matrix_rot3d_{{ combo.suffix }}(rot, enf, matrix, vals, npixels, &
                                   ntimes, ndetectors)
-        integer, parameter          :: s = <isize> + 3 * <rsize>
+        integer, parameter          :: s = {{ combo.isize }} + 3 * {{ combo.rsize }}
         integer(int64), intent(in)  :: npixels, ntimes, ndetectors
         real(real64), intent(in)    :: rot(3,3,ntimes)
         real(real64), intent(in)    :: vals(npixels,ndetectors)
         real(real64), intent(in)    :: enf(3,npixels,ndetectors)
         !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
-        type(PointingElementRot3d_i<isize>_r<rsize>), intent(inout) ::         &
+        type(PointingElementRot3d_{{ combo.suffix }}), intent(inout) ::         &
             matrix(npixels,ntimes,ndetectors)
         integer(int64) :: idetector, itime, ipixel
         real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
         real(real64)   :: val, r23, r33
-        real(<rkind>)  :: direct
+        real({{ combo.rkind }})  :: direct
 
-        direct = -1._<rkind>
+        direct = -1._{{ combo.rkind }}
 
         !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
         do idetector = 1, ndetectors
@@ -185,39 +165,43 @@ contains
             end do
             do itime = 1, ntimes
                 do ipixel = 1, npixels
-                    
+
                     call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
                     call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
                                       ephif(:,ipixel), eni, r23, r33)
                     r33 = direct * r33
                     val = vals(ipixel,idetector)
-                    matrix(ipixel,itime,idetector)%r11 = real(val, <rkind>)
-                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), <rkind>)
-                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, <rkind>)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, {{ combo.rkind }})
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), {{ combo.rkind }})
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, {{ combo.rkind }})
                 end do
             end do
         end do
         !$omp end parallel do
 
-    end subroutine matrix_rot3d_i<isize>_r<rsize>
+    end subroutine matrix_rot3d_{{ combo.suffix }}
 
-    subroutine weighted_matrix_rot3d_i<isize>_r<rsize>(rot, enf, matrix, vals, weights, npixels, &
+
+{% endfor %}
+
+{% for combo in combinations %}
+    subroutine weighted_matrix_rot3d_{{ combo.suffix }}(rot, enf, matrix, vals, weights, npixels, &
                                   ntimes, ndetectors)
-        integer, parameter          :: s = <isize> + 3 * <rsize>
+        integer, parameter          :: s = {{ combo.isize }} + 3 * {{ combo.rsize }}
         integer(int64), intent(in)  :: npixels, ntimes, ndetectors
         real(real64), intent(in)    :: rot(3,3,ntimes)
         real(real64), intent(in)    :: vals(npixels,ndetectors)
         real(real64), intent(in)    :: weights(npixels,ntimes,ndetectors)
         real(real64), intent(in)    :: enf(3,npixels,ndetectors)
         !f2py integer*1, intent(in) :: matrix(npixels*ntimes*ndetectors*s)
-        type(PointingElementRot3d_i<isize>_r<rsize>), intent(inout) ::         &
+        type(PointingElementRot3d_{{ combo.suffix }}), intent(inout) ::         &
             matrix(npixels,ntimes,ndetectors)
         integer(int64) :: idetector, itime, ipixel
         real(real64)   :: eni(3), ethetaf(3,npixels), ephif(2,npixels)
         real(real64)   :: val, r23, r33
-        real(<rkind>)  :: direct
+        real({{ combo.rkind }})  :: direct
 
-        direct = -1._<rkind>
+        direct = -1._{{ combo.rkind }}
 
         !$omp parallel do private(ethetaf, ephif, eni, val, r23, r33)
         do idetector = 1, ndetectors
@@ -227,21 +211,23 @@ contains
             end do
             do itime = 1, ntimes
                 do ipixel = 1, npixels
-                    
+
                     call rotinv_e(rot(:,:,itime), enf(:,ipixel,idetector), eni)
                     call eni2rotation(rot(:,:,itime), ethetaf(:,ipixel),       &
                                       ephif(:,ipixel), eni, r23, r33)
                     r33 = direct * r33
                     val = vals(ipixel,idetector)*weights(ipixel,itime,idetector)
-                    matrix(ipixel,itime,idetector)%r11 = real(val, <rkind>)
-                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), <rkind>)
-                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, <rkind>)
+                    matrix(ipixel,itime,idetector)%r11 = real(val, {{ combo.rkind }})
+                    matrix(ipixel,itime,idetector)%r22 = real(val*(r33**2 - r23**2), {{ combo.rkind }})
+                    matrix(ipixel,itime,idetector)%r32 = real(-val*2*r33*r23, {{ combo.rkind }})
                 end do
             end do
         end do
         !$omp end parallel do
 
-    end subroutine weighted_matrix_rot3d_i<isize>_r<rsize>
+    end subroutine weighted_matrix_rot3d_{{ combo.suffix }}
+
+{% endfor %}
 
 
 end module polarization

@@ -1,6 +1,5 @@
-from __future__ import division
 from pyoperators.utils import settingerr
-from .data import PATH
+from qubic.data import PATH
 import numpy as np
 
 __all__ = ['camb_spectra', 'read_spectra', 'plot_spectra', 'semilogy_spectra']

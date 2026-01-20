@@ -656,7 +656,7 @@ class PipelineFrequencyMapMaking:
         self.convergence_pcg = solution_qubic_planck["x"]["convergence"]
 
         if self.params["PCG"]["gif"]:
-            do_gif(gif_folder, "iter_", output="animation.gif")
+            do_gif(gif_folder, output="animation.gif")
 
         self.mpi._barrier()
 

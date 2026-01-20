@@ -433,7 +433,7 @@ class SbModelIndepPeaksAmpFWHM:
         # Move to actual center
         newxxyy[0, :] += xc
         newxxyy[1, :] += yc
-        if ~(np.product(np.isfinite(newxxyy)).astype(bool)):
+        if ~(np.prod(np.isfinite(newxxyy)).astype(bool)):
             raise ValueError("Invalid value encountered in newxxyy.")
 
         ### Peak amplitudes and resulting map #######################
@@ -637,7 +637,7 @@ class SbModelIndepPeaks:
         # Move to actual center
         newxxyy[0, :] += xc + dx
         newxxyy[1, :] += yc + dy
-        if ~(np.product(np.isfinite(newxxyy)).astype(bool)):
+        if ~(np.prod(np.isfinite(newxxyy)).astype(bool)):
             raise ValueError("Invalid value encountered in newxxyy.")
 
         ### Peak amplitudes and resulting map #######################

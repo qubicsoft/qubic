@@ -1452,7 +1452,7 @@ class QubicInstrument(Instrument):
         Return the operator that multiplies by the cumulative instrumental
         transmission.
         """
-        return DiagonalOperator(np.product(self.optics.components["transmission"]) * self.detector.efficiency, broadcast="rightward")
+        return DiagonalOperator(np.prod(self.optics.components["transmission"]) * self.detector.efficiency, broadcast="rightward")
 
     def remove_significant_peaks(thetas, phis, vals, synthbeam):
         # now remove insignificant peaks

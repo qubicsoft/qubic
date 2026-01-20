@@ -1,8 +1,14 @@
-# Find all Python files recursively in qubic package
-# We use run_command to get all .py files
+# Find all Python files and data, dicts & calfiles files in qubic package
+# We use run_command to get all .py, .dict, .fits, and .pkl files
 python_files = run_command(
   'find', 'calfiles', 'data', 'dicts', 'lib',
+  '(',
   '-name', '*.py',
+  '-o', '-name', '*.dict',
+  '-o', '-name', '*.fits',
+  '-o', '-name', '*.pkl',
+  '-o', '-name', '*.txt',
+  ')',
   '-not', '-path', '*/.*',
   '-not', '-path', '*/__pycache__/*',
   check: true,

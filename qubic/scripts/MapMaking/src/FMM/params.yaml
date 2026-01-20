@@ -58,12 +58,12 @@ PLANCK:
 
 Pipeline:
   mapmaking: true                # Run MapMaking Pipeline
-  spectrum: true                # Compute Power Spectra of the frequency maps
+  spectrum: false                # Compute Power Spectra of the frequency maps
 
 PCG:
     ### This section control PCG parameters
 
-  n_iter_pcg: 15                 # Number of PCG iterations #100
+  n_iter_pcg: 5                 # Number of PCG iterations #100
   tol_pcg: 1.0e-20               # Tolerance for PCG
   preconditioner: false
   initial_guess_intensity_to_zero: true

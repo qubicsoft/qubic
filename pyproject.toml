@@ -1,12 +1,10 @@
 [build-system]
-build-backend = 'mesonpy'
+build-backend = 'setuptools.build_meta'
 requires = [
-    "meson-python>=0.15.0",
-    "meson>=1.1.0",
-    "ninja",
-    "numpy>=2.0.0",
-    "setuptools_scm[toml]>=6.2",
-    "Jinja2>=3.0",
+    'setuptools',
+    'setuptools_scm[toml]',
+    'numpy>=2.0,<3',
+    'wheel',
 ]
 
 [project]
@@ -54,8 +52,8 @@ dependencies = [
     'numpy>=2.0.0',
     'progressbar',
     'py-cpuinfo',
-    'pyoperators>=1.0.0b1',
-    'pysimulators>=1.3b3',
+    'pyoperators[fft]>=1.0.0b1',
+    'pysimulators>=1.3b5',
     'pysm3',
     'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
     'satorchipy @ git+https://github.com/satorchi/mypy@master',

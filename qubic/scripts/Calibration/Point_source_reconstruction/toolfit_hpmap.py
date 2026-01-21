@@ -551,7 +551,7 @@ def _peak_angles_ref(scene, nu, position, synthbeam, horn, primary_beam,
     # and remove potential NaN in theta, phi
     for idet, imax_ in enumerate(imaxs):
         val[idet, imax_:] = 0
-        theta[idet, imax_:] = np.pi / 2  # XXX 0 fails in polarization.f90 (en2ephi and en2etheta_ephi)
+        theta[idet, imax_:] = np.pi / 2  # XXX 0 fails in pysimulators._flib.bi.en2ephi and en2etheta_ephi
         phi[idet, imax_:] = 0
     solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
     val *= solid_angle / scene.solid_angle * len(horn)

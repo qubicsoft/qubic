@@ -22,6 +22,7 @@ from pysimulators import (
     Instrument,
     Layout,
     ProjectionOperator,
+    _flib as flib,
 )
 from pysimulators.geometry import surface_simple_polygon
 from pysimulators.interfaces.healpy import (
@@ -32,7 +33,6 @@ from pysimulators.sparse import FSRMatrix, FSRRotation2dMatrix, FSRRotation3dMat
 from scipy.constants import c, h, k, sigma
 from scipy.integrate import quad
 
-from qubic import _flib as flib
 from qubic.lib.Calibration.Qcalibration import QubicCalibration
 from qubic.lib.Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
 from qubic.lib.Qbilin_interp import Cartesian2HealpixOperator_bilin_interp
@@ -1426,11 +1426,11 @@ class QubicInstrument(Instrument):
                 if interp_projection:
                     func = "weighted_matrix_rot{0}d_i{1}_r{2}".format(ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
 
-                    getattr(flib.polarization, func)(rotation.data.T, direction.T, s.data.ravel().view(np.int8), vals.T, weights[:, :, :, i_interp].T)
+                    getattr(flib.bi, func)(rotation.data.T, direction.T, s.data.ravel().view(np.int8), vals.T, weights[:, :, :, i_interp].T)
                 else:
                     func = "matrix_rot{0}d_i{1}_r{2}".format(ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
 
-                    getattr(flib.polarization, func)(rotation.data.T, direction.T, s.data.ravel().view(np.int8), vals.T)
+                    getattr(flib.bi, func)(rotation.data.T, direction.T, s.data.ravel().view(np.int8), vals.T)
 
                 if scene.kind == "QU":
                     shapeout = (ndetectors, ntimes, 2)
@@ -1467,7 +1467,7 @@ class QubicInstrument(Instrument):
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
             vals[idet, imax_:] = 0
-            thetas[idet, imax_:] = np.pi / 2  # XXX 0 fails in polarization.f90 (en2ephi and en2etheta_ephi)
+            thetas[idet, imax_:] = np.pi / 2  # XXX 0 fails in pysimulators._flib.bi.en2ephi and en2etheta_ephi
             phis[idet, imax_:] = 0
 
         return thetas, phis, vals
@@ -1501,7 +1501,7 @@ class QubicInstrument(Instrument):
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
             val[idet, imax_:] = 0
-            theta[idet, imax_:] = np.pi / 2  # XXX 0 fails in polarization.f90 (en2ephi and en2etheta_ephi)
+            theta[idet, imax_:] = np.pi / 2  # XXX 0 fails in pysimulators._flib.bi.en2ephi and en2etheta_ephi
             phi[idet, imax_:] = 0
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu) ** 2
         val *= solid_angle / scene.solid_angle * len(horn)

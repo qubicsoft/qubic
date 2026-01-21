@@ -902,7 +902,7 @@ class QubicInstrument(Instrument):
                     'nd {1}.'.format(dtype_index, synthbeam.dtype))
             func = 'matrix_rot{0}d_i{1}_r{2}'.format(
                 ndims, dtype_index.itemsize, synthbeam.dtype.itemsize)
-            getattr(flib.polarization, func)(
+            getattr(flib.bi, func)(
                 rotation.data.T, direction.T, s.data.ravel().view(np.int8),
                 vals.T)
 
@@ -951,7 +951,7 @@ class QubicInstrument(Instrument):
         # and remove potential NaN in theta, phi
         for idet, imax_ in enumerate(imaxs):
             val[idet, imax_:] = 0
-            theta[idet, imax_:] = np.pi / 2 #XXX 0 fails in polarization.f90 (en2ephi and en2etheta_ephi)
+            theta[idet, imax_:] = np.pi / 2 # XXX 0 fails in pysimulators._flib.bi.en2ephi and en2etheta_ephi
             phi[idet, imax_:] = 0
         solid_angle = synthbeam.peak150.solid_angle * (150e9 / nu)**2
         val *= solid_angle / scene.solid_angle * len(horn)

@@ -21,7 +21,7 @@ QUBIC:
   nsub_out: 8
   nrec: 2                        # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-  convolution_in: true          # Angular resolution in the input TOD
+  convolution_in: false          # Angular resolution in the input TOD
   convolution_out: false         # Angular resolution in the reconstruction
   bandpass_correction: true      # Correction to keep the edges of the integration band constant
   NOISE:
@@ -58,7 +58,7 @@ PLANCK:
 
 Pipeline:
   mapmaking: true                # Run MapMaking Pipeline
-  spectrum: true                # Compute Power Spectra of the frequency maps
+  spectrum: false                # Compute Power Spectra of the frequency maps
 
 PCG:
     ### This section control PCG parameters

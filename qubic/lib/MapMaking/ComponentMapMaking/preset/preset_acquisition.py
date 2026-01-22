@@ -124,16 +124,13 @@ class PresetAcquisition:
         ### Get convolution
         self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec = self.get_convolution()
-
+        print('FWHMs:')
+        print(self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec) # Leonora: fwhm_mapmaking remains zero when convolution_out = False
         #! Tom : check this part
         self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
-        C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_tod))
+        C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_rec))
         for icomp, _ in enumerate(self.preset_comp.components_name_out):
             self.components_in_convolved[icomp] = C(self.preset_comp.components_in[icomp])
-            # comp_nsub = np.zeros((self.preset_tools.params["QUBIC"]["nsub_in"], 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
-            # for jsub in range(self.preset_tools.params["QUBIC"]["nsub_in"]):
-            #     comp_nsub[jsub] = C(self.preset_mixingmatrix.Amm_in[jsub, icomp] * self.preset_comp.components_in[icomp])
-            # self.components_in_convolved[icomp] = comp_nsub.mean(axis=0)
 
         ### Get observed data
         self.preset_tools.mpi._print_message("    => Getting observational data")

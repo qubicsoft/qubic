@@ -2,7 +2,13 @@ import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
 from pyoperators import MPI
+from dataclasses import dataclass
 
+@dataclass
+class ParamLayout:
+    beta_indices: list          # [(comp_index, position_in_x)]
+    blind_indices: list         # [(comp_index, start, length)]
+    ndim: int
 
 def _dot(x, y, comm):
     d = np.array(np.dot(x.ravel(), y.ravel()))
@@ -12,38 +18,78 @@ def _dot(x, y, comm):
     return d
 
 
-class ComponentChi2:
-    def __init__(self, chi2, A_ref, icomp, mode):
-        self.chi2 = chi2
-        self.A_ref = A_ref
-        self.icomp = icomp
-        self.mode = mode
-        self.A = np.empty_like(self.chi2.preset.acquisition.Amm_iter)
+class MixedChi2:
+    def __init__(self, preset, TOD_sim, layout: ParamLayout):
+        self.preset = preset
+        self.TOD_sim = TOD_sim
+        self.layout = layout
 
-    def _parametric(self, x):
-        """Return the parametric mixing matrix for this component only."""
-        mixingmatrix = mm.MixingMatrix(*[self.chi2.preset.comp.components_model_out[self.icomp]])
-        return mixingmatrix.eval(self.chi2.nus, *x)
+        self.nus = preset.qubic.joint_out.allnus
+        self.nFP = preset.qubic.joint_out.qubic.nFocalPlanes
+        self.ncomp, self.nfreq, self.nsampling_ndet = TOD_sim.shape
+        self.nsub = self.nfreq // self.nFP
 
-    def _blind(self, x):
-        """Return the blind mixing matrix column for this component."""
-        nsub = self.chi2.fsub
-        nbin = self.chi2.preset.comp.params_foregrounds["bin_mixing_matrix"]
-        A_col = np.ones(self.chi2.nfreq)
-        for ibin in range(nbin):
-            start = ibin * nsub
-            end = (ibin + 1) * nsub
-            A_col[start:end] = x[ibin]
-        return A_col
+        self.TOD_sim_fp = []
+        for i in range(self.nFP):
+            self.TOD_sim_fp.append(
+                TOD_sim[:, self.nsub*i:self.nsub*(i+1)]
+                .reshape(self.ncomp*self.nsub, self.nsampling_ndet)
+            )
+        self.TOD_sim_fp = np.asarray(self.TOD_sim_fp)
+        self.Lplanck = 0
 
+    # packing
+    def unpack(self, x):
+        beta = {}
+        Amm  = {}
+
+        for comp, idx in self.layout.beta_indices:
+            beta[comp] = x[idx]
+
+        for comp, start, n in self.layout.blind_indices:
+            Amm[comp] = x[start:start+n]
+
+        return beta, Amm
+
+    # mixing matrix
+    def compute_mixing_matrix(self, x):
+        beta, Amm = self.unpack(x)
+        A = self.preset.acquisition.Amm_iter.copy()
+
+        # parametric
+        for comp, b in beta.items():
+            model = mm.MixingMatrix(
+                self.preset.comp.components_model_out[comp-1]
+            )
+            A[:, comp] = model.eval(self.nus, b)[:, 0]
+
+        # blind
+        for comp, v in Amm.items():
+            A[:, comp] = v
+
+        return A
+
+    # chi²
     def __call__(self, x):
-        """Compute chi² for this component given parameters x."""
-        if self.mode == "parametric":
-            self.A[:, self.icomp] = self._parametric(x)
-        else:
-            self.A[:, self.icomp] = self._blind(x)
+        A = self.compute_mixing_matrix(x)
 
-        return self.chi2.compute_chi_square_with_A(self.A, self.icomp)
+        ysim = []
+        for i in range(self.nFP):
+            ysim.append(
+                A[self.nsub*i:self.nsub*(i+1)].T.reshape(self.ncomp*self.nsub)
+                @ self.TOD_sim_fp[i]
+            )
+
+        ysim = np.concatenate(ysim)
+        res = ysim - self.preset.acquisition.TOD_qubic
+
+        self.Lqubic = 0.5 * _dot(
+            res.T,
+            self.preset.acquisition.invN.operands[0](res),
+            self.preset.comm,
+        )
+
+        return self.Lqubic
 
 
 class Chi2:
@@ -75,24 +121,6 @@ class Chi2:
             self.TOD_sim_fp.append(self.TOD_sim[:, self.nsub * i : self.nsub * (i + 1)].reshape((self.ncomp * self.nsub * npix, self.nsampling_ndet)))
         self.TOD_sim_fp = np.array(self.TOD_sim_fp)
 
-    def compute_chi_square_with_A(self, A, icomp):
-        ysim = []
-        for i in range(self.nFP):
-            print("A", A.shape)
-            print(self.TOD_sim_fp.shape)
-            ysim.append(A[icomp, self.nsub * i : self.nsub * (i + 1)].T @ self.TOD_sim_fp[i])
-
-        ysim = np.concatenate(ysim, axis=0)
-        residuals = ysim - self.preset.acquisition.TOD_qubic
-
-        self.Lqubic = 0.5 * _dot(
-            residuals.T,
-            self.preset.acquisition.invN.operands[0](residuals),
-            self.preset.comm,
-        )
-
-        return self.Lqubic
-
     def compute_mixing_matrix_parametric(self, nus, x):
         """
         Parametric case
@@ -118,7 +146,6 @@ class Chi2:
         if self.TOD_sim.ndim == 3:
             # If parametric -> we compute the mixing matrix element according to the spectral index
             if self.parametric:
-                print("x", x)
                 A = self.compute_mixing_matrix_parametric(self.nus, x)
 
             # If blind -> we treat the mixing matrix element as free parameters

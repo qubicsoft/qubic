@@ -21,7 +21,7 @@ Foregrounds:
     Dust_in: true
     Dust_out: true
 
-    type: "parametric"                                                          # Reconstruction method
+    type: "blind"                                                          # Reconstruction method
     model: "d0"
     beta_init: [1.54, 0.01, 10000000]                                             # PySM model
     nside_beta_in: 0                                                            # Input pixelization for beta_d (in a case of d1 model)
@@ -35,7 +35,7 @@ Foregrounds:
   Synchrotron:
     Synchrotron_in: true
     Synchrotron_out: true
-    type: "blind"                                                               # Reconstruction method
+    type: "parametric"                                                               # Reconstruction method
     model: "s0"                                                                 # PySM model
     beta_init: [-3, 0.01]
     nu0: 150                                                                    # Reference frequency (nu0_s)

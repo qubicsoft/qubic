@@ -124,9 +124,7 @@ class PresetAcquisition:
         ### Get convolution
         self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec = self.get_convolution()
-        print('FWHMs:')
-        print(self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec) # Leonora: fwhm_mapmaking remains zero when convolution_out = False
-        #! Tom : check this part
+        
         self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
         C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_rec))
         for icomp, _ in enumerate(self.preset_comp.components_name_out):

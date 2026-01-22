@@ -1,11 +1,6 @@
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = [
-    'setuptools',
-    'setuptools_scm[toml]',
-    'numpy>=2.0,<3',
-    'wheel',
-]
+requires = ['setuptools', 'setuptools_scm[toml]', 'numpy>=2.0,<2.4', 'wheel']
 
 [project]
 name = 'qubic'
@@ -49,9 +44,10 @@ dependencies = [
     'iminuit',
     'pandas',
     'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
-    'numpy>=2.0.0',
+    'numpy>=2.0,<2.4',
     'progressbar',
     'py-cpuinfo',
+    'pymaster',
     'pyoperators[fft]>=1.0.0b1',
     'pysimulators>=1.3b5',
     'pysm3',

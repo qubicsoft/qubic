@@ -67,113 +67,113 @@ def _plot_reconstructed_maps(
 
 def Dl2Cl(ell, Dl):
     """
-    Convert angular power spectrum from D_ell to C_ell.
+        Convert angular power spectrum from D_ell to C_ell.
 
-    Formula
-    -------
-    C_ell = D_ell * 2*pi / (ell * (ell + 1))
+        Formula
+    ---
+        C_ell = D_ell * 2*pi / (ell * (ell + 1))
 
-    Parameters
-    ----------
-    ell : array_like
-        Multipole moments (1D). Values must be > 0 (division by zero otherwise).
-    Dl : array_like
-        D_ell values. Can be scalar, 1D (same length as `ell`) or broadcastable to `ell`.
-        Typical shape in this module: (n_nus, n_nus, n_bins).
+        Parameters
+    --
+        ell : array_like
+            Multipole moments (1D). Values must be > 0 (division by zero otherwise).
+        Dl : array_like
+            D_ell values. Can be scalar, 1D (same length as `ell`) or broadcastable to `ell`.
+            Typical shape in this module: (n_nus, n_nus, n_bins).
 
-    Returns
-    -------
-    ndarray
-        C_ell values with the same shape as the broadcast result of `Dl` and `ell`.
+        Returns
+    ---
+        ndarray
+            C_ell values with the same shape as the broadcast result of `Dl` and `ell`.
 
-    Notes
-    -----
-    - Uses elementwise broadcasting; ensure `ell` and `Dl` shapes are compatible.
-    - No guard is performed for ell == 0; caller must avoid or mask such entries.
+        Notes
+    -
+        - Uses elementwise broadcasting; ensure `ell` and `Dl` shapes are compatible.
+        - No guard is performed for ell == 0; caller must avoid or mask such entries.
     """
     return Dl * 2 * np.pi / (ell * (ell + 1))
 
 
 def Cl2BK(ell, Cl):
     """
-    Convert C_ell to the bandpower-like quantity 100 * ell * C_ell / (2*pi).
+        Convert C_ell to the bandpower-like quantity 100 * ell * C_ell / (2*pi).
 
-    Formula
-    -------
-    result = 100 * ell * C_ell / (2*pi)
+        Formula
+    ---
+        result = 100 * ell * C_ell / (2*pi)
 
-    Parameters
-    ----------
-    ell : array_like
-        Multipole moments (1D). Should match or broadcast with `Cl`.
-    Cl : array_like
-        C_ell values. Can be scalar, 1D or broadcastable to `ell`.
-        Typical shape in this module: (n_nus, n_nus, n_bins).
+        Parameters
+    --
+        ell : array_like
+            Multipole moments (1D). Should match or broadcast with `Cl`.
+        Cl : array_like
+            C_ell values. Can be scalar, 1D or broadcastable to `ell`.
+            Typical shape in this module: (n_nus, n_nus, n_bins).
 
-    Returns
-    -------
-    ndarray
-        Transformed bandpower values with shape equal to the broadcasted inputs.
+        Returns
+    ---
+        ndarray
+            Transformed bandpower values with shape equal to the broadcasted inputs.
     """
     return 100 * ell * Cl / (2 * np.pi)
 
 
 def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, label_model="CMB + Dust", nbins=None, nrec=2, mode="Dl", figsize=None, title=None, name=None, dpi=300):
     """
-    Plot the upper-triangle matrix of cross-angular power spectra D_ell (and optional model).
+        Plot the upper-triangle matrix of cross-angular power spectra D_ell (and optional model).
 
-    The function arranges a len(nus) x len(nus) grid and fills only the upper triangle
-    (including diagonal) with small subplots labelled by the frequency pair `nus[i] x nus[j]`.
-    It draws data errorbars, an optional second series (Dl - noise if `Dl_noise` provided),
-    and a model line (from `ymodel`) either in D_ell units or transformed to the
-    "100 * ell * C_ell / (2*pi)" units depending on `mode`.
+        The function arranges a len(nus) x len(nus) grid and fills only the upper triangle
+        (including diagonal) with small subplots labelled by the frequency pair `nus[i] x nus[j]`.
+        It draws data errorbars, an optional second series (Dl - noise if `Dl_noise` provided),
+        and a model line (from `ymodel`) either in D_ell units or transformed to the
+        "100 * ell * C_ell / (2*pi)" units depending on `mode`.
 
-    Parameters
-    ----------
-    nus : array_like
-        1D array of frequency identifiers (used for subplot annotations). Length = n_nus.
-    ell : array_like
-        1D array of multipole moments. Length >= nbins (if nbins provided).
-        Must be > 0 to avoid division-by-zero in conversions.
-    Dl : ndarray
-        Data D_ell values, expected shape (n_nus, n_nus, n_ell) or broadcastable to that.
-    Dl_noise : ndarray or None
-        Errors on Dl with same shape as `Dl` (or broadcastable). If provided, an additional
-        series `Dl - Dl_noise` will be plotted where applicable. Errors are absolute-valued
-        (the function applies np.abs).
-    ymodel : ndarray or None
-        Model values for plotting. Expected shape (n_nus, n_nus, n_ell) (or broadcastable).
-        If None, no model line is drawn.
-    label_model : str, optional
-        Legend label for the model line (default: "CMB + Dust").
-    nbins : int or None, optional
-        Number of ell bins to plot. If None (default) uses len(ell).
-    nrec : int, optional
-        Number of "recon" channels used to choose subplot background color and styling.
-        Default is 2.
-    mode : {"Dl", ...}, optional
-        If "Dl" the data are plotted in D_ell units. Otherwise the model/data are
-        transformed via `_Dl2Cl` and `_Cl2BK` before plotting (matching original behaviour).
-    ft_nus : int, optional
-        Font size for the subplot frequency annotations (default: 10).
-    figsize : tuple, optional
-        Matplotlib figure size (default: (10, 8)).
-    title : str or None, optional
-        Suptitle appended to the fixed prefix "Angular Cross-Power Spectra".
-        If None, only the prefix is used.
-    name : str or None, optional
-        If provided, the figure is saved to this filename as a PDF.
+        Parameters
+    --
+        nus : array_like
+            1D array of frequency identifiers (used for subplot annotations). Length = n_nus.
+        ell : array_like
+            1D array of multipole moments. Length >= nbins (if nbins provided).
+            Must be > 0 to avoid division-by-zero in conversions.
+        Dl : ndarray
+            Data D_ell values, expected shape (n_nus, n_nus, n_ell) or broadcastable to that.
+        Dl_noise : ndarray or None
+            Errors on Dl with same shape as `Dl` (or broadcastable). If provided, an additional
+            series `Dl - Dl_noise` will be plotted where applicable. Errors are absolute-valued
+            (the function applies np.abs).
+        ymodel : ndarray or None
+            Model values for plotting. Expected shape (n_nus, n_nus, n_ell) (or broadcastable).
+            If None, no model line is drawn.
+        label_model : str, optional
+            Legend label for the model line (default: "CMB + Dust").
+        nbins : int or None, optional
+            Number of ell bins to plot. If None (default) uses len(ell).
+        nrec : int, optional
+            Number of "recon" channels used to choose subplot background color and styling.
+            Default is 2.
+        mode : {"Dl", ...}, optional
+            If "Dl" the data are plotted in D_ell units. Otherwise the model/data are
+            transformed via `_Dl2Cl` and `_Cl2BK` before plotting (matching original behaviour).
+        ft_nus : int, optional
+            Font size for the subplot frequency annotations (default: 10).
+        figsize : tuple, optional
+            Matplotlib figure size (default: (10, 8)).
+        title : str or None, optional
+            Suptitle appended to the fixed prefix "Angular Cross-Power Spectra".
+            If None, only the prefix is used.
+        name : str or None, optional
+            If provided, the figure is saved to this filename as a PDF.
 
-    Side effects
-    ------------
-    - Creates a matplotlib figure, shows it with plt.show() and optionally saves it.
-    - Does not return the figure (returns None). If you need the figure object, modify the
-    function to `return fig` after creation.
+        Side effects
 
-    Notes
-    -----
-    - The function preserves exact plotting order, labels and colours of the original code.
-    - The caller must ensure shapes of `nus`, `ell`, `Dl`, `Dl_noise`, and `ymodel` are compatible.
+        - Creates a matplotlib figure, shows it with plt.show() and optionally saves it.
+        - Does not return the figure (returns None). If you need the figure object, modify the
+        function to `return fig` after creation.
+
+        Notes
+    -
+        - The function preserves exact plotting order, labels and colours of the original code.
+        - The caller must ensure shapes of `nus`, `ell`, `Dl`, `Dl_noise`, and `ymodel` are compatible.
     """
 
     n = len(nus)
@@ -638,49 +638,79 @@ class PlotsCMM:
         if not self.params["Plots"]["conv_beta"]:
             return
 
-        nf_in, nc_in = A_in.shape
+        nf_in, nc = A_in.shape
         nf_out, nc_out = A_out.shape
+        assert nc == nc_out, "Inconsistent number of components between A_in and A_out"
+
         fsub = nf_in // nf_out
 
-        # label
-        label_plot = []
+        # Labels
         fg = self.preset.tools.params["Foregrounds"]
-
+        labels = []
         if fg["Dust"]["Dust_out"]:
-            label_plot.append(f"Dust {fg['Dust']['model']}")
+            labels.append(f"Dust ({fg['Dust']['model']})")
         if fg["Synchrotron"]["Synchrotron_out"]:
-            label_plot.append(f"Sync {fg['Synchrotron']['model']}")
-
-        label_plot = " - ".join(label_plot)
+            labels.append(f"Sync ({fg['Synchrotron']['model']})")
 
         plt.figure(figsize=figsize)
-        plt.title(f"Mixing matrix fitting using blind method - Iteration #{ki + 1}")
+        plt.title(f"Mixing matrix fit (blind) – iteration #{ki + 1}")
 
-        # true curves
-        for ic in range(nc_in):
-            plt.plot(nus_in, A_in[:, ic], "-k", label=label_plot if ic == 0 else None)
+        colors = plt.cm.tab10.colors  # color palette for components
 
-        # true binned points
-        for inu in range(nf_out):
-            mean_val = np.mean(A_in[inu * fsub : (inu + 1) * fsub])
-            plt.errorbar(nus_out[inu], mean_val, fmt="og", label="True" if inu == 0 else None)
+        # True continuous SEDs
+        for ic in range(nc):
+            plt.plot(
+                nus_in,
+                A_in[:, ic],
+                color=colors[ic % 10],
+                alpha=0.7,
+                lw=2,
+                label=f"Model: {labels[ic]}",
+            )
 
-        # fitted
-        for ic in range(nc_out):
-            plt.errorbar(nus_out, A_out[:, ic], fmt="xb", label="Fitted" if ic == 0 else None)
+        # True binned values
+        for ic in range(nc):
+            means = np.array([A_in[inu * fsub : (inu + 1) * fsub, ic].mean() for inu in range(nf_out)])
+            plt.scatter(
+                nus_out,
+                means,
+                color=colors[ic % 10],
+                marker="o",
+                s=60,
+                label=f"True binned: {labels[ic]}",
+                zorder=3,
+            )
 
-        plt.xlim(120, 260)
-        plt.xlabel("Frequency (GHz)")
+        # Fitted values (cross on top)
+        for ic in range(nc):
+            plt.scatter(
+                nus_out,
+                A_out[:, ic],
+                color=colors[ic % 10],
+                marker="x",
+                s=80,
+                lw=2,
+                label=f"Fitted: {labels[ic]}",
+                zorder=4,
+            )
+
+        # Axes & scaling
+        plt.xlabel("Frequency [GHz]")
         plt.ylabel("Mixing matrix element")
+        plt.xlim(120, 260)
         plt.yscale("log")
 
-        eps = 0.4
-        plt.ylim(A_in.min() * (1 - eps), A_in.max() * (1 + eps))
+        Amin = np.min(A_in[A_in > 0])
+        Amax = np.max(A_in)
+        plt.ylim(Amin * 0.5, Amax * 2.0)
 
         plt.legend()
+        plt.tight_layout()
+
         out = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki + 1}.svg"
         plt.savefig(out)
 
+        # Cleanup previous iteration
         if self.preset.tools.rank == 0 and ki > 0 and not gif:
             prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki}.svg"
             if os.path.exists(prev):
@@ -950,13 +980,13 @@ class PlotsCMM:
     def plot_gain_iteration(self, gain, figsize=(8, 6), ki=0):
         """
 
-        Method to plot convergence of reconstructed gains.
+            Method to plot convergence of reconstructed gains.
 
-        Arguments :
-        -----------
-            - gain    : Array containing gain number (1 per detectors). It has the shape (Niteration, Ndet, 2) for Two Bands design and (Niteration, Ndet) for Wide Band design
-            - alpha   : Transparency for curves.
-            - figsize : Tuple to control size of plots.
+            Arguments :
+        ---
+                - gain    : Array containing gain number (1 per detectors). It has the shape (Niteration, Ndet, 2) for Two Bands design and (Niteration, Ndet) for Wide Band design
+                - alpha   : Transparency for curves.
+                - figsize : Tuple to control size of plots.
 
         """
 

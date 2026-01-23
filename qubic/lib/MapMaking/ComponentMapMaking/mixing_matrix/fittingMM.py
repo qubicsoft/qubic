@@ -14,7 +14,7 @@ class FittingMM(ABC):
 
     @abstractmethod
     def update(self, tod_comp):
-        pass
+        raise NotImplementedError
 
     def callback(self, x):
         """Common callback for scipy optimizers."""

@@ -151,7 +151,7 @@ class Chi2InstrumentType:
                 ### Separe QUBIC and Planck and switch axes
                 Aext = np.transpose(A[:, 2 * self.nsub :, :], (1, 0, 2))
 
-                H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext, convolution=False)
+                H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext, convolution=False) #Leonora: how does this work when get_operator from PlanckAcquisition doesnt take convolution?
 
                 ### Compute Planck part of the chi^2
                 ysim_pl = H_planck(self.preset.comp.components_iter.copy())

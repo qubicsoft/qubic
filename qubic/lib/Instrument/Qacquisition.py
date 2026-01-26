@@ -872,7 +872,6 @@ class PlanckAcquisition:
         self.nsub_planck = nsub_planck
 
         self.npix = 12 * self.nside**2
-        self.noise = []
         self.fwhm = []
         self.sigma = []
         self.bandwidth = []
@@ -881,8 +880,7 @@ class PlanckAcquisition:
         for nu in self.nus:
             _planckData = pickle.load(open(PATH + f"Planck{nu}GHz.pkl", "rb"))
 
-            self.sigma.append(hp.ud_grade(_planckData[f"noise{nu}"].T, self.nside).T)
-            self.noise.append(_planckData[f"noise{nu}"])
+            self.sigma.append(_planckData[f"sigma{nu}"])
             self.fwhm.append(_planckData[f"fwhm{nu}"])
             self.bandwidth.append(_planckData[f"bw{nu}"])
 
@@ -902,6 +900,8 @@ class PlanckAcquisition:
         ----------
         planck_ntot : float
             Multiplicative factor for the noise.
+        weight_planck : float
+            Weight of Planck information inside the QUBIC patch, by default 1.0
         seed : int, optional
             Seed for random noise generation, by default None
         seenpix : array, optional
@@ -913,18 +913,19 @@ class PlanckAcquisition:
             Array containing noise for Planck TOD
         """
         nus = np.asarray(self.nus)
-
         state = np.random.get_state()
         np.random.seed(seed)
         out = np.zeros((len(nus), self.npix, 3))
 
-        for inu in range(len(self.nus)):
-            sigma = self.sigma[inu]
-            out[inu, :, :] = np.random.standard_normal((self.npix, 3)) * sigma
+        for nu in range(len(nus)):
+            sigma = self.sigma[nu]
+            out[nu, :, :] = np.random.standard_normal((self.npix, 3)) * sigma
 
         np.random.set_state(state)
 
-        out[:, seenpix, :] = weight_planck * out[:, seenpix, :]  # Add the same amount of noise as information inside the patch
+        # if the information of Planck is added with weight w, the confidence in it should scale as 1/w
+        if weight_planck < 1.0 and weight_planck > 0.00001:  # avoid too small weight_planck to not let the noise explode
+            out[:, seenpix, :] = out[:, seenpix, :] / weight_planck
 
         return out * planck_ntot
 
@@ -950,23 +951,23 @@ class PlanckAcquisition:
             _description_
         """
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
-
         sigma = np.asarray(self.sigma)
+        assert sigma.shape == (len(self.nus), 3), f"sigma must be shape (nus,3), got {sigma.shape}"
 
-        if sigma.ndim == 2:
-            sigma = sigma[None, ...]
-        nb, npix, _ = sigma.shape
+        npix = self.npix
 
         if planck_ntot == 0:
-            return IdentityOperator(shapein=(3 * nb * npix))
+            return IdentityOperator(shapein=(3 * len(self.nus) * npix))  # in FMM, len(self.nus) is always 1, in CMM it is over the range
+
+        sigma_perpix = np.broadcast_to(sigma[:, None, :], (len(self.nus), npix, 3))
 
         if beam_correction != 0:
             factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2
             # print(f'corrected by {factor}')
             varnew = hp.smoothing(self.var.T, fwhm=beam_correction / np.sqrt(2)) / factor
-            sigma = 1e6 * np.sqrt(varnew.T) * planck_ntot
+            sigma_perpix = 1e6 * np.sqrt(varnew.T) * planck_ntot
 
-        base_weight = 1.0 / ((sigma * planck_ntot) ** 2)  # this is invN before correcting for the patch
+        base_weight = 1.0 / ((sigma_perpix * planck_ntot) ** 2)  # this is invN before correcting for the patch
 
         beta = np.ones(npix)
         if seenpix is not None:
@@ -974,10 +975,9 @@ class PlanckAcquisition:
 
         scale = np.zeros(npix)  # we add a mask so to not divide by zero
         beta_pos = beta > 0
-        scale[beta_pos] = 1.0 / (beta[beta_pos] ** 2)
+        scale[beta_pos] = beta[beta_pos] ** 2  # previously 1.0 / (beta[beta_pos] ** 2)
 
         weight = base_weight * scale[None, :, None]
-
         invN = DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
 
         R = ReshapeOperator(invN.shapeout, invN.shape[0])

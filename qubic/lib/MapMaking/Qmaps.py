@@ -185,8 +185,10 @@ class PlanckMaps(Maps):
         index = self.experiments["Planck"]["frequency"].index(nu)
         np.random.seed(None)
 
-        sigma = self.experiments["Planck"]["depth_p"][index] / hp.nside2resol(self.nside, arcmin=True)
-
+        sigma_I = self.experiments["Planck"]["depth_i"][index] / hp.nside2resol(self.nside, arcmin=True)
+        sigma_P = self.experiments["Planck"]["depth_p"][index] / hp.nside2resol(self.nside, arcmin=True)
+        sigma = [sigma_I, sigma_P, sigma_P]
+        
         out = np.random.standard_normal(np.ones((12 * self.nside**2, 3)).shape) * sigma
         return out
 

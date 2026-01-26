@@ -172,6 +172,7 @@ class PresetQubic:
                 c.Dust(
                     nu0=self.preset_tools.params["Foregrounds"]["Dust"]["nu0"],
                     temp=20,
+                    beta_d = 1.54
                 )
             ]
             components_name += ["Dust"]

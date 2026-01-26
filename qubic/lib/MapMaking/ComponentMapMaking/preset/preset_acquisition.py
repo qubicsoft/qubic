@@ -125,10 +125,17 @@ class PresetAcquisition:
         self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec = self.get_convolution()
 
-        self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
+        ### Build Planck maps
+        self.components_in_convolved = np.zeros_like(self.preset_comp.components_out)
         C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_tod))
         for icomp, _ in enumerate(self.preset_comp.components_name_out):
             self.components_in_convolved[icomp] = C(self.preset_comp.components_in[icomp])
+
+        ### Build Input convolved maps
+        self.input_maps = np.zeros_like(self.preset_comp.components_out)
+        for icomp, _ in enumerate(self.preset_comp.components_name_out):
+            C = HealpixConvolutionGaussianOperator(self.fwhm_rec[icomp])
+            self.input_maps[icomp] = C(self.preset_comp.components_out[icomp])
 
         ### Get observed data
         self.preset_tools.mpi._print_message("    => Getting observational data")

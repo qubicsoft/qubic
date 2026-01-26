@@ -162,7 +162,7 @@ class PipelineComponentMapMaking:
             center=self.preset.sky.center,
             reso=self.preset.tools.params["PCG"]["reso_plot"],
             fwhm_plot=self.preset.tools.params["PCG"]["fwhm_plot"],
-            input=self.preset.acquisition.components_in_convolved,
+            input=self.preset.acquisition.input_maps,
             iter_init=self._steps * num_iter,
             is_planck=True,
         )["x"]

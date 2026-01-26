@@ -14,8 +14,6 @@ class ParametricMM(FittingMM):
 
         previous_beta = self.preset.acquisition.beta_iter.copy()
 
-        print("beta", self.preset.acquisition.beta_iter)
-
         self.chi2 = Chi2(self.preset, tod_comp, parametric=True)
         res = minimize(
             self.chi2,

@@ -7,6 +7,7 @@
 .f2py_f2cmap
 .venv*/
 .vscode/
+*.rst
 MANIFEST
 build
 dist

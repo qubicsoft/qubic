@@ -1,0 +1,7 @@
+sphinx>=6.0
+sphinx-rtd-theme
+sphinx-autodoc-typehints
+numpydoc
+sphinxcontrib-napoleon
+sphinx-autosummary
+sphinx-copybutton

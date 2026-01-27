@@ -1094,10 +1094,11 @@ class PlanckAcquisition:
         #         fwhm_planck = self.fwhm
 
         k = 0
+        self.fsub_planck = int(self.nsub_planck / len(self.nus))
         for _ in self.nus:
             ope_i = []
             # for _ in range(self.nsub_planck):
-            for _ in range(int(self.nsub_planck / len(self.nus))):
+            for _ in range(self.fsub_planck):
                 if fwhm is not None:
                     C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
                 else:
@@ -1110,12 +1111,12 @@ class PlanckAcquisition:
 
                 ope_i += [C * D]
                 k += 1
-
+            
             if comm is not None:
-                Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
+                Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.fsub_planck))
             else:
-                Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
-
+                Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.fsub_planck))
+            
         return BlockColumnOperator(Operator, axisout=0)
 
 

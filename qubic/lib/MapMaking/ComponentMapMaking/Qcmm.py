@@ -166,9 +166,13 @@ class PipelineComponentMapMaking:
             iter_init=self._steps * num_iter,
             is_planck=True,
         )["x"]
+        
+        print(results["x"][0, :, 0].mean())
 
         ### Update components
         self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
+        print(self.preset.comp.components_iter[0, seenpix, 0].mean())
+        
         self.preset.acquisition.convergence.append(results["convergence"].copy())
         ### Plot if asked
         if self.preset.tools.rank == 0:
@@ -179,6 +183,7 @@ class PipelineComponentMapMaking:
             self.plots.display_maps(seenpix, ki=self._steps)
             self.plots._display_allcomponents(ki=self._steps, gif=self.preset.tools.params["PCG"]["do_gif"], reso=self.preset.tools.params["PCG"]["reso_plot"])
             self.plots.plot_rms_iteration(self.preset.acquisition.rms_plot, ki=self._steps)
+            stop
 
     def update_components(self, seenpix):
         r"""

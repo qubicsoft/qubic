@@ -927,6 +927,8 @@ class PlanckAcquisition:
         # if the information of Planck is added with weight w, the confidence in it should scale as 1/w
         if weight_planck < 1.0 and weight_planck > 0.00001: # avoid too small weight_planck to not let the noise explode
             out[:, seenpix, :] = out[:, seenpix, :] / weight_planck
+        if weight_planck == 0:
+            out[:, seenpix, :] = 0.0
 
         return out * planck_ntot
 

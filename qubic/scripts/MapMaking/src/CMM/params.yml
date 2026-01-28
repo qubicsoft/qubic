@@ -54,7 +54,7 @@ QUBIC:
 
     instrument: "DB"                                                            # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                         # Instrumental configuration (TD or FI) # to be implemented in the code
-    npointings: 500                                                            # Number of time samples
+    npointings: 5000                                                            # Number of time samples
     nsub_in: 4                                                                  # Number of sub-acquisitions
     nsub_out: 4                                                                 # Number of sub-acquisitions for the reconstruction
     convolution_in: false                                                       # Angular resolution in the input TOD
@@ -89,7 +89,7 @@ PLANCK:
     ### This section define which external data are we using
     level_noise_planck: 0                                                       # Noise level for Planck data
     nsub_planck: 1                                                             # Number of integration step for Planck data
-    weight_planck: 0                                                           # Weight of Planck data within the QUBIC patch
+    weight_planck: 0                                                            # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                       # FWHM for apodized QUBIC patch
     30GHz: false
     44GHz: false

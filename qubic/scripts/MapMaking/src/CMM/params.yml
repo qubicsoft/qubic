@@ -88,8 +88,8 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
     level_noise_planck: 0                                                       # Noise level for Planck data
-    nsub_planck: 4                                                             # Number of integration step for Planck data
-    weight_planck: 0                                                            # Weight of Planck data within the QUBIC patch
+    nsub_planck: 1                                                             # Number of integration step for Planck data
+    weight_planck: 0                                                           # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                       # FWHM for apodized QUBIC patch
     30GHz: false
     44GHz: false
@@ -97,7 +97,7 @@ PLANCK:
     100GHz: false
     143GHz: false
     217GHz: false
-    353GHz: True
+    353GHz: true
     seed_noise: 22222
 
 Pipeline:

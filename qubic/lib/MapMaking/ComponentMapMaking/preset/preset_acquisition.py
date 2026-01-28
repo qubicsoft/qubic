@@ -126,7 +126,7 @@ class PresetAcquisition:
         self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec = self.get_convolution()
 
         ### Build Planck maps
-        self.components_in_convolved = np.zeros_like(self.preset_comp.components_out)
+        self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
         C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_tod))
         for icomp, _ in enumerate(self.preset_comp.components_name_out):
             self.components_in_convolved[icomp] = C(self.preset_comp.components_in[icomp])
@@ -294,6 +294,7 @@ class PresetAcquisition:
             seenpix=self.preset_sky.seenpix,
             seed=self.seed_noise_planck,
         )
+
         noise_qubic = self.get_noise()
 
         ### Create QUBIC TOD

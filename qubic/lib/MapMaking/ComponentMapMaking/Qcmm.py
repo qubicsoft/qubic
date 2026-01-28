@@ -162,13 +162,17 @@ class PipelineComponentMapMaking:
             center=self.preset.sky.center,
             reso=self.preset.tools.params["PCG"]["reso_plot"],
             fwhm_plot=self.preset.tools.params["PCG"]["fwhm_plot"],
-            input=self.preset.acquisition.input_maps,
+            input=self.preset.comp.components_in,
             iter_init=self._steps * num_iter,
             is_planck=True,
         )["x"]
 
         ### Update components
         self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
+        import matplotlib.pyplot as plt
+
+        hp.gnomview(self.preset.comp.components_iter[0, :, 0], rot=self.preset.sky.center, reso=20)
+        plt.show()
         self.preset.acquisition.convergence.append(results["convergence"].copy())
         ### Plot if asked
         if self.preset.tools.rank == 0:

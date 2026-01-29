@@ -831,7 +831,7 @@ class PlotsCMM:
 
             plt.close()
 
-    def _display_allcomponents(self, ki=0, gif=True, reso=15):
+    def _display_allcomponents(self, input_maps, reconstructed_maps, ki=0, gif=True, reso=15):
         """
         Display all components of the Healpix map with Gaussian convolution.
 
@@ -847,8 +847,8 @@ class PlotsCMM:
 
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
-            maps_in = self.preset.acquisition.components_in_convolved
-            maps_rec = self.preset.comp.components_iter
+            maps_in = input_maps
+            maps_rec = reconstructed_maps
             maps_res = maps_rec - maps_in
 
             Nmaps, _, Nstk = maps_res.shape
@@ -886,7 +886,7 @@ class PlotsCMM:
                     os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki}.svg")
             plt.close()
 
-    def display_maps(self, seenpix, ki=0, reso=15, view="gnomview"):
+    def display_maps(self, input_maps, reconstructed_maps, seenpix, ki=0, reso=15, view="gnomview"):
         """
         Display input / output / residual maps at a given iteration.
         """
@@ -896,8 +896,8 @@ class PlotsCMM:
         stk = ["I", "Q", "U"]
         rms_i = np.zeros((1, 2))
 
-        maps_in = self.preset.acquisition.components_in_convolved
-        maps_rec = self.preset.comp.components_iter
+        maps_in = input_maps
+        maps_rec = reconstructed_maps
         maps_res = maps_rec - maps_in
 
         ncomp = len(self.preset.comp.components_name_out)

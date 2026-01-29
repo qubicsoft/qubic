@@ -15,7 +15,6 @@ from qubic.lib.MapMaking.Qcg import pcg
 from qubic.lib.MapMaking.Qmap_plotter import PlotsCMM, plot_cross_spectrum
 from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
 from qubic.lib.Qhdf5 import HDF5Dict
-from qubic.lib.QskySim import get_angular_profile
 from qubic.lib.Qspectra import Spectra
 
 
@@ -123,7 +122,9 @@ class PipelineComponentMapMaking:
         """
 
         if self._steps == 0:
-            self.plots._display_allcomponents(ki=-1, reso=self.preset.tools.params["PCG"]["reso_plot"])
+            self.plots._display_allcomponents(
+                input_maps=self.preset.acquisition.components_in_convolved, reconstructed_maps=self.preset.comp.components_iter, ki=-1, reso=self.preset.tools.params["PCG"]["reso_plot"]
+            )
 
         ### Initialize PCG starting point
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
@@ -177,8 +178,14 @@ class PipelineComponentMapMaking:
                 do_gif(
                     self.gif_folder,
                 )
-            self.plots.display_maps(seenpix, ki=self._steps)
-            self.plots._display_allcomponents(ki=self._steps, gif=self.preset.tools.params["PCG"]["do_gif"], reso=self.preset.tools.params["PCG"]["reso_plot"])
+            self.plots.display_maps(input_maps=self.preset.acquisition.components_in_convolved, reconstructed_maps=self.preset.comp.components_iter, seenpix=seenpix, ki=self._steps)
+            self.plots._display_allcomponents(
+                input_maps=self.preset.acquisition.components_in_convolved,
+                reconstructed_maps=self.preset.comp.components_iter,
+                ki=self._steps,
+                gif=self.preset.tools.params["PCG"]["do_gif"],
+                reso=self.preset.tools.params["PCG"]["reso_plot"],
+            )
             self.plots.plot_rms_iteration(self.preset.acquisition.rms_plot, ki=self._steps)
 
     def update_components(self, seenpix):
@@ -551,81 +558,13 @@ class PipelineComponentMapMaking:
                         }
                         HDF5Dict().save_dict("CMM/" + self.preset.tools.params["foldername"] + "/Dict/" + self.preset.tools.params["filename"] + f"_{str(self.preset.job_id)}.h5", dictionary)
 
-    def _compute_map_noise_qubic_patch(self):
-        """
-
-        Compute the rms of the noise within the qubic patch.
-
-        """
-        nbins = 1  # average over the entire qubic patch
-
-        # if self.preset.comp.params_foregrounds['Dust']['nside_beta_out'] == 0:
-        if self.preset.qubic.params_qubic["convolution_out"]:
-            residual = self.preset.comp.components_iter - self.preset.comp.components_convolved_out
-        else:
-            residual = self.preset.comp.components_iter - self.preset.comp.components_out
-        # else:
-        #     if self.preset.qubic.params_qubic['convolution_out']:
-        #         residual = self.preset.comp.components_iter.T - self.preset.comp.components_convolved_out
-        #     else:
-        #         residual = self.preset.comp.components_iter.T - self.preset.comp.components_out.T
-        rms_maxpercomp = np.zeros(len(self.preset.comp.components_name_out))
-
-        for i in range(len(self.preset.comp.components_name_out)):
-            _, _, _, _, dI, dQ, dU = get_angular_profile(
-                residual[i],
-                thmax=self.preset.angmax,
-                nbins=nbins,
-                doplot=False,
-                allstokes=True,
-                separate=True,
-                integrated=True,
-                center=self.preset.sky.center,
-            )
-
-            ### Set dI to 0 to only keep polarization fluctuations
-            dI = 0
-            rms_maxpercomp[i] = np.max([dI, dQ, dU])
-        return rms_maxpercomp
-
-    def _compute_maxrms_array(self):
-        if self._steps <= self.preset.tools.params["PCG"]["ites_to_converge"] - 1:
-            self._rms_noise_qubic_patch_per_ite[self._steps, :] = self._compute_map_noise_qubic_patch()
-        elif self._steps > self.preset.tools.params["PCG"]["ites_to_converge"] - 1:
-            self._rms_noise_qubic_patch_per_ite[:-1, :] = self._rms_noise_qubic_patch_per_ite[1:, :]
-            self._rms_noise_qubic_patch_per_ite[-1, :] = self._compute_map_noise_qubic_patch()
-
     def _stop_condition(self):
         """
         Method that stop the convergence if there are more than k steps.
 
         """
 
-        if self._steps >= self.preset.tools.params["PCG"]["ites_to_converge"] - 1:
-            deltarms_max_percomp = np.zeros(len(self.preset.comp.components_name_out))
-
-            for i in range(len(self.preset.comp.components_name_out)):
-                deltarms_max_percomp[i] = np.max(np.abs((self._rms_noise_qubic_patch_per_ite[:, i] - self._rms_noise_qubic_patch_per_ite[-1, i]) / self._rms_noise_qubic_patch_per_ite[-1, i]))
-
-            deltarms_max = np.max(deltarms_max_percomp)
-            # if self.preset.tools.rank == 0:
-            #    print(f'Maximum RMS variation for the last {self.preset.acquisition.ites_rms_tolerance} iterations: {deltarms_max}')
-
-            if deltarms_max < self.preset.tools.params["PCG"]["tol_rms"]:
-                print(f"RMS variations lower than {self.preset.acquisition.rms_tolerance} for the last {self.preset.acquisition.ites_rms_tolerance} iterations.")
-
-                ### Update components last time with converged parameters
-                # self.update_components(maxiter=100)
-                self._info = False
-
         if self._steps >= self.preset.tools.params["PCG"]["n_iter_loop"] - 1:
-            ### Update components last time with converged parameters
-            # self.update_components(maxiter=100)
-
-            ### Wait for all processes and save data inside pickle file
-            # self.preset.tools.comm.Barrier()
-            # self.save_data()
-
             self._info = False
 
         self._steps += 1

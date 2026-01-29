@@ -66,11 +66,11 @@ class PresetTools:
                 raise TypeError("The argument nsub_out should be even")
 
         # Check if blind_method is one of the allowed methods
-        if self.params["Foregrounds"]["blind_method"] not in ["alternate", "minimize", "PCG"]:
-            raise TypeError("You must choose alternate, minimize or PCG method")
+        if self.params["Foregrounds"]["blind_method"] not in ["minimize"]:
+            raise TypeError("You must choose minimize method")
 
         # Check if nsub_out is greater than or equal to bin_mixing_matrix
-        if self.params["QUBIC"]["nsub_out"] < self.params["Foregrounds"]["bin_mixing_matrix"]:
+        if self.params["Foregrounds"]["fit_mixing_matrix"] and self.params["QUBIC"]["nsub_out"] < self.params["Foregrounds"]["bin_mixing_matrix"]:
             raise TypeError("nsub_out should be higher than bin_mixing_matrix")
 
         # Check if bin_mixing_matrix is a multiple of nsub_out when either Dust or Synchrotron type is 'blind'

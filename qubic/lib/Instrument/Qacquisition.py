@@ -926,6 +926,8 @@ class PlanckAcquisition:
         # if the information of Planck is added with weight w, the confidence in it should scale as 1/w
         if weight_planck < 1.0 and weight_planck > 0.00001:  # avoid too small weight_planck to not let the noise explode
             out[:, seenpix, :] = out[:, seenpix, :] / weight_planck
+        if weight_planck == 0:
+            out[:, seenpix, :] = 0.0
 
         return out * planck_ntot
 
@@ -1103,12 +1105,12 @@ class PlanckAcquisition:
 
                 ope_i += [C * D]
                 k += 1
-            
+
             if comm is not None:
                 Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
             else:
                 Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
-            
+
         return BlockColumnOperator(Operator, axisout=0)
 
 
@@ -1210,7 +1212,14 @@ class JointAcquisitionComponentsMapMaking:
         Aq = A[: self.Nsub]
         Ap = A[self.Nsub :]
 
-        Hq = self.qubic.get_operator(A=Aq, gain=gain, fwhm=fwhm)
+        if fwhm is None:
+            fwhm_q = None
+            fwhm_p = None
+        else:
+            fwhm_q = fwhm[: self.Nsub]
+            fwhm_p = fwhm[self.Nsub :]
+
+        Hq = self.qubic.get_operator(A=Aq, gain=gain, fwhm=fwhm_q)
         Rq = ReshapeOperator(Hq.shapeout, (Hq.shapeout[0] * Hq.shapeout[1]))
 
         try:
@@ -1218,7 +1227,7 @@ class JointAcquisitionComponentsMapMaking:
         except Exception:
             mpidist = None
 
-        He = self.external.get_operator(A=Ap, fwhm=None, comm=mpidist)  # , nu_co=nu_co)
+        He = self.external.get_operator(A=Ap, fwhm=fwhm_p, comm=mpidist)  # , nu_co=nu_co)
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 

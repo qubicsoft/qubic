@@ -919,15 +919,15 @@ class PlanckAcquisition:
 
         for nu in range(len(nus)):
             sigma = self.sigma[nu]
-            out[nu, :, :] = np.random.standard_normal((self.npix, 3)) * sigma
+            out[nu] = np.random.standard_normal((self.npix, 3)) * sigma
 
         np.random.set_state(state)
 
         # if the information of Planck is added with weight w, the confidence in it should scale as 1/w
         if weight_planck < 1.0 and weight_planck > 0.00001:  # avoid too small weight_planck to not let the noise explode
-            out[:, seenpix, :] = out[:, seenpix, :] / weight_planck
+            out[:, seenpix] = out[:, seenpix] / weight_planck
         if weight_planck == 0:
-            out[:, seenpix, :] = 0.0
+            out[:, seenpix] = 0.0
 
         return out * planck_ntot
 
@@ -961,7 +961,7 @@ class PlanckAcquisition:
         if planck_ntot == 0:
             return IdentityOperator(shapein=(3 * len(self.nus) * npix))  # in FMM, len(self.nus) is always 1, in CMM it is over the range
 
-        sigma_perpix = np.broadcast_to(sigma[:, None, :], (len(self.nus), npix, 3))
+        sigma_perpix = np.broadcast_to(sigma[:, None], (len(self.nus), npix, 3))
 
         if beam_correction != 0:
             factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2

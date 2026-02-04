@@ -54,8 +54,8 @@ class PresetTools:
 
         if self.params["QUBIC"]["instrument"] != "MB":  # We might want to build odd nsub with "MB"
             # Check if bin_mixing_matrix is even
-            if self.params["Foregrounds"]["fit_mixing_matrix"] and self.params["Foregrounds"]["bin_mixing_matrix"] % 2 != 0:
-                raise TypeError("The argument bin_mixing_matrix should be even")
+            # if self.params["Foregrounds"]["fit_mixing_matrix"] and self.params["Foregrounds"]["bin_mixing_matrix"] % 2 != 0:
+            #     raise TypeError("The argument bin_mixing_matrix should be even")
 
             # Check if nsub_in is even
             if self.params["QUBIC"]["nsub_in"] % 2 != 0:

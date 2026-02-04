@@ -122,7 +122,7 @@ class PresetAcquisition:
         self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_qubic_tod, self.fwhm_qubic_mapmaking, self.fwhm_qubic_rec = self.get_convolution()
         self.fwhm_planck_tod = [self.fwhm_qubic_tod.min()] * len(self.preset_external.external_nus)
-        #! Tom: need to upgrade this
+        #! Tom: need to update this
         self.fwhm_planck_mapmaking = [self.fwhm_qubic_mapmaking.min()] * len(self.preset_external.external_nus)
         self.fwhm_tod = np.concatenate((self.fwhm_qubic_tod, self.fwhm_planck_tod))
         self.fwhm_mapmaking = np.concatenate((self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking))
@@ -333,6 +333,7 @@ class PresetAcquisition:
         # self.TOD_external_zero_outside_patch = _r.T(maps_external)
 
         ### Observed TOD (Planck is assumed on the full sky)
+
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
         self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch.ravel()]
 

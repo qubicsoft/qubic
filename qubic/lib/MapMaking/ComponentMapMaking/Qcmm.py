@@ -203,7 +203,6 @@ class PipelineComponentMapMaking:
             Boolean array that define the pixels observed by QUBIC.
 
         """
-
         H_i = self.preset.qubic.joint_out.get_operator(
             A=self.preset.acquisition.Amm_iter,
             gain=self.preset.gain.gain_iter,
@@ -230,6 +229,7 @@ class PipelineComponentMapMaking:
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
         weight_mask = np.where(seenpix[None, :, None], w, 1.0)  # the 1.0 adds planck outside the patch, the weight_planck adds planck inside the patch
         x_planck_full = self.preset.comp.components_out * weight_mask
+
         self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck_full)))
 
         ### Run PCG
@@ -261,10 +261,10 @@ class PipelineComponentMapMaking:
         )
 
         #! raise ValueError("Tom : is it correct to use this H here ?")
+        #! H should include FWHM mapmaking
         for i in range(len(self.preset.comp.components_name_out)):
             for j in range(self.preset.qubic.joint_out.qubic.nsub):
-                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
-                tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](C(self.preset.comp.components_iter[i])).ravel()
+                tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](self.preset.comp.components_iter[i]).ravel()
 
         return tod_comp
 
@@ -317,9 +317,9 @@ class PipelineComponentMapMaking:
         _index_nside = hp.ud_grade(_index, self.preset.qubic.joint_out.external.nside)
         tod_comp = np.zeros(
             (
-                len(index),
-                self.preset.qubic.joint_out.qubic.nsub,
                 len(self.preset.comp.components_name_out),
+                self.preset.qubic.joint_out.qubic.nsub,
+                len(index),
                 self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
             )
         )
@@ -336,7 +336,7 @@ class PipelineComponentMapMaking:
                     _i = _index_nside == i
                     for stk in range(3):
                         maps_conv_i[:, :, stk] *= _i
-                    tod_comp[ii, j, icomp] = self.preset.qubic.joint_out.qubic.H[j](maps_conv_i[icomp]).ravel()
+                    tod_comp[icomp, j, ii] = self.preset.qubic.joint_out.qubic.H[j](maps_conv_i[icomp]).ravel()
         return tod_comp
 
     def update_mixing_matrix(self, beta, previous_mixingmatrix, icomp):
@@ -389,9 +389,23 @@ class PipelineComponentMapMaking:
 
     def fit_mixing_matrix(self):
         method = self.get_mixing_matrix_method()
-        tod_comp = self.get_tod_comp()
         self.nfev = 0
-        self.preset.mixingmatrix._index_seenpix_beta = 0
+
+        # d1 model
+        if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] != 0:
+            index_num = hp.ud_grade(self.preset.sky.seenpix_qubic, self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"])
+            self.preset.mixingmatrix._index_seenpix_beta = np.where(index_num)[0]
+
+            ### Simulated TOD for each components, nsub, npix with shape (npix, nsub, ncomp, nsnd)
+            tod_comp = self.get_tod_comp_superpixel(self.preset.mixingmatrix._index_seenpix_beta)
+
+            ### Store fixed beta (those denoted with hp.UNSEEN are variable)
+            beta_map = self.preset.acquisition.beta_iter.copy()
+            beta_map[:, self.preset.mixingmatrix._index_seenpix_beta] = hp.UNSEEN
+        # d0 or d6 model
+        else:
+            tod_comp = self.get_tod_comp()
+            self.preset.mixingmatrix._index_seenpix_beta = 0
 
         if method == "parametric":
             updater = ParametricMM(self)
@@ -402,7 +416,10 @@ class PipelineComponentMapMaking:
         else:
             raise TypeError(f"Unknown method {method}")
 
-        updater.update(tod_comp)
+        if self.preset.comp.params_foregrounds["Dust"]["model"] == "d1":
+            updater.update(tod_comp, beta_map)
+        else:
+            updater.update(tod_comp)
 
     def give_intercal(self, D, d, _invn):
         r"""Detectors intercalibration.

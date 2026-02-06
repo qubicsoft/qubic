@@ -234,7 +234,7 @@ class ObservationCampaign:
                 range(1, n_days + 1),
                 desc=f"Planning observations for {self.config.run.year}-{cal.month_name[self.config.run.month]}",
                 file=sys.stdout,
-                color="green",
+                colour="green",
                 dynamic_ncols=True):
 
             obs_time = Time(datetime(self.config.run.year, self.config.run.month, day), scale='utc')
@@ -386,7 +386,7 @@ class ObservationCampaign:
 
 
 def main():
-    config_file = sys.argv[1] if len(sys.argv) > 1 else "configs/conf.toml"
+    config_file = sys.argv[1] if len(sys.argv) > 1 else "/Volumes/Data/PycharmProjects/qubic/qubic/scripts/scanning_strategy/observation_plan/configs/conf.toml"
 
     campaign = ObservationCampaign(config_file)
     campaign.analyze_observability()

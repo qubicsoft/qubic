@@ -61,7 +61,7 @@ class AtmosphereProperties:
         self.integrated_abs_spectrum, self.frequencies, self.bandwidths = self.integrated_absorption_spectrum()
 
         ### Compute water vapor density's standard deviation
-        self.sigma_rho = self.get_sigma_rho(sigma_wv=self.params["sigma_wv"], h=2 * self.params["h_h2o"])
+        self.sigma_rho = self.get_sigma_rho(sigma_pwv=self.params["sigma_pwv"], h=2 * self.params["h_h2o"])
 
     def get_qubic_dict(self, key="in"):
         """QUBIC dictionary.
@@ -84,7 +84,6 @@ class AtmosphereProperties:
 
         args = {
             "nf_sub": self.params[f"nsub_{key}"],
-            "nf_recon": self.params["nrec"],
             "filter_relative_bandwidth": 0.25,
             "npointings": self.params["npointings"],
             "nside": self.params["nside"],
@@ -123,16 +122,16 @@ class AtmosphereProperties:
 
         return dict_qubic
 
-    def get_sigma_rho(self, sigma_wv, h=None):
+    def get_sigma_rho(self, sigma_pwv, h=None):
         r"""Water vapor density's standard deviation
 
-        Compute sigma_rho from sigma_wv at altitude h, with sigma_wv taken from Table 1 in Sugiyama 2024.
+        Compute sigma_rho from sigma_pwv at altitude h, with sigma_pwv taken from Table 1 in Sugiyama 2024.
         The formula, being $\sigma_{\rho(h)} = \frac{\sigma_{PWV}}{h}$ , comes from a scale approximation.
         h should be defined as 2*h_h2o, with h_h2o the water vapor half-height.
 
         Parameters
         ----------
-        sigma_wv : float
+        sigma_pwv : float
             PWV's STD in mm.(1 mm of water over a 1 m^2 area is equivalent to 1 kg/m^2, the actual dimension of the PWD per definition.)
         h : float
             height of the considered water vapor in m.
@@ -147,7 +146,7 @@ class AtmosphereProperties:
         if h is None:
             h = 2 * self.params["h_h2o"]
         if h is not None:
-            return sigma_wv / h
+            return sigma_pwv / h
         else:
             raise ValueError("height of the water vapor h must be given")
 

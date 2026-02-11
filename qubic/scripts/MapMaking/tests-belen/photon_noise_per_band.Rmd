@@ -1,0 +1,634 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+### NEP photon study using old version of QubicInstrument
+
+```{python}
+from pyoperators import MPI
+
+from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineEnd2End # wrapper de pipeline frecuency map making
+from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineFrequencyMapMaking
+import sys
+import yaml
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+```
+
+```{python}
+import matplotlib.pyplot as plt
+import numpy as np
+```
+
+```{python}
+from qubic.lib.Instrument.Qnoise import QubicTotNoise
+from qubic.lib.Instrument.Qacquisition import QubicAcquisition
+from qubic.lib.Instrument.Qinstrument import QubicInstrument
+
+from pysimulators import (
+    ConvolutionTruncatedExponentialOperator,
+    Instrument,
+    Layout,
+    ProjectionOperator,
+)
+```
+
+```{python}
+from qubic.lib.Instrument.Qinstrument import compute_freq
+
+```
+
+DB,  FI
+
+```{python}
+# read the yalm 
+with open("/home/belen/Doctorado/qubic-dev/qubic/qubic/scripts/MapMaking/src/FMM/params_test.yml", "r") as f:
+    params = yaml.safe_load(f)
+```
+
+```{python}
+params
+```
+
+```{python}
+# modificar Params segun interes
+```
+
+```{python}
+file = "salida.pkl"
+mapmaker = PipelineFrequencyMapMaking(comm, file, params)
+```
+
+```{python}
+### dict out from pipeline_demo, but it should be rewritten depending of the band that we use and so on
+```
+
+```{python}
+dict_out = mapmaker.get_dict(key="out")
+joint = mapmaker.joint
+```
+
+```{python}
+dict_out
+```
+
+```{python}
+qubic_noise = QubicTotNoise(dict_out, joint.qubic.sampling, joint.qubic.scene)
+
+nn = qubic_noise.total_noise(params["QUBIC"]["NOISE"]["ndet"], params["QUBIC"]["NOISE"]["npho150"], params["QUBIC"]["NOISE"]["npho220"])
+```
+
+```{python}
+sampling = joint.qubic.sampling
+ns = sampling.comm.allreduce(len(sampling))
+fact = np.sqrt(ns * sampling.period / (3 * 31557600))
+```
+
+```{python}
+np.shape(nn)
+```
+
+```{python}
+# %matplotlib inline
+```
+
+```{python}
+plt.plot(np.std(nn[992:]*np.sqrt(2)/fact, axis=1))
+plt.xlabel('Nº detector')
+plt.ylabel('std')
+plt.show()
+```
+
+```{python}
+if dict_out['instrument_type'] == 'DB':
+    band_used = [150, 220]
+
+instruments = {}
+for band in band_used: 
+    d = dict_out.copy()
+    d['debug'] = True
+    d['band'] = band 
+    d["filter_nu"] = int(band) * 1e9
+    d["nf_sub"] = 1
+    d["nf_recon"] = 1
+
+    
+    instruments[f"inst_{band}"] = QubicInstrument(d)
+
+```
+
+```{python}
+instruments
+```
+
+```{python}
+# en las funciones de get_noise_photon ya esta hecha la realizacion aleatoria. El nep es el que hace 
+# de _get_noise_photon_nep
+```
+
+```{python}
+def TOD_noise(inst): 
+    pho_noise = inst.get_noise(joint.qubic.sampling, joint.qubic.scene, det_noise=False, photon_noise=True)
+    det_noise = inst.get_noise(joint.qubic.sampling, joint.qubic.scene, det_noise=True, photon_noise=False)
+    total_noise = inst.get_noise(joint.qubic.sampling, joint.qubic.scene, det_noise=True, photon_noise=True)
+    
+    return pho_noise, det_noise, total_noise
+```
+
+```{python}
+pho150, det150, total150 = TOD_noise(instruments['inst_150'])
+pho220, det220, total220 = TOD_noise(instruments['inst_220'])
+
+```
+
+```{python}
+samp = joint.qubic.sampling.index
+```
+
+```{python}
+# %matplotlib inline
+```
+
+```{python}
+plt.plot(samp, np.mean(det150, axis=0), color='blue', label='detector noise')
+plt.fill_between(samp, y1 = np.mean(det150, axis=0) - np.std(det150, axis=0), y2 = np.mean(det150, axis=0) + np.std(det150, axis=0), color='blue', alpha=0.2)
+
+plt.plot(samp, np.mean(pho150, axis=0), color='red', label='photon noise')
+plt.fill_between(samp, y1 = np.mean(pho150, axis=0) - np.std(pho150, axis=0), y2 = np.mean(pho150, axis=0) + np.std(pho150, axis=0), color='red', alpha=0.2)
+
+plt.plot(samp, np.mean(total150, axis=0), color='green', label='total noise')
+plt.fill_between(samp, y1 = np.mean(total150, axis=0) - np.std(total150, axis=0), y2 = np.mean(total150, axis=0) + np.std(total150, axis=0), color='green',  alpha=0.2)
+
+
+plt.legend()
+plt.title('mean and std in all detectors')
+plt.xlabel('Time')
+plt.ylabel('NEP')
+plt.show()
+```
+
+```{python}
+plt.plot(samp, np.mean(det220, axis=0), color='blue', label='detector noise')
+plt.fill_between(samp, y1 = np.mean(det220, axis=0) - np.std(det220, axis=0), y2 = np.mean(det220, axis=0) + np.std(det220, axis=0), color='blue', alpha=0.2)
+
+plt.plot(samp, np.mean(pho220, axis=0), color='red', label='photon noise')
+plt.fill_between(samp, y1 = np.mean(pho220, axis=0) - np.std(pho220, axis=0), y2 = np.mean(pho220, axis=0) + np.std(pho220, axis=0), color='red', alpha=0.2)
+
+plt.plot(samp, np.mean(total220, axis=0), color='green', label='total noise')
+plt.fill_between(samp, y1 = np.mean(total220, axis=0) - np.std(total220, axis=0), y2 = np.mean(total220, axis=0) + np.std(total220, axis=0), color='green',  alpha=0.2)
+
+
+plt.legend()
+plt.title('mean and std in all detectors')
+plt.xlabel('Time')
+plt.ylabel('NEP')
+plt.show()
+```
+
+```{python}
+plt.hist(np.mean(total150, axis=1), bins=30, color='green', alpha = 0.7, label='total noise' )
+plt.hist(np.mean(pho150, axis=1), bins=30, color='red', alpha = 0.7, label='photon noise')
+plt.hist(np.mean(det150, axis=1), bins=30, color='blue', alpha = 0.7, label='detector noise' )
+plt.xlabel('NEP')
+plt.legend()
+plt.title('Histogram of NEP values in each detector')
+```
+
+```{python}
+plt.hist(np.mean(total220, axis=1), bins=30, color='green', alpha = 0.7, label='total noise' )
+plt.hist(np.mean(det220, axis=1), bins=30, color='blue', alpha = 0.7, label='detector noise' )
+plt.hist(np.mean(pho220, axis=1), bins=30, color='red', alpha = 0.7, label='photon noise')
+
+plt.xlabel('NEP')
+plt.legend()
+plt.title('Histogram of NEP values in each detector')
+```
+
+```{python}
+inst150 = instruments['inst_150']
+inst220 = instruments['inst_220']
+```
+
+```{python}
+# estos son los NEP totales, con estos tengo que comparar la std del noise TOD, pero ver ese factor
+# que se agrega en Qacquiation
+```
+
+```{python}
+np.shape(nep_photon150)
+```
+
+```{python}
+nep_photon150 = inst150._get_noise_photon_nep(joint.qubic.scene)
+nep_photon220 = inst220._get_noise_photon_nep(joint.qubic.scene)
+
+```
+
+```{python}
+inst150
+```
+
+```{python}
+plt.scatter(np.arange(len(nep_photon150)), nep_photon150/np.sqrt(2), c= nep_photon150/np.sqrt(2) )
+plt.xlabel('Nº detector')
+plt.ylabel('photon NEP')
+plt.title('150 band')
+plt.colorbar()
+plt.show()
+```
+
+```{python}
+plt.plot((np.std(nn[:992], axis=1)/fact), label='TOD std')
+plt.plot(nep_photon150/np.sqrt(2.0), label='NEP 150')
+plt.legend()
+plt.xlabel('Nº detector')
+```
+
+```{python}
+plt.plot((np.std(nn[992:], axis=1)/fact), label='TOD std')
+plt.plot(nep_photon220/np.sqrt(2.0), label='NEP 220')
+plt.legend()
+plt.xlabel('Nº detector')
+```
+
+```{python}
+ratio_220 = (np.std(nn[992:]*np.sqrt(2.0)/fact, axis=1))/nep_photon220
+```
+
+```{python}
+ratio_150 = (np.std(nn[:992]*np.sqrt(2.0)/fact, axis=1))/nep_photon150
+```
+
+```{python}
+np.mean(ratio_220)
+```
+
+```{python}
+sampling.period
+```
+
+```{python}
+plt.plot(ratio_150, label='ratio 150')
+plt.plot(ratio_220, label='ratio 220')
+plt.axhline(y=1, color='black')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+noisepar_150 = inst150.load_NEP_parameters(joint.qubic.scene)
+```
+
+```{python}
+noisepar_220 = inst220.load_NEP_parameters(joint.qubic.scene)
+```
+
+```{python}
+len(noisepar_150.omega_det) # omega_det angulo solido por detector
+```
+
+```{python}
+noisepar_150.omega_comb # omega_comb es constante
+```
+
+```{python}
+noisepar_150.names
+```
+
+```{python}
+noisepar_220.names
+```
+
+```{python}
+
+```
+
+```{python}
+plt.scatter(inst150.detector.center.T[0], inst150.detector.center.T[1], c = noisepar_150.sec_beam, marker = 's')
+plt.colorbar()
+plt.title('Sec beam')
+plt.show()
+```
+
+```{python}
+# components per band 
+
+# 1. NEP before horns array 
+
+
+# 150: 
+# 2. NEP horns
+# 3. NEP environment 
+# 4. NEP combiner 
+# 5. NEP coldspot 
+# 6. neutral density (no se bien) 
+# 7. lowpassedge (2)
+
+# 220: 
+# 2. NEP horns
+# 3. NEP env
+# 4. NEP combiner 
+# 5. NEP coldspot 
+# 6. NEP dichroic
+# 7. NEP lfiter 220 (3)
+
+# 8. NEP last_filter
+
+```
+
+```{python}
+noisepar_220.indf
+```
+
+```{python}
+sampling = joint.qubic.sampling
+
+```
+
+```{python}
+def load_NEP_components(inst, noisepar, band_150 = True):
+    dict_before_horns = inst.NEP_before_horns(noisepar, noisepar.nu, return_only=True, sampling=sampling) # se reescriben los 12 primeros NEP para cada detector
+    
+    dict_horns = inst.NEP_horns(noisepar, return_only=True, sampling=sampling)
+    dict_env = inst.NEP_environment(noisepar, noisepar.names, return_only=True, sampling=sampling)
+    dict_combiner = inst.NEP_combiner(noisepar, return_only=True, sampling=sampling)
+    dict_coldspot = inst.NEP_coldstop(noisepar, return_only=True, sampling=sampling)
+    dict_dich = inst.NEP_dichroic(noisepar, return_only=True, sampling=sampling)
+
+    
+    if band_150:
+        dict_ndf = inst.NEP_neutraldensityfilter(noisepar, return_only=True, sampling=sampling)
+        dict_lpe1 = inst.NEP_lowpassedge(noisepar, noisepar.lpe1, return_only=True, sampling=sampling)
+        dict_lpe2 = inst.NEP_lowpassedge(noisepar, noisepar.lpe2, return_only=True, sampling=sampling)
+    else: 
+        dict_ndf = inst.NEP_lpefilter_220(noisepar, noisepar.indf, return_only=True, sampling=sampling)
+        dict_lpe1 = inst.NEP_lpefilter_220(noisepar, noisepar.lpe1, return_only=True, sampling=sampling)
+        dict_lpe2 = inst.NEP_lpefilter_220(noisepar, noisepar.lpe2, return_only=True, sampling=sampling)        
+        
+    dict_last = inst.NEP_lastfilter(noisepar, return_only=True, sampling=sampling)
+    
+    allnoisearray = [dict_before_horns, dict_horns, dict_combiner, dict_coldspot, dict_dich, dict_ndf, dict_lpe1, dict_lpe2, dict_last]
+    
+    return allnoisearray
+```
+
+```{python}
+# el last filter es el mismo para las dos bandas
+```
+
+```{python}
+allnoise_150 = load_NEP_components(inst150, noisepar_150, band_150=True)
+```
+
+```{python}
+allnoise_220 = load_NEP_components(inst220, noisepar_220, band_150=False)
+```
+
+```{python}
+dict_before_horns = allnoise_150[0]
+ncomp_before_horns = len(dict_before_horns["power"])
+ncomp_after_horns = len(allnoise_150[1:])
+```
+
+```{python}
+np.shape(dict_before_horns["power"])
+```
+
+```{python}
+ncomp_after_horns
+```
+
+```{python}
+len(allnoise_150[2])
+```
+
+```{python}
+fig2, ax2 = plt.subplots(nrows = 3, ncols = 4, figsize = (16,12))
+fig2.suptitle('Power of the detected radiation for components before horns (150 band)')
+ax2 = ax2.ravel()
+for j in range(ncomp_before_horns):
+    ax2[j].cla()
+    plt.axes(ax2[j])
+    ax2[j].set_title("{}".format(noisepar_150.names[j]))
+    cp = ax2[j].scatter(inst150.detector.center.T[0],
+                        inst150.detector.center.T[1],
+                        c = allnoise_150[0]['power'][j], marker = 's')
+    cbar = fig2.colorbar(cp,)
+    ax2[j].set_xticklabels("")
+    ax2[j].set_yticklabels("")
+    ax2[j].set_aspect('equal')
+    
+#plt.show()
+
+plt.savefig('phonoise_focalplane_before150.png')
+```
+
+```{python}
+fig2, ax2 = plt.subplots(nrows = 3, ncols = 4, figsize = (16,12))
+fig2.suptitle('Power of the detected radiation for components before horns (220 band)')
+ax2 = ax2.ravel()
+for j in range(ncomp_before_horns):
+    ax2[j].cla()
+    plt.axes(ax2[j])
+    ax2[j].set_title("{}".format(noisepar_220.names[j]))
+    cp = ax2[j].scatter(inst220.detector.center.T[0],
+                        inst220.detector.center.T[1],
+                        c = allnoise_220[0]['power'][j], marker = 's')
+    cbar = fig2.colorbar(cp,)
+    ax2[j].set_xticklabels("")
+    ax2[j].set_yticklabels("")
+    ax2[j].set_aspect('equal')
+    
+#plt.show()
+plt.savefig('phonoise_focalplane_before220.png')
+```
+
+```{python}
+len(allnoise_150)
+```
+
+```{python}
+noisepar_150.names[1+ncomp_before_horns]
+```
+
+```{python}
+allnoise_150[8]['power'].max()
+```
+
+```{python}
+np.mean(allnoise_150[8]['power'])
+```
+
+```{python}
+fig2, ax2 = plt.subplots(nrows = 1, ncols = 2, figsize = (16,12))
+
+cp = ax2[0].scatter(inst150.detector.center.T[0],
+                inst150.detector.center.T[1],
+                c = allnoise_150[2]['power'], marker = 's')
+cbar = fig2.colorbar(cp, ax=ax2[0], fraction=0.046, pad=0.04)
+ax2[0].set_xticklabels("")
+ax2[0].set_yticklabels("")
+ax2[0].set_aspect('equal')
+ax2[0].set_title('Integration 150GHz')
+cp = ax2[1].scatter(inst220.detector.center.T[0],
+                inst220.detector.center.T[1],
+                c = allnoise_220[2]['power'], marker = 's')
+cbar = fig2.colorbar(cp, ax=ax2[1], fraction=0.046, pad=0.04)
+ax2[1].set_title('Thin band 220GHz')
+
+ax2[1].set_xticklabels("")
+ax2[1].set_yticklabels("")
+ax2[1].set_aspect('equal')
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
+
+```{python}
+fig2, ax2 = plt.subplots(nrows = 3, ncols = 4, figsize = (16,12))
+fig2.suptitle('Power of the detected radiation for components after horns (150 band)')
+ax2 = ax2.ravel()
+for j in range(0, ncomp_after_horns):
+    ax2[j].cla()
+    plt.axes(ax2[j])
+    ax2[j].set_title("{}".format(noisepar_150.names[j+ncomp_before_horns]))
+    cp = ax2[j].scatter(inst150.detector.center.T[0],
+                        inst150.detector.center.T[1],
+                        c = allnoise_150[j+1]['power'], marker = 's')
+    cbar = fig2.colorbar(cp,)
+    ax2[j].set_xticklabels("")
+    ax2[j].set_yticklabels("")
+    ax2[j].set_aspect('equal')
+
+plt.savefig('phonoise_focalplane_after150.png')
+#plt.show()
+```
+
+```{python}
+noisepar_220.names
+```
+
+```{python}
+allnoise_220[2]
+```
+
+```{python}
+# ver expresiones de por qué dan un valor constante para todos los detectores
+```
+
+```{python}
+np.shape(noisepar_150.transmissions)
+```
+
+```{python}
+noisepar_150.tr_prod
+```
+
+```{python}
+allnoise_220[7]['NEP_array']
+```
+
+```{python}
+noisepar_220.names[1+ncomp_before_horns]
+```
+
+```{python}
+allnoise_220[2]['power'].max()
+```
+
+```{python}
+results_220_afterhorns = {}
+
+for j in range(0, ncomp_after_horns):
+
+    name = noisepar_220.names[j+ncomp_before_horns]
+    results_220_afterhorns[name] = {
+        'P_max': allnoise_220[j+1]['power'].max(),
+        'NEP_max': allnoise_220[j+1]['NEP_array'].max(),
+    }
+```
+
+```{python}
+import pickle
+
+with open("results_220_afterhorns.pkl", "wb") as f:
+    pickle.dump(results_220_afterhorns, f)
+```
+
+```{python}
+results_150_afterhorns = {}
+
+for j in range(0, ncomp_after_horns):
+
+    name = noisepar_150.names[j+ncomp_before_horns]
+    results_150_afterhorns[name] = {
+        'P_max': allnoise_150[j+1]['power'].max(),
+        'NEP_max': allnoise_150[j+1]['NEP_array'].max(),
+    }
+```
+
+```{python}
+import pickle
+
+with open("results_150_afterhorns.pkl", "wb") as f:
+    pickle.dump(results_150_afterhorns, f)
+```
+
+```{python}
+# %matplotlib inline
+```
+
+```{python}
+fig2, ax2 = plt.subplots(nrows = 3, ncols = 4, figsize = (16,12))
+fig2.suptitle('Power of the detected radiation for components after horns (220 band)')
+ax2 = ax2.ravel()
+for j in range(0, ncomp_after_horns):
+    ax2[j].cla()
+    plt.axes(ax2[j])
+    ax2[j].set_title("{}".format(noisepar_220.names[j+ncomp_before_horns]))
+    cp = ax2[j].scatter(inst220.detector.center.T[0],
+                        inst220.detector.center.T[1],
+                        c = allnoise_220[j+1]['power'], marker = 's')
+    cbar = fig2.colorbar(cp,)
+    ax2[j].set_xticklabels("")
+    ax2[j].set_yticklabels("")
+    ax2[j].set_aspect('equal')
+
+plt.savefig('phonoise_focalplane_after220.png')
+
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+
+```

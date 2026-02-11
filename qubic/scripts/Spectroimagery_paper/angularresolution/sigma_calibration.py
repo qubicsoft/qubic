@@ -125,7 +125,7 @@ for f_i, fwhm_i in enumerate(fwhm):
 		noise[i,:] = amp*np.random.random(np.shape(f0_ud[0]))
 		f0_ud[i,:] += noise[i,:]
 
-	m0_ud = np.zeros((n_subpop, hp.nside2npix(nsideLow)), dtype=np.float)
+	m0_ud = np.zeros((n_subpop, hp.nside2npix(nsideLow)), dtype=float)
 			
 	if onePx == False:
 		for i in range(n_subpop):

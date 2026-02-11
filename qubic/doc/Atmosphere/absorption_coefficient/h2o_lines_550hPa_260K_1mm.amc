@@ -1,0 +1,7 @@
+f 130 GHz  250 GHz  0.005 GHz
+output f  k
+
+layer
+P 550 hPa
+T 260 K
+column h2o_lines 1 mm_pwv

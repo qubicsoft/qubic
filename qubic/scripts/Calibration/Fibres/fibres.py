@@ -85,7 +85,7 @@ notch = ft.notch_array(freqs_pt, bw_0)
 # hack to add number of harmonics expected in fibtools.filter_data
 notch_shape = np.array(notch.shape)
 notch_shape[1] += 1
-new_notch = np.zeros(notch_shape,dtype=np.float)
+new_notch = np.zeros(notch_shape,dtype=float)
 new_notch[:,:2] = notch
 new_notch[:,2] = 2 # notch filter also for two harmonics
 notch = new_notch

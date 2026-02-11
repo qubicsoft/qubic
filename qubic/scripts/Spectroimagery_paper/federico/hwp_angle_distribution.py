@@ -43,7 +43,7 @@ longest_idx = np.sum(hwp_angles_distribution != 0, axis=1).argmin()
 nonzero_idxs = np.argwhere(hwp_angles_distribution[longest_idx, :] != 0)
 relevant_values = hwp_angles_distribution[:, nonzero_idxs.ravel()]
 
-hwp_angles_distribution[:, 0] = np.full(len(hwp_angles), np.int(np.max(
+hwp_angles_distribution[:, 0] = np.full(len(hwp_angles), int(np.max(
     hwp_angles_distribution)))
 hwp_angles_distribution[hwp_angles_distribution == 0] = np.NaN
 

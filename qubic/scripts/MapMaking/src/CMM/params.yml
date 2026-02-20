@@ -1,5 +1,5 @@
 save_iter: 1                                                                    # Save every 'save_iter' iteration
-foldername: "test_convo_in"                                                              # Name of the saved folder
+foldername: "test_convo_512"                                                              # Name of the saved folder
 filename: "test"                                                                # Name of the saved file
 lastite: true                                                                   # Keep only the last iteration
 
@@ -54,11 +54,11 @@ QUBIC:
 
     instrument: "DB"                                                            # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                         # Instrumental configuration (TD or FI) # to be implemented in the code
-    npointings: 5000                                                            # Number of time samples
+    npointings: 3000                                                            # Number of time samples
     nsub_in: 8                                                                  # Number of sub-acquisitions
     nsub_out: 8                                                                 # Number of sub-acquisitions for the reconstruction
     convolution_in: true                                                       # Angular resolution in the input TOD
-    convolution_out: false                                                      # Angular resolution in the reconstruction
+    convolution_out: true                                                      # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:
         ndet: 1                                                                 # Level of detector noise
@@ -80,7 +80,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-  nside: 128                                                                    # Nside of components
+  nside: 512                                                                    # Nside of components
   coverage_cut: 0.15                                                            # Percent of coverage to keep the pixels seen enough by QUBIC
   RA_center: 0
   DEC_center: -57
@@ -117,7 +117,7 @@ PCG:
     fixI: false                                                                   # Fix the intensity during the map-making
     reso_plot: 15
     fwhm_plot: 0
-    do_gif: true
+    do_gif: false
     seed_start: 33333
 
 INITIAL:

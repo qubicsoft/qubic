@@ -33,7 +33,7 @@ class AbstractChi2(ABC):
     def __init__(self, preset, TOD_sim, layout: Optional[ParamLayout] = None, full_beta_map: Optional[np.ndarray] = None):
         self.preset = preset
         self.TOD_sim = TOD_sim
-        self.layout = layout
+        self.layout = layout 
         self.full_beta_map = full_beta_map
 
         # Deduce shapes for 3D or 4D TOD_sim

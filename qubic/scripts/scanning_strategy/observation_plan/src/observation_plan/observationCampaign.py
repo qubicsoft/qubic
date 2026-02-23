@@ -18,13 +18,13 @@ from astroplan import (Observer,
 
 from matplotlib import pyplot as plt
 
-from observation_plan.constraint import SunSeparationConstraint, MoonSeparationConstraint
+from scanning_strategy.constraint import SunSeparationConstraint, MoonSeparationConstraint
 from astropy.coordinates import EarthLocation
 from pytz import timezone
 
-from observation_plan.schema.types import type_hooks
-from observation_plan.schema.types import ObservationConfig
-from observation_plan.source import PointSource, ExtendedSource, load_sources_from_file, Source
+from scanning_strategy.schema.types import type_hooks
+from scanning_strategy.schema.types import ObservationConfig
+from scanning_strategy.source import PointSource, ExtendedSource, load_sources_from_file, Source
 
 
 logging.basicConfig(filemode="w",
@@ -37,11 +37,11 @@ logging.basicConfig(filemode="w",
 class ObservationCampaign:
     """
     Manages observation campaigns by handling the observatory configuration,
-    constraints, celestial region observability, and observation planning.
+    constraints, celestial region observability, and daily observation planning.
 
     The class is designed to load and use the provided configuration for
     various operations such as analyzing extended source observability, applying
-    constraints, and scheduling observation plans. Essential components
+    constraints, and scheduling daily observation plans. Essential components
     like the observatory setup and constraints are constructed from the
     configuration, ensuring flexibility and modularity for different campaigns.
 
@@ -176,7 +176,7 @@ class ObservationCampaign:
             self.site,
             Time(self.config.run.monthly_visibility_start),
             self.extended_constraints,
-            self.parse_quantity(self.config.general.time_resolution),
+            u.Quantity(self.config.general.time_resolution),
             source_file=self.config.sources.regions_file,
             results_dir=self.config.general.output_dir / "panoramic",
             radius=self.config.run.radius * u.deg,
@@ -203,7 +203,7 @@ class ObservationCampaign:
                     region.plot_months_visible(
                         Time(self.config.run.monthly_visibility_start),
                         Time(self.config.run.monthly_visibility_end),
-                        time_resolution=self.parse_quantity(self.config.run.monthly_heatmap_resolution),
+                        time_resolution=u.Quantity(self.config.run.monthly_heatmap_resolution),
                         plot_path=self.config.general.output_dir /
                                   "panoramic" / region_name / f"{region_name}_month_visibility.png")
 
@@ -212,16 +212,16 @@ class ObservationCampaign:
                         region.plot_monthly_heatmap(
                             self.config.run.year,
                             month,
-                            time_resolution=self.parse_quantity(self.config.run.monthly_heatmap_resolution))
+                            time_resolution=u.Quantity(self.config.run.monthly_heatmap_resolution))
 
     def plan_observations(self):
         """
         Generates and prepares observation plans for an entire month.
 
         This method calculates the total number of days in the specified month and
-        iteratively schedules and prepares observation plans for each of the
+        iteratively schedules and prepares observation plans for each day of the
         month. It utilizes the year and month configuration supplied to create
-        appropriate observation times for each  within the specified month.
+        appropriate observation times for each day within the specified month.
 
         :raises AttributeError: Raised if mandatory configuration attributes are
             missing or improperly set.
@@ -238,11 +238,11 @@ class ObservationCampaign:
                 dynamic_ncols=True):
 
             obs_time = Time(datetime(self.config.run.year, self.config.run.month, day), scale='utc')
-            self.prepare_plan(obs_time)
+            self.prepare_observation_plan(obs_time)
 
-    def prepare_plan(self, obs_time: Time):
+    def prepare_observation_plan(self, obs_time: Time):
         """
-        Prepare the directory structure and observation plan for a given day.
+        Prepare the directory structure and observation plan.
 
         This method creates a directory specific to the observation date within the
         base directory defined in the configuration. It retrieves observation targets
@@ -287,7 +287,7 @@ class ObservationCampaign:
                 obs_time=obs_time,
                 point_constraints=self.point_constraints,
                 extended_constraints=self.extended_constraints,
-                time_resolution=self.parse_quantity(self.config.general.time_resolution),
+                time_resolution=u.Quantity(self.config.general.time_resolution),
                 results_dir=obs_dir,
                 radius=self.config.run.radius * u.deg,
                 radial_samples=self.config.run.radial_samples,
@@ -300,7 +300,7 @@ class ObservationCampaign:
                 self.site,
                 obs_time,
                 self.extended_constraints,
-                self.parse_quantity(self.config.general.time_resolution),
+                u.Quantity(self.config.general.time_resolution),
                 source_file=self.config.sources.regions_file,
                 results_dir=obs_dir,
                 radius=self.config.run.radius * u.deg,
@@ -329,7 +329,8 @@ class ObservationCampaign:
             qubic_site=self.site,
             obs_time=obs_time,
             constraints=self.point_constraints,
-            time_resolution=self.parse_quantity(self.config.general.time_resolution),
+            time_resolution=u.Quantity(self.config.general.time_resolution),
+            is_fixed=False,
             results_dir=obs_dir)
 
     def process_observation_target(self, target: Source):
@@ -350,43 +351,18 @@ class ObservationCampaign:
 
         if self.config.tasks.run_trajectory_plots:
             target.plot_trajectory(
-                loc_time_resolution=self.parse_quantity(self.config.run.trajectory_time_resolution),
+                loc_time_resolution=u.Quantity(self.config.run.trajectory_time_resolution),
                 make_plot=True)
 
         if self.config.tasks.write_trajectories:
             target.write_trajectory()
 
-        if self.config.tasks.plot_sidereal:
+        if self.config.tasks.plot_sidereal and target.is_fixed:
             target.plot_sidereal()
-
-    @staticmethod
-    def parse_quantity(s: str) -> u.Quantity:
-        """
-        Parses a quantity string representation into a `Quantity` object.
-
-        The input string should be in the format of '<value> <unit>', where
-        a valid unit follows a numerical value. If the input does not
-        match the expected format, the method raises a `ValueError`. This is a
-        utility function that simplifies the construction of quantities from
-        formatted string representations.
-
-        :param s: The quantity string to be parsed.
-        :type s: str
-        :raises ValueError: If the input string does not match the expected format.
-        :return: A Quantity object representing the parsed value and unit.
-        :rtype: u.Quantity
-        """
-        parts = s.strip().split()
-        if len(parts) != 2:
-            raise ValueError(
-                f"Invalid quantity string '{s}'. Expected '<value> <unit>'"
-            )
-        value, unit = parts
-        return float(value) * u.Unit(unit)
 
 
 def main():
-    config_file = sys.argv[1] if len(sys.argv) > 1 else "/Volumes/Data/PycharmProjects/qubic/qubic/scripts/scanning_strategy/observation_plan/configs/conf.toml"
+    config_file = sys.argv[1] if len(sys.argv) > 1 else "configs/conf.toml"
 
     campaign = ObservationCampaign(config_file)
     campaign.analyze_observability()

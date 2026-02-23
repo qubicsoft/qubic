@@ -26,6 +26,7 @@ from astroplan import AltitudeConstraint, AirmassConstraint
 
 plt.ioff()
 
+
 def load_sources_from_file(
         path: Path,
         qubic_site,
@@ -39,52 +40,35 @@ def load_sources_from_file(
         polar_angle_samples: int = 100):
 
     """
-    Loads celestial sources from a file and categorizes them as point or extended sources by querying
-    their metadata from the SIMBAD database. The function identifies source types based on their major
-    axis size and constructs appropriate instances for further processing. This process relies on the
-    specified constraints and configurations.
+    Loads sources from a file and categorizes them into point sources and extended sources
+    based on their properties. Each source name in the specified file is queried to identify
+    its characteristics. If the source has a major axis dimension greater than one arcminute,
+    it is categorized as an extended source; otherwise, it is considered a point source.
 
-    :param path:  The file path containing the list of source names to query.
-    :type: Path
-
-    :param qubic_site: The site configuration related to the QUIC observation system.
-    :type: Any
-
-    :param obs_time: The observation time configuration.
-    :type: Any
-
-    :param point_constraints: List of constraints specifically applicable to point sources.
-    :type: list
-
-    :param extended_constraints: List of constraints specifically applicable to extended sources.
-    :type: list
-
-    :param time_resolution: The time resolution required for the sources.
-    :type: u.Quantity
-
-   :param results_dir: Directory where results are stored, defaults to the current directory.
-   :type: Path, optional
-
-    :param radius:  Search radius around the object, defaults to 14 degrees.
-    :type: u.Quantity, optional
-
-    :param radial_samples: Number of radial samples for extended source calculations, defaults to 50.
-    :type: int, optional
-
-    :param polar_angle_samples: Number of polar angle samples for extended source calculations, defaults to 100.
-    :type: int, optional
-
-    :return: A tuple of two lists:
-        - The first list contains `PointSource` objects representing point-like astronomical sources.
-        - The second list contains `ExtendedSource` objects representing extended astronomical sources.
+    :param path: Path to the file containing names of celestial sources.
+    :type path: str
+    :param qubic_site: Observing site information for QUBIC.
+    :param obs_time: Observation time information for the sources.
+    :param point_constraints: List of constraints applied to point sources.
+    :type point_constraints: list
+    :param extended_constraints: List of constraints applied to extended sources.
+    :type extended_constraints: list
+    :param time_resolution: Time resolution of the observation in appropriate units.
+    :type time_resolution: u.Quantity
+    :param results_dir: Directory where results are stored. Default is the current directory.
+    :type results_dir: str
+    :param radius: Radius around the source for extended source calculations, provided in units.
+    :type radius: u.Quantity
+    :param radial_samples: Number of radial samples for extended sources.
+    :type radial_samples: int
+    :param polar_angle_samples: Number of polar angle samples for extended sources.
+    :type polar_angle_samples: int
+    :return: A tuple containing two lists - one of point sources and the other of extended sources.
     :rtype: tuple
     """
-
-    # it allows to specify additional columns to include in the output of a SIMBAD query.
-    # These fields can be individual data items (e.g. 'ra', 'dec') or thematic groups that add multiple related columns
+    # Aggiungo i campi necessari a SIMBAD
     Simbad.add_votable_fields("ra", "dec", "coo_err_maj", "coo_err_min", "dim")
 
-    # store in names the names of the point sources after removing the white spaces at the beginning and end of each line
     with open(path) as f:
         names = [line.strip() for line in f if line.strip()]
 
@@ -92,7 +76,6 @@ def load_sources_from_file(
     extended_sources = []
 
     for name in names:
-        # method in the astroquery library used to query the SIMBAD database for a specifc object using its idenitfier
         tbl = Simbad.query_object(name)
         if tbl is None:
             print(f"{name}: not Found")
@@ -117,10 +100,9 @@ def load_sources_from_file(
                 results_dir=results_dir,
                 radius=radius,
                 radial_samples=radial_samples,
-                polar_angle_samples=polar_angle_samples)
-
+                polar_angle_samples=polar_angle_samples
+            )
             extended_sources.append(src)
-
         else:
             src = PointSource(
                 name=name,
@@ -182,6 +164,7 @@ class Source(ABC):
             obs_time: Time,
             constraints: list,
             time_resolution: u.Quantity,
+            is_fixed: bool = True,
             coord: SkyCoord | None = None,
             results_dir: Path = Path('.'),
             logger: logging.Logger = None):
@@ -189,6 +172,7 @@ class Source(ABC):
         self.name = name
         self.qubic_site = qubic_site
         self.obs_time = obs_time
+        self.is_fixed = is_fixed
         self.time_resolution = time_resolution
         self.constraints = constraints
         self.coord = coord
@@ -528,7 +512,7 @@ class Source(ABC):
 
             plt.savefig(out_fname, dpi=400)
             plt.close()
-            # plt.show()
+
             self.logger.info(f"Saved monthly heat‑map to %s", out_fname)
         else:
             self.logger.info(f"No valid observation windows for '%s' and %s",

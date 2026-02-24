@@ -39,12 +39,22 @@ seed: 1
 ### Map-making parameters
 
 # Qubic parameters
-npointings: 4000
+npointings: 400
 kmax: 1
 synthbeam_fraction: 1
 
 # Reconstruction parameters
-n_iter: 5
-n_loop: 5
-wind: False
+preconditioner: false
+n_iter: 10
+n_loop: 1
+iterative_iter: false
+convolutions: false
+sweeping_pointings: true             # If false: random pointings
+fit_mixing_matrix: false
 fix_maps: true 
+
+# Wind
+wind: false
+wind_type: "constant"                # Can be : "constant" or "normal"
+wind_cst: [-1, 0]                   # [wind_x, wind_y]
+wind_normal: [0, 1]                  # [wind_mean, wind_std]

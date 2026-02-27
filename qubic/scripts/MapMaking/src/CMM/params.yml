@@ -23,7 +23,7 @@ Foregrounds:
 
     type: "parametric"                                                          # Reconstruction method
     model: "d1"
-    beta_init: [1.54, 0.05, 10000000]                                             # PySM model
+    beta_init: [1.54, 0.02, 10000000]                                             # PySM model
     nside_beta_in: 8                                                            # Input pixelization for beta_d (in a case of d1 model)
     nside_beta_out: 8                                                           # Output pixelization for beta_d (in a case of d1 model)
     nu0: 150.0                                                                  # Reference frequency (nu0_d)
@@ -54,16 +54,16 @@ QUBIC:
 
     instrument: "DB"                                                            # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                         # Instrumental configuration (TD or FI) # to be implemented in the code
-    npointings: 5000                                                            # Number of time samples
+    npointings: 1000                                                            # Number of time samples
     nsub_in: 8                                                                  # Number of sub-acquisitions
     nsub_out: 8                                                                 # Number of sub-acquisitions for the reconstruction
     convolution_in: false                                                       # Angular resolution in the input TOD
     convolution_out: false                                                      # Angular resolution in the reconstruction
     preconditioner: False
     NOISE:
-        ndet: 0.1                                                                 # Level of detector noise
-        npho150: 0.1                                                              # Level of photon noise at 150 GHz
-        npho220: 0.1                                                              # Level of photon noise at 220 GHz
+        ndet: 1                                                                 # Level of detector noise
+        npho150: 1                                                              # Level of photon noise at 150 GHz
+        npho220: 1                                                              # Level of photon noise at 220 GHz
         detector_nep: 4.7e-17                                                   # NEP of detector noise
         duration_150: 3                                                         # Effective duration at 150 GHz
         duration_220: 3                                                         # Effective duration at 220 GHz
@@ -87,7 +87,7 @@ SKY:
 
 PLANCK:
     ### This section define which external data are we using
-    level_noise_planck: 0.1                                                       # Noise level for Planck data
+    level_noise_planck: 1                                                       # Noise level for Planck data
     nsub_planck: 1                                                             # Number of integration step for Planck data
     weight_planck: 1                                                          # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                       # FWHM for apodized QUBIC patch
@@ -107,10 +107,10 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 1
+    n_init_iter_pcg: 5
     n_iter_pcg: 5                                                            # Number of PCG iterations
     tol_pcg: 1.0e-15                                                            # Tolerance for PCG
-    n_iter_loop: 500                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+    n_iter_loop: 50                                                              # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
     ites_to_converge: 1                                                         # should be less than n_iter_loop
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                             # Fixing pixels outside QUBIC patch

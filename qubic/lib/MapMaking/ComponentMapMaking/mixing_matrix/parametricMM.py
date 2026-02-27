@@ -11,8 +11,10 @@ from qubic.lib.MapMaking.ComponentMapMaking.Qchi2MM import Chi2
 class ParametricMM(FittingMM):
     def update(self, tod_comp, beta_map=None):
         _, self.seenpix_beta = np.where(beta_map == hp.UNSEEN)
-
         previous_beta = self.preset.acquisition.beta_iter.copy()[:, self.seenpix_beta]
+        
+        # Create boundaries
+        # bounds = [(1.3, 1.8)] * len(previous_beta)
 
         self.chi2 = Chi2(self.preset, tod_comp, parametric=True, beta_map=beta_map)
 
@@ -20,8 +22,10 @@ class ParametricMM(FittingMM):
             self.chi2,
             x0=self.preset.acquisition.beta_iter[:, self.seenpix_beta].ravel(),
             method="L-BFGS-B",
+            jac=None,
             callback=self.callback,
-            options={"maxiter": 1000, "ftol": 1e-9},
+            bounds=None,
+            options={"eps": 1e-6, "maxls": 20, "maxiter":100},
         )
 
         self.preset.acquisition.beta_iter[:, self.seenpix_beta] = res.x

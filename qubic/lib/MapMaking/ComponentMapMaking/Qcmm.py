@@ -17,7 +17,6 @@ from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
 from qubic.lib.Qhdf5 import HDF5Dict
 from qubic.lib.Qspectra import Spectra
 
-
 class PipelineComponentMapMaking:
     """
     Instance to reconstruct component maps using QUBIC abilities.
@@ -393,7 +392,7 @@ class PipelineComponentMapMaking:
 
         # d1 model
         if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] != 0:
-            index_num = hp.ud_grade(self.preset.sky.seenpix_qubic, self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"])
+            index_num = hp.ud_grade(self.preset.sky.seenpix, self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"])
             self.preset.mixingmatrix._index_seenpix_beta = np.where(index_num)[0]
 
             ### Simulated TOD for each components, nsub, npix with shape (npix, nsub, ncomp, nsnd)

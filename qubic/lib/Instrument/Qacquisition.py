@@ -163,11 +163,18 @@ class QubicAcquisition(Acquisition):
 
     def get_noise(self, det_noise, photon_noise, seed=None, out=None):
         np.random.seed(seed)
+        print("sampling : ", self.sampling)
+        print("scene : ", self.scene)
+        print("det_noise : ", det_noise)
+        print("photon_noise : ", photon_noise)
+        print("out : ", out)
         out = self.instrument.get_noise(self.sampling, self.scene, det_noise, photon_noise, out=out)
+        print("out_get_noise : ", out.mean())
+        
         if self.effective_duration is not None:
             nsamplings = self.sampling.comm.allreduce(len(self.sampling))
-
             out *= np.sqrt(nsamplings * self.sampling.period / (self.effective_duration * 31557600))
+            factor = nsamplings * self.sampling.period / (self.effective_duration * 31557600)
         return out
 
     get_noise.__doc__ = Acquisition.get_noise.__doc__

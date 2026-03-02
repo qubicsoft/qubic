@@ -108,8 +108,11 @@ class QubicTotNoise:
                 comm=self.d["comm"],
                 size=self.d["nprocs_instrument"],
             )
-            npho.append(QnoiseBand.photon_noise(wpho[i]))
-            ndet.append(QnoiseBand.detector_noise(wdet))
+            pho = QnoiseBand.photon_noise(wpho[i])
+            det = QnoiseBand.detector_noise(wdet)
+
+            npho.append(pho)
+            ndet.append(det)
 
         if self.type == "UWB":
             return ndet[0] + npho[0] + npho[1]

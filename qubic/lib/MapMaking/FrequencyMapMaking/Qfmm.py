@@ -621,6 +621,8 @@ class PipelineFrequencyMapMaking:
             b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck_weighted))
         else:
             b = self.H_out.T * self.invN * d
+            
+        print("d : ", d.mean())
 
         ### Preconditionning
         M = self.get_preconditioner()

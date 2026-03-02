@@ -43,6 +43,10 @@ npointings: 400
 kmax: 1
 synthbeam_fraction: 1
 
+# Sky parameters
+cmb: false
+atm: true
+
 # Reconstruction parameters
 preconditioner: false
 n_iter: 10

@@ -123,6 +123,7 @@ class PipelineFrequencyMapMaking:
         self.coverage = self.joint.qubic.subacqs[0].get_coverage()
         self.seenpix = self.coverage / self.coverage.max() > self.params["SKY"]["coverage_cut"]
         self.seenpix_qubic = self.coverage / self.coverage.max() > 0
+        self.fsky = np.sum(self.seenpix) / self.seenpix.shape[0]
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()

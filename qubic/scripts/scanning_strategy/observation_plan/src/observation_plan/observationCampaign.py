@@ -2,11 +2,11 @@ import sys
 import logging
 from pathlib import Path
 
+import numpy as np
 import toml
 import tqdm
 import dacite
 from astropy.time import Time
-import os
 import calendar as cal
 from datetime import datetime
 from typing import List
@@ -18,13 +18,13 @@ from astroplan import (Observer,
 
 from matplotlib import pyplot as plt
 
-from scanning_strategy.constraint import SunSeparationConstraint, MoonSeparationConstraint
+from observation_plan.constraint import SunSeparationConstraint, MoonSeparationConstraint
 from astropy.coordinates import EarthLocation
 from pytz import timezone
 
-from scanning_strategy.schema.types import type_hooks
-from scanning_strategy.schema.types import ObservationConfig
-from scanning_strategy.source import PointSource, ExtendedSource, load_sources_from_file, Source
+from observation_plan.schema.types import type_hooks
+from observation_plan.schema.types import ObservationConfig
+from observation_plan.source import PointSource, ExtendedSource, load_sources_from_file, Source
 
 
 logging.basicConfig(filemode="w",
@@ -32,6 +32,75 @@ logging.basicConfig(filemode="w",
                     format="%(asctime)s - %(funcName)s - %(message)s",
                     datefmt="%d/%m/%Y | %H:%M:%S",
                     level=logging.INFO)
+
+def plot_sidereal_overall(celestial_regions, outpath: Path, ang_offset: float = 15.0):
+    """
+    Plots the sidereal elevation tracks for specified celestial regions and saves the generated
+    figure to the given output path.
+
+    This function visualizes the sidereal elevation tracks of various celestial regions over the
+    local sidereal time (LST). It highlights elevation window bands if defined for the regions,
+    and generates labeled plots of visibility and elevation. The resulting plot is stored as a
+    high-resolution image.
+
+    :param celestial_regions: A dictionary where keys are region names (str) and values are objects
+        containing sidereal tracking data such as local sidereal time (LST), elevation, visibility,
+        minimum altitude, and maximum altitude.
+    :type celestial_regions: dict
+    :param outpath: A path to the directory where the output plot image should be saved.
+    :type outpath: Path
+    :param ang_offset: Optional angular offset used to define inner bounding bands inside the
+        elevation window. Default is 15.0 degrees.
+    :type ang_offset: float
+    :return: A tuple containing the generated Matplotlib figure and axis objects.
+    :rtype: tuple[matplotlib.figure.Figure, matplotlib.axes._axes.Axes]
+    """
+    fig, ax = plt.subplots(figsize=(12, 6), tight_layout=True)
+
+    bands_drawn = False
+    band_label = r"${} ^ \circ \leq \mathrm{{{}}} \leq {} ^ \circ$"
+
+    for name, region in celestial_regions.items():
+        lst, elev, alt_min, alt_max, vis = region.sidereal_track()
+
+        if (not bands_drawn
+            and (alt_min is not None)
+            and (alt_max is not None)):
+            ax.axhspan(
+                alt_min, alt_max,
+                color="lightgray",
+                alpha=0.6,
+                label=band_label.format(int(alt_min), r"Elevation \, Window", int(alt_max)))
+
+            inner_min = alt_min + ang_offset
+            inner_max = alt_max - ang_offset
+
+            if inner_min < inner_max:
+                ax.axhspan(
+                    inner_min, inner_max,
+                    color="silver",
+                    alpha=0.6,
+                    label=band_label.format(int(inner_min), r"Elevation \, Center", int(inner_max)))
+
+            bands_drawn = True
+
+        ax.plot(lst, np.where(vis, elev, np.nan), linewidth=2.0, label=name)
+
+    first = next(iter(celestial_regions.values()))
+    date_str = first.obs_time.strftime("%Y-%m-%d")
+    title = rf"$\bf{{Sidereal \, plot}}$ : all sources on {date_str}".strip()
+    ax.set_title(title, fontsize=11, pad=10)
+
+    ax.set_xlim(0, 24)
+    ax.set_xticks(np.arange(0, 25, 3))
+    ax.set_ylim(0, 90)
+    ax.set(xlabel="Local Sidereal Time (LST) [h]", ylabel=r"Elevation [$^\circ$]")
+    ax.grid(True, alpha=0.3, linestyle=":")
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0))
+
+    plt.savefig(outpath / "all_extended_sidereal.png", dpi=600)
+
+    return fig, ax
 
 
 class ObservationCampaign:
@@ -59,7 +128,7 @@ class ObservationCampaign:
     :type extended_constraints: List[Constraint]
     """
 
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: Path):
         self.config = self.load_config(config_path)
         self.site = self.build_observatory()
         self.point_constraints = self.build_constraints('point')
@@ -68,7 +137,7 @@ class ObservationCampaign:
         plt.style.use(self.config.general.mpl_style)
 
     @staticmethod
-    def load_config(config_path: str) -> ObservationConfig:
+    def load_config(config_path: Path) -> ObservationConfig:
         """
         Loads the observation configuration from a TOML file.
 
@@ -82,10 +151,9 @@ class ObservationCampaign:
             the TOML file.
         :rtype: ObservationConfig
         """
-        if not os.path.isfile(config_path):
+        if not config_path.exists():
             raise FileNotFoundError(f"Configuration file '{config_path}' not found")
-        with open(config_path) as f:
-            config_dict = toml.load(f)
+        config_dict = toml.load(config_path)
 
         return dacite.from_dict(data_class=ObservationConfig,
                                 data=config_dict,
@@ -107,8 +175,7 @@ class ObservationCampaign:
         location = EarthLocation.from_geodetic(
             lon=self.config.observatory.lon * u.deg,
             lat=self.config.observatory.lat * u.deg,
-            height=self.config.observatory.height * u.m,
-        )
+            height=self.config.observatory.height * u.m)
 
         return Observer(
             name=self.config.observatory.name,
@@ -116,8 +183,7 @@ class ObservationCampaign:
             pressure=self.config.observatory.pressure * u.bar,
             relative_humidity=self.config.observatory.relative_humidity,
             timezone=timezone(self.config.observatory.timezone),
-            description=self.config.observatory.description,
-        )
+            description=self.config.observatory.description)
 
     def build_constraints(self, constraint_type: str) -> List[Constraint]:
         """
@@ -214,13 +280,16 @@ class ObservationCampaign:
                             month,
                             time_resolution=u.Quantity(self.config.run.monthly_heatmap_resolution))
 
+        # plot siderale complessivo
+        plot_sidereal_overall(celestial_regions, self.config.general.output_dir / "panoramic")
+
     def plan_observations(self):
         """
         Generates and prepares observation plans for an entire month.
 
         This method calculates the total number of days in the specified month and
         iteratively schedules and prepares observation plans for each day of the
-        month. It utilizes the year and month configuration supplied to create
+        month. It uses the year and month configuration supplied to create
         appropriate observation times for each day within the specified month.
 
         :raises AttributeError: Raised if mandatory configuration attributes are
@@ -362,7 +431,14 @@ class ObservationCampaign:
 
 
 def main():
-    config_file = sys.argv[1] if len(sys.argv) > 1 else "configs/conf.toml"
+
+    if len(sys.argv) > 1:
+        config_file = Path(sys.argv[1])
+    else:
+        config_file = Path(__file__).parents[2] / "configs" / "conf.toml"
+
+    if not config_file.exists() or config_file.suffix != ".toml":
+        raise FileNotFoundError(f"Configuration file '{config_file}' not found")
 
     campaign = ObservationCampaign(config_file)
     campaign.analyze_observability()

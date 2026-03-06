@@ -3,7 +3,6 @@ import logging
 from pathlib import Path
 from abc import ABC, abstractmethod
 
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
@@ -15,16 +14,20 @@ from datetime import datetime as dt, timezone as dt_timezone
 import astropy.units as u
 from astropy.time import Time
 from astropy.table import Table, QTable
-from astropy.coordinates import SkyCoord, get_body, EarthLocation, AltAz
+from astropy.coordinates import SkyCoord, get_body, AltAz, ICRS
 
 from astroquery.simbad import Simbad
 
 from astroplan.plots import plot_sky
 from astroplan import Constraint, Observer
 from astroplan.utils import time_grid_from_range
-from astroplan import AltitudeConstraint, AirmassConstraint
+from astroplan import AltitudeConstraint
+
+import warnings
 
 plt.ioff()
+
+NO_SIMBAD_SOURCE = False
 
 
 def load_sources_from_file(
@@ -76,10 +79,24 @@ def load_sources_from_file(
     extended_sources = []
 
     for name in names:
-        tbl = Simbad.query_object(name)
-        if tbl is None:
-            print(f"{name}: not Found")
-            continue
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            tbl = Simbad.query_object(name)
+
+        if not tbl:
+            global NO_SIMBAD_SOURCE
+
+            if not NO_SIMBAD_SOURCE:
+                print(f" - {name} not found in SIMBAD. Trying astropy.coordinates.get_body() ...")
+                NO_SIMBAD_SOURCE = True
+            try:
+                source = get_body(name, time=obs_time, location=qubic_site.location).transform_to(ICRS)
+                tbl = {"ra": [source.ra.deg], "dec": [source.dec.deg], "galdim_majaxis": [0]}
+
+            except Exception as e:
+                print(f"Error getting coordinates for {name}: {e}")
+                continue
+
 
         # Coordinate ICRS
         ra, dec = tbl["ra"][0], tbl["dec"][0]
@@ -100,8 +117,8 @@ def load_sources_from_file(
                 results_dir=results_dir,
                 radius=radius,
                 radial_samples=radial_samples,
-                polar_angle_samples=polar_angle_samples
-            )
+                polar_angle_samples=polar_angle_samples)
+
             extended_sources.append(src)
         else:
             src = PointSource(
@@ -227,9 +244,8 @@ class Source(ABC):
         # start and end observation times in UTC
         start = self.obs_time
         end = start + 1 * u.day - 1 * u.microsecond
-        # Get linearly-spaced sequence of times, each with a duration of time_resolution
-        self.time_grid = time_grid_from_range([start, end],
-                                              time_resolution=self.time_resolution)
+        # Get linearly spaced sequence of times, each with a duration of time_resolution
+        self.time_grid = time_grid_from_range([start, end], time_resolution=self.time_resolution)
 
     def compute_valid_times_from_constraints(self):
         """
@@ -365,6 +381,7 @@ class Source(ABC):
 
         fig.suptitle(title)
 
+
         ax.set_xticks(range(len(self.time_grid)))
         ax.set_xticklabels([t.datetime.strftime("%H:%M") for t in self.time_grid], rotation=30, ha="right")
         ax.set_xlabel('UTC Time')
@@ -378,11 +395,23 @@ class Source(ABC):
         ax.set_xticks(np.arange(-0.5, N), minor=True)
         ax.set_yticks(np.arange(-0.5, len(self.constraints)), minor=True)
 
+        sunset = self.qubic_site.sun_set_time(self.obs_time)
+        sunrise = self.qubic_site.sun_rise_time(self.obs_time)
+        ax.annotate(
+            f"Sunrise: {sunrise.datetime.strftime('%H:%M')}, Sunset: {sunset.datetime.strftime('%H:%M')}",
+            xy=(N - 3.5, len(self.constraints) - 0.5),
+            xytext=(N - 3.5, len(self.constraints) + 0.5),
+            ha="center",
+            va="center",
+            fontsize=10,
+            color="white",
+            bbox=dict(boxstyle="round", fc="black", alpha=0.5),
+        )
+
         ax.grid(which='minor', color='#333333', linewidth=1)
         ax.set_aspect("equal")
 
-        plt.savefig(os.path.join(self.plots_dir, f"{self.name}_constraint_grid"), dpi=400)
-        # plt.show()
+        plt.savefig(os.path.join(self.plots_dir, f"{self.name}_constraint_grid"), dpi=600)
         plt.close()
 
     def plot_monthly_heatmap(self, year, month, time_resolution=None, cmap='Blues'):
@@ -438,7 +467,7 @@ class Source(ABC):
         # Loop over each day of the month
         for day in range(1, n_days + 1):
 
-            # Local midnight for this day → convert to UTC Astropy Time
+            # Local midnight for this day: convert to UTC Astropy Time
             start_dt_local = local_tz.localize(dt(year, month, day, 0, 0, 0))
             start = Time(start_dt_local.astimezone(dt_timezone.utc))
             # Define end of the day interval in UTC
@@ -505,12 +534,11 @@ class Source(ABC):
             ax.set_yticks(np.arange(-0.5, n_days, 1), minor=True)
             ax.grid(which="minor", color="#333333", linewidth=0.4)
 
-            # save & show
             os.makedirs(self.plots_dir, exist_ok=True)
             out_fname = os.path.join(self.plots_dir,
                                      f"{self.name}_{year}-{month:02d}_heatmap")
 
-            plt.savefig(out_fname, dpi=400)
+            plt.savefig(out_fname, dpi=600)
             plt.close()
 
             self.logger.info(f"Saved monthly heat‑map to %s", out_fname)
@@ -618,7 +646,7 @@ class Source(ABC):
                             time_resolution: u.Quantity = 1 * u.h,
                             plot_path: str | None = None):
         """
-        Plot a heatmap (years × months) showing which months the source
+        Plot a heatmap (years x months) showing which months the source
         is observable for at least `time_resolution`, given all constraints.
 
         Parameters
@@ -678,21 +706,32 @@ class Source(ABC):
 
         if plot_path:
             fname = f"{self.name}_months_visible"
-            plt.savefig(os.path.join(self.plots_dir, fname), dpi=400)
+            plt.savefig(os.path.join(self.plots_dir, fname), dpi=600)
 
         plt.close()
 
-    def plot_sidereal(self, make_plot: bool = True, ang_offset: float = 15.0):
+    def sidereal_track(self, *, n_samples=400):
+        """
+        Calculates the sidereal track of the object's center position over time, using a specified
+        number of time samples. The function determines the local sidereal time (LST), elevation
+        track, and also applies any altitude constraints defined in the observation conditions.
 
-        if not make_plot:
-            return
-
-        if not self.time_grid:
-            self.compute_time_grid()
-
+        :param n_samples: Number of time samples to evaluate the sidereal track. Defaults to 400.
+        :type n_samples: int, optional
+        :return: A tuple containing:
+            - lst: Local sidereal time values (in hours), sorted in ascending order.
+            - elevations: Elevations (in degrees) of the center position at the corresponding LST.
+            - alt_min: Minimum altitude constraint (in degrees), if an AltitudeConstraint is defined.
+              Otherwise, None.
+            - alt_max: Maximum altitude constraint (in degrees), if an AltitudeConstraint is defined.
+              Otherwise, None.
+            - visible_mask: A boolean mask indicating whether the center's elevation satisfies the
+              altitude constraints at each sampled LST.
+        :rtype: tuple
+        """
         center = self.coord if self.coord.isscalar else self.coord[0]
-        # Build a 24h grid and corresponding Local Sidereal Time
-        time_grid = self.obs_time + np.linspace(0, 25, 400) * u.hour
+
+        time_grid = self.obs_time + np.linspace(0, 25, n_samples) * u.hour
         lst = self.qubic_site.local_sidereal_time(time_grid).hour
 
         sort_idx = np.argsort(lst)
@@ -701,26 +740,35 @@ class Source(ABC):
 
         # Altitude track of the region center
         altaz = AltAz(obstime=time_grid, location=self.qubic_site.location)
-        center_altaz = center.transform_to(altaz)
-        elevations = center_altaz.alt.to_value(u.deg)
+        elevations = center.transform_to(altaz).alt.to_value(u.deg)
 
-        # Extract AltitudeConstraint bound
         alt_min, alt_max = None, None
-
-        for c in self.constraints:
+        for c in self.constraints or []:
             if isinstance(c, AltitudeConstraint):
-                alt_min = c.min.to_value(u.deg)
-                alt_max = c.max.to_value(u.deg)
+                alt_min = c.min.to_value(u.deg) if c.min is not None else 0.0
+                alt_max = c.max.to_value(u.deg) if c.max is not None else 90.0
                 break
 
-        # Visibility mask inside the elevation window
-        visible_mask = (elevations >= alt_min) & (elevations <= alt_max)
-        frac_visible = visible_mask.mean() * 100.0
+        if alt_min is None or alt_max is None:
+            visible_mask = np.ones_like(elevations, dtype=bool)
+        else:
+            visible_mask = (elevations >= alt_min) & (elevations <= alt_max)
+
+        return lst, elevations, alt_min, alt_max, visible_mask
+
+
+    def plot_sidereal(self, ang_offset: float = 15.0, n_samples: int = 400):
+
+        if not self.time_grid:
+            self.compute_time_grid()
+
+        lst, elev, alt_min, alt_max, vis = self.sidereal_track(n_samples=n_samples)
+
+        frac_visible = vis.mean() * 100.0
 
         fig, ax = plt.subplots(figsize=(12, 6), tight_layout=True)
 
         # Gray band for the instrumental elevation window
-        # band_label = rf"${int(alt_min)} ^ \circ \leq \mathrm{{Elevation}} \leq {int(alt_max)} ^ \circ$"
         band_label = r"${} ^ \circ \leq \mathrm{{{}}} \leq {} ^ \circ$"
         ax.axhspan(alt_min, alt_max,
                    color="lightgray",
@@ -734,24 +782,21 @@ class Source(ABC):
                                            r"Elevation \, Center",
                                            int(alt_max - ang_offset)))
 
-        # Full center-elevation curve (dashed gray) – "Not Visible"
-        ax.plot(lst, elevations, linestyle=(0, (4, 4)), color="gray", linewidth=1.5, label="Not Visible")
+        # Full center-elevation curve
+        ax.plot(lst, elev, linestyle=(0, (4, 4)), color="gray", linewidth=1.5, label="Not Visible")
 
         # Overplot only the visible segments in solid blue
-        if np.any(visible_mask):
-            visible_elevations = np.where(visible_mask, elevations, np.nan)
-            ax.plot(lst, visible_elevations, linewidth=2.5, label='Visible (Source Center)')
+        if vis.any():
+            ax.plot(lst, np.where(vis, elev, np.nan), linewidth=2.5, label='Visible (Source Center)')
 
-        # Axes formatting
-        ax.set_xlim(0, 24)
-        ax.set_xticks(np.arange(0, 25, 3))
-        ax.set_xlabel(r"Local Sidereal Time (LST) [h]")
+        ax.set_xlim(0,  24)
         ax.set_ylim(0, 90)
-        ax.set_ylabel(r"Elevation [$ ^ \circ$]")
+        ax.set_xticks(np.arange(0,  25, 3))
+        ax.set(xlabel=r"Local Sidereal Time (LST) [h]", ylabel=r"Elevation [$ ^ \circ$]")
         ax.grid(True, alpha=0.3, linestyle=":", color="gray")
 
-        safe_name = self.name.replace("-", r"\-")
-        title = rf"$\bf{{Observation \, window}}$ : {safe_name} on {self.obs_time.strftime('%Y-%m-%d')}" + "\n"
+        safe_name = self.name # .replace("-", r"\-")
+        title = rf"$\bf{{Observation \, window}}$ : ${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}" + "\n"
 
         if hasattr(self, 'radius'):
             title += rf"Ring of radius ${self.radius.to_value(u.deg):.1f}^\circ$"
@@ -793,7 +838,6 @@ class Source(ABC):
         if self.coord is None:
             raise RuntimeError("Coordinates not initialized: load the source first")
 
-        # Default filename path in plots_dir
         dest = dest or self.plots_dir
 
         # Loop over each valid time interval
@@ -965,8 +1009,8 @@ class PointSource(Source):
                     "label": f"{self.name}: {start.datetime.strftime('%H:%M')}"
                              f"-{stop.datetime.strftime('%H:%M')}"
                 },
-                north_to_east_ccw=False,
-            )
+                north_to_east_ccw=False)
+
             plot_sky(
                 sun, self.qubic_site, tw,
                 style_kwargs={
@@ -974,8 +1018,7 @@ class PointSource(Source):
                     "color": "gold",
                     "label": "sun" if add_label else ""
                 },
-                north_to_east_ccw=False,
-            )
+                north_to_east_ccw=False)
 
             add_label = False
 
@@ -989,8 +1032,7 @@ class PointSource(Source):
         fig.tight_layout()
         plt.gca().set_facecolor("whitesmoke")
         if make_plot:
-            plt.savefig(os.path.join(self.plots_dir, f"{self.name}_polar_plot"),
-                        dpi=400)
+            plt.savefig(os.path.join(self.plots_dir, f"{self.name}_polar_plot"), dpi=600)
         plt.close()
 
 
@@ -1011,7 +1053,7 @@ class ExtendedSource(Source):
             polar_angle_samples: int = 100):
 
         super().__init__(name, qubic_site, obs_time,
-                         constraints, time_resolution, coord, results_dir)
+                         constraints, time_resolution, True, coord, results_dir)
 
         self.radius = radius
         self.radial_samples = radial_samples
@@ -1225,6 +1267,5 @@ class ExtendedSource(Source):
 
         if make_plot:
             plt.savefig(os.path.join(self.plots_dir,
-                                     f"{self.name}_polar_plot"), dpi=400)
-        # plt.show()
+                                     f"{self.name}_polar_plot"), dpi=600)
         plt.close()

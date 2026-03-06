@@ -33,13 +33,13 @@ point_sources_file = "data/sources/point_sources.txt"
 
 [run]
 year = 2026
-month = 2
+month = 3
 radius = 14.0
 radial_samples = 50
 polar_angle_samples = 100
 trajectory_time_resolution = "20 min"
 monthly_visibility_start = "2026-01-01T00:00:00"
-monthly_visibility_end = "2026-05-31T23:59:59"
+monthly_visibility_end = "2026-12-31T23:59:59"
 monthly_heatmap_resolution = "30 min"
 
 [tasks]

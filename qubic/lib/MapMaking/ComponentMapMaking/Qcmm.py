@@ -492,7 +492,7 @@ class PipelineComponentMapMaking:
         #     self.preset.gain.gain_iter /= self.preset.gain.gain_iter[0]
         #     self.preset.gain.all_gain = np.concatenate((self.preset.gain.all_gain, np.array([self.preset.gain.gain_iter])), axis=0)
 
-        # elif self.preset.qubic.params_qubic["instrument"] == "DB":
+        # elif self.preset.qubic.params_qubic["instrument"] == "DB": 
         #     TODi_Q_150 = self.H_i.operands[0](self.preset.comp.components_iter)[: self.ndets * self.nsampling]
         #     TODi_Q_220 = self.H_i.operands[0](self.preset.comp.components_iter)[self.ndets * self.nsampling : 2 * self.ndets * self.nsampling]
 
@@ -610,7 +610,8 @@ class PipelineComponentMapMaking:
             self.preset.tools._display_iter(self._steps)
 
             ### Update self.fg.components_iter^{k} -> self.fg.components_iter^{k+1}
-            self.update_components(seenpix=self.preset.sky.seenpix)
+            if self.preset.comp.params_foregrounds["fit_components"]:
+                self.update_components(seenpix=self.preset.sky.seenpix)
 
             ### Update self.preset.acquisition.beta_iter^{k} -> self.preset.acquisition.beta_iter^{k+1}
             if self.preset.comp.params_foregrounds["fit_mixing_matrix"]:

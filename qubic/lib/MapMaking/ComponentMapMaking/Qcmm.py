@@ -562,6 +562,7 @@ class PipelineComponentMapMaking:
                             "center": self.preset.sky.center,
                             "coverage": self.preset.sky.coverage,
                             "seenpix": self.preset.sky.seenpix,
+                            "seenpix_beta": self.preset.mixingmatrix._index_seenpix_beta,
                             "fsky": self.preset.sky.fsky,
                             "fwhm_in": self.preset.acquisition.fwhm_tod,
                             "fwhm_out": self.preset.acquisition.fwhm_mapmaking,

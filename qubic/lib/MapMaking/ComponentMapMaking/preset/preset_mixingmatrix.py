@@ -377,13 +377,13 @@ class PresetMixingMatrix:
                 val, sigma, _ = self.preset_comp.params_foregrounds["Dust"]["beta_init"]
                 beta_map = np.random.normal(val, sigma, size=npix)
 
-                # Physical constraints
-                if name == "Dust":
-                    beta_map = np.clip(beta_map, 1.3, 1.8)
-                elif name == "Synchrotron":
-                    beta_map = np.clip(beta_map, -4.0, -2.0)
-                else:
-                    raise ValueError(f"Unknown component {name}")
+                # # Physical constraints
+                # if name == "Dust":
+                #     beta_map = np.clip(beta_map, 1.3, 1.8)
+                # elif name == "Synchrotron":
+                #     beta_map = np.clip(beta_map, -4.0, -2.0)
+                # else:
+                #     raise ValueError(f"Unknown component {name}")
 
                 self.beta_in[idx] = beta_map
 

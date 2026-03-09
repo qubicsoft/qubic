@@ -311,6 +311,7 @@ class PipelineComponentMapMaking:
     def get_tod_comp_superpixel(self, index):
         if self.preset.tools.rank == 0:
             print("Computing contribution of each super-pixel")
+            
         _index = np.zeros(12 * self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] ** 2)
         _index[index] = index.copy()
         _index_nside = hp.ud_grade(_index, self.preset.qubic.joint_out.external.nside)
@@ -327,9 +328,10 @@ class PipelineComponentMapMaking:
 
         for j in range(self.preset.qubic.params_qubic["nsub_out"]):
             for icomp in range(len(self.preset.comp.components_name_out)):
+                #! Check convolution here
                 C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
 
-                maps_conv[icomp] = C(self.preset.comp.components_iter[icomp, :, :]).copy()
+                maps_conv[icomp] = C(maps_conv[icomp, :, :])
                 for ii, i in enumerate(index):
                     maps_conv_i = maps_conv.copy()
                     _i = _index_nside == i

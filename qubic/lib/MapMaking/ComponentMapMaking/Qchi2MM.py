@@ -237,7 +237,7 @@ class Chi2(AbstractChi2):
         self.Lqubic = self.compute_qubic_chi_varying_beta(A)
 
         ### Planck chi2
-        H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext[:, 0])
+        H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext.transpose(1, 0, 2))
         ysim_pl = H_planck(self.preset.comp.components_iter.copy())
         residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external
         self.Lplanck = 0.5 * _dot(residuals_pl.T, self.preset.acquisition.invN.operands[1](residuals_pl), self.preset.comm)

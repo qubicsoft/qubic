@@ -163,13 +163,7 @@ class QubicAcquisition(Acquisition):
 
     def get_noise(self, det_noise, photon_noise, seed=None, out=None):
         np.random.seed(seed)
-        print("sampling : ", self.sampling)
-        print("scene : ", self.scene)
-        print("det_noise : ", det_noise)
-        print("photon_noise : ", photon_noise)
-        print("out : ", out)
         out = self.instrument.get_noise(self.sampling, self.scene, det_noise, photon_noise, out=out)
-        print("out_get_noise : ", out.mean())
         
         if self.effective_duration is not None:
             nsamplings = self.sampling.comm.allreduce(len(self.sampling))
@@ -1100,6 +1094,7 @@ class PlanckAcquisition:
         for _ in self.nus:
             ope_i = []
             for _ in range(self.nsub_planck):
+                
                 if fwhm is not None:
                     C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
                 else:
@@ -1117,7 +1112,7 @@ class PlanckAcquisition:
                 Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
             else:
                 Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
-
+        
         return BlockColumnOperator(Operator, axisout=0)
 
 

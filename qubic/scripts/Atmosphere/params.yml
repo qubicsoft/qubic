@@ -25,8 +25,6 @@ n_grid: 1000                         # Number of squares in the grid
 h_grid: 1                            # Number of sqares for the altitude, i for 2d model
 h_qubic: 4869                        # QUBIC altitude in m
 size_atm: 10000                      # Lenght of the atm in m
-nsub_in: 8                           # Number of sub-acquisitions used to integrate over the atm spectrum
-nrec: 2
 2d: True                             # Determine if you want to simulate a 2d atm
 nside: 128
 n_theta: 10000
@@ -39,17 +37,19 @@ seed: 1
 ### Map-making parameters
 
 # Qubic parameters
-npointings: 5000
+nsub_in: 8                           # Number of sub-acquisitions used to integrate over the atm spectrum
+nrec: 1
+npointings: 3000
 kmax: 1
 synthbeam_fraction: 1
 
 # Sky parameters
 cmb: true
-atm: true
+atm: false
 
 # Reconstruction parameters
 preconditioner: false
-n_iter: 10
+n_iter: 500
 n_loop: 1
 iterative_iter: false
 convolutions: false

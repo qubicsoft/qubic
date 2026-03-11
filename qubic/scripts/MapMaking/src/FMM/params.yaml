@@ -1,4 +1,4 @@
-foldername: "test_sigma_r"
+foldername: "UWB_sigma_r"
 filename: "test"
 
 CMB:
@@ -16,12 +16,12 @@ QUBIC:
 
   instrument: "UWB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
-  npointings: 500               # Number of time samples
+  npointings: 10000               # Number of time samples
   nsub_in: 8                     # Number of sub-acquisitions
   nsub_out: 8
   nrec: 2                        # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-  convolution_in: false          # Angular resolution in the input TOD
+  convolution_in: true          # Angular resolution in the input TOD
   convolution_out: false         # Angular resolution in the reconstruction
   bandpass_correction: true      # Correction to keep the edges of the integration band constant
   NOISE:
@@ -32,7 +32,7 @@ QUBIC:
     detector_nep: 4.7e-17        # NEP of detector noise 
     duration_150: 3                        # Effective duration at 150 GHz
     duration_220: 3                        # Effective duration at 220 GHz
-    seed_noise: 302550961
+    seed_noise: 323669370
   SYNTHBEAM:
     synthbeam_kmax: 1            # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1
@@ -41,7 +41,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-  nside: 128                     # Nside of components
+  nside: 256                     # Nside of components
   coverage_cut: 0.1             # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57
@@ -52,18 +52,18 @@ PLANCK:
   external_data: true
   weight_planck: 0               # Weight of Planck data within the QUBIC patch
   level_noise_planck: 1          # Noise level for Planck data
-  seed_noise: 302550961
+  seed_noise: 323669370
   bandwidth_planck: 0.2          # Multiplicative factor to define the bandwidth of Planck's data
   nsub_planck: 100                # Number of sub acquisitions for Planck's data
 
 Pipeline:
   mapmaking: true                # Run MapMaking Pipeline
-  spectrum: false                # Compute Power Spectra of the frequency maps
+  spectrum: true                # Compute Power Spectra of the frequency maps
 
 PCG:
     ### This section control PCG parameters
 
-  n_iter_pcg: 30                 # Number of PCG iterations #100
+  n_iter_pcg: 400                 # Number of PCG iterations #100
   tol_pcg: 1.0e-20               # Tolerance for PCG
   preconditioner: false
   initial_guess_intensity_to_zero: true

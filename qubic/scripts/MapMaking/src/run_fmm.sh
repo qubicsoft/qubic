@@ -4,10 +4,10 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=10
-#SBATCH --mem=10G
-#SBATCH --time=0-00:20:00
+#SBATCH --mem=100G
+#SBATCH --time=0-20:00:00
 #SBATCH --output=FMM/slurm_logs/multiple_jobs_%A_%a.log
-#SBATCH --array=1-1
+#SBATCH --array=1-300
 
 mkdir -p FMM/slurm_logs
 

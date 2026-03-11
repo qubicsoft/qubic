@@ -1,5 +1,5 @@
 import os
-import pickle
+from qubic.lib.Qhdf5 import HDF5Dict
 import re
 from io import BytesIO
 from pathlib import Path
@@ -30,22 +30,6 @@ def yaml_to_txt(yaml_file, txt_file, comm=None):
         print(f"Successfully converted {yaml_file} to {txt_file}")
     except Exception as e:
         print(f"Error converting YAML to TXT: {str(e)}")
-
-
-def save_data(name, d):
-    """
-
-    Method to save data using pickle convention.
-
-    """
-
-    with open(name, "wb") as handle:
-        pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-def open_data(name):
-    with open(name, "rb") as f:
-        return pickle.load(f)
 
 
 def create_folder_if_not_exists(comm, folder_name):
@@ -99,11 +83,13 @@ class MergeAllFiles:
 
         self.list_files = os.listdir(self.foldername)
         self.number_of_realizations = len(self.list_files)
+        
+        self.hdf5 = HDF5Dict()
 
     def _reads_one_file(self, i, key):
-        d = open_data(self.foldername + self.list_files[i])
+        d = self.hdf5.load_dict(self.foldername + self.list_files[i])[key]
 
-        return d[key]
+        return d
 
     def _reads_all_files(self, key, verbose=False):
         arr = []
@@ -122,7 +108,7 @@ class MergeAllFiles:
         return arr
 
     def get_frequency_comp(self, i):
-        d = open_data(self.foldername + self.list_files[i])["parameters"]
+        d = self.hdf5.load_dict(self.foldername + self.list_files[i])["parameters"]
 
         nus, comp = [], []
         print(d.keys())

@@ -9,8 +9,28 @@ class HDF5Dict:
     def __init__(self, compression: str | None = "gzip", compression_opts: int | None = 4):
         self.compression = compression
         self.compression_opts = compression_opts
+        self._file: h5py.File | None = None
+        
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
     # Utilities functions
+    def open(self, filename: str, mode: str = "r"):
+        if self._file is not None and not self._file.id.valid:
+            self._file = None
+
+        if self._file is not None:
+            self._file.close()
+
+        self._file = h5py.File(filename, mode)
+
+    def close(self):
+        if self._file is not None:
+            self._file.close()
+            self._file = None
     def save_dict(self, filename: str, data: Dict[str, Any], mode: str = "w") -> None:
         with h5py.File(filename, mode) as h5f:
             self._write_group(h5f, data)
@@ -30,16 +50,24 @@ class HDF5Dict:
                 raise ValueError("The key 'data' does not correspond to a dataset.")
             return self._decode_dataset(obj)
 
-    def load_item(self, filename: str, path: str) -> Any:
-        if "::" in path:
-            h5_path, attr_name = path.split("::", 1)
-            with h5py.File(filename, "r") as h5f:
+    def load_item(self, filename: str | None, path: str) -> Any:
+        if self._file is not None:
+            h5f = self._file
+        else:
+            if filename is None:
+                raise ValueError("filename must be provided if no file is open")
+            h5f = h5py.File(filename, "r")
+
+        try:
+            if "::" in path:
+                h5_path, attr_name = path.split("::", 1)
                 return self._decode_attribute(h5f[h5_path].attrs[attr_name])
 
-        with h5py.File(filename, "r") as h5f:
             obj = h5f[path]
+
             if isinstance(obj, h5py.Dataset):
                 return self._decode_dataset(obj)
+
             if isinstance(obj, h5py.Group):
                 if "__json__" in obj.attrs:
                     try:
@@ -51,7 +79,11 @@ class HDF5Dict:
                         pass
                 return self._read_group(obj)
 
-        raise ValueError(f"Unknown object type at path: {path}")
+            raise ValueError(f"Unknown object type at path: {path}")
+
+        finally:
+            if self._file is None:
+                h5f.close()
 
     # Internal helpers
     def _write_group(self, h5group: h5py.Group, data: Dict[str, Any]) -> None:

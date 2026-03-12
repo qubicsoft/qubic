@@ -1,6 +1,8 @@
 import os
 
 import healpy as hp
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
@@ -722,51 +724,90 @@ class PlotsCMM:
         if not self.params["Plots"]["conv_beta"]:
             return
 
+        beta = np.asarray(beta)
         niter = beta.shape[0]
         it = np.arange(niter)
 
-        fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]})
-        ax_top, ax_bot = axes
+        fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]})
 
-        # Colors variables
-        if beta.ndim > 1:
-            cmap = plt.get_cmap("tab10")
-            colors = cmap.colors
-        else:
-            colors = ["tab:blue"]
+        # Colors
+        cmap_comp = plt.get_cmap("tab10")
+        ncomp = beta.shape[1] if beta.ndim >= 2 else 1
+        colors_comp = cmap_comp.colors[:ncomp]
 
-        # Spectral index evolution
+        # TOP : beta evolution        
         if beta.ndim == 1:
-            ax_top.plot(it, beta, lw=2, color=colors[0], label=r"$\beta$")
+            ax_top.plot(it, beta, lw=2, color=colors_comp[0], label=r"$\beta$")
 
             if errors is not None:
-                ax_top.errorbar(it, beta, yerr=errors, fmt="none", ecolor=colors[0], elinewidth=1.5, capsize=3, alpha=0.8, label=r"$1\sigma$")
+                ax_top.fill_between(it, beta - errors, beta + errors, color=colors_comp[0], alpha=0.25, label=r"$1\sigma$")
 
             if truth is not None:
-                ax_top.axhline(truth, ls="--", color="red", lw=1.5, label="Truth")
+                ax_top.axhline(truth, ls="--", color="k", lw=1.5, label="Truth")
+
+        elif beta.ndim == 3 and beta.shape[-1] == 1:
+            for ic in range(beta.shape[1]):
+                name = self.preset.comp.components_name_out[ic + 1]
+                ax_top.plot(it, beta[:, ic], color=colors_comp[ic], lw=2, label=rf"$\beta_{{{name}}}$")
+
+            if truth is not None:
+                for ic, val in enumerate(truth):
+                    ax_top.axhline(val, ls="--", color=colors_comp[ic], alpha=0.6)
 
         else:
-            for i in range(beta.shape[1]):
-                color = colors[i % len(colors)]
-                ax_top.plot(it, beta[:, i], color=color, lw=2, alpha=0.8, label=rf"$\beta_{{{self.preset.comp.components_name_out[i + 1]}}}$")
+            # (Niter, Ncomp, Nbeta)
+            ncomp, nbeta = beta.shape[1], beta.shape[2]
 
+            cmap_beta = cm.get_cmap("jet", nbeta)
+            colors_beta = [cmap_beta(i) for i in range(nbeta)]
+
+            for ic in range(ncomp):
+                name = self.preset.comp.components_name_out[ic + 1]
+
+                for ib in range(nbeta):
+                    ax_top.plot(
+                        it,
+                        beta[:, ic, ib],
+                        color=colors_beta[ib],
+                        lw=1.7,
+                        alpha=0.8,
+                    )
+
+                # one legend entry per component
+                ax_top.plot([], [], color=colors_comp[ic], lw=2, label=rf"$\beta_{{{name}}}$")
+
+            # truth
             if truth is not None:
-                for i, val in enumerate(np.ravel(truth)):
-                    color = colors[i % len(colors)]
-                    ax_top.axhline(val, ls="--", color=color, alpha=0.6)
+                truth = np.asarray(truth)
+                for ic in range(ncomp):
+                    for ib in range(nbeta):
+                        ax_top.axhline(truth[ic, ib], ls="--", color=colors_beta[ib], alpha=0.4)
+
+            # colorbar for beta index
+            norm = mcolors.Normalize(vmin=0, vmax=nbeta - 1)
+            sm = cm.ScalarMappable(norm=norm, cmap=cmap_beta)
+            sm.set_array([])
+
+            cbar = fig.colorbar(sm, ax=ax_top, pad=0.02, aspect=30)
+            cbar.set_label(r"Index $\beta$")
 
         ax_top.set_ylabel(r"$\beta$")
-        ax_top.legend(ncol=2, fontsize=9)
+        ax_top.legend(ncol=2, fontsize=9, frameon=False)
         ax_top.grid(alpha=0.3)
 
-        # Convergence
+        # BOTTOM : convergence
         if truth is not None:
             if beta.ndim == 1:
-                ax_bot.plot(it, np.abs(beta - truth), color=colors[0], lw=2)
+                ax_bot.plot(it, np.abs(beta - truth), color=colors_comp[0], lw=2)
+
+            elif beta.ndim == 3 and beta.shape[-1] == 1:
+                for ic in range(beta.shape[1]):
+                    ax_bot.plot(it, np.abs(beta[:, ic] - truth[ic]), color=colors_comp[ic], lw=2, alpha=0.8)
+
             else:
-                for i in range(beta.shape[1]):
-                    color = colors[i % len(colors)]
-                    ax_bot.plot(it, np.abs(beta[:, i] - truth[i]), color=color, lw=2, alpha=0.8)
+                for ic in range(beta.shape[1]):
+                    for ib in range(beta.shape[2]):
+                        ax_bot.plot(it, np.abs(beta[:, ic, ib] - truth[ic, ib]), color=colors_beta[ib], lw=1.3, alpha=0.35)
 
         ax_bot.set_yscale("log")
         ax_bot.set_xlabel("Iteration")

@@ -166,8 +166,8 @@ class QubicAcquisition(Acquisition):
         out = self.instrument.get_noise(self.sampling, self.scene, det_noise, photon_noise, out=out)
         if self.effective_duration is not None:
             nsamplings = self.sampling.comm.allreduce(len(self.sampling))
-
-            out *= np.sqrt(nsamplings * self.sampling.period / (self.effective_duration * 31557600))
+            factor = np.sqrt(nsamplings * self.sampling.period / (self.effective_duration * 31557600))
+            out *= factor
         return out
 
     get_noise.__doc__ = Acquisition.get_noise.__doc__
@@ -919,15 +919,15 @@ class PlanckAcquisition:
 
         for nu in range(len(nus)):
             sigma = self.sigma[nu]
-            out[nu, :, :] = np.random.standard_normal((self.npix, 3)) * sigma
+            out[nu] = np.random.standard_normal((self.npix, 3)) * sigma
 
         np.random.set_state(state)
 
         # if the information of Planck is added with weight w, the confidence in it should scale as 1/w
         if weight_planck < 1.0 and weight_planck > 0.00001:  # avoid too small weight_planck to not let the noise explode
-            out[:, seenpix, :] = out[:, seenpix, :] / weight_planck
+            out[:, seenpix] = out[:, seenpix] / weight_planck
         if weight_planck == 0:
-            out[:, seenpix, :] = 0.0
+            out[:, seenpix] = 0.0
 
         return out * planck_ntot
 
@@ -961,7 +961,7 @@ class PlanckAcquisition:
         if planck_ntot == 0:
             return IdentityOperator(shapein=(3 * len(self.nus) * npix))  # in FMM, len(self.nus) is always 1, in CMM it is over the range
 
-        sigma_perpix = np.broadcast_to(sigma[:, None, :], (len(self.nus), npix, 3))
+        sigma_perpix = np.broadcast_to(sigma[:, None], (len(self.nus), npix, 3))
 
         if beam_correction != 0:
             factor = 4 * np.pi * (np.rad2deg(beam_correction) / 2.35 / np.degrees(hp.nside2resol(self.scene.nside))) ** 2
@@ -1093,6 +1093,7 @@ class PlanckAcquisition:
         for _ in self.nus:
             ope_i = []
             for _ in range(self.nsub_planck):
+                
                 if fwhm is not None:
                     C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
                 else:
@@ -1110,7 +1111,7 @@ class PlanckAcquisition:
                 Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
             else:
                 Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
-
+        
         return BlockColumnOperator(Operator, axisout=0)
 
 

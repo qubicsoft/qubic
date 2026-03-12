@@ -17,7 +17,6 @@ from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
 from qubic.lib.Qhdf5 import HDF5Dict
 from qubic.lib.Qspectra import Spectra
 
-
 class PipelineComponentMapMaking:
     """
     Instance to reconstruct component maps using QUBIC abilities.
@@ -203,7 +202,6 @@ class PipelineComponentMapMaking:
             Boolean array that define the pixels observed by QUBIC.
 
         """
-
         H_i = self.preset.qubic.joint_out.get_operator(
             A=self.preset.acquisition.Amm_iter,
             gain=self.preset.gain.gain_iter,
@@ -230,6 +228,7 @@ class PipelineComponentMapMaking:
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
         weight_mask = np.where(seenpix[None, :, None], w, 1.0)  # the 1.0 adds planck outside the patch, the weight_planck adds planck inside the patch
         x_planck_full = self.preset.comp.components_out * weight_mask
+
         self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck_full)))
 
         ### Run PCG
@@ -261,10 +260,10 @@ class PipelineComponentMapMaking:
         )
 
         #! raise ValueError("Tom : is it correct to use this H here ?")
+        #! H should include FWHM mapmaking
         for i in range(len(self.preset.comp.components_name_out)):
             for j in range(self.preset.qubic.joint_out.qubic.nsub):
-                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
-                tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](C(self.preset.comp.components_iter[i])).ravel()
+                tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](self.preset.comp.components_iter[i]).ravel()
 
         return tod_comp
 
@@ -312,14 +311,15 @@ class PipelineComponentMapMaking:
     def get_tod_comp_superpixel(self, index):
         if self.preset.tools.rank == 0:
             print("Computing contribution of each super-pixel")
+            
         _index = np.zeros(12 * self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] ** 2)
         _index[index] = index.copy()
         _index_nside = hp.ud_grade(_index, self.preset.qubic.joint_out.external.nside)
         tod_comp = np.zeros(
             (
-                len(index),
-                self.preset.qubic.joint_out.qubic.nsub,
                 len(self.preset.comp.components_name_out),
+                self.preset.qubic.joint_out.qubic.nsub,
+                len(index),
                 self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
             )
         )
@@ -328,15 +328,16 @@ class PipelineComponentMapMaking:
 
         for j in range(self.preset.qubic.params_qubic["nsub_out"]):
             for icomp in range(len(self.preset.comp.components_name_out)):
+                #! Check convolution here
                 C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
 
-                maps_conv[icomp] = C(self.preset.comp.components_iter[icomp, :, :]).copy()
+                maps_conv[icomp] = C(maps_conv[icomp, :, :])
                 for ii, i in enumerate(index):
                     maps_conv_i = maps_conv.copy()
                     _i = _index_nside == i
                     for stk in range(3):
                         maps_conv_i[:, :, stk] *= _i
-                    tod_comp[ii, j, icomp] = self.preset.qubic.joint_out.qubic.H[j](maps_conv_i[icomp]).ravel()
+                    tod_comp[icomp, j, ii] = self.preset.qubic.joint_out.qubic.H[j](maps_conv_i[icomp]).ravel()
         return tod_comp
 
     def update_mixing_matrix(self, beta, previous_mixingmatrix, icomp):
@@ -389,9 +390,23 @@ class PipelineComponentMapMaking:
 
     def fit_mixing_matrix(self):
         method = self.get_mixing_matrix_method()
-        tod_comp = self.get_tod_comp()
         self.nfev = 0
-        self.preset.mixingmatrix._index_seenpix_beta = 0
+
+        # d1 model
+        if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] != 0:
+            index_num = hp.ud_grade(self.preset.sky.seenpix, self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"])
+            self.preset.mixingmatrix._index_seenpix_beta = np.where(index_num)[0]
+
+            ### Simulated TOD for each components, nsub, npix with shape (npix, nsub, ncomp, nsnd)
+            tod_comp = self.get_tod_comp_superpixel(self.preset.mixingmatrix._index_seenpix_beta)
+
+            ### Store fixed beta (those denoted with hp.UNSEEN are variable)
+            beta_map = self.preset.acquisition.beta_iter.copy()
+            beta_map[:, self.preset.mixingmatrix._index_seenpix_beta] = hp.UNSEEN
+        # d0 or d6 model
+        else:
+            tod_comp = self.get_tod_comp()
+            self.preset.mixingmatrix._index_seenpix_beta = 0
 
         if method == "parametric":
             updater = ParametricMM(self)
@@ -402,7 +417,10 @@ class PipelineComponentMapMaking:
         else:
             raise TypeError(f"Unknown method {method}")
 
-        updater.update(tod_comp)
+        if self.preset.comp.params_foregrounds["Dust"]["model"] == "d1":
+            updater.update(tod_comp, beta_map)
+        else:
+            updater.update(tod_comp)
 
     def give_intercal(self, D, d, _invn):
         r"""Detectors intercalibration.
@@ -476,7 +494,7 @@ class PipelineComponentMapMaking:
         #     self.preset.gain.gain_iter /= self.preset.gain.gain_iter[0]
         #     self.preset.gain.all_gain = np.concatenate((self.preset.gain.all_gain, np.array([self.preset.gain.gain_iter])), axis=0)
 
-        # elif self.preset.qubic.params_qubic["instrument"] == "DB":
+        # elif self.preset.qubic.params_qubic["instrument"] == "DB": 
         #     TODi_Q_150 = self.H_i.operands[0](self.preset.comp.components_iter)[: self.ndets * self.nsampling]
         #     TODi_Q_220 = self.H_i.operands[0](self.preset.comp.components_iter)[self.ndets * self.nsampling : 2 * self.ndets * self.nsampling]
 
@@ -546,6 +564,7 @@ class PipelineComponentMapMaking:
                             "center": self.preset.sky.center,
                             "coverage": self.preset.sky.coverage,
                             "seenpix": self.preset.sky.seenpix,
+                            "seenpix_beta": self.preset.mixingmatrix._index_seenpix_beta,
                             "fsky": self.preset.sky.fsky,
                             "fwhm_in": self.preset.acquisition.fwhm_tod,
                             "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
@@ -593,7 +612,8 @@ class PipelineComponentMapMaking:
             self.preset.tools._display_iter(self._steps)
 
             ### Update self.fg.components_iter^{k} -> self.fg.components_iter^{k+1}
-            self.update_components(seenpix=self.preset.sky.seenpix)
+            if self.preset.comp.params_foregrounds["fit_components"]:
+                self.update_components(seenpix=self.preset.sky.seenpix)
 
             ### Update self.preset.acquisition.beta_iter^{k} -> self.preset.acquisition.beta_iter^{k+1}
             if self.preset.comp.params_foregrounds["fit_mixing_matrix"]:

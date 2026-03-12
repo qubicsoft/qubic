@@ -79,28 +79,22 @@ class AbstractChi2(ABC):
         Shared computation of the QUBIC time-domain chi^2 given mixing
         matrix A. Returns Lqubic and stores it on the instance.
         """
-        
-        # Select seen super_pixels
-        A_seen = A[self.seenpix_beta[0]]  # (npix, nsub*nFP, ncomp)
-        A_seen = A_seen.reshape(
-            A_seen.shape[0], self.nFP, self.nsub, self.ncomp
-        ).transpose(1, 2, 0, 3)  # (nFP, nsub, npix, ncomp)
-        A_flat = A_seen.reshape(self.nFP, -1)  # (nFP, nsub*npix*ncomp)
+        # build ysim concatenating focal planes
+        ysim_parts = []
+        for i in range(self.nFP):
+            a_slice = A[self.nsub * i : self.nsub * (i + 1)]  # shape (nsub, ncomp)
+            vec = a_slice.T.reshape(self.ncomp * self.nsub) @ self.TOD_sim_fp[i]
+            ysim_parts.append(vec)
 
-        ysim = np.concatenate([
-            A_flat[i] @ self.TOD_sim_fp[i]
-            for i in range(self.nFP)
-        ])
-
+        ysim = np.concatenate(ysim_parts, axis=0)
         residuals = ysim - self.preset.acquisition.TOD_qubic
 
-        Lqubic = 0.5 * _dot(
+        self.Lqubic = 0.5 * _dot(
             residuals.T,
             self.preset.acquisition.invN.operands[0](residuals),
             self.preset.comm,
         )
-
-        return Lqubic
+        return self.Lqubic
 
     def compute_qubic_chi_varying_beta(self, A):
         ysim_parts = []

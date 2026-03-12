@@ -735,7 +735,7 @@ class PlotsCMM:
         ncomp = beta.shape[1] if beta.ndim >= 2 else 1
         colors_comp = cmap_comp.colors[:ncomp]
 
-        # TOP : beta evolution
+        # TOP : beta evolution        
         if beta.ndim == 1:
             ax_top.plot(it, beta, lw=2, color=colors_comp[0], label=r"$\beta$")
 
@@ -745,7 +745,7 @@ class PlotsCMM:
             if truth is not None:
                 ax_top.axhline(truth, ls="--", color="k", lw=1.5, label="Truth")
 
-        elif beta.ndim == 2:
+        elif beta.ndim == 3 and beta.shape[-1] == 1:
             for ic in range(beta.shape[1]):
                 name = self.preset.comp.components_name_out[ic + 1]
                 ax_top.plot(it, beta[:, ic], color=colors_comp[ic], lw=2, label=rf"$\beta_{{{name}}}$")
@@ -800,7 +800,7 @@ class PlotsCMM:
             if beta.ndim == 1:
                 ax_bot.plot(it, np.abs(beta - truth), color=colors_comp[0], lw=2)
 
-            elif beta.ndim == 2:
+            elif beta.ndim == 3 and beta.shape[-1] == 1:
                 for ic in range(beta.shape[1]):
                     ax_bot.plot(it, np.abs(beta[:, ic] - truth[ic]), color=colors_comp[ic], lw=2, alpha=0.8)
 

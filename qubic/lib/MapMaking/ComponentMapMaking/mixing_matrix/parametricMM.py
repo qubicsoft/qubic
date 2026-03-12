@@ -10,7 +10,11 @@ from qubic.lib.MapMaking.ComponentMapMaking.Qchi2MM import Chi2
 
 class ParametricMM(FittingMM):
     def update(self, tod_comp, beta_map=None):
-        _, self.seenpix_beta = np.where(beta_map == hp.UNSEEN)
+        if beta_map is not None:
+            _, self.seenpix_beta = np.where(beta_map == hp.UNSEEN)
+        else:
+            self.seenpix_beta = None
+            previous_beta = self.preset.acquisition.beta_iter.copy()
         previous_beta = self.preset.acquisition.beta_iter.copy()[:, self.seenpix_beta]
         
         # Create boundaries
@@ -33,7 +37,7 @@ class ParametricMM(FittingMM):
         self.preset.acquisition.Amm_iter = self.chi2.compute_mixing_matrix_parametric(
             nus=self.preset.qubic.joint_out.allnus,
             x=self.preset.acquisition.beta_iter,
-        ).transpose((1, 0, 2))
+        )#.transpose((1, 0, 2))
 
         self._log(previous_beta)
         self._finalize()

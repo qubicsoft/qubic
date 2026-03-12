@@ -56,7 +56,7 @@ QUBIC:
     npointings: 1000                                                          # Number of time samples
     nsub_in: 8                                                                # Number of sub-acquisitions
     nsub_out: 8                                                                # Number of sub-acquisitions for the reconstruction
-    convolution_in: False                                                     # Angular resolution in the input TOD
+    convolution_in: True                                                     # Angular resolution in the input TOD
     convolution_out: False                                                    # Angular resolution in the reconstruction
     preconditioner: True
     NOISE:
@@ -79,7 +79,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-    nside: 128                                                                # Nside of components
+    nside: 512                                                                # Nside of components
     coverage_cut: 0.15                                                        # Percent of coverage to keep the pixels seen enough by QUBIC
     RA_center: 0
     DEC_center: -57
@@ -102,10 +102,10 @@ PLANCK:
 PCG:
     ### This section control PCG parameters
 
-    n_init_iter_pcg: 150
+    n_init_iter_pcg: 30
     n_iter_pcg: 25                                                             # Number of PCG iterations
     tol_pcg: 1.0e-20                                                          # Tolerance for PCG
-    n_iter_loop: 1                                                            # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+    n_iter_loop: 10                                                            # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
     ites_to_converge: 1                                                       # should be less than n_iter_loop
     tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                           # Fixing pixels outside QUBIC patch
@@ -147,6 +147,6 @@ Plots:
     thr_plot: 0.2                                                             # Threashold for maps plot
 
 save_iter: 1                                                                  # Save every 'save_iter' iteration
-foldername: "test"                                                      # Name of the saved folder
-filename: "test_w_precond"                                                              # Name of the saved file
+foldername: "test_convol"                                                      # Name of the saved folder
+filename: "convol_in"                                                              # Name of the saved file
 lastite: True                                                                 # Keep only the last iteration

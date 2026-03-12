@@ -12,7 +12,7 @@ CMB:
 Foregrounds:
   fit_components: false                                                                 # If true, component maps are reconstructed
   fit_mixing_matrix: true                                                              # If true, mixing matrix is reconstructed
-  bin_mixing_matrix: 1
+  bin_mixing_matrix: 8
   blind_method: "minimize"                                                             # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
                                                                                        # 'alternate' or 'minimize'
     ### Thermal Dust emission
@@ -20,7 +20,7 @@ Foregrounds:
     Dust_in: true
     Dust_out: true
 
-    type: "parametric"                                                                 # Reconstruction method
+    type: "blind"                                                                 # Reconstruction method
     model: "d0"
     beta_init: [1.54, 0.05, 10000000]                                                  # PySM model
     nside_beta_in: 0                                                                   # Input pixelization for beta_d (in a case of d1 model)
@@ -51,7 +51,7 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-    instrument: "UWB"                                                                   # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
+    instrument: "DB"                                                                   # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                                # Instrumental configuration (TD or FI) # to be implemented in the code
     npointings: 1000                                                                   # Number of time samples
     nsub_in: 8                                                                         # Number of sub-acquisitions
@@ -87,15 +87,15 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
     level_noise_planck: 1                                                            # Noise level for Planck data
-    nsub_planck: 1                                                                     # Number of integration step for Planck data
+    nsub_planck: 3                                                                     # Number of integration step for Planck data
     weight_planck: 1                                                                   # Weight of Planck data within the QUBIC patch
     fwhm_weight_planck: 0                                                              # FWHM for apodized QUBIC patch
     30GHz: false
     44GHz: false
     70GHz: false
     100GHz: false
-    143GHz: false
-    217GHz: false
+    143GHz: true
+    217GHz: true
     353GHz: true
     seed_noise: 22222
 

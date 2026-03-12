@@ -1,4 +1,4 @@
-import os
+import os, sys
 
 import emcee
 import numpy as np
@@ -182,19 +182,31 @@ class FitEllSpace:
         return lp - 0.5 * ((residuals).T @ self.invN @ (residuals))
 
     def run(self, nsteps, nwalkers, discard=0, comm=None):
-        ### Initial condition for each parameters
         x0 = self._initial_conditions(nwalkers)
 
-        if comm.Get_size() == 1 or comm is None:
-            print("Running on multi-threading")
-            with Pool() as pool:
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool)
-                sampler.run_mcmc(x0, nsteps, progress=True)
-        else:
+        # With MPI
+        if comm is not None and comm.Get_size() > 1:
             if comm.Get_rank() == 0:
                 print("Running with MPI")
+
             with MPIPool() as pool:
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool)
+                if not pool.is_master():
+                    pool.wait()
+                    sys.exit(0)
+
+                sampler = emcee.EnsembleSampler(
+                    nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool
+                )
+                sampler.run_mcmc(x0, nsteps, progress=True)
+
+        # Without MPI
+        else:
+            print("Running on multi-threading")
+            from multiprocess import Pool
+            with Pool() as pool:
+                sampler = emcee.EnsembleSampler(
+                    nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool
+                )
                 sampler.run_mcmc(x0, nsteps, progress=True)
 
         samples_flat = sampler.get_chain(flat=True, discard=discard, thin=15)

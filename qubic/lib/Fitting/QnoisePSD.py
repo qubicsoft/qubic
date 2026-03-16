@@ -248,6 +248,92 @@ def nll_gauss_wrapper(freq, ps, sigma, n_params):
     return f
 
 
+def fit_minuit_ll_from_ps(freq, ps, noise_model_x0, nbins=300, plot=False):
+    """
+    Fit a binned power spectral density using Minuit with Gaussian likelihood.
+    Automatically selects the noise model (white, 1/f, or combined) based on the
+    length of `noise_model_x0`.
+
+    Parameters
+    ----------
+    freq : ndarray
+        Frequencies corresponding to the PSD values (Hz).
+        Ranges from -Nyquist to +Nyquist.
+    ps : ndarray
+        Two-sided power spectral density of the signal.
+        Units are [signal units]^2 / Hz.
+    noise_model_x0 : list or tuple
+        Initial guesses for the model parameters:
+        - 1 element: [A_white] (white noise)
+        - 2 elements: [A_f, alpha] (1/f^alpha)
+        - 3 elements: [A_white, f_knee, alpha] (combined)
+    nbins : int, optional
+        Number of bins for PSD averaging.
+    plot : bool, optional
+        If True, plot the PSD and fit.
+    data_name : str, optional
+        Dataset name for plotting.
+    index : int or None, optional
+        Index label for plotting.
+
+    Returns
+    -------
+    values : dict
+        Best-fit parameter values.
+    errors : dict
+        Parameter uncertainties.
+    reduced_chi2 : float
+        Reduced chi-squared of the fit.
+    """
+    freq, ps = freq[1:], ps[1:]  # skip DC
+    ps /= ps.max()
+
+    # Bin PSD
+    if plot:
+        plt.figure(dpi=150)
+    binned_freq, binned_ps, _, binned_ps_error, _ = ft.profile(
+        freq, ps, nbins=nbins, plot=plot, log=True
+    )
+    print(binned_ps_error.mean())
+    binned_ps_error = np.maximum(binned_ps_error, 1e-20)
+
+    # Log Likelihood for Noise model
+    n_params = len(noise_model_x0)
+    nll = nll_gauss_wrapper(binned_freq, binned_ps, binned_ps_error, n_params)
+
+    # Initialize Minuit with initial guesses
+    m = Minuit(nll, *noise_model_x0)
+
+    # Set limits (all positive)
+    for i, val in enumerate(noise_model_x0):
+        m.limits[i] = (0, None)
+
+    # Run fit
+    m.migrad()
+    m.hesse()
+
+    # Plot
+    if plot:
+        plt.plot(freq, ps, label="Data")
+        plt.plot(freq, noise_model(freq, *m.values), "k", label="Fit")
+
+        fit_info = [
+            f"$\\chi^2$/ndof = {m.fval:.2f} / {m.ndof} = {m.fmin.reduced_chi2:.2f}"
+        ]
+        for p, v, e in zip(m.parameters, m.values, m.errors):
+            fit_info.append(f"{p} = ${v:.2e} \\pm {e:.2e}$")
+
+        plt.title("PSD Fit")
+        plt.legend(title="\n".join(fit_info))
+        plt.xlabel("Frequency (Hz)")
+        plt.ylabel(r"Power Spectrum ($[signal]^2/Hz$)")
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.show()
+
+    return m.values, m.errors, m.fmin.reduced_chi2
+
+
 def fit_minuit_ll(data, timestep, noise_model_x0, nbins=300, plot=False):
     """
     Fit a binned power spectral density using Minuit with Gaussian likelihood.
@@ -287,7 +373,7 @@ def fit_minuit_ll(data, timestep, noise_model_x0, nbins=300, plot=False):
     # Compute PSD
     freq, ps = compute_real_ps(data, timestep=timestep)
     freq, ps = freq[1:], ps[1:]  # skip DC
-    ps /= ps[0]
+    ps /= ps.max()
 
     # Bin PSD
     if plot:

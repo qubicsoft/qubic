@@ -45,11 +45,11 @@ synthbeam_fraction: 1
 
 # Sky parameters
 cmb: true
-atm: true
+atm: false
 
 # Reconstruction parameters
 preconditioner: false
-n_iter: 500
+n_iter: 300
 n_loop: 1
 iterative_iter: false
 convolutions: false

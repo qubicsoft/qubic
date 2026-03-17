@@ -862,7 +862,7 @@ def remove_peaks(tt, tod, peaks_detected, interval, mask):
             low = (index >= peak - 3*interval[i_peak]) & (index <= peak - interval[i_peak])
             high = (index >= peak + interval[i_peak]) & (index <= peak + 3*interval[i_peak])
             slope = (np.median(tod[high]) - np.median(tod[low]))/(np.median(tt[high]) - np.median(tt[low]))
-            origin = np.median(tod[low])- slope*np.median(tt[low])
+            origin = np.median(tod[low]) - slope*np.median(tt[low])
             tod[peak - interval[i_peak] : peak + interval[i_peak]] = slope*tt[peak - interval[i_peak] : peak + interval[i_peak]] + origin
     return tod
 
@@ -881,7 +881,7 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 # xlim = [9480, 9550]
 xlim = [10540, 10640]
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True, check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True):
+def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True, check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False, year_data=None):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -892,14 +892,15 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
     freq_sampling = 157.36 # Hz
 
-    # Inversion in signal
-    # mytod = -tod.copy()
-
-    mytod = tod.copy() # not in 2026
+    if year_data == "2022":
+        # Inversion in signal
+        mytod = -tod.copy()
+    elif year_data == "2026":
+        # not in 2026
+        mytod = tod.copy()
 
     if clean_tod:
-        data_year = "2026"
-        if data_year == "2022":
+        if year_data == "2022":
             # Filter the TOD
             mytod_1 = my_filt(mytod.copy())
 
@@ -916,34 +917,43 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             # might have to go even higher for the peaks aligned with elevation scans
             # distance=None helps with order 1 peaks that are a bit irregular (close to border of map/dead time)
             # kept distance=10s to remove some foregrounds
-        elif data_year == "2026":
+        elif year_data == "2026":
             mask_elt = np.ones_like(elt, dtype=bool)
             # Filter the TOD
             test_tod = my_filt_4(mytod.copy()) # only a high pass to detect the glitches
-            glitches_detected, glitches_properties = find_peaks(test_tod, height=80000, threshold=None, distance=None, width=0, wlen=10*freq_sampling) # totally empirical cut at 80000 ADUs
-            interval_glitch = (glitches_properties["widths"]).astype(int) * 10
-            test_tod_no_glitch = remove_peaks(tt, test_tod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt)
-            glitches_detected_ = np.isin(np.arange(len(tt)), glitches_detected)
+            if manual:
+                period_tt = np.mean(tt[1:] - tt[:-1])
+                intervals = [[570, 650], [3650, 3750], [3955, 4000]] #s
+                peaks_s = [(interval[1] + interval[0])/2 for interval in intervals]
+                glitches_detected = [np.argmin(np.abs(peaks_s[i_peak] - tt)) for i_peak in range(len(peaks_s))]
+                interval_glitch = np.array([(interval[1] - interval[0])/(2*period_tt) for interval in intervals]).astype(int)
+                test_tod_no_glitch = remove_peaks(tt, test_tod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt)
+            else:
+                glitches_detected, glitches_properties = find_peaks(test_tod, height=80000, threshold=None, distance=None, width=0, wlen=10*freq_sampling) # totally empirical cut at 80000 ADUs
+                interval_glitch = (glitches_properties["widths"]).astype(int) * 10
+                test_tod_no_glitch = remove_peaks(tt, test_tod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt)
+                glitches_detected_ = np.isin(np.arange(len(tt)), glitches_detected)
             plt.figure()
             plt.plot(tt, mytod, label="raw TOD")
             plt.plot(tt, test_tod, label="test_tod")
             plt.plot(tt, test_tod_no_glitch, label="TOD no peak")
-            plt.scatter(tt[glitches_detected_ & mask_elt], mytod[glitches_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
+            if not manual:
+                plt.scatter(tt[glitches_detected_ & mask_elt], mytod[glitches_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
             plt.legend()
             plt.show()
 
-
             mytod_1 = my_filt(mytod.copy())
             tod_ma_filt = my_filt_3(test_tod_no_glitch.copy()) # bandpass instead of moving average then highpass
-            mean_tod = 0 # approximation, since the data is filtered a lot
             sigma_clipped = tod_ma_filt.copy()
+            mean_tod = 0 # approximation, since the data is filtered a lot
             for i_clip in range(2):
-                sigma_clipping = sigma_clipped[np.abs(sigma_clipped) < 3*np.std(sigma_clipped)]
-            std_prominence = np.std(sigma_clipping)
+                sigma_clipped = sigma_clipped[np.abs(sigma_clipped - mean_tod) < 6*np.std(sigma_clipped)]
+            std_prominence = np.std(sigma_clipped)
             prominence = (3*std_prominence, None)
             data_peaks = tod_ma_filt
 
-            peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
+            # peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
+            peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 10*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
 
         widths = peaks_properties["widths"]
 
@@ -952,6 +962,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             plt.plot(tt, data_peaks, label="bandpass filtered TOD")
             plt.scatter(tt[peaks_detected], data_peaks[peaks_detected], c="r", label="peaks_detected", zorder=1000)
             # plt.scatter(tt[peaks_detected], peaks_detected[peaks_detected], c="g", label="peaks_detected")
+            # plt.axhline(y=prominence[0], c="k", ls="--", label="prominence cut") # not as easy to plot
             plt.legend()
             plt.tight_layout()
             plt.savefig("figures/peak_detection_TES_{}.pdf".format(TES_number), dpi=300)
@@ -966,8 +977,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
         # interval_peak = int(time_moon*freq_sampling * 1.5) # 1.5 is good
         interval_peak = (widths).astype(int)
-        if data_year == "2026":
-            tod_no_glitches = remove_peaks(tt, mytod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt)
+        if year_data == "2026":
+            tod_no_glitches = remove_peaks(tt, mytod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt) #this doesn't deal well with flux jumps
+            # tod_no_glitches = test_tod_no_glitch.copy() # you can use this for flux jumps, but there is a bit of filtering ringing around Moon
         else:
             tod_no_glitches = mytod
         # tod_no_peak = remove_peaks(tt, mytod.copy(), peaks_detected, interval=interval_peak, mask=mask_elt)
@@ -1042,9 +1054,10 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         mapsb_forth, mapcount_forth = healpix_map(newazt[scantype > 0], newelt[scantype > 0], final_tod[scantype > 0], nside=nside)
         mapsb_back, mapcount_back = healpix_map(newazt[scantype < 0], newelt[scantype < 0], final_tod[scantype < 0], nside=nside)
 
-        reso = 8
 
-        if data_year == "2026":
+
+        if year_data == "2026":
+            reso = 8
             mapsb_fb_proj = []
             for mapsb_ in [mapsb_forth, mapsb_back]:
                 mapsb_proj = hp.gnomview(mapsb_, reso=reso, min=min_plot, max=max_plot, 
@@ -1065,6 +1078,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
             plt.show()
         else:
+            reso = 10
             plt.figure()
             hp.gnomview(mapsb_forth, reso=reso, sub=(1, 3, 1), min=min_plot, max=max_plot, 
                     title="forth scans", rot=center)
@@ -1115,7 +1129,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     if also_tod:
         return mapsb, mapcount, final_tod
     
-    if data_year == "2026":
+    if year_data == "2026":
         mapsb_proj = hp.gnomview(mapsb, reso=reso, min=min_plot, max=max_plot, 
                     rot=center, return_projected_map=True, no_plot=True)
         X = np.arange(len(mapsb_proj))
@@ -1201,7 +1215,7 @@ def my_filt_4(mytod): # utiliser cette fonction ?
     # Cuts are expressed in Hz, a back and forth scan takes 107.5 seconds
     fs = 157.36 # Hz # could be computed directly on TOD
     # lowcut = 4/107.5 # 4/107.5, i.e. half a forth (or back) scan
-    lowcut = 4/107.5
+    lowcut = 2/107.5
     filt_tod = butter_highpass_filter(mytod, lowcut=lowcut, fs=fs, order=1) # Hz
     return filt_tod
 
@@ -1210,8 +1224,9 @@ def my_filt_3(mytod): # utiliser cette fonction ?
     fs = 157.36 # Hz # could be computed directly on TOD
     scan_period = 112 # s
     # lowcut = 4/107.5 # 4/107.5, i.e. half a forth (or back) scan
+    # lowcut = 16/scan_period
     lowcut = 16/scan_period
-    highcut = 2/scan_period*100/4 # 2/107.5*100/4, i.e. approx. 4 % of a forth (or back) scan --> passer à 2% parce que 4% est trop proche de la taille de la Lune (2/107.5*100/6 makes the Moon round but it's fine-tuned for it...)
+    highcut = 2/scan_period*100/2 # 2/107.5*100/4, i.e. approx. 4 % of a forth (or back) scan --> passer à 2% parce que 4% est trop proche de la taille de la Lune (2/107.5*100/6 makes the Moon round but it's fine-tuned for it...)
     filt_tod = butter_bandpass_filter(mytod, lowcut=lowcut, highcut=highcut, fs=fs, order=6) # Hz
     return filt_tod
 
@@ -1769,7 +1784,7 @@ def cos_window(Nx, Ny, lx=None,ly=None):
     return result
 
 
-def read_data(datadir, remove_t0=True):
+def read_data(datadir, remove_t0=True, year_data="2022"):
     """
     Reads QUBIC raw data: time and TOD, as well azimuth, elevation and 
     their corresponding time
@@ -1797,8 +1812,10 @@ def read_data(datadir, remove_t0=True):
     az = a.azimuth()
     el = a.elevation()
     Tbath = a.Tbath
-    # thk = a.timeaxis(datatype='hk')
-    thk = a.timeaxis(datatype='extern', asic=1) # there is no intern hk in 2026-03-11 data
+    if year_data == "2022":
+        thk = a.timeaxis(datatype='hk')
+    elif year_data == "2026":
+        thk = a.timeaxis(datatype='extern', asic=1) # there is no intern hk in 2026-03-11 data
     tinit = tt[0]
     if remove_t0:
         ### We remove tt[0]
@@ -1841,7 +1858,7 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     return azmoon, elmoon
 
 
-def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None, tshift=0):
+def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None, tshift=0, year_data="2022"):
     if data is None: # first read the data from disk if needed
         ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
         FPidentity = pt.make_id_focalplane()
@@ -1860,7 +1877,7 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         sort_idx_old = np.argsort(QPidx_old)
         QPidx = QPidx[sort_idx_old]
         # QPidx = QPidx_old # if want old
-        tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False)
+        tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False, year_data=year_data)
 
         # az = -az - np.max(np.abs(az)) # the map doesn't look great, there probably isn't an azimuth inversion then?
         az += az_qubic
@@ -1965,10 +1982,10 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
     return tt, tinit, alltod, QPidx, azt, elt, allnewazt, allnewelt, scantype, Tbath
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, tshift=0,
-                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None, det_pos=None, clean_tod=True):
+                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None, det_pos=None, clean_tod=True, manual=False, year_data=None):
 
     if det_pos is None:
-        data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift)
+        data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=year_data)
     else:
         tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath = format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data, datadir, det_pos, isok_arr, tshift=tshift)
         print(np.shape(newazt_))
@@ -1990,8 +2007,11 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             TESNum = allTESNum[i]
             print('TES# {}'.format(TESNum), end=" ")
             iTES = TESNum - 1
-            # tod = alltod[iTES, :]
-            tod = alltod[iTES == QPidx][0] # order of TES not well-imlpemented before
+            if year_data == "2022":
+                tod = alltod[iTES, :]
+                # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before (use this in 2022 analysis)
+            else:
+                tod = alltod[iTES, :]
             if det_pos is not None:
                 if np.shape(newazt_)[0] == 1:
                     newazt = newazt_[0]
@@ -2004,7 +2024,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             print("shape pos", np.shape(det_pos))
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                              TES_number=TESNum, nside=nside, 
-                                                             doplot=doplot, check_back_forth=check_back_forth, det_pos=det_pos, clean_tod=clean_tod)
+                                                             doplot=doplot, check_back_forth=check_back_forth, det_pos=det_pos, clean_tod=clean_tod, manual=manual, year_data=year_data)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
@@ -2013,11 +2033,13 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             # Create a lock for each process to ensure safe access to shared memory
             lock = Lock()
             
-            # tod = alltod[TESNum - 1, :]
-            tod = alltod[TESNum - 1 == QPidx][0] # order of TES not well-imlpemented before
-
+            if year_data == "2022":
+                tod = alltod[iTES, :]
+                # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before (use this in 2022 analysis)
+            else:
+                tod = alltod[iTES, :]
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
-                                                           TES_number=i+1, nside=nside, doplot=doplot, det_pos=det_pos, clean_tod=clean_tod)        
+                                                           TES_number=i+1, nside=nside, doplot=doplot, det_pos=det_pos, clean_tod=clean_tod, manual=manual, year_data=year_data)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
                 # Directly assign the result to the correct index in allmaps

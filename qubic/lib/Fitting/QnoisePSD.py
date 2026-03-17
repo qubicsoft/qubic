@@ -248,7 +248,7 @@ def nll_gauss_wrapper(freq, ps, sigma, n_params):
     return f
 
 
-def fit_minuit_ll_from_ps(freq, ps, noise_model_x0, nbins=300, plot=False):
+def fit_minuit_ll_from_ps(freq, ps, noise_model_x0, nbins=300, plot=False, log=True):
     """
     Fit a binned power spectral density using Minuit with Gaussian likelihood.
     Automatically selects the noise model (white, 1/f, or combined) based on the
@@ -286,15 +286,15 @@ def fit_minuit_ll_from_ps(freq, ps, noise_model_x0, nbins=300, plot=False):
         Reduced chi-squared of the fit.
     """
     freq, ps = freq[1:], ps[1:]  # skip DC
-    ps /= ps.max()
+    ps /= ps[0]
 
     # Bin PSD
     if plot:
         plt.figure(dpi=150)
     binned_freq, binned_ps, _, binned_ps_error, _ = ft.profile(
-        freq, ps, nbins=nbins, plot=plot, log=True
+        freq, ps, nbins=nbins, plot=plot, log=log
     )
-    print(binned_ps_error.mean())
+
     binned_ps_error = np.maximum(binned_ps_error, 1e-20)
 
     # Log Likelihood for Noise model
@@ -317,9 +317,21 @@ def fit_minuit_ll_from_ps(freq, ps, noise_model_x0, nbins=300, plot=False):
         plt.plot(freq, ps, label="Data")
         plt.plot(freq, noise_model(freq, *m.values), "k", label="Fit")
 
-        fit_info = [
-            f"$\\chi^2$/ndof = {m.fval:.2f} / {m.ndof} = {m.fmin.reduced_chi2:.2f}"
-        ]
+        ndof = len(binned_ps) - len(noise_model_x0)
+        print("binned_ps :", len(binned_ps))
+        print("noise_model : ", len(noise_model_x0))
+        print("ndof : ", ndof)
+        chi2 = np.sum(
+            ((binned_ps - noise_model(binned_freq, *m.values)) / binned_ps_error) ** 2
+        )
+        print("chi2 : ", chi2)
+        reduced_chi2 = chi2 / ndof
+
+        # fit_info = [
+        #     f"$\\chi^2$/ndof = {m.fval:.2f} / {m.ndof} = {m.fmin.reduced_chi2:.2f}"
+        # ]
+
+        fit_info = [f"$\\chi^2$/ndof = {chi2:.2f} / {ndof} = {reduced_chi2:.2f}"]
         for p, v, e in zip(m.parameters, m.values, m.errors):
             fit_info.append(f"{p} = ${v:.2e} \\pm {e:.2e}$")
 
@@ -334,7 +346,7 @@ def fit_minuit_ll_from_ps(freq, ps, noise_model_x0, nbins=300, plot=False):
     return m.values, m.errors, m.fmin.reduced_chi2
 
 
-def fit_minuit_ll(data, timestep, noise_model_x0, nbins=300, plot=False):
+def fit_minuit_ll(data, timestep, noise_model_x0, nbins=300, plot=False, log=True):
     """
     Fit a binned power spectral density using Minuit with Gaussian likelihood.
     Automatically selects the noise model (white, 1/f, or combined) based on the
@@ -373,13 +385,13 @@ def fit_minuit_ll(data, timestep, noise_model_x0, nbins=300, plot=False):
     # Compute PSD
     freq, ps = compute_real_ps(data, timestep=timestep)
     freq, ps = freq[1:], ps[1:]  # skip DC
-    ps /= ps.max()
+    ps /= ps[0]
 
     # Bin PSD
     if plot:
         plt.figure(dpi=150)
     binned_freq, binned_ps, _, binned_ps_error, _ = ft.profile(
-        freq, ps, nbins=nbins, plot=plot, log=True
+        freq, ps, nbins=nbins, plot=plot, log=log
     )
     binned_ps_error = np.maximum(binned_ps_error, 1e-20)
 
@@ -403,9 +415,22 @@ def fit_minuit_ll(data, timestep, noise_model_x0, nbins=300, plot=False):
         plt.plot(freq, ps, label="Data")
         plt.plot(freq, noise_model(freq, *m.values), "k", label="Fit")
 
-        fit_info = [
-            f"$\\chi^2$/ndof = {m.fval:.2f} / {m.ndof} = {m.fmin.reduced_chi2:.2f}"
-        ]
+        ndof = len(binned_ps) - len(noise_model_x0)
+        print("binned_ps :", len(binned_ps))
+        print("noise_model : ", len(noise_model_x0))
+        print("ndof : ", ndof)
+        chi2 = np.sum(
+            ((binned_ps - noise_model(binned_freq, *m.values)) / binned_ps_error) ** 2
+        )
+        print("chi2 : ", chi2)
+        reduced_chi2 = chi2 / ndof
+
+        # fit_info = [
+        #     f"$\\chi^2$/ndof = {m.fval:.2f} / {m.ndof} = {m.fmin.reduced_chi2:.2f}"
+        # ]
+
+        fit_info = [f"$\\chi^2$/ndof = {chi2:.2f} / {ndof} = {reduced_chi2:.2f}"]
+
         for p, v, e in zip(m.parameters, m.values, m.errors):
             fit_info.append(f"{p} = ${v:.2e} \\pm {e:.2e}$")
 

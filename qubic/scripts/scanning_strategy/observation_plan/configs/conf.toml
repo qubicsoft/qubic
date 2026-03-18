@@ -1,7 +1,7 @@
 [general]
-output_dir = "data/output/test_date"
+output_dir = "../data/output"
 time_resolution = "15 min"
-mpl_style = "styles/modern_style.mplstyle"
+mpl_style = "../styles/modern_style.mplstyle"
 
 [observatory]
 name = "Qubic"
@@ -26,8 +26,8 @@ extended = [
 ]
 
 [sources]
-regions_file = "data/sources/sky_regions.ecsv"
-point_sources_file = "data/sources/point_sources.csv"
+regions_file = "../data/sources/sky_regions.ecsv"
+point_sources_file = "../data/sources/point_sources.csv"
 
 [run]
 year = 2026

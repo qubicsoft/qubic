@@ -3,17 +3,20 @@ from typing import Optional
 from dataclasses import dataclass
 
 
+# def _resolve_path(path: str) -> Path:
+#     p = Path(__file__).expanduser().resolve().parents[3] / path
+#
+#     if p.is_file():
+#         p.parent.mkdir(parents=True, exist_ok=True)
+#
+#     if p.is_dir():
+#         p.mkdir(parents=True, exist_ok=True)
+#
+#     return p
+
+
 def _resolve_path(path: str) -> Path:
-    p = Path(__file__).expanduser().resolve().parents[3] / path
-
-    if p.is_file():
-        p.parent.mkdir(parents=True, exist_ok=True)
-
-    if p.is_dir():
-        p.mkdir(parents=True, exist_ok=True)
-
-    return p
-
+    return Path(path).expanduser()
 
 type_hooks = {Path: _resolve_path}
 

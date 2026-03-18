@@ -19,13 +19,13 @@ from astroplan import (Observer,
 
 from matplotlib import pyplot as plt
 
-from observation_plan.constraint import SunSeparationConstraint, MoonSeparationConstraint
+from .constraint import SunSeparationConstraint, MoonSeparationConstraint
 from astropy.coordinates import EarthLocation
 from pytz import timezone
 
-from observation_plan.schema.types import type_hooks
-from observation_plan.schema.types import ObservationConfig
-from observation_plan.source import PointSource, ExtendedSource, load_sources_from_file, Source
+from .schema.types import type_hooks
+from .schema.types import ObservationConfig
+from .source import PointSource, ExtendedSource, load_sources_from_file, Source
 
 
 logging.basicConfig(filemode="w",
@@ -131,12 +131,20 @@ class ObservationCampaign:
     """
 
     def __init__(self, config_path: Path):
-        self.config = self.load_config(config_path)
+
+        self.config_path = Path(config_path).expanduser().resolve()
+        self.config = self.load_config(self.config_path)
+
+        self.output_dir = self._resolve_config_path(self.config.general.output_dir)
+        self.mpl_style_path = self._resolve_config_path(self.config.general.mpl_style)
+        self.regions_file = self._resolve_config_path(self.config.sources.regions_file)
+        self.point_sources_file = self._resolve_config_path(self.config.sources.point_sources_file)
+
         self.site = self.build_observatory()
         self.point_constraints = self.build_constraints('point')
         self.extended_constraints = self.build_constraints('extended')
 
-        plt.style.use(self.config.general.mpl_style)
+        plt.style.use(self.mpl_style_path)
 
     @staticmethod
     def load_config(config_path: Path) -> ObservationConfig:
@@ -160,6 +168,16 @@ class ObservationCampaign:
         return dacite.from_dict(data_class=ObservationConfig,
                                 data=config_dict,
                                 config=dacite.Config(type_hooks=type_hooks))
+
+    def _resolve_config_path(self, path_value: Path) -> Path:
+        """
+        Resolve a path from the TOML configuration relative to the directory that
+        contains the configuration file.
+        """
+        path_obj = Path(path_value).expanduser()
+        if not path_obj.is_absolute():
+            path_obj = self.config_path.parent / path_obj
+        return path_obj.resolve()
 
     def build_observatory(self) -> Observer:
         """
@@ -245,8 +263,8 @@ class ObservationCampaign:
             Time(self.config.run.monthly_visibility_start),
             self.extended_constraints,
             u.Quantity(self.config.general.time_resolution),
-            source_file=self.config.sources.regions_file,
-            results_dir=self.config.general.output_dir / "panoramic",
+            source_file=self.regions_file,
+            results_dir=self.output_dir / "panoramic",
             radius=self.config.run.radius * u.deg,
             radial_samples=self.config.run.radial_samples,
             polar_angle_samples=self.config.run.polar_angle_samples)
@@ -272,7 +290,7 @@ class ObservationCampaign:
                         Time(self.config.run.monthly_visibility_start),
                         Time(self.config.run.monthly_visibility_end),
                         time_resolution=u.Quantity(self.config.run.monthly_heatmap_resolution),
-                        plot_path=self.config.general.output_dir /
+                        plot_path=self.output_dir /
                                   "panoramic" / region_name / f"{region_name}_month_visibility.png")
 
                 if self.config.tasks.run_monthly_heatmaps:
@@ -283,7 +301,7 @@ class ObservationCampaign:
                             time_resolution=u.Quantity(self.config.run.monthly_heatmap_resolution))
 
         # plot siderale complessivo
-        plot_sidereal_overall(celestial_regions, self.config.general.output_dir / "panoramic")
+        plot_sidereal_overall(celestial_regions, self.output_dir / "panoramic")
 
     def plan_observations(self):
         """
@@ -328,9 +346,9 @@ class ObservationCampaign:
         """
 
         obs_local = obs_time.to_datetime(timezone=self.site.timezone)
-        obs_dir = self.config.general.output_dir / obs_local.strftime("%B_%Y") / obs_local.strftime("%Y_%m_%d")
+        obs_dir = self.output_dir / obs_local.strftime("%B_%Y") / obs_local.strftime("%Y_%m_%d")
 
-        # obs_dir = self.config.general.output_dir / obs_time.strftime("%B_%Y") / obs_time.strftime("%Y_%m_%d")
+        # obs_dir = self.output_dir / obs_time.strftime("%B_%Y") / obs_time.strftime("%Y_%m_%d")
 
         obs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -360,7 +378,7 @@ class ObservationCampaign:
 
         if self.config.tasks.load_point_sources:
             point_sources, extended_sources = load_sources_from_file(
-                path=self.config.sources.point_sources_file,
+                path=self.point_sources_file,
                 qubic_site=self.site,
                 obs_time=obs_time,
                 point_constraints=self.point_constraints,
@@ -379,7 +397,7 @@ class ObservationCampaign:
                 obs_time,
                 self.extended_constraints,
                 u.Quantity(self.config.general.time_resolution),
-                source_file=self.config.sources.regions_file,
+                source_file=self.regions_file,
                 results_dir=obs_dir,
                 radius=self.config.run.radius * u.deg,
                 radial_samples=self.config.run.radial_samples,

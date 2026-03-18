@@ -1,6 +1,6 @@
 [general]
-output_dir = "data/output"
-time_resolution = "30 min"
+output_dir = "data/output/test_date"
+time_resolution = "15 min"
 mpl_style = "styles/modern_style.mplstyle"
 
 [observatory]
@@ -16,20 +16,18 @@ description = "Qubic telescope on Alto Chorrillos, Salta"
 [constraints]
 point = [
     { type = "AltitudeConstraint", min = 15.0, max = 85.0 },
-    { type = "AirmassConstraint", max = 3.0 },
-    { type = "SunSeparationConstraint", min = 50.0 }
+    { type = "SunSeparationConstraint", min = 25.0 }
 ]
 
 extended = [
     { type = "AltitudeConstraint", min = 15.0, max = 85.0 },
-    { type = "AirmassConstraint", max = 3.0 },
-    { type = "SunSeparationConstraint", min = 50.0 },
-    { type = "MoonSeparationConstraint", min = 30.0 }
+    { type = "SunSeparationConstraint", min = 25.0 },
+    { type = "MoonSeparationConstraint", min = 25.0 }
 ]
 
 [sources]
 regions_file = "data/sources/sky_regions.ecsv"
-point_sources_file = "data/sources/point_sources.txt"
+point_sources_file = "data/sources/point_sources.csv"
 
 [run]
 year = 2026

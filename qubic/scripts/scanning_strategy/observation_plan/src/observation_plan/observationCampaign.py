@@ -9,6 +9,7 @@ import dacite
 from astropy.time import Time
 import calendar as cal
 from datetime import datetime
+from datetime import timezone as dt_timezone
 from typing import List
 import astropy.units as u
 from astroplan import (Observer,
@@ -87,7 +88,8 @@ def plot_sidereal_overall(celestial_regions, outpath: Path, ang_offset: float = 
         ax.plot(lst, np.where(vis, elev, np.nan), linewidth=2.0, label=name)
 
     first = next(iter(celestial_regions.values()))
-    date_str = first.obs_time.strftime("%Y-%m-%d")
+    # date_str = first.obs_time.strftime("%Y-%m-%d")
+    date_str = first.obs_time.to_datetime(timezone=first.qubic_site.timezone).strftime("%Y-%m-%d")
     title = rf"$\bf{{Sidereal \, plot}}$ : all sources on {date_str}".strip()
     ax.set_title(title, fontsize=11, pad=10)
 
@@ -306,7 +308,10 @@ class ObservationCampaign:
                 colour="green",
                 dynamic_ncols=True):
 
-            obs_time = Time(datetime(self.config.run.year, self.config.run.month, day), scale='utc')
+            local_tz = self.site.timezone
+            obs_time_local = local_tz.localize(datetime(self.config.run.year, self.config.run.month, day, 0, 0, 0))
+            obs_time = Time(obs_time_local.astimezone(dt_timezone.utc))
+            #obs_time = Time(datetime(self.config.run.year, self.config.run.month, day), scale='utc')
             self.prepare_observation_plan(obs_time)
 
     def prepare_observation_plan(self, obs_time: Time):
@@ -321,7 +326,11 @@ class ObservationCampaign:
         :type obs_time: Time
         :return: None
         """
-        obs_dir = self.config.general.output_dir / obs_time.strftime("%B_%Y") / obs_time.strftime("%Y_%m_%d")
+
+        obs_local = obs_time.to_datetime(timezone=self.site.timezone)
+        obs_dir = self.config.general.output_dir / obs_local.strftime("%B_%Y") / obs_local.strftime("%Y_%m_%d")
+
+        # obs_dir = self.config.general.output_dir / obs_time.strftime("%B_%Y") / obs_time.strftime("%Y_%m_%d")
 
         obs_dir.mkdir(parents=True, exist_ok=True)
 

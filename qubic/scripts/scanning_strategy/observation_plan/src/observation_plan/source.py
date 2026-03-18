@@ -1,4 +1,5 @@
 import os
+import csv
 import logging
 from pathlib import Path
 from abc import ABC, abstractmethod
@@ -9,7 +10,7 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib.colors import ListedColormap
 
 import calendar as cal
-from datetime import datetime as dt, timezone as dt_timezone
+from datetime import datetime as dt, timezone as dt_timezone, timedelta
 
 import astropy.units as u
 from astropy.time import Time
@@ -72,35 +73,44 @@ def load_sources_from_file(
     # Aggiungo i campi necessari a SIMBAD
     Simbad.add_votable_fields("ra", "dec", "coo_err_maj", "coo_err_min", "dim")
 
-    with open(path) as f:
-        names = [line.strip() for line in f if line.strip()]
+    with open(path) as csvfile:
+        reader = csv.DictReader(csvfile)
+        sources = {row["source"]: bool(int(row["is_fixed"])) for row in reader}
 
     point_sources = []
     extended_sources = []
 
-    for name in names:
+    for name in sources:
+        unit = (u.hourangle, u.deg)
+        coord = None
+        is_fixed = sources[name]
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             tbl = Simbad.query_object(name)
 
+
         if not tbl:
             global NO_SIMBAD_SOURCE
 
+
             if not NO_SIMBAD_SOURCE:
-                print(f" - {name} not found in SIMBAD. Trying astropy.coordinates.get_body() ...")
+                print(f" - `{name}` not found in SIMBAD. Trying astropy.coordinates.get_body() ...")
                 NO_SIMBAD_SOURCE = True
             try:
-                source = get_body(name, time=obs_time, location=qubic_site.location).transform_to(ICRS)
-                tbl = {"ra": [source.ra.deg], "dec": [source.dec.deg], "galdim_majaxis": [0]}
-
+                get_body(name, time=obs_time, location=qubic_site.location)
+                tbl = {"galdim_majaxis": [0]}
+                coord = None
+                is_fixed = False
             except Exception as e:
                 print(f"Error getting coordinates for {name}: {e}")
                 continue
 
 
-        # Coordinate ICRS
-        ra, dec = tbl["ra"][0], tbl["dec"][0]
-        coord = SkyCoord(ra, dec, unit=(u.hourangle, u.deg), frame="icrs")
+        # Coordinate ICRS for fixed sources only.
+        # Solar-system bodies are kept dynamic and will be evaluated on the full time grid.
+        if coord is None and "ra" in tbl.colnames if hasattr(tbl, "colnames") else "ra" in tbl:
+            ra, dec = tbl["ra"][0], tbl["dec"][0]
+            coord = SkyCoord(ra, dec, unit=unit, frame="icrs")
 
         # Major axis in arcmin – if > 1 it is an extended source
         maj = tbl["galdim_majaxis"][0]
@@ -128,6 +138,7 @@ def load_sources_from_file(
                 constraints=point_constraints,
                 time_resolution=time_resolution,
                 coord=coord,
+                is_fixed=is_fixed,
                 results_dir=results_dir)
 
             point_sources.append(src)
@@ -234,17 +245,23 @@ class Source(ABC):
     def compute_time_grid(self):
         """
         Creation of the time intervals of the constraints grid (each with a duration of time_resolution).
-        It goes from the midnight of the observation start time (obs_time) to 1 microsecond
-        before the midnight of the following day.
+        It goes from local midnight at the observatory on the date containing obs_time to 1 microsecond
+        before the following local midnight.
         """
 
         if self.time_grid:
             return
 
-        # start and end observation times in UTC
-        start = self.obs_time
-        end = start + 1 * u.day - 1 * u.microsecond
-        # Get linearly spaced sequence of times, each with a duration of time_resolution
+        local_tz = self.qubic_site.timezone
+        obs_dt_local = self.obs_time.to_datetime(timezone=local_tz)
+
+
+        start_local = local_tz.localize(dt(obs_dt_local.year, obs_dt_local.month, obs_dt_local.day, 0, 0, 0))
+        end_local = start_local + timedelta(days=1) - timedelta(microseconds=1)
+
+        start = Time(start_local.astimezone(dt_timezone.utc))
+        end = Time(end_local.astimezone(dt_timezone.utc))
+
         self.time_grid = time_grid_from_range([start, end], time_resolution=self.time_resolution)
 
     def compute_valid_times_from_constraints(self):
@@ -343,15 +360,6 @@ class Source(ABC):
         if not self.constraints:
             return
 
-        # Compute time resolution from the first two entries of time_grid
-        dt = (self.time_grid[1] - self.time_grid[0]).to(u.hour)
-
-        # Compute how many time intervals fit in 24 hours
-        # The ratio (24*hour/dt) gives a dimensionless quantity but retains compound units (hour / hour)
-        # decompose() reduces this to a pure dimensionless value, allowing extraction of numerical value with .value
-        # This ensures conversion to integer for the number of time steps
-        N = int((24 * u.hour / dt).decompose().value)
-
         if not make_plot:
             return
 
@@ -367,7 +375,8 @@ class Source(ABC):
         # Compute percentage of observable hours
         valid_per_slot = np.all(grid, axis=0)
         n_valid = valid_per_slot.sum()
-        tot_hours = n_valid * dt.value  # dt is in hours
+        slot_hours = self.time_resolution.to_value(u.hour)
+        tot_hours = n_valid * slot_hours
         percent = tot_hours / 24.0 * 100
 
         # Set title including percentage
@@ -381,10 +390,29 @@ class Source(ABC):
 
         fig.suptitle(title)
 
+        n_times = len(self.time_grid)
+        desired_n_labels = 12
+        major_step = max(1, int(np.ceil(n_times / desired_n_labels)))
+        major_ticks = np.arange(0, n_times, major_step)
 
-        ax.set_xticks(range(len(self.time_grid)))
-        ax.set_xticklabels([t.datetime.strftime("%H:%M") for t in self.time_grid], rotation=30, ha="right")
+        if major_ticks[-1] != n_times - 1:
+            major_ticks = np.append(major_ticks, n_times - 1)
+
+        times_utc = self.time_grid.to_datetime(timezone=dt_timezone.utc)
+        ax.set_xticks(major_ticks)
+        ax.set_xticklabels([times_utc[i].strftime("%H:%M") for i in major_ticks], rotation=30, ha="right")
         ax.set_xlabel('UTC Time')
+
+        ax_top = ax.twiny()
+        ax_top.set_xlim(ax.get_xlim())
+        ax_top.set_xticks(major_ticks)
+
+        times_local = self.time_grid.to_datetime(timezone=self.qubic_site.timezone)
+        ax_top.set_xticklabels([times_local[i].strftime("%H:%M") for i in major_ticks], rotation=30, ha="left")
+        ax_top.set_xlabel('Local Time')
+
+        ax.tick_params(axis='x', pad=2)
+        ax_top.tick_params(axis='x', pad=6)
 
         ytick_labels = self._parse_ylabels()
 
@@ -392,15 +420,23 @@ class Source(ABC):
         ax.set_yticks(range(len(self.constraints)))
         ax.set_yticklabels(ytick_labels)
 
-        ax.set_xticks(np.arange(-0.5, N), minor=True)
+        minor_step = max(1, int(np.ceil(len(self.time_grid) / 24)))
+        ax.set_xticks(np.arange(-0.5, len(self.time_grid), minor_step), minor=True)
         ax.set_yticks(np.arange(-0.5, len(self.constraints)), minor=True)
 
         sunset = self.qubic_site.sun_set_time(self.obs_time)
         sunrise = self.qubic_site.sun_rise_time(self.obs_time)
+        sunrise_utc = sunrise.to_datetime(timezone=dt_timezone.utc)
+        sunset_utc = sunset.to_datetime(timezone=dt_timezone.utc)
+        sunrise_local = sunrise.to_datetime(timezone=self.qubic_site.timezone)
+        sunset_local = sunset.to_datetime(timezone=self.qubic_site.timezone)
         ax.annotate(
-            f"Sunrise: {sunrise.datetime.strftime('%H:%M')}, Sunset: {sunset.datetime.strftime('%H:%M')}",
-            xy=(N - 3.5, len(self.constraints) - 0.5),
-            xytext=(N - 3.5, len(self.constraints) + 0.5),
+            "Sunrise: "
+            f"{sunrise_utc.strftime('%H:%M')} UTC / {sunrise_local.strftime('%H:%M')} LT\n"
+            "Sunset:  "
+            f"{sunset_utc.strftime('%H:%M')} UTC / {sunset_local.strftime('%H:%M')} LT",
+            xy=(len(self.time_grid) - 3.5, len(self.constraints) - 0.5),
+            xytext=(len(self.time_grid) - 3.5, len(self.constraints) + 0.5),
             ha="center",
             va="center",
             fontsize=10,
@@ -409,7 +445,7 @@ class Source(ABC):
         )
 
         ax.grid(which='minor', color='#333333', linewidth=1)
-        ax.set_aspect("equal")
+        ax.set_aspect("auto")
 
         plt.savefig(os.path.join(self.plots_dir, f"{self.name}_constraint_grid"), dpi=600)
         plt.close()
@@ -796,7 +832,9 @@ class Source(ABC):
         ax.grid(True, alpha=0.3, linestyle=":", color="gray")
 
         safe_name = self.name # .replace("-", r"\-")
-        title = rf"$\bf{{Observation \, window}}$ : ${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}" + "\n"
+        obs_local_date = self.obs_time.to_datetime(timezone=self.qubic_site.timezone).strftime("%Y-%m-%d")
+        title = rf"$\bf{{Observation \, window}}$ : ${safe_name}$ on {obs_local_date}" + "\n"
+        # title = rf"$\bf{{Observation \, window}}$ : ${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}" + "\n"
 
         if hasattr(self, 'radius'):
             title += rf"Ring of radius ${self.radius.to_value(u.deg):.1f}^\circ$"
@@ -844,42 +882,57 @@ class Source(ABC):
         for start, stop in self.valid_time_intervals:
 
             times_local, times_utc, ras, decs, elevations, azimuths = [], [], [], [], [], []
-            name = f"{self.name}-{start.strftime('%Y%m%d_%H_%M')}-{stop.strftime('%H_%M')}"
+            # name in UTC
+            # name = f"{self.name}-{start.strftime('%Y%m%d_%H_%M')}-{stop.strftime('%H_%M')}"
+
+            obs_local = self.obs_time.to_datetime(timezone=self.qubic_site.timezone)
+            start_local = start.to_datetime(timezone=self.qubic_site.timezone)
+            stop_local = stop.to_datetime(timezone=self.qubic_site.timezone)
+
+            # name in LT
+            name = (
+                f"{self.name}-"
+                f"{obs_local.strftime('%Y%m%d')}_"
+                f"{start_local.strftime('%H_%M')}-"
+                f"{stop_local.strftime('%H_%M')}"
+            )
 
             # sample times in the interval
             tw = time_grid_from_range([start, stop], time_resolution=self.time_resolution)
-            # Transform to AltAz frame at each sample time
-            altaz = AltAz(obstime=tw, location=self.qubic_site.location)
 
             # saving central coords of the extended region
             if self.coord.isscalar:
 
                 # project the central coords over time_grid in altaz coords
+                altaz = AltAz(obstime=tw, location=self.qubic_site.location)
                 sc_altaz = self.coord.transform_to(altaz)
-                # Convert back to ICRS to get RA/DEC
-                sc_icrs = sc_altaz.transform_to('icrs')
 
                 # Collect times and coordinates
                 times_local.extend(tw.to_datetime(timezone=self.qubic_site.timezone))
                 times_utc.extend(tw.to_datetime(timezone=dt_timezone.utc))
 
-                ras.extend(sc_icrs.ra.deg)
-                decs.extend(sc_icrs.dec.deg)
+                ras.extend(np.full(len(tw), self.coord.ra.deg))
+                decs.extend(np.full(len(tw), self.coord.dec.deg))
 
                 elevations.extend(sc_altaz.alt.deg)
                 azimuths.extend(sc_altaz.az.deg)
             else:
                 # Mask the global time grid to this interval
                 mask = (self.time_grid >= start) & (self.time_grid <= stop)
+                times_sel = self.time_grid[mask]
 
-                altaz_coords = self.coord[mask].transform_to(altaz)
+                if len(times_sel) == 0:
+                    continue
 
-                # For point sources, use the precomputed ICRS coordinates array
-                icrs_coords = self.coord[mask].transform_to('icrs')
+                altaz = AltAz(obstime=times_sel, location=self.qubic_site.location)
+                coords_sel = self.coord[mask]
+
+                altaz_coords = coords_sel.transform_to(altaz)
+                icrs_coords = coords_sel.transform_to('icrs')
 
                 # Collect the masked times and corresponding RA/DEC
-                times_local.extend(self.time_grid[mask].to_datetime(timezone=self.qubic_site.timezone))
-                times_utc.extend(self.time_grid[mask].to_datetime(timezone=dt_timezone.utc))
+                times_local.extend(times_sel.to_datetime(timezone=self.qubic_site.timezone))
+                times_utc.extend(times_sel.to_datetime(timezone=dt_timezone.utc))
 
                 ras.extend(icrs_coords.ra.deg)
                 decs.extend(icrs_coords.dec.deg)
@@ -1023,7 +1076,8 @@ class PointSource(Source):
             add_label = False
 
         safe_name = self.name.replace("-", r"\,")
-        title = (r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}\n" +
+        obs_local_date = self.obs_time.to_datetime(timezone=self.qubic_site.timezone).strftime("%Y-%m-%d")
+        title = (r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {obs_local_date}\n" +
                  rf"Time Resolution: ${round(loc_time_resolution.value)} \, {loc_time_resolution.unit}$")
 
         plt.legend(loc="upper right", bbox_to_anchor=(1.50, 1))
@@ -1228,7 +1282,7 @@ class ExtendedSource(Source):
 
             plot_sky(center_altaz, self.qubic_site, tw,
                      style_kwargs={"marker": "o",
-                                   "label": f'Center: {start.datetime.strftime("%H:%M")} - {stop.datetime.strftime("%H:%M")}'},
+                                   "label": f'Center: {start.datetime.strftime("%H:%M")} - {stop.datetime.strftime("%H:%M")} UTC'},
                      north_to_east_ccw=False)
 
             # plot_sky(top_altaz, self.qubic_site, tw,
@@ -1256,8 +1310,9 @@ class ExtendedSource(Source):
         fig = plt.gcf()
 
         safe_name = self.name.replace("-", r"\,")
+        obs_local_date = self.obs_time.to_datetime(timezone=self.qubic_site.timezone).strftime("%Y-%m-%d")
         title = (
-                r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {self.obs_time.strftime('%Y-%m-%d')}\n"
+                r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {obs_local_date}\n"
                                           r"QUBIC Patch Radius " + f"{self.radius.value:.1f}" + r"$ ^ \circ$ - " +
                 rf"Time Resolution: ${round(loc_time_resolution.value)} \, {loc_time_resolution.unit}$")
 

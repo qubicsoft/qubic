@@ -1,5 +1,5 @@
-simulation_path: "FMM/test_sigma_r"
-name: "test"
+simulation_path: "FMM/UWB_nrec=4"
+name: "test_planck"
 
 Spectrum:
   sample_variance: True                                         # Add sample-variance correction in the correlation matrix
@@ -7,8 +7,8 @@ Spectrum:
   nbins: null                                                      # Number of power-spectrum points to keep, if null, keep all values
 
 MCMC:
-  nus_qubic: [True, True]                                       # QUBIC frequencies used for fitting. It should match Nrec value put in simulations !!!
-  nus_planck: [False, False, False, False, False, False, False] # Planck frequencies used for fitting. It should match 7 !!!
+  nus_qubic: [True, True, True, True]                                       # QUBIC frequencies used for fitting. It should match Nrec value put in simulations !!!
+  nus_planck: [False, False, False, true, true, true, true] # Planck frequencies used for fitting. It should match 7 !!!
   discard: 100                                                  # Number of iterations discarded
   nwalkers: 50                                                  # Number of MCMC walkers
   nsteps: 300                                                   # Number of MCMC iterations

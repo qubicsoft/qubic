@@ -184,26 +184,26 @@ class FitEllSpace:
     def run(self, nsteps, nwalkers, discard=0, comm=None):
         x0 = self._initial_conditions(nwalkers)
 
-        # With MPI
+        # MPI mode
         if comm is not None and comm.Get_size() > 1:
             if comm.Get_rank() == 0:
                 print("Running with MPI")
 
-            with MPIPool() as pool:
-                if not pool.is_master():
-                    pool.wait()
-                    sys.exit(0)
+            sampler = emcee.EnsembleSampler(
+                nwalkers, self.ndim, log_prob_fn=self.loglikelihood
+            )
+            sampler.run_mcmc(x0, nsteps, progress=True)
 
-                sampler = emcee.EnsembleSampler(
-                    nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool
-                )
-                sampler.run_mcmc(x0, nsteps, progress=True)
-
-        # Without MPI
+        # Local multiprocessing
         else:
             print("Running on multi-threading")
+
+            import os
             from multiprocess import Pool
-            with Pool() as pool:
+
+            nproc = int(os.environ.get("SLURM_CPUS_PER_TASK", 4))
+
+            with Pool(processes=nproc) as pool:
                 sampler = emcee.EnsembleSampler(
                     nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool
                 )

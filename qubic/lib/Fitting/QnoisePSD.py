@@ -177,6 +177,8 @@ def noise_model(f, *args):
     psd : ndarray
         Power spectral density evaluated at f.
     """
+    print(args)
+    print(args[0])
     if len(args) == 1:
         return white_noise(f, *args)
 

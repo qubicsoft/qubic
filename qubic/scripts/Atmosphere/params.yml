@@ -42,13 +42,13 @@ nrec: 1
 npointings: 3000
 kmax: 1
 synthbeam_fraction: 1
-wdet: 0
-wpho150: 0
-wpho220: 0
+wdet: 1
+wpho150: 1
+wpho220: 1
 
 # Sky parameters
 cmb: true
-atm: false
+atm: true
 
 # Reconstruction parameters
 preconditioner: false

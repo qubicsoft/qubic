@@ -137,7 +137,6 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     dataset_path = Path("/Volumes/Data/PycharmProjects/calibration/qubic/scripts/Calibration/skydip_calibration/data/input/2026-03-11/2026-03-11_16.48.15__SkyDip")
-    skydip_path = Path("/path/to/skydip")
     out_dir = Path("/Volumes/Data/PycharmProjects/calibration/qubic/scripts/Calibration/skydip_calibration/data/output") / dataset_path.name / "input"
 
     dataset = read_qubic_dataset(dataset_path=dataset_path, logger=logger)

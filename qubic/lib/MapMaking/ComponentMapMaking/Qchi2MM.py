@@ -31,7 +31,13 @@ class AbstractChi2(ABC):
     because both original classes shared that logic.
     """
 
-    def __init__(self, preset, TOD_sim, layout: Optional[ParamLayout] = None, beta_map: Optional[np.ndarray] = None):
+    def __init__(
+        self,
+        preset,
+        TOD_sim,
+        layout: Optional[ParamLayout] = None,
+        beta_map: Optional[np.ndarray] = None,
+    ):
         self.preset = preset
         self.TOD_sim = TOD_sim
         self.layout = layout
@@ -65,7 +71,9 @@ class AbstractChi2(ABC):
             if block.ndim == 3:  # 3D block: (ncomp, nsub, nsampling_ndet)
                 resh = block.reshape((self.ncomp * self.nsub * 1, self.nsampling_ndet))
             else:  # 4D block: (ncomp, nsub, npix, nsampling_ndet)
-                resh = block.reshape((self.ncomp * self.nsub * self.npix, self.nsampling_ndet))
+                resh = block.reshape(
+                    (self.ncomp * self.nsub * self.npix, self.nsampling_ndet)
+                )
             self.TOD_sim_fp.append(resh)
         self.TOD_sim_fp = np.asarray(self.TOD_sim_fp)
 
@@ -99,8 +107,13 @@ class AbstractChi2(ABC):
     def compute_qubic_chi_varying_beta(self, A):
         ysim_parts = []
         for i in range(self.nFP):
-            a_slice = A[self.seenpix_beta[0], self.nsub * i : self.nsub * (i + 1)]  # (npix, nsub, ncomp)
-            vec = a_slice.T.reshape(self.ncomp * self.nsub * a_slice.shape[0]) @ self.TOD_sim_fp[i]
+            a_slice = A[
+                self.seenpix_beta[0], self.nsub * i : self.nsub * (i + 1)
+            ]  # (npix, nsub, ncomp)
+            vec = (
+                a_slice.T.reshape(self.ncomp * self.nsub * a_slice.shape[0])
+                @ self.TOD_sim_fp[i]
+            )
             ysim_parts.append(vec)
 
         ysim = np.concatenate(ysim_parts, axis=0)
@@ -207,7 +220,9 @@ class Chi2(AbstractChi2):
             comp[:, ~self.preset.sky.seenpix] = 0
 
             ysim_pl = H_planck(comp)
-            _residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
+            _residuals_pl = (
+                np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
+            )
 
             self.Lplanck = 0.5 * _dot(
                 _residuals_pl.T,
@@ -231,10 +246,16 @@ class Chi2(AbstractChi2):
         self.Lqubic = self.compute_qubic_chi_varying_beta(A)
 
         ### Planck chi2
-        H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext.transpose(1, 0, 2))
+        H_planck = self.preset.qubic.joint_out.external.get_operator(
+            A=Aext.transpose(1, 0, 2)
+        )
         ysim_pl = H_planck(self.preset.comp.components_iter.copy())
         residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external
-        self.Lplanck = 0.5 * _dot(residuals_pl.T, self.preset.acquisition.invN.operands[1](residuals_pl), self.preset.comm)
+        self.Lplanck = 0.5 * _dot(
+            residuals_pl.T,
+            self.preset.acquisition.invN.operands[1](residuals_pl),
+            self.preset.comm,
+        )
 
         return self.Lqubic, self.Lplanck
 

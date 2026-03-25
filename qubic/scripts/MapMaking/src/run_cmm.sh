@@ -2,7 +2,7 @@
 #SBATCH --job-name=CMM
 #SBATCH --partition=htc
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=5
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=100G
 #SBATCH --time=1-10:00:00

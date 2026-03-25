@@ -117,6 +117,7 @@ PCG:
     reso_plot: 15
     fwhm_plot: 0
     do_gif: false
+    do_gif: false
     seed_start: 33333
 
 INITIAL:

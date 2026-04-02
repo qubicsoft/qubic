@@ -38,7 +38,7 @@ seed: 1
 
 # Qubic parameters
 nsub_in: 8                           # Number of sub-acquisitions used to integrate over the atm spectrum
-nrec: 1
+nrec: 2
 npointings: 3000
 kmax: 1
 synthbeam_fraction: 1

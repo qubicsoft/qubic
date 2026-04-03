@@ -1,7 +1,0 @@
-lib.Calibration.Qfluxjumps module
-=================================
-
-.. automodule:: lib.Calibration.Qfluxjumps
-   :members:
-   :undoc-members:
-   :show-inheritance:

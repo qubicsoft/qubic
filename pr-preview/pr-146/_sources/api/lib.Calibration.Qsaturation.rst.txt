@@ -1,7 +1,0 @@
-lib.Calibration.Qsaturation module
-==================================
-
-.. automodule:: lib.Calibration.Qsaturation
-   :members:
-   :undoc-members:
-   :show-inheritance:

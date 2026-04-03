@@ -285,8 +285,7 @@ class AtmosphereProperties:
 
         ### Import absorption coefficients from molecular absorption lines
         with open(
-            self.params["path_am_files"]
-            + f"h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out",
+            self.params["path_am_files"] + f"h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out",
             "r",
         ) as file:
             for line in file:
@@ -1116,10 +1115,10 @@ class WindPerturbation:
     def __init__(self, params, qubic_sampling):
         """Wind Perturbation
 
-        This class aims to simulate wind for atmosphere observations. 
-        It relies on the same parameters dictionary than AtmosphereMaps, as well as on a QubicSampling instance. 
-        We take the choice to simulate wind by deviating the scanning strategy, rather than shifting pixels in an atmosphere maps. 
-        The two methods are equivalent, but the one we chose if way cheaper in terms of computational ressources. 
+        This class aims to simulate wind for atmosphere observations.
+        It relies on the same parameters dictionary than AtmosphereMaps, as well as on a QubicSampling instance.
+        We take the choice to simulate wind by deviating the scanning strategy, rather than shifting pixels in an atmosphere maps.
+        The two methods are equivalent, but the one we chose if way cheaper in terms of computational ressources.
         We will then deviated the pixels seen in the QubicSampling instance according to the wind generated from the parameters given in the parameters dict.
 
         Parameters
@@ -1218,10 +1217,10 @@ class WindPerturbation:
         wind_x, wind_y = self.get_wind()
 
         # Compute deviated scanning strategy
-        x, y = self.azel_to_cartesian(np.radians(azimuth), np.radians(elevation), self.params["altitude_atm_2d"])
-        deviated_index_x, deviated_index_y = self.get_deviated_index(
-            x, y, wind_x, wind_y
+        x, y = self.azel_to_cartesian(
+            np.radians(azimuth), np.radians(elevation), self.params["altitude_atm_2d"]
         )
+        deviated_index_x, deviated_index_y = self.get_deviated_index(x, y, wind_x, wind_y)
         deviated_az, deviated_el = self.cartesian_to_azel(
             deviated_index_x, deviated_index_y, self.params["altitude_atm_2d"]
         )

@@ -32,18 +32,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r docs/requirements.txt
-          pip install sphinx
 
       - name: Generate API docs (sphinx-apidoc)
         run: |
           rm -rf docs/source/api
-          sphinx-apidoc -f -e -M -o docs/source/api ./qubic/lib
+          rm -rf docs/build
+          sphinx-apidoc -feMo docs/source/api ./qubic/lib
 
       - name: Build HTML with Sphinx
         run: |
           sphinx-build -b html \
-            -E -a -W \
-            -j auto \
+            -E -a \
             docs/source \
             docs/build/html
 

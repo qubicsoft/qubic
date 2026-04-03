@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -66,6 +67,5 @@ jobs:
           source-dir: docs/build/html
           preview-branch: gh-pages
           umbrella-dir: pr-preview
-          comment: true
           qr-code: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          comment: false

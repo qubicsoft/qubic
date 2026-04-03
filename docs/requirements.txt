@@ -3,3 +3,4 @@ sphinx-rtd-theme
 sphinx-autodoc-typehints
 numpydoc
 sphinx-copybutton
+myst-parser

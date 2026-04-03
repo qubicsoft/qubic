@@ -1,45 +1,52 @@
 import numpy as np
+from scipy import interpolate
 
 
 def logistic(x, pars):
     """
-    This function is the logistic function to be used in Minuit fitting
+    Logistic function used in Minuit fitting.
 
-    INPUTS
-    x      - FLOAT - The x values
-    pars   - FLOAT ARRAY - the parameters
-                 pars[0] : Amplitude in Y of the efficiency curve
-                 pars[1] : central value in x of the efficiency curve
-                 pars[2] : width in x of the efficiency curve
-                 pars[3] : offset in y of the efficiency curve
+    Parameters
+    ----------
+    x : float or array-like
+        Input values.
+    pars : array-like
+        Parameters of the model:
 
-    OUTPUTS
-    result  - the logistic function
+        - pars[0] : Amplitude in Y of the efficiency curve
+        - pars[1] : Central value in x
+        - pars[2] : Width in x
+        - pars[3] : Offset in y
+
+    Returns
+    -------
+    float or ndarray
+        Value of the logistic function.
     """
     return pars[3] + pars[0] * 1.0 / (1 + np.exp(-(x - pars[1]) / pars[2]))
 
 
 def source_cal(Vin, freq=150.0, finterp_Vin="", finterp_freq=""):
-    import numpy as np
-    from scipy import interpolate
-
     """
-    This function interpolates the source calibration curve and returns an interpolated value at any point
+    Interpolate the source calibration curve.
 
-    INPUTS
-    Vin          - FLOAT - the input voltage [V]
-    freq         - FLOAT - the RF frequency (default = 150 GHz)
-    finterp_Vin  - MIXED - the interpolating function that returns the fraction of power
-                           as a function of Vin. If it is provided externally then it is of type
-                           scipy.interpolate.interp2d. Default is an empty string, in this case the interpolation
-                           is carried out internally
-    finterp_freq - MIXED - the interpolating function that returns the maximum power
-                           as a function of the frequency in GHz. If it is provided externally then it is of type
-                           scipy.interpolate.interp1d. Default is an empty string, in this case the interpolation
-                           is carried out internally
-    OUTPUTS
-    result  - FLOAT - the interpolated value at Vin, freq
+    Parameters
+    ----------
+    Vin : float or array-like
+        Input voltage [V].
+    freq : float, optional
+        RF frequency in GHz (default is 150).
+    finterp_Vin : callable, optional
+        Interpolation function returning the fraction of power as a function
+        of Vin. If not provided, it is computed internally.
+    finterp_freq : callable, optional
+        Interpolation function returning the maximum power as a function
+        of frequency. If not provided, it is computed internally.
 
+    Returns
+    -------
+    ndarray
+        Interpolated value(s) at (Vin, freq).
     """
 
     # Check if the interpolating function is provided externally
@@ -486,30 +493,35 @@ def source_cal(Vin, freq=150.0, finterp_Vin="", finterp_freq=""):
     return np.array(result)
 
 
-def sim_generator_power(time, amplitude, offset, frequency, phase, rf_freq=150.0, finterp_Vin="", finterp_freq=""):
+def sim_generator_power(
+    time, amplitude, offset, frequency, phase, rf_freq=150.0, finterp_Vin="", finterp_freq=""
+):
     """
-    This function simulates the power output of the source
-    taking into account the source calibration curve
+    Simulate the calibrated power output of the source.
 
-    INPUTS
-    time      - FLOAT - the current time [s]
-    amplitude - FLOAT - the p2p amplitude of the signal in the UCA stage of the generator [V]
-    offset    - FLOAT - the offset of the signal in the UCA stage of the generator [V]
-    frequency - FLOAT - the modulation frequency [Hz]
-    phase     - FLOAT - the wave initial phase
-    rf_freq   - FLOAT - the RF frequency (chosen to select the right calibration curve, defaults to 150 GHz)
-    finterp_Vin  - MIXED - the interpolating function that returns the fraction of power
-                           as a function of Vin. If it is provided externally then it is of type
-                           scipy.interpolate.interp2d. Default is an empty string, in this case the interpolation
-                           is carried out internally
-    finterp_freq - MIXED - the interpolating function that returns the maximum power
-                           as a function of the frequency in GHz. If it is provided externally then it is of type
-                           scipy.interpolate.interp1d. Default is an empty string, in this case the interpolation
-                           is carried out internally
+    Parameters
+    ----------
+    time : float or array-like
+        Time [s].
+    amplitude : float
+        Peak-to-peak amplitude of the generator signal [V].
+    offset : float
+        Offset of the generator signal [V].
+    frequency : float
+        Modulation frequency [Hz].
+    phase : float
+        Initial phase.
+    rf_freq : float, optional
+        RF frequency (default is 150 GHz).
+    finterp_Vin : callable, optional
+        Interpolation function for Vin.
+    finterp_freq : callable, optional
+        Interpolation function for frequency.
 
-    OUTPUTS
-    cal_signal  - FLOAT - the calibrated signal
-
+    Returns
+    -------
+    ndarray
+        Calibrated signal.
     """
 
     if type(time) is float:
@@ -517,45 +529,64 @@ def sim_generator_power(time, amplitude, offset, frequency, phase, rf_freq=150.0
     else:
         tim = time
 
-    sine = amplitude / 2.0 * np.sin(2.0 * np.pi * frequency * tim + phase)  # Divide by 2 because we provide the p2p
+    sine = (
+        amplitude / 2.0 * np.sin(2.0 * np.pi * frequency * tim + phase)
+    )  # Divide by 2 because we provide the p2p
     uncal_signal = sine + offset
     # cal_signal = np.array([source_cal(i) for i in uncal_signal])
-    cal_signal = source_cal(uncal_signal, freq=rf_freq, finterp_Vin=finterp_Vin, finterp_freq=finterp_freq)
+    cal_signal = source_cal(
+        uncal_signal, freq=rf_freq, finterp_Vin=finterp_Vin, finterp_freq=finterp_freq
+    )
     return cal_signal
 
 
 def sine(x, pars):
     """
-    This function is just a wrapper to a sine function to be used for fitting with Minuit. It returns a sine modulation
-    of a given amplitude around a given offset
+    Sine function wrapper for Minuit fitting.
 
-    INPUT
-    x        - FLOAT - the array of x for which we want the sine
-    pars     - FLOAT - the parameters of the sine
-                          pars[0] : Peak-to-peak amplitude
-                          pars[1] : Modulation frequency (in Hz)
-                          pars[2] : phase (in seconds)
-                          pars[3] : offset
+    Parameters
+    ----------
+    x : float or array-like
+        Input values.
+    pars : array-like
+        Parameters:
+
+        - pars[0] : Peak-to-peak amplitude
+        - pars[1] : Modulation frequency [Hz]
+        - pars[2] : Phase shift
+        - pars[3] : Offset
+
+    Returns
+    -------
+    float or ndarray
+        Sine signal.
     """
     return 0.5 * np.sqrt(pars[0] ** 2) * np.sin(2 * np.pi * (x - pars[2]) / pars[1]) + pars[3]
 
 
 def shift_src(xyper, pars):
     """
-    This function returns a shifted version of an array supposed to be periodic and scaled in amplitude and offset.
-    the array to be shifted is supposed to be in a global variable called "array_to_shift"
-    The result is interpolated on the x array abscissas
-    This function is to be used for fitting with Minuit
+    Shift and scale a periodic signal.
 
-    INPUT
-    xyper    - LIST  - the input array and period to be shifted
-                          xyper[0] : the array of x
-                          xyper[1] : the array of y
-                          xyper[2] : the periodicity of the signal
-    pars     - FLOAT - the parameters of the shift
-                          pars[0] : amplitude
-                          pars[1] : offset
-                          pars[2] : shift in x
+    Parameters
+    ----------
+    xyper : tuple
+        Input data:
+
+        - xyper[0] : x values
+        - xyper[1] : y values
+        - xyper[2] : period of the signal
+    pars : array-like
+        Parameters:
+
+        - pars[0] : Amplitude scaling
+        - pars[1] : Offset
+        - pars[2] : Shift in x
+
+    Returns
+    -------
+    ndarray
+        Shifted and scaled signal.
     """
     x = xyper[0]
     y = xyper[1]
@@ -565,20 +596,30 @@ def shift_src(xyper, pars):
 
 def sinesat(x, pars):
     """
-    This function returns the model of the source signal for a given modulation configuration (amp, offset, freq, phase) and then
-    multiplies it by a global amplitude (calibration factor) and adds a offset.
-    This is to be used in fitting with Minuit
+    Model of a calibrated modulated source signal.
 
-    INPUT
-    x        - FLOAT - the input x
-    pars     - FLOAT - the parameters of the source
-                          ---------- Calib Params ---------
-                          pars[0] : calibration amplitude
-                          pars[1] : calibration offset
-                          ---------- Modulation Params ----
-                          pars[2] : peak to peak amplitude of the source modulation in Volts
-                          pars[3] : Period of the modulation [s]
-                          pars[4] : the wave initial phase
-                          pars[5] : the offset of the signal in the UCA stage of the generator [V]
+    Parameters
+    ----------
+    x : float or array-like
+        Input values.
+    pars : array-like
+        Parameters:
+
+        Calibration:
+        - pars[0] : Calibration amplitude
+        - pars[1] : Calibration offset
+
+        Modulation:
+        - pars[2] : Peak-to-peak amplitude [V]
+        - pars[3] : Period [s]
+        - pars[4] : Phase
+        - pars[5] : Offset [V]
+
+    Returns
+    -------
+    ndarray
+        Modeled signal.
     """
-    return np.abs(pars[0]) * sim_generator_power(x, pars[2], pars[5], 1.0 / pars[3], pars[4]) + pars[1]
+    return (
+        np.abs(pars[0]) * sim_generator_power(x, pars[2], pars[5], 1.0 / pars[3], pars[4]) + pars[1]
+    )

@@ -95,7 +95,9 @@ class Demodulation:
         if others is not None:
             newothers = plt.bin_per_period(period, time, others)
         if verbose:
-            printnow("Calculating RMS per period for {} periods and {} TES".format(len(allperiods), nTES))
+            printnow(
+                "Calculating RMS per period for {} periods and {} TES".format(len(allperiods), nTES)
+            )
 
         for i in range(len(allperiods)):
             ok = period_index == allperiods[i]
@@ -124,7 +126,9 @@ class Demodulation:
 
     def fitperiod(self, x, y, fct):
         guess = np.array([np.std(y), np.mean(y), 0.0])
-        res = ft.do_minuit(x, y, y * 0 + 1, guess, functname=fct, verbose=False, nohesse=True, force_chi2_ndf=True)
+        res = ft.do_minuit(
+            x, y, y * 0 + 1, guess, functname=fct, verbose=False, nohesse=True, force_chi2_ndf=True
+        )
         return res
 
     def return_fit_period(self, period, indata, others=None, verbose=False, template=None):
@@ -159,7 +163,9 @@ class Demodulation:
         if others is not None:
             newothers = self.bin_per_period(period, time, others)
         if verbose:
-            printnow("Performing fit per period for {} periods and {} TES".format(len(allperiods), nTES))
+            printnow(
+                "Performing fit per period for {} periods and {} TES".format(len(allperiods), nTES)
+            )
 
         for i in range(len(allperiods)):
             ok = period_index == allperiods[i]
@@ -179,7 +185,17 @@ class Demodulation:
         else:
             return tper, ampdata, err_ampdata, newothers
 
-    def demodulate_JC(self, period, indata, indata_src, others=None, verbose=False, template=None, quadrature=False, remove_noise=False):
+    def demodulate_JC(
+        self,
+        period,
+        indata,
+        indata_src,
+        others=None,
+        verbose=False,
+        template=None,
+        quadrature=False,
+        remove_noise=False,
+    ):
         time = indata[0]
         data = indata[1]
         sh = data.shape
@@ -202,9 +218,16 @@ class Demodulation:
         sh = np.shape(data)
         for i in range(sh[0]):
             if quadrature:
-                demodulated[i, :] = scsig.fftconvolve((np.sqrt((data[i, :] * data_src) ** 2 + (data[i, :] * data_src_shift) ** 2)) / np.sqrt(2), filter_period, mode="same")
+                demodulated[i, :] = scsig.fftconvolve(
+                    (np.sqrt((data[i, :] * data_src) ** 2 + (data[i, :] * data_src_shift) ** 2))
+                    / np.sqrt(2),
+                    filter_period,
+                    mode="same",
+                )
             else:
-                demodulated[i, :] = scsig.fftconvolve(data[i, :] * data_src, filter_period, mode="same")
+                demodulated[i, :] = scsig.fftconvolve(
+                    data[i, :] * data_src, filter_period, mode="same"
+                )
 
         # Remove First and last periods
         nper = 4.0
@@ -224,7 +247,18 @@ class Demodulation:
 
         return timereturn, demodulated, demodulated * 0 + 1
 
-    def demodulate_methods(self, data_in, fmod, fourier_cuts=None, verbose=False, src_data_in=None, method="demod", others=None, template=None, remove_noise=False):
+    def demodulate_methods(
+        self,
+        data_in,
+        fmod,
+        fourier_cuts=None,
+        verbose=False,
+        src_data_in=None,
+        method="demod",
+        others=None,
+        template=None,
+        remove_noise=False,
+    ):
         # Various demodulation methods
         # Others is a list of other vectors (with similar time sampling as the data to demodulate)
         # that we need to sample the same way as the data.
@@ -249,12 +283,22 @@ class Demodulation:
             lowcut = fourier_cuts[0]
             highcut = fourier_cuts[1]
             notch = fourier_cuts[2]
-            newtod = ft.filter_data(data_in[0], data_in[1], lowcut, highcut, notch=notch, rebin=True, verbose=verbose)
+            newtod = ft.filter_data(
+                data_in[0], data_in[1], lowcut, highcut, notch=notch, rebin=True, verbose=verbose
+            )
             data = [data_in[0], newtod]
             if src_data_in is None:
                 src_data = None
             else:
-                new_src_tod = ft.filter_data(src_data_in[0], src_data_in[1], lowcut, highcut, notch=notch, rebin=True, verbose=verbose)
+                new_src_tod = ft.filter_data(
+                    src_data_in[0],
+                    src_data_in[1],
+                    lowcut,
+                    highcut,
+                    notch=notch,
+                    rebin=True,
+                    verbose=verbose,
+                )
                 src_data = [src_data_in[0], new_src_tod]
 
             # Now we have the "input" data, we can start demodulation
@@ -262,12 +306,27 @@ class Demodulation:
 
         if method == "rms":
             # RMS method: calculate the RMS in each period (beware ! it returns noise+signal !)
-            return self.return_rms_period(period, data, others=others, verbose=verbose, remove_noise=remove_noise)
+            return self.return_rms_period(
+                period, data, others=others, verbose=verbose, remove_noise=remove_noise
+            )
         elif method == "fit":
-            return self.return_fit_period(period, data, others=others, verbose=verbose, template=template)
+            return self.return_fit_period(
+                period, data, others=others, verbose=verbose, template=template
+            )
         elif method == "demod":
-            return self.demodulate_JC(period, data, src_data, others=others, verbose=verbose, template=None)
+            return self.demodulate_JC(
+                period, data, src_data, others=others, verbose=verbose, template=None
+            )
         elif method == "demod_quad":
-            return self.demodulate_JC(period, data, src_data, others=others, verbose=verbose, template=None, quadrature=True, remove_noise=remove_noise)
+            return self.demodulate_JC(
+                period,
+                data,
+                src_data,
+                others=others,
+                verbose=verbose,
+                template=None,
+                quadrature=True,
+                remove_noise=remove_noise,
+            )
         elif method == "absolute_value":
             return np.abs(data)

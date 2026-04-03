@@ -50,4 +50,4 @@ html_theme_options = {
 html_sidebars = {
     "**": ["sidebar-logo.html", "sidebar-nav.html", "sidebar-ethical-ads.html"],
 }
-html_static_path = ["_static"]
+html_static_path = []

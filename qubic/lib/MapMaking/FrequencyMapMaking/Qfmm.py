@@ -1,6 +1,5 @@
 ### General packages
 import os
-import pickle
 import time
 
 import numpy as np
@@ -19,6 +18,7 @@ from qubic.lib.MapMaking.Qmap_plotter import PlotsFMM, plot_cross_spectrum
 from qubic.lib.MapMaking.Qmaps import InputMaps, PlanckMaps
 from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
+from qubic.lib.Qhdf5 import HDF5Dict
 from qubic.lib.Qmpi_tools import MpiTools
 from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Qspectra import Spectra
@@ -67,11 +67,11 @@ class PipelineFrequencyMapMaking:
         self.fsub_out = int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])
 
         self.file = file
-        self.plot_folder = "FMM/" + self.params["path_out"] + "Plots/"
+        self.plot_folder = "FMM/" + self.params["foldername"] + "/Plots/"
 
         ### Create folders
-        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Dict/")
-        create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Plots/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Dict/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Plots/")
 
         ### Center of the QUBIC patch
         self.center = equ2gal(self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"])
@@ -107,9 +107,17 @@ class PipelineFrequencyMapMaking:
         )
 
         ### Ensure that all processors have the same external dataset
-        self.externaldata = PlanckMaps(self.skyconfig, self.joint_tod.qubic.allnus, self.params["QUBIC"]["nrec"], nside=self.params["SKY"]["nside"])
+        self.externaldata = PlanckMaps(
+            self.skyconfig,
+            self.joint_tod.qubic.allnus,
+            self.params["QUBIC"]["nrec"],
+            nside=self.params["SKY"]["nside"],
+        )
         if self.rank == 0:
-            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(use_fwhm=self.params["QUBIC"]["convolution_in"], nsub=self.params["PLANCK"]["nsub_planck"])
+            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(
+                use_fwhm=self.params["QUBIC"]["convolution_in"],
+                nsub=self.params["PLANCK"]["nsub_planck"],
+            )
         else:
             self.externaldata.maps = None
             self.externaldata.maps_noise = None
@@ -123,8 +131,7 @@ class PipelineFrequencyMapMaking:
         self.coverage = self.joint.qubic.subacqs[0].get_coverage()
         self.seenpix = self.coverage / self.coverage.max() > self.params["SKY"]["coverage_cut"]
         self.seenpix_qubic = self.coverage / self.coverage.max() > 0
-        self.mask = np.ones(12 * self.params["SKY"]["nside"] ** 2)
-        self.mask[self.seenpix] = self.params["PLANCK"]["weight_planck"]
+        self.fsky = np.sum(self.seenpix) / self.seenpix.shape[0]
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()
@@ -140,7 +147,9 @@ class PipelineFrequencyMapMaking:
         ### Convolve the Nsub input maps at QUBIC resolution
         self.maps_input_convolved = self.input_maps.m_nu.copy()
         for i in range(len(self.fwhm_in)):
-            C = HealpixConvolutionGaussianOperator(self.fwhm_in[i], lmax=3 * self.params["SKY"]["nside"] - 1)
+            C = HealpixConvolutionGaussianOperator(
+                self.fwhm_in[i], lmax=3 * self.params["SKY"]["nside"] - 1
+            )
             self.maps_input_convolved[i] = C(self.input_maps.m_nu[i])
 
         ### Initial maps
@@ -166,11 +175,16 @@ class PipelineFrequencyMapMaking:
             for i in range(2):
                 self.noise_planck.append(
                     self.joint.planck_acquisition[i].get_noise(
-                        planck_ntot=self.params["PLANCK"]["level_noise_planck"], seed=self.params["PLANCK"]["seed_noise"], weight_planck=self.params["PLANCK"]["weight_planck"], seenpix=self.seenpix
+                        planck_ntot=self.params["PLANCK"]["level_noise_planck"],
+                        seed=self.params["PLANCK"]["seed_noise"],
+                        weight_planck=self.params["PLANCK"]["weight_planck"],
+                        seenpix=self.seenpix,
                     )
                 )
 
-        qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
+        qubic_noise = QubicTotNoise(
+            self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene
+        )
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],
             self.params["QUBIC"]["NOISE"]["npho150"],
@@ -237,7 +251,9 @@ class PipelineFrequencyMapMaking:
 
         nus_ave = []
         for i in range(self.params["QUBIC"]["nrec"]):
-            nus_ave += [np.mean(self.joint.qubic.allnus[i * self.fsub_out : (i + 1) * self.fsub_out])]
+            nus_ave += [
+                np.mean(self.joint.qubic.allnus[i * self.fsub_out : (i + 1) * self.fsub_out])
+            ]
 
         return np.array(nus_ave)
 
@@ -308,7 +324,9 @@ class PipelineFrequencyMapMaking:
         args = {
             "npointings": self.params["QUBIC"]["npointings"],
             "nf_recon": self.params["QUBIC"]["nrec"],
-            "nf_sub": self.params["QUBIC"][f"nsub_{key}"],  # here is the difference between in and out dictionaries
+            "nf_sub": self.params["QUBIC"][
+                f"nsub_{key}"
+            ],  # here is the difference between in and out dictionaries
             "nside": self.params["SKY"]["nside"],
             "MultiBand": True,
             "period": 1,
@@ -397,7 +415,14 @@ class PipelineFrequencyMapMaking:
                 fwhm_out = np.append(
                     fwhm_out,
                     np.sqrt(
-                        self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out] ** 2 - np.min(self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]) ** 2
+                        self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]
+                        ** 2
+                        - np.min(
+                            self.joint.qubic.allfwhm[
+                                irec * self.fsub_out : (irec + 1) * self.fsub_out
+                            ]
+                        )
+                        ** 2
                     ),
                 )
 
@@ -405,9 +430,17 @@ class PipelineFrequencyMapMaking:
         if self.params["QUBIC"]["convolution_in"] and self.params["QUBIC"]["convolution_out"]:
             fwhm_rec = np.array([])
             for irec in range(self.params["QUBIC"]["nrec"]):
-                fwhm_rec = np.append(fwhm_rec, np.min(self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]))
+                fwhm_rec = np.append(
+                    fwhm_rec,
+                    np.min(
+                        self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]
+                    ),
+                )
 
-        elif self.params["QUBIC"]["convolution_in"] and self.params["QUBIC"]["convolution_out"] is False:
+        elif (
+            self.params["QUBIC"]["convolution_in"]
+            and self.params["QUBIC"]["convolution_out"] is False
+        ):
             fwhm_rec = np.array([])
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
 
@@ -432,7 +465,9 @@ class PipelineFrequencyMapMaking:
                 numerator_nus, denominator_nus = 0, 0
                 for jsub in range(irec * self.fsub_out, (irec + 1) * self.fsub_out):
                     # Compute the expected reconstructed resolution for sub-acquisition
-                    numerator_fwhm += scalar_acquisition_operators[jsub] * weight_factor[jsub] * fwhm_in[jsub]
+                    numerator_fwhm += (
+                        scalar_acquisition_operators[jsub] * weight_factor[jsub] * fwhm_in[jsub]
+                    )
                     denominator_fwhm += scalar_acquisition_operators[jsub] * weight_factor[jsub]
 
                     # Compute the expected reconstructed frequencies for sub_acquisition
@@ -492,7 +527,13 @@ class PipelineFrequencyMapMaking:
             return TOD_QUBIC
 
         # To handle the case nrec == 1, even if it is broken because of the way compute_freq is used in QubicMultiAcquisitions
-        TOD_PLANCK = np.zeros((max(self.params["QUBIC"]["nrec"], 2), 12 * self.params["SKY"]["nside"] ** 2, 3))
+        TOD_PLANCK = np.zeros(
+            (
+                max(self.params["QUBIC"]["nrec"], 2),
+                12 * self.params["SKY"]["nside"] ** 2,
+                3,
+            )
+        )
         for irec in range(self.params["QUBIC"]["nrec"]):
             if irec < self.params["QUBIC"]["nrec"] / 2:  # choose between the two levels of noise
                 noise = self.noise_planck[0]
@@ -506,13 +547,7 @@ class PipelineFrequencyMapMaking:
         return TOD
 
     def get_preconditioner(self):
-        """PCG Preconditioner.
-
-        Returns
-        -------
-        M: DiagonalOperator
-            Preconditioner for PCG algorithm.
-        """
+        """PCG Preconditioner."""
         if not self.params["PCG"]["preconditioner"]:
             return None
 
@@ -524,63 +559,77 @@ class PipelineFrequencyMapMaking:
         no_det = len(self.joint.qubic.multiinstrument[0].detector)
         H_qubic = self.joint.qubic.operator
 
-        stacked_dptdp_inv = np.empty((nrec, npix))
+        stacked_dptdp_inv = np.empty((nrec, npix), dtype=float)
+
+        # convenience vars used below
+        planck_external = self.params["PLANCK"]["external_data"]
+        seenpix = getattr(self, "seenpix", None)
 
         for irec in range(nrec):
-            stacked_dptdp_inv_fsub = np.empty((fsub, npix))
+            # will accumulate over fsub entries
+            stacked_dptdp_inv_fsub = np.zeros((fsub, npix), dtype=float)
 
             for j_fsub in range(fsub):
                 H_single = H_qubic[irec * fsub + j_fsub]
 
+                # find D and P in one pass through operands
                 D = None
-                # D = H_single.operands[1]
-                for op in H_single.operands:
-                    if isinstance(op, DiagonalOperator):
-                        D = op
-                        break
                 P = None
                 for op in H_single.operands:
-                    if isinstance(op, ProjectionOperator):
+                    if D is None and isinstance(op, DiagonalOperator):
+                        D = op
+                    if P is None and isinstance(op, ProjectionOperator):
                         P = op
+                    if D is not None and P is not None:
                         break
-                sh = P.matrix.data.index.shape
+                if D is None or P is None:
+                    raise RuntimeError(
+                        "Expected both DiagonalOperator and ProjectionOperator in H_single.operands"
+                    )
 
-                point_per_det = sh[0] // no_det
-                mapPtP_perdet_seq = np.empty((no_det, npix))
+                indices = P.matrix.data.index  # shape (no_det * point_per_det, ncol)
+                weights = P.matrix.data.r11  # same shape as indices
+                total_rows, ncols = indices.shape
+                point_per_det = total_rows // no_det
 
-                for det in range(no_det):
-                    start, end = det * point_per_det, (det + 1) * point_per_det
-                    indices = P.matrix.data.index[start:end, :]
-                    weights = P.matrix.data.r11[start:end, :]
-                    flat_indices = indices.ravel()
-                    flat_weights = weights.ravel()
+                flat_idx = indices.ravel()
+                flat_w = weights.ravel()
+                per_det_count = point_per_det * ncols
+                det_ids = np.repeat(np.arange(no_det), per_det_count)
 
-                    mapPitPi = np.bincount(flat_indices, weights=flat_weights**2, minlength=npix)
-                    mapPtP_perdet_seq[det, :] = mapPitPi
+                # build combined index = det_id * npix + pixel_index
+                combined_index = det_ids * npix + flat_idx
+                weights_squared = flat_w * flat_w
 
-                D_sq = D.data**2
-                mapPtP_seq_scaled = D_sq[:, np.newaxis] * mapPtP_perdet_seq
-                dptdp = mapPtP_seq_scaled.sum(axis=0)
+                # bincount over combined index to get per-det contributions
+                minlength = no_det * npix
+                per_det_flat = np.bincount(
+                    combined_index, weights=weights_squared, minlength=minlength
+                )
+                mapPtP_perdet_seq = per_det_flat.reshape((no_det, npix))
 
-                # # Pre-fetch Planck diagonals if needed
-                # if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["level_noise_planck"] > 0:
-                #     Diag_planck_143 = self.joint.pl143.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data  # [:, 0]
-                #     Diag_planck_217 = self.joint.pl217.get_invntt_operator(self.params["PLANCK"]["level_noise_planck"]).data  # [:, 0]
-                #     planck_diag_sum = Diag_planck_143**2 + Diag_planck_217**2
-                #     dptdp = dptdp + planck_diag_sum
+                # scale per-det sums by diagonal D squared
+                D_sq = (D.data**2).astype(float)
 
-                # Safe inversion
-                dptdp_inv = np.zeros_like(dptdp)
-                nonzero = dptdp != 0
-                dptdp_inv[nonzero] = 1.0 / dptdp[nonzero]
-                stacked_dptdp_inv_fsub[j_fsub] = dptdp_inv
+                # scale and sum across detectors to compute dptdp
+                dptdp = (D_sq[:, np.newaxis] * mapPtP_perdet_seq).sum(axis=0)
 
-            stacked_dptdp_inv[irec] = stacked_dptdp_inv_fsub.sum(axis=0)
+                # safe inversion
+                dptdp_inv = np.zeros_like(dptdp, dtype=float)
+                np.divide(1.0, dptdp, out=dptdp_inv, where=(dptdp != 0))
 
-        if self.params["PLANCK"]["external_data"]:
-            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci[self.seenpix], broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+                stacked_dptdp_inv_fsub[j_fsub, :] = dptdp_inv
+
+            stacked_dptdp_inv[irec, :] = stacked_dptdp_inv_fsub.sum(axis=0)
+
+        if planck_external and seenpix is not None:
+            blocks = [
+                DiagonalOperator(ci[seenpix], broadcast="rightward") for ci in stacked_dptdp_inv
+            ]
         else:
-            preconditioner = BlockDiagonalOperator([DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv], new_axisin=0)
+            blocks = [DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv]
+
+        preconditioner = BlockDiagonalOperator(blocks, new_axisin=0)
         return preconditioner
 
     def call_pcg(self, d, x0, seenpix):
@@ -615,11 +664,15 @@ class PipelineFrequencyMapMaking:
             weight_planck = self.params["PLANCK"]["weight_planck"]
 
             # define a weight mask: 0 outside seenpix, weight inside seenpix, this will create what we want (outside based on boolean external_data, inside based on weight_planck)
-            weight_mask = np.where(seenpix[None, :, None], weight_planck, 1.0)
+            weight_mask = np.where(
+                seenpix[None, :, None], weight_planck, 1.0
+            )  # the 1.0 adds planck outside the patch, the weight_planck adds planck inside the patch
             x_planck_weighted = x_planck * weight_mask
             b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck_weighted))
         else:
             b = self.H_out.T * self.invN * d
+
+        print("d : ", d.mean())
 
         ### Preconditionning
         M = self.get_preconditioner()
@@ -665,19 +718,19 @@ class PipelineFrequencyMapMaking:
         solution = np.ones(self.maps_input.shape)  # * hp.UNSEEN
         if self.params["PLANCK"]["external_data"]:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
+
+            weight_planck = self.params[
+                "PLANCK"
+            ][
+                "weight_planck"
+            ]  # we also need to add back the Planck contribution weighted if we were solving for difference
+            solution[:, self.seenpix, :] += (
+                weight_planck * self.maps_input_convolved[:, self.seenpix, :]
+            )
         else:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"][:, seenpix, :].copy()
 
         return solution
-
-    def _save_data(self, name, d):
-        """
-        Method to save data using pickle convention.
-
-        """
-
-        with open(name, "wb") as handle:
-            pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def run(self):
         """Run the FMM Pipeline.
@@ -694,28 +747,27 @@ class PipelineFrequencyMapMaking:
         ### Wait for all processes
         self.mpi._barrier()
 
+        ### Define starting point for PCG depending on the presence of Planck
         if self.params["PLANCK"]["external_data"]:
             # if Planck is added inside the patch, PCG is reconstructing the DIFFERENCE to Planck, so the start shoud be 0
             if self.params["PLANCK"]["weight_planck"] == 1.0:
                 starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
-
-            # in every other case, we can start from Planck
-            else:
+            elif self.params["PLANCK"]["weight_planck"] == 0.0:
                 starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
                 if self.params["PCG"]["initial_guess_intensity_to_zero"] is False:
                     starting_point[..., 0] = self.maps_input[:, self.seenpix, 0].copy()
+            # in every other case, we can start from 0
+            else:
+                starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
         else:
             # no external data at all: previous behavior
             starting_point = np.zeros(self.maps_input.shape)
             if self.params["PCG"]["initial_guess_intensity_to_zero"] is False:
                 starting_point[..., 0] = self.maps_input[..., 0].copy()
 
+        ### Solve the map-making equation with PCG
         s_hat_temp = self.call_pcg(self.TOD, x0=starting_point, seenpix=self.seenpix)
-
-        if self.params["PLANCK"]["external_data"] and self.params["PLANCK"]["weight_planck"] == 1.0:
-            # if weight_planck is 1 PCG is solving the difference to Planck which has to be added back (just inside seenpix)
-            s_hat_temp[:, self.seenpix, :] += self.maps_input_convolved[:, self.seenpix, :]
-        self.s_hat = s_hat_temp
+        self.s_hat = s_hat_temp.copy()
 
         ### Wait for all processes
         self.mpi._barrier()
@@ -739,8 +791,12 @@ class PipelineFrequencyMapMaking:
             if len(self.externaldata.experiments["Planck"]["frequency"]) != 0:
                 fwhm_ext = self.externaldata.fwhm_ext.copy()
                 self.s_hat = np.concatenate((self.s_hat, self.external_maps), axis=0)
-                self.s_hat_noise = np.concatenate((self.s_hat_noise, self.external_maps_noise), axis=0)
-                self.nus_rec = np.array(list(self.nus_Q) + list(self.externaldata.experiments["Planck"]["frequency"]))
+                self.s_hat_noise = np.concatenate(
+                    (self.s_hat_noise, self.external_maps_noise), axis=0
+                )
+                self.nus_rec = np.array(
+                    list(self.nus_Q) + list(self.externaldata.experiments["Planck"]["frequency"])
+                )
                 self.fwhm_rec = np.array(list(self.fwhm_rec) + list(fwhm_ext))
             self.plots.plot_frequency_maps(
                 self.maps_input_convolved[: len(self.nus_Q)],
@@ -774,11 +830,14 @@ class PipelineFrequencyMapMaking:
                 "fwhm_out": self.fwhm_out,
                 "fwhm_rec": self.fwhm_rec,
                 "seenpix": self.seenpix,
+                "fsky": self.fsky,
                 "duration": mapmaking_time,
-                "qubic_dict": {k: v for k, v in self.dict_out.items() if k != "comm"},  # I have to remove the MPI communicator, which is not supported by pickle
+                "qubic_dict": {
+                    k: v for k, v in self.dict_out.items() if k != "comm"
+                },  # I have to remove the MPI communicator, which is not supported by pickle
             }
 
-            self._save_data(self.file, dict_solution)
+            HDF5Dict().save_dict(self.file, dict_solution)
 
         ### Wait for all processors
         self.mpi._barrier()
@@ -798,9 +857,16 @@ class PipelineEnd2End:
         self.comm = comm
         self.job_id = os.environ.get("SLURM_JOB_ID")
 
-        self.folder = "FMM/" + self.params["path_out"] + "Dict/"
-        self.file = self.folder + self.params["datafilename"] + f"_{self.job_id}.pkl"
-        self.file_spectrum = "FMM/" + self.params["path_out"] + "Spectrum/" + "spectrum_" + self.params["datafilename"] + f"_{self.job_id}.pkl"
+        self.folder = "FMM/" + self.params["foldername"] + "/Dict/"
+        self.file = self.folder + self.params["filename"] + f"_{self.job_id}.h5"
+        self.file_spectrum = (
+            "FMM/"
+            + self.params["foldername"]
+            + "/Spectrum/"
+            + "spectrum_"
+            + self.params["filename"]
+            + f"_{self.job_id}.h5"
+        )
         self.mapmaking = None
 
     def main(self, specific_file=None):
@@ -816,11 +882,13 @@ class PipelineEnd2End:
 
         ### Execute spectrum
         if self.params["Pipeline"]["spectrum"]:
-            if self.params["Spectrum"]["lmax"] > 2 * self.params["SKY"]["nside"] - 1:
-                raise ValueError("lmax should be lower than 2*nside - 1")
+            # if self.params["Spectrum"]["lmax"] > 2 * self.params["SKY"]["nside"] - 1:
+            #     raise ValueError("lmax should be lower than 2*nside - 1")
 
             if self.comm.Get_rank() == 0:
-                create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/")
+                create_folder_if_not_exists(
+                    self.comm, "FMM/" + self.params["foldername"] + "/Spectrum/"
+                )
 
                 if self.mapmaking is not None:
                     self.spectrum = Spectra(self.file)
@@ -828,59 +896,76 @@ class PipelineEnd2End:
                     self.spectrum = Spectra(specific_file)
 
                 ### Signal
-                print("\n===============================================")
-                print("========= Cross-spectra with Sky =============")
-                print("===============================================\n")
+                print("\n==============================================")
+                print("=========== Cross-spectra with Sky ===========")
+                print("==============================================\n")
                 DlBB_maps = self.spectrum.run(maps=self.spectrum.maps)
 
                 ### Noise
-                print("\n===============================================")
-                print("========= Cross-spectra with Residual =========")
-                print("===============================================\n")
+                print("\n==============================================")
+                print("======== Cross-spectra with Residual =========")
+                print("==============================================\n")
                 DlBB_noise = self.spectrum.run(maps=self.spectrum.dictionary["maps_noise"])
 
                 dict_solution = {
-                    "nus": self.spectrum.dictionary["nus"],
+                    "nus": self.spectrum.dictionary["nus"].round(0),
                     "ell": self.spectrum.ell,
                     "Dls": DlBB_maps,
                     "Nls": DlBB_noise,
                     "parameters": self.params,
+                    "delta_ell": self.params["Spectrum"]["dl"],
+                    "fsky": self.spectrum.dictionary["fsky"],
                 }
+
                 if self.params["Spectrum"]["plot_spectrum"]:
-                    self.plots = PlotsFMM(self.spectrum.seenpix)
-                    create_folder_if_not_exists(self.comm, "FMM/" + self.params["path_out"] + "Spectrum/Plots/")
+                    create_folder_if_not_exists(
+                        self.comm,
+                        "FMM/" + self.params["foldername"] + "/Spectrum/Plots/",
+                    )
                     ### QUBIC only plots
-                    N = len(self.spectrum.dictionary["nus"]) - 7
+                    N = (
+                        len(self.spectrum.dictionary["nus"].round(0)) - 7
+                    )  # Remove the 7 Planck maps at the end to have the number of QUBIC maps
                     plot_cross_spectrum(
-                        nus=self.spectrum.dictionary["nus"][:N],
+                        nus=self.spectrum.dictionary["nus"].round(0)[:N],
                         ell=self.spectrum.ell,
                         Dl=DlBB_maps[:N, :N],
                         Dl_err=DlBB_noise[:N, :N],
                         ymodel=None,
                         nrec=N,
+                        figsize=(25, 25),
                         title=" (QUBIC only)",
-                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_{self.job_id}.svg",
+                        name="FMM/"
+                        + self.params["foldername"]
+                        + "/Spectrum/Plots/"
+                        + f"QUBIC_{self.job_id}.svg",
                     )
                     ### Planck only plots
                     plot_cross_spectrum(
-                        nus=self.spectrum.dictionary["nus"][N:],
+                        nus=self.spectrum.dictionary["nus"].round(0)[N:],
                         ell=self.spectrum.ell,
                         Dl=DlBB_maps[N:, N:],
                         Dl_err=DlBB_noise[N:, N:],
                         ymodel=None,
                         nrec=0,
                         title=" (Planck only)",
-                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"Planck_{self.job_id}.svg",
+                        name="FMM/"
+                        + self.params["foldername"]
+                        + "/Spectrum/Plots/"
+                        + f"Planck_{self.job_id}.svg",
                     )
                     ### QUBIC + Planck plots
                     plot_cross_spectrum(
-                        nus=self.spectrum.dictionary["nus"],
+                        nus=self.spectrum.dictionary["nus"].round(0),
                         ell=self.spectrum.ell,
                         Dl=DlBB_maps,
                         Dl_err=DlBB_noise,
                         ymodel=None,
                         nrec=N,
                         title=" (QUBIC + Planck)",
-                        name="FMM/" + self.params["path_out"] + "Spectrum/Plots/" + f"QUBIC_Planck_{self.job_id}.svg",
+                        name="FMM/"
+                        + self.params["foldername"]
+                        + "/Spectrum/Plots/"
+                        + f"QUBIC_Planck_{self.job_id}.svg",
                     )
-                self.mapmaking._save_data(self.file_spectrum, dict_solution)
+                HDF5Dict().save_dict(self.file_spectrum, dict_solution)

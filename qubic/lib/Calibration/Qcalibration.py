@@ -70,23 +70,19 @@ class QubicCalibration(object):
             print("self.synthbeam = %s" % self.synthbeam)
 
     def __str__(self):
-        state = [("path", self.path), ("detarray", self.detarray), ("hornarray", self.hornarray), ("optics", self.optics), ("primbeam", self.primbeam), ("synthbeam", self.synthbeam)]
+        state = [
+            ("path", self.path),
+            ("detarray", self.detarray),
+            ("hornarray", self.hornarray),
+            ("optics", self.optics),
+            ("primbeam", self.primbeam),
+            ("synthbeam", self.synthbeam),
+        ]
         return "\n".join([a + ": " + repr(v) for a, v in state])
 
     __repr__ = __str__
 
     def get(self, name, *args):
-        """
-        Access calibration files.
-        Parameters
-        ----------
-        name : str
-            One of the following:
-                - 'detarray'
-                - 'hornarray'
-                - 'optics'
-                - 'primbeam'
-        """
 
         if name == "detarray":
             hdus = fits.open(self.detarray)
@@ -122,7 +118,15 @@ class QubicCalibration(object):
                 yreflection = h["yreflection"]
                 radius = h["radius"]
                 selection = ~hdus[1].data.view(bool)
-                layout = LayoutGrid(removed.shape, spacing, selection=selection, radius=radius, xreflection=xreflection, yreflection=yreflection, open=None)
+                layout = LayoutGrid(
+                    removed.shape,
+                    spacing,
+                    selection=selection,
+                    radius=radius,
+                    xreflection=xreflection,
+                    yreflection=yreflection,
+                    open=None,
+                )
             else:
                 h = hdus[1].header
                 spacing = h["spacing"]
@@ -132,17 +136,40 @@ class QubicCalibration(object):
                 radius = h["radius"]
                 selection = ~hdus[2].data.view(bool)
                 shape = selection.shape
-                layout = HornLayout(shape, spacing, selection=selection, radius=radius, xreflection=xreflection, yreflection=yreflection, angle=angle, startswith1=True, id=None, open=None)
+                layout = HornLayout(
+                    shape,
+                    spacing,
+                    selection=selection,
+                    radius=radius,
+                    xreflection=xreflection,
+                    yreflection=yreflection,
+                    angle=angle,
+                    startswith1=True,
+                    id=None,
+                    open=None,
+                )
                 layout.id = np.arange(len(layout))
-            layout.center = np.concatenate([layout.center, np.full_like(layout.center[..., :1], 0)], -1)
+            layout.center = np.concatenate(
+                [layout.center, np.full_like(layout.center[..., :1], 0)], -1
+            )
             layout.open = np.ones(len(layout), bool)
             return layout
 
         elif name == "optics":
-            dtype = [("name", "S16"), ("temperature", float), ("transmission", float), ("emissivity", float), ("nstates_pol", int)]
+            dtype = [
+                ("name", "S16"),
+                ("temperature", float),
+                ("transmission", float),
+                ("emissivity", float),
+                ("nstates_pol", int),
+            ]
             if self.optics.endswith("fits"):
                 header = fits.open(self.optics)[0].header
-                return {"focal length": header["flength"], "detector efficiency": 1.0, "components": np.empty(0, dtype=dtype)}
+                return {
+                    "focal length": header["flength"],
+                    "detector efficiency": 1.0,
+                    "components": np.empty(0, dtype=dtype),
+                }
             parser = ConfigParser()
             parser.read(self.optics)
             # ### The 2 next lines are commented as there is nothing in the section

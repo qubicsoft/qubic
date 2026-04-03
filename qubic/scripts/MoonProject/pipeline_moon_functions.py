@@ -117,7 +117,6 @@ def mean_bin_data_nd(pos, values, bins): # data and bins have shape (ndims, ...)
     
     values_df = pd.DataFrame(values)
     values_binned = values_df.groupby([bin_df[i] for i in range(ndims)])
-
     return  np.array(values_binned[0].mean())
 
 
@@ -324,8 +323,8 @@ def get_new_azel(azt, elt, azmoon, elmoon):
     return newazt, newelt
 
 
-def spherical2cartesian(rho, theta, phi, coord="spherical", axis="first"):
-    if coord == "horizontal":
+def spherical2cartesian(rho, theta, phi, coord="spherical", axis="first"): # axis is the axis where the coords for each point will be
+    if coord == "horizontal": # theta is azimuth and phi is elevation
         theta_ = theta.copy()
         theta = np.pi/2 - np.radians(phi.copy())
         phi = np.radians(theta_)
@@ -362,22 +361,39 @@ def cartesian2spherical(x, y, z, coord="spherical", axis="first"):
     else:
         raise ValueError("Argument axis = {} not understood.".format(axis))
 
-def get_perp_vect(point_A, point_B, point_C): # get the vector perpendicular to the plane with these three points
-    if len(np.shape(point_A)) == 2:
-        vec_1 = (point_A - point_C[:, None])
-    else:
-        vec_1 = (point_A - point_C)
-    if len(np.shape(point_B)) == 2:
-        vec_2 = (point_B - point_C[:, None])
-        if len(np.shape(point_A)) == 2:
-            res_nonorm = np.cross(vec_1, vec_2, axis=0)
-        else:
-            res_nonorm = np.cross(vec_1[:, None], vec_2, axis=0)
-    else:
-        vec_2 = (point_B - point_C)
-        if len(np.shape(point_A)) != 1:
-            raise ValueError("Not the right shape for point_A")
-        res_nonorm = np.cross(vec_1, vec_2, axis=0)
+# def get_perp_vect(point_A, point_B, point_C): # get the vector perpendicular to the plane with these three points
+#     if len(np.shape(point_A)) == 2:
+#         vec_1 = (point_A - point_C[:, None])
+#     else:
+#         vec_1 = (point_A - point_C)
+#     if len(np.shape(point_B)) == 2:
+#         vec_2 = (point_B - point_C[:, None])
+#         if len(np.shape(point_A)) == 2:
+#             res_nonorm = np.cross(vec_1, vec_2, axis=0)
+#         else:
+#             res_nonorm = np.cross(vec_1[:, None], vec_2, axis=0)
+#     else:
+#         vec_2 = (point_B - point_C)
+#         if len(np.shape(point_A)) != 1:
+#             raise ValueError("Not the right shape for point_A")
+#         res_nonorm = np.cross(vec_1, vec_2, axis=0)
+#     print("shapes vec_1, vec_2, res_nonorm")
+#     print(np.shape(vec_1))
+#     print(np.shape(vec_2))
+#     print(np.shape(res_nonorm))
+#     return res_nonorm/np.linalg.norm(res_nonorm, axis=0)
+
+def get_perp_vect(point_A, point_B, point_C): # get the vector perpendicular to the plane with these three points of shape (3, ...)
+    print("np.shape(point_A)", np.shape(point_A))
+    print("np.shape(point_B)", np.shape(point_B))
+    print("np.shape(point_C)", np.shape(point_C))
+    vec_1 = point_A - match_shape(point_C, point_A.shape)
+    print("np.shape(vec_1)", np.shape(vec_1))
+    vec_2 = point_B - match_shape(point_C, point_B.shape)
+    print("np.shape(vec_2)", np.shape(vec_2))
+    vec_2 = match_shape(vec_2, np.shape(vec_1))
+    print("np.shape(vec_2)", np.shape(vec_2))
+    res_nonorm = np.cross(vec_1, vec_2, axis=0)
     print("shapes vec_1, vec_2, res_nonorm")
     print(np.shape(vec_1))
     print(np.shape(vec_2))
@@ -881,7 +897,7 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 # xlim = [9480, 9550]
 xlim = [10540, 10640]
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True, check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False, year_data=None):
+def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True, check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False, ObsDate=None, new_method_clean=False):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -890,17 +906,35 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     # - filter the result (highpass, to get rid of large scales)
     # - add the removed peaks again (difference between raw peaks and linear fit of filtered data around peaks)
 
-    freq_sampling = 157.36 # Hz
+    # freq_sampling = 157.36 # Hz
+    freq_sampling = 1/np.median(tt[1:] - tt[:-1]) # Hz
+    # print("freq_sampling", freq_sampling)
 
-    if year_data == "2022":
+    if ObsDate[:4] == "2022":
         # Inversion in signal
         mytod = -tod.copy()
-    elif year_data == "2026":
+        reso=10
+    elif ObsDate[:4] == "2026":
         # not in 2026
         mytod = tod.copy()
+        # reso = 8
+        ang_size = 60 # degrees
+        reso = ang_size*60/200 # arcmin/pix
+        print(reso)
 
     if clean_tod:
-        if year_data == "2022":
+        min_plot = -5e3
+        max_plot = 1.2e4
+    else:
+        min_plot = np.min(mapsb[mapsb != hp.UNSEEN])
+        max_plot = np.max(mapsb[mapsb != hp.UNSEEN])
+
+    if new_method_clean:
+        scantype
+        return mapsb, mapcount
+
+    if clean_tod:
+        if ObsDate[:4] == "2022":
             # Filter the TOD
             mytod_1 = my_filt(mytod.copy())
 
@@ -917,7 +951,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             # might have to go even higher for the peaks aligned with elevation scans
             # distance=None helps with order 1 peaks that are a bit irregular (close to border of map/dead time)
             # kept distance=10s to remove some foregrounds
-        elif year_data == "2026":
+        elif ObsDate == "2026-03-11":
             mask_elt = np.ones_like(elt, dtype=bool)
             # Filter the TOD
             test_tod = my_filt_4(mytod.copy()) # only a high pass to detect the glitches
@@ -955,6 +989,16 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             # peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
             peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 10*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
 
+        elif ObsDate == "2026-03-13":
+            # Filter the TOD
+            mask_elt = np.ones_like(elt, dtype=bool)
+            mytod_1 = my_filt(mytod.copy())
+            tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
+            prominence = (5*np.std(tod_ma_filt[mask_elt]), None) # 3 good filter
+            # prominence = None
+            data_peaks = tod_ma_filt
+            peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
+
         widths = peaks_properties["widths"]
 
         if doplot and True:
@@ -977,7 +1021,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
         # interval_peak = int(time_moon*freq_sampling * 1.5) # 1.5 is good
         interval_peak = (widths).astype(int)
-        if year_data == "2026":
+        if ObsDate == "2026-03-11":
             tod_no_glitches = remove_peaks(tt, mytod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt) #this doesn't deal well with flux jumps
             # tod_no_glitches = test_tod_no_glitch.copy() # you can use this for flux jumps, but there is a bit of filtering ringing around Moon
         else:
@@ -991,10 +1035,16 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         # mytod_3 = my_filt(tod_no_peak.copy())
         # mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, peaks_detected, interval=interval_peak, mask=mask_elt)
 
-        if doplot and True:
+        if doplot and True: # these plots are peaks, Moon TOD and Moon TOD spectrum
+            # Lagrange_poly(x, points_x, points_y)
+            # binned_tt, binned_TOD, scan_sorted, bin_id = bin_data_by_scan(tt, mytod, scantype)
+            # print(scan_sorted)
+            # print(bin_id)
+
             peaks_detected_ = np.isin(np.arange(len(tt)), peaks_detected)
             plt.figure()
             plt.plot(tt, mytod, label="raw TOD")
+            # plt.scatter(binned_tt, binned_TOD, c="g", label="binned TOD", zorder=1000)
             # plt.plot(tt, test_tod, label="test_tod")
             # plt.plot(tt, tod_no_peak, label="TOD no peak")
             plt.scatter(tt[peaks_detected_ & mask_elt], mytod[peaks_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
@@ -1005,6 +1055,47 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             plt.savefig("figures/TOD_TES_{}.pdf".format(TES_number), dpi=300)
             plt.show()
 
+
+            # fit_lagrange_scans(tt, mytod, scantype)
+            # azr
+
+            # tmin, tmax = 4300, 4900
+            # fig, ax = plt.subplots()
+            # ax.set_title("raw TOD")
+            # ax.plot(tt, mytod)
+            # ax.set_xlim([4300, 4900])
+            # ax.set_xlabel("time [s]")
+            # ax.set_ylabel("amplitude [arbitrary units]")
+            # ax.set_yticks([])
+            # plt.tight_layout()
+            # # plt.savefig("figures/moon_tod.pdf")
+            # plt.savefig("figures/moon_tod.png")
+            # plt.show()
+
+            # tt_min, tt_max = 4200, 5000
+            # interval = 50 # how many points to apodise
+            # mask_sample_moon = np.logical_and(tt>tt_min, tt<tt_max)
+            # TOD_sample_moon = mytod[mask_sample_moon]
+            # tt_sample_moon = tt[mask_sample_moon]
+            # slope = (np.median(TOD_sample_moon[-interval:]) - np.median(TOD_sample_moon[:interval]))/(np.median(tt_sample_moon[-interval:]) - np.median(tt_sample_moon[interval:]))
+            # origin = np.median(TOD_sample_moon[interval:]) - slope*np.median(tt_sample_moon[interval:])
+            # TOD_sample_moon -= slope*tt_sample_moon + origin
+            # spectrum_sample_moon = np.abs(fft(TOD_sample_moon))**2
+            # fft_freqs = fftfreq(len(TOD_sample_moon))
+
+
+            # fig, ax = plt.subplots()
+            # ax.set_title("raw TOD spectrum")
+            # ax.plot(fft_freqs, spectrum_sample_moon)
+            # ax.set_yscale("log")
+            # ax.set_xlabel("freq [Hz]")
+            # ax.set_ylabel("amplitude [arbitrary units]")
+            # ax.set_yticks([])
+            # plt.tight_layout()
+            # plt.savefig("figures/moon_tod_spectrum.pdf")
+            # plt.show()
+
+            # zae
         if doplot and False:
             fig, ax = plt.subplots(figsize=(10, 7))
             ax.plot(tt, -tod, label="TOD")
@@ -1044,20 +1135,13 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
     # To compare the map created with only forth scans with the map created with only back scans
     if check_back_forth:
-        if clean_tod:
-            min_plot = -5e3
-            max_plot = 1.2e4
-        else:
-            min_plot = np.min(mapsb[mapsb != hp.UNSEEN])
-            max_plot = np.max(mapsb[mapsb != hp.UNSEEN])
     
         mapsb_forth, mapcount_forth = healpix_map(newazt[scantype > 0], newelt[scantype > 0], final_tod[scantype > 0], nside=nside)
         mapsb_back, mapcount_back = healpix_map(newazt[scantype < 0], newelt[scantype < 0], final_tod[scantype < 0], nside=nside)
 
 
 
-        if year_data == "2026":
-            reso = 8
+        if ObsDate[:4] == "2026":
             mapsb_fb_proj = []
             for mapsb_ in [mapsb_forth, mapsb_back]:
                 mapsb_proj = hp.gnomview(mapsb_, reso=reso, min=min_plot, max=max_plot, 
@@ -1078,7 +1162,6 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
             plt.show()
         else:
-            reso = 10
             plt.figure()
             hp.gnomview(mapsb_forth, reso=reso, sub=(1, 3, 1), min=min_plot, max=max_plot, 
                     title="forth scans", rot=center)
@@ -1129,7 +1212,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     if also_tod:
         return mapsb, mapcount, final_tod
     
-    if year_data == "2026":
+    if ObsDate[:4] == "2026":
         mapsb_proj = hp.gnomview(mapsb, reso=reso, min=min_plot, max=max_plot, 
                     rot=center, return_projected_map=True, no_plot=True)
         X = np.arange(len(mapsb_proj))
@@ -1140,7 +1223,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         mapsb_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), mapsb_proj[no_UNSEEN_mask])
         new_mapsb_proj = mapsb_interpolator(np.moveaxis([XX, YY], 0, -1))
         
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(5, 5))
         plt.imshow(new_mapsb_proj, vmin=min_plot, vmax=max_plot)
         for minor in [True, False]:
             ax.set_xticks([], minor=minor)
@@ -1930,7 +2013,9 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
 
         # New coordinates centered on the Moon
-        newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
+        # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
+        newazt_, newelt_ = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
+        newazt, newelt = azt, newelt_ # no corretion for Moon movement in azimuth (because of cos(delta_az)), trying to fit the real Moon postion for each TES
         # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon) # great circle
         # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos) # ?
@@ -1982,10 +2067,10 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
     return tt, tinit, alltod, QPidx, azt, elt, allnewazt, allnewelt, scantype, Tbath
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, tshift=0,
-                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None, det_pos=None, clean_tod=True, manual=False, year_data=None):
+                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None):
 
     if det_pos is None:
-        data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=year_data)
+        data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=ObsDate[:4])
     else:
         tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath = format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data, datadir, det_pos, isok_arr, tshift=tshift)
         print(np.shape(newazt_))
@@ -2007,7 +2092,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             TESNum = allTESNum[i]
             print('TES# {}'.format(TESNum), end=" ")
             iTES = TESNum - 1
-            if year_data == "2022":
+            if ObsDate[:4] == "2022":
                 tod = alltod[iTES, :]
                 # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before (use this in 2022 analysis)
             else:
@@ -2024,22 +2109,23 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             print("shape pos", np.shape(det_pos))
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                              TES_number=TESNum, nside=nside, 
-                                                             doplot=doplot, check_back_forth=check_back_forth, det_pos=det_pos, clean_tod=clean_tod, manual=manual, year_data=year_data)
+                                                             doplot=doplot, check_back_forth=check_back_forth, det_pos=det_pos, clean_tod=clean_tod, manual=manual, ObsDate=ObsDate)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
         ### Note that this code has been generated using ChatGPT
-        def process_TES(i, TESNum, allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot, det_pos_i):
+        def process_TES(i, TESNum, allmaps, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot):
             # Create a lock for each process to ensure safe access to shared memory
             lock = Lock()
+            iTES = TESNum - 1
             
-            if year_data == "2022":
+            if ObsDate[:4] == "2022":
                 tod = alltod[iTES, :]
                 # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before (use this in 2022 analysis)
             else:
                 tod = alltod[iTES, :]
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
-                                                           TES_number=i+1, nside=nside, doplot=doplot, det_pos=det_pos, clean_tod=clean_tod, manual=manual, year_data=year_data)        
+                                                           TES_number=i+1, nside=nside, doplot=doplot, det_pos=det_pos, clean_tod=clean_tod, manual=manual, ObsDate=ObsDate)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
                 # Directly assign the result to the correct index in allmaps
@@ -2047,6 +2133,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
                 allmaps[i] = map_result
         
         def parallel_coadded_maps(allTESNum, alltod, tt, azt, elt, scantype, newazt, newelt, nside, doplot):
+
             # Use Manager to create a shared list that will be modified by parallel processes
             with Manager() as manager:
                 # Create a list of NumPy arrays initialized to zeros
@@ -2134,8 +2221,11 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
         dt_ = time[2*order:] - time[:-2*order]
         az_vel[order:-order] = (az[2*order:] - az[:-2*order])/dt_
         return az_vel
-    medaz_dt_ = get_az_vel(thk, az, order=50) # high order necessary to remove glitches
-    medaz_dt = medfilt(medaz_dt_, median_size)
+    # medaz_dt_ = get_az_vel(thk, az, order=50) # high order necessary to remove glitches
+    # medaz_dt = medfilt(medaz_dt_, median_size)
+    medaz_dt_ = get_az_vel(thk, az, order=2)
+    medaz_dt = medaz_dt_
+    
     if doplot:
         plt.figure()
         plt.subplot(1, 2, 1)
@@ -2593,3 +2683,285 @@ def get_side_lines(hpmap, theta_gc, phi_gc, side, nlines):
         coord_up = [theta_gc_test_diff_up, phi_gc_test_diff]
         coord_down = [theta_gc_test_diff_down, phi_gc_test_diff]
     return zi_up, zi_down, coord_up, coord_down
+
+
+
+
+# from calibration_dev All_scans_demodulation_src.ipynb
+
+def match_shape(array1, shape_array2): # in the case that array2 has more or the same number of dims
+    if len(shape_array2) <= len(np.shape(array1)):
+        return array1
+    return np.expand_dims(array1, list(np.arange(len(shape_array2))[1:]))
+
+def polar2cartesian(r, theta, axis="first"):
+    x = r * np.cos(np.radians(theta))
+    y = r * np.sin(np.radians(theta))
+    res = np.array([x, y])
+    if axis == "first":
+        return res
+    elif axis == "last":
+        return np.moveaxis(res, 0, -1)
+
+# get the angle between two points (of shape (..., 3))
+def dist_angle(vec_A, vec_B):
+    cos_angle = np.einsum("...j,...j->...", vec_A, vec_B)/(np.linalg.norm(vec_A, axis=-1) * np.linalg.norm(vec_B, axis=-1))
+    mask = np.logical_and(1<cos_angle, cos_angle<1 + 1e-8)
+    cos_angle[mask] = 1 # be careful with that, it just seems that it is sometimes a bit higher than 1 because of numerical approximations
+    mask = np.logical_and(-1 - 1e-8<cos_angle, cos_angle<-1)
+    cos_angle[mask] = -1 # be careful with that, it just seems that it is sometimes a bit higher than 1 because of numerical approximations
+    angle = np.arccos(cos_angle) # compute the angle between CA and CB
+    sign_angle = np.sign(np.cross(vec_A, vec_B, axis=-1)[..., 2]) # the sign of the z component should give us the sign of the angle
+    sign_angle[sign_angle == 0] = 1 # works only if we don't care about the sign
+    return sign_angle * angle
+
+# get vector perp to horizontal great circle from az el position
+def get_perp_vect_horiz_great_circle(azimuth, elevation, tilt_az=0, sphere_centre=np.array([0, 0, 0]), sphere_radius=1):
+    perp_direction = spherical2cartesian(sphere_radius, centre_coord_at_0(azimuth + 180 + tilt_az), 90 - elevation, coord="horizontal", axis="first")
+    perp_vect = perp_direction - match_shape(sphere_centre, perp_direction.shape)
+    return perp_vect
+
+def get_simple_rotation_matrix(axis, angle):
+    one = np.ones_like(angle)
+    zero = np.zeros_like(angle)
+    if axis == "x":
+        R = np.array([[one, zero, zero],
+                      [zero, np.cos(angle), -np.sin(angle)],
+                      [zero, np.sin(angle), np.cos(angle)]])
+    elif axis == "y":
+        R = np.array([[np.cos(angle), zero, np.sin(angle)],
+                      [zero, one, zero],
+                      [-np.sin(angle), zero, np.cos(angle)]])
+    elif axis == "z":
+        R = np.array([[np.cos(angle), -np.sin(angle), zero],
+                      [np.sin(angle), np.cos(angle), zero],
+                      [zero, zero, one]])
+    else:
+        raise ValueError("{} is not a good axis.".format(axis))
+    return R
+
+
+def method_4_moon(allscans_az, allscans_el, allscans_amp, az_source, el_source, az_moon, el_moon): # wrapper of method 4 to be used with Moon maps
+    return method_4(allscans_az, allscans_el, allscans_amp, az_source, el_source)
+
+
+# in this method, instead of correcting the azimuth to conserve the angle to the meridian at casource azimuth,
+# I want to correct it with respect to the calsource position
+# this means that the map has to be in angle with respect to source position and not in pseudo azel?
+# I consider the calsource as if it is at the zenith and compute the angular distance and the angle from the source - pointing great circle with
+# respect to the horizontal great circle? so that the horizontal great circle is at a given azimuth if the source is the zenith?
+def method_4(allscans_az, allscans_el, allscans_amp, az_source, el_source, tilt_az=0, doplot=False, azmoon=None, elmoon=None, Npix=500, reso_map=3.6): # not finalized yet
+    # az_source and el_source need to be either np.float_ or np.array
+    # tilt_az = 1. # degrees
+    # tilt_az = 0 # degrees
+    sphere_radius = 1
+    sphere_centre = np.array([0, 0, 0])
+    ang_res = reso_map/60 # degrees/pix
+
+    # we get the vector perpendicular to the horizontal great circle at pointing
+    perp_vect_pointing = get_perp_vect_horiz_great_circle(allscans_az, allscans_el, tilt_az=tilt_az, sphere_radius=sphere_radius, sphere_centre=sphere_centre)
+
+    # we get vector perpendicular to the great circle going through pointing and calsource
+    calsource = spherical2cartesian(sphere_radius, az_source, el_source, coord="horizontal", axis="first")
+    pointing = spherical2cartesian(sphere_radius, allscans_az, allscans_el, coord="horizontal", axis="first")
+    # print(np.shape(calsource))
+    # print(np.shape(pointing))
+    perp_vec_gc_pointing_calsrc = get_perp_vect(calsource, pointing, sphere_centre)
+    # print(np.shape(perp_vec_gc_pointing_calsrc))
+
+    # we want the coords to be the last axis
+    vec_calsource = np.moveaxis(calsource, 0, -1) # sphere centre is [0, 0, 0]
+    vec_pointing = np.moveaxis(pointing, 0, -1)
+    # the angle between the pointing and the calsource
+    angle_beta = np.abs(np.degrees(dist_angle(vec_calsource, vec_pointing)))
+
+    print("angle_beta == 0:", np.argwhere(angle_beta == 0))
+
+    print(np.shape(perp_vect_pointing))
+    print(np.shape(perp_vec_gc_pointing_calsrc))
+    # the angle between the horizontal great circle and the great circle with the pointing and the calsource
+    angle_alpha = np.degrees(dist_angle(np.moveaxis(perp_vect_pointing, 0, -1), np.moveaxis(perp_vec_gc_pointing_calsrc, 0, -1)))
+    angle_alpha[~np.isfinite(angle_alpha)] = 0 # at the pixel pointing at calsource or if problem for a scan
+    angle_beta[~np.isfinite(angle_beta)] = Npix*ang_res/2 # 0 # if problem for a scan
+
+    map_ii, map_jj = np.meshgrid(np.linspace(np.min(angle_beta), np.max(angle_beta), 1000), np.linspace(np.min(angle_alpha), np.max(angle_alpha), 1000))
+
+    # we want to build the map as a sphere seen from the zenith where the calsource is
+    # alpha becomes 90° - elevation and beta the azimuth + 90°
+    # Npix = 500
+    # Npix = 200 # to match moon maps?
+    # ang_res = (np.max(angle_beta) - np.min(angle_beta))*np.sqrt(2)/Npix
+    # ang_res = 30/Npix # degrees/pix
+    map_ii, map_jj = np.meshgrid(np.arange(Npix), np.arange(Npix), indexing='ij')
+    centre = np.array([map_ii[Npix//2, Npix//2], map_jj[Npix//2, Npix//2], 0])
+    beta_map = np.sqrt((map_ii-centre[0])**2+(map_jj-centre[1])**2) * ang_res
+    vec_pix = np.array([map_ii, map_jj, np.zeros_like(map_jj)]) - match_shape(centre, np.array([map_ii, map_jj, np.zeros_like(map_jj)]).shape)
+    vec_zero = np.array([map_ii[Npix//2, -1], map_jj[Npix//2, -1], 0]) - centre # this is not the usual 0 azimuth, but it suits the way I built beta
+    alpha_map = -np.degrees(dist_angle(np.moveaxis(vec_pix, 0, -1), np.moveaxis(vec_zero, 0, -1)))
+    alpha_map[~np.isfinite(alpha_map)] = 0
+
+    # in order to interpolate around the zenith, I have to first convert alpha beta into cartesian coordinates!
+    # I use beta as radius in polar coordinates and alpha as angle, in order to stay in 2D
+    cartesian_pos = polar2cartesian(angle_beta, angle_alpha, axis="last")
+    cartesian_map = polar2cartesian(beta_map, alpha_map, axis="last")
+
+    if doplot:
+        # plot azel2alphabeta
+        plot_0 = angle_alpha
+        plot_1 = angle_beta
+        # plot_0 = cartesian_pos[..., 0]
+        # plot_1 = cartesian_pos[..., 1]
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        axs[0].set_title("alpha")
+        axs[0].imshow(plot_0, cmap=plt.cm.gray, aspect=len(allscans_amp[0])/len(allscans_amp))
+        axs[1].set_title("beta")
+        axs[1].imshow(plot_1, cmap=plt.cm.gray, aspect=len(allscans_amp[0])/len(allscans_amp))
+        for ax in axs:
+            ax.tick_params(
+                axis="both",          # changes apply to the x-axis
+                which='both',      # both major and minor ticks are affected
+                bottom=False,      # ticks along the bottom edge are off
+                left=False,         # ticks along the top edge are off
+                labelbottom=False,
+                labelleft=False) # labels along the bottom edge are off
+            ax.set_xlabel("azimuth")
+            ax.set_ylabel("elevation")
+        plt.tight_layout()
+        # plt.savefig("azel2alphabeta.pdf")
+        plt.show()
+        
+        # plot_0 = alpha_map
+        # plot_1 = beta_map
+        plot_0 = cartesian_map[..., 0]
+        plot_1 = cartesian_map[..., 1]
+        fig, axs = plt.subplots(1, 2)
+        fig.suptitle("cartesian_map")
+        axs[0].imshow(plot_0, cmap=plt.cm.gray)
+        axs[1].imshow(plot_1, cmap=plt.cm.gray)
+        plt.show()
+
+    # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
+    new_pointing = spherical2cartesian(sphere_radius, alpha_map, 90 - beta_map, coord="horizontal", axis="first") # beta is 90 - elevation!
+    print("shape new _pointing", np.shape(new_pointing))
+
+    ### simpler code
+    # rotation_matrix1 = get_simple_rotation_matrix("x", np.radians(90 - el_source)) # rotation y --> z
+    # rotation_matrix2 = get_simple_rotation_matrix("z", np.radians(90 - az_source)) # rotation x --> y
+    # more rotations but easier to understand
+    pre_rotation_matrix = get_simple_rotation_matrix("z", np.radians(90)) # rotation x --> y
+    rotation_matrix1 = get_simple_rotation_matrix("y", np.radians(90 - el_source)) # rotation z --> x
+    rotation_matrix2 = get_simple_rotation_matrix("z", np.radians(az_source)) # rotation x --> y # azimuth grows from west to east, how do I translate that in x and y? For now it grows from x to y
+    new_pointing = np.einsum("ij,jkl->ikl", pre_rotation_matrix, new_pointing) # because the definition of alpha is -90 degrees rotated w.r.t. azimuth at zenith
+    
+    ### the last axis of both arrays becomes the first one in order to use np.dot
+    # los_pos = np.moveaxis(los_pos, -1, 0)
+    # rotation_matrix = np.moveaxis(rotation_matrix, -1, 0)
+    print("shape new_pointing", np.shape(new_pointing))
+    # new_los_pos = np.einsum("il,ikl->kl", los_pos, rotation_matrix) # computation working!
+    print("shape rotation_matrix", np.shape(rotation_matrix1), np.shape(rotation_matrix2))
+
+    if len(np.shape(rotation_matrix1)) > 2: # in the case with a moving source (e.g. the Moon)
+        new_pointing = np.einsum("ijkl,jkl->ikl", rotation_matrix1, new_pointing)
+        new_pointing = np.einsum("ijkl,jkl->ikl", rotation_matrix2, new_pointing)
+    else:
+        new_pointing = np.einsum("ij,jkl->ikl", rotation_matrix1, new_pointing)
+        new_pointing = np.einsum("ij,jkl->ikl", rotation_matrix2, new_pointing)
+
+    print(np.shape(new_pointing))
+
+    _, new_az, new_el = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
+
+    if doplot:
+        plot_0 = new_az
+        plot_1 = new_el
+        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+        axs[0].set_title("new az")
+        axs[0].imshow(plot_0, cmap=plt.cm.gray)
+        axs[1].set_title("new el")
+        axs[1].imshow(plot_1, cmap=plt.cm.gray)
+        for ax in axs:
+            ax.tick_params(
+                axis="both",          # changes apply to the x-axis
+                which='both',      # both major and minor ticks are affected
+                bottom=False,      # ticks along the bottom edge are off
+                left=False,         # ticks along the top edge are off
+                labelbottom=False,
+                labelleft=False) # labels along the bottom edge are off
+            ax.set_xlabel("azimuth")
+            ax.set_ylabel("elevation")
+        plt.tight_layout()
+        plt.savefig("newazel.pdf")
+        plt.show()
+        # zar
+
+    # we now operate in angle from the calsource at the zenith
+    print(np.sum(np.isnan(allscans_amp)))
+    print(np.sum(np.isnan(cartesian_pos)))
+
+    original_map_interpolator4 = LinearNDInterpolator(cartesian_pos.reshape(cartesian_pos.shape[0]*cartesian_pos.shape[1], 2), allscans_amp.flatten(), fill_value=0) # we know the "real" positions of the pixels on the original map and we want to know the amplitudes on a regular grid to create the new map, not the other way around
+    return original_map_interpolator4(cartesian_map), new_az, new_el # good one
+
+
+def Lagrange_poly(x, points_x, points_y):
+    P = 0
+    for j in range(len(points_x)):
+        li_j = []
+        for i in range(len(points_x)):
+            if i != j:
+                li_j.append((x - points_x[i])/(points_x[j] - points_x[i]))
+        P += points_y[j] * np.prod(np.array(li_j), axis=0)
+    return P
+
+
+def bin_data_by_scan(xdata, ydata, scantype): # scantype is positive, negative of null
+    bin_id = np.zeros(len(scantype))
+    bin_id_i = -1
+    scan_sorted = []
+    previous = -100
+    current_scan = []
+    for i in range(len(scantype)):
+        if scantype[i] != previous:
+            bin_id_i += 1
+            previous = scantype[i]
+            current_scan.append(bin_id_i)
+            if scantype[i] == 0:
+                scan_sorted.append(current_scan)
+                current_scan = []
+                current_scan.append(bin_id_i)
+        bin_id[i] = bin_id_i
+
+    values_df = pd.DataFrame(xdata)
+    values_binned = values_df.groupby([bin_id])
+    # binned_xdata = np.array(values_binned[0].median())
+    binned_xdata = np.array(values_binned[0].mean())
+
+    values_df = pd.DataFrame(ydata)
+    values_binned = values_df.groupby([bin_id])
+    binned_ydata = np.array(values_binned[0].mean())
+
+    return binned_xdata, binned_ydata, scan_sorted, bin_id
+
+def fit_lagrange_scans(xdata, ydata, scantype):
+    binned_xdata, binned_ydata, scan_sorted, bin_id = bin_data_by_scan(xdata, ydata, scantype)
+
+
+    for i_scan in range(len(scan_sorted)):
+        points_x = []
+        points_y = []
+        x = []
+        for i_point in range(len(scan_sorted[i_scan])):
+            i_bin = scan_sorted[i_scan][i_point]
+            print("i_bin", i_bin)
+            points_x.append(binned_xdata[i_bin])
+            points_y.append(binned_ydata[i_bin])
+            x.append(xdata[bin_id == i_bin])
+        x = np.concatenate(x)
+        Poly = Lagrange_poly(x, points_x, points_y)
+
+        if i_scan == 68:
+            plt.figure()
+            plt.plot(xdata, ydata)
+            plt.plot(x, Poly)
+            plt.show()
+            ear
+    

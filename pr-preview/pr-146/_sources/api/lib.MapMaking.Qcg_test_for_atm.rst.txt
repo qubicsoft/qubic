@@ -1,0 +1,7 @@
+lib.MapMaking.Qcg\_test\_for\_atm module
+========================================
+
+.. automodule:: lib.MapMaking.Qcg_test_for_atm
+   :members:
+   :undoc-members:
+   :show-inheritance:

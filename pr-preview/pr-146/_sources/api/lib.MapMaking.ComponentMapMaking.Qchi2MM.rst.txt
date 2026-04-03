@@ -1,0 +1,7 @@
+lib.MapMaking.ComponentMapMaking.Qchi2MM module
+===============================================
+
+.. automodule:: lib.MapMaking.ComponentMapMaking.Qchi2MM
+   :members:
+   :undoc-members:
+   :show-inheritance:

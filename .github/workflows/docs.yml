@@ -31,7 +31,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get install -y gfortran
+          sudo apt-get update
+          sudo apt-get install -y build-essential gfortran
           python -m pip install --upgrade pip
           pip install -r docs/requirements.txt
           pip install .

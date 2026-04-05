@@ -1,0 +1,73 @@
+name: Build & Deploy Sphinx docs
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          apt-get install -y gfortran
+          python -m pip install --upgrade pip
+          pip install -r docs/requirements.txt
+          pip install .
+
+      - name: Generate API docs (sphinx-apidoc)
+        run: |
+          rm -rf docs/source/api
+          rm -rf docs/build
+          sphinx-apidoc -feMo docs/source/api ./qubic/lib
+
+      - name: Build HTML with Sphinx
+        run: |
+          sphinx-build -b html \
+            -E -a \
+            docs/source \
+            docs/build/html
+
+      - name: Add .nojekyll
+        run: |
+          touch docs/build/html/.nojekyll
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: docs/build/html
+          clean: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy PR preview
+        if: github.event_name == 'pull_request'
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: docs/build/html
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          qr-code: true
+          comment: false

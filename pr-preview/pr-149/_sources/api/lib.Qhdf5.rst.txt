@@ -1,0 +1,7 @@
+lib.Qhdf5 module
+================
+
+.. automodule:: lib.Qhdf5
+   :members:
+   :undoc-members:
+   :show-inheritance:

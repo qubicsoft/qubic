@@ -1,0 +1,7 @@
+lib.MapMaking.FrequencyMapMaking.FMM\_errors\_checking module
+=============================================================
+
+.. automodule:: lib.MapMaking.FrequencyMapMaking.FMM_errors_checking
+   :members:
+   :undoc-members:
+   :show-inheritance:

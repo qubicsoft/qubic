@@ -1,0 +1,1458 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.MapMaking.Qatmosphere &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.MapMaking.Qatmosphere</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.MapMaking.Qatmosphere</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">camb.correlations</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">cc</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">healpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">hp</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">scipy.constants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">c</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">scipy.special</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">CoolProp</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoolProp</span> <span class="k">as</span> <span class="n">CP</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyoperators</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Cartesian2SphericalOperator</span><span class="p">,</span>
+    <span class="n">Rotation3dOperator</span><span class="p">,</span>
+    <span class="n">Spherical2CartesianOperator</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pysimulators.interfaces.healpy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Spherical2HealpixOperator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.integrate</span><span class="w"> </span><span class="kn">import</span> <span class="n">quad</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">qubic.lib.Instrument.Qinstrument</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_freq</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">qubic.lib.Qdictionary</span><span class="w"> </span><span class="kn">import</span> <span class="n">qubicDict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">qubic.lib.Qsamplings</span><span class="w"> </span><span class="kn">import</span> <span class="n">QubicSampling</span>
+
+<span class="c1"># TODO : Adjust rho_0 with PWV</span>
+<span class="c1"># TODO : Verify conversion into µK_CMB</span>
+<span class="c1"># TODO : Adjust pressure with density</span>
+<span class="c1"># TODO : Verify frequency dependence of the atmosphere</span>
+<span class="c1"># TODO : Verify if the atmosphere is in the same frame as the qubic</span>
+<span class="c1"># TODO : Add the possibility to have a 3d atmosphere</span>
+<span class="c1"># TODO : Verify that get_integrated_absorption_spectrum works as expected, i.e. tha same way as in MM pipeline to build maps</span>
+
+
+<div class="viewcode-block" id="AtmosphereProperties">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AtmosphereProperties</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="c1">### Import parameters files</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">qubic_dict</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_qubic_dict</span><span class="p">()</span>
+
+        <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;seed&quot;</span><span class="p">])</span>
+
+        <span class="c1">### Build atmospheric coordinates</span>
+        <span class="c1"># Cartesian coordinates</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_grid&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="c1"># 2d model</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">altitude</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_qubic&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;altitude_atm_2d&quot;</span><span class="p">]</span>
+            <span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_grid&quot;</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># 3d model, not yet implemented</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">altitude</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_qubic&quot;</span><span class="p">],</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;altitude_atm_2d&quot;</span><span class="p">],</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_grid&quot;</span><span class="p">],</span>
+            <span class="p">)</span>
+        <span class="c1"># Import atmosphere coordinates for the flat atmosphere case</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;flat&quot;</span><span class="p">]:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span>
+                <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;size_atm&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;size_atm&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;n_grid&quot;</span><span class="p">]</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">y_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span>
+                <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;size_atm&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;size_atm&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;n_grid&quot;</span><span class="p">]</span>
+            <span class="p">)</span>
+            <span class="c1"># Azimuth / Elevation coordinates</span>
+            <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x_list</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_list</span><span class="p">)</span>
+            <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;altitude_atm_2d&quot;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">r</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">el</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">az</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">horizontal_plane_to_azel</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+
+        <span class="c1">### Compute atmosphere temperature and mean water vapor density</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_temperature_atm</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">altitude</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;temp_ground&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_temp&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mean_water_vapor_density</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_mean_water_vapor_density</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">altitude</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;rho_0&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_h2o&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Compute absorption coefficients</span>
+        <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mol_absorption_coeff</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">self_absorption_coeff</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">air_absorption_coeff</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">integration_frequencies</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">atm_absorption_coeff</span><span class="p">()</span>
+
+        <span class="c1">### Compute absorption spectrum</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">abs_spectrum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">absorption_spectrum</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">integrated_abs_spectrum</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">frequencies</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bandwidths</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">integrated_absorption_spectrum</span><span class="p">()</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Compute water vapor density&#39;s standard deviation</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sigma_rho</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_sigma_rho</span><span class="p">(</span>
+            <span class="n">sigma_pwv</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;sigma_pwv&quot;</span><span class="p">],</span> <span class="n">h</span><span class="o">=</span><span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_h2o&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="AtmosphereProperties.get_qubic_dict">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.get_qubic_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_qubic_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="s2">&quot;in&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;QUBIC dictionary.</span>
+
+<span class="sd">        Method to modify the qubic dictionary.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        key : str, optional</span>
+<span class="sd">            Can be &quot;in&quot; or &quot;out&quot;.</span>
+<span class="sd">            It is used to build respectively the instances to generate the TODs or to reconstruct the sky maps,</span>
+<span class="sd">            by default &quot;in&quot;.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dict_qubic: dict</span>
+<span class="sd">            Modified QUBIC dictionary.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">args</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;nf_sub&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;nsub_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;filter_relative_bandwidth&quot;</span><span class="p">:</span> <span class="mf">0.25</span><span class="p">,</span>
+            <span class="s2">&quot;npointings&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;npointings&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;nside&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;MultiBand&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;period&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;RA_center&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="s2">&quot;DEC_center&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mi">57</span><span class="p">,</span>
+            <span class="s2">&quot;filter_nu&quot;</span><span class="p">:</span> <span class="mi">150</span> <span class="o">*</span> <span class="mf">1e9</span><span class="p">,</span>
+            <span class="s2">&quot;noiseless&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;dtheta&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;dtheta&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;nprocs_sampling&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="s2">&quot;photon_noise&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="s2">&quot;nhwp_angles&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="c1">#&#39;effective_duration&#39;:3,</span>
+            <span class="s2">&quot;effective_duration150&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="s2">&quot;effective_duration220&quot;</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+            <span class="s2">&quot;type_instrument&quot;</span><span class="p">:</span> <span class="s2">&quot;two&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;TemperatureAtmosphere150&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;TemperatureAtmosphere220&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;EmissivityAtmosphere150&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;EmissivityAtmosphere220&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">&quot;detector_nep&quot;</span><span class="p">:</span> <span class="mf">4.7e-17</span><span class="p">,</span>
+            <span class="s2">&quot;synthbeam_kmax&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;kmax&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;synthbeam_fraction&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;synthbeam_fraction&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="s2">&quot;IQU&quot;</span><span class="p">,</span>
+        <span class="p">}</span>
+
+        <span class="c1">### Get the default dictionary</span>
+        <span class="n">dictfilename</span> <span class="o">=</span> <span class="s2">&quot;dicts/pipeline_demo.dict&quot;</span>
+        <span class="n">dict_qubic</span> <span class="o">=</span> <span class="n">qubicDict</span><span class="p">()</span>
+        <span class="n">dict_qubic</span><span class="o">.</span><span class="n">read_from_file</span><span class="p">(</span><span class="n">dictfilename</span><span class="p">)</span>
+
+        <span class="c1">### Modify the dictionary</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">dict_qubic</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="k">return</span> <span class="n">dict_qubic</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereProperties.get_sigma_rho">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.get_sigma_rho">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_sigma_rho</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sigma_pwv</span><span class="p">,</span> <span class="n">h</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Water vapor density&#39;s standard deviation</span>
+
+<span class="sd">        Compute sigma_rho from sigma_pwv at altitude h, with sigma_pwv taken from Table 1 in Sugiyama 2024.</span>
+<span class="sd">        The formula, being $\sigma_{\rho(h)} = \frac{\sigma_{PWV}}{h}$ , comes from a scale approximation.</span>
+<span class="sd">        h should be defined as 2*h_h2o, with h_h2o the water vapor half-height.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        sigma_pwv : float</span>
+<span class="sd">            PWV&#39;s STD in mm.(1 mm of water over a 1 m^2 area is equivalent to 1 kg/m^2, the actual dimension of the PWD per definition.)</span>
+<span class="sd">        h : float</span>
+<span class="sd">            height of the considered water vapor in m.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        sigma_rho : float</span>
+<span class="sd">            Water vapor density&#39;s standard deviation in kg/m^3</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">h</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">h</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;h_h2o&quot;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">h</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">sigma_pwv</span> <span class="o">/</span> <span class="n">h</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;height of the water vapor h must be given&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereProperties.get_mean_water_vapor_density">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.get_mean_water_vapor_density">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_mean_water_vapor_density</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">altitude</span><span class="p">,</span> <span class="n">rho_0</span><span class="p">,</span> <span class="n">h_h2o</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Mean water vapor density.</span>
+
+<span class="sd">        Compute the mean water vapor density depending on the altitude, using reference water vapor density and water vapor half_height, given in self.params.yml.</span>
+<span class="sd">        The corresponding equation to compute the mean water vapor density, taken from equation (1) in Morris 2021, is :</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            \langle \rho(h) \rangle = \rho_0 e^{\left( -log(2).(h - 5190) / h_0 \right)} .</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        altitude : array_like</span>
+<span class="sd">            Array containing altitudes at which we want to compute the mean water vapor density.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        mean_water_vapor_density : array_like</span>
+<span class="sd">            Mean water vapor density in :math:`g/m{3}`.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="n">rho_0</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">altitude</span> <span class="o">-</span> <span class="mi">5190</span><span class="p">)</span> <span class="o">/</span> <span class="n">h_h2o</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereProperties.get_temperature_atm">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.get_temperature_atm">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_temperature_atm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">altitude</span><span class="p">,</span> <span class="n">temp_ground</span><span class="p">,</span> <span class="n">h_T</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Temperature.</span>
+
+<span class="sd">        Compute the temperature of the atmosphere depending on the altitude, using the average ground temperature and a typical height that depend on the observation site.</span>
+<span class="sd">        The corresponding equation to compute the temperature, taken from equation (13) in Morris 2021, is :</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            T_{atm}(h) = T_{atm}(0) e^{h / h_T} .</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        altitude : array_like</span>
+<span class="sd">            Array containing altitudes at which we want to compute the temperature.</span>
+<span class="sd">        temp_ground : float</span>
+<span class="sd">            Average ground temperature in K.</span>
+<span class="sd">        h_T : float</span>
+<span class="sd">            Typical height in m.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        temperature : array_like</span>
+<span class="sd">            Temperature in K.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="n">temp_ground</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">altitude</span> <span class="o">/</span> <span class="n">h_T</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereProperties.atm_absorption_coeff">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.atm_absorption_coeff">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">atm_absorption_coeff</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Absorption coefficients.</span>
+
+<span class="sd">        Method to build the absorption spectrum of the atmopshere using files computed using the am atmospheric model (Paine, 2018).</span>
+<span class="sd">        The absorption coefficient has two origins: the line-by-line absorption which reprensents the spectral lines,</span>
+<span class="sd">        and a continuum absorption coming from collisions between molecules,</span>
+<span class="sd">        either :math:`H_2O-H_2O` collisions (self-induced continuum), or collisions between :math:`H_2O` and the air (air_induced).</span>
+
+<span class="sd">        See the am documentation for more details: https://lweb.cfa.harvard.edu/~spaine/am/ .</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        frequencies : array_like</span>
+<span class="sd">            Frequencies at which the absorption spectrum is computed.</span>
+<span class="sd">        mol_absorption_coeff : array_like</span>
+<span class="sd">            Molecular absorption lines spectrum, from water and dioxygene, in :math:`m^{2}`.</span>
+<span class="sd">        self_absorption_coeff : array_like</span>
+<span class="sd">            Self-induced collisions continuum, from water, in :math:`m^{5}`.</span>
+<span class="sd">        air_absorption_coeff : array_like</span>
+<span class="sd">            Air_induced collisions continuun, from water, in :math:`m^{5}`.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Spectras for the line-by-line absorption-coefficient were produced using .amc files that looks like that:</span>
+
+        <span class="c1"># f 130 GHz  250 GHz  0.005 GHz</span>
+        <span class="c1"># output f  k</span>
+
+        <span class="c1"># layer</span>
+        <span class="c1"># P 500 hPa</span>
+        <span class="c1"># T 280 K</span>
+        <span class="c1"># column h2o_lines 1 mm_pwv</span>
+
+        <span class="c1"># And for the continuum absorption:</span>
+
+        <span class="c1"># f 130 GHz  250 GHz  0.005 GHz</span>
+        <span class="c1"># output f  k</span>
+
+        <span class="c1"># layer</span>
+        <span class="c1"># P 550 hPa</span>
+        <span class="c1"># T 280 K</span>
+        <span class="c1"># h 3000 m</span>
+        <span class="c1"># column h2o_self_continuum 1 mm_pwv</span>
+
+        <span class="c1"># Then we only need to execute a command line like: am file_name.amc &gt; file_name.out .</span>
+
+        <span class="c1"># The file &#39;file_name.out&#39; is created and contains two colomns, one for the frequency, and one for the absorption coefficient.</span>
+        <span class="c1"># Be careful, am results are in cm and not in m.</span>
+
+        <span class="n">frequencies</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">mol_absorption_coeff</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">self_absorption_coeff</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">air_absorption_coeff</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1">### Initialize atmosppheric properties</span>
+        <span class="n">pressure</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;pressure_atm&quot;</span><span class="p">]</span>
+        <span class="n">temp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;temp_ground&quot;</span><span class="p">]</span>
+        <span class="n">pwv</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;pwv&quot;</span><span class="p">]</span>
+
+        <span class="c1">### Import absorption coefficients from molecular absorption lines</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;path_am_files&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;h2o_lines_</span><span class="si">{</span><span class="n">pressure</span><span class="si">}</span><span class="s2">hPa_</span><span class="si">{</span><span class="n">temp</span><span class="si">}</span><span class="s2">K_</span><span class="si">{</span><span class="n">pwv</span><span class="si">}</span><span class="s2">mm.out&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;r&quot;</span><span class="p">,</span>
+        <span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">frequencies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">]))</span>
+                <span class="n">mol_absorption_coeff</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1e-2</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="c1">### Import absorption coefficients from self-induced collisions continuum</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;path_am_files&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;h2o_self_continuum.out&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">self_absorption_coeff</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1e-2</span><span class="p">)</span> <span class="o">**</span> <span class="mi">5</span><span class="p">)</span>
+
+        <span class="c1">### Import absorption coefficients from air-induced collisions continuum</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;path_am_files&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;h2o_air_continuum.out&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">file</span><span class="p">:</span>
+                <span class="n">air_absorption_coeff</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="mf">1e-2</span><span class="p">)</span> <span class="o">**</span> <span class="mi">5</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">mol_absorption_coeff</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">self_absorption_coeff</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">air_absorption_coeff</span><span class="p">),</span>
+            <span class="n">frequencies</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereProperties.get_gas_properties">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.get_gas_properties">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_gas_properties</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params_file</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Gas properties.</span>
+
+<span class="sd">        Method to compute the properties of the water vapor and the air in the atmosphere. It uses the CoolProp package (https://github.com/CoolProp/CoolProp) to compute the molar mass of air and water.</span>
+<span class="sd">        It can use parameters given in self.params.yml or be baised on the CoolProp package to compute the water vapor density.</span>
+
+<span class="sd">        The pressure as to be defined in the params.yml file. The temperature is computed using the function &#39;get_temp_atm&#39;.</span>
+
+<span class="sd">        The molar mass of air is given by the CoolProp package: CP.PropsSI(&#39;MOLARMASS&#39;, &#39;Air&#39;) kg/mol.</span>
+<span class="sd">        The molar mass of water is given by the CoolProp package: CP.PropsSI(&#39;MOLARMASS&#39;, &#39;Water&#39;) kg/mol.</span>
+
+<span class="sd">        From molar mass, the mass is given by :</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            m = M / N_A ,</span>
+<span class="sd">        where :math:`m` is the mass, :math:`M` is the molar mass and :math:`N_A` is the Avogadro constant, given by scipy.constants .</span>
+
+<span class="sd">        The mass density of air is computed using CoolProp package, from the  pressure and the temperature of the atmosphere.</span>
+<span class="sd">        Then, the density of air is computed with :</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            n = \rho / m ,</span>
+<span class="sd">        where :math:`n` is the density, :math:`\rho` is the mass density and :math:`m` is the mass.</span>
+
+<span class="sd">        For the water vapor density, you can follow the same steps by putting the argument params_file = False,</span>
+<span class="sd">        or compute it using the mass density computed using &#39;get_mean_water_vapor_density&#39; and the parameters given in self.params_file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        self.params_file : bool, optional</span>
+<span class="sd">            If True, will use the reference water vapor density given in self.params_file by self.params[&#39;rho_0&#39;] (in :math:`g/m^{3}`) to compute the density in :math:`m^{-3}`.</span>
+<span class="sd">            Else, will use the temperature and pression value to compute it. By default True.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        water_mass : float</span>
+<span class="sd">            The weight of a :math:`H_2O` molecule in :math:`g`.</span>
+<span class="sd">        water_vapor_density : float</span>
+<span class="sd">            The density of water vapor given the atmospheric temperature and pressure in :math:`m^{-3}`.</span>
+<span class="sd">        air_vapor_density : float</span>
+<span class="sd">            The density of air vapor given the atmospheric temperature and pressure in :math:`m^{-3}`.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Import physical constants</span>
+        <span class="n">temp_atm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span>  <span class="c1"># in K</span>
+        <span class="n">pressure_atm</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;pressure_atm&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="mi">100</span>  <span class="c1"># in Pa</span>
+
+        <span class="c1">### Air properties</span>
+        <span class="n">air_molar_mass</span> <span class="o">=</span> <span class="n">CP</span><span class="o">.</span><span class="n">PropsSI</span><span class="p">(</span><span class="s2">&quot;MOLARMASS&quot;</span><span class="p">,</span> <span class="s2">&quot;Air&quot;</span><span class="p">)</span>  <span class="c1"># in kg/mol</span>
+        <span class="n">air_mass</span> <span class="o">=</span> <span class="n">air_molar_mass</span> <span class="o">/</span> <span class="n">c</span><span class="o">.</span><span class="n">Avogadro</span> <span class="o">*</span> <span class="mf">1e3</span>  <span class="c1"># in g</span>
+        <span class="n">air_mass_density</span> <span class="o">=</span> <span class="n">CP</span><span class="o">.</span><span class="n">PropsSI</span><span class="p">(</span>
+            <span class="s2">&quot;D&quot;</span><span class="p">,</span> <span class="s2">&quot;T&quot;</span><span class="p">,</span> <span class="n">temp_atm</span><span class="p">,</span> <span class="s2">&quot;P&quot;</span><span class="p">,</span> <span class="n">pressure_atm</span><span class="p">,</span> <span class="s2">&quot;Air&quot;</span>
+        <span class="p">)</span>  <span class="c1"># in kg/m-3</span>
+        <span class="n">air_density</span> <span class="o">=</span> <span class="n">air_mass_density</span> <span class="o">*</span> <span class="mf">1e3</span> <span class="o">/</span> <span class="n">air_mass</span>  <span class="c1"># in m-3</span>
+
+        <span class="c1">### Water properties</span>
+        <span class="n">water_molar_mass</span> <span class="o">=</span> <span class="n">CP</span><span class="o">.</span><span class="n">PropsSI</span><span class="p">(</span><span class="s2">&quot;MOLARMASS&quot;</span><span class="p">,</span> <span class="s2">&quot;Water&quot;</span><span class="p">)</span>  <span class="c1"># in kg/mol</span>
+        <span class="n">water_mass</span> <span class="o">=</span> <span class="n">water_molar_mass</span> <span class="o">/</span> <span class="n">c</span><span class="o">.</span><span class="n">Avogadro</span> <span class="o">*</span> <span class="mf">1e3</span>  <span class="c1"># in g</span>
+
+        <span class="c1">### Compute water vapor density</span>
+        <span class="k">if</span> <span class="n">params_file</span><span class="p">:</span>
+            <span class="n">water_vapor_density</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_water_vapor_density</span> <span class="o">/</span> <span class="n">water_mass</span>  <span class="c1"># in m-3</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">water_vapor_mass_density</span> <span class="o">=</span> <span class="n">CP</span><span class="o">.</span><span class="n">PropsSI</span><span class="p">(</span>
+                <span class="s2">&quot;D&quot;</span><span class="p">,</span> <span class="s2">&quot;T&quot;</span><span class="p">,</span> <span class="n">temp_atm</span><span class="p">,</span> <span class="s2">&quot;P&quot;</span><span class="p">,</span> <span class="n">pressure_atm</span><span class="p">,</span> <span class="s2">&quot;Water&quot;</span>
+            <span class="p">)</span>  <span class="c1"># in kg/m-3</span>
+            <span class="n">water_vapor_density</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">c</span><span class="o">.</span><span class="n">Avogadro</span> <span class="o">*</span> <span class="n">water_vapor_mass_density</span> <span class="o">/</span> <span class="n">water_molar_mass</span> <span class="o">*</span> <span class="mf">1e-3</span>
+            <span class="p">)</span>  <span class="c1"># in m-3</span>
+
+        <span class="k">return</span> <span class="n">water_mass</span><span class="p">,</span> <span class="n">water_vapor_density</span><span class="p">,</span> <span class="n">air_density</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereProperties.absorption_spectrum">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.absorption_spectrum">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">absorption_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Absorption spectrum.</span>
+
+<span class="sd">        The coefficient :math:`\alpha_b(\nu)` (:math:`m^2/g`) is defined by:</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            \alpha_b(\nu) = \frac{1}{m_{H_2O}} \left(k_{lines}(\nu) + n_{H_2O}k_{self}(\nu) + n_{air}k_{air}(\nu)\right) ,</span>
+
+<span class="sd">        with :math:`m_{H_2O}= 2.992\times 10^{-23} g` the mass of a :math:`H_2O` molecule, :math:`k_{lines}` (:math:`m^2`) the line-by-line absorption coefficient,</span>
+<span class="sd">        :math`k_{self}` and :math`k_{air}` (:math:`m^5`) the self- and air-induced continua, :math:`n_{H_2O}` and :math:`n_{air}` (:math:`m^{-3}`) the densities of water vapor and air.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        abs_spectrum : array_like</span>
+<span class="sd">            Atmosphere absorption coefficient, in :math:`m^{2} / g`.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Import gas properties</span>
+        <span class="n">water_mass</span><span class="p">,</span> <span class="n">water_vapor_density</span><span class="p">,</span> <span class="n">air_density</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_gas_properties</span><span class="p">()</span>
+
+        <span class="c1">### Compute coeff</span>
+        <span class="n">abs_spectrum</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">mol_absorption_coeff</span>
+            <span class="o">+</span> <span class="n">water_vapor_density</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">self_absorption_coeff</span>
+            <span class="o">+</span> <span class="n">air_density</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">air_absorption_coeff</span>
+        <span class="p">)</span> <span class="o">/</span> <span class="n">water_mass</span>
+
+        <span class="k">return</span> <span class="n">abs_spectrum</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereProperties.get_integrated_absorption_spectrum">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.get_integrated_absorption_spectrum">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_integrated_absorption_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">band</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Integrated absorption spectrum within a band.</span>
+
+<span class="sd">        Compute the integrated absorption spectrum in a given frequency band, according to the parameters in the self.params.yml file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        band : int</span>
+<span class="sd">            QUBIC frequency band. Can be either 150 or 220.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        integrated_abs_spectrum : numpy.ndarray</span>
+<span class="sd">            The integrated absorption spectrum in the given frequency band, in m^2/g.</span>
+<span class="sd">        nus : numpy.ndarray</span>
+<span class="sd">            The frequencies at which the absorption spectrum is computed, in GHz.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1">#! Verify if the integration is made properly !!!</span>
+
+        <span class="c1">### Verify the given band</span>
+        <span class="k">if</span> <span class="n">band</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">150</span><span class="p">,</span> <span class="mi">220</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Band must be either 150 or 220 GHz.&quot;</span><span class="p">)</span>
+
+        <span class="c1">### Evaluate the frequency band edges</span>
+        <span class="n">freq_min</span><span class="p">,</span> <span class="n">freq_max</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">integration_frequencies</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">integration_frequencies</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="n">freq_step</span> <span class="o">=</span> <span class="p">(</span><span class="n">freq_max</span> <span class="o">-</span> <span class="n">freq_min</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">integration_frequencies</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1">### Compute the frequency sub-bands within the QUBIC band and their associated indexes</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">nus_edges</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">bandwidths</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">N_bands</span> <span class="o">=</span> <span class="n">compute_freq</span><span class="p">(</span>
+            <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">,</span>
+            <span class="n">Nfreq</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;nsub_in&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="n">relative_bandwidth</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic_dict</span><span class="p">[</span><span class="s2">&quot;filter_relative_bandwidth&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+        <span class="n">nus_edge_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">((</span><span class="n">nus_edges</span> <span class="o">-</span> <span class="n">freq_min</span><span class="p">)</span> <span class="o">/</span> <span class="n">freq_step</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+
+        <span class="c1">### Integrate the absorption spectrum over the frequency sub-bands using the trapezoidal method</span>
+        <span class="c1"># Need to normalize by the bandwidth to get average absorption coefficient</span>
+        <span class="n">integrated_abs_spectrum</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">trapz</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">abs_spectrum</span><span class="p">[</span><span class="n">nus_edge_index</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="p">:</span> <span class="n">nus_edge_index</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]],</span>
+                    <span class="n">x</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">integration_frequencies</span><span class="p">[</span>
+                        <span class="n">nus_edge_index</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="p">:</span> <span class="n">nus_edge_index</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+                    <span class="p">],</span>
+                <span class="p">)</span>
+                <span class="o">/</span> <span class="p">(</span><span class="n">nus_edges</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">nus_edges</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N_bands</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">integrated_abs_spectrum</span><span class="p">,</span> <span class="n">nus</span><span class="p">,</span> <span class="n">bandwidths</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereProperties.integrated_absorption_spectrum">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereProperties.integrated_absorption_spectrum">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">integrated_absorption_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Integrated absorption spectrum.</span>
+
+<span class="sd">        Integrated absorption spectrum in the QUBIC frequency bands: 150 and 220 GHz.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        integrated_abs_spectrum : array_like</span>
+<span class="sd">            The integrated absorption spectrum in the given frequency band, in :math:`m^{2} / g`.</span>
+<span class="sd">        nus : array_like</span>
+<span class="sd">            The frequencies at which the absorption spectrum is computed, in :math:`GHz`.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Get the integrated absorption spectrum in the two QUBIC bands : 150 and 220 GHz</span>
+        <span class="n">int_abs_spectrum_150</span><span class="p">,</span> <span class="n">nus_150</span><span class="p">,</span> <span class="n">bandwidths_150</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_integrated_absorption_spectrum</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">int_abs_spectrum_220</span><span class="p">,</span> <span class="n">nus_220</span><span class="p">,</span> <span class="n">bandwidths_220</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">get_integrated_absorption_spectrum</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">220</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">int_abs_spectrum_150</span><span class="p">,</span> <span class="n">int_abs_spectrum_220</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">nus_150</span><span class="p">,</span> <span class="n">nus_220</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bandwidths_150</span><span class="p">,</span> <span class="n">bandwidths_220</span><span class="p">),</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="AtmosphereMaps">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AtmosphereMaps</span><span class="p">(</span><span class="n">AtmosphereProperties</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">):</span>
+        <span class="c1">### Import parameters and the class describing the atmosphere</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="n">AtmosphereProperties</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">)</span>
+
+        <span class="c1">### Compute the maximum multipole according to the resolution of the map</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lmax</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;nside&quot;</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+
+        <span class="c1">### Build water vapor density map</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">delta_rho_map</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_water_vapor_density_fluctuation_2d_map</span><span class="p">(</span>
+            <span class="n">flat</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;flat&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Build the temperature maps of the atmosphere</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">atm_temp_maps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_temp_maps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">delta_rho_map</span><span class="p">)</span>
+
+<div class="viewcode-block" id="AtmosphereMaps.get_fourier_grid_2d">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.get_fourier_grid_2d">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_fourier_grid_2d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n_grid</span><span class="p">,</span> <span class="n">size_atm</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fourier 2d grid.</span>
+
+<span class="sd">        Generate a 2d grid of spatial frequencies in Fourier space according to the parameters in the self.params.yml file.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        n_grid : int</span>
+<span class="sd">            Number of grid points in the 2d grid.</span>
+<span class="sd">        size_atm : float</span>
+<span class="sd">            Size of the atmosphere in m.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        kx : array_like</span>
+<span class="sd">            2d array containing the spatial x frequencies in Fourier space, (n_grid, n_grid).</span>
+<span class="sd">        ky : array_like</span>
+<span class="sd">            2d array containing the spatial y frequencies in Fourier space, (n_grid, n_grid).</span>
+<span class="sd">        k_norm : array_like</span>
+<span class="sd">            2d array containing the norm of the spatial frequencies in Fourier space, (n_grid, n_grid).</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Generate spatial frequency in Fourier space</span>
+        <span class="n">k_distrib_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fftfreq</span><span class="p">(</span><span class="n">n_grid</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">2</span> <span class="o">*</span> <span class="n">size_atm</span> <span class="o">/</span> <span class="n">n_grid</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+        <span class="n">k_distrib_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fftfreq</span><span class="p">(</span><span class="n">n_grid</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="mi">2</span> <span class="o">*</span> <span class="n">size_atm</span> <span class="o">/</span> <span class="n">n_grid</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+
+        <span class="c1">### Build 2d grid and compute the norm of the spatial frequencies</span>
+        <span class="n">kx</span><span class="p">,</span> <span class="n">ky</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">k_distrib_x</span><span class="p">,</span> <span class="n">k_distrib_y</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
+        <span class="n">k_norm</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">kx</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">ky</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">kx</span><span class="p">,</span> <span class="n">ky</span><span class="p">,</span> <span class="n">k_norm</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.kolmogorov_spectrum">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.kolmogorov_spectrum">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">kolmogorov_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">r0</span><span class="p">,</span> <span class="n">sigma_rho</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">atm_size</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Kolmogorov spectrum.</span>
+
+<span class="sd">        Compute the Kolmogorov spectrum, which simulate the power spectrum of the spatial fluctuations of the water vapor density, following the equation :</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            P(\textbf{k}) = (r_0^{-2} + \lvert \textbf{k} \rvert ^{2})^{-11/6} .</span>
+
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        k : array_like</span>
+<span class="sd">            Array containing the spatial frequencies at which we want to compute the Kolmogorov 2d spectrum.</span>
+<span class="sd">        r0 : float</span>
+<span class="sd">            Maximum spatial coherence length of the water vapor density, in m.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        kolmogorov_spectrum : array_like</span>
+<span class="sd">            Kolmogorov spectrum.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;2d&quot;</span><span class="p">]:</span>
+            <span class="n">exposant</span> <span class="o">=</span> <span class="o">-</span><span class="mi">8</span> <span class="o">/</span> <span class="mi">6</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">exposant</span> <span class="o">=</span> <span class="o">-</span><span class="mi">11</span> <span class="o">/</span> <span class="mi">6</span>
+
+        <span class="n">k_r0</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="n">r0</span>
+        <span class="n">P</span> <span class="o">=</span> <span class="p">(</span><span class="n">k_r0</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">k</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span> <span class="o">**</span> <span class="n">exposant</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;adjust&quot;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">sigma_rho</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">atm_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Compute normalization constant C</span>
+            <span class="n">dk</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="n">atm_size</span>
+            <span class="n">sum_kk</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">P</span><span class="p">)</span> <span class="o">*</span> <span class="n">dk</span><span class="o">**</span><span class="mi">2</span>
+            <span class="n">C</span> <span class="o">=</span> <span class="n">sigma_rho</span> <span class="o">/</span> <span class="n">sum_kk</span>
+
+            <span class="n">P</span> <span class="o">*=</span> <span class="n">C</span>
+
+        <span class="k">return</span> <span class="n">P</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.normalized_kolmogorov_spectrum">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.normalized_kolmogorov_spectrum">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">normalized_kolmogorov_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="n">r0</span><span class="p">,</span> <span class="n">sigma_rho</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">atm_size</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Normalized Kolmogorov spectrum.</span>
+
+<span class="sd">        Compute the normalized Kolmogorov spectrum, to ensure :</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            \int_\textbf{k} P(\textbf{k}) d\textbf{k} = 1 .</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        k : array_like</span>
+<span class="sd">            Array containing the spatial frequencies at which we want to compute the normalized Kolmogorov spectrum.</span>
+<span class="sd">        r0 : float</span>
+<span class="sd">            Maximum spatial coherence length of the water vapor density, in m.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        normalized_kolmogorov_spectrum : array_like</span>
+<span class="sd">            Normalized Kolmogorov spectrum.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Compute the normalization constant</span>
+        <span class="n">res</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">quad</span><span class="p">(</span>
+            <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">kolmogorov_spectrum</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">r0</span><span class="p">,</span> <span class="n">sigma_rho</span><span class="p">,</span> <span class="n">atm_size</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">k</span><span class="p">),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">k</span><span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">kolmogorov_spectrum</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">r0</span><span class="p">,</span> <span class="n">sigma_rho</span><span class="p">,</span> <span class="n">atm_size</span><span class="p">)</span> <span class="o">/</span> <span class="n">res</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.generate_spatial_fluctuations_fourier">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.generate_spatial_fluctuations_fourier">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">generate_spatial_fluctuations_fourier</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">n_grid</span><span class="p">,</span> <span class="n">size_atm</span><span class="p">,</span> <span class="n">r0</span><span class="p">,</span> <span class="n">sigma_rho</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">atm_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Debug</span><span class="o">=</span><span class="kc">False</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Spatial 2d fluctuations.</span>
+
+<span class="sd">        Produce the spatial fluctuations of the water vapor density, by generating random phases in Fourier space, and then computing the inverse Fourier transform.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        n_grid : int</span>
+<span class="sd">            Number of grid points in the 2d grid.</span>
+<span class="sd">        size_atm : float</span>
+<span class="sd">            Size of the atmosphere in m.</span>
+<span class="sd">        r0 : float</span>
+<span class="sd">            Maximum spatial coherence length of the water vapor density, in m</span>
+<span class="sd">        Debug : bool</span>
+<span class="sd">            If True, prints sigma_rho / np.sqrt( np.var(delta_rho)) to check wether the fourier normalization was done correctly in kolmogorov_spectrum.</span>
+<span class="sd">            By default False</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        delta_rho_x : array_like</span>
+<span class="sd">            Variation of the water vapor density.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1">#! At some point, we will need to normalize these fluctuations using real data. We can maybe use :math:`\sigma_{PWV}` that can be estimated with figure 4 in Morris 2021.</span>
+
+        <span class="c1">### Compute the spatial frequencies &amp; power spectrum.</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_fourier_grid_2d</span><span class="p">(</span><span class="n">n_grid</span><span class="p">,</span> <span class="n">size_atm</span><span class="p">)</span>
+        <span class="n">kolmogorov_spectrum</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">normalized_kolmogorov_spectrum</span><span class="p">(</span>
+            <span class="n">k</span><span class="p">,</span> <span class="n">r0</span><span class="p">,</span> <span class="n">sigma_rho</span><span class="p">,</span> <span class="n">atm_size</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Generate spatial fluctuations through random phases in Fourier space</span>
+        <span class="n">phi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span>
+            <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;n_grid&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;n_grid&quot;</span><span class="p">])</span>
+        <span class="p">)</span>
+        <span class="n">delta_rho_k</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">kolmogorov_spectrum</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="mi">1</span><span class="n">j</span> <span class="o">*</span> <span class="n">phi</span><span class="p">)</span>
+
+        <span class="c1">### Apply inverse Fourier transform to obtain spatial fluctuations in real space</span>
+        <span class="n">delta_rho</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">ifft2</span><span class="p">(</span>
+            <span class="n">delta_rho_k</span><span class="p">,</span> <span class="n">s</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;n_grid&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;n_grid&quot;</span><span class="p">])</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">real</span>
+
+        <span class="c1">### Normalize to ensure correct variance</span>
+        <span class="n">delta_rho</span> <span class="o">*=</span> <span class="n">sigma_rho</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">delta_rho</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">Debug</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="s2">&quot;sigma_rho / np.sqrt( np.var(delta_rho))= &quot;</span><span class="p">,</span>
+                <span class="n">sigma_rho</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">var</span><span class="p">(</span><span class="n">delta_rho</span><span class="p">)),</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">delta_rho</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.kolmogorov_correlation_function">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.kolmogorov_correlation_function">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">kolmogorov_correlation_function</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">r0</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Kolmogorov correlation function.</span>
+
+<span class="sd">        Compute the Kolmogorov correlation function by applying the inverse Fourier transform to the Kolmogorov 2d spectrum.</span>
+<span class="sd">        This correlation function can be written as:</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            D(r) = \frac{2^{2/3}}{\Gamma(1/3)} \left(\frac{r}{r_0}\right)^{1/3} K_{1/3} \left(\frac{r}{r_0}\right) .</span>
+
+<span class="sd">        We impose that the correlation function is 1 at r = 0.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        r : array_like or float</span>
+<span class="sd">            Distance between two points, in meters.</span>
+<span class="sd">        r0 : array_like or float</span>
+<span class="sd">            Maximum correlation length, in meters.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        D : array_like</span>
+<span class="sd">            Correlation function.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span>
+            <span class="n">r</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span>
+            <span class="mi">1</span><span class="p">,</span>
+            <span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="mi">2</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">/</span> <span class="n">sp</span><span class="o">.</span><span class="n">gamma</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">r</span> <span class="o">/</span> <span class="n">r0</span><span class="p">)</span> <span class="o">**</span> <span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="mi">3</span><span class="p">)</span> <span class="o">*</span> <span class="n">sp</span><span class="o">.</span><span class="n">kv</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="mi">3</span><span class="p">,</span> <span class="n">r</span> <span class="o">/</span> <span class="n">r0</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.angular_correlation">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.angular_correlation">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">angular_correlation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theta</span><span class="p">,</span> <span class="n">h_atm</span><span class="p">,</span> <span class="n">r0</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Angular Kolmogorov correlation function.</span>
+
+<span class="sd">        We compute the angular Kolmogorov correlation function, switching the distance between two points to the angle between them on the surface of the sphere,</span>
+<span class="sd">        using the relation :</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            r = 2h_{atm} \sin \left(\frac{\theta}{2}\right) ,</span>
+
+<span class="sd">        where :math:`h_{atm}` is the distance between the atmosphere and our instrument and :math:`\theta` is the angle between the two points.</span>
+
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        theta : array_like or float</span>
+<span class="sd">            Angle between two points, in degrees.</span>
+<span class="sd">        h_atm : array_like or float</span>
+<span class="sd">            Distance between the atmosphere and our instrument, in meters.</span>
+<span class="sd">        r0 : float</span>
+<span class="sd">            Maximum correlation length, in meters.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        C : array_like or float</span>
+<span class="sd">            Angular Kolmogorov correlation function.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Compute the distance between two points separeted by the angle theta on the surface of the sphere</span>
+        <span class="n">r</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">h_atm</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">kolmogorov_correlation_function</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">r0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.cl_from_angular_correlation_int">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.cl_from_angular_correlation_int">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cl_from_angular_correlation_int</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ell</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Angular power spectrum from angular correlation function.</span>
+
+<span class="sd">        Compute the angular power spectrum from the angular correlation function, using the formula:</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            C_{\ell} = 2 \pi \int_{-1}^{1} C(\theta) P_{\ell}(\cos \theta) d \cos \theta ,</span>
+
+<span class="sd">        where :math:`C(\theta)` is the angular correlation function and :math:`P_l(\cos \theta)` is the Legendre polynomial of order :math:`l`.</span>
+
+<span class="sd">        WARNING: This function is not very efficient, as it computes the Legendre polynomial of order l for each value of cos(theta). It takes a long time to compute for high values of l.</span>
+<span class="sd">        It is just used for testing purposes and to compute the case \ell = 0 which is not possible in &#39;ctheta_2_dell&#39;.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        ell : int</span>
+<span class="sd">            Angular multipole order.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        C_l : float</span>
+<span class="sd">            Angular power spectrum of order l.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">#! It should be possible to speed the computation by using the function np.polynomial.legendre.leggauss</span>
+
+        <span class="c1">###Compute the integrand for the integral</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">integrand</span><span class="p">(</span><span class="n">cos_theta</span><span class="p">):</span>
+            <span class="c1"># Compute theta from cos(theta)</span>
+            <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">cos_theta</span><span class="p">))</span>
+
+            <span class="c1"># Compute the legendre polynomial of order l</span>
+            <span class="n">legendre</span> <span class="o">=</span> <span class="n">sp</span><span class="o">.</span><span class="n">legendre</span><span class="p">(</span><span class="n">ell</span><span class="p">)(</span><span class="n">cos_theta</span><span class="p">)</span>
+
+            <span class="c1"># Return the product of the angular correlation function and the legendre polynomial</span>
+            <span class="k">return</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">angular_correlation</span><span class="p">(</span>
+                    <span class="n">theta</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;altitude_atm_2d&quot;</span><span class="p">],</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;correlation_length&quot;</span><span class="p">],</span>
+                <span class="p">)</span>
+                <span class="o">*</span> <span class="n">legendre</span>
+            <span class="p">)</span>
+
+        <span class="c1">### Integrate over cos(theta)</span>
+        <span class="n">res</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">quad</span><span class="p">(</span><span class="n">integrand</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">*</span> <span class="n">res</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.ctheta_2_dell">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.ctheta_2_dell">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ctheta_2_dell</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theta_deg</span><span class="p">,</span> <span class="n">ctheta</span><span class="p">,</span> <span class="n">lmax</span><span class="p">,</span> <span class="n">normalization</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Angular power spectrum from angular correlation function.</span>
+
+<span class="sd">        Compute the angular power spectrum from the angular correlation function, using the formula:</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            C_{\ell} = 2 \pi \int_{-1}^{1} C(\theta) P_{\ell}(\cos \theta) d \cos \theta ,</span>
+<span class="sd">        where :math:`C(\theta)` is the angular correlation function and :math:`P_l(\cos \theta)` is the Legendre polynomial of order :math:`l`.</span>
+
+<span class="sd">        This computation is done using the CAMB library, which is much faster than the &#39;cl_from_angular_correlation_int&#39; function.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        theta_deg : array_like</span>
+<span class="sd">            Angles between two points on the surface of the sphere, in degrees.</span>
+<span class="sd">        ctheta : array_like</span>
+<span class="sd">            Angular correlation function.</span>
+<span class="sd">        lmax : int</span>
+<span class="sd">            Maximum angular multipole order.</span>
+<span class="sd">        normalization : int, optional</span>
+<span class="sd">            Normalization parameter, by default 1</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dell : array_like</span>
+<span class="sd">            Angular power spectrum.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Compute the Legendre polynomials up to lmax+1, and the theta values</span>
+        <span class="c1">### These cos_theta do not contain cos(theta)=1 so we have to do this case separately</span>
+        <span class="n">cos_theta</span><span class="p">,</span> <span class="n">legendre</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">polynomial</span><span class="o">.</span><span class="n">legendre</span><span class="o">.</span><span class="n">leggauss</span><span class="p">(</span><span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">xdeg</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">cos_theta</span><span class="p">))</span>
+
+        <span class="c1">### Replace C(theta=0) by 0</span>
+        <span class="n">myctheta</span> <span class="o">=</span> <span class="n">ctheta</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">myctheta</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="c1">### Fill the array that should include polarization (we put zeros there) with the values of our imput c(theta) interpolated at the cos_theta locations</span>
+        <span class="n">allctheta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">cos_theta</span><span class="p">),</span> <span class="mi">4</span><span class="p">))</span>
+        <span class="n">allctheta</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">xdeg</span><span class="p">,</span> <span class="n">theta_deg</span><span class="p">,</span> <span class="n">myctheta</span><span class="p">)</span>
+
+        <span class="c1">### Call the camb function that does the transform from C(theta) to Dl</span>
+        <span class="n">dlth</span> <span class="o">=</span> <span class="n">cc</span><span class="o">.</span><span class="n">corr2cl</span><span class="p">(</span><span class="n">allctheta</span><span class="p">,</span> <span class="n">cos_theta</span><span class="p">,</span> <span class="n">legendre</span><span class="p">,</span> <span class="n">lmax</span><span class="p">)</span>
+
+        <span class="c1">### Compute the multipole moments</span>
+        <span class="n">ell</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">lmax</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1">### the special case cos(theta)=1 corresponds to theta=0 and add 2pi times c(theta=0) to the Dl</span>
+        <span class="k">return</span> <span class="n">ell</span><span class="p">,</span> <span class="n">dlth</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">ctheta</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">normalization</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.ctheta_2_cell">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.ctheta_2_cell">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ctheta_2_cell</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theta_deg</span><span class="p">,</span> <span class="n">ctheta</span><span class="p">,</span> <span class="n">lmax</span><span class="p">,</span> <span class="n">normalization</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Angular power spectrum from angular correlation function.</span>
+
+<span class="sd">        Compute the angular power spectrum from the angular correlation function, using the function &#39;ctheta_2_dell&#39;,</span>
+<span class="sd">        and convert the result to :math:`C_{\ell}`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        theta_deg : array_like</span>
+<span class="sd">            Angles between two points on the surface of the sphere, in degrees.</span>
+<span class="sd">        ctheta : array_like</span>
+<span class="sd">            Angular correlation function.</span>
+<span class="sd">        lmax : int</span>
+<span class="sd">            Maximum angular multipole order.</span>
+<span class="sd">        normalization : int, optional</span>
+<span class="sd">            Normalization parameter, by default 1</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        cell : array_like</span>
+<span class="sd">            Angular power spectrum.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">#! Warning : the Cl computed using CAMB are different from the ones computed using &#39;cl_from_angular_correlation_int&#39; at large l</span>
+
+        <span class="c1">### Compute multipole moments and Dl angular power spectrum</span>
+        <span class="n">ell</span><span class="p">,</span> <span class="n">dlth</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctheta_2_dell</span><span class="p">(</span>
+            <span class="n">theta_deg</span><span class="p">,</span> <span class="n">ctheta</span><span class="p">,</span> <span class="n">lmax</span><span class="p">,</span> <span class="n">normalization</span><span class="o">=</span><span class="n">normalization</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Convert from Dl to Cl</span>
+        <span class="n">dl2cl_factor</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="p">(</span><span class="n">ell</span> <span class="o">*</span> <span class="p">(</span><span class="n">ell</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">clth</span> <span class="o">=</span> <span class="n">dlth</span> <span class="o">*</span> <span class="n">dl2cl_factor</span>
+
+        <span class="c1">### Correct for the special case l=0, as the convertion factor is not valid</span>
+        <span class="n">clth</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cl_from_angular_correlation_int</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">ell</span><span class="p">,</span> <span class="n">clth</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.generate_spatial_fluctuation_sphercial_harmonics">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.generate_spatial_fluctuation_sphercial_harmonics">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">generate_spatial_fluctuation_sphercial_harmonics</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">sigma_rho</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">atm_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">Debug</span><span class="o">=</span><span class="kc">False</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Spatial fluctuation map from angular correlation function.</span>
+
+<span class="sd">        Compute the spatial fluctuation HEALPix map from the angular correlation function, using the function &#39;ctheta_2_cell&#39;.</span>
+<span class="sd">        Debug can be used to check</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        delta : array_like</span>
+<span class="sd">            Spatial fluctuation map, generated accorging HEALPix formalism.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Compute angular correlation function</span>
+        <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">180</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;n_theta&quot;</span><span class="p">])</span>
+        <span class="n">ctheta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">angular_correlation</span><span class="p">(</span>
+            <span class="n">theta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;altitude_atm_2d&quot;</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;correlation_length&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Compute spherical harmonics from angular correlation function</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">clth</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctheta_2_cell</span><span class="p">(</span>
+            <span class="n">theta</span><span class="p">,</span> <span class="n">ctheta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">lmax</span><span class="p">,</span> <span class="n">normalization</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;normalization&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        if self.params[&quot;adjust&quot;]:</span>
+<span class="sd">            sum_cl = np.sum(clth)</span>
+<span class="sd">            C = sigma_rho * (atm_size**2) / sum_cl</span>
+<span class="sd">            clth *= C</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;adjust&quot;</span><span class="p">]:</span>
+            <span class="c1"># var_theory = np.sum(np.fromiter(((2*l + 1) * clth[l] for l in range(self.lmax + 1)),float) )/ (4*np.pi)  #Calling np.sum(generator) is deprecated, and in the future will give a different result. Use np.sum(np.fromiter(generator)) or the python sum builtin instead.</span>
+            <span class="n">sigma_theo</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">clth</span><span class="p">)</span>
+            <span class="n">C</span> <span class="o">=</span> <span class="n">sigma_rho</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">sigma_theo</span><span class="p">)</span>
+            <span class="n">clth</span> <span class="o">*=</span> <span class="n">C</span>
+
+        <span class="c1">### Build fluctuations map</span>
+        <span class="n">delta_rho</span> <span class="o">=</span> <span class="n">hp</span><span class="o">.</span><span class="n">synfast</span><span class="p">(</span><span class="n">clth</span><span class="p">,</span> <span class="n">nside</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span> <span class="n">lmax</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lmax</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">delta_rho</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.get_water_vapor_density_fluctuation_2d_map">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.get_water_vapor_density_fluctuation_2d_map">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_water_vapor_density_fluctuation_2d_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flat</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Water vapor density 2d map.</span>
+
+<span class="sd">        Get the water vapor density 2d map with simulated fluctuations.</span>
+<span class="sd">        The spatial fluctuations are generated using either the correlation function or the angular correlation function.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        mean_rho : array_like</span>
+<span class="sd">            Mean water vapor density.</span>
+<span class="sd">        angular : bool, optional</span>
+<span class="sd">            If True, use the angular correlation function. If False, use the correlation function., by default True</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        atm_maps_2d : array_like</span>
+<span class="sd">            Water vapor density 2d map.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Build water vapor density fluctuations</span>
+        <span class="k">if</span> <span class="n">flat</span><span class="p">:</span>
+            <span class="n">delta_rho</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_spatial_fluctuations_fourier</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;n_grid&quot;</span><span class="p">],</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;size_atm&quot;</span><span class="p">],</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;correlation_length&quot;</span><span class="p">],</span>
+                <span class="n">sigma_rho</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;sigma_rho&quot;</span><span class="p">],</span>
+                <span class="n">atm_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;size_atm&quot;</span><span class="p">],</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">delta_rho</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_spatial_fluctuation_sphercial_harmonics</span><span class="p">(</span>
+                <span class="n">sigma_rho</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;sigma_rho&quot;</span><span class="p">],</span> <span class="n">atm_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;size_atm&quot;</span><span class="p">]</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">delta_rho</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.get_temp_maps">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.get_temp_maps">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_temp_maps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">maps</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Atmosphere maps.</span>
+
+<span class="sd">        Get the atmosphere maps in temperature, by using the equation 12 from Morris 2021, that compute the induced temperature in the detector due to the water vapor density :</span>
+
+<span class="sd">        .. math::</span>
+<span class="sd">            dT( \textbf{r}, \nu) = \alpha_b(\nu) \rho(\textbf{r}) T_{atm}(\textbf{r}) dV .</span>
+
+<span class="sd">        And then, convert it in micro Kelvin CMB.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        maps : array_like</span>
+<span class="sd">            Water vapor density 2d map.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        temp_maps : array_like</span>
+<span class="sd">            Temperature maps in micro Kelvin CMB.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">maps</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">temp_maps</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">integrated_abs_spectrum</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+                <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_water_vapor_density</span>
+                <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span>
+                <span class="o">*</span> <span class="n">maps</span>
+            <span class="p">)</span>  <span class="c1"># maps obtained with spherical harmonics (flat =False)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">temp_maps</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">integrated_abs_spectrum</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+                <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_water_vapor_density</span>
+                <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">temperature</span>
+                <span class="o">*</span> <span class="n">maps</span>
+            <span class="p">)</span>  <span class="c1"># flat maps</span>
+
+        <span class="c1">### Convert them into micro Kelvin CMB</span>
+        <span class="c1"># temp_maps -= Planck18.Tcmb0.value</span>
+        <span class="n">temp_maps</span> <span class="o">*=</span> <span class="mf">1e6</span>
+
+        <span class="k">return</span> <span class="n">temp_maps</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.horizontal_plane_to_azel">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.horizontal_plane_to_azel">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">horizontal_plane_to_azel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Horizontal plane to azimuth and elevation.</span>
+
+<span class="sd">        Convert the coordinates in the horizontal plane to azimuth and elevation.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        x : array_like</span>
+<span class="sd">            x coordinate.</span>
+<span class="sd">        y : array_like</span>
+<span class="sd">            y coordinate.</span>
+<span class="sd">        z : array_like</span>
+<span class="sd">            z coordinate.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        az : array_like</span>
+<span class="sd">            Azimuth coordinate.</span>
+<span class="sd">        el : array_like</span>
+<span class="sd">            Elevation coordinate.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">y</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">z</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">el</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">z</span> <span class="o">/</span> <span class="n">r</span><span class="p">)</span>
+        <span class="n">az</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">r</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.azel_to_horizontal_plane">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.azel_to_horizontal_plane">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">azel_to_horizontal_plane</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">r</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        r : array_like</span>
+<span class="sd">            Radius coordinate.</span>
+<span class="sd">        az : array_like</span>
+<span class="sd">            Azimuth coordinate.</span>
+<span class="sd">        el : array_like</span>
+<span class="sd">            Elevation coordinate.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        x : array_like</span>
+<span class="sd">            x coordinate.</span>
+<span class="sd">        y : array_like</span>
+<span class="sd">            y coordinate.</span>
+<span class="sd">        z : array_like</span>
+<span class="sd">            z coordinate.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="n">r</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">el</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">az</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">r</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">el</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">az</span><span class="p">)</span>
+        <span class="n">z</span> <span class="o">=</span> <span class="n">r</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">el</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.get_azel_coordinates">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.get_azel_coordinates">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_azel_coordinates</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">az_list</span><span class="p">,</span> <span class="n">el_list</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">ind_x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">x_list</span><span class="p">)):</span>
+            <span class="k">for</span> <span class="n">ind_y</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">y_list</span><span class="p">)):</span>
+                <span class="n">_</span><span class="p">,</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">horizontal_plane_to_azel</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">x_list</span><span class="p">[</span><span class="n">ind_x</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">y_list</span><span class="p">[</span><span class="n">ind_y</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">altitude</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="p">)</span>
+                <span class="n">az_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">az</span><span class="p">)</span>
+                <span class="n">el_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">el</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="n">az_list</span><span class="p">,</span> <span class="n">el_list</span><span class="p">])</span><span class="o">.</span><span class="n">T</span></div>
+
+
+<div class="viewcode-block" id="AtmosphereMaps.get_healpy_atm_maps_2d">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.AtmosphereMaps.get_healpy_atm_maps_2d">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_healpy_atm_maps_2d</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">maps</span><span class="p">,</span> <span class="n">longitude</span><span class="p">,</span> <span class="n">latitude</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Healpy 2d atmosphere maps.</span>
+
+<span class="sd">        Function to project the 2d atmosphere maps in cartesian coordinates, and then project them in spherical coordinates using healpy.</span>
+<span class="sd">        By default, the projection is centered on the QUBIC patch (RA=0, DEC=-57).</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        hp_maps_2d : array_like</span>
+<span class="sd">            2d healpy maps of the atmosphere.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1">### Build list of azimuth and elevation coordinates for each point of the atmosphere</span>
+        <span class="n">azel_coordinates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_azel_coordinates</span><span class="p">()</span>
+
+        <span class="c1">### Build rotation operator</span>
+
+        <span class="n">rotation_above_qubic</span> <span class="o">=</span> <span class="n">Cartesian2SphericalOperator</span><span class="p">(</span><span class="s2">&quot;azimuth,elevation&quot;</span><span class="p">)(</span>
+            <span class="n">Rotation3dOperator</span><span class="p">(</span><span class="s2">&quot;ZY&#39;&quot;</span><span class="p">,</span> <span class="n">longitude</span><span class="p">,</span> <span class="mi">90</span> <span class="o">-</span> <span class="n">latitude</span><span class="p">,</span> <span class="n">degrees</span><span class="o">=</span><span class="kc">True</span><span class="p">)(</span>
+                <span class="n">Spherical2CartesianOperator</span><span class="p">(</span><span class="s2">&quot;azimuth,elevation&quot;</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Build healpy projection operator</span>
+        <span class="n">rotation_azel2hp</span> <span class="o">=</span> <span class="n">Spherical2HealpixOperator</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;nside&quot;</span><span class="p">],</span> <span class="s2">&quot;azimuth,elevation&quot;</span>
+        <span class="p">)</span>
+
+        <span class="c1">### Fill the healpy maps with the temperature maps using the operators</span>
+        <span class="n">hp_maps_index</span> <span class="o">=</span> <span class="n">rotation_azel2hp</span><span class="p">(</span><span class="n">rotation_above_qubic</span><span class="p">(</span><span class="n">azel_coordinates</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span>
+            <span class="nb">int</span>
+        <span class="p">)</span>
+        <span class="n">hp_maps_2d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+            <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">frequencies</span><span class="p">),</span> <span class="n">hp</span><span class="o">.</span><span class="n">nside2npix</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;nside&quot;</span><span class="p">]))</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">ifreq</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">frequencies</span><span class="p">)):</span>
+            <span class="n">hp_maps_2d</span><span class="p">[</span><span class="n">ifreq</span><span class="p">,</span> <span class="n">hp_maps_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">maps</span><span class="p">[</span><span class="n">ifreq</span><span class="p">]</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">hp_maps_2d</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="WindPerturbation">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WindPerturbation</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">qubic_sampling</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Wind Perturbation</span>
+
+<span class="sd">        This class aims to simulate wind for atmosphere observations.</span>
+<span class="sd">        It relies on the same parameters dictionary than AtmosphereMaps, as well as on a QubicSampling instance.</span>
+<span class="sd">        We take the choice to simulate wind by deviating the scanning strategy, rather than shifting pixels in an atmosphere maps.</span>
+<span class="sd">        The two methods are equivalent, but the one we chose if way cheaper in terms of computational ressources.</span>
+<span class="sd">        We will then deviated the pixels seen in the QubicSampling instance according to the wind generated from the parameters given in the parameters dict.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        params : dict</span>
+<span class="sd">            Dictionary containing all the simulation parameters</span>
+<span class="sd">        scanning_strategy : QubicSampling</span>
+<span class="sd">            QubicSampling instance</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span> <span class="o">=</span> <span class="n">qubic_sampling</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">npointings</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">size</span>
+
+<div class="viewcode-block" id="WindPerturbation.azel_to_cartesian">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation.azel_to_cartesian">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">azel_to_cartesian</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">azimuth</span><span class="p">,</span> <span class="n">elevation</span><span class="p">,</span> <span class="n">altitude</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;AzEl to Cartesian coordinates.&quot;&quot;&quot;</span>
+
+        <span class="n">x</span> <span class="o">=</span> <span class="n">altitude</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">elevation</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">elevation</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">azimuth</span><span class="p">)</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">altitude</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">elevation</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">elevation</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">azimuth</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span></div>
+
+
+<div class="viewcode-block" id="WindPerturbation.cartesian_to_azel">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation.cartesian_to_azel">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cartesian_to_azel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Cartesian to AzEl cooordinates.&quot;&quot;&quot;</span>
+
+        <span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">y</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">z</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+        <span class="n">el</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">arccos</span><span class="p">(</span><span class="n">z</span> <span class="o">/</span> <span class="n">r</span><span class="p">)</span>
+        <span class="n">az</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arctan2</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">az</span><span class="p">,</span> <span class="n">el</span></div>
+
+
+<div class="viewcode-block" id="WindPerturbation.get_constant_wind">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation.get_constant_wind">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_constant_wind</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wind_x</span><span class="p">,</span> <span class="n">wind_y</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Constant wind field</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        wind_x, wind_y : float</span>
+<span class="sd">            wind&#39;s x and y components</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        wind_field : array_like</span>
+<span class="sd">            shape (2, npointings)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">wind</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">npointings</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">wind_x</span> <span class="o">*</span> <span class="n">wind</span><span class="p">,</span> <span class="n">wind_y</span> <span class="o">*</span> <span class="n">wind</span></div>
+
+
+<div class="viewcode-block" id="WindPerturbation.get_normal_wind">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation.get_normal_wind">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_normal_wind</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">wind_mean</span><span class="p">,</span> <span class="n">wind_std</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Random normal wind field</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        wind_mean, wind_std : array_like</span>
+<span class="sd">            parameters of the Gaussian distribution. Each is a lenght 2 array for x and y components</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        wind_field : array_like</span>
+<span class="sd">            shape (2, npointings)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">wind_x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">wind_mean</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">wind_std</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">npointings</span><span class="p">))</span>
+        <span class="n">wind_y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">wind_mean</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">wind_std</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">npointings</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">wind_x</span><span class="p">,</span> <span class="n">wind_y</span></div>
+
+
+<div class="viewcode-block" id="WindPerturbation.get_wind">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation.get_wind">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_wind</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;wind_type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;constant&quot;</span><span class="p">:</span>
+            <span class="n">wind_x</span><span class="p">,</span> <span class="n">wind_y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_constant_wind</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;wind_cst&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;wind_cst&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+            <span class="p">)</span>
+
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;wind_type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;normal&quot;</span><span class="p">:</span>
+            <span class="n">wind_x</span><span class="p">,</span> <span class="n">wind_y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_normal_wind</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;wind_normal&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;wind_normal&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+            <span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;Wind type not defined yet. Please enter &#39;constant&#39; or &#39;normal&#39;.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">wind_x</span><span class="p">,</span> <span class="n">wind_y</span></div>
+
+
+<div class="viewcode-block" id="WindPerturbation.get_deviated_index">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation.get_deviated_index">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_deviated_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">pos_x</span><span class="p">,</span> <span class="n">pos_y</span><span class="p">,</span> <span class="n">wind_x</span><span class="p">,</span> <span class="n">wind_y</span><span class="p">):</span>
+        <span class="n">deviated_index_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">wind_x</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">pos_x</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+        <span class="n">deviated_index_y</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">wind_y</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">pos_y</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">deviated_index_x</span><span class="p">,</span> <span class="n">deviated_index_y</span></div>
+
+
+<div class="viewcode-block" id="WindPerturbation.get_deviated_coord">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation.get_deviated_coord">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_deviated_coord</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">azimuth</span><span class="p">,</span> <span class="n">elevation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">azimuth</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">elevation</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;wind&quot;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">azimuth</span><span class="p">,</span> <span class="n">elevation</span>
+
+        <span class="c1"># Get wind</span>
+        <span class="n">wind_x</span><span class="p">,</span> <span class="n">wind_y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_wind</span><span class="p">()</span>
+
+        <span class="c1"># Compute deviated scanning strategy</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">azel_to_cartesian</span><span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">azimuth</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="n">elevation</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;altitude_atm_2d&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">deviated_index_x</span><span class="p">,</span> <span class="n">deviated_index_y</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_deviated_index</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">wind_x</span><span class="p">,</span> <span class="n">wind_y</span><span class="p">)</span>
+        <span class="n">deviated_az</span><span class="p">,</span> <span class="n">deviated_el</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cartesian_to_azel</span><span class="p">(</span>
+            <span class="n">deviated_index_x</span><span class="p">,</span> <span class="n">deviated_index_y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">[</span><span class="s2">&quot;altitude_atm_2d&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="n">deviated_az</span><span class="p">,</span> <span class="n">deviated_el</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">deviated_az</span> <span class="o">%</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="p">)),</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">degrees</span><span class="p">(</span><span class="n">deviated_el</span><span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">deviated_az</span><span class="p">,</span> <span class="n">deviated_el</span></div>
+
+
+<div class="viewcode-block" id="WindPerturbation.get_deviated_qubic_sampling">
+<a class="viewcode-back" href="../../../api/lib.MapMaking.Qatmosphere.html#lib.MapMaking.Qatmosphere.WindPerturbation.get_deviated_qubic_sampling">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_deviated_qubic_sampling</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">deviated_az</span><span class="p">,</span> <span class="n">deviated_el</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_deviated_coord</span><span class="p">()</span>
+
+        <span class="n">deviated_qubic_sampling</span> <span class="o">=</span> <span class="n">QubicSampling</span><span class="p">(</span>
+            <span class="n">azimuth</span><span class="o">=</span><span class="n">deviated_az</span><span class="p">,</span>
+            <span class="n">elevation</span><span class="o">=</span><span class="n">deviated_el</span><span class="p">,</span>
+            <span class="n">pitch</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">pitch</span><span class="p">,</span>
+            <span class="n">angle_hwp</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">angle_hwp</span><span class="p">,</span>
+            <span class="n">time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">time</span><span class="p">,</span>
+            <span class="n">period</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">period</span><span class="p">,</span>
+            <span class="n">latitude</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">latitude</span><span class="p">,</span>
+            <span class="n">longitude</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">qubic_sampling</span><span class="o">.</span><span class="n">longitude</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">deviated_qubic_sampling</span><span class="o">.</span><span class="n">fix_az</span> <span class="o">=</span> <span class="kc">True</span>
+
+        <span class="k">return</span> <span class="n">deviated_qubic_sampling</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

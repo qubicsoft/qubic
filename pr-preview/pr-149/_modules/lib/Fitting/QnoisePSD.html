@@ -1,0 +1,433 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lib.Fitting.QnoisePSD &mdash; qubicsoft  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            qubicsoft
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api/lib.html">lib package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">qubicsoft</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lib.Fitting.QnoisePSD</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for lib.Fitting.QnoisePSD</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">QnoisePSD.py</span>
+<span class="sd">============</span>
+
+<span class="sd">Tools for computing and fitting noise power spectral densities (PSD).</span>
+
+<span class="sd">This module provides utilities to estimate power spectra from time-domain</span>
+<span class="sd">data and to fit common noise models such as white noise, 1/f noise, and</span>
+<span class="sd">generalized power-law spectra.</span>
+
+<span class="sd">Author</span>
+<span class="sd">------</span>
+<span class="sd">Tom Laclavère</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">iminuit</span><span class="w"> </span><span class="kn">import</span> <span class="n">Minuit</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">qubic.lib.Calibration.Qfiber</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ft</span>
+
+<span class="c1"># ========== Compute Power Spectrum ==========</span>
+
+
+<div class="viewcode-block" id="compute_ps">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.compute_ps">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_ps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute the two-sided Power Spectral Density (PSD) of a time-domain signal.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : array_like</span>
+<span class="sd">        Input time-domain signal. Must be one-dimensional.</span>
+<span class="sd">    timestep : float</span>
+<span class="sd">        Sampling interval of the signal (seconds per sample).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    freq : ndarray</span>
+<span class="sd">        Frequencies corresponding to the PSD values (Hz).</span>
+<span class="sd">        Ranges from -Nyquist to +Nyquist.</span>
+<span class="sd">    ps : ndarray</span>
+<span class="sd">        Two-sided power spectral density of the signal.</span>
+<span class="sd">        Units are [signal units]^2 / Hz.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">N</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">size</span>
+
+    <span class="n">freq</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fftfreq</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">timestep</span><span class="p">)</span>
+    <span class="n">ps</span> <span class="o">=</span> <span class="p">(</span><span class="n">timestep</span> <span class="o">/</span> <span class="n">N</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">fft</span><span class="p">(</span><span class="n">data</span><span class="p">))</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="k">return</span> <span class="n">freq</span><span class="p">,</span> <span class="n">ps</span></div>
+
+
+
+<div class="viewcode-block" id="compute_real_ps">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.compute_real_ps">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute_real_ps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute the one-sided Power Spectral Density (PSD) of a real-valued signal.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : array_like</span>
+<span class="sd">        Real-valued time-domain signal. Must be one-dimensional.</span>
+<span class="sd">    timestep : float</span>
+<span class="sd">        Sampling interval of the signal (seconds per sample).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    freq : ndarray</span>
+<span class="sd">        Positive frequencies corresponding to the PSD values (Hz), from 0 to Nyquist.</span>
+<span class="sd">    ps : ndarray</span>
+<span class="sd">        One-sided power spectral density of the signal.</span>
+<span class="sd">        Units are [signal units]^2 / Hz.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - One-sided correction is applied: all bins except the first and last are multiplied by 2.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">N</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">size</span>
+
+    <span class="n">freq</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">rfftfreq</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">d</span><span class="o">=</span><span class="n">timestep</span><span class="p">)</span>
+    <span class="n">ps</span> <span class="o">=</span> <span class="p">(</span><span class="n">timestep</span> <span class="o">/</span> <span class="n">N</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">fft</span><span class="o">.</span><span class="n">rfft</span><span class="p">(</span><span class="n">data</span><span class="p">))</span> <span class="o">**</span> <span class="mi">2</span>
+
+    <span class="c1"># One-sided correction</span>
+    <span class="k">if</span> <span class="n">N</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">ps</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*=</span> <span class="mi">2</span>
+
+    <span class="k">return</span> <span class="n">freq</span><span class="p">,</span> <span class="n">ps</span></div>
+
+
+
+<span class="c1"># ========== Noise Models ==========</span>
+
+
+<div class="viewcode-block" id="white_noise">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.white_noise">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">white_noise</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">A_white</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    White noise PSD.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    f : array_like</span>
+<span class="sd">        Frequencies.</span>
+<span class="sd">    A_white : float</span>
+<span class="sd">        Amplitude of the white noise (rms).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    psd : ndarray</span>
+<span class="sd">        Power spectral density of white noise.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">A_white</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">f</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="one_over_f_noise">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.one_over_f_noise">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">one_over_f_noise</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">A_f</span><span class="p">,</span> <span class="n">alpha</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    1/f^alpha noise PSD.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    f : array_like</span>
+<span class="sd">        Frequencies (should be &gt;0 to avoid division by zero).</span>
+<span class="sd">    A_f : float</span>
+<span class="sd">        Amplitude of 1/f noise at f=1 Hz.</span>
+<span class="sd">    alpha : float</span>
+<span class="sd">        Exponent of 1/f noise.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    psd : ndarray</span>
+<span class="sd">        Power spectral density of 1/f^alpha noise.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">A_f</span><span class="o">**</span><span class="mi">2</span> <span class="o">/</span> <span class="n">f</span><span class="o">**</span><span class="n">alpha</span></div>
+
+
+
+<div class="viewcode-block" id="combined_noise">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.combined_noise">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">combined_noise</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">A_white</span><span class="p">,</span> <span class="n">f_knee</span><span class="p">,</span> <span class="n">alpha</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Combination of white noise + 1/f^alpha noise.</span>
+
+<span class="sd">    PSD = white + 1/f^alpha</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    f : array_like</span>
+<span class="sd">        Frequencies.</span>
+<span class="sd">    A_white : float</span>
+<span class="sd">        Amplitude of white noise.</span>
+<span class="sd">    f_knee : float</span>
+<span class="sd">        &quot;Knee&quot; frequency where the 1/f^alpha noise equals the white noise level (Hz).</span>
+<span class="sd">    alpha : float</span>
+<span class="sd">        Exponent of 1/f noise.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    psd : ndarray</span>
+<span class="sd">        Combined PSD.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">A_white</span><span class="o">**</span><span class="mi">2</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">f_knee</span> <span class="o">/</span> <span class="n">f</span><span class="p">)</span> <span class="o">**</span> <span class="n">alpha</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ========== Fitting Utilities ==========</span>
+
+
+<div class="viewcode-block" id="nll_gauss_model">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.nll_gauss_model">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">nll_gauss_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">freq</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">sigma</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return a Minuit-compatible function for any model.</span>
+
+<span class="sd">    model : callable</span>
+<span class="sd">        model(freq, *params)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">nll</span><span class="p">(</span><span class="o">*</span><span class="n">params</span><span class="p">):</span>
+        <span class="n">psd_model</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="o">*</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="mf">0.5</span> <span class="o">*</span> <span class="p">((</span><span class="n">ps</span> <span class="o">-</span> <span class="n">psd_model</span><span class="p">)</span> <span class="o">/</span> <span class="n">sigma</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">nll</span></div>
+
+
+
+<div class="viewcode-block" id="make_minuit">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.make_minuit">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_minuit</span><span class="p">(</span><span class="n">nll</span><span class="p">,</span> <span class="n">param_names</span><span class="p">,</span> <span class="n">x0</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create Minuit object with named parameters.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">param_names</span><span class="p">,</span> <span class="n">x0</span><span class="p">))</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">Minuit</span><span class="p">(</span><span class="n">nll</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">param_names</span><span class="p">:</span>
+        <span class="n">m</span><span class="o">.</span><span class="n">limits</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">m</span></div>
+
+
+
+<div class="viewcode-block" id="fit_minuit_ll_from_ps">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.fit_minuit_ll_from_ps">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fit_minuit_ll_from_ps</span><span class="p">(</span>
+    <span class="n">freq</span><span class="p">,</span>
+    <span class="n">ps</span><span class="p">,</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="n">x0</span><span class="p">,</span>
+    <span class="n">param_names</span><span class="p">,</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+    <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">log</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="n">freq</span><span class="p">,</span> <span class="n">ps</span> <span class="o">=</span> <span class="n">freq</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">ps</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+    <span class="n">ps</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">ps</span><span class="p">[</span><span class="o">-</span><span class="mi">10</span><span class="p">:])</span>
+
+    <span class="k">if</span> <span class="n">plot</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">dpi</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
+
+    <span class="n">binned_freq</span><span class="p">,</span> <span class="n">binned_ps</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">binned_ps_error</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">profile</span><span class="p">(</span>
+        <span class="n">freq</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">nbins</span><span class="o">=</span><span class="n">nbins</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="n">plot</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="n">log</span>
+    <span class="p">)</span>
+
+    <span class="n">binned_ps_error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">binned_ps_error</span><span class="p">,</span> <span class="mf">1e-20</span><span class="p">)</span>
+
+    <span class="c1"># Build NLL</span>
+    <span class="n">nll</span> <span class="o">=</span> <span class="n">nll_gauss_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">binned_freq</span><span class="p">,</span> <span class="n">binned_ps</span><span class="p">,</span> <span class="n">binned_ps_error</span><span class="p">)</span>
+
+    <span class="c1"># Minuit</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">make_minuit</span><span class="p">(</span><span class="n">nll</span><span class="p">,</span> <span class="n">param_names</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+
+    <span class="n">m</span><span class="o">.</span><span class="n">migrad</span><span class="p">()</span>
+    <span class="n">m</span><span class="o">.</span><span class="n">hesse</span><span class="p">()</span>
+
+    <span class="c1"># Plot</span>
+    <span class="k">if</span> <span class="n">plot</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Data&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="n">model</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="o">*</span><span class="n">m</span><span class="o">.</span><span class="n">values</span><span class="p">),</span> <span class="s2">&quot;k&quot;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Fit&quot;</span><span class="p">)</span>
+
+        <span class="n">ndof</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">binned_ps</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
+        <span class="n">chi2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+            <span class="p">((</span><span class="n">binned_ps</span> <span class="o">-</span> <span class="n">model</span><span class="p">(</span><span class="n">binned_freq</span><span class="p">,</span> <span class="o">*</span><span class="n">m</span><span class="o">.</span><span class="n">values</span><span class="p">))</span> <span class="o">/</span> <span class="n">binned_ps_error</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="p">)</span>
+        <span class="n">reduced_chi2</span> <span class="o">=</span> <span class="n">chi2</span> <span class="o">/</span> <span class="n">ndof</span>
+
+        <span class="n">fit_info</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;$</span><span class="se">\\</span><span class="s2">chi^2$/ndof = </span><span class="si">{</span><span class="n">chi2</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="n">ndof</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">reduced_chi2</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_names</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
+            <span class="n">e</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">errors</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
+            <span class="n">fit_info</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> = $</span><span class="si">{</span><span class="n">v</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2"> </span><span class="se">\\</span><span class="s2">pm </span><span class="si">{</span><span class="n">e</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fit_info</span><span class="p">))</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">xscale</span><span class="p">(</span><span class="s2">&quot;log&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">yscale</span><span class="p">(</span><span class="s2">&quot;log&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">m</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">m</span><span class="o">.</span><span class="n">errors</span><span class="p">,</span> <span class="n">m</span><span class="o">.</span><span class="n">fmin</span><span class="o">.</span><span class="n">reduced_chi2</span></div>
+
+
+
+<div class="viewcode-block" id="fit_minuit_ll">
+<a class="viewcode-back" href="../../../api/lib.Fitting.QnoisePSD.html#lib.Fitting.QnoisePSD.fit_minuit_ll">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">fit_minuit_ll</span><span class="p">(</span>
+    <span class="n">data</span><span class="p">,</span>
+    <span class="n">timestep</span><span class="p">,</span>
+    <span class="n">model</span><span class="p">,</span>
+    <span class="n">x0</span><span class="p">,</span>
+    <span class="n">param_names</span><span class="p">,</span>
+    <span class="n">nbins</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span>
+    <span class="n">plot</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">log</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="c1"># Compute PSD</span>
+    <span class="n">freq</span><span class="p">,</span> <span class="n">ps</span> <span class="o">=</span> <span class="n">compute_real_ps</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="o">=</span><span class="n">timestep</span><span class="p">)</span>
+    <span class="n">freq</span><span class="p">,</span> <span class="n">ps</span> <span class="o">=</span> <span class="n">freq</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">ps</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+    <span class="n">ps</span> <span class="o">/=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">ps</span><span class="p">[</span><span class="o">-</span><span class="mi">10</span><span class="p">:])</span>
+
+    <span class="k">if</span> <span class="n">plot</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">dpi</span><span class="o">=</span><span class="mi">150</span><span class="p">)</span>
+
+    <span class="n">binned_freq</span><span class="p">,</span> <span class="n">binned_ps</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">binned_ps_error</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ft</span><span class="o">.</span><span class="n">profile</span><span class="p">(</span>
+        <span class="n">freq</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">nbins</span><span class="o">=</span><span class="n">nbins</span><span class="p">,</span> <span class="n">plot</span><span class="o">=</span><span class="n">plot</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="n">log</span>
+    <span class="p">)</span>
+
+    <span class="n">binned_ps_error</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">binned_ps_error</span><span class="p">,</span> <span class="mf">1e-20</span><span class="p">)</span>
+
+    <span class="c1"># Generic NLL</span>
+    <span class="n">nll</span> <span class="o">=</span> <span class="n">nll_gauss_model</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">binned_freq</span><span class="p">,</span> <span class="n">binned_ps</span><span class="p">,</span> <span class="n">binned_ps_error</span><span class="p">)</span>
+
+    <span class="c1"># Minuit</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">make_minuit</span><span class="p">(</span><span class="n">nll</span><span class="p">,</span> <span class="n">param_names</span><span class="p">,</span> <span class="n">x0</span><span class="p">)</span>
+
+    <span class="n">m</span><span class="o">.</span><span class="n">migrad</span><span class="p">()</span>
+    <span class="n">m</span><span class="o">.</span><span class="n">hesse</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">plot</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Data&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="n">model</span><span class="p">(</span><span class="n">freq</span><span class="p">,</span> <span class="o">*</span><span class="n">m</span><span class="o">.</span><span class="n">values</span><span class="p">),</span> <span class="s2">&quot;k&quot;</span><span class="p">,</span> <span class="n">label</span><span class="o">=</span><span class="s2">&quot;Fit&quot;</span><span class="p">)</span>
+
+        <span class="n">ndof</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">binned_ps</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
+        <span class="n">chi2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span>
+            <span class="p">((</span><span class="n">binned_ps</span> <span class="o">-</span> <span class="n">model</span><span class="p">(</span><span class="n">binned_freq</span><span class="p">,</span> <span class="o">*</span><span class="n">m</span><span class="o">.</span><span class="n">values</span><span class="p">))</span> <span class="o">/</span> <span class="n">binned_ps_error</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="p">)</span>
+        <span class="n">reduced_chi2</span> <span class="o">=</span> <span class="n">chi2</span> <span class="o">/</span> <span class="n">ndof</span>
+
+        <span class="n">fit_info</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;$</span><span class="se">\\</span><span class="s2">chi^2$/ndof = </span><span class="si">{</span><span class="n">chi2</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> / </span><span class="si">{</span><span class="n">ndof</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">reduced_chi2</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">param_names</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
+            <span class="n">e</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">errors</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
+            <span class="n">fit_info</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> = $</span><span class="si">{</span><span class="n">v</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2"> </span><span class="se">\\</span><span class="s2">pm </span><span class="si">{</span><span class="n">e</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">$&quot;</span><span class="p">)</span>
+
+        <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fit_info</span><span class="p">))</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">xscale</span><span class="p">(</span><span class="s2">&quot;log&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">yscale</span><span class="p">(</span><span class="s2">&quot;log&quot;</span><span class="p">)</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">m</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">m</span><span class="o">.</span><span class="n">errors</span><span class="p">,</span> <span class="n">m</span><span class="o">.</span><span class="n">fmin</span><span class="o">.</span><span class="n">reduced_chi2</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, QUBIC collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

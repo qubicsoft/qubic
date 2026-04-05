@@ -1,7 +1,0 @@
-lib.MapMaking.Qatmosphere module
-================================
-
-.. automodule:: lib.MapMaking.Qatmosphere
-   :members:
-   :undoc-members:
-   :show-inheritance:

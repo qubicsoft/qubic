@@ -1,7 +1,0 @@
-lib.Fitting.QnoisePSD module
-============================
-
-.. automodule:: lib.Fitting.QnoisePSD
-   :members:
-   :undoc-members:
-   :show-inheritance:

@@ -2,7 +2,7 @@ name: Sphinx Docs
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
     types: [opened, reopened, synchronize]
 
@@ -61,7 +61,7 @@ jobs:
 
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: build-docs
     runs-on: ubuntu-latest
 

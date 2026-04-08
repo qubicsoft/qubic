@@ -918,9 +918,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         # not in 2026
         mytod = tod.copy()
         # reso = 8
-        ang_size = 60 # degrees
+        ang_size = 40 # degrees
         reso = ang_size*60/200 # arcmin/pix
-        print(reso)
+        # print(reso)
 
     if clean_tod:
         min_plot = -5e3
@@ -1128,10 +1128,12 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     mask_map = mask_scan# * mask_elt
 
     if det_pos is None:
-        center=[np.mean(newazt), np.mean(newelt)]
+        # center = [np.mean(newazt), np.mean(newelt)]
+        center = [0, 90] # zenith
     else:
         # center = det_pos
-        center = [0, 0] # because of the rotation applied, the Moon is supposed to be at the centre
+        # center = [0, 0] # because of the rotation applied, the Moon is supposed to be at the centre
+        center = [0, 90] # zenith
 
     # To compare the map created with only forth scans with the map created with only back scans
     if check_back_forth:
@@ -1152,31 +1154,36 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
                 no_UNSEEN_mask = ~mapsb_proj.mask
 
+                print(np.shape(XX))
+                print(np.shape(XX[no_UNSEEN_mask]))
+
                 mapsb_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), mapsb_proj[no_UNSEEN_mask])
                 new_mapsb_proj = mapsb_interpolator(np.moveaxis([XX, YY], 0, -1))
                 mapsb_fb_proj.append(new_mapsb_proj)
 
-            fig, axs = plt.subplots(1, 3)
-            axs[0].imshow(mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
-            axs[1].imshow(mapsb_fb_proj[1], vmin=min_plot, vmax=max_plot)
-            axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
-            plt.show()
+            if doplot:
+                fig, axs = plt.subplots(1, 3)
+                axs[0].imshow(mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
+                axs[1].imshow(mapsb_fb_proj[1], vmin=min_plot, vmax=max_plot)
+                axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
+                plt.show()
         else:
-            plt.figure()
-            hp.gnomview(mapsb_forth, reso=reso, sub=(1, 3, 1), min=min_plot, max=max_plot, 
-                    title="forth scans", rot=center)
-            hp.gnomview(mapsb_back, reso=reso, sub=(1, 3, 2), min=min_plot, max=max_plot, 
-                    title="back scans", rot=center)
-            hp.gnomview(mapsb_forth - mapsb_back, reso=reso, sub=(1, 3, 3), min=min_plot, max=max_plot, 
-                    title="forth - back scans", rot=center)
-            # hp.gnomview(mapsb_forth, reso=10, sub=(1, 3, 1), 
-            #         title="forth scans", rot=center)
-            # hp.gnomview(mapsb_back, reso=10, sub=(1, 3, 2), 
-            #         title="back scans", rot=center)
-            # hp.gnomview(mapsb_forth - mapsb_back, reso=10, sub=(1, 3, 3), 
-            #         title="forth - back scans", rot=center)
-            plt.show()
-            # return mapsb_forth, mapcount_forth, mapsb_back, mapcount_back
+            if doplot:
+                plt.figure()
+                hp.gnomview(mapsb_forth, reso=reso, sub=(1, 3, 1), min=min_plot, max=max_plot, 
+                        title="forth scans", rot=center)
+                hp.gnomview(mapsb_back, reso=reso, sub=(1, 3, 2), min=min_plot, max=max_plot, 
+                        title="back scans", rot=center)
+                hp.gnomview(mapsb_forth - mapsb_back, reso=reso, sub=(1, 3, 3), min=min_plot, max=max_plot, 
+                        title="forth - back scans", rot=center)
+                # hp.gnomview(mapsb_forth, reso=10, sub=(1, 3, 1), 
+                #         title="forth scans", rot=center)
+                # hp.gnomview(mapsb_back, reso=10, sub=(1, 3, 2), 
+                #         title="back scans", rot=center)
+                # hp.gnomview(mapsb_forth - mapsb_back, reso=10, sub=(1, 3, 3), 
+                #         title="forth - back scans", rot=center)
+                plt.show()
+                # return mapsb_forth, mapcount_forth, mapsb_back, mapcount_back
 
     mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
 
@@ -1185,7 +1192,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         plt.figure()
         # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, 
         #             title="gaussian map", rot=center)
-        hp.gnomview(mapsb, reso=10, min=-5e3, max=1.2e4, 
+        hp.gnomview(mapsb, reso=reso, min=-5e3, max=1.2e4,
                     title="final map", rot=center)
         # hp.gnomview(mapsb, reso=10, 
         #             title="final map", rot=center)
@@ -1222,15 +1229,15 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         no_UNSEEN_mask = ~mapsb_proj.mask
         mapsb_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), mapsb_proj[no_UNSEEN_mask])
         new_mapsb_proj = mapsb_interpolator(np.moveaxis([XX, YY], 0, -1))
-        
-        fig, ax = plt.subplots(figsize=(5, 5))
-        plt.imshow(new_mapsb_proj, vmin=min_plot, vmax=max_plot)
-        for minor in [True, False]:
-            ax.set_xticks([], minor=minor)
-            ax.set_yticks([], minor=minor)
-        plt.tight_layout()
-        plt.savefig("figures/20260311_TES{}_v2.pdf".format(TES_number))
-        plt.show()
+        if doplot:
+            fig, ax = plt.subplots(figsize=(5, 5))
+            plt.imshow(new_mapsb_proj, vmin=min_plot, vmax=max_plot)
+            for minor in [True, False]:
+                ax.set_xticks([], minor=minor)
+                ax.set_yticks([], minor=minor)
+            plt.tight_layout()
+            plt.savefig("figures/20260311_TES{}_v2.pdf".format(TES_number))
+            plt.show()
     return mapsb, mapcount
 
 
@@ -2012,10 +2019,11 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
                                                                     thr_speedmin=speedmin)
         Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
 
-        # New coordinates centered on the Moon
+        # New coordinates centered on the Moon: we might want to do this separately for each TES (i.e. not in this function) once we have their positions on the sky!
         # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
-        newazt_, newelt_ = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
-        newazt, newelt = azt, newelt_ # no corretion for Moon movement in azimuth (because of cos(delta_az)), trying to fit the real Moon postion for each TES
+        # newazt, newelt = azt - azmoon, elt - elmoon # no complicated corretion for Moon movement in azimuth, trying here to fit the real Moon postion for each TES --> position of order 0 in Moon maps?
+        # newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+        newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
         # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon) # great circle
         # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos) # ?
@@ -2072,7 +2080,8 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
     if det_pos is None:
         data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=ObsDate[:4])
     else:
-        tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath = format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data, datadir, det_pos, isok_arr, tshift=tshift)
+        data, tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=ObsDate[:4], det_pos=det_pos)
+        # tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath = format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data, datadir, det_pos, isok_arr, tshift=tshift)
         print(np.shape(newazt_))
         print(np.shape(newelt_))
 
@@ -2098,7 +2107,10 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             else:
                 tod = alltod[iTES, :]
             if det_pos is not None:
-                if np.shape(newazt_)[0] == 1:
+                if len(np.shape(newazt_)) == 1:
+                    newazt = newazt_
+                    newelt = newelt_
+                elif np.shape(newazt_)[0] == 1:
                     newazt = newazt_[0]
                     newelt = newelt_[0]
                     # det_pos_i = det_pos
@@ -2170,7 +2182,8 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
         # center = det_pos
         center = [0, 0]
     else:
-        center = [np.mean(newazt), np.mean(newelt)]
+        # center = [np.mean(newazt), np.mean(newelt)]
+        center = [0, 90] # zenith
     return allmaps, data, center, newazt, newelt, scantype
 
 
@@ -2741,9 +2754,98 @@ def get_simple_rotation_matrix(axis, angle):
     return R
 
 
-def method_4_moon(allscans_az, allscans_el, allscans_amp, az_source, el_source, az_moon, el_moon): # wrapper of method 4 to be used with Moon maps
-    return method_4(allscans_az, allscans_el, allscans_amp, az_source, el_source)
+def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=None):
+    """
+    This function computes the coorinates of a point or an array of points with respect to a
+    given source, taking the source as the zenith of the new coordinates system.
 
+    Parameters
+    ----------
+    azt, elt : arrays (N,)
+        The original coordinates of the array of N points.
+    azt_source, elt_source : arrays (N,) or np.float_
+        The original coordinates of the source.
+    tilt_az : float
+        The boresight rotation to apply (to be checked) in order to retrieve a vertical beam,
+        in degrees. Default is 0.
+
+    Returns
+    -------
+    new_azt, new_elt :
+        The coordinates of the array of points in the new system.
+
+    """
+    # az_source and el_source need to be either np.float_ or np.array
+    sphere_radius = 1
+    sphere_centre = np.array([0, 0, 0])
+    if det_pos is not None: # if we have already fitted the detector offset on the sky, we can put the position of the Moon for this particular detector as the zenith
+        # the idea here is to compute the value of az and el for the given detector position
+        # this position is fitted from maps centered at the line of sight of the telescope as if the source were at zenith
+        az_zen = det_pos[0]
+        el_zen = det_pos[1]
+        # below, the deltas are computed from the distance to zenith (90 - el_zen) and the direction (az_zen - 90)
+        delta_az = (90 - el_zen) * np.cos(np.radians(az_zen - 90)) / np.cos(np.radians(elt_source))
+        delta_el = (90 - el_zen) * np.sin(np.radians(az_zen - 90))
+        azt_source += delta_az
+        elt_source += delta_el
+
+    # we get the vector perpendicular to the horizontal great circle at pointing
+    perp_vect_pointing = get_perp_vect_horiz_great_circle(azt, elt, tilt_az=tilt_az, sphere_radius=sphere_radius, sphere_centre=sphere_centre)
+
+    # we get vector perpendicular to the great circle going through pointing and calsource
+    calsource = spherical2cartesian(sphere_radius, azt_source, elt_source, coord="horizontal", axis="first")
+    pointing = spherical2cartesian(sphere_radius, azt, elt, coord="horizontal", axis="first")
+    # print(np.shape(calsource))
+    # print(np.shape(pointing))
+    perp_vec_gc_pointing_calsrc = get_perp_vect(calsource, pointing, sphere_centre)
+    # print(np.shape(perp_vec_gc_pointing_calsrc))
+
+    # we want the coords to be the last axis
+    vec_calsource = np.moveaxis(calsource, 0, -1) # sphere centre is [0, 0, 0]
+    vec_pointing = np.moveaxis(pointing, 0, -1)
+    # the angle between the pointing and the calsource in degrees
+    angle_beta = np.abs(np.degrees(dist_angle(vec_calsource, vec_pointing)))
+
+    print("angle_beta == 0:", np.argwhere(angle_beta == 0))
+
+    print(np.shape(perp_vect_pointing))
+    print(np.shape(perp_vec_gc_pointing_calsrc))
+    # the angle between the horizontal great circle and the great circle with the pointing and the calsource
+    angle_alpha = np.degrees(dist_angle(np.moveaxis(perp_vect_pointing, 0, -1), np.moveaxis(perp_vec_gc_pointing_calsrc, 0, -1)))
+    angle_alpha[~np.isfinite(angle_alpha)] = 0 # at the pixel pointing at calsource or if problem for a scan
+    angle_beta[~np.isfinite(angle_beta)] = 30 # if problem for a scan
+
+    # plt.figure()
+    # plt.plot(tt, angle_alpha)
+    # plt.show()
+
+    # plt.figure()
+    # plt.plot(tt, angle_beta)
+    # plt.show()
+
+    where_moon = np.logical_or(np.logical_and(tt>4224, tt<4225), np.logical_and(tt>4267, tt<4268))
+    plt.figure()
+    plt.scatter(angle_alpha, angle_beta, s=1)
+    plt.scatter(angle_alpha[where_moon], angle_beta[where_moon], s=4, c="r", zorder=1000)
+    plt.xlabel("angle_alpha")
+    plt.ylabel("angle_beta")
+    plt.axvline(x=0)
+    plt.axhline(y=0)
+    plt.show()
+    # ar
+
+    # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
+    new_pointing = spherical2cartesian(sphere_radius, angle_alpha, 90 - angle_beta, coord="horizontal", axis="first") # beta is 90 - elevation!
+    pre_rotation_matrix = get_simple_rotation_matrix("z", np.radians(90)) # rotation x --> y
+
+    print(np.shape(new_pointing))
+    print(np.shape(pre_rotation_matrix))
+
+    new_pointing = np.einsum("ij,jk->ik", pre_rotation_matrix, new_pointing) # because the definition of alpha is -90 degrees rotated w.r.t. azimuth at zenith
+        
+    _, azt_zen, elt_zen = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
+
+    return azt_zen, elt_zen
 
 # in this method, instead of correcting the azimuth to conserve the angle to the meridian at casource azimuth,
 # I want to correct it with respect to the calsource position

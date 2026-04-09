@@ -870,16 +870,24 @@ def detect_peaks_TOD(tt, mytod, resolution, doplot=False, freq_sampling=157.36):
         # zf
     return filtmapsn
 
-def remove_peaks(tt, tod, peaks_detected, interval, mask):
+def remove_peaks(tt, tod, peaks_detected, interval, mask, control_size=None):
     index = np.arange(len(tod))
     index_masked = index[mask]
+
+    # plt.figure()
+    # plt.plot(tt, tod)
     for i_peak, peak in enumerate(peaks_detected):
         if peak in index_masked:
-            low = (index >= peak - 3*interval[i_peak]) & (index <= peak - interval[i_peak])
-            high = (index >= peak + interval[i_peak]) & (index <= peak + 3*interval[i_peak])
-            slope = (np.median(tod[high]) - np.median(tod[low]))/(np.median(tt[high]) - np.median(tt[low]))
+            if control_size is None:
+                control_size = 3*interval[i_peak]
+            low = (index >= peak - (interval[i_peak] + control_size)) & (index <= peak - interval[i_peak])
+            high = (index >= peak + interval[i_peak]) & (index <= peak + (interval[i_peak] + control_size))
+            slope = (np.median(tod[high]) - np.median(tod[low]))/(np.median(tt[high]) - np.median(tt[low])) # or use Lagrange polynome?
             origin = np.median(tod[low]) - slope*np.median(tt[low])
             tod[peak - interval[i_peak] : peak + interval[i_peak]] = slope*tt[peak - interval[i_peak] : peak + interval[i_peak]] + origin
+            # plt.plot(tt, tod)
+            # plt.show()
+            # aer
     return tod
 
 def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
@@ -897,7 +905,9 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 # xlim = [9480, 9550]
 xlim = [10540, 10640]
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True, check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False, ObsDate=None, new_method_clean=False):
+def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True,
+                          check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
+                          ObsDate=None, new_method_clean=True, theo_sb=None):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -905,6 +915,12 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     # - remove the detected peaks from raw TOD and replace them by a linear fit of raw data around peaks
     # - filter the result (highpass, to get rid of large scales)
     # - add the removed peaks again (difference between raw peaks and linear fit of filtered data around peaks)
+
+    # we get the theoretical synthbeam
+    thetas = theo_sb[0] # shape (n_nus, npeaks)
+    phis = theo_sb[1]
+    n_nus = len(thetas)
+    n_peaks = len(thetas[0])
 
     # freq_sampling = 157.36 # Hz
     freq_sampling = 1/np.median(tt[1:] - tt[:-1]) # Hz
@@ -930,10 +946,58 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         max_plot = np.max(mapsb[mapsb != hp.UNSEEN])
 
     if new_method_clean:
-        scantype
-        return mapsb, mapcount
+        rho = 1
+        dist_min = 2 # deg
+        tod_pos = spherical2cartesian(rho, newazt, newelt, coord="horizontal", axis="last")
+        protected_tod = np.zeros_like(mytod)
+        mask_elt = np.ones_like(mytod, dtype=bool) # we don't mask in elevation
+        for i_nu in range(n_nus):
+            for i_peak in range(n_peaks):
+                el_peak = 90 - np.degrees(thetas[i_nu, i_peak])
+                az_peak = np.degrees(phis[i_nu, i_peak])
+                # azimuth differences won't work at az=+/-180
+                # tod_close = np.logical_and(np.abs(az_peak - newazt) < 1, np.abs(el_peak - newelt) < 1) # in a 1 deg^2 square
+                peak_pos = spherical2cartesian(rho, az_peak, el_peak, coord="horizontal", axis="last")
+                dist_peak = np.abs(np.degrees(dist_angle(tod_pos, peak_pos)))
+                # we should add a selection on the peak's position:
+                # if it is too close to the border of the map the peak is not counted
+                if np.min(dist_peak[scantype ==0]) < dist_min:
+                    # print("skipped the peak", i_nu, i_peak)
+                    continue
+                tod_close = dist_peak < dist_min
+                protected_tod[tod_close] = 1
+        new_peak_ = np.append(protected_tod[1:] - protected_tod[:-1], 0)
+        start_peak = np.argwhere(new_peak_ == 1)[:, 0]
+        end_peak = np.argwhere(new_peak_ == -1)[:, 0]
+        pos_peak = ((end_peak + start_peak)/2).astype(int)
+        border_margin = 0 # 0.2*freq_sampling # border_margin is xx seconds (approx. xx deg)
+        interval_peak = (((end_peak - start_peak) + border_margin*2)/2).astype(int) # we add the border margin on both sides
+        print(np.shape(new_peak_))
+        print(np.shape(start_peak), np.shape(end_peak))
+        print(np.shape(interval_peak))
+        print(interval_peak)
+        # ar
+        # ind_peak = 100
+        # tod_no_peak = remove_peaks(tt, mytod.copy(), [pos_peak[ind_peak]], interval=[interval_peak[ind_peak]], mask=mask_elt)ind_peak = 100
+        control_size = 1*freq_sampling # one second of data is used to compute the continuum in remove_peaks
+        tod_no_peak = remove_peaks(tt, mytod.copy(), pos_peak, interval=interval_peak, mask=mask_elt, control_size=control_size)
+        mytod_3 = my_filt(tod_no_peak.copy())
+        mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, pos_peak, interval=interval_peak, mask=mask_elt)
+        if doplot and True: # plot with raw tod vs filtered tod
+            # peaks_detected_ = np.isin(np.arange(len(tt)), pos_peak)
+            plt.figure()
+            plt.plot(tt, mytod, label="raw TOD")
+            # plt.scatter(tt[pos_peak], mytod[pos_peak], c="r", label="peaks_detected", zorder=1000)
+            plt.scatter(tt[protected_tod == 1], mytod[protected_tod == 1], c="r", s=1, label="peaks_detected", zorder=1000)
+            # plt.scatter(tt[scantype == 0], mytod[scantype == 0], c="g", s=1, label="scantype == 0", zorder=1000)
+            plt.plot(tt, tod_no_peak, label="tod_no_peak")
+            plt.plot(tt, mytod_4, label="filtered with peaks added")
+            plt.legend()
+            plt.show()
+        final_tod = mytod_4
 
-    if clean_tod:
+
+    elif clean_tod:
         if ObsDate[:4] == "2022":
             # Filter the TOD
             mytod_1 = my_filt(mytod.copy())
@@ -1027,6 +1091,11 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         else:
             tod_no_glitches = mytod
         # tod_no_peak = remove_peaks(tt, mytod.copy(), peaks_detected, interval=interval_peak, mask=mask_elt)
+        # print(np.shape(peaks_detected))
+        # print(peaks_detected)
+        # print(np.shape(interval_peak))
+        # print(interval_peak)
+        # aetzr
         tod_no_peak = remove_peaks(tt, tod_no_glitches.copy(), peaks_detected, interval=interval_peak, mask=mask_elt)
         mytod_3 = my_filt(tod_no_peak.copy())
         mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, peaks_detected, interval=interval_peak, mask=mask_elt)
@@ -1196,6 +1265,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
                     title="final map", rot=center)
         # hp.gnomview(mapsb, reso=10, 
         #             title="final map", rot=center)
+        for i in range(n_nus):
+            hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
+                           marker='x', cmap='Reds')
         # plt.savefig("figures/mapsb.pdf")
         plt.tight_layout()
         plt.savefig("figures/map_TES_{}.pdf".format(TES_number), dpi=300)
@@ -2023,7 +2095,7 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
         # newazt, newelt = azt - azmoon, elt - elmoon # no complicated corretion for Moon movement in azimuth, trying here to fit the real Moon postion for each TES --> position of order 0 in Moon maps?
         # newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
-        newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+        newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=4, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
         # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon) # great circle
         # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos) # ?
@@ -2075,7 +2147,8 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
     return tt, tinit, alltod, QPidx, azt, elt, allnewazt, allnewelt, scantype, Tbath
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, tshift=0,
-                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False, isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None):
+                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False,
+                      isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None, theo_sb=None):
 
     if det_pos is None:
         data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=ObsDate[:4])
@@ -2121,7 +2194,9 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             print("shape pos", np.shape(det_pos))
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                              TES_number=TESNum, nside=nside, 
-                                                             doplot=doplot, check_back_forth=check_back_forth, det_pos=det_pos, clean_tod=clean_tod, manual=manual, ObsDate=ObsDate)
+                                                             doplot=doplot, check_back_forth=check_back_forth,
+                                                             det_pos=det_pos, clean_tod=clean_tod, manual=manual,
+                                                             ObsDate=ObsDate, theo_sb=theo_sb)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
@@ -2722,11 +2797,11 @@ def dist_angle(vec_A, vec_B):
     mask = np.logical_and(1<cos_angle, cos_angle<1 + 1e-8)
     cos_angle[mask] = 1 # be careful with that, it just seems that it is sometimes a bit higher than 1 because of numerical approximations
     mask = np.logical_and(-1 - 1e-8<cos_angle, cos_angle<-1)
-    cos_angle[mask] = -1 # be careful with that, it just seems that it is sometimes a bit higher than 1 because of numerical approximations
+    cos_angle[mask] = -1 # be careful with that, it just seems that it is sometimes a bit lower than -1 because of numerical approximations
     angle = np.arccos(cos_angle) # compute the angle between CA and CB
     sign_angle = np.sign(np.cross(vec_A, vec_B, axis=-1)[..., 2]) # the sign of the z component should give us the sign of the angle
     sign_angle[sign_angle == 0] = 1 # works only if we don't care about the sign
-    return sign_angle * angle
+    return sign_angle * angle # radians
 
 # get vector perp to horizontal great circle from az el position
 def get_perp_vect_horiz_great_circle(azimuth, elevation, tilt_az=0, sphere_centre=np.array([0, 0, 0]), sphere_radius=1):

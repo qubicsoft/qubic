@@ -94,13 +94,14 @@ def plot_fit_img(mapij, axs, ipos, jpos, iguess, jguess, ifit, jfit, vmin, vmax,
     elif origin == "lower":
         bottom = np.min(ipos)
         top = np.max(ipos)
-    im = ax.imshow(mapij, origin=origin, extent=[np.max(jpos), np.min(jpos), bottom, top], vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
+    # im = ax.imshow(mapij, origin=origin, extent=[np.max(jpos), np.min(jpos), bottom, top], vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
+    im = ax.imshow(mapij, origin=origin, vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
     ax.set_xlabel('Degrees')
     ax.set_ylabel('Degrees')
     # ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=3, label='Guess') # j = -azt = x, i = elt = y
     # ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
-    ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=5, label='Guess') # j = azt, i = -elt
-    ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
+    # ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=5, label='Guess') # j = azt, i = -elt
+    # ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
     ax.legend()
     cax = axs[-1]
     cax.clear()

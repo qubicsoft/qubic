@@ -907,7 +907,7 @@ xlim = [10540, 10640]
 
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True,
                           check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
-                          ObsDate=None, new_method_clean=True, theo_sb=None):
+                          ObsDate=None, new_method_clean=False, theo_sb=None):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -1131,17 +1131,18 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             # azr
 
             # tmin, tmax = 4300, 4900
-            # fig, ax = plt.subplots()
+            tmin, tmax = 4000, 4600
+            fig, ax = plt.subplots(figsize=(7.5, 6))
             # ax.set_title("raw TOD")
-            # ax.plot(tt, mytod)
-            # ax.set_xlim([4300, 4900])
-            # ax.set_xlabel("time [s]")
-            # ax.set_ylabel("amplitude [arbitrary units]")
-            # ax.set_yticks([])
-            # plt.tight_layout()
-            # # plt.savefig("figures/moon_tod.pdf")
-            # plt.savefig("figures/moon_tod.png")
-            # plt.show()
+            ax.plot(tt, mytod)
+            ax.set_xlim([tmin, tmax])
+            ax.set_xlabel("time [s]")
+            ax.set_ylabel("amplitude [arbitrary units]")
+            ax.set_yticks([])
+            plt.tight_layout()
+            # plt.savefig("figures/moon_tod.pdf")
+            plt.savefig("figures/moon_tod_.png")
+            plt.show()
 
             # tt_min, tt_max = 4200, 5000
             # interval = 50 # how many points to apodise
@@ -1238,6 +1239,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
                 axs[1].imshow(mapsb_fb_proj[1], vmin=min_plot, vmax=max_plot)
                 axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
                 plt.show()
+
         else:
             if doplot:
                 plt.figure()
@@ -1258,8 +1260,28 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
     mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
 
-    if doplot:
+    if doplot and False:
         
+        mapsb_proj = hp.gnomview(mapsb, reso=reso, min=1e-3, max=1e4,
+                                rot=center, return_projected_map=True, no_plot=True)
+        
+        # plt.figure()
+        fig, ax = plt.subplots(1, 1, figsize=(10, 7), subplot_kw={'projection': 'rectilinear'})
+
+        no_UNSEEN_mask = ~mapsb_proj.mask
+        mapsb_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), mapsb_proj[no_UNSEEN_mask])
+        new_mapsb_proj = mapsb_interpolator(np.moveaxis([XX, YY], 0, -1))
+        ax.imshow(new_mapsb_proj, origin="lower")
+        for i in range(n_nus):
+            # hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
+            #                 marker='x', cmap='Reds')#, rot=center)
+            ax.scatter(phis[i,:], np.pi/2 - thetas[i,:], c=np.ones_like(thetas[i,:]), 
+                            marker='x', cmap='Reds')
+        # plt.savefig("figures/mapsb.pdf")
+        plt.tight_layout()
+        plt.savefig("figures/map_interp_TES_{}.pdf".format(TES_number), dpi=300)
+        plt.show()
+    
         plt.figure()
         # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, 
         #             title="gaussian map", rot=center)
@@ -1274,6 +1296,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         plt.tight_layout()
         plt.savefig("figures/map_TES_{}.pdf".format(TES_number), dpi=300)
         plt.show()
+        azr
         
     if doplot and False:
         mapsb_2, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], comparison_tod[mask_map], nside=nside)
@@ -2118,7 +2141,7 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         # print("tinit = {}".format(tinit))
 
         ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
-        azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+        azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=True)
 
         # print("mean az el Moon", np.mean(azmoon), np.mean(elmoon))
         # print("mean az el pointing", np.mean(az), np.mean(el))
@@ -2137,7 +2160,7 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         # aze
         ### Identify scan types and numbers
         scantype_hk, azt, elt, scantype, vmean = identify_scans(thk, az, el, 
-                                                                    tt=tt, doplot=False, 
+                                                                    tt=tt, doplot=True, 
                                                                     plotrange=[0, 2000], 
                                                                     thr_speedmin=speedmin)
         Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])

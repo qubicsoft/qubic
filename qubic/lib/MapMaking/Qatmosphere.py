@@ -37,9 +37,9 @@ class AtmosphereProperties:
         # Cartesian coordinates
         if self.params["h_grid"] == 1:
             # 2d model
-            self.altitude = (
-                self.params["h_qubic"] + self.params["altitude_atm_2d"]
-            ) * np.ones(self.params["h_grid"])
+            self.altitude = (self.params["h_qubic"] + self.params["altitude_atm_2d"]) * np.ones(
+                self.params["h_grid"]
+            )
         else:
             # 3d model, not yet implemented
             self.altitude = np.linspace(
@@ -285,8 +285,7 @@ class AtmosphereProperties:
 
         ### Import absorption coefficients from molecular absorption lines
         with open(
-            self.params["path_am_files"]
-            + f"h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out",
+            self.params["path_am_files"] + f"h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out",
             "r",
         ) as file:
             for line in file:
@@ -361,9 +360,7 @@ class AtmosphereProperties:
         ### Air properties
         air_molar_mass = CP.PropsSI("MOLARMASS", "Air")  # in kg/mol
         air_mass = air_molar_mass / c.Avogadro * 1e3  # in g
-        air_mass_density = CP.PropsSI(
-            "D", "T", temp_atm, "P", pressure_atm, "Air"
-        )  # in kg/m-3
+        air_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Air")  # in kg/m-3
         air_density = air_mass_density * 1e3 / air_mass  # in m-3
 
         ### Water properties
@@ -458,9 +455,7 @@ class AtmosphereProperties:
             [
                 np.trapz(
                     self.abs_spectrum[nus_edge_index[i] : nus_edge_index[i + 1]],
-                    x=self.integration_frequencies[
-                        nus_edge_index[i] : nus_edge_index[i + 1]
-                    ],
+                    x=self.integration_frequencies[nus_edge_index[i] : nus_edge_index[i + 1]],
                 )
                 / (nus_edges[i + 1] - nus_edges[i])
                 for i in range(N_bands)
@@ -484,11 +479,11 @@ class AtmosphereProperties:
         """
 
         ### Get the integrated absorption spectrum in the two QUBIC bands : 150 and 220 GHz
-        int_abs_spectrum_150, nus_150, bandwidths_150 = (
-            self.get_integrated_absorption_spectrum(band=150)
+        int_abs_spectrum_150, nus_150, bandwidths_150 = self.get_integrated_absorption_spectrum(
+            band=150
         )
-        int_abs_spectrum_220, nus_220, bandwidths_220 = (
-            self.get_integrated_absorption_spectrum(band=220)
+        int_abs_spectrum_220, nus_220, bandwidths_220 = self.get_integrated_absorption_spectrum(
+            band=220
         )
 
         return (
@@ -648,20 +643,14 @@ class AtmosphereMaps(AtmosphereProperties):
 
         ### Compute the spatial frequencies & power spectrum.
         _, _, k = self.get_fourier_grid_2d(n_grid, size_atm)
-        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(
-            k, r0, sigma_rho, atm_size
-        )
+        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(k, r0, sigma_rho, atm_size)
 
         ### Generate spatial fluctuations through random phases in Fourier space
-        phi = np.random.uniform(
-            0, 2 * np.pi, size=(self.params["n_grid"], self.params["n_grid"])
-        )
+        phi = np.random.uniform(0, 2 * np.pi, size=(self.params["n_grid"], self.params["n_grid"]))
         delta_rho_k = np.sqrt(kolmogorov_spectrum) * np.exp(1j * phi)
 
         ### Apply inverse Fourier transform to obtain spatial fluctuations in real space
-        delta_rho = np.fft.ifft2(
-            delta_rho_k, s=(self.params["n_grid"], self.params["n_grid"])
-        ).real
+        delta_rho = np.fft.ifft2(delta_rho_k, s=(self.params["n_grid"], self.params["n_grid"])).real
 
         ### Normalize to ensure correct variance
         delta_rho *= sigma_rho / np.std(delta_rho)
@@ -865,9 +854,7 @@ class AtmosphereMaps(AtmosphereProperties):
         #! Warning : the Cl computed using CAMB are different from the ones computed using 'cl_from_angular_correlation_int' at large l
 
         ### Compute multipole moments and Dl angular power spectrum
-        ell, dlth = self.ctheta_2_dell(
-            theta_deg, ctheta, lmax, normalization=normalization
-        )
+        ell, dlth = self.ctheta_2_dell(theta_deg, ctheta, lmax, normalization=normalization)
 
         ### Convert from Dl to Cl
         dl2cl_factor = 2 * np.pi / (ell * (ell + 1))
@@ -1095,17 +1082,11 @@ class AtmosphereMaps(AtmosphereProperties):
         )
 
         ### Build healpy projection operator
-        rotation_azel2hp = Spherical2HealpixOperator(
-            self.params["nside"], "azimuth,elevation"
-        )
+        rotation_azel2hp = Spherical2HealpixOperator(self.params["nside"], "azimuth,elevation")
 
         ### Fill the healpy maps with the temperature maps using the operators
-        hp_maps_index = rotation_azel2hp(rotation_above_qubic(azel_coordinates)).astype(
-            int
-        )
-        hp_maps_2d = np.zeros(
-            (len(self.frequencies), hp.nside2npix(self.params["nside"]))
-        )
+        hp_maps_index = rotation_azel2hp(rotation_above_qubic(azel_coordinates)).astype(int)
+        hp_maps_2d = np.zeros((len(self.frequencies), hp.nside2npix(self.params["nside"])))
         for ifreq in range(len(self.frequencies)):
             hp_maps_2d[ifreq, hp_maps_index] = maps[ifreq].flatten()
 
@@ -1116,10 +1097,10 @@ class WindPerturbation:
     def __init__(self, params, qubic_sampling):
         """Wind Perturbation
 
-        This class aims to simulate wind for atmosphere observations. 
-        It relies on the same parameters dictionary than AtmosphereMaps, as well as on a QubicSampling instance. 
-        We take the choice to simulate wind by deviating the scanning strategy, rather than shifting pixels in an atmosphere maps. 
-        The two methods are equivalent, but the one we chose if way cheaper in terms of computational ressources. 
+        This class aims to simulate wind for atmosphere observations.
+        It relies on the same parameters dictionary than AtmosphereMaps, as well as on a QubicSampling instance.
+        We take the choice to simulate wind by deviating the scanning strategy, rather than shifting pixels in an atmosphere maps.
+        The two methods are equivalent, but the one we chose if way cheaper in terms of computational ressources.
         We will then deviated the pixels seen in the QubicSampling instance according to the wind generated from the parameters given in the parameters dict.
 
         Parameters
@@ -1198,9 +1179,7 @@ class WindPerturbation:
             )
 
         else:
-            raise ValueError(
-                "Wind type not defined yet. Please enter 'constant' or 'normal'."
-            )
+            raise ValueError("Wind type not defined yet. Please enter 'constant' or 'normal'.")
 
         return wind_x, wind_y
 
@@ -1218,10 +1197,10 @@ class WindPerturbation:
         wind_x, wind_y = self.get_wind()
 
         # Compute deviated scanning strategy
-        x, y = self.azel_to_cartesian(np.radians(azimuth), np.radians(elevation), self.params["altitude_atm_2d"])
-        deviated_index_x, deviated_index_y = self.get_deviated_index(
-            x, y, wind_x, wind_y
+        x, y = self.azel_to_cartesian(
+            np.radians(azimuth), np.radians(elevation), self.params["altitude_atm_2d"]
         )
+        deviated_index_x, deviated_index_y = self.get_deviated_index(x, y, wind_x, wind_y)
         deviated_az, deviated_el = self.cartesian_to_azel(
             deviated_index_x, deviated_index_y, self.params["altitude_atm_2d"]
         )

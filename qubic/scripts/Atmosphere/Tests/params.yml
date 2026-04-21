@@ -64,5 +64,5 @@ fix_maps: true
 # Wind
 wind: true
 wind_type: "constant"                # Can be : "constant" or "normal"
-wind_cst: [-1, 1]                   # [wind_x, wind_y]
+wind_cst: [0, 5]                   # [wind_x, wind_y]
 wind_normal: [0, 1]                  # [wind_mean, wind_std]

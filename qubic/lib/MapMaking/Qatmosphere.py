@@ -1184,8 +1184,8 @@ class WindPerturbation:
         return wind_x, wind_y
 
     def get_deviated_index(self, pos_x, pos_y, wind_x, wind_y):
-        deviated_index_x = (np.round(wind_x) + np.round(pos_x)).astype(int)
-        deviated_index_y = (np.round(wind_y) + np.round(pos_y)).astype(int)
+        deviated_index_x = wind_x + pos_x
+        deviated_index_y = wind_y + pos_y
         return deviated_index_x, deviated_index_y
 
     def get_deviated_coord(self):
@@ -1211,8 +1211,74 @@ class WindPerturbation:
 
         return deviated_az, deviated_el
 
+    def get_deviated_coord_sphere(self):
+        """
+        Compute wind-deviated pointing using proper spherical geometry.
+
+        Instead of shifting Cartesian coordinates in a flat plane (Method 1),
+        we apply the wind displacement as a great-circle walk on the unit sphere.
+
+        For a point p on the sphere and a local tangent vector v (the wind shift),
+        the exponential map gives:
+            new_p = p * cos(|v|) + (v / |v|) * sin(|v|)
+        which is exact for any shift magnitude, not just small angles.
+        """
+        azimuth, elevation = self.qubic_sampling.azimuth, self.qubic_sampling.elevation
+        if not self.params["wind"]:
+            return azimuth, elevation
+
+        # --- Wind displacement in radians on the sky ---
+        wind_x, wind_y = self.get_wind()  # meters (velocity × time_delta)
+        h = self.params["altitude_atm_2d"]  # atmosphere altitude in meters
+        dx_rad = wind_x / h  # eastward angular shift  (rad)
+        dy_rad = wind_y / h  # northward angular shift (rad)
+
+        if np.hypot(np.atleast_1d(dx_rad).max(), np.atleast_1d(dy_rad).max()) < 1e-12:
+            return azimuth, elevation
+
+        # --- Convert az/el to unit vectors on the sphere ---
+        az_rad = np.radians(azimuth)
+        el_rad = np.radians(elevation)
+        theta = np.pi / 2 - el_rad  # colatitude  (0 = North pole)
+        phi = az_rad  # azimuth angle
+
+        sin_t, cos_t = np.sin(theta), np.cos(theta)
+        sin_p, cos_p = np.sin(phi), np.cos(phi)
+
+        # Pointing unit vectors  shape (N, 3)
+        p = np.column_stack([sin_t * cos_p, sin_t * sin_p, cos_t])
+
+        # --- Local orthonormal frame at each pointing ---
+        # East:  tangent along increasing phi (azimuth)
+        e_east = np.column_stack([-sin_p, cos_p, np.zeros_like(phi)])
+
+        # North: tangent along decreasing theta (increasing elevation)
+        e_north = np.column_stack([-cos_t * cos_p, -cos_t * sin_p, sin_t])
+
+        # --- Wind tangent vector in the local frame ---
+        dx_rad = np.broadcast_to(dx_rad, az_rad.shape)
+        dy_rad = np.broadcast_to(dy_rad, az_rad.shape)
+
+        v = dx_rad[:, np.newaxis] * e_east + dy_rad[:, np.newaxis] * e_north
+
+        # --- Exponential map: walk along the great circle ---
+        v_norm = np.linalg.norm(v, axis=1, keepdims=True)  # (N, 1)
+        safe_norm = np.where(v_norm > 0, v_norm, 1.0)  # avoid div/0
+
+        new_p = p * np.cos(v_norm) + (v / safe_norm) * np.sin(v_norm)
+
+        # --- Convert back to az/el ---
+        new_theta = np.arccos(np.clip(new_p[:, 2], -1.0, 1.0))
+        new_phi = np.arctan2(new_p[:, 1], new_p[:, 0])
+
+        new_az = np.degrees(new_phi % (2 * np.pi))
+        new_el = np.degrees(np.pi / 2 - new_theta)
+
+        return new_az, new_el
+
     def get_deviated_qubic_sampling(self):
-        deviated_az, deviated_el = self.get_deviated_coord()
+        # deviated_az, deviated_el = self.get_deviated_coord()
+        deviated_az, deviated_el = self.get_deviated_coord_sphere()
 
         deviated_qubic_sampling = QubicSampling(
             azimuth=deviated_az,
@@ -1225,5 +1291,4 @@ class WindPerturbation:
             longitude=self.qubic_sampling.longitude,
         )
         deviated_qubic_sampling.fix_az = True
-
         return deviated_qubic_sampling

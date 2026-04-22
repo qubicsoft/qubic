@@ -237,6 +237,9 @@ class PresetComponents:
                 np.random.seed(skyconfig[comp_name])
                 component_map = hp.synfast(mycls, self.preset_tools.params["SKY"]["nside"], verbose=False, new=True).T
 
+                # # test
+                # component_map = np.zeros_like(component_map)
+
             # Dust and synchrotron case
             elif comp_name == "Dust" or comp_name == "Synchrotron":
                 model = self.preset_tools.params["Foregrounds"][comp_name]["model"]
@@ -248,6 +251,10 @@ class PresetComponents:
                 if comp_name == "Dust":
                     sky_comp.components[0].mbb_temperature = 20 * sky_comp.components[0].mbb_temperature.unit
                 component_map = np.array(sky_comp.get_emission(reference_freq * u.GHz, None).T * utils.bandpass_unit_conversion(reference_freq * u.GHz, None, u.uK_CMB)) * amplification
+
+                # # test
+                # component_map = np.zeros_like(component_map)
+
 
             # CO emission case
             elif comp_name == "CO":

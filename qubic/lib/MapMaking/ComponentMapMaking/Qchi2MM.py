@@ -178,12 +178,14 @@ class Chi2(AbstractChi2):
         super().__init__(preset, TOD_sim, beta_map=beta_map)
         self.parametric = parametric
         self.beta_map = beta_map
+        print("np.shape(beta_map)", np.shape(beta_map))
+        print("beta_map", beta_map)
 
     def compute_mixing_matrix_parametric(self, nus, x):
         """
         Parametric case
         """
-
+        print("self.preset.comp.components_model_out", self.preset.comp.components_model_out)
         mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_model_out)
         return mixingmatrix.eval(nus, *x)
 
@@ -206,6 +208,7 @@ class Chi2(AbstractChi2):
             return self.compute_mixing_matrix_blind(x)
 
     def compute_chi_square_fix_beta(self, x):
+        print("here", flush=True)
         A = self.compute_mixing_matrix(x)
         self.Lqubic = self.compute_qubic_chi(A)
 
@@ -260,6 +263,7 @@ class Chi2(AbstractChi2):
         return self.Lqubic, self.Lplanck
 
     def compute_chi_square(self, x):
+        print("self.TOD_sim.ndim", self.TOD_sim.ndim, flush=True)
         if self.TOD_sim.ndim == 3:
             return self.compute_chi_square_fix_beta(x)
         elif self.TOD_sim.ndim == 4:

@@ -121,9 +121,10 @@ class PresetAcquisition:
         ### Get convolution
         self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_qubic_tod, self.fwhm_qubic_mapmaking, self.fwhm_qubic_rec = self.get_convolution()
-        #! Tom: need to update this
-        self.fwhm_planck_tod = [self.fwhm_qubic_tod.min()] * len(self.preset_external.external_nus) * self.preset_external.params_external["nsub_planck"]
-        self.fwhm_planck_mapmaking = [self.fwhm_qubic_mapmaking.min()] * len(self.preset_external.external_nus) * self.preset_external.params_external["nsub_planck"]
+        self.fwhm_planck_tod = [self.fwhm_qubic_tod.min()] * len(self.preset_external.external_nus)
+        #! Tom: need to upgrade this
+        # yes, this should be at Planck freqs
+        self.fwhm_planck_mapmaking = [self.fwhm_qubic_mapmaking.min()] * len(self.preset_external.external_nus)
         self.fwhm_tod = np.concatenate((self.fwhm_qubic_tod, self.fwhm_planck_tod))
         self.fwhm_mapmaking = np.concatenate((self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking))
         self.fwhm_rec = self.fwhm_qubic_rec
@@ -195,7 +196,7 @@ class PresetAcquisition:
 
         # Calculate the reconstructed FWHM based on convolution parameters
         if self.preset_qubic.params_qubic["convolution_in"] and self.preset_qubic.params_qubic["convolution_out"]:
-            fwhm_qubic_rec = np.min(self.preset_qubic.joint_in.qubic.allfwhm)  # min of allfwhm?
+            fwhm_qubic_rec = np.min(self.preset_qubic.joint_in.qubic.allfwhm)  # min of allfwhm
         elif self.preset_qubic.params_qubic["convolution_in"] and not self.preset_qubic.params_qubic["convolution_out"]:
             # fwhm_qubic_rec = np.full(len(self.preset_comp.components_model_out), np.mean(self.preset_qubic.joint_in.qubic.allfwhm))
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
@@ -278,13 +279,12 @@ class PresetAcquisition:
         """
 
         ### Build joint acquisition operator
-        print("Amm_in : ", self.preset_mixingmatrix.Amm_in.shape)
         self.H = self.preset_qubic.joint_in.get_operator(
             A=self.preset_mixingmatrix.Amm_in,
             gain=self.preset_gain.gain_in,
             fwhm=self.fwhm_tod,
         )
-    
+
         ### Build noise variables
         noise_external = self.preset_qubic.joint_in.external.get_noise(
             planck_ntot=self.preset_tools.params["PLANCK"]["level_noise_planck"],
@@ -334,7 +334,6 @@ class PresetAcquisition:
         # self.TOD_external_zero_outside_patch = _r.T(maps_external)
 
         ### Observed TOD (Planck is assumed on the full sky)
-
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
         self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch.ravel()]
 

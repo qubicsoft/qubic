@@ -54,8 +54,8 @@ class PresetTools:
 
         if self.params["QUBIC"]["instrument"] != "MB":  # We might want to build odd nsub with "MB"
             # Check if bin_mixing_matrix is even
-            # if self.params["Foregrounds"]["fit_mixing_matrix"] and self.params["Foregrounds"]["bin_mixing_matrix"] % 2 != 0:
-            #     raise TypeError("The argument bin_mixing_matrix should be even")
+            if self.params["Foregrounds"]["fit_mixing_matrix"] and self.params["Foregrounds"]["bin_mixing_matrix"] % 2 != 0:
+                raise TypeError("The argument bin_mixing_matrix should be even")
 
             # Check if nsub_in is even
             if self.params["QUBIC"]["nsub_in"] % 2 != 0:
@@ -77,10 +77,6 @@ class PresetTools:
         if self.params["Foregrounds"]["fit_mixing_matrix"] and (self.params["Foregrounds"]["Dust"]["type"] == "blind" or self.params["Foregrounds"]["Synchrotron"]["type"] == "blind"):
             if self.params["QUBIC"]["nsub_out"] % self.params["Foregrounds"]["bin_mixing_matrix"] != 0:
                 raise TypeError("bin_mixing_matrix should be a multiple of nsub_out")
-            
-        # Check if nside_beta is zero if model is not d1
-        if self.params["Foregrounds"]["Dust"]["model"] != "d1" and self.params["Foregrounds"]["Dust"]["nside_beta_in"] != 0:
-            raise ValueError(f'nside_beta should be 0 for {self.params["Foregrounds"]["Dust"]["model"]} model')
 
         # Check if nside_beta is a multiple of 2 for d1 case
         if self.params["Foregrounds"]["Dust"]["model"] == "d1" and self.params["Foregrounds"]["Dust"]["nside_beta_in"] % 2 != 0:

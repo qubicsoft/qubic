@@ -26,7 +26,7 @@ h_grid: 1                            # Number of sqares for the altitude, i for 
 h_qubic: 4869                        # QUBIC altitude in m
 size_atm: 10000                      # Lenght of the atm in m
 2d: True                             # Determine if you want to simulate a 2d atm
-nside: 128
+nside: 32
 n_theta: 10000
 normalization: 1
 flat: False
@@ -64,5 +64,5 @@ fix_maps: true
 # Wind
 wind: true
 wind_type: "constant"                # Can be : "constant" or "normal"
-wind_cst: [0, 5]                   # [wind_x, wind_y]
+wind_cst: [0, 2]                   # [wind_x, wind_y]
 wind_normal: [0, 1]                  # [wind_mean, wind_std]

@@ -1,4 +1,4 @@
-foldername: "test_Nsub_16_16_bis"
+foldername: "test_Npointings_10000"
 filename: "test"
 
 CMB:
@@ -16,7 +16,7 @@ QUBIC:
 
   instrument: "DB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
-  npointings: 8000               # Number of time samples
+  npointings: 10000               # Number of time samples
   nsub_in: 16                     # Number of sub-acquisitions
   nsub_out: 16
   nrec: 2                        # Number of reconstructed fr
@@ -32,7 +32,7 @@ QUBIC:
     detector_nep: 4.7e-17                  # NEP of detector noise 
     duration_150: 3                        # Effective duration at 150 GHz
     duration_220: 3                        # Effective duration at 220 GHz
-    seed_noise: 291
+    seed_noise: 283
   SYNTHBEAM:
     synthbeam_kmax: 1                      # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1
@@ -51,13 +51,13 @@ PLANCK:
   external_data: true
   weight_planck: 0               # Weight of Planck data within the QUBIC patch
   level_noise_planck: 1          # Noise level for Planck data
-  seed_noise: 291
+  seed_noise: 283
   bandwidth_planck: 0.2          # Multiplicative factor to define the bandwidth of Planck's data
   nsub_planck: 100                # Number of sub acquisitions for Planck's data
 
 Pipeline:
   mapmaking: true                          # Run MapMaking Pipeline
-  spectrum: false                          # Compute Power Spectra of the frequency maps
+  spectrum: true                          # Compute Power Spectra of the frequency maps
 
 PCG:
     ### This section control PCG parameters
@@ -78,6 +78,14 @@ Spectrum:
   lmax: 511
   aposize: 10
   plot_spectrum: true
+
+
+
+
+
+
+
+
 
 
 

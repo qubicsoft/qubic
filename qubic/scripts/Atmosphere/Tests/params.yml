@@ -26,7 +26,7 @@ h_grid: 1                            # Number of sqares for the altitude, i for 
 h_qubic: 4869                        # QUBIC altitude in m
 size_atm: 10000                      # Lenght of the atm in m
 2d: True                             # Determine if you want to simulate a 2d atm
-nside: 32
+nside: 64
 n_theta: 10000
 normalization: 1
 flat: False

@@ -405,11 +405,11 @@ class QubicInstrument(Instrument):
 
         """
         if out is None:
-            out = np.empty((len(self), len(sampling)))
+            out = np.zeros((len(self), len(sampling)))
         if det_noise:
             self.get_noise_detector(sampling, out=out)
         else:
-            out *= 0
+            out[...] = 0
         if photon_noise:
             out += self.get_noise_photon(sampling, scene)
         return out

@@ -8,8 +8,8 @@
 #SBATCH --nodes=1                # c
 #SBATCH --ntasks-per-node=2      # n
 #SBATCH --cpus-per-task=4        # N
-#SBATCH --mem=20G
-#SBATCH --time=0-02:00:00
+#SBATCH --mem=10G
+#SBATCH --time=0-00:30:00
 #SBATCH --output=FMM/slurm_logs/multiple_jobs_%A_%a.log
 ###SBATCH --array=1-1
 

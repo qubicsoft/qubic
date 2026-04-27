@@ -1,4 +1,4 @@
-foldername: "test_Npointings_10000"
+foldername: "test_Npointings_5000"
 filename: "test"
 
 CMB:
@@ -16,7 +16,7 @@ QUBIC:
 
   instrument: "DB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
-  npointings: 10000               # Number of time samples
+  npointings: 5000               # Number of time samples
   nsub_in: 16                     # Number of sub-acquisitions
   nsub_out: 16
   nrec: 2                        # Number of reconstructed fr
@@ -63,7 +63,7 @@ PCG:
     ### This section control PCG parameters
 
   n_iter_pcg: 300                 # Number of PCG iterations #100
-  tol_pcg: 1.0e-15               # Tolerance for PCG
+  tol_pcg: 1.0e-10               # Tolerance for PCG
   preconditioner: false
   initial_guess_intensity_to_zero: true
   gif: false

@@ -620,6 +620,11 @@ class QubicMultiAcquisitions:
         for i in range(len(self.multiinstrument)):
             self.allfwhm[i] = self.subacqs[i].get_convolution_peak_operator().fwhm
 
+        # test
+        # self.allfwhm = np.full_like(self.allfwhm, self.allfwhm[0]*2)
+        self.allfwhm = self.allfwhm[0] * np.sqrt((150 / self.allnus)) * 2
+        self.allfwhm[-1] = self.allfwhm[0]/2
+
         ### Compute the pointing matrix if not already done
         if H is None:
             self.H = [self.subacqs[i].get_operator() for i in range(len(self.subacqs))]

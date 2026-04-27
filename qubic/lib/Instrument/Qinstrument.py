@@ -1219,9 +1219,10 @@ class QubicInstrument(Instrument):
         """
         if self.ripples:
             return ConvolutionRippledGaussianOperator(self.filter.nu, **keywords)
-        # fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
-        # test
-        fwhm = np.full_like(self.filter.nu, self.synthbeam.peak150.fwhm)
+        fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu)
+        # # test
+        # fwhm = self.synthbeam.peak150.fwhm * (150e9 / self.filter.nu) * 10
+        # fwhm = self.synthbeam.peak150.fwhm
         if "ripples" in keywords.keys():
             del keywords["ripples"]
         return HealpixConvolutionGaussianOperator(fwhm=fwhm, **keywords)

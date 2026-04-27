@@ -57,8 +57,8 @@ QUBIC:
     npointings: 1000                                                            # Number of time samples
     nsub_in: 8                                                                  # Number of sub-acquisitions
     nsub_out: 8                                                                 # Number of sub-acquisitions for the reconstruction
-    convolution_in: false                                                       # Angular resolution in the input TOD
-    convolution_out: false                                                      # Angular resolution in the reconstruction
+    convolution_in: true                                                       # Angular resolution in the input TOD
+    convolution_out: true                                                      # Angular resolution in the reconstruction
     preconditioner: false
     NOISE:
         ndet: 1                                                                 # Level of detector noise
@@ -80,7 +80,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-  nside: 128                                                                    # Nside of components
+  nside: 256                                                                    # Nside of components
   coverage_cut: 0.15                                                            # Percent of coverage to keep the pixels seen enough by QUBIC
   RA_center: 0
   DEC_center: -57

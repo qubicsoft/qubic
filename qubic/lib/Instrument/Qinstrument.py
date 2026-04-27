@@ -515,7 +515,16 @@ class QubicInstrument(Instrument):
 
         # Total NEP
         noise.P_phot_tot = np.sum(noise.P_phot, axis=0)
-        noise.NEP_tot = np.sqrt(np.sum(noise.NEP_phot2, axis=0) + noise.NEP_phot2_env)
+        total_nep_sq = np.sum(noise.NEP_phot2, axis=0) + noise.NEP_phot2_env
+        if np.any(total_nep_sq < 0):
+            import warnings
+            warnings.warn(
+                f"Negative total NEP² for {np.sum(total_nep_sq < 0)} detector(s); "
+                "clamping to zero. Check omega_det sign convention.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        noise.NEP_tot = np.sqrt(np.maximum(total_nep_sq, 0.0))
 
         if self.debug:
             print("Total photon power =  {0:.2e} W".format(noise.P_phot_tot.max()) + ", Total photon NEP = " + "{0:.2e}".format(noise.NEP_tot.max()) + " W/sqrt(Hz)")
@@ -577,7 +586,7 @@ class QubicInstrument(Instrument):
         
         noise.dnu = noise.nu * self.FRBW
         noise.S_det = self.detector.area
-        noise.omega_det = -self.detector.area / self.optics.focal_length**2 * np.cos(self.detector.theta) ** 3
+        noise.omega_det = self.detector.area / self.optics.focal_length**2 * np.cos(self.detector.theta) ** 3
         
         # Physical horn area
         noise.S_horns = np.pi * self.horn.radius**2 * len(self.horn)

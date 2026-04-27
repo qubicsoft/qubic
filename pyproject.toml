@@ -11,22 +11,18 @@ requires = [
 [project]
 name = 'qubic'
 authors = [
-    {name = 'Pierre Chanial', email = 'chanial@apc.in2p3.fr'},
-    {name = 'Jean-Christophe Hamilton', email = 'hamilton@apc.in2p3.fr'},
-    {name = 'Mikhail Stolpovskiy', email = 'mikhail.stolpovskiy@apc.univ-paris7.fr'},
-    {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
-    {name = 'Louise Mousset', email = 'mousset@apc.in2p3.fr'},
-    {name = 'Mathias Régnier', email = 'mathias.p.regnier@gmail.com'},
-    {name = "Tom Laclavère", email = "laclaver@apc.in2p3.fr"},
+    { name = 'Pierre Chanial', email = 'chanial@apc.in2p3.fr' },
+    { name = 'Jean-Christophe Hamilton', email = 'hamilton@apc.in2p3.fr' },
+    { name = 'Mikhail Stolpovskiy', email = 'mikhail.stolpovskiy@apc.univ-paris7.fr' },
+    { name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr' },
+    { name = 'Louise Mousset', email = 'mousset@apc.in2p3.fr' },
+    { name = 'Mathias Régnier', email = 'mathias.p.regnier@gmail.com' },
+    { name = "Tom Laclavère", email = "laclaver@apc.in2p3.fr" },
 ]
-maintainers = [
-    {name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr'},
-]
+maintainers = [{ name = 'Steve Torchinsky', email = 'satorchi@apc.in2p3.fr' }]
 description = 'Simulation and map-making tools for the QUBIC experiment.'
 readme = 'README.md'
-keywords = [
-    'scientific computing',
-]
+keywords = ['scientific computing']
 classifiers = [
     'Programming Language :: Python',
     'Programming Language :: Python :: 3.8',
@@ -49,12 +45,12 @@ dependencies = [
     'GetDist',
     'healpy',
     'iminuit',
-    'pandas',
+    'pandas==2.1.4',
     'fgbuster @ git+https://github.com/fgbuster/fgbuster@master',
     'progressbar',
     'py-cpuinfo',
-    'pyoperators[fft]>=0.13.18',
-    'pysimulators>=1.2.3',
+    'pyoperators==0.16.2',
+    'pysimulators==1.2.3',
     'pysm3',
     'qubicpack @ git+https://github.com/satorchi/qubicpack@master',
     'satorchipy @ git+https://github.com/satorchi/mypy@master',
@@ -63,18 +59,17 @@ dependencies = [
     'scikit-learn',
     'schwimmbad',
     'imageio',
+    "cairosvg",
     "ruamel.yaml",
     "jq",
+    "CoolProp",
+    "plotly",
 ]
 dynamic = ['version']
 
 [project.optional-dependencies]
 mpi = ['mpi4py']
-dev = [
-    'mpi4py',
-    'pytest',
-    'pytest-cov',
-]
+dev = ['mpi4py', 'pytest', 'pytest-cov']
 
 [project.urls]
 homepage = 'https://www.qubic.org.ar'
@@ -92,12 +87,8 @@ skip_covered = true
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov=qubic"
-testpaths = [
-    "tests",
-]
-markers = [
-    "mpi: mark tests to be run using mpirun.",
-]
+testpaths = ["tests"]
+markers = ["mpi: mark tests to be run using mpirun."]
 
 [tool.setuptools.packages]
 find = {}

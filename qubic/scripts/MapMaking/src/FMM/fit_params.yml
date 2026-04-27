@@ -1,16 +1,14 @@
-simulation_path: "FMM/test_qubic_only"
-name: "test_qubic_only"
+simulation_path: "FMM/UWB_nrec=4"
+name: "test_planck"
 
 Spectrum:
-  nbins: 7                                                      # Number of multipole (minimum is fixed at what you defined during the map-making)
   sample_variance: True                                         # Add sample-variance correction in the correlation matrix
   diagonal: False                                               # Consider only the diagonal of the noise correlation matrix
-  fsky: 0.015                                                   # Sky fraction value
-  dl: 30                                                        # Interval between two multipole
+  nbins: null                                                      # Number of power-spectrum points to keep, if null, keep all values
 
 MCMC:
-  nus_qubic: [True, True]                                       # QUBIC frequencies used for fitting. It should match Nrec value put in simulations !!!
-  nus_planck: [False, False, False, False, False, False, False] # Planck frequencies used for fitting. It should match 7 !!!
+  nus_qubic: [True, True, True, True]                                       # QUBIC frequencies used for fitting. It should match Nrec value put in simulations !!!
+  nus_planck: [False, False, False, true, true, true, true] # Planck frequencies used for fitting. It should match 7 !!!
   discard: 100                                                  # Number of iterations discarded
   nwalkers: 50                                                  # Number of MCMC walkers
   nsteps: 300                                                   # Number of MCMC iterations
@@ -37,13 +35,13 @@ cmb:
 
 dust:
   Ad:
-    fit: 0
+    fit: True
     bound_min: 0
     bound_max: 10
     init_average: 1
     init_std: 0.1
   alphad:
-    fit: 0
+    fit: True
     bound_min: -10
     bound_max: 10
     init_average: -1

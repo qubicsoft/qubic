@@ -35,15 +35,13 @@ class PresetAcquisition:
         Seed for random noise realization.
     params_foregrounds: dict
         Dictionary containing the paramters associated with foregrounds.
-    rms_tolerance: float
-        Tolerance for PCG algorithm.
     ites_to_converge: int
         Max iteration number for PCG algorithm.
     invN: BlockDiagonalOperator
         Inverse noise covariance matrix with input shape :math:`(N_{det}*N_{samples} + N_{pix}*N_{planck}*N_{stokes})` and output shape :math:`(N_{det}*N_{samples} + N_{pix}*N_{planck}*N_{stokes})`.
     M: DiagonalOperator
         Preconditioner for PCG algorithm.
-    fwhm_rec: array_like
+    fwhm_qubic_rec: array_like
         Resolution of the reconstructed maps.
     H: BlockColumnOperator
         Pointing matrix.
@@ -106,7 +104,6 @@ class PresetAcquisition:
         self.seed_start_pcg = seed_start_pcg
 
         ### Define tolerance of the rms variations
-        self.rms_tolerance = self.preset_tools.params["PCG"]["tol_rms"]
         self.ites_to_converge = self.preset_tools.params["PCG"]["ites_to_converge"]
         self.rms_plot = np.zeros((1, 2))
         self.convergence = []
@@ -123,17 +120,19 @@ class PresetAcquisition:
 
         ### Get convolution
         self.preset_tools.mpi._print_message("    => Getting convolution")
-        self.fwhm_tod, self.fwhm_mapmaking, self.fwhm_rec = self.get_convolution()
+        self.fwhm_qubic_tod, self.fwhm_qubic_mapmaking, self.fwhm_qubic_rec = self.get_convolution()
+        #! Tom: need to update this
+        self.fwhm_planck_tod = [self.fwhm_qubic_tod.min()] * len(self.preset_external.external_nus) * self.preset_external.params_external["nsub_planck"]
+        self.fwhm_planck_mapmaking = [self.fwhm_qubic_mapmaking.min()] * len(self.preset_external.external_nus) * self.preset_external.params_external["nsub_planck"]
+        self.fwhm_tod = np.concatenate((self.fwhm_qubic_tod, self.fwhm_planck_tod))
+        self.fwhm_mapmaking = np.concatenate((self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking))
+        self.fwhm_rec = self.fwhm_qubic_rec
 
-        #! Tom : check this part
+        ### Build Planck maps
         self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
-        C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_tod))
+        C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_qubic_tod))
         for icomp, _ in enumerate(self.preset_comp.components_name_out):
             self.components_in_convolved[icomp] = C(self.preset_comp.components_in[icomp])
-            # comp_nsub = np.zeros((self.preset_tools.params["QUBIC"]["nsub_in"], 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
-            # for jsub in range(self.preset_tools.params["QUBIC"]["nsub_in"]):
-            #     comp_nsub[jsub] = C(self.preset_mixingmatrix.Amm_in[jsub, icomp] * self.preset_comp.components_in[icomp])
-            # self.components_in_convolved[icomp] = comp_nsub.mean(axis=0)
 
         ### Get observed data
         self.preset_tools.mpi._print_message("    => Getting observational data")
@@ -166,41 +165,41 @@ class PresetAcquisition:
         Method to define all angular resolutions of the instrument at each frequency.
 
         This method sets the Full Width at Half Maximum (FWHM) for Time-Ordered Data (TOD) and map-making processes.
-        `self.fwhm_tod` represents the real angular resolution, and `self.fwhm_mapmaking` represents the beams used for reconstruction.
+        `self.fwhm_qubic_tod` represents the real angular resolution, and `self.fwhm_qubic_mapmaking` represents the beams used for reconstruction.
 
         The method checks the `convolution_in` and `convolution_out` parameters to determine the appropriate FWHM values.
         It also calculates the reconstructed FWHM based on these parameters.
 
         Returns
         -------
-        fwhm_tod: array_like
+        fwhm_qubic_tod: array_like
             Resolutions to create input TOD.
-        fwhm_mapmaking: array_like
+        fwhm_qubic_mapmaking: array_like
             Resolutions for map-making.
-        fwhm_rec: array_like
+        fwhm_qubic_rec: array_like
             Resolutions of reconstructed maps.
 
         """
 
         # Initialize FWHM arrays to 0
-        fwhm_tod = self.preset_qubic.joint_in.qubic.allfwhm * 0
-        fwhm_mapmaking = self.preset_qubic.joint_in.qubic.allfwhm * 0
+        fwhm_qubic_tod = self.preset_qubic.joint_in.qubic.allfwhm * 0
+        fwhm_qubic_mapmaking = self.preset_qubic.joint_in.qubic.allfwhm * 0
 
         # Check if convolution_in is True
         if self.preset_qubic.params_qubic["convolution_in"]:
-            fwhm_tod = self.preset_qubic.joint_in.qubic.allfwhm
+            fwhm_qubic_tod = self.preset_qubic.joint_in.qubic.allfwhm
 
         # Check if convolution_out is True
         if self.preset_qubic.params_qubic["convolution_out"]:
-            fwhm_mapmaking = np.sqrt(self.preset_qubic.joint_in.qubic.allfwhm**2 - np.min(self.preset_qubic.joint_in.qubic.allfwhm) ** 2)
+            fwhm_qubic_mapmaking = np.sqrt(self.preset_qubic.joint_in.qubic.allfwhm**2 - np.min(self.preset_qubic.joint_in.qubic.allfwhm) ** 2)
 
         # Calculate the reconstructed FWHM based on convolution parameters
         if self.preset_qubic.params_qubic["convolution_in"] and self.preset_qubic.params_qubic["convolution_out"]:
-            fwhm_rec = np.min(self.preset_qubic.joint_in.qubic.allfwhm)  # min of allfwhm?
+            fwhm_qubic_rec = np.min(self.preset_qubic.joint_in.qubic.allfwhm)  # min of allfwhm?
         elif self.preset_qubic.params_qubic["convolution_in"] and not self.preset_qubic.params_qubic["convolution_out"]:
-            # fwhm_rec = np.full(len(self.preset_comp.components_model_out), np.mean(self.preset_qubic.joint_in.qubic.allfwhm))
+            # fwhm_qubic_rec = np.full(len(self.preset_comp.components_model_out), np.mean(self.preset_qubic.joint_in.qubic.allfwhm))
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
-            fwhm_rec = np.zeros(len(self.preset_comp.components_model_out))
+            fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
             for comp, comp_name in enumerate(self.preset_comp.components_name_out):
                 if comp_name == "CMB":
                     factor = scalar_acquisition_operators
@@ -213,16 +212,16 @@ class PresetAcquisition:
                         beta_pl=self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"][0],
                     )
                     factor = scalar_acquisition_operators * f_sync.eval(self.preset_qubic.joint_out.qubic.allnus)
-                fwhm_rec[comp] = np.sum(factor * fwhm_tod) / (np.sum(factor))
+                fwhm_qubic_rec[comp] = np.sum(factor * fwhm_qubic_tod) / (np.sum(factor))
         elif not self.preset_qubic.params_qubic["convolution_in"] and not self.preset_qubic.params_qubic["convolution_out"]:
-            fwhm_rec = np.zeros(len(self.preset_comp.components_model_out))
+            fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
 
         # Print the FWHM values
-        self.preset_tools.mpi._print_message(f"FWHM for TOD making : {fwhm_tod}")
-        self.preset_tools.mpi._print_message(f"FWHM for reconstruction : {fwhm_mapmaking}")
-        self.preset_tools.mpi._print_message(f"Reconstructed FWHM : {fwhm_rec}")
+        self.preset_tools.mpi._print_message(f"FWHM for TOD making : {fwhm_qubic_tod}")
+        self.preset_tools.mpi._print_message(f"FWHM for reconstruction : {fwhm_qubic_mapmaking}")
+        self.preset_tools.mpi._print_message(f"Reconstructed FWHM : {fwhm_qubic_rec}")
 
-        return fwhm_tod, fwhm_mapmaking, fwhm_rec
+        return fwhm_qubic_tod, fwhm_qubic_mapmaking, fwhm_qubic_rec
 
     def get_noise(self):
         """Noise.
@@ -279,12 +278,13 @@ class PresetAcquisition:
         """
 
         ### Build joint acquisition operator
+        print("Amm_in : ", self.preset_mixingmatrix.Amm_in.shape)
         self.H = self.preset_qubic.joint_in.get_operator(
             A=self.preset_mixingmatrix.Amm_in,
             gain=self.preset_gain.gain_in,
             fwhm=self.fwhm_tod,
         )
-
+    
         ### Build noise variables
         noise_external = self.preset_qubic.joint_in.external.get_noise(
             planck_ntot=self.preset_tools.params["PLANCK"]["level_noise_planck"],
@@ -292,6 +292,7 @@ class PresetAcquisition:
             seenpix=self.preset_sky.seenpix,
             seed=self.seed_noise_planck,
         )
+
         noise_qubic = self.get_noise()
 
         ### Create QUBIC TOD
@@ -299,7 +300,14 @@ class PresetAcquisition:
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        self.TOD_external = self.H.operands[1](self.components_in_convolved) + noise_external.ravel()
+        # self.TOD_external = self.H.operands[1](self.components_in_convolved) + noise_external.ravel()
+        # self.TOD_external_zero_outside_patch = self.components_in_convolved.copy()
+        # self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
+        # self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
+        self.TOD_external = self.H.operands[1](self.preset_comp.components_in) + noise_external.ravel()
+        self.TOD_external_zero_outside_patch = self.preset_comp.components_in.copy()
+        self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
+        self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
 
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         # _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
@@ -315,19 +323,20 @@ class PresetAcquisition:
         #     for i in range(maps_external.shape[0]):
         #         maps_external[i] = C(maps_external[i])
 
-        # if self.preset_tools.params["PCG"]["fix_pixels_outside_patch"]:
-        #     maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
-        #     self.TOD_external = _r.T(maps_external)
+        # # if self.preset_tools.params["PCG"]["fix_pixels_outside_patch"]:
+        # #     maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
+        # #     self.TOD_external = _r.T(maps_external)
 
-        #     self.seenpix_external = np.tile(self.preset_sky.seenpix_qubic, (maps_external.shape[0], 3, 1)).reshape(maps_external.shape)
+        # #     self.seenpix_external = np.tile(self.preset_sky.seenpix_qubic, (maps_external.shape[0], 3, 1)).reshape(maps_external.shape)
 
-        ### Planck dataset with 0 outside QUBIC patch (Planck is assumed on the full sky)
+        # ## Planck dataset with 0 outside QUBIC patch (Planck is assumed on the full sky)
         # maps_external[:, ~self.preset_sky.seenpix_qubic, :] = 0
         # self.TOD_external_zero_outside_patch = _r.T(maps_external)
 
         ### Observed TOD (Planck is assumed on the full sky)
+
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
-        # self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch]
+        self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch.ravel()]
 
     def get_x0(self):
         """PCG starting point.
@@ -354,7 +363,7 @@ class PresetAcquisition:
 
         # Build beta map for spatially varying spectral index
         self.allbeta = np.array([self.beta_iter])
-        # C1 = [HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec[i], lmax=3 * self.preset_tools.params["SKY"]["nside"]) for i in range(len(self.preset_comp.components_model_out))]
+        # C1 = [HealpixConvolutionGaussianOperator(fwhm=self.fwhm_qubic_rec[i], lmax=3 * self.preset_tools.params["SKY"]["nside"]) for i in range(len(self.preset_comp.components_model_out))]
         C2 = HealpixConvolutionGaussianOperator(
             fwhm=self.preset_tools.params["INITIAL"]["fwhm0"],
             lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
@@ -389,7 +398,7 @@ class PresetAcquisition:
 
         # else:
         #     self.allbeta = np.array([self.beta_iter])
-        #     C1 = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_rec, lmax=3*self.preset_tools.params['SKY']['nside'])
+        #     C1 = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_qubic_rec, lmax=3*self.preset_tools.params['SKY']['nside'])
         #     C2 = HealpixConvolutionGaussianOperator(fwhm=self.preset_tools.params['INITIAL']['fwhm0'], lmax=3*self.preset_tools.params['SKY']['nside'])
         #     ### Varying spectral indices -> maps have shape (Nstk, Npix, Ncomp)
         #     for i in range(len(self.preset_comp.components_model_out)):

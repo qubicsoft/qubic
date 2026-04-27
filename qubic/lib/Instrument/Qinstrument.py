@@ -353,6 +353,52 @@ class QubicInstrument(Instrument):
 
     __repr__ = __str__
 
+    def _planck_integrals(self, T, nu_low, nu_up):
+
+        x_low = h * nu_low / (k * T)
+        x_up = h * nu_up / (k * T)
+
+        I1 = quad(funct, x_low, x_up, (4, 1))[0]
+        I2 = quad(funct, x_low, x_up, (4, 2))[0]
+        K1 = quad(funct, x_low, x_up, (3, 1))[0]
+
+        return I1, I2, K1
+
+    def _get_component_eta(self, noise, index):
+        """
+        Effective emissivity-transmission factor for one component.
+        """
+        return (noise.emissivities * noise.tr_prod)[index] * self.detector.efficiency
+
+    def _get_planck_prefactors(self, T):
+        """
+        Return common blackbody prefactors used in NEP calculations:
+        (kT)^4/(c^2 h^3) and (kT)^5/(c^2 h^3).
+        """
+        kt = k * T
+        pref4 = kt**4 / c**2 / h**3
+        pref5 = kt * pref4
+        return pref4, pref5
+
+    def _get_band_limits(self):
+
+        if self.nu1_down <= self.filter.nu <= self.nu1_up:
+            return self.nu1_down, self.nu1_up
+        elif self.nu2_down <= self.filter.nu <= self.nu2_up:
+            return self.nu2_down, self.nu2_up
+        else:
+            raise ValueError("Frequency outside defined bands.")
+
+    def _get_noise_photon_context(self, noise, nu_low):
+        """
+        Precompute branch flags used in _get_noise_photon_nep.
+        """
+        return {
+            "is_150_band": nu_low == self.nu1_down,
+            "is_fi_config": self.config == "FI",
+            "has_ndf_emission": noise.emissivities[noise.indf] != 0.0,
+        }
+
     def get_noise(self, sampling, scene, det_noise=True, photon_noise=True, out=None, operation=operation_assignment):
         """
         Return a noisy timeline.
@@ -416,65 +462,51 @@ class QubicInstrument(Instrument):
 
         noise = self.load_NEP_parameters(scene)
 
-        # Compute noise of the components before the horn array
+        nu_low, nu_up = self._get_band_limits()
+        noise_ctx = self._get_noise_photon_context(noise, nu_low)
+
+        # Components before horns
         self.NEP_before_horns(noise, noise.nu)
 
-        # bifurcation for the whole 150 GHz
-        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            # noise.nu_up = 168e9
+        # Horns
+        self.NEP_horns(noise, nu_low, nu_up)
 
-            # Compute NEP contribution from horn array
-            self.NEP_horns(noise)
+        # Environment
+        self.NEP_environment(noise, noise.names, nu_low, nu_up)
 
-            ## Environment NEP
-            self.NEP_environment(noise, noise.names)
+        # Combiner
+        self.NEP_combiner(noise, nu_low, nu_up)
 
-            # Combiner - compute
-            self.NEP_combiner(noise)
+        # Cold stop
+        self.NEP_coldstop(noise, nu_low, nu_up)
 
-            # cold stop low pass edge - compute
-            self.NEP_coldstop(noise)
+        # Dichroic
+        if noise_ctx["is_fi_config"]:
+            # Compute
+            self.NEP_dichroic(noise, nu_low, nu_up)
 
-            # Dichroic
-            if self.config == "FI":
-                # Compute
-                self.NEP_dichroic(noise)
+        if noise_ctx["is_150_band"]:  # 150GHz band
 
-            if noise.emissivities[noise.indf] == 0.0:
+            if not noise_ctx["has_ndf_emission"]:
                 noise.P_phot[noise.indf] = 0.0
                 noise.NEP_phot2[noise.indf] = 0.0
             else:
-                # Compute NEP neutral density filter
-
-                self.NEP_neutraldensityfilter(noise)
+                self.NEP_neutraldensityfilter(noise, nu_low, nu_up)
 
             # The two before last low pass Edges - compute
-            self.NEP_lowpassedge(noise, noise.lpe1)
+            self.NEP_lowpassedge(noise, noise.lpe1, nu_low, nu_up)
 
             # Compute
-            self.NEP_lowpassedge(noise, noise.lpe2)
+            self.NEP_lowpassedge(noise, noise.lpe2, nu_low, nu_up)
 
-        else:  # 220 GHz
-            self.NEP_horns(noise)
-
-            # Environment NEP
-            self.NEP_environment(noise, noise.names)
-
-            # combiner
-            self.NEP_combiner(noise)
-
-            # coldstop
-            self.NEP_coldstop(noise)
-
-            # dichroic
-            self.NEP_dichroic(noise)
+        else:  # 220 GHz band
 
             # Last three filters (ndf, lpe1, lpe2?)
-            self.NEP_lpefilter_220(noise, noise.indf)
+            self.NEP_lpefilter_220(noise, noise.indf, nu_low, nu_up)
 
-            self.NEP_lpefilter_220(noise, noise.lpe1)
+            self.NEP_lpefilter_220(noise, noise.lpe1, nu_low, nu_up)
 
-            self.NEP_lpefilter_220(noise, noise.lpe2)
+            self.NEP_lpefilter_220(noise, noise.lpe2, nu_low, nu_up)
 
             # self.NEP_lastfilters_220(noise) #Old
         # 5.6 cm EDGE (150 GHz) or Band Defining Filter (220 GHZ)
@@ -537,17 +569,22 @@ class QubicInstrument(Instrument):
         # after the present one
         noise.tr_prod = np.r_[[np.prod(noise.transmissions[j + 1 :]) for j in range(n - 1)], 1]
         # insures that the noise is comuted for the full bandwidth.
+        
         if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
             noise.nu = self.nu1
         elif (self.filter.nu <= self.nu2_up) and (self.filter.nu >= self.nu2_down):
             noise.nu = self.nu2
+        
         noise.dnu = noise.nu * self.FRBW
         noise.S_det = self.detector.area
         noise.omega_det = -self.detector.area / self.optics.focal_length**2 * np.cos(self.detector.theta) ** 3
+        
         # Physical horn area
         noise.S_horns = np.pi * self.horn.radius**2 * len(self.horn)
+        
         # Effective horn area, taking the number of modes into account
         noise.S_horns_eff = np.pi * self.horn.radeff**2 * len(self.horn)
+        
         noise.sec_beam = self.secondary_beam(self.detector.theta, self.detector.phi)
         alpha = np.arctan(0.5)  # half oppening angle of the combiner
         noise.omega_comb = np.pi * (1 - np.cos(alpha) ** 2)  # to be revisited,
@@ -566,6 +603,7 @@ class QubicInstrument(Instrument):
 
         # Upper frequency for 150GHz channel computation of
         noise.nu_up = 168e9
+
         # Load indexes
         # components before the horn plane
         noise.ib2b = names.index(b"ba2ba")
@@ -712,7 +750,7 @@ class QubicInstrument(Instrument):
         else:
             return
 
-    def NEP_horns(self, noise, return_only=False, sampling=None):
+    def NEP_horns(self, noise, nu_low, nu_up, return_only=False, sampling=None):
         """
         This method calculates the noise of the array of horns.
 
@@ -735,29 +773,23 @@ class QubicInstrument(Instrument):
         self._raise_sampling_error(return_only, sampling)
 
         ib2b = noise.ib2b
-        # 150GHz band
-        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            # print("======== 150GHz band horns NEP")
-            # back to back horns, as seen by the detectors through the combiner
-            T = noise.temperatures[ib2b]
-            b = h * noise.nu_up / k / T
-            I1 = quad(funct, 0, b, (4, 1))[0]
-            I2 = quad(funct, 0, b, (4, 2))[0]
-            K1 = quad(funct, 0, b, (3, 1))[0]
-            eta = (noise.emissivities * noise.tr_prod)[ib2b] * self.detector.efficiency
-            # Here the physical horn area S_horns must be used
-            noise.NEP_phot2[ib2b] = 2 * noise.gp[ib2b] * eta * (k * T) ** 5 / c**2 / h**3 * (I1 + eta * I2) * noise.S_horns * noise.omega_det * noise.sec_beam
-            noise.P_phot[ib2b] = noise.gp[ib2b] * eta * (k * T) ** 4 / c**2 / h**3 * K1 * noise.S_horns * noise.omega_det * noise.sec_beam
-        else:  # 220GHz band
+        T = noise.temperatures[ib2b]
+        I1, I2, K1 = self._planck_integrals(T, nu_low, nu_up)
+        eta = self._get_component_eta(noise, ib2b)
+        pref4, pref5 = self._get_planck_prefactors(T)
+        # Here the physical horn area S_horns must be used
+        noise.P_phot[ib2b] = noise.gp[ib2b] * eta * pref4 * K1 * noise.S_horns * noise.omega_det * noise.sec_beam
+        noise.NEP_phot2[ib2b] = 2 * noise.gp[ib2b] * eta * pref5 * (I1 + eta * I2) * noise.S_horns * noise.omega_det * noise.sec_beam
+
             # back to back horns, as seen by the detectors through the combiner
             # Here the physical horn area S_horns must be used
-            noise.g[ib2b] = noise.gp[ib2b, None] * noise.S_horns * noise.omega_det * (self.filter.nu / c) ** 2 * noise.sec_beam * noise.dnu
+            #noise.g[ib2b] = noise.gp[ib2b, None] * noise.S_horns * noise.omega_det * (self.filter.nu / c) ** 2 * noise.sec_beam * noise.dnu
             # [MARTIN note: tr_prod has the proper indexes? (see eta computation for 150GHz band) ]
-            noise.P_phot[ib2b] = (noise.emissivities * noise.tr_prod * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * noise.g[ib2b]
-            noise.P_phot[ib2b] = noise.P_phot[ib2b] * self.detector.efficiency
-            noise.NEP_phot2_nobunch[ib2b] = h * self.filter.nu * noise.P_phot[ib2b] * 2
+            #noise.P_phot[ib2b] = (noise.emissivities * noise.tr_prod * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * noise.g[ib2b]
+            #noise.P_phot[ib2b] = noise.P_phot[ib2b] * self.detector.efficiency
+            #noise.NEP_phot2_nobunch[ib2b] = h * self.filter.nu * noise.P_phot[ib2b] * 2
             # note the factor 2 in the definition of the NEP^2
-            noise.NEP_phot2[ib2b] = noise.NEP_phot2_nobunch[ib2b] * (1 + noise.P_phot[ib2b] / (h * self.filter.nu * noise.g[ib2b]))
+            #noise.NEP_phot2[ib2b] = noise.NEP_phot2_nobunch[ib2b] * (1 + noise.P_phot[ib2b] / (h * self.filter.nu * noise.g[ib2b]))
 
         if self.debug:
             self._raise_debug(noise, noise.ib2b)
@@ -768,7 +800,7 @@ class QubicInstrument(Instrument):
         else:
             return
 
-    def NEP_environment(self, noise, names, return_only=False, sampling=None):
+    def NEP_environment(self, noise, names, nu_low, nu_up, return_only=False, sampling=None):
         """
         This method calculates the environment noise.
 
@@ -795,32 +827,30 @@ class QubicInstrument(Instrument):
         self._raise_sampling_error(return_only, sampling)
 
         ib2b = noise.ib2b
-        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            T = noise.temperatures[ib2b]
-            b = h * noise.nu_up / k / T
-            I1 = quad(funct, 0, b, (4, 1))[0]
-            I2 = quad(funct, 0, b, (4, 2))[0]
-            K1 = quad(funct, 0, b, (3, 1))[0]
+        T = noise.temperatures[ib2b]
+        I1, I2, K1 = self._planck_integrals(T, nu_low, nu_up)
+        pref4, pref5 = self._get_planck_prefactors(T)
 
-            eff_factor = np.prod(noise.transmissions[(len(names) - 4) :]) * self.detector.efficiency
-            noise.P_phot_env = noise.gp[ib2b] * eff_factor * noise.omega_coldstop * noise.S_det * (k * noise.temperatures[ib2b]) ** 4 / c**2 / h**3 * K1
-            noise.NEP_phot2_env = 4 * noise.omega_coldstop * noise.S_det * (k * noise.temperatures[ib2b]) ** 5 / c**2 / h**3 * eff_factor * (I1 + I2 * eff_factor)
-            NEP_phot2_env_nobunch = None
+        eff_factor = np.prod(noise.transmissions[(len(names) - 4) :]) * self.detector.efficiency
+        noise.P_phot_env = noise.gp[ib2b] * eff_factor * noise.omega_coldstop * noise.S_det * pref4 * K1
+        noise.NEP_phot2_env = 4 * noise.omega_coldstop * noise.S_det * pref5 * eff_factor * (I1 + I2 * eff_factor)
+        NEP_phot2_env_nobunch = None
 
-        else:  ##220GHz:
-            eff_factor = np.prod(noise.transmissions[(len(names) - 4) :]) * self.detector.efficiency
-            g_env = noise.gp[ib2b, None] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.sec_beam * noise.dnu
-            noise.P_phot_env = (eff_factor * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * g_env
-            NEP_phot2_env_nobunch = h * self.filter.nu * noise.P_phot_env * 2
+            #eff_factor = np.prod(noise.transmissions[(len(names) - 4) :]) * self.detector.efficiency
+            #g_env = noise.gp[ib2b, None] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.sec_beam * noise.dnu
+            #noise.P_phot_env = (eff_factor * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ib2b]) - 1))[ib2b, None] * g_env
+            #NEP_phot2_env_nobunch = h * self.filter.nu * noise.P_phot_env * 2
+            
             # note the factor 2 in the definition of the NEP^2
-            noise.NEP_phot2_env = NEP_phot2_env_nobunch * (1 + noise.P_phot_env / (h * self.filter.nu * g_env))
-            if self.debug:
-                print("==========================")
-                print("Shape of NEP_phot2_env_nobunch = ", np.shape(NEP_phot2_env_nobunch))
-                print("Shape of NEP_phot2_env_nobunch = ", np.shape(noise.P_phot_env))
-                print("ib2b", ib2b)
-                print("Value used in current version of qubicsoft", NEP_phot2_env_nobunch[ib2b])
-                print("==========================")
+            #noise.NEP_phot2_env = NEP_phot2_env_nobunch * (1 + noise.P_phot_env / (h * self.filter.nu * g_env))
+            
+        if self.debug:
+            print("==========================")
+            print("Shape of NEP_phot2_env_nobunch = ", np.shape(NEP_phot2_env_nobunch))
+            print("Shape of NEP_phot2_env_nobunch = ", np.shape(noise.P_phot_env))
+            print("ib2b", ib2b)
+            #print("Value used in current version of qubicsoft", NEP_phot2_env_nobunch[ib2b])
+            print("==========================")
 
         if self.debug:
             self._raise_debug(noise, noise.ib2b, environment=True)
@@ -836,7 +866,7 @@ class QubicInstrument(Instrument):
         else:
             return
 
-    def NEP_combiner(self, noise, return_only=False, sampling=None):
+    def NEP_combiner(self, noise, nu_low, nu_up, return_only=False, sampling=None):
         """
         This method calculates the noise of the optical combiner (consider 2 mirrors).
 
@@ -860,25 +890,30 @@ class QubicInstrument(Instrument):
         self._raise_sampling_error(return_only, sampling)
 
         icomb = noise.icomb
+        T = noise.temperatures[icomb]
+        J1, J2, L1 = self._planck_integrals(T, nu_low, nu_up)
+        eta = self._get_component_eta(noise, icomb)
+        pref4, pref5 = self._get_planck_prefactors(T)
+        
         # 150GHz band
-        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            T = noise.temperatures[icomb]
-            b = h * noise.nu_up / k / T
-            J1 = quad(funct, 0, b, (4, 1))[0]
-            J2 = quad(funct, 0, b, (4, 2))[0]
-            L1 = quad(funct, 0, b, (3, 1))[0]
-            eta = (noise.emissivities * noise.tr_prod)[icomb] * self.detector.efficiency
-            noise.P_phot[icomb] = noise.gp[icomb] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.S_det * noise.omega_comb * noise.sec_beam
-            noise.NEP_phot2[icomb] = 2 * noise.gp[icomb] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.S_det * noise.omega_comb * noise.sec_beam
+        if nu_low == self.nu1_down:
 
-        else:  # 220GHz band
-            noise.g[icomb] = noise.gp[icomb] * noise.S_det * noise.omega_comb * (self.filter.nu / c) ** 2 * noise.dnu
+            noise.P_phot[icomb] = noise.gp[icomb] * eta * pref4 * L1 * noise.S_det * noise.omega_comb * noise.sec_beam
+            noise.NEP_phot2[icomb] = 2 * noise.gp[icomb] * eta * pref5 * (J1 + eta * J2) * noise.S_det * noise.omega_comb * noise.sec_beam
+
+        else:  # 220GHz band 
+
+            noise.P_phot[icomb] = noise.gp[icomb] * eta * pref4 * L1 * noise.S_det * noise.omega_comb * noise.sec_beam
+            noise.NEP_phot2[icomb] = 2 * noise.gp[icomb] * eta * pref5 * (J1 + eta * J2) * noise.S_det * noise.omega_comb * noise.sec_beam
+
+
+            #noise.g[icomb] = noise.gp[icomb] * noise.S_det * noise.omega_comb * (self.filter.nu / c) ** 2 * noise.dnu
             # The combiner emissivity includes the fact that there are 2
             # mirrors
-            eta = (noise.emissivities * noise.tr_prod)[icomb] * self.detector.efficiency
-            noise.P_phot[icomb] = eta * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[icomb]) - 1) * noise.g[icomb]
-            noise.NEP_phot2_nobunch[icomb] = h * self.filter.nu * noise.P_phot[icomb] * 2
-            noise.NEP_phot2[icomb] = noise.NEP_phot2_nobunch[icomb] * (1 + noise.P_phot[icomb] / (h * self.filter.nu * noise.g[icomb]))
+            #eta = (noise.emissivities * noise.tr_prod)[icomb] * self.detector.efficiency
+            #noise.P_phot[icomb] = eta * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[icomb]) - 1) * noise.g[icomb]
+            #noise.NEP_phot2_nobunch[icomb] = h * self.filter.nu * noise.P_phot[icomb] * 2
+            #noise.NEP_phot2[icomb] = noise.NEP_phot2_nobunch[icomb] * (1 + noise.P_phot[icomb] / (h * self.filter.nu * noise.g[icomb]))
 
         if self.debug:
             self._raise_debug(noise, noise.icomb)
@@ -889,7 +924,7 @@ class QubicInstrument(Instrument):
         else:
             return
 
-    def NEP_coldstop(self, noise, return_only=False, sampling=None):
+    def NEP_coldstop(self, noise, nu_low, nu_up, return_only=False, sampling=None):
         """
         This method calculates the noise of the cold stop.
 
@@ -913,24 +948,27 @@ class QubicInstrument(Instrument):
         self._raise_sampling_error(return_only, sampling)
 
         ics = noise.ics
+        T = noise.temperatures[ics]
+        J1, J2, L1 = self._planck_integrals(T, nu_low, nu_up)
+        eta = self._get_component_eta(noise, ics)
+        pref4, pref5 = self._get_planck_prefactors(T)
+        
         # 150GHz band
-        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            T = noise.temperatures[ics]
-            b = h * noise.nu_up / k / T
-            J1 = quad(funct, 0, b, (4, 1))[0]
-            J2 = quad(funct, 0, b, (4, 2))[0]
-            L1 = quad(funct, 0, b, (3, 1))[0]
-            eta = (noise.emissivities * noise.tr_prod)[ics] * self.detector.efficiency
-
-            noise.NEP_phot2[ics] = 2 * noise.gp[ics] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.S_det * noise.omega_coldstop * noise.sec_beam
-            noise.P_phot[ics] = noise.gp[ics] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.S_det * noise.omega_coldstop * noise.sec_beam
+        if nu_low == self.nu1_down:
+           
+            noise.NEP_phot2[ics] = 2 * noise.gp[ics] * eta * pref5 * (J1 + eta * J2) * noise.S_det * noise.omega_coldstop * noise.sec_beam
+            noise.P_phot[ics] = noise.gp[ics] * eta * pref4 * L1 * noise.S_det * noise.omega_coldstop * noise.sec_beam
 
         else:  # 220GHz band
-            eta = noise.emissivities[ics] * noise.tr_prod[ics] * self.detector.efficiency
-            noise.g[ics] = noise.gp[ics] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.dnu
-            noise.P_phot[ics] = eta * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ics]) - 1) * noise.g[ics]
-            noise.NEP_phot2_nobunch[ics] = h * self.filter.nu * noise.P_phot[ics] * 2
-            noise.NEP_phot2[ics] = noise.NEP_phot2_nobunch[ics] * (1 + noise.P_phot[ics] / (h * self.filter.nu * noise.g[ics]))
+
+            noise.NEP_phot2[ics] = 2 * noise.gp[ics] * eta * pref5 * (J1 + eta * J2) * noise.S_det * noise.omega_coldstop * noise.sec_beam
+            noise.P_phot[ics] = noise.gp[ics] * eta * pref4 * L1 * noise.S_det * noise.omega_coldstop * noise.sec_beam
+
+            #eta = noise.emissivities[ics] * noise.tr_prod[ics] * self.detector.efficiency
+            #noise.g[ics] = noise.gp[ics] * noise.S_det * noise.omega_coldstop * (self.filter.nu / c) ** 2 * noise.dnu
+            #noise.P_phot[ics] = eta * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[ics]) - 1) * noise.g[ics]
+            #noise.NEP_phot2_nobunch[ics] = h * self.filter.nu * noise.P_phot[ics] * 2
+            #noise.NEP_phot2[ics] = noise.NEP_phot2_nobunch[ics] * (1 + noise.P_phot[ics] / (h * self.filter.nu * noise.g[ics]))
 
         if self.debug:
             self._raise_debug(noise, noise.ics)
@@ -941,7 +979,7 @@ class QubicInstrument(Instrument):
         else:
             return
 
-    def NEP_dichroic(self, noise, return_only=False, sampling=None):
+    def NEP_dichroic(self, noise, nu_low, nu_up, return_only=False, sampling=None):
         """
         This method calculates the noise of the dichroic. It's only accounted for the FI configuration.
 
@@ -965,22 +1003,27 @@ class QubicInstrument(Instrument):
         self._raise_sampling_error(return_only, sampling)
 
         idic = noise.idic
-        if (self.filter.nu <= self.nu1_up) and (self.filter.nu >= self.nu1_down):
-            T = noise.temperatures[idic]
-            b = h * noise.nu_up / k / T
-            J1 = quad(funct, 0, b, (4, 1))[0]
-            J2 = quad(funct, 0, b, (4, 2))[0]
-            L1 = quad(funct, 0, b, (3, 1))[0]
-            eta = (noise.emissivities * noise.tr_prod)[idic] * self.detector.efficiency
-            noise.g[idic] = noise.gp[idic] * noise.S_det * noise.omega_dichro
-            noise.P_phot[idic] = noise.g[idic] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.sec_beam
-            noise.NEP_phot2[idic] = 2 * noise.g[idic] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.sec_beam
+        T = noise.temperatures[idic]
+        J1, J2, L1 = self._planck_integrals(T, nu_low, nu_up)
+        eta = self._get_component_eta(noise, idic)
+        pref4, pref5 = self._get_planck_prefactors(T)
+        noise.g[idic] = noise.gp[idic] * noise.S_det * noise.omega_dichro
+
+        if nu_low == self.nu1_down:
+                        
+            noise.P_phot[idic] = noise.g[idic] * eta * pref4 * L1 * noise.sec_beam
+            noise.NEP_phot2[idic] = 2 * noise.g[idic] * eta * pref5 * (J1 + eta * J2) * noise.sec_beam
+
         else:  # 220GHz
-            eta = (noise.emissivities * noise.tr_prod)[idic] * self.detector.efficiency
-            noise.g[idic] = noise.gp[idic] * noise.S_det * noise.omega_dichro * (noise.nu / c) ** 2 * noise.dnu
-            noise.P_phot[idic] = h * noise.nu / (np.exp(h * noise.nu / k / noise.temperatures[idic]) - 1) * noise.g[idic]
-            noise.NEP_phot2_nobunch[idic] = h * noise.nu * noise.P_phot[idic] * 2
-            noise.NEP_phot2[idic] = noise.NEP_phot2_nobunch[idic] * (1 + noise.P_phot[idic] / (h * noise.nu * noise.g[idic]))
+
+            noise.P_phot[idic] = noise.g[idic] * eta * pref4 * L1 * noise.sec_beam
+            noise.NEP_phot2[idic] = 2 * noise.g[idic] * eta * pref5 * (J1 + eta * J2) * noise.sec_beam
+
+            #eta = (noise.emissivities * noise.tr_prod)[idic] * self.detector.efficiency
+            #noise.g[idic] = noise.gp[idic] * noise.S_det * noise.omega_dichro * (noise.nu / c) ** 2 * noise.dnu
+            #noise.P_phot[idic] = h * noise.nu / (np.exp(h * noise.nu / k / noise.temperatures[idic]) - 1) * noise.g[idic]
+            #noise.NEP_phot2_nobunch[idic] = h * noise.nu * noise.P_phot[idic] * 2
+            #noise.NEP_phot2[idic] = noise.NEP_phot2_nobunch[idic] * (1 + noise.P_phot[idic] / (h * noise.nu * noise.g[idic]))
 
         if self.debug:
             self._raise_debug(noise, noise.idic)
@@ -991,7 +1034,7 @@ class QubicInstrument(Instrument):
         else:
             return
 
-    def NEP_neutraldensityfilter(self, noise, return_only=False, sampling=None):
+    def NEP_neutraldensityfilter(self, noise, nu_low, nu_up, return_only=False, sampling=None):
         """
         This method calculates the noise of the neutral density filter for 150GHz band.
         In the case of the 220GHz the ndf is considered in an independent method called NEP_lastfilters_220.
@@ -1018,13 +1061,11 @@ class QubicInstrument(Instrument):
         indf = noise.indf
 
         T = noise.temperatures[indf]
-        b = h * noise.nu_up / k / T
-        J1 = quad(funct, 0, b, (4, 1))[0]
-        J2 = quad(funct, 0, b, (4, 2))[0]
-        L1 = quad(funct, 0, b, (3, 1))[0]
-        eta = (noise.emissivities * noise.tr_prod)[indf] * self.detector.efficiency
-        noise.NEP_phot2[indf] = 2 * noise.gp[indf] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.S_det * np.pi * noise.sec_beam
-        noise.P_phot[indf] = noise.gp[indf] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.S_det * np.pi * noise.sec_beam
+        J1, J2, L1 = self._planck_integrals(T, nu_low, nu_up)
+        eta = self._get_component_eta(noise, indf)
+        pref4, pref5 = self._get_planck_prefactors(T)
+        noise.NEP_phot2[indf] = 2 * noise.gp[indf] * eta * pref5 * (J1 + eta * J2) * noise.S_det * np.pi * noise.sec_beam
+        noise.P_phot[indf] = noise.gp[indf] * eta * pref4 * L1 * noise.S_det * np.pi * noise.sec_beam
 
         if self.debug:
             self._raise_debug(noise, noise.indf)
@@ -1035,7 +1076,7 @@ class QubicInstrument(Instrument):
         else:
             return
 
-    def NEP_lowpassedge(self, noise, i, return_only=False, sampling=None):
+    def NEP_lowpassedge(self, noise, i, nu_low, nu_up, return_only=False, sampling=None):
         """
         This method calculates the noise of the low pass edge filter.
         In the case of the 220GHz the ndf is considered in an independent method called NEP_lastfilters_220.
@@ -1061,13 +1102,11 @@ class QubicInstrument(Instrument):
         self._raise_sampling_error(return_only, sampling)
 
         T = noise.temperatures[i]
-        b = h * noise.nu_up / k / T
-        J1 = quad(funct, 0, b, (4, 1))[0]
-        J2 = quad(funct, 0, b, (4, 2))[0]
-        L1 = quad(funct, 0, b, (3, 1))[0]
-        eta = (noise.emissivities * noise.tr_prod)[i] * self.detector.efficiency
-        noise.NEP_phot2[i] = 2 * noise.gp[i] * eta * (k * T) ** 5 / c**2 / h**3 * (J1 + eta * J2) * noise.S_det * np.pi * noise.sec_beam
-        noise.P_phot[i] = noise.gp[i] * eta * (k * T) ** 4 / c**2 / h**3 * L1 * noise.S_det * np.pi * noise.sec_beam
+        J1, J2, L1 = self._planck_integrals(T, nu_low, nu_up)
+        eta = self._get_component_eta(noise, i)
+        pref4, pref5 = self._get_planck_prefactors(T)
+        noise.NEP_phot2[i] = 2 * noise.gp[i] * eta * pref5 * (J1 + eta * J2) * noise.S_det * np.pi * noise.sec_beam
+        noise.P_phot[i] = noise.gp[i] * eta * pref4 * L1 * noise.S_det * np.pi * noise.sec_beam
 
         if self.debug:
             self._raise_debug(noise, i)
@@ -1114,7 +1153,7 @@ class QubicInstrument(Instrument):
         else:
             return
 
-    def NEP_lpefilter_220(self, noise, i, return_only=False, sampling=None):
+    def NEP_lpefilter_220(self, noise, i, nu_low, nu_up, return_only=False, sampling=None):
         """
         Arguments:
             noise: parameters for the computation of the noise. It is loaded from
@@ -1140,10 +1179,18 @@ class QubicInstrument(Instrument):
             noise.P_phot[i] = 0.0
             noise.NEP_phot2[i] = 0.0
         else:
-            noise.g[i] = noise.gp[i] * noise.S_det * noise.omega_dichro * (self.filter.nu / c) ** 2 * noise.dnu
-            noise.P_phot[i] = noise.emissivities[i] * noise.tr_prod[i] * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[i]) - 1) * noise.g[i] * self.detector.efficiency
-            noise.NEP_phot2_nobunch[i] = h * self.filter.nu * noise.P_phot[i] * 2
-            noise.NEP_phot2[i] = noise.NEP_phot2_nobunch[i] * (1 + noise.P_phot[i] / (h * self.filter.nu * noise.g[i]))
+            T = noise.temperatures[i]
+            J1, J2, L1 = self._planck_integrals(T, nu_low, nu_up)
+            eta = self._get_component_eta(noise, i)
+            pref4, pref5 = self._get_planck_prefactors(T)
+            noise.g[i] = noise.gp[i] * noise.S_det * noise.omega_dichro
+            noise.P_phot[i] = noise.g[i] * eta * pref4 * L1 * noise.sec_beam
+            noise.NEP_phot2[i] = 2 * noise.g[i] * eta * pref5 * (J1 + eta * J2) * noise.sec_beam
+
+            #noise.g[i] = noise.gp[i] * noise.S_det * noise.omega_dichro * (self.filter.nu / c) ** 2 * noise.dnu
+            #noise.P_phot[i] = noise.emissivities[i] * noise.tr_prod[i] * h * self.filter.nu / (np.exp(h * self.filter.nu / k / noise.temperatures[i]) - 1) * noise.g[i] * self.detector.efficiency
+            #noise.NEP_phot2_nobunch[i] = h * self.filter.nu * noise.P_phot[i] * 2
+            #noise.NEP_phot2[i] = noise.NEP_phot2_nobunch[i] * (1 + noise.P_phot[i] / (h * self.filter.nu * noise.g[i]))
 
         if self.debug:
             self._raise_debug(noise, i)

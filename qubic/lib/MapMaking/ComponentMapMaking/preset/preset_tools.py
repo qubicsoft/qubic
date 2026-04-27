@@ -54,8 +54,8 @@ class PresetTools:
 
         if self.params["QUBIC"]["instrument"] != "MB":  # We might want to build odd nsub with "MB"
             # Check if bin_mixing_matrix is even
-            if self.params["Foregrounds"]["fit_spectral_index"] and self.params["Foregrounds"]["bin_mixing_matrix"] % 2 != 0:
-                raise TypeError("The argument bin_mixing_matrix should be even")
+            # if self.params["Foregrounds"]["fit_mixing_matrix"] and self.params["Foregrounds"]["bin_mixing_matrix"] % 2 != 0:
+            #     raise TypeError("The argument bin_mixing_matrix should be even")
 
             # Check if nsub_in is even
             if self.params["QUBIC"]["nsub_in"] % 2 != 0:
@@ -66,17 +66,21 @@ class PresetTools:
                 raise TypeError("The argument nsub_out should be even")
 
         # Check if blind_method is one of the allowed methods
-        if self.params["Foregrounds"]["blind_method"] not in ["alternate", "minimize", "PCG"]:
-            raise TypeError("You must choose alternate, minimize or PCG method")
+        if self.params["Foregrounds"]["blind_method"] not in ["minimize"]:
+            raise TypeError("You must choose minimize method")
 
         # Check if nsub_out is greater than or equal to bin_mixing_matrix
-        if self.params["QUBIC"]["nsub_out"] < self.params["Foregrounds"]["bin_mixing_matrix"]:
+        if self.params["Foregrounds"]["fit_mixing_matrix"] and self.params["QUBIC"]["nsub_out"] < self.params["Foregrounds"]["bin_mixing_matrix"]:
             raise TypeError("nsub_out should be higher than bin_mixing_matrix")
 
         # Check if bin_mixing_matrix is a multiple of nsub_out when either Dust or Synchrotron type is 'blind'
-        if self.params["Foregrounds"]["fit_spectral_index"] and (self.params["Foregrounds"]["Dust"]["type"] == "blind" or self.params["Foregrounds"]["Synchrotron"]["type"] == "blind"):
+        if self.params["Foregrounds"]["fit_mixing_matrix"] and (self.params["Foregrounds"]["Dust"]["type"] == "blind" or self.params["Foregrounds"]["Synchrotron"]["type"] == "blind"):
             if self.params["QUBIC"]["nsub_out"] % self.params["Foregrounds"]["bin_mixing_matrix"] != 0:
                 raise TypeError("bin_mixing_matrix should be a multiple of nsub_out")
+            
+        # Check if nside_beta is zero if model is not d1
+        if self.params["Foregrounds"]["Dust"]["model"] != "d1" and self.params["Foregrounds"]["Dust"]["nside_beta_in"] != 0:
+            raise ValueError(f'nside_beta should be 0 for {self.params["Foregrounds"]["Dust"]["model"]} model')
 
         # Check if nside_beta is a multiple of 2 for d1 case
         if self.params["Foregrounds"]["Dust"]["model"] == "d1" and self.params["Foregrounds"]["Dust"]["nside_beta_in"] % 2 != 0:

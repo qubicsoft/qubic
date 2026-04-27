@@ -66,15 +66,19 @@ class CMBModel:
 
 
 class SkySpectra:
-    def __init__(self, ell, nus, nu0_d=353, nu0_s=23):
+    def __init__(self, ell, nus, nu0_d=353, nu0_s=23, comp=None):
         self.nus = nus
         self.ell = ell
         if self.ell is None:
             self.ell = np.arange(2, 4000)
         self.nbins = len(self.ell)
-        self.nfreq = len(self.nus)
+        self.nspectra = len(self.nus)
         self.nu0_d = nu0_d
         self.nu0_s = nu0_s
+
+        if comp is not None:
+            self.comp = comp
+            self.nspectra = len(self.comp)
 
     def cl_to_dl(self, cl):
         """
@@ -102,9 +106,9 @@ class SkySpectra:
         Define the CMB model, depending on r and Alens
         """
 
-        models = np.zeros((self.nfreq, self.nfreq, len(self.ell)))
+        models = np.zeros((self.nspectra, self.nspectra, len(self.ell)))
         cmb_ps = self._get_cl_cmb(r, Alens)
-        models = np.tile(cmb_ps, (self.nfreq, self.nfreq, 1))
+        models = np.tile(cmb_ps, (self.nspectra, self.nspectra, 1))
 
         return self.cl_to_dl(models)
 
@@ -138,7 +142,7 @@ class SkySpectra:
         return Adust[None, :] * Async[:, None] + Adust[:, None] * Async[None, :]
 
     def model(self, r, Alens, Ad, alphad, betad, As, alphas, betas, eps):
-        Dl_model = np.zeros((self.nfreq, self.nfreq, self.nbins))
+        Dl_model = np.zeros((self.nspectra, self.nspectra, self.nbins))
 
         ### CMB
         Dl_model += self.model_cmb(r, Alens)
@@ -151,5 +155,21 @@ class SkySpectra:
 
         prod_Anu_ds = self.scale_dustsync(betad=betad, betas=betas)[..., None]
         Dl_model += eps * np.sqrt(abs(As) * abs(Ad)) * prod_Anu_ds * (self.ell / 80) ** ((alphad + alphas) / 2)
+
+        return Dl_model
+
+    def modelCMM(self, r, Alens, Ad, alphad, betad, As, alphas, betas, eps):
+        # TODO : remove unnused args
+        Dl_model = np.zeros((self.nspectra, self.nspectra, self.nbins))
+
+        for i in range(self.nspectra):
+            if self.comp[i] == "CMB":
+                Dl_model[i, i] = self.model_cmb(r, Alens)[0, 0]
+            elif self.comp[i] == "Dust":
+                Dl_model[i, i] = Ad * (self.ell / 80) ** alphad
+            elif self.comp[i] == "Sync":
+                Dl_model[i, i] = As * (self.ell / 80) ** alphas
+            else:
+                raise ValueError(f"The component model {self.comp[i]} is not implement. Please use a known component.")
 
         return Dl_model

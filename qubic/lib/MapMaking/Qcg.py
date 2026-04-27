@@ -117,7 +117,7 @@ class PCGAlgorithm(IterativeAlgorithm):
         IterativeAlgorithm.__init__(
             self,
             x=x0,
-            convergence=np.array([]),
+            convergence=[],
             abnormal_stop_condition=abnormal_stop_condition,
             disp=disp,
             dtype=dtype,
@@ -156,11 +156,11 @@ class PCGAlgorithm(IterativeAlgorithm):
 
     def initialize(self):
         IterativeAlgorithm.initialize(self)
+        self.convergence = []
 
         if self.b_norm == 0:
             self.error = 0
             self.x[...] = 0
-            self.convergence = np.array([])
             raise StopIteration("RHS is zero.")
 
         self.r[...] = self.b
@@ -207,7 +207,7 @@ class PCGAlgorithm(IterativeAlgorithm):
 
         self.r -= alpha * self.q
         self.error = np.sqrt(self.norm(self.r) / self.b_norm)
-        self.convergence = np.append(self.convergence, self.error)
+        self.convergence.append(self.error)
 
         if self.error < self.tol:
             raise StopIteration("Solver reached maximum tolerance.")

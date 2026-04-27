@@ -1,4 +1,4 @@
-import os
+import os, sys
 
 import emcee
 import numpy as np
@@ -9,7 +9,7 @@ __path__ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class FitEllSpace:
-    def __init__(self, x, y, yerr, model, parameters_file, sample_variance=True, fsky=0.015, dl=30, diagonal=False):
+    def __init__(self, x, y, yerr, model, parameters_file, sample_variance=True, fsky=None, dl=30, diagonal=False):
         self.x = x
         self.y = y
         self.yerr = yerr
@@ -182,19 +182,31 @@ class FitEllSpace:
         return lp - 0.5 * ((residuals).T @ self.invN @ (residuals))
 
     def run(self, nsteps, nwalkers, discard=0, comm=None):
-        ### Initial condition for each parameters
         x0 = self._initial_conditions(nwalkers)
 
-        if comm.Get_size() == 1 or comm is None:
-            print("Running on multi-threading")
-            with Pool() as pool:
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool)
-                sampler.run_mcmc(x0, nsteps, progress=True)
-        else:
+        # MPI mode
+        if comm is not None and comm.Get_size() > 1:
             if comm.Get_rank() == 0:
                 print("Running with MPI")
-            with MPIPool() as pool:
-                sampler = emcee.EnsembleSampler(nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool)
+
+            sampler = emcee.EnsembleSampler(
+                nwalkers, self.ndim, log_prob_fn=self.loglikelihood
+            )
+            sampler.run_mcmc(x0, nsteps, progress=True)
+
+        # Local multiprocessing
+        else:
+            print("Running on multi-threading")
+
+            import os
+            from multiprocess import Pool
+
+            nproc = int(os.environ.get("SLURM_CPUS_PER_TASK", 4))
+
+            with Pool(processes=nproc) as pool:
+                sampler = emcee.EnsembleSampler(
+                    nwalkers, self.ndim, log_prob_fn=self.loglikelihood, pool=pool
+                )
                 sampler.run_mcmc(x0, nsteps, progress=True)
 
         samples_flat = sampler.get_chain(flat=True, discard=discard, thin=15)

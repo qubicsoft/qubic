@@ -1,6 +1,8 @@
 import os
 
 import healpy as hp
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
@@ -67,113 +69,113 @@ def _plot_reconstructed_maps(
 
 def Dl2Cl(ell, Dl):
     """
-    Convert angular power spectrum from D_ell to C_ell.
+        Convert angular power spectrum from D_ell to C_ell.
 
-    Formula
-    -------
-    C_ell = D_ell * 2*pi / (ell * (ell + 1))
+        Formula
+    ---
+        C_ell = D_ell * 2*pi / (ell * (ell + 1))
 
-    Parameters
-    ----------
-    ell : array_like
-        Multipole moments (1D). Values must be > 0 (division by zero otherwise).
-    Dl : array_like
-        D_ell values. Can be scalar, 1D (same length as `ell`) or broadcastable to `ell`.
-        Typical shape in this module: (n_nus, n_nus, n_bins).
+        Parameters
+    --
+        ell : array_like
+            Multipole moments (1D). Values must be > 0 (division by zero otherwise).
+        Dl : array_like
+            D_ell values. Can be scalar, 1D (same length as `ell`) or broadcastable to `ell`.
+            Typical shape in this module: (n_nus, n_nus, n_bins).
 
-    Returns
-    -------
-    ndarray
-        C_ell values with the same shape as the broadcast result of `Dl` and `ell`.
+        Returns
+    ---
+        ndarray
+            C_ell values with the same shape as the broadcast result of `Dl` and `ell`.
 
-    Notes
-    -----
-    - Uses elementwise broadcasting; ensure `ell` and `Dl` shapes are compatible.
-    - No guard is performed for ell == 0; caller must avoid or mask such entries.
+        Notes
+    -
+        - Uses elementwise broadcasting; ensure `ell` and `Dl` shapes are compatible.
+        - No guard is performed for ell == 0; caller must avoid or mask such entries.
     """
     return Dl * 2 * np.pi / (ell * (ell + 1))
 
 
 def Cl2BK(ell, Cl):
     """
-    Convert C_ell to the bandpower-like quantity 100 * ell * C_ell / (2*pi).
+        Convert C_ell to the bandpower-like quantity 100 * ell * C_ell / (2*pi).
 
-    Formula
-    -------
-    result = 100 * ell * C_ell / (2*pi)
+        Formula
+    ---
+        result = 100 * ell * C_ell / (2*pi)
 
-    Parameters
-    ----------
-    ell : array_like
-        Multipole moments (1D). Should match or broadcast with `Cl`.
-    Cl : array_like
-        C_ell values. Can be scalar, 1D or broadcastable to `ell`.
-        Typical shape in this module: (n_nus, n_nus, n_bins).
+        Parameters
+    --
+        ell : array_like
+            Multipole moments (1D). Should match or broadcast with `Cl`.
+        Cl : array_like
+            C_ell values. Can be scalar, 1D or broadcastable to `ell`.
+            Typical shape in this module: (n_nus, n_nus, n_bins).
 
-    Returns
-    -------
-    ndarray
-        Transformed bandpower values with shape equal to the broadcasted inputs.
+        Returns
+    ---
+        ndarray
+            Transformed bandpower values with shape equal to the broadcasted inputs.
     """
     return 100 * ell * Cl / (2 * np.pi)
 
 
-def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", nbins=None, nrec=2, mode="Dl", figsize=None, title=None, name=None, dpi=300):
+def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, label_model="CMB + Dust", nbins=None, nrec=2, mode="Dl", figsize=None, title=None, name=None, dpi=300):
     """
-    Plot the upper-triangle matrix of cross-angular power spectra D_ell (and optional model).
+        Plot the upper-triangle matrix of cross-angular power spectra D_ell (and optional model).
 
-    The function arranges a len(nus) x len(nus) grid and fills only the upper triangle
-    (including diagonal) with small subplots labelled by the frequency pair `nus[i] x nus[j]`.
-    It draws data errorbars, an optional second series (Dl - noise if `Dl_err` provided),
-    and a model line (from `ymodel`) either in D_ell units or transformed to the
-    "100 * ell * C_ell / (2*pi)" units depending on `mode`.
+        The function arranges a len(nus) x len(nus) grid and fills only the upper triangle
+        (including diagonal) with small subplots labelled by the frequency pair `nus[i] x nus[j]`.
+        It draws data errorbars, an optional second series (Dl - noise if `Dl_noise` provided),
+        and a model line (from `ymodel`) either in D_ell units or transformed to the
+        "100 * ell * C_ell / (2*pi)" units depending on `mode`.
 
-    Parameters
-    ----------
-    nus : array_like
-        1D array of frequency identifiers (used for subplot annotations). Length = n_nus.
-    ell : array_like
-        1D array of multipole moments. Length >= nbins (if nbins provided).
-        Must be > 0 to avoid division-by-zero in conversions.
-    Dl : ndarray
-        Data D_ell values, expected shape (n_nus, n_nus, n_ell) or broadcastable to that.
-    Dl_err : ndarray or None
-        Errors on Dl with same shape as `Dl` (or broadcastable). If provided, an additional
-        series `Dl - Dl_err` will be plotted where applicable. Errors are absolute-valued
-        (the function applies np.abs).
-    ymodel : ndarray or None
-        Model values for plotting. Expected shape (n_nus, n_nus, n_ell) (or broadcastable).
-        If None, no model line is drawn.
-    label_model : str, optional
-        Legend label for the model line (default: "CMB + Dust").
-    nbins : int or None, optional
-        Number of ell bins to plot. If None (default) uses len(ell).
-    nrec : int, optional
-        Number of "recon" channels used to choose subplot background color and styling.
-        Default is 2.
-    mode : {"Dl", ...}, optional
-        If "Dl" the data are plotted in D_ell units. Otherwise the model/data are
-        transformed via `_Dl2Cl` and `_Cl2BK` before plotting (matching original behaviour).
-    ft_nus : int, optional
-        Font size for the subplot frequency annotations (default: 10).
-    figsize : tuple, optional
-        Matplotlib figure size (default: (10, 8)).
-    title : str or None, optional
-        Suptitle appended to the fixed prefix "Angular Cross-Power Spectra".
-        If None, only the prefix is used.
-    name : str or None, optional
-        If provided, the figure is saved to this filename as a PDF.
+        Parameters
+    --
+        nus : array_like
+            1D array of frequency identifiers (used for subplot annotations). Length = n_nus.
+        ell : array_like
+            1D array of multipole moments. Length >= nbins (if nbins provided).
+            Must be > 0 to avoid division-by-zero in conversions.
+        Dl : ndarray
+            Data D_ell values, expected shape (n_nus, n_nus, n_ell) or broadcastable to that.
+        Dl_noise : ndarray or None
+            Errors on Dl with same shape as `Dl` (or broadcastable). If provided, an additional
+            series `Dl - Dl_noise` will be plotted where applicable. Errors are absolute-valued
+            (the function applies np.abs).
+        ymodel : ndarray or None
+            Model values for plotting. Expected shape (n_nus, n_nus, n_ell) (or broadcastable).
+            If None, no model line is drawn.
+        label_model : str, optional
+            Legend label for the model line (default: "CMB + Dust").
+        nbins : int or None, optional
+            Number of ell bins to plot. If None (default) uses len(ell).
+        nrec : int, optional
+            Number of "recon" channels used to choose subplot background color and styling.
+            Default is 2.
+        mode : {"Dl", ...}, optional
+            If "Dl" the data are plotted in D_ell units. Otherwise the model/data are
+            transformed via `_Dl2Cl` and `_Cl2BK` before plotting (matching original behaviour).
+        ft_nus : int, optional
+            Font size for the subplot frequency annotations (default: 10).
+        figsize : tuple, optional
+            Matplotlib figure size (default: (10, 8)).
+        title : str or None, optional
+            Suptitle appended to the fixed prefix "Angular Cross-Power Spectra".
+            If None, only the prefix is used.
+        name : str or None, optional
+            If provided, the figure is saved to this filename as a PDF.
 
-    Side effects
-    ------------
-    - Creates a matplotlib figure, shows it with plt.show() and optionally saves it.
-    - Does not return the figure (returns None). If you need the figure object, modify the
-    function to `return fig` after creation.
+        Side effects
 
-    Notes
-    -----
-    - The function preserves exact plotting order, labels and colours of the original code.
-    - The caller must ensure shapes of `nus`, `ell`, `Dl`, `Dl_err`, and `ymodel` are compatible.
+        - Creates a matplotlib figure, shows it with plt.show() and optionally saves it.
+        - Does not return the figure (returns None). If you need the figure object, modify the
+        function to `return fig` after creation.
+
+        Notes
+    -
+        - The function preserves exact plotting order, labels and colours of the original code.
+        - The caller must ensure shapes of `nus`, `ell`, `Dl`, `Dl_noise`, and `ymodel` are compatible.
     """
 
     n = len(nus)
@@ -181,23 +183,27 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
         figsize = (2.2 * n, 2.2 * n)
 
     # Dynamic font scaling based on figure height
-    count_factor = 1 / np.sqrt(n)
-    scale_factor = (figsize[1] / 8.0) * count_factor
+    # Guard against n <= 0 and large figsize values. Compute a scale factor
+    # that decreases with number of subplots and increases with figure height.
+    count_factor = 1.0 / np.sqrt(max(1, n))
+    scale_factor = (float(figsize[1]) / 8.0) * count_factor
 
-    ft_axis = max(int(13 * scale_factor), 7)
-    ft_nus = max(int(15 * scale_factor), 8)
-    ft_title = max(int(32 * np.sqrt(scale_factor)), 14)
+    # Clamp sizes to reasonable readable bounds so very large figures (e.g.
+    # figsize=(25,25)) don't produce oversized fonts. Ranges chosen to keep
+    # ticks and small labels readable while preventing overlap.
+    # ft_axis: tick label size (6..16)
+    # ft_nus: small subtitle/annotation size (8..14)
+    # ft_title: suptitle size (12..28)
+    ft_axis = int(np.clip(13.0 * scale_factor, 6, 16))
+    ft_nus = int(np.clip(10.0 * scale_factor, 8, 14))
+    ft_title = int(np.clip(32.0 * np.sqrt(max(scale_factor, 0.1)), 12, 28))
 
-    # defaults & preproc (preserve original behavior)
+    # defaults & preproc
     if nbins is None:
         nbins = len(ell)
 
-    # Dl2 := Dl - Dl_err (only if Dl_err provided)
-    Dl2 = Dl - Dl_err if Dl_err is not None else None
-
     # keep absolute-valued errors as in original
     Dl_err = np.abs(Dl_err) if Dl_err is not None else None
-    Dl2_err = np.abs(Dl2) if Dl2 is not None else None
 
     ell_sel = ell[:nbins]
 
@@ -221,9 +227,10 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
             else:
                 ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r", label=label_model)
         else:
-            # replicate original behavior: plot Dl model and (always) transformed model if ymodel present
-            ax.plot(ell_sel, y, "--r")
-            ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r")
+            if mode == "Dl":
+                ax.plot(ell_sel, y, "--r")
+            else:
+                ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r")
 
     def _plot_errorbars(ax, i, j, color_main, color_second=None, label_main=None, label_second=None):
         """Add errorbars in either 'Dl' or transformed mode."""
@@ -261,15 +268,16 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
                     ax.set_ylabel(r"$\mathcal{D}_{\ell}$", fontsize=2 * ft_axis)
                 else:
                     ax.set_ylabel(r"100 $ \frac{\ell \mathcal{C}_{\ell}}{2 \pi}$", fontsize=2 * ft_axis)
-            else:
-                ax.tick_params(axis="x", labelrotation=30)
-                ax.tick_params(axis="y", labelrotation=-45)
+            # set tick label rotation and size per-axis so small/large figures
+            # and varying `n` use the computed `ft_axis` consistently
+            ax.tick_params(axis="x", labelrotation=30, labelsize=ft_axis)
+            ax.tick_params(axis="y", labelrotation=-45, labelsize=ft_axis)
 
             # model plotting (keeps original behavior/oddity)
             _model_plot(ax, i, j, kp)
 
             ax.patch.set_alpha(0.2)
-            ax.annotate(f"{nus[i]:.0f}x{nus[j]:.0f}", xy=(0.1, 0.9), fontsize=ft_nus, xycoords="axes fraction", color="black", weight="bold")
+            ax.annotate(f"{nus[i]}x{nus[j]}", xy=(0.1, 0.9), fontsize=ft_nus, xycoords="axes fraction", color="black", weight="bold")
 
             # facecolor + plotting choices exactly as original
             if i < nrec and j < nrec:
@@ -311,8 +319,6 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, label_model="CMB + Dust", 
                     _plot_errorbars(ax, i, j, color_main="blue", color_second="orange")
 
             kp += 1
-            plt.xticks(fontsize=ft_axis)
-            plt.yticks(fontsize=ft_axis)
 
     # title / legend / save / show
     if title is not None:
@@ -440,14 +446,14 @@ class Plots:
         plt.savefig(f"allplots_{job_id}/triangle_plot.svg")
         plt.close()
 
-    def get_Dl_plot(self, ell, Dl, Dl_err, nus, job_id, figsize=(10, 10), model=None):
+    def get_Dl_plot(self, ell, Dl, Dl_noise, nus, job_id, figsize=(10, 10), model=None):
         plt.figure(figsize=figsize)
 
         k = 0
         for i in range(len(nus)):
             for j in range(len(nus)):
                 plt.subplot(len(nus), len(nus), k + 1)
-                plt.errorbar(ell, Dl[k], yerr=Dl_err[k], fmt="or")
+                plt.errorbar(ell, Dl[k], yerr=Dl_noise[k], fmt="or")
                 if model is not None:
                     plt.errorbar(ell, model[k], fmt="-k")
                 plt.title(f"{nus[i]:.0f}x{nus[j]:.0f}")
@@ -631,87 +637,194 @@ class PlotsCMM:
         None
         """
 
-        if self.params["Plots"]["conv_beta"]:
-            nf_in, nc_in = A_in.shape
-            nf_out, nc_out = A_out.shape
-            fsub = int(nf_in / nf_out)
-            plt.figure(figsize=figsize)
+        if not self.params["Plots"]["conv_beta"]:
+            return
 
-            for ic in range(nc_in):
-                plt.plot(nus_in, A_in[:, ic], "-k")
+        nf_in, nc = A_in.shape
+        nf_out, nc_out = A_out.shape
+        assert nc == nc_out, "Inconsistent number of components between A_in and A_out"
 
-            for inu in range(nf_out):
-                plt.errorbar(nus_out[inu], np.mean(A_in[inu * fsub : (inu + 1) * fsub]), fmt="og")
+        fsub = nf_in // nf_out
 
-            for ic in range(nc_out):
-                plt.errorbar(nus_out, A_out[:, ic], fmt="xb")
+        # Labels
+        fg = self.preset.tools.params["Foregrounds"]
+        labels = []
+        if fg["Dust"]["Dust_out"]:
+            labels.append(f"Dust ({fg['Dust']['model']})")
+        if fg["Synchrotron"]["Synchrotron_out"]:
+            labels.append(f"Sync ({fg['Synchrotron']['model']})")
 
-            plt.xlim(120, 260)
-            eps = 0.4
-            eps_max = A_in.max() * (1 + eps)
-            eps_min = A_in.min() * (1 - eps)
-            plt.ylim(eps_min, eps_max)
-            plt.yscale("log")
+        plt.figure(figsize=figsize)
+        plt.title(f"Mixing matrix fit (blind) – iteration #{ki + 1}")
 
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki + 1}.svg")
+        colors = plt.cm.tab10.colors  # color palette for components
 
-            if self.preset.tools.rank == 0:
-                if ki > 0 and gif is False:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/A_iter{ki}.svg")
+        # True continuous SEDs
+        for ic in range(nc):
+            plt.plot(
+                nus_in,
+                A_in[:, ic],
+                color=colors[ic % 10],
+                alpha=0.7,
+                lw=2,
+                label=f"Model: {labels[ic]}",
+            )
 
-            plt.close()
+        # True binned values
+        for ic in range(nc):
+            means = np.array([A_in[inu * fsub : (inu + 1) * fsub, ic].mean() for inu in range(nf_out)])
+            plt.scatter(
+                nus_out,
+                means,
+                color=colors[ic % 10],
+                marker="o",
+                s=60,
+                label=f"True binned: {labels[ic]}",
+                zorder=3,
+            )
 
-    def plot_beta_iteration(self, beta, figsize=(8, 6), truth=None, ki=0):
-        """
-        Method to plot beta as a function of iteration. Beta can have shape (niter) or (niter, nbeta).
+        # Fitted values (cross on top)
+        for ic in range(nc):
+            plt.scatter(
+                nus_out,
+                A_out[:, ic],
+                color=colors[ic % 10],
+                marker="x",
+                s=80,
+                lw=2,
+                label=f"Fitted: {labels[ic]}",
+                zorder=4,
+            )
 
-        Parameters:
-        beta : numpy.ndarray
-            Array containing beta values for each iteration. Can be 1D or 2D.
-        figsize : tuple, optional
-            Size of the figure to be plotted. Default is (8, 6).
-        truth : numpy.ndarray or float, optional
-            True value(s) of beta to be plotted as a reference line. Default is None.
-        ki : int, optional
-            Iteration index for saving the plot. Default is 0.
+        # Axes & scaling
+        plt.xlabel("Frequency [GHz]")
+        plt.ylabel("Mixing matrix element")
+        plt.xlim(120, 260)
+        plt.yscale("log")
 
-        Returns:
-        None
-        """
+        Amin = np.min(A_in[A_in > 0])
+        Amax = np.max(A_in)
+        plt.ylim(Amin * 0.5, Amax * 2.0)
 
-        if self.params["Plots"]["conv_beta"]:
-            niter = beta.shape[0]
-            alliter = np.arange(0, niter, 1)
+        plt.legend()
+        plt.tight_layout()
 
-            plt.figure(figsize=figsize)
-            plt.subplot(2, 1, 1)
+        out = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki + 1}.svg"
+        plt.savefig(out)
 
-            ### Constant beta on the sky
-            if np.ndim(beta) == 2:
-                plt.plot(alliter[1:] - 1, beta[1:])
-                if truth is not None:
-                    plt.axhline(truth, ls="--", color="red")
+        # Cleanup previous iteration
+        if self.preset.tools.rank == 0 and ki > 0 and not gif:
+            prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki}.svg"
+            if os.path.exists(prev):
+                os.remove(prev)
 
-            ### Varying beta on the sky
+        plt.close()
+
+    def plot_beta_iteration(self, beta, figsize=(8, 6), truth=None, ki=0, errors=None):
+        if not self.params["Plots"]["conv_beta"]:
+            return
+
+        beta = np.asarray(beta)
+        niter = beta.shape[0]
+        it = np.arange(niter)
+
+        fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]})
+
+        # Colors
+        cmap_comp = plt.get_cmap("tab10")
+        ncomp = beta.shape[1] if beta.ndim >= 2 else 1
+        colors_comp = cmap_comp.colors[:ncomp]
+
+        # TOP : beta evolution        
+        if beta.ndim == 1:
+            ax_top.plot(it, beta, lw=2, color=colors_comp[0], label=r"$\beta$")
+
+            if errors is not None:
+                ax_top.fill_between(it, beta - errors, beta + errors, color=colors_comp[0], alpha=0.25, label=r"$1\sigma$")
+
+            if truth is not None:
+                ax_top.axhline(truth, ls="--", color="k", lw=1.5, label="Truth")
+
+        elif beta.ndim == 3 and beta.shape[-1] == 1:
+            for ic in range(beta.shape[1]):
+                name = self.preset.comp.components_name_out[ic + 1]
+                ax_top.plot(it, beta[:, ic], color=colors_comp[ic], lw=2, label=rf"$\beta_{{{name}}}$")
+
+            if truth is not None:
+                for ic, val in enumerate(truth):
+                    ax_top.axhline(val, ls="--", color=colors_comp[ic], alpha=0.6)
+
+        else:
+            # (Niter, Ncomp, Nbeta)
+            ncomp, nbeta = beta.shape[1], beta.shape[2]
+
+            cmap_beta = cm.get_cmap("jet", nbeta)
+            colors_beta = [cmap_beta(i) for i in range(nbeta)]
+
+            for ic in range(ncomp):
+                name = self.preset.comp.components_name_out[ic + 1]
+
+                for ib in range(nbeta):
+                    ax_top.plot(
+                        it,
+                        beta[:, ic, ib],
+                        color=colors_beta[ib],
+                        lw=1.7,
+                        alpha=0.8,
+                    )
+
+                # one legend entry per component
+                ax_top.plot([], [], color=colors_comp[ic], lw=2, label=rf"$\beta_{{{name}}}$")
+
+            # truth
+            if truth is not None:
+                truth = np.asarray(truth)
+                for ic in range(ncomp):
+                    for ib in range(nbeta):
+                        ax_top.axhline(truth[ic, ib], ls="--", color=colors_beta[ib], alpha=0.4)
+
+            # colorbar for beta index
+            norm = mcolors.Normalize(vmin=0, vmax=nbeta - 1)
+            sm = cm.ScalarMappable(norm=norm, cmap=cmap_beta)
+            sm.set_array([])
+
+            cbar = fig.colorbar(sm, ax=ax_top, pad=0.02, aspect=30)
+            cbar.set_label(r"Index $\beta$")
+
+        ax_top.set_ylabel(r"$\beta$")
+        ax_top.legend(ncol=2, fontsize=9, frameon=False)
+        ax_top.grid(alpha=0.3)
+
+        # BOTTOM : convergence
+        if truth is not None:
+            if beta.ndim == 1:
+                ax_bot.plot(it, np.abs(beta - truth), color=colors_comp[0], lw=2)
+
+            elif beta.ndim == 3 and beta.shape[-1] == 1:
+                for ic in range(beta.shape[1]):
+                    ax_bot.plot(it, np.abs(beta[:, ic] - truth[ic]), color=colors_comp[ic], lw=2, alpha=0.8)
+
             else:
-                for i in range(beta.shape[1]):
-                    plt.plot(alliter, beta[:, i], "-k", alpha=0.3)
-                    if truth is not None:
-                        for j in range(truth.shape[1]):
-                            plt.axhline(truth[i, j], ls="--", color="red")
+                for ic in range(beta.shape[1]):
+                    for ib in range(beta.shape[2]):
+                        ax_bot.plot(it, np.abs(beta[:, ic, ib] - truth[ic, ib]), color=colors_beta[ib], lw=1.3, alpha=0.35)
 
-            plt.subplot(2, 1, 2)
-            if np.ndim(beta) == 1:
-                plt.plot(alliter[1:] - 1, abs(truth - beta[1:]))
-            else:
-                for i in range(beta.shape[1]):
-                    plt.plot(alliter, abs(truth[i] - beta[:, i]), "-k", alpha=0.3)
-            plt.yscale("log")
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki + 1}.svg")
+        ax_bot.set_yscale("log")
+        ax_bot.set_xlabel("Iteration")
+        ax_bot.set_ylabel(r"$|\beta - \beta_{\mathrm{true}}|$")
+        ax_bot.grid(alpha=0.3)
 
-            if ki > 0:
-                os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Plots/A_iter/beta_iter{ki}.svg")
-            plt.close()
+        # Save
+        fname = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/beta_iter{ki + 1}.svg"
+        fig.tight_layout()
+        fig.savefig(fname)
+
+        if ki > 0:
+            old = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/beta_iter{ki}.svg"
+            if os.path.exists(old):
+                os.remove(old)
+
+        plt.close(fig)
 
     def _display_allresiduals(self, map_i, seenpix, ki=0):
         """
@@ -759,7 +872,7 @@ class PlotsCMM:
 
             plt.close()
 
-    def _display_allcomponents(self, ki=0, gif=True, reso=15):
+    def _display_allcomponents(self, input_maps, reconstructed_maps, ki=0, gif=True, reso=15):
         """
         Display all components of the Healpix map with Gaussian convolution.
 
@@ -775,8 +888,8 @@ class PlotsCMM:
 
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
-            maps_in = self.preset.acquisition.components_in_convolved
-            maps_rec = self.preset.comp.components_iter
+            maps_in = input_maps
+            maps_rec = reconstructed_maps
             maps_res = maps_rec - maps_in
 
             Nmaps, _, Nstk = maps_res.shape
@@ -814,115 +927,107 @@ class PlotsCMM:
                     os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki}.svg")
             plt.close()
 
-    def display_maps(self, seenpix, ki=0, reso=15, view="gnomview"):
+    def display_maps(self, input_maps, reconstructed_maps, seenpix, ki=0, reso=15, view="gnomview"):
         """
-
-        Method to display maps at given iteration.
-
-        Arguments:
-        ----------
-            - seenpix : array containing the id of seen pixels.
-            - ngif    : Int number to create GIF with ngif svg image.
-            - figsize : Tuple to control size of plots.
-            - nsig    : Int number to compute errorbars.
-
+        Display input / output / residual maps at a given iteration.
         """
-        if self.params["Plots"]["maps"]:
-            stk = ["I", "Q", "U"]
-            rms_i = np.zeros((1, 2))
+        if not self.params["Plots"]["maps"]:
+            return
 
-            maps_in = self.preset.acquisition.components_in_convolved
-            maps_rec = self.preset.comp.components_iter
-            maps_res = maps_rec - maps_in
+        stk = ["I", "Q", "U"]
+        rms_i = np.zeros((1, 2))
 
-            maps_in[:, ~seenpix, :] = hp.UNSEEN
-            maps_rec[:, ~seenpix, :] = hp.UNSEEN
-            maps_res[:, ~seenpix, :] = hp.UNSEEN
+        maps_in = input_maps
+        maps_rec = reconstructed_maps
+        maps_res = maps_rec - maps_in
 
-            Nmaps, _, _ = maps_res.shape
+        ncomp = len(self.preset.comp.components_name_out)
+
+        for istk, s in enumerate(stk):
+            plt.figure(figsize=(6 * ncomp, 12))
             k = 0
 
-            for istk, s in enumerate(stk):
-                plt.figure(figsize=(3.5 * Nmaps, 12))
-                k = 0
+            for icomp in range(ncomp):
+                if icomp == 0 and istk > 0:
+                    rms_i[0, istk - 1] = np.std(maps_res[icomp, seenpix, istk])
 
-                for icomp in range(len(self.preset.comp.components_name_out)):
-                    if icomp == 0:
-                        if istk > 0:
-                            rms_i[0, istk - 1] = np.std(maps_res[icomp, seenpix, istk])
+                if view == "gnomview":
+                    hp.gnomview(
+                        maps_in[icomp, :, istk],
+                        rot=self.preset.sky.center,
+                        reso=reso,
+                        notext=True,
+                        title=f"Input {s}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 1),
+                    )
+                    hp.gnomview(
+                        maps_rec[icomp, :, istk],
+                        rot=self.preset.sky.center,
+                        reso=reso,
+                        notext=True,
+                        title=f"Output {s}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 2),
+                    )
+                    hp.gnomview(
+                        maps_res[icomp, :, istk],
+                        rot=self.preset.sky.center,
+                        reso=reso,
+                        notext=True,
+                        title=f"Residual {s} - Std = {np.std(maps_res[icomp, seenpix, istk]):.3e}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 3),
+                    )
 
-                    if view == "gnomview":
-                        hp.gnomview(
-                            maps_in[icomp, :, istk],
-                            rot=self.preset.sky.center,
-                            reso=reso,
-                            notext=True,
-                            title=f"Input {stk[istk]}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 1),
-                        )
-                        hp.gnomview(
-                            maps_rec[icomp, :, istk],
-                            rot=self.preset.sky.center,
-                            reso=reso,
-                            notext=True,
-                            title=f"Output {stk[istk]}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 2),
-                        )
-                        hp.gnomview(
-                            maps_res[icomp, :, istk],
-                            rot=self.preset.sky.center,
-                            reso=reso,
-                            notext=True,
-                            title=f"Residual {stk[istk]} - Std = {np.std(maps_res[icomp, seenpix, istk]):.3e}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 3),
-                        )
-                    elif view == "mollview":
-                        hp.mollview(
-                            maps_in,
-                            notext=True,
-                            title=f"Input {stk[istk]}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 1),
-                        )
-                        hp.mollview(
-                            maps_rec,
-                            notext=True,
-                            title=f"Output {stk[istk]}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 2),
-                        )
-                        hp.mollview(
-                            maps_rec,
-                            notext=True,
-                            title=f"Residual {stk[istk]} - Std = {np.std(maps_rec[icomp, seenpix, istk]):.3e}",
-                            cmap="jet",
-                            sub=(len(self.preset.comp.components_out), 3, k + 3),
-                        )
-                    k += 3
+                elif view == "mollview":
+                    hp.mollview(
+                        maps_in[icomp, :, istk],
+                        notext=True,
+                        title=f"Input {s}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 1),
+                    )
+                    hp.mollview(
+                        maps_rec[icomp, :, istk],
+                        notext=True,
+                        title=f"Output {s}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 2),
+                    )
+                    hp.mollview(
+                        maps_res[icomp, :, istk],
+                        notext=True,
+                        title=f"Residual {s} - Std = {np.std(maps_res[icomp, seenpix, istk]):.3e}",
+                        cmap="jet",
+                        sub=(ncomp, 3, k + 3),
+                    )
 
-                plt.tight_layout()
-                plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki + 1}.svg")
+                k += 3
 
-                if self.preset.tools.rank == 0:
-                    if ki > 0:
-                        os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/{s}/maps_iter{ki}.svg")
+            plt.tight_layout()
+            out = f"CMM/{self.preset.tools.params['foldername']}/Plots/{s}/maps_iter{ki + 1}.svg"
+            plt.savefig(out)
 
-                plt.close()
-            self.preset.acquisition.rms_plot = np.concatenate((self.preset.acquisition.rms_plot, rms_i), axis=0)
+            if self.preset.tools.rank == 0 and ki > 0:
+                prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/{s}/maps_iter{ki}.svg"
+                if os.path.exists(prev):
+                    os.remove(prev)
+
+            plt.close()
+
+        self.preset.acquisition.rms_plot = np.concatenate((self.preset.acquisition.rms_plot, rms_i), axis=0)
 
     def plot_gain_iteration(self, gain, figsize=(8, 6), ki=0):
         """
 
-        Method to plot convergence of reconstructed gains.
+            Method to plot convergence of reconstructed gains.
 
-        Arguments :
-        -----------
-            - gain    : Array containing gain number (1 per detectors). It has the shape (Niteration, Ndet, 2) for Two Bands design and (Niteration, Ndet) for Wide Band design
-            - alpha   : Transparency for curves.
-            - figsize : Tuple to control size of plots.
+            Arguments :
+        ---
+                - gain    : Array containing gain number (1 per detectors). It has the shape (Niteration, Ndet, 2) for Two Bands design and (Niteration, Ndet) for Wide Band design
+                - alpha   : Transparency for curves.
+                - figsize : Tuple to control size of plots.
 
         """
 
@@ -959,19 +1064,28 @@ class PlotsCMM:
             plt.close()
 
     def plot_rms_iteration(self, rms, figsize=(8, 6), ki=0):
-        if self.params["Plots"]["conv_rms"]:
-            plt.figure(figsize=figsize)
+        if not self.params["Plots"]["conv_rms"]:
+            return
 
-            plt.plot(rms[1:, 0], "-b", label="Q")
-            plt.plot(rms[1:, 1], "-r", label="U")
+        plt.figure(figsize=figsize)
 
-            plt.yscale("log")
+        plt.plot(rms[1:, 0], "-b", label="Q")
+        plt.plot(rms[1:, 1], "-r", label="U")
 
-            plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki + 1}.svg")
+        plt.yscale("log")
+        plt.xlabel("Iteration")
+        plt.ylabel("RMS")
+        plt.title("RMS evolution")
+        plt.legend()
 
-            if self.preset.tools.rank == 0:
-                if ki > 0:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/rms_iter{ki}.svg")
+        plt.tight_layout()
 
-            plt.close()
+        out = f"CMM/{self.preset.tools.params['foldername']}/Plots/rms_iter{ki + 1}.svg"
+        plt.savefig(out)
+
+        if self.preset.tools.rank == 0 and ki > 0:
+            prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/rms_iter{ki}.svg"
+            if os.path.exists(prev):
+                os.remove(prev)
+
+        plt.close()

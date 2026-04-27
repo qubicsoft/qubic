@@ -1,0 +1,81 @@
+simulation_path: "CMM/parametric_d0_DB_test_noiseless"
+name: "test"
+
+Spectrum:
+  sample_variance: True                                         # Add sample-variance correction in the correlation matrix
+  diagonal: False                                               # Consider only the diagonal of the noise correlation matrix
+  nbins: null                                                      # Number of power-spectrum points to keep, if null, keep all values
+
+MCMC:
+  comp_qubic: [True, True]                                      # Comp used for fitting. It should match Ncomp value put in simulations !!!
+  discard: 150                                                  # Number of iterations discarded
+  nwalkers: 50                                                  # Number of MCMC walkers
+  nsteps: 400                                                   # Number of MCMC iterations
+  verbose: False                                                # Print values
+
+# For each components' parameters : 
+# - put fit: True => mcmc will fit this parameter
+# - put fit: value => will fix the parameter to value
+# WARNING : fit: False will not work !! If you don't wont to fit a parameter, you need to give it's value !!!
+# ADVICE : if there is no dust/synchroton, we have to write fit: 0 to the value of Ad/As, to ensure that the spectrum is null.
+cmb:
+  r:
+    fit: True
+    bound_min: -1
+    bound_max: 1
+    init_average: 0
+    init_std: 0.1
+  Alens:
+    fit: 1
+    bound_min: 0
+    bound_max: 2
+    init_average: 1
+    init_std: 0.01
+
+dust:
+  Ad:
+    fit: True 
+    bound_min: 0
+    bound_max: 100
+    init_average: 5
+    init_std: 1
+  alphad:
+    fit: True
+    bound_min: -10
+    bound_max: 10
+    init_average: -1
+    init_std: 0.5
+  betad:
+    fit: 1.54
+    bound_min: 0
+    bound_max: 10
+    init_average: 1.5
+    init_std: 0.01
+
+synchrotron:
+  As:
+    fit: 0
+    bound_min: 0
+    bound_max: 10
+    init_average: 1
+    init_std: 0.01
+  alphas:
+    fit: 0
+    bound_min: -1
+    bound_max: 1
+    init_average: 1
+    init_std: 0.01
+  betas:
+    fit: 0
+    bound_min: 0
+    bound_max: 10
+    init_average: 1
+    init_std: 0.01
+
+correlation:
+  eps:
+    fit: 0
+    bound_min: -1
+    bound_max: 1
+    init_average: 0
+    init_std: 0.01

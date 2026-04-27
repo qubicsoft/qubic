@@ -1,0 +1,61 @@
+CMB:
+  Alens: 1
+  cmb: true
+  r: 0
+  seed: 1
+Foregrounds:
+  Dust: false
+  Synchrotron: false
+PCG:
+  fwhm_plot: 0
+  gif: false
+  initial_guess_intensity_to_zero: true
+  n_iter_pcg: 300
+  preconditioner: false
+  resolution_plot: 15
+  tol_pcg: 1.0e-20
+PLANCK:
+  bandwidth_planck: 0.2
+  external_data: false
+  level_noise_planck: 1
+  nsub_planck: 100
+  seed_noise: 172423528
+  weight_planck: 0
+Pipeline:
+  mapmaking: true
+  spectrum: false
+QUBIC:
+  NOISE:
+    detector_nep: 4.7e-17
+    duration_150: 3
+    duration_220: 3
+    ndet: 1
+    npho150: 1
+    npho220: 1
+    seed_noise: 341049311
+  SYNTHBEAM:
+    synthbeam_fraction: 1
+    synthbeam_kmax: 1
+  bandpass_correction: true
+  configuration: FI
+  convolution_in: true
+  convolution_out: false
+  dtheta: 15
+  instrument: DB
+  npointings: 10000
+  nrec: 2
+  nsub_in: 8
+  nsub_out: 8
+SKY:
+  DEC_center: -57
+  RA_center: 0
+  coverage_cut: 0.2
+  nside: 256
+Spectrum:
+  aposize: 10
+  dl: 30
+  lmax: 511
+  lmin: 40
+  plot_spectrum: true
+filename: test_10000
+foldername: Npointings_wo_planck

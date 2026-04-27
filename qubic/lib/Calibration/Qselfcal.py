@@ -41,7 +41,21 @@ def plot_baseline(q, bs, ax=None):
     return
 
 
-def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None, s=None, title=None, unit="[W / Hz]", cbar=True, fontsize=14, **kwargs):
+def scatter_plot_FP(
+    q,
+    x,
+    y,
+    FP_signal,
+    frame,
+    fig=None,
+    ax=None,
+    s=None,
+    title=None,
+    unit="[W / Hz]",
+    cbar=True,
+    fontsize=14,
+    **kwargs,
+):
     """
     Make a scatter plot of the focal plane.
     Parameters
@@ -84,7 +98,9 @@ def scatter_plot_FP(q, x, y, FP_signal, frame, fig=None, ax=None, s=None, title=
     return
 
 
-def pcolor_plot_FP(q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cbar=True, unit="[W / Hz]", **kwargs):
+def pcolor_plot_FP(
+    q, x, y, FP_signal, frame, title=None, fig=None, ax=None, cbar=True, unit="[W / Hz]", **kwargs
+):
     """
     Make a pcolor plot of the focal plane.
     !!! x, y, FP_signal must be ordered as defined in q.detector.
@@ -287,7 +303,9 @@ def get_TES_Instru_coords(q, frame="ONAFP", verbose=True):
                 print(f"\n ASIC {ASIC} - TES {TES}")
             if TES not in thermos:
                 i = (TES - 1) + 128 * (ASIC - 1)
-                x[i], y[i], FP_index[i], index_q[i] = TES_Instru2coord(TES, ASIC, q, frame=frame, verbose=verbose)
+                x[i], y[i], FP_index[i], index_q[i] = TES_Instru2coord(
+                    TES, ASIC, q, frame=frame, verbose=verbose
+                )
             else:
                 if verbose:
                     print("Thermometer !")
@@ -523,7 +541,17 @@ def make_external_A(rep, open_horns):
     return external_A
 
 
-def get_response_power(q, theta, phi, nu, spectral_irradiance, frame="ONAFP", external_A=None, hwp_position=0, verbose=False):
+def get_response_power(
+    q,
+    theta,
+    phi,
+    nu,
+    spectral_irradiance,
+    frame="ONAFP",
+    external_A=None,
+    hwp_position=0,
+    verbose=False,
+):
     """
     Compute power on the focal plane in the ONAFP frame for one position of the source
     with respect to the instrument.
@@ -565,7 +593,19 @@ def get_response_power(q, theta, phi, nu, spectral_irradiance, frame="ONAFP", ex
     yGRF = position[:, 1]
 
     # Electric field on the FP in the GRF frame
-    E = q._get_response(theta, phi, spectral_irradiance, position, q.detector.area, nu, q.horn, q.primary_beam, q.secondary_beam, external_A=external_A, hwp_position=hwp_position)
+    E = q._get_response(
+        theta,
+        phi,
+        spectral_irradiance,
+        position,
+        q.detector.area,
+        nu,
+        q.horn,
+        q.primary_beam,
+        q.secondary_beam,
+        external_A=external_A,
+        hwp_position=hwp_position,
+    )
     power = np.abs(E) ** 2
     # power *= q.filter.bandwidth  # [W/Hz] to [W]
 
@@ -707,7 +747,13 @@ def fullreso2TESreso(x, y, power, TESvertex, TESarea, interp=False, verbose=True
         print("********** Begin interpolation **********")
         reso = int(np.sqrt(x.shape[0]))
         print("Reso:", reso)
-        power_interp = RegularGridInterpolator((np.unique(x), np.unique(y)), power.reshape((reso, reso)), method="linear", bounds_error=False, fill_value=0.0)
+        power_interp = RegularGridInterpolator(
+            (np.unique(x), np.unique(y)),
+            power.reshape((reso, reso)),
+            method="linear",
+            bounds_error=False,
+            fill_value=0.0,
+        )
 
         def power_interp_function(x, y):
             return power_interp(np.array([x, y]))
@@ -864,7 +910,20 @@ def get_chi2(params, allInvCov, allData, BLs, q, nu_source=150e9, returnA=False)
         return chi2
 
 
-def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.25, fl_max=0.35, th_min=np.deg2rad(-1.0), th_max=np.deg2rad(1), LogPower=-1, fixPower=True):
+def make_chi2_grid(
+    allInvCov,
+    fringes,
+    BLs,
+    q,
+    nval_fl=30,
+    nval_th=30,
+    fl_min=0.25,
+    fl_max=0.35,
+    th_min=np.deg2rad(-1.0),
+    th_max=np.deg2rad(1),
+    LogPower=-1,
+    fixPower=True,
+):
     """Loop over the parameters (focal length and source off-axis angle) to explore the chi2.
     Global powers are fixed to Log_10(Power)=-1 or optimized at each step by minimizing a temporary chi2 (longer)."""
     nimages = len(BLs)
@@ -895,7 +954,13 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
                     chi2_temp = get_chi2(params, allInvCov, fringes, BLs, q)
                     return chi2_temp
 
-                result = sop.minimize(chi2_temporary, x0=[LogPower] * nimages, args=(allInvCov, fringes, BLs, q), method="Nelder-Mead", options={"maxiter": 10000})
+                result = sop.minimize(
+                    chi2_temporary,
+                    x0=[LogPower] * nimages,
+                    args=(allInvCov, fringes, BLs, q),
+                    method="Nelder-Mead",
+                    options={"maxiter": 10000},
+                )
                 chi2_grid[i, j] = result["fun"]
                 power_optimize[i, j, :] = result["x"]
 
@@ -908,7 +973,17 @@ def make_chi2_grid(allInvCov, fringes, BLs, q, nval_fl=30, nval_th=30, fl_min=0.
 
 # ========== Fringe simulations =============
 class Model_Fringes_Ana:
-    def __init__(self, q, baseline, theta_source=0.0, phi_source=0.0, nu_source=150e9, fwhm=20.0, amp=1.0, frame="ONAFP"):
+    def __init__(
+        self,
+        q,
+        baseline,
+        theta_source=0.0,
+        phi_source=0.0,
+        nu_source=150e9,
+        fwhm=20.0,
+        amp=1.0,
+        frame="ONAFP",
+    ):
         """
 
         Parameters
@@ -964,7 +1039,9 @@ class Model_Fringes_Ana:
         # Maybe there is a sign problem here...
         x_center = self.focal * np.tan(self.theta_source) * np.cos(self.phi_source)
         y_center = self.focal * np.tan(self.theta_source) * np.sin(self.phi_source)
-        self.gaussian = np.exp(-0.5 * ((self.x - x_center) ** 2 + (self.y - y_center) ** 2) / sigma**2)
+        self.gaussian = np.exp(
+            -0.5 * ((self.x - x_center) ** 2 + (self.y - y_center) ** 2) / sigma**2
+        )
         return self.gaussian
 
     def get_fringes(self, times_gaussian=True):
@@ -974,13 +1051,26 @@ class Model_Fringes_Ana:
             gaussian = 1.0
         xprime = self.x * np.cos(self.BL_angle) + self.y * np.sin(self.BL_angle)
         interfrange = self.lam * self.focal / self.BL_length
-        self.fringes = self.amp * np.cos((2.0 * np.pi / interfrange * xprime) + self.phase) * gaussian
+        self.fringes = (
+            self.amp * np.cos((2.0 * np.pi / interfrange * xprime) + self.phase) * gaussian
+        )
 
         return self.x, self.y, self.fringes
 
 
 class Model_Fringes_QubicSoft:
-    def __init__(self, q, baseline, theta_source=0.0, phi_source=0.0, nu_source=150e9, spec_irrad_source=1.0, frame="ONAFP", external_A=None, hwp_position=0):
+    def __init__(
+        self,
+        q,
+        baseline,
+        theta_source=0.0,
+        phi_source=0.0,
+        nu_source=150e9,
+        spec_irrad_source=1.0,
+        frame="ONAFP",
+        external_A=None,
+        hwp_position=0,
+    ):
         """
         Parameters
         ----------
@@ -1017,7 +1107,15 @@ class Model_Fringes_QubicSoft:
         open_switches(self.q, self.baseline)
 
         self.x, self.y, self.fringes = get_response_power(
-            self.q, self.theta_source, self.phi_source, self.nu_source, self.spec_irrad_source, frame=self.frame, external_A=self.external_A, hwp_position=self.hwp_position, verbose=verbose
+            self.q,
+            self.theta_source,
+            self.phi_source,
+            self.nu_source,
+            self.spec_irrad_source,
+            frame=self.frame,
+            external_A=self.external_A,
+            hwp_position=self.hwp_position,
+            verbose=verbose,
         )
 
         if doplot:
@@ -1027,7 +1125,9 @@ class Model_Fringes_QubicSoft:
                 self.y,
                 self.fringes,
                 frame=self.frame,
-                title="Baseline {} - Theta={}deg - Phi={}deg".format(self.baseline, np.rad2deg(self.theta_source), np.rad2deg(self.phi_source)),
+                title="Baseline {} - Theta={}deg - Phi={}deg".format(
+                    self.baseline, np.rad2deg(self.theta_source), np.rad2deg(self.phi_source)
+                ),
                 **kwargs,
             )
         return self.x, self.y, self.fringes
@@ -1049,47 +1149,153 @@ class Model_Fringes_QubicSoft:
         self.q.horn.open = True
 
         # All open
-        self.x, self.y, S = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source, self.spec_irrad_source, frame=self.frame, verbose=verbose)
+        self.x, self.y, S = get_response_power(
+            self.q,
+            self.theta_source,
+            self.phi_source,
+            self.nu_source,
+            self.spec_irrad_source,
+            frame=self.frame,
+            verbose=verbose,
+        )
         if doplot:
-            plot_horn_and_FP(self.q, self.x, self.y, S, frame=self.frame, title="$S$ - All open", **kwargs)
+            plot_horn_and_FP(
+                self.q, self.x, self.y, S, frame=self.frame, title="$S$ - All open", **kwargs
+            )
 
         # All open except i
         self.q.horn.open[self.baseline[0] - 1] = False
-        _, _, Cminus_i = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source, self.spec_irrad_source, frame=self.frame, verbose=verbose)
+        _, _, Cminus_i = get_response_power(
+            self.q,
+            self.theta_source,
+            self.phi_source,
+            self.nu_source,
+            self.spec_irrad_source,
+            frame=self.frame,
+            verbose=verbose,
+        )
         if doplot:
-            plot_horn_and_FP(self.q, self.x, self.y, Cminus_i, frame=self.frame, title="$C_{-i}$" + f" - Horn {self.baseline[0]} close", **kwargs)
+            plot_horn_and_FP(
+                self.q,
+                self.x,
+                self.y,
+                Cminus_i,
+                frame=self.frame,
+                title="$C_{-i}$" + f" - Horn {self.baseline[0]} close",
+                **kwargs,
+            )
 
         # All open except baseline [i, j]
         self.q.horn.open[self.baseline[1] - 1] = False
-        _, _, Sminus_ij = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source, self.spec_irrad_source, frame=self.frame, verbose=verbose)
+        _, _, Sminus_ij = get_response_power(
+            self.q,
+            self.theta_source,
+            self.phi_source,
+            self.nu_source,
+            self.spec_irrad_source,
+            frame=self.frame,
+            verbose=verbose,
+        )
         if doplot:
-            plot_horn_and_FP(self.q, self.x, self.y, Sminus_ij, frame=self.frame, title="$S_{-ij}$" + f" - Baseline {self.baseline} close", **kwargs)
+            plot_horn_and_FP(
+                self.q,
+                self.x,
+                self.y,
+                Sminus_ij,
+                frame=self.frame,
+                title="$S_{-ij}$" + f" - Baseline {self.baseline} close",
+                **kwargs,
+            )
 
         # All open except j
         self.q.horn.open[self.baseline[0] - 1] = True
-        _, _, Cminus_j = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source, self.spec_irrad_source, frame=self.frame, verbose=verbose)
+        _, _, Cminus_j = get_response_power(
+            self.q,
+            self.theta_source,
+            self.phi_source,
+            self.nu_source,
+            self.spec_irrad_source,
+            frame=self.frame,
+            verbose=verbose,
+        )
         if doplot:
-            plot_horn_and_FP(self.q, self.x, self.y, Cminus_j, frame=self.frame, title="$C_{-j}$" + f" - Horn {self.baseline[1]} close", **kwargs)
+            plot_horn_and_FP(
+                self.q,
+                self.x,
+                self.y,
+                Cminus_j,
+                frame=self.frame,
+                title="$C_{-j}$" + f" - Horn {self.baseline[1]} close",
+                **kwargs,
+            )
 
         # Only i open (not a realistic observable)
         self.q.horn.open = False
         self.q.horn.open[self.baseline[0] - 1] = True
-        _, _, Ci = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source, self.spec_irrad_source, frame=self.frame, verbose=verbose)
+        _, _, Ci = get_response_power(
+            self.q,
+            self.theta_source,
+            self.phi_source,
+            self.nu_source,
+            self.spec_irrad_source,
+            frame=self.frame,
+            verbose=verbose,
+        )
         if doplot:
-            plot_horn_and_FP(self.q, self.x, self.y, Ci, frame=self.frame, title="$C_i$" + f" - Only horn {self.baseline[0]} open", **kwargs)
+            plot_horn_and_FP(
+                self.q,
+                self.x,
+                self.y,
+                Ci,
+                frame=self.frame,
+                title="$C_i$" + f" - Only horn {self.baseline[0]} open",
+                **kwargs,
+            )
 
         # Only j open (not a realistic observable)
         self.q.horn.open[self.baseline[0] - 1] = False
         self.q.horn.open[self.baseline[1] - 1] = True
-        _, _, Cj = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source, self.spec_irrad_source, frame=self.frame, verbose=verbose)
+        _, _, Cj = get_response_power(
+            self.q,
+            self.theta_source,
+            self.phi_source,
+            self.nu_source,
+            self.spec_irrad_source,
+            frame=self.frame,
+            verbose=verbose,
+        )
         if doplot:
-            plot_horn_and_FP(self.q, self.x, self.y, Cj, frame=self.frame, title="$C_j$" + f" - Only horn {self.baseline[1]} open", **kwargs)
+            plot_horn_and_FP(
+                self.q,
+                self.x,
+                self.y,
+                Cj,
+                frame=self.frame,
+                title="$C_j$" + f" - Only horn {self.baseline[1]} open",
+                **kwargs,
+            )
 
         # Only baseline [i, j] open (not a realistic observable)
         self.q.horn.open[self.baseline[0] - 1] = True
-        _, _, Sij = get_response_power(self.q, self.theta_source, self.phi_source, self.nu_source, self.spec_irrad_source, frame=self.frame, verbose=verbose)
+        _, _, Sij = get_response_power(
+            self.q,
+            self.theta_source,
+            self.phi_source,
+            self.nu_source,
+            self.spec_irrad_source,
+            frame=self.frame,
+            verbose=verbose,
+        )
         if doplot:
-            plot_horn_and_FP(self.q, self.x, self.y, Sij, frame=self.frame, title="$S_{ij}$" + f" - Only baseline {self.baseline} open", **kwargs)
+            plot_horn_and_FP(
+                self.q,
+                self.x,
+                self.y,
+                Sij,
+                frame=self.frame,
+                title="$S_{ij}$" + f" - Only baseline {self.baseline} open",
+                **kwargs,
+            )
 
         return self.x, self.y, S, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij
 
@@ -1103,7 +1309,9 @@ class Model_Fringes_QubicSoft:
         fringes : Fringes on the FP, for each coordinate, at each pointing.
         """
 
-        self.x, self.y, S_tot, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = self.get_all_combinations_power(doplot=doplot, verbose=verbose, **kwargs)
+        self.x, self.y, S_tot, Cminus_i, Sminus_ij, Cminus_j, Ci, Cj, Sij = (
+            self.get_all_combinations_power(doplot=doplot, verbose=verbose, **kwargs)
+        )
         if measured_comb:
             self.fringes_comb = S_tot - Cminus_i - Cminus_j + Sminus_ij
         else:
@@ -1116,14 +1324,18 @@ class Model_Fringes_QubicSoft:
                 self.y,
                 self.fringes_comb,
                 frame=self.frame,
-                title="Baseline {} - Theta={}deg - Phi={}deg".format(self.baseline, np.rad2deg(self.theta_source), np.rad2deg(self.phi_source)),
+                title="Baseline {} - Theta={}deg - Phi={}deg".format(
+                    self.baseline, np.rad2deg(self.theta_source), np.rad2deg(self.phi_source)
+                ),
                 **kwargs,
             )
         return self.x, self.y, self.fringes_comb
 
 
 class Model_Fringes_Maynooth:
-    def __init__(self, q, baseline, rep, theta_source=0.0, nu_source=150e9, frame="ONAFP", interp=False):
+    def __init__(
+        self, q, baseline, rep, theta_source=0.0, nu_source=150e9, frame="ONAFP", interp=False
+    ):
         """
         Parameters
         ----------
@@ -1161,12 +1373,27 @@ class Model_Fringes_Maynooth:
         if self.q.config != "TD":
             raise ValueError("Maynooth simulations are for the TD only.")
 
-        xONAFP, yONAFP, fringes_fullreso = get_power_Maynooth(self.rep, self.baseline, self.theta_source, self.nu_source, self.q.horn.center, verbose=verbose)
+        xONAFP, yONAFP, fringes_fullreso = get_power_Maynooth(
+            self.rep,
+            self.baseline,
+            self.theta_source,
+            self.nu_source,
+            self.q.horn.center,
+            verbose=verbose,
+        )
 
         # TES centers and TES vertex in the ONAFP frame
         xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(self.q)
 
-        self.fringes = fullreso2TESreso(xONAFP, yONAFP, fringes_fullreso, vONAFP_TES, self.q.detector.area, interp=self.interp, verbose=verbose)
+        self.fringes = fullreso2TESreso(
+            xONAFP,
+            yONAFP,
+            fringes_fullreso,
+            vONAFP_TES,
+            self.q.detector.area,
+            interp=self.interp,
+            verbose=verbose,
+        )
 
         # power_TES *= q.filter.bandwidth  # W/Hz to W
 
@@ -1201,22 +1428,72 @@ class Model_Fringes_Maynooth:
         first_close = np.delete(all_open, i - 1)
         second_close = np.delete(all_open, j - 1)
         both_close = np.delete(all_open, [i - 1, j - 1])
-        xONAFP, yONAFP, S_tot = get_power_Maynooth(self.rep, all_open, self.theta_source, self.nu_source, self.q.horn.center, verbose=verbose)
-        _, _, Cminus_i = get_power_Maynooth(self.rep, first_close, self.theta_source, self.nu_source, self.q.horn.center, verbose=verbose)
-        _, _, Cminus_j = get_power_Maynooth(self.rep, second_close, self.theta_source, self.nu_source, self.q.horn.center, verbose=verbose)
-        _, _, Sminus_ij = get_power_Maynooth(self.rep, both_close, self.theta_source, self.nu_source, self.q.horn.center, verbose=verbose)
+        xONAFP, yONAFP, S_tot = get_power_Maynooth(
+            self.rep,
+            all_open,
+            self.theta_source,
+            self.nu_source,
+            self.q.horn.center,
+            verbose=verbose,
+        )
+        _, _, Cminus_i = get_power_Maynooth(
+            self.rep,
+            first_close,
+            self.theta_source,
+            self.nu_source,
+            self.q.horn.center,
+            verbose=verbose,
+        )
+        _, _, Cminus_j = get_power_Maynooth(
+            self.rep,
+            second_close,
+            self.theta_source,
+            self.nu_source,
+            self.q.horn.center,
+            verbose=verbose,
+        )
+        _, _, Sminus_ij = get_power_Maynooth(
+            self.rep,
+            both_close,
+            self.theta_source,
+            self.nu_source,
+            self.q.horn.center,
+            verbose=verbose,
+        )
 
         if measured_comb:
             fringes_comb_fullreso = S_tot - Cminus_i - Cminus_j + Sminus_ij
         else:
-            _, _, Ci = get_power_Maynooth(self.rep, [i - 1], self.theta_source, self.nu_source, self.q.horn.center, verbose=verbose)
-            _, _, Cj = get_power_Maynooth(self.rep, [j - 1], self.theta_source, self.nu_source, self.q.horn.center, verbose=verbose)
+            _, _, Ci = get_power_Maynooth(
+                self.rep,
+                [i - 1],
+                self.theta_source,
+                self.nu_source,
+                self.q.horn.center,
+                verbose=verbose,
+            )
+            _, _, Cj = get_power_Maynooth(
+                self.rep,
+                [j - 1],
+                self.theta_source,
+                self.nu_source,
+                self.q.horn.center,
+                verbose=verbose,
+            )
             fringes_comb_fullreso = S_tot - Cminus_i - Cminus_j + Sminus_ij + Ci + Cj
 
         # TES centers and TES vertex in the ONAFP frame
         xONAFP_TES, yONAFP_TES, vONAFP_TES = get_TEScoordinates_ONAFP(self.q)
 
-        self.fringes_comb = fullreso2TESreso(xONAFP, yONAFP, fringes_comb_fullreso, vONAFP_TES, self.q.detector.area, interp=self.interp, verbose=verbose)
+        self.fringes_comb = fullreso2TESreso(
+            xONAFP,
+            yONAFP,
+            fringes_comb_fullreso,
+            vONAFP_TES,
+            self.q.detector.area,
+            interp=self.interp,
+            verbose=verbose,
+        )
         if self.frame == "ONAFP":
             self.x = xONAFP_TES
             self.y = yONAFP_TES

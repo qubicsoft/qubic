@@ -907,7 +907,7 @@ xlim = [10540, 10640]
 
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True,
                           check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
-                          ObsDate=None, new_method_clean=False, theo_sb=None):
+                          ObsDate=None, new_method_clean=True, theo_sb=None):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -2126,23 +2126,38 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         # ax2.plot(tt, alltod[72], c='g')
         # plt.show()
 
-        # Remove the first start_tt points (out of 1998848)
+        # Remove the first start_tt points (out of 1998848 for 2022 data)
         tinit = tt[start_tt]
         print("tinit = {}".format(tinit))
         alltod = alltod[:, start_tt:]
         tt = tt[start_tt:]
         # need to put tt[0] to zero, but be careful of real time
         # Also, I would have to adjust the mount time?
-        tt -= tinit# + 0.21 # delta_t seen in plotting back and forth images
-        # thk -= tinit - 0.21 # seems better this way (almost no change except on one border)
-        thk -= tinit - tshift
+        # if len(np.shape(tshift)) == 0 :
+        #     tt -= tinit + tshift # tshift seen in plotting back and forth images
+        # elif len(np.shape(tshift)) == 1:
+        #     tt_ASIC1 = tt - (tinit - tshift[0])
+        #     tt_ASIC2 = tt - (tinit - tshift[1])
+        #     tt = np.array([tt_ASIC1, tt_ASIC2])
+        tt -= tinit + tshift # tshift seen in plotting back and forth images
+        thk -= tinit
+
+        # print(np.min(thk), np.max(thk))
+        # print(np.min(tt), np.max(tt))
+        # plt.figure()
+        # plt.plot(thk, thk, lw=6, label="thk")
+        # plt.plot(tt, tt, lw=2, label="tt")
+        # plt.legend()
+        # plt.show()
+        # at
+
         # print(np.shape(tt))
         # print(np.shape(alltod))
         # print("tinit = {}".format(tinit))
 
         ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
         azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=True)
-
+ 
         # print("mean az el Moon", np.mean(azmoon), np.mean(elmoon))
         # print("mean az el pointing", np.mean(az), np.mean(el))
 
@@ -2163,13 +2178,17 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
                                                                     tt=tt, doplot=True, 
                                                                     plotrange=[0, 2000], 
                                                                     thr_speedmin=speedmin)
+        
         Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
 
         # New coordinates centered on the Moon: we might want to do this separately for each TES (i.e. not in this function) once we have their positions on the sky!
         # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
         # newazt, newelt = azt - azmoon, elt - elmoon # no complicated corretion for Moon movement in azimuth, trying here to fit the real Moon postion for each TES --> position of order 0 in Moon maps?
-        # newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+        
+        # good solution
         newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=4, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+        # newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+        
         # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
         # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon) # great circle
         # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos) # ?

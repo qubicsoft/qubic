@@ -4,7 +4,7 @@
 
 # we ask for n MPI tasks with N cores each on c nodes
 
-#SBATCH --partition=htc
+#SBATCH --partition=flash
 #SBATCH --nodes=1                # c
 #SBATCH --ntasks-per-node=2      # n
 #SBATCH --cpus-per-task=4        # N

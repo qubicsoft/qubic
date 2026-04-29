@@ -966,6 +966,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
                     continue
                 tod_close = dist_peak < dist_min
                 protected_tod[tod_close] = 1
+        # Just to avoid having different numbers of start and end peaks
+        protected_tod[0] = 0
+        protected_tod[-1] = 0
         new_peak_ = np.append(protected_tod[1:] - protected_tod[:-1], 0)
         start_peak = np.argwhere(new_peak_ == 1)[:, 0]
         end_peak = np.argwhere(new_peak_ == -1)[:, 0]
@@ -1456,12 +1459,17 @@ class gauss2dfit:
 
 class gaussfitsphere:
     def __init__(self, elt, azt):
-        self.pix_pos = spherical2cartesian(1, azt, elt, coord="horizontal", axis="last")
+        self.pix_pos = spherical2cartesian(1, azt, elt, coord="horizontal", axis="last") # here we save the coordinates of each pixel of the map
     def __call__(self, x, pars):
-        amp, eltc, aztc, sig = pars # sig in degrees
-        aztc = np.float_(aztc)
-        eltc = np.float_(eltc)
-        centre_pos = spherical2cartesian(1, aztc, eltc, coord="horizontal", axis="last")
+        # amp, eltc, aztc, sig = pars # sig in degrees
+        # aztc = np.float_(aztc)
+        # eltc = np.float_(eltc)
+        # centre_pos = spherical2cartesian(1, aztc, eltc, coord="horizontal", axis="last")
+        amp, ic, jc, sig = pars # here the position is given in pixels and later converted to azel
+        if np.isnan(ic) or np.isnan(jc): # for some reason, maybe when we fall outise of the image, ic or jc can be NaNs
+            shape_pix_pos = np.shape(self.pix_pos)
+            return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
+        centre_pos = self.pix_pos[int(ic), int(jc)]
         dist_rad = np.degrees(dist_angle(self.pix_pos, centre_pos))
         mygauss = amp * np.exp(-0.5*dist_rad**2/sig**2)
         return np.ravel(mygauss)
@@ -1630,7 +1638,7 @@ class empty_class():
     pass
 
 def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None):
-    # iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij") # ça plante ici ??
+    # iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     iipos = ipos # already 2D
     jjpos = jpos
     
@@ -1675,8 +1683,14 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         # plt.show()
 
         maxii = filtmapsn == np.nanmax(filtmapsn)
-        max_i = np.mean(iipos[maxii])
-        max_j = np.mean(jjpos[maxii])
+        ### in data coords
+        # max_i = np.mean(iipos[maxii])
+        # max_j = np.mean(jjpos[maxii])
+        # guess = np.array([1e4, max_i, max_j, reso_img/conv_reso_fwhm])
+        ### in pixel coords (new version, easier to plot). distok is now in pixels
+        iipix, jjpix = np.meshgrid(np.arange(Ni), np.arange(Nj), indexing="ij")
+        max_i = int(np.mean(iipix[maxii]))
+        max_j = int(np.mean(jjpix[maxii]))
         guess = np.array([1e4, max_i, max_j, reso_img/conv_reso_fwhm])
         if verbose:
             print("guess: amp = {}, i = {}, j = {}, sig = {}".format(guess[0], guess[1], guess[2], guess[3]))
@@ -1698,14 +1712,20 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
 
     data = fit.Data(np.ravel(iipos), np.ravel(mapij), np.ravel(errpix), g2d)
 
-    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
+    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.5/conv_reso_fwhm]], renorm=renorm)
     # m: amplitude, elevation (i), azimuth ((-)j), sigma Gaussian fit
+    where_res = [int(m.values[1]), int(m.values[2])]
+    ires = iipos[where_res[0], where_res[1]]
+    jres = jjpos[where_res[0], where_res[1]]
+    ijres = np.array([ires, jres])
+
+    ijerr = np.array([m.errors[1], m.errors[2]]) * reso/60 # pix to deg
 
     ### Image of the fitted Gaussian
     fitted = np.reshape(g2d(ipos, m.values), (xs, xs))
 
     if doplot:
-        origin = "upper" #"lower" swaps the y-axis and the guess doesn't match, default is "upper"
+        origin = "upper" #"lower" swaps the y-axis and the guess doesn't match, default is "upper", and lower matches the hp.gnomview display orientation
         if axs is None:
             fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(16, 5))
             # axs[1].imshow(fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
@@ -1717,8 +1737,8 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
                 axs[i].set_xlabel('Azimuth [degrees]')
             axs[2].set_title('Residuals')
         axs = pmp.plot_fit_img(mapij, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=m.values[1], jfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
-        return m, fitted, axs
-    return m, fitted
+        return m, fitted, axs, ijres, ijerr
+    return m, fitted, ijres, ijerr
     
     
 
@@ -1753,33 +1773,54 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
 
     # print(np.min(i_elt), np.max(i_elt))
     # print(np.min(j_azt), np.max(j_azt))
+    # plt.figure()
+    # plt.imshow(i_elt)
+    # plt.show()
+    # plt.figure()
+    # plt.imshow(j_azt)
+    # plt.show()
+
 
     if xycreid_corr is not None:
-        try:
-            guess = np.array([1e4, xycreid_corr[0], xycreid_corr[1], 0.92])
+        # try:
+            # guess = np.array([1e4, xycreid_corr[0], xycreid_corr[1], 0.92])
+            # guess_pos_cart = spherical2cartesian(1, -xycreid_corr[0], xycreid_corr[1], coord="horizontal", axis="last")
+            guess_pos_cart = spherical2cartesian(1, xycreid_corr[0], xycreid_corr[1], coord="horizontal", axis="last")
+            pix_pos_cart = spherical2cartesian(1, j_azt, i_elt, coord="horizontal", axis="last")
+            dist_to_guess = dist_angle(guess_pos_cart, pix_pos_cart)
+            argpix = np.argmin(np.abs(dist_to_guess))
+            Npix_side = len(dist_to_guess)
+            guess = np.array([1e4, argpix//Npix_side, argpix%Npix_side, 0.92])
+
+            # plt.figure()
+            # plt.imshow(dist_to_guess)
+            # plt.show()
+            # print(np.shape(dist_to_guess))
+            # print(guess)
+            
             if verbose:
                 print(guess)
-        except:
-            guess = None
-            if verbose:
-                print("TES has no position on sky")
-                print(guess)
+        # except:
+        #     guess = None
+        #     if verbose:
+        #         print("TES has no position on sky")
+        #         print(guess)
         
     # # test méli mélo
     # i_elt_ = i_elt.copy()
     # i_elt = j_azt.copy()
     # j_azt = i_elt_.copy()
     if doplot:
-        m, fitted, fig_axs = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso, pack=pack)
+        m, fitted, fig_axs, ijres, ijerr = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso, pack=pack)
         if verbose:
             print(m.values)
     else:
-        m, fitted = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack)
+        m, fitted, ijres, ijerr = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack)
 
     if return_images:
-        return m, mapxy, fitted, [np.min(i_elt), np.max(i_elt), np.min(j_azt), np.max(j_azt)], fig_axs
+        return m, mapxy, fitted, [np.min(i_elt), np.max(i_elt), np.min(j_azt), np.max(j_azt)], fig_axs, ijres, ijerr
 
-    return m
+    return m, ijres, ijerr
     
 
 def get_close(deltax, deltay, tolerance):

@@ -40,21 +40,21 @@ seed: 1
 nsub_in: 8                           # Number of sub-acquisitions used to integrate over the atm spectrum
 nsub_rec: 8
 nrec: 2
-npointings: 500
+npointings: 200
 kmax: 1
 synthbeam_fraction: 1
-wdet: 0
-wpho150: 0
-wpho220: 0
+wdet: 0.1
+wpho150: 0.1
+wpho220: 0.1
 
 # Sky parameters
-cmb: true
+cmb: false
 atm: true
 
 # Reconstruction parameters
 preconditioner: false
-n_iter: 20
-n_loop: 10
+n_iter: 0
+n_loop: 1
 iterative_iter: false
 convolutions: false
 sweeping_pointings: true             # If false: random pointings
@@ -64,5 +64,5 @@ fix_maps: true
 # Wind
 wind: true
 wind_type: "constant"                # Can be : "constant" or "normal"
-wind_cst: [0, 2]                   # [wind_x, wind_y]
+wind_cst: [0, 0.1]                   # [wind_x, wind_y]
 wind_normal: [0, 1]                  # [wind_mean, wind_std]

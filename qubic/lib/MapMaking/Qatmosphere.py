@@ -647,9 +647,7 @@ class AtmosphereMaps(AtmosphereProperties):
         kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(k, r0, sigma_rho, atm_size)
 
         ### Generate spatial fluctuations through random phases in Fourier space
-        phi = self.rng.uniform(
-            0, 2 * np.pi, size=(self.params["n_grid"], self.params["n_grid"])
-        )
+        phi = self.rng.uniform(0, 2 * np.pi, size=(self.params["n_grid"], self.params["n_grid"]))
         delta_rho_k = np.sqrt(kolmogorov_spectrum) * np.exp(1j * phi)
 
         ### Apply inverse Fourier transform to obtain spatial fluctuations in real space

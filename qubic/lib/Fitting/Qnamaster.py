@@ -161,7 +161,7 @@ class Namaster(object):
     def compute_master(self, field_a, field_b, workspace):
         """
         Parameters
-        ----------
+        ---------- 
         field_a: NmtField
         field_b: NmtField
         workspace: NmtWorkspace

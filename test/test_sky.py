@@ -19,9 +19,11 @@ I, Q, U = read_map(data_path + "syn256_pol.fits").T
 np.random.seed(0)
 qubic_dict = qubicDict()
 qubic_dict.read_from_file(dicts_path + "pipeline_demo.dict")
+qubic_dict["duration"] = 1
 qubic_dict["random_pointing"] = False
 qubic_dict["sweeping_pointing"] = True
 pointings = get_pointing(qubic_dict)
+print(pointings)
 instrument = QubicInstrument(qubic_dict)
 scene = QubicScene(qubic_dict)
 
@@ -31,8 +33,8 @@ pT1s = {}
 pTx_pT1s = {}
 cbiks = {}
 outputs = {}
-kinds = ["IQU"]  # ["I", "QU", "IQU"]
-input_maps = [np.array([I, Q, U]).T]  # [I, np.array([Q, U]).T, np.array([I, Q, U]).T]
+kinds = ["I", "QU", "IQU"]
+input_maps = [I, np.array([Q, U]).T, np.array([I, Q, U]).T]
 for kind, input_map in zip(kinds, input_maps):
     qubic_dict["kind"] = kind
     acq = QubicAcquisition(instrument, pointings, scene, qubic_dict)
@@ -80,3 +82,6 @@ def test_sky2():
     for k in ("QU", "IQU"):
         assert_equal(cbiks[k], cbiks["I"])
         assert_same(pT1s[k], pT1s["I"].astype(np.float32), rtol=15)
+
+
+test_sky()

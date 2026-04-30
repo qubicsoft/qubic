@@ -65,7 +65,10 @@ class Namaster(object):
         -------
         The binned monopoles and the NmtBin object
         """
-        b = nmt.NmtBin(bpws=self.bpws, ells=self.ells, weights=self.weights, lmax=self.lmax).from_lmax_linear(self.lmax, self.delta_ell, is_Dell=True)
+        lmax = min(self.lmax, 3 * nside - 1)
+
+        b = nmt.NmtBin.from_lmax_linear(lmax, self.delta_ell, is_Dell=True)
+
         ell_binned = b.get_effective_ells()
         self.ell_binned = ell_binned[np.where(ell_binned >= self.lmin)]
 

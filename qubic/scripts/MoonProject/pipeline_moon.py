@@ -22,6 +22,7 @@ import pickle
 import fitsio
 from scipy.interpolate import LinearNDInterpolator
 import astropy.units as u
+from scipy.optimize import least_squares
 
 #### QUBIC IMPORT
 from qubic.lib import Qdictionary 
@@ -41,7 +42,8 @@ import pipeline_moon_functions as pmf
 do_part_1 = False
 # Save map at second stage (with Moon for each detector at zenith)
 do_part_2 = False
-# Save pos
+# Save positions of order 0
+save_order0_pos = False
 
 #### These are directories used in the analysis, not really clean
 dirtemplibs = ["/Users/huchet/qubic/qubic/scripts/MoonProject/", "/Users/huchet/Documents/code/scripts/", "/Users/huchet/Documents/code/data/"] #[os.environ['QUBIC_DATADIR']+'scripts/MoonProject/']
@@ -167,14 +169,48 @@ if do_part_2:
     # We want to fit the Moon position for each TES
     myrotinit = np.array([0, 90, 0]) # the Moon should be around zenith
 
+    ### We load offsets measured from Maynooth simulations
+
+    #### Offsets from Créidhe
+    quadrant = 3 # for TD, quadrant = 3; formerly "pointing_offsets_fixed_hole.pickle"
+    # import pickle
+    offsets = pickle.load( open( mydatadir3 + 'pointing_offsets_Q{}.pickle'.format(quadrant), 'rb') )
+    print(np.shape(offsets))
+
+    mytesn = np.array(allTESNum)
+    azel_maynooth = offsets[mytesn -1 , :]
+    print(np.shape(azel_maynooth))
+
+    ######## Here we apply the inversion betwwen Az and El ##############
+    invert_azel = True # was due to an inversion in the numbering of TES, or was it? It doesn't fit well with the inversion
+    if invert_azel is True:
+        azel_maynooth = np.flip(azel_maynooth, axis=1)
+    # print(azel_maynooth[0])
+
+    invert_az = True # might be an error in the data taking (orientation east/west)?
+    if invert_az is True:
+        azel_maynooth[:, 0] = -azel_maynooth[:, 0]
+    # print(azel_maynooth[0])
+
+    invert_el = True # might be because we do el - elmoon in our data?
+    if invert_el is True:
+        azel_maynooth[:, 1] = -azel_maynooth[:, 1]
+
+    ### We rotate Maynooth to zenith (note that it is in general not the same as fitting at zenith from the start)
+    ### this is in case we want to use this data as guess for the order 0 fit
+    maynooth_cart = pmf.spherical2cartesian(1, azel_maynooth[:, 0], azel_maynooth[:, 1], coord="horizontal", axis="last")
+    rot_mat_zen = pmf.get_simple_rotation_matrix(axis="y", angle=np.radians(90)) # we go back to zenith
+    maynooth_zen_cart = np.einsum("li,ik->lk", maynooth_cart, rot_mat_zen)
+    maynooth_zen = pmf.cartesian2spherical(maynooth_zen_cart[:, 0], maynooth_zen_cart[:, 1], maynooth_zen_cart[:, 2], coord="horizontal", axis="last")[:, 1:]
+
     reso = 6 #4 #5
-    xs = 201
+    xs = 301
     allamp = np.zeros(len(allTESNum))
     allerramp = np.zeros(len(allTESNum))
     allFWHM = np.zeros(len(allTESNum)) * np.nan
     allerrFWHM = np.zeros(len(allTESNum))
-    allxy = np.zeros((len(allTESNum), 2)) * np.nan
-    allerrxy = np.zeros((len(allTESNum), 2))
+    pos_zen = np.zeros((len(allTESNum), 2)) * np.nan
+    pos_zen_err = np.zeros((len(allTESNum), 2))
 
     moon_fit = []
 
@@ -185,33 +221,107 @@ if do_part_2:
             moon_fit.append([(np.nan, np.nan), np.nan, np.nan])
             continue
         print(allTESNum[i])
-        m = pmf.fit_one_tes(allmaps[i,:], xs, reso, rot=myrotinit, verbose=False, renorm=True, doplot=False)
+        # now in pixel space from maynooth guess
+        m, ijres, ijerr = pmf.fit_one_tes(allmaps[i,:], xs, reso, rot=myrotinit, verbose=False, renorm=True, doplot=False, distok=50)
+        # m, ijres, ijerr = pmf.fit_one_tes(allmaps[i,:], xs, reso, rot=myrotinit, xycreid_corr=maynooth_zen[i], verbose=False, renorm=True, doplot=False, distok=50)
+        # m, ijres, ijerr = pmf.fit_one_tes(allmaps[i,:], xs, reso, rot=myrotinit, xycreid_corr=fitted_maynooth[i], verbose=False, renorm=True, doplot=False, distok=25)
         allFWHM[i] = m.values[3] * pmf.conv_reso_fwhm
         allerrFWHM[i] = m.errors[3] * pmf.conv_reso_fwhm
         allamp[i] = m.values[0] * pmf.conv_reso_fwhm
         allerramp[i] = m.errors[0] * pmf.conv_reso_fwhm
-        # allxy[i, :] = m.values[1:3]
-        # allerrxy[i, :] = m.errors[1:3]
-        allxy[i, :] = [m.values[2], m.values[1]] # m.values contains amplitude, elevation, azimuth, sigma
-        allerrxy[i, :] = [m.errors[2], m.errors[1]]
+        pos_zen[i, :] = [ijres[1], ijres[0]] # azt, eltc
+        pos_zen_err[i, :] = [ijerr[1], ijerr[0]]
         print('TES#{0}: FWHM = {1:5.2f}'.format(i + 1, m.values[3] * pmf.conv_reso_fwhm))
-        moon_fit.append([allxy[i, :], allFWHM[i], allamp[i]])
+        moon_fit.append([pos_zen[i, :], allFWHM[i], allamp[i]])
+
+    ### Here we move to cartesian coordinates in order to compare with Maynooth at zenith
+    all_det_pos_cart = pmf.spherical2cartesian(1, pos_zen[:, 0], pos_zen[:, 1], coord="horizontal", axis="first")
+
+    ### The DBscan allows us to detect the cluster of TES that have the same offset with theory (as expected if theory is right with an offset)
+    ### Works well, a bit because the z-axis points to the Moon for the telescope
+    DBscan_ok = pmf.get_DBscan_res_cart(all_det_pos_cart[:, 0], all_det_pos_cart[:, 1], all_det_pos_cart[:, 2], maynooth_zen_cart[:, 0], maynooth_zen_cart[:, 1], maynooth_zen_cart[:, 2], visibly_ok_arr, doplot=True, eps=0.01, min_samples=10)
+
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(projection='polar')
+    ax.plot(np.radians(maynooth_zen[:,  0]), 90 - maynooth_zen[:,  1], 'ro', alpha=0.2)
+    ax.plot(np.radians(maynooth_zen[DBscan_ok,  0]), 90 - maynooth_zen[DBscan_ok,  1], 'ro', label="Simulated positions")
+    ax.plot(np.radians(pos_zen[:, 0]), 90 - pos_zen[:, 1], 'ko', label="Observed positions")
+    # plt.plot(pos_zen_rot[:,0], pos_zen_rot[:,1], 'ko', label="Fitted positions")
+    ax.set_xlabel('$el^{Moon}$')
+    ax.set_ylabel('$az^{Moon}$')
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(dir_plots + "simulated_vs_observed_moonpos_zen.pdf", dpi=600)
+    plt.show()
+
+    ### We want to fit the rotations necessary to move the Maynooth simulations to the real positions
+    fake_pos = pos_zen - pos_zen_err
+    fake_pos_cart = pmf.spherical2cartesian(1, fake_pos[:, 0], fake_pos[:, 1], coord="horizontal", axis="last")
+    all_det_err_cart = np.abs(all_det_pos_cart - fake_pos_cart) * 1
+
+    initvec = maynooth_zen_cart[DBscan_ok]
+    outvec = all_det_pos_cart[DBscan_ok,:]
+    initvec_sph = pmf.cartesian2spherical(initvec[:, 0], initvec[:, 1], initvec[:, 2], coord="horizontal", axis="last")[:, 1:]
+    outvec_sph = pmf.cartesian2spherical(outvec[:, 0], outvec[:, 1], outvec[:, 2], coord="horizontal", axis="last")[:, 1:]
+
+    ### Plotting the new positions w.r.t. the old ones and the real ones
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(projection='polar')
+    ax.set_aspect(1)
+    ax.plot(np.radians(initvec_sph[:, 0]), 90 - initvec_sph[:, 1], 'bo', label = 'Maynooth')
+    ax.plot(np.radians(outvec_sph[:, 0]), 90 - outvec_sph[:, 1], 'go', label='Moon VI')
+
+    theta_0 = np.array([0, 0, 0])
+    theta_fit = least_squares(pmf.fun_minimise, theta_0, args=(initvec.flatten(), outvec.flatten()))
+    newvec = np.reshape(pmf.rotate_2d_zen_pts(np.ravel(initvec), theta_fit.x), np.shape(initvec))
+
+    newvec_sph = pmf.cartesian2spherical(newvec[:, 0], newvec[:, 1], newvec[:, 2], coord="horizontal", axis="last")[:, 1:]
+
+    res = theta_fit.x
+    err = [theta_fit.cost for i in range(len(res))]
+
+    mylabel = 'Fit to match Moon: \n'+ r'Rot$_x$={0:3.2f}+/-{1:3.2f} deg'.format(res[0], err[0])
+    mylabel += '\n' + r'Rot$_y$={0:3.2f}+/-{1:3.2f} deg'.format(res[1], err[1])
+    mylabel += '\n' + r'Rot$_z$={0:3.2f}+/-{1:3.2f} deg'.format(res[2], err[2])
+    ax.plot(np.radians(newvec_sph[:, 0]), 90 - newvec_sph[:, 1], 'b+', ms=13, label=mylabel)
+    ax.legend()
+    ax.set_xlabel('$\Delta_{az}$ [deg.]')
+    label_position=ax.get_rlabel_position()
+    ax.text(np.radians(label_position+10), ax.get_rmax()/2., '$\Delta_{el}$ [deg.]', # the r label is put manually
+        rotation=label_position, ha='center', va='center')
+
+    for pointi in range(len(initvec[:, 0])):
+        plt.plot(np.radians([outvec_sph[pointi, 0], newvec_sph[pointi, 0]]), 90 - np.array([outvec_sph[pointi, 1], newvec_sph[pointi, 1]]), c="k")
+    plt.tight_layout()
+    plt.savefig()
+    plt.show()
 
 
     not_fitted = ~DBscan_ok
-    np.shape(allxy_rot[not_fitted])
-    newvec_full = np.reshape(function_fit(np.ravel(xycreidhe), m.values), np.shape(xycreidhe))
-    allxy_rot[not_fitted] = newvec_full[not_fitted]
+    newvec_full = np.reshape(function_fit(np.ravel(azel_maynooth), m.values), np.shape(azel_maynooth))
+    pos_zen_rot[not_fitted] = newvec_full[not_fitted]
 
     # let's go back to zenith
-    new_det_pos_rot = pmf.spherical2cartesian(1, allxy_rot[:, 0], allxy_rot[:, 1], coord="horizontal", axis="first")
+    new_det_pos_rot = pmf.spherical2cartesian(1, pos_zen_rot[:, 0], pos_zen_rot[:, 1], coord="horizontal", axis="first")
     rot_mat_zen = pmf.get_simple_rotation_matrix(axis="y", angle=np.radians(90)) # we go back to zenith
     new_det_pos_zen = np.einsum("il,ik->kl", new_det_pos_rot, rot_mat_zen)
     full_det_pos_zen = pmf.cartesian2spherical(new_det_pos_zen[0], new_det_pos_zen[1], new_det_pos_zen[2], coord="horizontal", axis="last")[:, 1:]
+    # full_det_pos_zen is the real position, when available, of the Moon for each detector or the fitted Maynooth otherwise
+    # use this to build the maps used to fit the order 1 / the spectrum of the Moon
 
-    full_det_pos_zen = np.load('full_det_pos_zen.npy')
+    new_det_pos_rot = pmf.spherical2cartesian(1, newvec_full[:, 0], newvec_full[:, 1], coord="horizontal", axis="first")
+    rot_mat_zen = pmf.get_simple_rotation_matrix(axis="y", angle=np.radians(90)) # we go back to zenith
+    new_det_pos_zen = np.einsum("il,ik->kl", new_det_pos_rot, rot_mat_zen)
+    fitted_maynooth = pmf.cartesian2spherical(new_det_pos_zen[0], new_det_pos_zen[1], new_det_pos_zen[2], coord="horizontal", axis="last")[:, 1:]
+    # fitted_maynooth is the result from Maynooth simulation fitted as a whole (all detectors at once) to the measured Moon positions for the detectors
+    # use this to fit the order 0 in a second round
 
-    pickle.dump( [allTESNum, allmaps], open( mydatadir2 + "202603-allmaps-13032026_zenith_det.pkl", "wb" ) )
+    if save_order0_pos:
+        np.save('full_det_pos_zen.npy', full_det_pos_zen)
+        np.save('fitted_maynooth.npy', fitted_maynooth)
+        print("saved")
+
+    pickle.dump( [allTESNum, allmaps], open( mydatadir2 + "202603-allmaps-13032026_zenith_det.pkl", "wb" ) )#
 
 
 

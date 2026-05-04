@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import healpy as hp
+from matplotlib.widgets import Button
+
 
 #########################
 

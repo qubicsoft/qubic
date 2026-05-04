@@ -1742,7 +1742,7 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     
     
 
-def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, xycreid_corr=None, axs=None, pack=None):
+def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, azelguess=None, axs=None, pack=None):
     ### get the gnomview back into a np.array in order to fit it
     mm = mymap.copy()
     badpix = mm == hp.UNSEEN
@@ -1781,11 +1781,11 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
     # plt.show()
 
 
-    if xycreid_corr is not None:
+    if azelguess is not None:
         # try:
-            # guess = np.array([1e4, xycreid_corr[0], xycreid_corr[1], 0.92])
-            # guess_pos_cart = spherical2cartesian(1, -xycreid_corr[0], xycreid_corr[1], coord="horizontal", axis="last")
-            guess_pos_cart = spherical2cartesian(1, xycreid_corr[0], xycreid_corr[1], coord="horizontal", axis="last")
+            # guess = np.array([1e4, azelguess[0], azelguess[1], 0.92])
+            # guess_pos_cart = spherical2cartesian(1, -azelguess[0], azelguess[1], coord="horizontal", axis="last")
+            guess_pos_cart = spherical2cartesian(1, azelguess[0], azelguess[1], coord="horizontal", axis="last")
             pix_pos_cart = spherical2cartesian(1, j_azt, i_elt, coord="horizontal", axis="last")
             dist_to_guess = dist_angle(guess_pos_cart, pix_pos_cart)
             argpix = np.argmin(np.abs(dist_to_guess))
@@ -2559,6 +2559,35 @@ def get_DBscan_res(x_fit, y_fit, x_theo, y_theo, x_err, y_err, FWHM, errFWHM, vi
 
     return DB_ok
 
+def get_DBscan_res_cart(x_fit, y_fit, z_fit, x_theo, y_theo, z_theo, visibly_ok_arr, doplot, eps=0.5, min_samples=10):
+
+    delta_x = x_fit - x_theo
+    delta_y = y_fit - y_theo
+    delta_z = z_fit - z_theo
+
+    params_dbscan = np.array([delta_x, delta_y, delta_z]).T
+    rng_nan = np.random.default_rng(seed=12345)
+
+    # we don't want the NaNs to crash our scan
+    params_dbscan[np.isnan(params_dbscan)] = rng_nan.uniform(low=1, high=2, size=(len(params_dbscan[np.isnan(params_dbscan)]),)) * 1e8
+
+    clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(params_dbscan)
+    labels = clustering.labels_
+    DB_ok = labels == 0
+    if doplot:
+        plt.figure()
+        plt.subplot().set_aspect(1)
+        plt.scatter(delta_x[visibly_ok_arr], delta_y[visibly_ok_arr], c='k', s=30, label='all visibly ok ({})'.format(len(delta_x[visibly_ok_arr])))
+        plt.scatter(delta_x[DB_ok], delta_y[DB_ok], c='r', s=20, label='DBSCAN selected ({})'.format(len(delta_x[DB_ok])))
+        plt.xlabel('$\Delta_{x}^{Moon} - Offset_{Creidhe}$')
+        plt.ylabel('$\Delta_{y}^{Moon} - Offset_{Creidhe}$')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("DBscan_result.pdf")
+        plt.show()
+
+    return DB_ok
+
 
 ### Function to rotate a set of points around a given center
 def rotate_translate_scale_2d(xin, theta, center, scale):
@@ -2572,6 +2601,29 @@ def rot_trans_scale_pts(x, pars):
 def rot_trans_scale2d_pts(x, pars):
     pts = np.reshape(x, (len(x)//2, 2))
     return np.ravel(rotate_translate_scale_2d(pts, np.radians(pars[0]), np.array([pars[1],pars[2]]), np.array([pars[3], pars[4]])))
+
+
+def rotate_2d_zen(data, theta_rot): # data_in (npoints, 3), theta_rot (3) in degrees
+    theta_x, theta_y, theta_z = np.radians(theta_rot)
+    rot_mat_x = get_simple_rotation_matrix(axis="x", angle=theta_x)
+    rot_mat_y = get_simple_rotation_matrix(axis="y", angle=theta_y)
+    rot_mat_z = get_simple_rotation_matrix(axis="z", angle=theta_z)
+    rot_mats = [rot_mat_x, rot_mat_y, rot_mat_z]
+    for rot_mat in rot_mats:
+        data = np.einsum("ij,kj->ki", rot_mat, data) # we do the rotations in the order x then y then z
+    return data
+
+def rotate_2d_zen_pts(data_flat, theta_rot):
+    pts = np.reshape(data_flat, (len(data_flat)//3, 3))
+    return np.ravel(rotate_2d_zen(pts, theta_rot))
+
+def fun_minimise(theta_rot, data, target):
+    pts = np.reshape(data, (len(data)//3, 3))
+    target_pts = np.reshape(target, (len(data)//3, 3))
+    rotated_pts = rotate_2d_zen(pts, theta_rot)
+    all_dist = dist_angle(target_pts, rotated_pts)
+    return np.sum(all_dist**2)
+
 
 
 def get_synthbeam_freqs(idet, nsub=16, nside=512):

@@ -40,12 +40,13 @@ seed: 1
 nsub_in: 8                           # Number of sub-acquisitions used to integrate over the atm spectrum
 nsub_rec: 8
 nrec: 2
-npointings: 200
+npointings: 500
+n_buffer: 50
 kmax: 1
 synthbeam_fraction: 1
-wdet: 0.1
-wpho150: 0.1
-wpho220: 0.1
+wdet: 0.001
+wpho150: 0.001
+wpho220: 0.001
 
 # Sky parameters
 cmb: false
@@ -53,13 +54,14 @@ atm: true
 
 # Reconstruction parameters
 preconditioner: false
-n_iter: 0
-n_loop: 1
+n_iter: 10
+n_loop: 10
 iterative_iter: false
 convolutions: false
 sweeping_pointings: true             # If false: random pointings
 fit_mixing_matrix: false
 fix_maps: true
+fit_wind: true
 
 # Wind
 wind: true

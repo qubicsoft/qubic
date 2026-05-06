@@ -16,7 +16,7 @@ QUBIC:
 
   instrument: "DB" # Instrumental design (MB, DB or UWB)
   configuration: "FI" # Instrumental configuration (TD or FI)
-  npointings: 1000 # Number of time samples
+  npointings: 3000 # Number of time samples
   nsub_in: 8 # Number of sub-acquisitions
   nsub_out: 8
   nrec:
@@ -69,7 +69,7 @@ PCG:
   tol_pcg: 1.0e-20 # Tolerance for PCG
   preconditioner: false
   initial_guess_intensity_to_zero: true
-  gif: true
+  gif: false
   resolution_plot: 15
   fwhm_plot: 0
 

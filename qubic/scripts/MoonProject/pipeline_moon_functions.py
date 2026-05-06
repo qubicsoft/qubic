@@ -52,6 +52,9 @@ from qubic.lib.Qutilities import _compress_mask
 from qubic.lib.Instrument.Qinstrument import SyntheticBeam
 from qubic.lib.Qsamplings import hor2equ
 
+from qubic.lib.Qdictionary import qubicDict
+from qubic.lib.Instrument.Qinstrument import QubicMultibandInstrument
+from qubic.lib.Qscene import QubicScene
 #########################
 
 conv_reso_fwhm = 2.35482
@@ -3339,7 +3342,7 @@ def Lagrange_poly(x, points_x, points_y):
     return P
 
 
-def bin_data_by_scan(xdata, ydata, scantype): # scantype is positive, negative of null
+def bin_data_by_scan(xdata, ydata, scantype): # scantype is positive, negative or null
     bin_id = np.zeros(len(scantype))
     bin_id_i = -1
     scan_sorted = []
@@ -3391,3 +3394,94 @@ def fit_lagrange_scans(xdata, ydata, scantype):
             plt.show()
             ear
     
+
+def print_keys(d, keys):
+    for key in keys:
+        print(' - {:25}: {}'.format(key, d[key]))
+    print('\n')
+
+### This function retrieves the peaks information as a function of frequency, for each of the MultiBandInstrument sub-bands
+def get_peaks_configuration(d, doplot=False, idet=None, debug=False):
+    if d['config'] == 'TD':
+        Ndet = 248
+    elif d['config'] == 'FI':
+        Ndet = 992
+    else:
+        print('Wrong config in dict')
+        return 0
+
+    print_keys(d, ['config', 'instrument_type', 'synthbeam', 'use_synthbeam_file', 'synthbeam_fraction', 'synthbeam_kmax'])
+    try:
+        q_instrument = QubicMultibandInstrument(d)
+        q_scene = QubicScene(d)
+        print('done', d["config"], d['instrument_type'], 'nf_sub={}'.format(d['nf_sub']))
+    except:
+        print('oups ! failed instanciating QubicMultibandInstrument()')
+        return 0,0,0,0
+    
+    n_nus = len(q_instrument)
+    nus = np.zeros(n_nus)
+    dnus = np.zeros(n_nus)
+    print()
+    print('The instrument has {} sub-frequencies'.format(n_nus))
+    print("detector center", q_instrument.subinstruments[i].detector.center)
+    for i in range(n_nus):
+        nus[i] = q_instrument.subinstruments[i].d['filter_nu']/1e9
+        dnus[i] = q_instrument.subinstruments[i].d['filter_relative_bandwidth']*q_instrument.subinstruments[i].d['filter_nu']/1e9
+        print('- {0:}: nu = {1:7.2f} GHz ; bw = {2:7.2f}'.format(i, nus[i], dnus[i]))
+
+        q_instrument.subinstruments[i].detector.center[0] = [0, 0, -0.3] # we take a fake central detector because we only care about theta and phi from zenith
+    
+    thetas = np.zeros((n_nus, Ndet, (2*d['synthbeam_kmax']+1)**2))
+    phis = np.zeros((n_nus, Ndet, (2*d['synthbeam_kmax']+1)**2))
+    vals = np.zeros((n_nus, Ndet, (2*d['synthbeam_kmax']+1)**2))
+    for i in range(n_nus):
+        thetas[i,:,:], phis[i,:,:], vals[i,:,:] = q_instrument.subinstruments[i]._peak_angles(q_scene, 
+                                                    q_instrument.subinstruments[i].d['filter_nu'], 
+                                                    q_instrument.subinstruments[i].detector.center, 
+                                                    q_instrument.subinstruments[i].synthbeam, 
+                                                    q_instrument.subinstruments[i].horn, 
+                                                    q_instrument.subinstruments[i].primary_beam)
+    if doplot:
+        imed = n_nus // 2
+        if idet is None:
+            # idet = np.random.randint(Ndet)
+            idet = 0
+        sb = q_instrument.subinstruments[imed].get_synthbeam(q_scene, idet)
+        plt.figure(figsize=(8, 4))
+        hp.gnomview(np.log10(sb/np.max(sb)), rot=[0,90], reso=20, min=-5, max=0,
+             title='Theory {0:} {1:7.2f} GHz: TES #{2:}'.format(d['config'], q_instrument.subinstruments[imed].d['filter_nu']/1e9, idet), 
+             sub=(1,2,1))
+        for i in range(n_nus):
+            hp.projscatter(thetas[i, idet,:], phis[i, idet,:], c=vals[i, idet,:]/np.max(vals[i, idet,:]), 
+                           marker='x', cmap='Reds')
+
+        plt.subplot(1,2,2)
+        plt.errorbar(nus, dnus, yerr=0, xerr=dnus/2, fmt='ro')
+        for i in range(len(nus)):
+            plt.axvline(x=nus[i]-dnus[i]/2, ls=':', color='k', alpha=0.5)
+            plt.axvline(x=nus[i]+dnus[i]/2, ls=':', color='k', alpha=0.5)
+        plt.xlabel('Frequency [GHz]')
+        plt.ylabel('Bandwidth [GHz]')
+        plt.title('Theory {0:} {1:7.2f} GHz: TES #{2:}'.format(d['config'], q_instrument.subinstruments[imed].d['filter_nu']/1e9, idet))
+        plt.tight_layout()
+
+    return thetas, phis, vals, nus, q_instrument
+
+def update_dict(config, instrument_type, nf_sub, nside, dictfilename='qubic/qubic/dicts/pipeline_demo.dict', debug=True):
+    d = qubicDict()
+    d.read_from_file(dictfilename)
+    d['config'] = config
+    
+    d['instrument_type'] = instrument_type
+    d['nf_sub'] = nf_sub
+    d['debug'] = debug
+    d['nside'] = nside
+
+    d['beam_shape'] = 'gaussian'  # can be 'gaussian', 'fitted_beam' or 'multi_freq'  
+    d['synthbeam'] = None         # we put nothing
+    d['use_synthbeam_fits_file'] = False
+    d['synthbeam_fraction'] = 1
+    d['synthbeam_kmax'] = 1
+    return d
+

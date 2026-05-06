@@ -4,11 +4,11 @@
 # 1. - change the coordinates to ones where the Moon position in the sky is the zenith at all times
 #      (thus keeping the real distances between detector apparent Moon position and real position)
 #    - clean it and build maps in coordinates where the telescope/mount los sees the Moon at zenith
-#    - measure the position, in this configuration, between the los of the telescope and the one of each TES
-# 2. - change the coordinates to ones where the Moon position in the sky is the zenith at all times for each detector this time
+# 2. - measure the position, in this configuration, between the los of the telescope and the one of each TES
+# 3. - change the coordinates to ones where the Moon position in the sky is the zenith at all times for each detector this time
 #    - clean it and build maps in coordinates where the telescope/mount los sees the Moon at zenith for each detector
 #    - we now have maps where angles and distances between order 0 and 1 should be
-# 3. - use these maps to fit the synthbeam of each detector on its associated Moon map
+# 4. - use these maps to fit the synthbeam of each detector on its associated Moon map
 #    - this should give us the spectrum of the Moon (before any atmosphere mitigation!)
 
 
@@ -38,12 +38,15 @@ import time_domain_tools as tdt
 import pipeline_moon_plotting as pmp
 import pipeline_moon_functions as pmf
 
-# Save map at first stage (with Moon for telescope at zenith)
+# Save maps at first stage (with Moon for telescope at zenith)
 do_part_1 = False
-# Save map at second stage (with Moon for each detector at zenith)
-do_part_2 = False
 # Save positions of order 0
-save_order0_pos = False
+do_part_2 = True
+# Save maps at second stage (with Moon for each detector at zenith)
+do_part_3 = False
+# Save the spectrum of the Moon for each detector
+do_part_4 = False
+
 
 #### These are directories used in the analysis, not really clean
 dirtemplibs = ["/Users/huchet/qubic/qubic/scripts/MoonProject/", "/Users/huchet/Documents/code/scripts/", "/Users/huchet/Documents/code/data/"] #[os.environ['QUBIC_DATADIR']+'scripts/MoonProject/']
@@ -118,7 +121,8 @@ else:
         # also, there is a clock drift happening during the data acquition, so the maps are not the best they could be
         tshift_ASIC2 = -0.4 #-0.6 # TES 218
         tshift_ASIC1 = -1.35 # TES 96
-        tshift = np.array([tshift_ASIC2, tshift_ASIC1])
+        # tshift = np.array([tshift_ASIC2, tshift_ASIC1])
+        tshift = tshift_ASIC1
         start_tt = 50000
         speedmin = 0.1
 
@@ -260,7 +264,7 @@ if do_part_2:
     all_det_err_cart = np.abs(all_det_pos_cart - fake_pos_cart) * 1
 
     initvec = maynooth_zen_cart[DBscan_ok]
-    outvec = all_det_pos_cart[DBscan_ok,:]
+    outvec = all_det_pos_cart[DBscan_ok, :]
     initvec_sph = pmf.cartesian2spherical(initvec[:, 0], initvec[:, 1], initvec[:, 2], coord="horizontal", axis="last")[:, 1:]
     outvec_sph = pmf.cartesian2spherical(outvec[:, 0], outvec[:, 1], outvec[:, 2], coord="horizontal", axis="last")[:, 1:]
 
@@ -270,60 +274,53 @@ if do_part_2:
     ax.set_aspect(1)
     ax.plot(np.radians(initvec_sph[:, 0]), 90 - initvec_sph[:, 1], 'bo', label = 'Maynooth')
     ax.plot(np.radians(outvec_sph[:, 0]), 90 - outvec_sph[:, 1], 'go', label='Moon VI')
-
     theta_0 = np.array([0, 0, 0])
-    theta_fit = least_squares(pmf.fun_minimise, theta_0, args=(initvec.flatten(), outvec.flatten()))
-    newvec = np.reshape(pmf.rotate_2d_zen_pts(np.ravel(initvec), theta_fit.x), np.shape(initvec))
-
+    fit_res = least_squares(pmf.fun_minimise, theta_0, args=(initvec.flatten(), outvec.flatten()))
+    theta_fit = fit_res.x
+    newvec = np.reshape(pmf.rotate_2d_zen_pts(np.ravel(initvec), theta_fit), np.shape(initvec))
     newvec_sph = pmf.cartesian2spherical(newvec[:, 0], newvec[:, 1], newvec[:, 2], coord="horizontal", axis="last")[:, 1:]
-
-    res = theta_fit.x
-    err = [theta_fit.cost for i in range(len(res))]
-
-    mylabel = 'Fit to match Moon: \n'+ r'Rot$_x$={0:3.2f}+/-{1:3.2f} deg'.format(res[0], err[0])
-    mylabel += '\n' + r'Rot$_y$={0:3.2f}+/-{1:3.2f} deg'.format(res[1], err[1])
-    mylabel += '\n' + r'Rot$_z$={0:3.2f}+/-{1:3.2f} deg'.format(res[2], err[2])
+    mylabel = 'Fit to match Moon: \n'+ r'Rot$_x$={0:3.2f}+/-{1:3.2f} deg'.format(theta_fit[0])
+    mylabel += '\n' + r'Rot$_y$={0:3.2f}+/-{1:3.2f} deg'.format(theta_fit[1])
+    mylabel += '\n' + r'Rot$_z$={0:3.2f}+/-{1:3.2f} deg'.format(theta_fit[2])
     ax.plot(np.radians(newvec_sph[:, 0]), 90 - newvec_sph[:, 1], 'b+', ms=13, label=mylabel)
     ax.legend()
     ax.set_xlabel('$\Delta_{az}$ [deg.]')
     label_position=ax.get_rlabel_position()
     ax.text(np.radians(label_position+10), ax.get_rmax()/2., '$\Delta_{el}$ [deg.]', # the r label is put manually
         rotation=label_position, ha='center', va='center')
-
     for pointi in range(len(initvec[:, 0])):
         plt.plot(np.radians([outvec_sph[pointi, 0], newvec_sph[pointi, 0]]), 90 - np.array([outvec_sph[pointi, 1], newvec_sph[pointi, 1]]), c="k")
     plt.tight_layout()
-    plt.savefig()
+    plt.savefig(dir_plots + "fitted_maynooth_pos.pdf", dpi=600)
     plt.show()
 
-
+    pos_zen_full = pos_zen.copy()
     not_fitted = ~DBscan_ok
-    newvec_full = np.reshape(function_fit(np.ravel(azel_maynooth), m.values), np.shape(azel_maynooth))
-    pos_zen_rot[not_fitted] = newvec_full[not_fitted]
+    newvec_full = np.reshape(pmf.rotate_2d_zen_pts(np.ravel(maynooth_zen_cart), theta_fit), np.shape(azel_maynooth))
+    pos_zen_full[not_fitted] = newvec_full[not_fitted]
 
-    # let's go back to zenith
-    new_det_pos_rot = pmf.spherical2cartesian(1, pos_zen_rot[:, 0], pos_zen_rot[:, 1], coord="horizontal", axis="first")
-    rot_mat_zen = pmf.get_simple_rotation_matrix(axis="y", angle=np.radians(90)) # we go back to zenith
-    new_det_pos_zen = np.einsum("il,ik->kl", new_det_pos_rot, rot_mat_zen)
-    full_det_pos_zen = pmf.cartesian2spherical(new_det_pos_zen[0], new_det_pos_zen[1], new_det_pos_zen[2], coord="horizontal", axis="last")[:, 1:]
-    # full_det_pos_zen is the real position, when available, of the Moon for each detector or the fitted Maynooth otherwise
-    # use this to build the maps used to fit the order 1 / the spectrum of the Moon
-
-    new_det_pos_rot = pmf.spherical2cartesian(1, newvec_full[:, 0], newvec_full[:, 1], coord="horizontal", axis="first")
-    rot_mat_zen = pmf.get_simple_rotation_matrix(axis="y", angle=np.radians(90)) # we go back to zenith
-    new_det_pos_zen = np.einsum("il,ik->kl", new_det_pos_rot, rot_mat_zen)
-    fitted_maynooth = pmf.cartesian2spherical(new_det_pos_zen[0], new_det_pos_zen[1], new_det_pos_zen[2], coord="horizontal", axis="last")[:, 1:]
+    fitted_maynooth = pmf.cartesian2spherical(newvec_full[:, 0], newvec_full[:, 1], newvec_full[:, 2], coord="horizontal", axis="last")[:, 1:]
     # fitted_maynooth is the result from Maynooth simulation fitted as a whole (all detectors at once) to the measured Moon positions for the detectors
     # use this to fit the order 0 in a second round
 
-    if save_order0_pos:
-        np.save('full_det_pos_zen.npy', full_det_pos_zen)
-        np.save('fitted_maynooth.npy', fitted_maynooth)
-        print("saved")
+    np.save('pos_zen_full.npy', pos_zen_full)
+    np.save('fitted_maynooth.npy', fitted_maynooth)
+    print("saved")
 
-    pickle.dump( [allTESNum, allmaps], open( mydatadir2 + "202603-allmaps-13032026_zenith_det.pkl", "wb" ) )#
+if do_part_3:
+    pos_zen_full = np.load('pos_zen_full.npy')
+
+    allmaps_zendet, data_TOD, center, newazt, newelt, scantype = pmf.make_coadded_maps(datadir, Obs_Site, allTESNum, data=None, 
+                                        nside=nside, doplot=False, az_qubic=azqubic, parallel=True, ObsDate=ObsDate, tshift=tshift,
+                                        det_pos=pos_zen_full, theo_sb=None)
+
+    pickle.dump( [allmaps_zendet, allmaps], open( mydatadir2 + "202603-allmaps-13032026_zenith_det.pkl", "wb" ) )#
 
 
+if do_part_4:
 
+    well_fitted = []
+
+    # Let's first test it in the notebook
 
 

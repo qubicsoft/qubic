@@ -1,7 +1,6 @@
-# %% [markdown]
-# # Importation
+# Importation
 
-# %%
+
 import io
 from qubic.lib.Qscene import QubicScene
 from qubic.lib.Instrument.Qnoise import QubicTotNoise
@@ -36,14 +35,14 @@ rank = comm.Get_rank()
 
 # %matplotlib inline
 
-# %%
+
 # Import simulation parameters
 with open("params.yml", "r") as file:
     params = yaml.safe_load(file)
 
 np.random.seed(params["seed"])
 
-# %%
+
 # Call the class which build the atmosphere maps
 atm = AtmosphereMaps(params)
 qubic_dict = atm.qubic_dict
@@ -56,10 +55,7 @@ npix = hp.nside2npix(params["nside"])
 center = np.array([0, -57])
 qubic_patch = qubic.lib.Qsamplings.equ2gal(center[0], center[1])
 
-# %% [markdown]
-# # Mixing Matrix
-
-# %%
+# Mixing Matrix
 mixing_matrix = np.ones((params["nsub_in"], 2))
 # Atm mixing matrix
 mixing_matrix[:, 1] = atm.temperature * atm.integrated_abs_spectrum * atm.mean_water_vapor_density
@@ -68,10 +64,8 @@ if rank == 0:
     print(f"[diag] mixing_matrix[:, 1] = {mixing_matrix[:, 1]}")
     print(f"[diag] mixing_matrix has NaN: {np.any(np.isnan(mixing_matrix))}")
 
-# %% [markdown]
-# # Scanning Strategy
+# Scanning Strategy
 
-# %%
 ### Random pointing
 qubic_dict["random_pointing"] = True
 qubic_dict["date_obs"] = "2023-10-01 22:57:00.000"
@@ -100,9 +94,8 @@ center_gal = equ2gal(qubic_patch[0], qubic_patch[1])
 center_local = np.array([np.mean(q_sampling_gal.azimuth), np.mean(q_sampling_gal.elevation)])
 
 
-# ## Build local sampling
+## Build local sampling
 
-# %%
 ### Define scanning strategy for atm observation
 q_sampling_local_rec = QubicSampling(
     q_sampling_gal.index.size,
@@ -125,17 +118,13 @@ if params["wind"]:
 else:
     q_sampling_local = q_sampling_local_rec
 
-# %%
-# %% [markdown]
-# ## Build 1 pointing sampling list
 
-# %%
 print(q_sampling_local)
 
-# %%
+
 q_sampling = []
 
-N_buffer = 10
+N_buffer = params["n_buffer"]
 
 for ipointing in range(int(params["npointings"] / N_buffer)):
     tmp = QubicSampling(N_buffer)
@@ -146,16 +135,12 @@ for ipointing in range(int(params["npointings"] / N_buffer)):
     tmp.fix_az = True
     q_sampling.append(tmp)
 
-# %% [markdown]
-# # Atm
-
-# %%
+# Atm
 atm_maps = np.zeros((params["nsub_in"], hp.nside2npix(params["nside"]), 3))
 atm_maps[..., 0] = atm.get_temp_maps(atm.delta_rho_map) / 1e3
 print(atm_maps.shape)
 
 
-# %%
 true_maps = atm_maps.mean(axis=0)[None]
 print(true_maps.shape)
 
@@ -166,13 +151,9 @@ max = np.max([min_input, max_input], axis=0)
 min_input = -max
 max_input = max
 
-# %% [markdown]
-# # Map-making
+# Map-making
 
-# %% [markdown]
-# ## Tod acquisition
-
-# %%
+## Tod acquisition
 # Build the QUBIC operators
 H_tod = QubicInstrumentType(
     atm.qubic_dict, nsub=params["nsub_in"], nrec=params["nsub_in"], sampling=q_sampling_local
@@ -184,10 +165,7 @@ print(tod.shape)
 
 del H_tod
 
-# %% [markdown]
-# ## Rec acquisition
-
-# %%
+## Rec acquisition
 Qacq = QubicInstrumentType(
     qubic_dict, params["nsub_in"], params["nsub_in"], sampling=q_sampling_local_rec
 )
@@ -195,50 +173,25 @@ Qacq = QubicInstrumentType(
 # 1 pointing acq
 H_rec = []
 invN_rec = []
-reference_mpidist = None
 
 for ipointing in range(int(params["npointings"] / N_buffer)):
     tmp = QubicInstrumentType(
         qubic_dict, params["nsub_rec"], params["nsub_rec"], sampling=q_sampling[ipointing]
     )
-    # Each QubicInstrumentType calls pysimulators' Create_cart, producing a new
-    # MPI communicator object each time. CompositionOperator caches commout at
-    # construction, so we must patch both operands[-1] (the distribution op) and
-    # h.commout before get_operator() builds the chain on top.
-    if reference_mpidist is None:
-        reference_mpidist = tmp.H[0].operands[-1]
-        reference_commout = tmp.H[0].commout
-    else:
-        for h in tmp.H:
-            h.operands[-1] = reference_mpidist
-            h.commout = reference_commout
+
     H_rec.append(tmp.get_operator())
     invN_rec.append(tmp.get_invntt_operator(params["wdet"], params["wpho150"], params["wpho220"]))
 
-    # Free per-chunk MPI communicators to avoid exhausting the MPICH context-ID
-    # pool (default limit 2048). Iteration 0's commgrid is kept alive as
-    # reference_commout; all subsequent chunks' commgrids are no longer needed
-    # after we patched the distribution operators.
-    if ipointing > 0:
-        for acq in tmp.subacqs:
-            try:
-                acq.comm.Free()
-            except Exception:
-                pass
-
 del tmp
 
-# %%
+
 coverage = Qacq.coverage
 
 covnorm = coverage / coverage.max()
 seenpix = covnorm > params["coverage_cut"]
 
-# %% [markdown]
-# # Wind Operator
 
-
-# %%
+# Wind Operator
 @flags.linear
 @flags.square
 class ShiftOperator(Operator):
@@ -298,16 +251,6 @@ def get_wind_operator(
     return BlockColumnOperator(tmp, axisout=0)
 
 
-# Expected output shape: (n_chunks * nsub_rec, npix, 3)
-n_chunks = len(range(0, params["npointings"], N_buffer))
-print("Expected output shape:", (n_chunks * params["nsub_rec"], npix, 3))
-
-shift_test = get_wind_operator(wind_class.get_wind(), Npointings=params["npointings"], Nsub=1)
-
-print("shift:", shift_test.shapein, "→", shift_test.shapeout)
-
-
-# %%
 @flags.linear
 class PermuteChunksOperator(Operator):
     """
@@ -339,7 +282,6 @@ class PermuteChunksOperator(Operator):
         out[...] = input.reshape(D, nc, Nb).transpose(1, 0, 2).ravel()
 
 
-# %%
 def create_mollview_gif(maps, duration=100):
     """
     Create a GIF from a sequence of HEALPix maps and display it inline (no file saved).
@@ -385,16 +327,7 @@ def create_mollview_gif(maps, duration=100):
     return IPyImage(data=gif_buffer.getvalue())
 
 
-# %%
-# test = shift_test(true_maps)
-# print(test.shape)
-
-# create_mollview_gif(test[..., 0])
-
-# %% [markdown]
-# # Rec Operator
-
-# %%
+# Rec Operator
 Amm = DenseOperator(
     mixing_matrix[:, 1, None],
     broadcast="rightward",
@@ -412,7 +345,7 @@ shift = get_wind_operator(
 
 print("W : ", shift.shapein, shift.shapeout)
 
-# %%
+
 H_ = BlockDiagonalOperator(H_rec, axisin=0)
 print("H_ :", H_.shapein, H_.shapeout)
 print("W :", shift.shapein, shift.shapeout)
@@ -420,7 +353,7 @@ print("A :", Amm.shapein, Amm.shapeout)
 print("W * A : ", (shift * Amm).shapein, (shift * Amm).shapeout)
 
 n_chunks = params["npointings"] // N_buffer
-ndet = tod.size // params["npointings"]
+ndet = 992
 
 # Permutation operator: converts BlockDiagonalOperator's (n_chunks, ndet, N_buffer)
 # ordering to the full-acquisition (ndet, Npointings) ordering.
@@ -442,52 +375,18 @@ print("invN :", invN.shapein, invN.shapeout)
 wind_rec = params["wind_cst"]
 wind_true = params["wind_cst"]
 
-# %%
-# tod_t = H_(atm_maps)
-# print(tod_t.shape)
-# test = np.empty_like(tod)
-
-# for idet in range(992):
-#     tmp = []
-#     for i in range(int(params["npointings"] / N_buffer)):
-#             tmp.append(tod_t[i, idet * (N_buffer) : (idet + 1) * (N_buffer)])
-#     print(idet * int(params["npointings"] / N_buffer), (idet + 1) * int(params["npointings"] / N_buffer))
-#     print(len(tmp), tmp[0].shape)
-#     tmp = np.concatenate(tmp)
-#     test[idet * params["npointings"] : (idet + 1) * params["npointings"]] = tmp
-
-# plt.plot(test, label="H_(atm_maps)")
-# plt.plot(tod, label="Original")
-# plt.legend()
-plt.show()
-
-# %% [markdown]
-# # Test
-
-# %%
-tod_rec = H(true_maps) / mixing_matrix[:, 1].mean()
-print(tod_rec.shape)
-print(tod.shape)
-
-# %%
-plt.plot(tod, label="Input")
-plt.plot(tod_rec, label="Rec")
-plt.legend()
-
-# %%
 # Build PCG
 R = ReshapeOperator(tod.shape, H.shapeout)
 A = H.T * invN * H
 b = H.T * invN * R(tod)
 x0 = true_maps  # * 0.0
 
-# %%
+
 print("A", A.shapein, A.shapeout)
 print("b", b.shape)
 print("x0", x0.shape)
 
 
-# %%
 def call_pcg(A, b, x0, max_iter=5, M=None):
     algo = PCGAlgorithm(
         A,
@@ -577,10 +476,9 @@ def fit_wind(tod, eps=0.05):
     return result.x
 
 
-# %% [markdown]
-# # Run Map-Making
+# Run Map-Making
 
-# %%
+
 # Fix CMB Intensity + Atm Polarisation
 mask = np.ones(true_maps.shape)  # Mask for 2 components : CMB & Atm
 print(mask.shape)
@@ -609,7 +507,7 @@ wind_op = get_wind_operator(wind_rec)
 # Preconditioner
 M = None
 
-# %%
+
 # Run PCG
 convergence = []
 wind_iter = [wind_rec]
@@ -631,7 +529,9 @@ for iloop in range(params["n_loop"]):
     if rank == 0 and iloop == 0:
         _test = np.ones(A.shapein)
         _Atest = A(_test)
-        print(f"[diag] A(ones) has NaN: {np.any(np.isnan(_Atest))}, max: {np.nanmax(np.abs(_Atest)):.3e}, dot(ones, A ones): {np.dot(_test, _Atest):.3e}")
+        print(
+            f"[diag] A(ones) has NaN: {np.any(np.isnan(_Atest))}, max: {np.nanmax(np.abs(_Atest)):.3e}, dot(ones, A ones): {np.dot(_test, _Atest):.3e}"
+        )
         print(f"[diag] b has NaN: {np.any(np.isnan(b))}, b_norm: {np.linalg.norm(b):.3e}")
 
     if params["iterative_iter"]:
@@ -672,7 +572,6 @@ for iloop in range(params["n_loop"]):
         print("Residual wind: ", wind_true - wind_rec)
 
 
-# %%
 maps_rec = P(maps_rec)
 plt.plot(H(true_maps), label="TOD true")
 plt.plot(H(maps_rec), label="TOD rec")
@@ -682,17 +581,16 @@ plt.legend()
 print(np.mean(H(maps_rec) - tod))
 print(np.mean(H(true_maps) - tod))
 
-# %% [markdown]
-# # Convergence & Plot
+# Convergence & Plot
 
-# %%
+
 plt.plot(convergence)
 plt.title("Polychromatic")
 plt.yscale("log")
 plt.xlabel("Iteration")
 plt.ylabel("Convergence")
 
-# %%
+
 plt.figure(figsize=(12, 12), dpi=200)
 k = 1
 # true_maps[:, ~seenpix, :] = hp.UNSEEN
@@ -734,7 +632,7 @@ for inu in range(maps_rec.shape[0]):
     )
     k += 3
 
-# %%
+
 plt.figure(figsize=(12, 12), dpi=200)
 k = 1
 true_maps[:, ~seenpix, :] = hp.UNSEEN
@@ -780,7 +678,7 @@ for inu in range(maps_rec.shape[0]):
     )
     k += 3
 
-# %%
+
 for inu in range(maps_rec.shape[0]):
     sigma = np.std(true_maps[inu, seenpix, istk])
     hp.mollview(
@@ -789,7 +687,7 @@ for inu in range(maps_rec.shape[0]):
         title="{} - Residual - {:.2f} GHz".format(stk[istk], atm.frequencies[inu]),
     )
 
-# %%
+
 plt.figure(figsize=(12, 12), dpi=200)
 
 k = 1
@@ -827,38 +725,3 @@ for inu in range(maps_rec.shape[0]):
         notext=True,
     )
     k += 3
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%
-
-
-# %%

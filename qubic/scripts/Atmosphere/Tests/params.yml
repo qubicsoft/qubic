@@ -44,9 +44,9 @@ npointings: 100
 n_buffer: 10
 kmax: 1
 synthbeam_fraction: 1
-wdet: 0.001
-wpho150: 0.001
-wpho220: 0.001
+wdet: 1
+wpho150: 1
+wpho220: 1
 
 # Sky parameters
 cmb: false
@@ -55,7 +55,7 @@ atm: true
 # Reconstruction parameters
 preconditioner: false
 n_iter: 10
-n_loop: 10
+n_loop: 1
 iterative_iter: false
 convolutions: false
 sweeping_pointings: true             # If false: random pointings
@@ -66,5 +66,5 @@ fit_wind: true
 # Wind
 wind: true
 wind_type: "constant"                # Can be : "constant" or "normal"
-wind_cst: [0, 0.5]                   # [wind_x, wind_y]
+wind_cst: [0.3, 0.5]                   # [wind_x, wind_y]
 wind_normal: [0, 1]                  # [wind_mean, wind_std]

@@ -23,8 +23,6 @@ from qubic.lib.Qmpi_tools import MpiTools
 from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Qspectra import Spectra
 
-from qubic.scripts.Scanning_Strategy import Sky_Dips_Sim
-
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
 
 
@@ -84,16 +82,10 @@ class PipelineFrequencyMapMaking:
         # change config and detector_nep
 
         ### Samplings
-        if self.params["QUBIC"]["POINTINGS"]["scanning_strategy"] == True:
+        if self.params["QUBIC"]["POINTINGS"]["realistic_scanning_strategy"] == True:
             if self.params["QUBIC"]["POINTINGS"]["pointings_file"] is None:
-                print('-----------------scanning strategy-----------------')
-                self.dict_out['angspeed'] = 1                   # deg/s
-                self.dict_out['delta_az'] = 20.0                # deg
-                self.dict_out['nsweeps_per_elevation'] = 25
-        
-                sampling = Sky_Dips_Sim.QubicObservation(self.dict_out).get_samplings()
+                raise NotImplementedError("Scanning strategy without a pointings file is not implemented yet.")
             else:
-                print('-----------------loading pointings from file-----------------')
                 with open(self.params["QUBIC"]["POINTINGS"]["pointings_file"], "rb") as f:
                     sampling = pickle.load(f)
         else: 
@@ -379,8 +371,6 @@ class PipelineFrequencyMapMaking:
             "random_pointing": self.params["QUBIC"]["POINTINGS"]["random_pointing"],
             "sweeping_pointing": self.params["QUBIC"]["POINTINGS"]["sweeping_pointing"],
             "repeat_pointing": self.params["QUBIC"]["POINTINGS"]["repeat_pointing"],
-            "duration": self.params["QUBIC"]["POINTINGS"]["duration"],
-            "date_obs": self.params["QUBIC"]["POINTINGS"]["date_obs"],
         }
 
         ### Get the default dictionary

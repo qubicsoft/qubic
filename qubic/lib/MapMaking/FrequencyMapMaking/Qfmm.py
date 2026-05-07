@@ -307,7 +307,7 @@ class PipelineFrequencyMapMaking:
         for j in self.params["Foregrounds"]:
             if j == "Dust":
                 if self.params["Foregrounds"][j]:
-                    dict_sky["dust"] = "d1"
+                    dict_sky["dust"] = "d0"
             elif j == "Synchrotron":
                 if self.params["Foregrounds"][j]:
                     dict_sky["synchrotron"] = "s0"
@@ -466,7 +466,7 @@ class PipelineFrequencyMapMaking:
                 def fun(nu):
                     return np.abs(fraction - f_dust.eval(nu))
             else:
-                f_ = CMB()
+                f_cmb = CMB()
                 weight_factor = f_cmb.eval(self.joint.qubic.allnus)
 
                 def fun(nu):

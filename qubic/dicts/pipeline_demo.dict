@@ -1,5 +1,5 @@
 ############################################# Instrument ################################
-debug =False #False/True # Boolean
+debug = False #False/True # Boolean
 
 config = 'FI' # 'TD' or 'FI' at 150 GHz, only 'FI' at 220 GHz
 filter_nu = 150e9 # 150e9 or 220e9 Hz
@@ -25,7 +25,7 @@ detector_tau=0.01
 polarizer=True
 synthbeam_fraction=1.
 synthbeam_kmax=1
-synthbeam_peak150_fwhm= 0.68 # TD 0.39268176 # FI # in degree
+synthbeam_peak150_fwhm=0.39268176 # in degree
 ripples=False
 nripples=0
 focal_length=0.3
@@ -40,7 +40,7 @@ synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits'
 
 ############################################# Scene ################################
 nside=256
-kind='IQU'  
+kind='IQU'
 absolute=False
 temperature=2.7255 # K for CMB, 300 K for TD in lab # 
 summer=False
@@ -50,7 +50,7 @@ summer=False
 RA_center= 0. #deg
 DEC_center=-57. #deg
 period=1. #s
-date_obs='2026-01-01 00:00:00'
+date_obs='2016-01-01 00:00:00'
 
 latitude= -(24 + 11. / 60)   #ARGENTINA
 longitude= -(66 + 28. / 60)   #ARGENTINA

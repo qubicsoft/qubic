@@ -5,15 +5,6 @@ from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineEnd2End
 
 comm = MPI.COMM_WORLD
 
-#parameters_file = str(sys.argv[1])
-parameters_file = '/home/mattia/qubic/qubic/scripts/MapMaking/src/FMM/params.yml'
-
-try:
-    file_spectrum = str(sys.argv[2])
-except Exception:
-    file_spectrum = None
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run QUBIC FMM pipeline with optional seed.")
     parser.add_argument("parameters_file", type=str, help="Path to parameters file.")

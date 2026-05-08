@@ -22,6 +22,7 @@ from qubic.lib.Qhdf5 import HDF5Dict
 from qubic.lib.Qmpi_tools import MpiTools
 from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Qspectra import Spectra
+from qubic.lib.Qsamplings import QubicSampling
 
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
 
@@ -82,14 +83,31 @@ class PipelineFrequencyMapMaking:
         # change config and detector_nep
 
         ### Samplings
-        if self.params["QUBIC"]["POINTINGS"]["realistic_scanning_strategy"] == True:
-            if self.params["QUBIC"]["POINTINGS"]["pointings_file"] is None:
-                raise NotImplementedError("Scanning strategy without a pointings file is not implemented yet.")
+        if self.params["QUBIC"]["POINTINGS"]["pointings_file"] is not None:
+            # Load pre-computed pointings from file
+            pointings_path = self.params["QUBIC"]["POINTINGS"]["pointings_file"]
+            if not os.path.exists(pointings_path):
+                raise FileNotFoundError(f"Pointings file not found: {pointings_path}")
+            sampling_data = HDF5Dict().load_dict(pointings_path)
+            sampling = QubicSampling(
+                azimuth   = sampling_data["azimuth"],
+                elevation = sampling_data["elevation"],
+                angle_hwp = sampling_data["angle_hwp"],
+                time      = sampling_data["time"],
+                date_obs  = sampling_data["date_obs"],
+                latitude  = sampling_data["latitude"],
+                longitude = sampling_data["longitude"],
+                fix_az    = sampling_data["fix_az"],
+            )
+            
+        else:
+            # Generate pointings using a realistic scanning strategy
+            if self.params["QUBIC"]["POINTINGS"]["realistic_scanning_strategy"]:
+                raise NotImplementedError("Realistic scanning strategy is not implemented yet.")
             else:
-                with open(self.params["QUBIC"]["POINTINGS"]["pointings_file"], "rb") as f:
-                    sampling = pickle.load(f)
-        else: 
-            sampling = None
+                # random_pointing, sweeping_pointing or repeat_pointing are handled
+                # internally by get_pointing() based on the QUBIC dictionary
+                sampling = None
 
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(

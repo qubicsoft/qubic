@@ -13,6 +13,7 @@ from qubic.lib.Instrument.Qinstrument import QubicInstrument
 from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qscene import QubicScene
 from qubic.lib.Qsamplings import QubicSampling
+from qubic.lib.Qhdf5 import HDF5Dict
 
 
 class QubicScanScheduler:
@@ -342,6 +343,59 @@ class QubicScanScheduler:
             plt.savefig(f'{label}_coverage.pdf', bbox_inches='tight')
 
         return coverage, seenpix
+
+    # ------------------------------------------------------------------ 
+    #  5. Saving and loading samplings
+    # ------------------------------------------------------------------ 
+    def save_sampling(self, filename):
+        """
+        Save the current samplings to an HDF5 file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the output HDF5 file.
+       """
+        self._check_scheduled()
+
+        data = {
+            "azimuth":   np.array(self.samplings.azimuth),
+            "elevation": np.array(self.samplings.elevation),
+            "angle_hwp": np.array(self.samplings.angle_hwp),
+            "time":      np.array(self.samplings.time),
+            "fix_az":    bool(self.samplings.fix_az),
+            "latitude":  float(self.samplings.latitude),
+            "longitude": float(self.samplings.longitude),
+            "date_obs":  self.samplings.date_obs.iso[0],
+        }
+        HDF5Dict().save_dict(filename, data)
+
+    @staticmethod
+    def load_sampling(filename):
+        """
+        Load samplings from an HDF5 file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the HDF5 file.
+
+        Returns
+        -------
+        QubicSampling
+        """
+        data = HDF5Dict().load_dict(filename)
+
+        return QubicSampling(
+            azimuth   = data["azimuth"],
+            elevation = data["elevation"],
+            angle_hwp = data["angle_hwp"],
+            time      = data["time"],
+            date_obs  = data["date_obs"],
+            longitude = data["longitude"],
+            latitude  = data["latitude"],
+            fix_az    = data["fix_az"],
+        )
 
 
     # ------------------------------------------------------------------ 

@@ -22,6 +22,7 @@ from qubic.lib.Qhdf5 import HDF5Dict
 from qubic.lib.Qmpi_tools import MpiTools
 from qubic.lib.Qsamplings import equ2gal
 from qubic.lib.Qspectra import Spectra
+from qubic.lib.Qsamplings import QubicSampling
 
 __all__ = ["PipelineFrequencyMapMaking", "PipelineEnd2End"]
 
@@ -81,6 +82,33 @@ class PipelineFrequencyMapMaking:
         self.dict_out = self.get_dict(key="out")
         # change config and detector_nep
 
+        ### Samplings
+        if self.params["QUBIC"]["POINTINGS"]["pointings_file"] is not None:
+            # Load pre-computed pointings from file
+            pointings_path = self.params["QUBIC"]["POINTINGS"]["pointings_file"]
+            if not os.path.exists(pointings_path):
+                raise FileNotFoundError(f"Pointings file not found: {pointings_path}")
+            sampling_data = HDF5Dict().load_dict(pointings_path)
+            sampling = QubicSampling(
+                azimuth   = sampling_data["azimuth"],
+                elevation = sampling_data["elevation"],
+                angle_hwp = sampling_data["angle_hwp"],
+                time      = sampling_data["time"],
+                date_obs  = sampling_data["date_obs"],
+                latitude  = sampling_data["latitude"],
+                longitude = sampling_data["longitude"],
+                fix_az    = sampling_data["fix_az"],
+            )
+            
+        else:
+            # Generate pointings using a realistic scanning strategy
+            if self.params["QUBIC"]["POINTINGS"]["realistic_scanning_strategy"]:
+                raise NotImplementedError("Realistic scanning strategy is not implemented yet.")
+            else:
+                # random_pointing, sweeping_pointing or repeat_pointing are handled
+                # internally by get_pointing() based on the QUBIC dictionary
+                sampling = None
+
         ### Joint acquisition for TOD making
         self.joint_tod = JointAcquisitionFrequencyMapMaking(
             self.dict_in,
@@ -88,6 +116,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nsub_in"],
             self.params["QUBIC"]["nsub_in"],
             H=None,
+            sampling=sampling,
             is_external_data=self.params["PLANCK"]["external_data"],
         )
 
@@ -103,6 +132,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nrec"],
             self.params["QUBIC"]["nsub_out"],
             H=H,
+            sampling = sampling,
             is_external_data=self.params["PLANCK"]["external_data"],
         )
 
@@ -356,6 +386,9 @@ class PipelineFrequencyMapMaking:
             "interp_projection": False,
             "instrument_type": self.params["QUBIC"]["instrument"],
             "config": self.params["QUBIC"]["configuration"],
+            "random_pointing": self.params["QUBIC"]["POINTINGS"]["random_pointing"],
+            "sweeping_pointing": self.params["QUBIC"]["POINTINGS"]["sweeping_pointing"],
+            "repeat_pointing": self.params["QUBIC"]["POINTINGS"]["repeat_pointing"],
         }
 
         ### Get the default dictionary
@@ -520,7 +553,6 @@ class PipelineFrequencyMapMaking:
             Simulated TOD :math:`(N_{rec}, 12 \times N^{2}_{side}, N_{stk})`.
 
         """
-
         TOD_QUBIC = self.H_in_qubic(self.input_maps.m_nu).ravel() + self.noiseq
 
         if not self.params["PLANCK"]["external_data"]:

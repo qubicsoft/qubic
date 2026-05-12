@@ -942,6 +942,15 @@ class AtmosphereMaps(AtmosphereProperties):
             )
 
         return delta_rho
+    
+    def get_ref_temp_maps(self, maps, ref_freq=150):
+        ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
+        ref_abs = self.integrated_abs_spectrum[ref_idx]
+        return ref_abs * self.mean_water_vapor_density * self.temperature * maps * 1e6
+
+    def get_atm_mixing_matrix(self, ref_freq=150):
+        ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
+        return self.integrated_abs_spectrum / self.integrated_abs_spectrum[ref_idx]
 
     def get_temp_maps(self, maps):
         r"""Atmosphere maps.

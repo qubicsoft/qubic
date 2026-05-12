@@ -44,9 +44,9 @@ npointings: 100
 n_buffer: 10
 kmax: 1
 synthbeam_fraction: 1
-wdet: 1
-wpho150: 1
-wpho220: 1
+wdet: 0.01
+wpho150: 0.01
+wpho220: 0.01
 
 # Sky parameters
 cmb: false
@@ -54,8 +54,8 @@ atm: true
 
 # Reconstruction parameters
 preconditioner: false
-n_iter: 10
-n_loop: 1
+n_iter: 20
+n_loop: 20
 iterative_iter: false
 convolutions: false
 sweeping_pointings: true             # If false: random pointings

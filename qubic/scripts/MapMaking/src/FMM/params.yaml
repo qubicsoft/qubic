@@ -1,4 +1,4 @@
-foldername: "test"
+foldername: "test_w_precond"
 filename: "test"
 
 CMB:
@@ -65,8 +65,8 @@ Pipeline:
 PCG:
   ### This section control PCG parameters
 
-  n_iter_pcg: 15 # Number of PCG iterations #100
-  tol_pcg: 1.0e-20 # Tolerance for PCG
+  n_iter_pcg: 150 # Number of PCG iterations #100
+  tol_pcg: 1.0e-10 # Tolerance for PCG
   preconditioner: false
   initial_guess_intensity_to_zero: true
   gif: false

@@ -1,4 +1,4 @@
-simulation_path: "FMM/test_Npointings_1000"
+simulation_path: "FMM/test_l_min_30"
 name: "test_qubic"
 
 Spectrum:

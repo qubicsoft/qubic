@@ -1,4 +1,4 @@
-foldername: "test_Npointings_5000"
+foldername: "test_k_max_3_synthbeam_fraction_0.99"
 filename: "test"
 
 CMB:
@@ -17,13 +17,14 @@ QUBIC:
   instrument: "DB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
   npointings: 5000               # Number of time samples
-  nsub_in: 16                     # Number of sub-acquisitions
+  nsub_in: 40                     # Number of sub-acquisitions
   nsub_out: 16
   nrec: 2                        # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
   convolution_in: true          # Angular resolution in the input TOD
   convolution_out: false         # Angular resolution in the reconstruction
   bandpass_correction: true      # Correction to keep the edges of the integration band constant
+  interp: false
   NOISE:
     ndet: 1                                # Level of detector noise
                                            # randomness not fixed for det and photon noise, to be checked
@@ -34,8 +35,8 @@ QUBIC:
     duration_220: 3                        # Effective duration at 220 GHz
     seed_noise: 283
   SYNTHBEAM:
-    synthbeam_kmax: 1                      # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
-    synthbeam_fraction: 1
+    synthbeam_kmax: 3                      # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+    synthbeam_fraction: 0.99
   dtheta: 15                               # Angle for coverage
 
 SKY:
@@ -74,7 +75,7 @@ Spectrum:
   ### This section define the parameters to compute the power spectra
 
   dl: 30
-  lmin: 40
+  lmin: 30
   lmax: 511
   aposize: 10
   plot_spectrum: true

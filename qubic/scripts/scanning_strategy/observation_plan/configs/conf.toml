@@ -1,6 +1,6 @@
 [general]
-output_dir = "../data/output"
-time_resolution = "15 min"
+output_dir = "../data/output/tm_reso_1sec"
+time_resolution = "1 min"
 mpl_style = "../styles/modern_style.mplstyle"
 
 [observatory]
@@ -31,7 +31,7 @@ point_sources_file = "../data/sources/point_sources.csv"
 
 [run]
 year = 2026
-month = 3
+month = 5
 radius = 14.0
 radial_samples = 50
 polar_angle_samples = 100
@@ -47,6 +47,6 @@ process_moon = true
 run_constraints = true
 run_trajectory_plots = true
 write_trajectories = true
-run_monthly_visibility = true
-run_monthly_heatmaps = true
-plot_sidereal = true
+run_monthly_visibility = false
+run_monthly_heatmaps = false
+plot_sidereal = false

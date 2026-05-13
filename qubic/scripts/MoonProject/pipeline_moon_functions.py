@@ -169,6 +169,7 @@ def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
 # Function to go from QubicSoft (Sims) indices (0-247) to QubicPack (data) indices (0-255)
 ### The 8 thermometers are not in QubicSoft
 
+# QP is real data, QS is QubicSoft
 def iQS2iQP(indexQS):
     qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
     return qpnumi+(qpasici-1)*128-1
@@ -933,6 +934,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         # Inversion in signal
         mytod = -tod.copy()
         reso=10
+        xsize = 200 # default
     elif ObsDate[:4] == "2026":
         # not in 2026
         mytod = tod.copy()
@@ -940,6 +942,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         ang_size = 40 # degrees
         reso = ang_size*60/200 # arcmin/pix
         # print(reso)
+        xsize = 201
 
     if clean_tod:
         min_plot = -5e3
@@ -1224,7 +1227,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         if ObsDate[:4] == "2026":
             mapsb_fb_proj = []
             for mapsb_ in [mapsb_forth, mapsb_back]:
-                mapsb_proj = hp.gnomview(mapsb_, reso=reso, min=min_plot, max=max_plot, 
+                mapsb_proj = hp.gnomview(mapsb_, reso=reso, min=min_plot, max=max_plot, xsize=xsize,
                         rot=center, return_projected_map=True, no_plot=True)
                 X = np.arange(len(mapsb_proj))
                 Y = np.arange(len(mapsb_proj[0]))
@@ -1249,11 +1252,11 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         else:
             if doplot:
                 plt.figure()
-                hp.gnomview(mapsb_forth, reso=reso, sub=(1, 3, 1), min=min_plot, max=max_plot, 
+                hp.gnomview(mapsb_forth, reso=reso, sub=(1, 3, 1), min=min_plot, max=max_plot, xsize=xsize,
                         title="forth scans", rot=center)
-                hp.gnomview(mapsb_back, reso=reso, sub=(1, 3, 2), min=min_plot, max=max_plot, 
+                hp.gnomview(mapsb_back, reso=reso, sub=(1, 3, 2), min=min_plot, max=max_plot, xsize=xsize,
                         title="back scans", rot=center)
-                hp.gnomview(mapsb_forth - mapsb_back, reso=reso, sub=(1, 3, 3), min=min_plot, max=max_plot, 
+                hp.gnomview(mapsb_forth - mapsb_back, reso=reso, sub=(1, 3, 3), min=min_plot, max=max_plot, xsize=xsize,
                         title="forth - back scans", rot=center)
                 # hp.gnomview(mapsb_forth, reso=10, sub=(1, 3, 1), 
                 #         title="forth scans", rot=center)
@@ -1268,7 +1271,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
     if doplot and False:
         
-        mapsb_proj = hp.gnomview(mapsb, reso=reso, min=1e-3, max=1e4,
+        mapsb_proj = hp.gnomview(mapsb, reso=reso, min=1e-3, max=1e4, xsize=xsize,
                                 rot=center, return_projected_map=True, no_plot=True)
         
         # plt.figure()
@@ -1289,11 +1292,11 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         plt.show()
     
         plt.figure()
-        # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, 
+        # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, xsize=xsize,
         #             title="gaussian map", rot=center)
-        hp.gnomview(mapsb, reso=reso, min=-5e3, max=1.2e4,
+        hp.gnomview(mapsb, reso=reso, min=-5e3, max=1.2e4, xsize=xsize,
                     title="final map", rot=center)
-        # hp.gnomview(mapsb, reso=10, 
+        # hp.gnomview(mapsb, reso=10, xsize=xsize,
         #             title="final map", rot=center)
         for i in range(n_nus):
             hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
@@ -1307,14 +1310,14 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     if doplot and False:
         mapsb_2, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], comparison_tod[mask_map], nside=nside)
         plt.figure()
-        hp.gnomview(mapsb_2, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, 
+        hp.gnomview(mapsb_2, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, xsize=xsize,
                     title="final map 2", rot=center)
         plt.savefig("figures/mapsb_2.pdf")
         plt.show()
 
 
         plt.figure()
-        hp.gnomview(mapsb_2 - mapsb, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, 
+        hp.gnomview(mapsb_2 - mapsb, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, xsize=xsize,
                     title="mapsb_2 - mapsb", rot=center)
         plt.savefig("figures/mapsb_2-mapsb.pdf")
         plt.show()
@@ -1323,7 +1326,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         return mapsb, mapcount, final_tod
     
     if ObsDate[:4] == "2026":
-        mapsb_proj = hp.gnomview(mapsb, reso=reso, min=min_plot, max=max_plot, 
+        mapsb_proj = hp.gnomview(mapsb, reso=reso, min=min_plot, max=max_plot, xsize=xsize,
                     rot=center, return_projected_map=True, no_plot=True)
         X = np.arange(len(mapsb_proj))
         Y = np.arange(len(mapsb_proj[0]))
@@ -2313,7 +2316,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             iTES = TESNum - 1
             if ObsDate[:4] == "2022":
                 tod = alltod[iTES, :]
-                # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before (use this in 2022 analysis)
+                # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before? (use this in 2022 analysis?)
             else:
                 tod = alltod[iTES, :]
             if det_pos is not None:
@@ -2347,7 +2350,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             
             if ObsDate[:4] == "2022":
                 tod = alltod[iTES, :]
-                # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before (use this in 2022 analysis?)
+                # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before? (use this in 2022 analysis?)
             else:
                 tod = alltod[iTES, :]
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
@@ -3424,8 +3427,8 @@ def get_peaks_configuration(d, doplot=False, idet=None, debug=False):
     dnus = np.zeros(n_nus)
     print()
     print('The instrument has {} sub-frequencies'.format(n_nus))
-    print("detector center", q_instrument.subinstruments[i].detector.center)
     for i in range(n_nus):
+        print("detector center", q_instrument.subinstruments[i].detector.center)
         nus[i] = q_instrument.subinstruments[i].d['filter_nu']/1e9
         dnus[i] = q_instrument.subinstruments[i].d['filter_relative_bandwidth']*q_instrument.subinstruments[i].d['filter_nu']/1e9
         print('- {0:}: nu = {1:7.2f} GHz ; bw = {2:7.2f}'.format(i, nus[i], dnus[i]))

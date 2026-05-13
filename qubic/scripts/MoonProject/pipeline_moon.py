@@ -46,6 +46,7 @@ do_part_2 = True
 do_part_3 = False
 # Save the spectrum of the Moon for each detector
 do_part_4 = False
+use_allmaps_ok_proj = False
 
 
 #### These are directories used in the analysis, not really clean
@@ -132,7 +133,7 @@ if do_part_1:
                                         nside=nside, doplot=False, az_qubic=azqubic, parallel=True, ObsDate=ObsDate, tshift=tshift,
                                         det_pos=None, theo_sb=None)
     
-    pickle.dump( [allTESNum, allmaps], open( mydatadir2 + "202603-allmaps-13032026_zenith_tshift{}.pkl".format(tshift), "wb" ) )
+    pickle.dump( [allTESNum, allmaps], open( mydatadir2 + "202603-allmaps-13032026_zenith_tshift{}_nside{}.pkl".format(tshift, nside), "wb" ) )
 
 elif do_part_2:
     # We read the maps from a previous run
@@ -318,9 +319,37 @@ if do_part_3:
 
 
 if do_part_4:
+    # Let's first test it in the notebook
+    print("Now starting to fit the Moon spectrum")
 
     well_fitted = []
 
-    # Let's first test it in the notebook
+
+    allTESNum, allmaps = pickle.load( open(  mydatadir2 + "202603-allmaps-13032026_zenith_det.pkl", "rb" ) )
+    nside = int(np.sqrt(len(allmaps[0])/12))
+    print("nside = {}".format(nside))
+    i_peak = 4#3 # order 0 for Kmax=1
+    zenith = np.array([0, 90, 0])
+    reso = 7
+    Npix = 200
 
 
+    X = np.arange(Npix)
+    Y = np.arange(Npix)
+    XX, YY = np.meshgrid(X, Y, indexing="xy") # pixel units, just for the interpolation
+
+    if use_allmaps_ok_proj:
+        allmaps_ok_proj = np.load("allmaps_ok_proj.npy")
+    else:
+        allmaps_ok_proj = np.zeros((np.sum(visibly_ok_arr), Npix, Npix))
+        i_TES_ok = 0
+        for i_TES in range(len(allmaps)):
+        # for i_TES in range(95,96):
+            if not visibly_ok_arr[i_TES]:
+                continue
+            map_proj = hp.gnomview(allmaps[i_TES], rot=zenith, reso=reso, xsize=Npix, return_projected_map=True, no_plot=True)
+            no_UNSEEN_mask = ~map_proj.mask
+            interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), map_proj[no_UNSEEN_mask])
+            allmaps_ok_proj[i_TES_ok] = interpolator(np.moveaxis([XX, YY], 0, -1))
+            i_TES_ok += 1
+        np.save("allmaps_ok_proj.npy", allmaps_ok_proj)

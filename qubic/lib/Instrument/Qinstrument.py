@@ -292,7 +292,7 @@ class QubicInstrument(Instrument):
         layout.area = surface_simple_polygon(layout.vertex[0, :, :2])
         layout.ncorr = ncorr
         layout.ngrids = ngrids
-        modif = 3 # 3 is good, 0 is no modif
+        modif = 0 # 3 is good, 0 is no modif
         if modif == 1:
             print("correction = {}".format([-6, -16, 0]))
             layout.center += np.array([0.003*(-6), 0.003*(-16), 0.003*0]) # fit unflipped numerotation? no
@@ -1674,7 +1674,7 @@ class QubicInstrument(Instrument):
         return theta, phi, val
     
     # @staticmethod
-    def _peak_angles_unsorted(self, scene, nu, position, synthbeam, horn, primary_beam):
+    def _peak_angles_unsorted(scene, nu, position, synthbeam, horn, primary_beam):
         """
         Compute the angles and intensity of the synthetic beam peaks.
 

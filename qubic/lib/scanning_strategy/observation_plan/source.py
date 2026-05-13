@@ -278,44 +278,98 @@ class Source(ABC):
             return
 
         # Mask that checks whether the constraints are satisfied for each time interval in time_grid.
-        # It contains True or False depending on whether the constraints are met
         mask = np.all(self.constraints_grid == 1, axis=0)
-        # Indices of time_grid that correspond to True values in the mask
         idx_true = np.where(mask)[0]
 
         if idx_true.size == 0:
             self.valid_time_intervals = []
             return
 
-        # Starting indices of uninterrupted time interval blocks
         gaps = np.where(np.diff(idx_true) > 1)[0]
-        # Arrays of indices corresponding to uninterrupted time interval blocks
         runs = np.split(idx_true, gaps + 1)
 
-        # list of lists containing the start and stop time values of uninterrupted time interval blocks
-        # note: the indices in runs refer to the temporal beginning of each time interval block (which constitute the
-        # time_grid), NOT to the end of the block.
-        # So when the last block of an uninterrupted time interval blocks is reached
-        # we have to retrieve the index of the end of the block by summing 1 to r[-1] (the end index of a block is the
-        # start index of the following one)
-        # (if the last block corresponds to the end of time_grid, the index of the block end will be set to
-        # len(self.time_grid) - 1)
-        # self.valid_time_intervals = [[self.time_grid[r[0]],
-        #                               self.time_grid[min(r[-1] + 1, len(self.time_grid) - 1)]] for r in runs]
+        # Each run is one continuous observability window. The indices in a run
+        # identify valid grid samples. The stop time is moved to the beginning of
+        # the first non-valid slot after the run, so every output file represents
+        # one continuous interval for which the constraints remain valid.
+        self.valid_time_intervals = []
+        for r in runs:
+            start = self.time_grid[r[0]]
+            stop_idx = min(r[-1] + 1, len(self.time_grid) - 1)
+            stop = self.time_grid[stop_idx]
 
-        self.valid_time_intervals = [[self.time_grid[r[0]],
-                                      self.time_grid[r[-1]]] for r in runs]
+            if stop == start:
+                stop = start + self.time_resolution
 
-        # Check if the start time of the last time interval block is equal to its end time.
-        # If so, add one time_resolution to properly account for the final time interval block
+            self.valid_time_intervals.append([start, stop])
 
-        for idx, (start, stop) in enumerate(self.valid_time_intervals):
-            if start == stop:
-                self.valid_time_intervals[idx] = [start, stop + self.time_resolution - 1 * u.s]
+    def ecsv_time_intervals(self):
+        """
+        Return continuous observation windows for ECSV output.
 
-        # last_valid = self.valid_time_intervals[-1]
-        # if last_valid[0] == last_valid[-1]:
-        #     self.valid_time_intervals[-1][1] += self.time_resolution - 1 * u.s
+        The constraint grid is built on one local day, from local midnight
+        to the following local midnight. A real observing window can therefore
+        be split into two pieces by that artificial boundary: one piece at the
+        beginning of the local day and one piece at the end of the same local
+        day. For ECSV files only, join those two edge pieces into one continuous
+        local-night window crossing midnight.
+        """
+
+        if not self.valid_time_intervals:
+            self.compute_valid_times_from_constraints()
+
+        # Work on a copy: this method must not modify
+        # `self.valid_time_intervals`, because that list is also used by the
+        # constraint-grid logic and by the polar plots.
+        intervals = list(self.valid_time_intervals)
+
+        # If there are zero or one valid intervals, there is nothing to merge.
+        # In that case the ECSV intervals are identical to the standard valid
+        # intervals.
+        if len(intervals) < 2:
+            return intervals
+
+        # Because the time grid is ordered from local midnight to local
+        # midnight, a window crossing midnight can only be split into the first
+        # and last intervals of the list.
+        first_start, first_stop = intervals[0]
+        last_start, last_stop = intervals[-1]
+
+        # Check whether the first valid interval starts exactly at the first
+        # sample of the grid, i.e. at local midnight of the selected observing
+        # day. A small tolerance is used to avoid floating-point precision
+        # issues in Astropy Time differences.
+        starts_at_local_midnight = abs((first_start - self.time_grid[0]).to_value(u.s)) < 0.5
+
+        # Check whether the last valid interval reaches the end of the local
+        # day covered by the grid. The tolerance is one time-resolution step,
+        # because the stop value can be either the last grid sample or the first
+        # boundary after the last valid sample, depending on how the interval was
+        # constructed.
+        reaches_end_of_local_day = abs((last_stop - self.time_grid[-1]).to_value(u.s)) <= self.time_resolution.to_value(u.s)
+
+        # If both conditions are true, the first and last intervals are not two
+        # independent observing windows. They are the same physical observing
+        # window, split only because the grid stops at local midnight.
+        if starts_at_local_midnight and reaches_end_of_local_day:
+
+            # Move the early-morning block to the following local day by adding
+            # one day to its stop time, and use the evening block as the start.
+            # Example for a grid built on local date 2026-05-12:
+            #   first interval: [2026-05-12 00:00, 2026-05-12 07:22]
+            #   last interval:  [2026-05-12 21:33, 2026-05-12 23:58]
+            # These two blocks are on the same local grid day only because the
+            # grid is cut at midnight. For the ECSV file, the early-morning
+            # block is interpreted as the continuation of the evening block into
+            # the following local date, so they become:
+            #   [2026-05-12 21:33, 2026-05-13 07:22]
+            merged = [last_start, first_stop + 1 * u.day]
+
+            # Keep any intermediate valid windows unchanged, and append the
+            # merged night-crossing interval as one single ECSV window.
+            intervals = intervals[1:-1] + [merged]
+
+        return intervals
 
     def _parse_ylabels(self):
 
@@ -447,7 +501,21 @@ class Source(ABC):
         ax.grid(which='minor', color='#333333', linewidth=1)
         ax.set_aspect("auto")
 
-        plt.savefig(os.path.join(self.plots_dir, f"{self.name}_constraint_grid"), dpi=600)
+        ecsv_intervals = self.ecsv_time_intervals()
+        if ecsv_intervals:
+            # Use the UTC start time of the first real ECSV observation window,
+            # so the constraint-grid plot name is consistent with the ECSV and
+            # polar-plot filenames when the source is observable.
+            plot_time = ecsv_intervals[0][0]
+        else:
+            # If the source is never observable on this grid, there is no ECSV
+            # window to use. Fall back to the UTC start time of the planned
+            # observation day, so the constraint grid can still be saved.
+            plot_time = self.obs_time
+
+        plot_time_utc = plot_time.to_datetime(timezone=dt_timezone.utc)
+        plot_name = f"{self.name}-{plot_time_utc.strftime('%Y%m%d_%H_%M')}_constraint_grid"
+        plt.savefig(os.path.join(self.plots_dir, plot_name), dpi=600)
         plt.close()
 
     def plot_monthly_heatmap(self, year, month, time_resolution=None, cmap='Blues'):
@@ -854,7 +922,7 @@ class Source(ABC):
 
     def write_trajectory(self, dest: str | None = None):
         """
-        Write valid observation times with RA and DEC to an ECSV file.
+        Write one ECSV file per continuous valid observation window.
 
         Parameters
         ----------
@@ -879,23 +947,14 @@ class Source(ABC):
         dest = dest or self.plots_dir
 
         # Loop over each valid time interval
-        for start, stop in self.valid_time_intervals:
+        for start, stop in self.ecsv_time_intervals():
 
             times_local, times_utc, ras, decs, elevations, azimuths = [], [], [], [], [], []
-            # name in UTC
-            # name = f"{self.name}-{start.strftime('%Y%m%d_%H_%M')}-{stop.strftime('%H_%M')}"
 
-            obs_local = self.obs_time.to_datetime(timezone=self.qubic_site.timezone)
-            start_local = start.to_datetime(timezone=self.qubic_site.timezone)
-            stop_local = stop.to_datetime(timezone=self.qubic_site.timezone)
+            start_utc = start.to_datetime(timezone=dt_timezone.utc)
 
-            # name in LT
-            name = (
-                f"{self.name}-"
-                f"{obs_local.strftime('%Y%m%d')}_"
-                f"{start_local.strftime('%H_%M')}-"
-                f"{stop_local.strftime('%H_%M')}"
-            )
+            # Name ECSV files by the UTC start time of the observation window.
+            name = f"{self.name}-{start_utc.strftime('%Y%m%d_%H_%M')}"
 
             # sample times in the interval
             tw = time_grid_from_range([start, stop], time_resolution=self.time_resolution)
@@ -1086,7 +1145,10 @@ class PointSource(Source):
         fig.tight_layout()
         plt.gca().set_facecolor("whitesmoke")
         if make_plot:
-            plt.savefig(os.path.join(self.plots_dir, f"{self.name}_polar_plot"), dpi=600)
+            first_start = self.ecsv_time_intervals()[0][0]
+            first_start_utc = first_start.to_datetime(timezone=dt_timezone.utc)
+            plot_name = f"{self.name}-{first_start_utc.strftime('%Y%m%d_%H_%M')}_polar_plot"
+            plt.savefig(os.path.join(self.plots_dir, plot_name), dpi=600)
         plt.close()
 
 
@@ -1321,6 +1383,8 @@ class ExtendedSource(Source):
         plt.gca().set_facecolor("whitesmoke")
 
         if make_plot:
-            plt.savefig(os.path.join(self.plots_dir,
-                                     f"{self.name}_polar_plot"), dpi=600)
+            first_start = self.ecsv_time_intervals()[0][0]
+            first_start_utc = first_start.to_datetime(timezone=dt_timezone.utc)
+            plot_name = f"{self.name}-{first_start_utc.strftime('%Y%m%d_%H_%M')}_polar_plot"
+            plt.savefig(os.path.join(self.plots_dir, plot_name), dpi=600)
         plt.close()

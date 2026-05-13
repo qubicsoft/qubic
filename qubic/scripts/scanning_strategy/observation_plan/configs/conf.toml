@@ -1,5 +1,5 @@
 [general]
-output_dir = "../data/output/tm_reso_1sec"
+output_dir = "../data/output/fixed_tm_reso_1sec"
 time_resolution = "1 min"
 mpl_style = "../styles/modern_style.mplstyle"
 

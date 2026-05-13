@@ -1,5 +1,4 @@
 import os
-import pickle as pkl
 import sys
 from copy import deepcopy
 
@@ -9,6 +8,7 @@ import numpy as np
 import yaml
 from getdist import MCSamples, plots
 from pyoperators import MPI
+from qubic.lib.Qhdf5 import HDF5Dict
 
 from qubic.lib.MapMaking.FrequencyMapMaking.Qspectra_component import SkySpectra
 from qubic.lib.Qfit import FitEllSpace
@@ -284,5 +284,4 @@ print(f"[OK] GetDist plot saved: {out_svg}")
 
 ### Save Pickle
 dict = {"samples": samples, "samples_flat": samples_flat, "parameters": files._reads_one_file(0, "parameters"), "fit_parameters": fit_params}
-with open(folder_save + "mcmc.pkl", "wb") as handle:
-    pkl.dump(dict, handle, protocol=pkl.HIGHEST_PROTOCOL)
+HDF5Dict().save_dict(folder_save + "mcmc.h5", dict)

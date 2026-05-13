@@ -78,7 +78,7 @@ class PresetSky:
                 self.preset_tools.params["Foregrounds"]["Dust"]["nside_beta_out"],
             )
             # Compute their coverage
-            self.coverage_beta = self.get_coverage()
+            self.coverage_beta = self.get_coverage_beta()
         else:
             self.coverage_beta = None
 
@@ -96,8 +96,8 @@ class PresetSky:
         self.preset_tools.mpi._print_message("    => Initializing Namaster")
         self.get_spectra_namaster_informations()
 
-    def get_coverage(self):
-        """Coverage.
+    def get_coverage_beta(self):
+        """Coverage spectral index.
 
         Calculate the coverage mask for the QUBIC patch, according with the number of beta that you want to reconstruct.
 

@@ -63,28 +63,18 @@ class PipelineFrequencyMapMaking:
         self.skyconfig = self.get_sky_config()
 
         ### fsub
-        self.fsub_in = int(
-            self.params["QUBIC"]["nsub_in"] / self.params["QUBIC"]["nrec"]
-        )
-        self.fsub_out = int(
-            self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"]
-        )
+        self.fsub_in = int(self.params["QUBIC"]["nsub_in"] / self.params["QUBIC"]["nrec"])
+        self.fsub_out = int(self.params["QUBIC"]["nsub_out"] / self.params["QUBIC"]["nrec"])
 
         self.file = file
         self.plot_folder = "FMM/" + self.params["foldername"] + "/Plots/"
 
         ### Create folders
-        create_folder_if_not_exists(
-            self.comm, "FMM/" + self.params["foldername"] + "/Dict/"
-        )
-        create_folder_if_not_exists(
-            self.comm, "FMM/" + self.params["foldername"] + "/Plots/"
-        )
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Dict/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Plots/")
 
         ### Center of the QUBIC patch
-        self.center = equ2gal(
-            self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"]
-        )
+        self.center = equ2gal(self.params["SKY"]["RA_center"], self.params["SKY"]["DEC_center"])
 
         ### Sky
         self.dict_in = self.get_dict(key="in")
@@ -124,29 +114,24 @@ class PipelineFrequencyMapMaking:
             nside=self.params["SKY"]["nside"],
         )
         if self.rank == 0:
-            self.externaldata.maps, self.externaldata.maps_noise = (
-                self.externaldata.run(
-                    use_fwhm=self.params["QUBIC"]["convolution_in"],
-                    nsub=self.params["PLANCK"]["nsub_planck"],
-                )
+            self.externaldata.maps, self.externaldata.maps_noise = self.externaldata.run(
+                use_fwhm=self.params["QUBIC"]["convolution_in"],
+                nsub=self.params["PLANCK"]["nsub_planck"],
             )
         else:
             self.externaldata.maps = None
             self.externaldata.maps_noise = None
 
         self.externaldata.maps = self.comm.bcast(self.externaldata.maps, root=0)
-        self.externaldata.maps_noise = self.comm.bcast(
-            self.externaldata.maps_noise, root=0
-        )
+        self.externaldata.maps_noise = self.comm.bcast(self.externaldata.maps_noise, root=0)
 
         self.nus_Q = self.get_averaged_nus()
 
         ### Coverage map
         self.coverage = self.joint.qubic.subacqs[0].get_coverage()
-        self.seenpix = (
-            self.coverage / self.coverage.max() > self.params["SKY"]["coverage_cut"]
-        )
+        self.seenpix = self.coverage / self.coverage.max() > self.params["SKY"]["coverage_cut"]
         self.seenpix_qubic = self.coverage / self.coverage.max() > 0
+        self.fsky = np.sum(self.seenpix) / self.seenpix.shape[0]
 
         ### Angular resolutions
         self.fwhm_in, self.fwhm_out, self.fwhm_rec = self.get_convolution()
@@ -248,9 +233,7 @@ class PipelineFrequencyMapMaking:
         ### Pointing matrix for reconstruction
         if self.params["PLANCK"]["external_data"]:
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
-            self.H_out = self.joint.get_operator(
-                fwhm=self.fwhm_out, seenpix=self.seenpix
-            )
+            self.H_out = self.joint.get_operator(fwhm=self.fwhm_out, seenpix=self.seenpix)
         else:
             self.H_out = self.joint.qubic.get_operator(fwhm=self.fwhm_out)
 
@@ -269,9 +252,7 @@ class PipelineFrequencyMapMaking:
         nus_ave = []
         for i in range(self.params["QUBIC"]["nrec"]):
             nus_ave += [
-                np.mean(
-                    self.joint.qubic.allnus[i * self.fsub_out : (i + 1) * self.fsub_out]
-                )
+                np.mean(self.joint.qubic.allnus[i * self.fsub_out : (i + 1) * self.fsub_out])
             ]
 
         return np.array(nus_ave)
@@ -371,9 +352,7 @@ class PipelineFrequencyMapMaking:
             "EmissivityAtmosphere220": None,
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
-            "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"][
-                "synthbeam_fraction"
-            ],
+            "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
             "interp_projection": False,
             "instrument_type": self.params["QUBIC"]["instrument"],
             "config": self.params["QUBIC"]["configuration"],
@@ -403,9 +382,7 @@ class PipelineFrequencyMapMaking:
         ### Apply each sub_operator on the vector
         scalar_acquisition_operators = np.empty(len(self.joint.qubic.allnus))
         for freq in range(len(self.joint.qubic.allnus)):
-            scalar_acquisition_operators[freq] = np.mean(
-                acquisition_operators[freq](vector_ones)
-            )
+            scalar_acquisition_operators[freq] = np.mean(acquisition_operators[freq](vector_ones))
         return scalar_acquisition_operators
 
     def get_convolution(self):
@@ -438,9 +415,7 @@ class PipelineFrequencyMapMaking:
                 fwhm_out = np.append(
                     fwhm_out,
                     np.sqrt(
-                        self.joint.qubic.allfwhm[
-                            irec * self.fsub_out : (irec + 1) * self.fsub_out
-                        ]
+                        self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]
                         ** 2
                         - np.min(
                             self.joint.qubic.allfwhm[
@@ -452,18 +427,13 @@ class PipelineFrequencyMapMaking:
                 )
 
         ### Define reconstructed FWHM depending on the user's choice
-        if (
-            self.params["QUBIC"]["convolution_in"]
-            and self.params["QUBIC"]["convolution_out"]
-        ):
+        if self.params["QUBIC"]["convolution_in"] and self.params["QUBIC"]["convolution_out"]:
             fwhm_rec = np.array([])
             for irec in range(self.params["QUBIC"]["nrec"]):
                 fwhm_rec = np.append(
                     fwhm_rec,
                     np.min(
-                        self.joint.qubic.allfwhm[
-                            irec * self.fsub_out : (irec + 1) * self.fsub_out
-                        ]
+                        self.joint.qubic.allfwhm[irec * self.fsub_out : (irec + 1) * self.fsub_out]
                     ),
                 )
 
@@ -496,24 +466,16 @@ class PipelineFrequencyMapMaking:
                 for jsub in range(irec * self.fsub_out, (irec + 1) * self.fsub_out):
                     # Compute the expected reconstructed resolution for sub-acquisition
                     numerator_fwhm += (
-                        scalar_acquisition_operators[jsub]
-                        * weight_factor[jsub]
-                        * fwhm_in[jsub]
+                        scalar_acquisition_operators[jsub] * weight_factor[jsub] * fwhm_in[jsub]
                     )
-                    denominator_fwhm += (
-                        scalar_acquisition_operators[jsub] * weight_factor[jsub]
-                    )
+                    denominator_fwhm += scalar_acquisition_operators[jsub] * weight_factor[jsub]
 
                     # Compute the expected reconstructed frequencies for sub_acquisition
-                    numerator_nus += (
-                        scalar_acquisition_operators[jsub] * weight_factor[jsub]
-                    )
+                    numerator_nus += scalar_acquisition_operators[jsub] * weight_factor[jsub]
                     denominator_nus += scalar_acquisition_operators[jsub]
 
                 # Compute the expected resolution
-                fwhm_rec = np.append(
-                    fwhm_rec, np.sum(numerator_fwhm) / np.sum(denominator_fwhm)
-                )
+                fwhm_rec = np.append(fwhm_rec, np.sum(numerator_fwhm) / np.sum(denominator_fwhm))
 
                 # Compute the expected frequency
                 fraction = np.sum(numerator_nus) / np.sum(denominator_nus)
@@ -540,14 +502,10 @@ class PipelineFrequencyMapMaking:
 
         """
 
-        m_nu_in = np.zeros(
-            (self.params["QUBIC"]["nrec"], 12 * self.params["SKY"]["nside"] ** 2, 3)
-        )
+        m_nu_in = np.zeros((self.params["QUBIC"]["nrec"], 12 * self.params["SKY"]["nside"] ** 2, 3))
 
         for i in range(self.params["QUBIC"]["nrec"]):
-            m_nu_in[i] = np.mean(
-                m_nu[i * self.fsub_out : (i + 1) * self.fsub_out], axis=0
-            )
+            m_nu_in[i] = np.mean(m_nu[i * self.fsub_out : (i + 1) * self.fsub_out], axis=0)
 
         return m_nu_in
 
@@ -577,9 +535,7 @@ class PipelineFrequencyMapMaking:
             )
         )
         for irec in range(self.params["QUBIC"]["nrec"]):
-            if (
-                irec < self.params["QUBIC"]["nrec"] / 2
-            ):  # choose between the two levels of noise
+            if irec < self.params["QUBIC"]["nrec"] / 2:  # choose between the two levels of noise
                 noise = self.noise_planck[0]
             else:
                 noise = self.noise_planck[1]
@@ -668,13 +624,10 @@ class PipelineFrequencyMapMaking:
 
         if planck_external and seenpix is not None:
             blocks = [
-                DiagonalOperator(ci[seenpix], broadcast="rightward")
-                for ci in stacked_dptdp_inv
+                DiagonalOperator(ci[seenpix], broadcast="rightward") for ci in stacked_dptdp_inv
             ]
         else:
-            blocks = [
-                DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv
-            ]
+            blocks = [DiagonalOperator(ci, broadcast="rightward") for ci in stacked_dptdp_inv]
 
         preconditioner = BlockDiagonalOperator(blocks, new_axisin=0)
         return preconditioner
@@ -718,6 +671,8 @@ class PipelineFrequencyMapMaking:
             b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck_weighted))
         else:
             b = self.H_out.T * self.invN * d
+
+        print("d : ", d.mean())
 
         ### Preconditionning
         M = self.get_preconditioner()
@@ -773,9 +728,7 @@ class PipelineFrequencyMapMaking:
                 weight_planck * self.maps_input_convolved[:, self.seenpix, :]
             )
         else:
-            solution[:, seenpix, :] = solution_qubic_planck["x"]["x"][
-                :, seenpix, :
-            ].copy()
+            solution[:, seenpix, :] = solution_qubic_planck["x"]["x"][:, seenpix, :].copy()
 
         return solution
 
@@ -842,8 +795,7 @@ class PipelineFrequencyMapMaking:
                     (self.s_hat_noise, self.external_maps_noise), axis=0
                 )
                 self.nus_rec = np.array(
-                    list(self.nus_Q)
-                    + list(self.externaldata.experiments["Planck"]["frequency"])
+                    list(self.nus_Q) + list(self.externaldata.experiments["Planck"]["frequency"])
                 )
                 self.fwhm_rec = np.array(list(self.fwhm_rec) + list(fwhm_ext))
             self.plots.plot_frequency_maps(
@@ -923,9 +875,7 @@ class PipelineEnd2End:
             ### Checking errors
             ErrorChecking(self.params).check_errors()
             ### Initialization
-            self.mapmaking = PipelineFrequencyMapMaking(
-                self.comm, self.file, self.params
-            )
+            self.mapmaking = PipelineFrequencyMapMaking(self.comm, self.file, self.params)
 
             ### Run
             self.mapmaking.run()
@@ -955,9 +905,7 @@ class PipelineEnd2End:
                 print("\n==============================================")
                 print("======== Cross-spectra with Residual =========")
                 print("==============================================\n")
-                DlBB_noise = self.spectrum.run(
-                    maps=self.spectrum.dictionary["maps_noise"]
-                )
+                DlBB_noise = self.spectrum.run(maps=self.spectrum.dictionary["maps_noise"])
 
                 dict_solution = {
                     "nus": self.spectrum.dictionary["nus"].round(0),

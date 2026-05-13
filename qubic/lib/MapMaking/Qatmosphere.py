@@ -942,7 +942,7 @@ class AtmosphereMaps(AtmosphereProperties):
             )
 
         return delta_rho
-    
+
     def get_ref_temp_maps(self, maps, ref_freq=150):
         ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
         ref_abs = self.integrated_abs_spectrum[ref_idx]

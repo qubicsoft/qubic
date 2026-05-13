@@ -1,5 +1,5 @@
-simulation_path: "FMM/test_noise"
-name: "test"
+simulation_path: "FMM/test_Npointings_1000"
+name: "test_qubic"
 
 Spectrum:
   sample_variance: True                                         # Add sample-variance correction in the correlation matrix
@@ -8,10 +8,10 @@ Spectrum:
 
 MCMC:
   nus_qubic: [True, True]                                       # QUBIC frequencies used for fitting. It should match Nrec value put in simulations !!!
-  nus_planck: [False, False, False, False, False, False, False] # Planck frequencies used for fitting. It should match 7 !!!
-  discard: 100                                                  # Number of iterations discarded
+  nus_planck: [false, false, false, false, false, false, false] # Planck frequencies used for fitting. It should match 7 !!!
+  discard: 150                                                  # Number of iterations discarded
   nwalkers: 50                                                  # Number of MCMC walkers
-  nsteps: 300                                                   # Number of MCMC iterations
+  nsteps: 400                                                   # Number of MCMC iterations
   verbose: False                                                # Print values
 
 # For each components' parameters : 
@@ -35,13 +35,13 @@ cmb:
 
 dust:
   Ad:
-    fit: True
+    fit: 0
     bound_min: 0
     bound_max: 10
     init_average: 1
     init_std: 0.1
   alphad:
-    fit: True
+    fit: 0
     bound_min: -10
     bound_max: 10
     init_average: -1

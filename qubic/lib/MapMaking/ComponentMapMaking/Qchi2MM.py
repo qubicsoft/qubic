@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import fgbuster.mixingmatrix as mm
+import healpy as hp
 import numpy as np
 from pyoperators import MPI
 
@@ -30,11 +31,17 @@ class AbstractChi2(ABC):
     because both original classes shared that logic.
     """
 
-    def __init__(self, preset, TOD_sim, layout: Optional[ParamLayout] = None, full_beta_map: Optional[np.ndarray] = None):
+    def __init__(
+        self,
+        preset,
+        TOD_sim,
+        layout: Optional[ParamLayout] = None,
+        beta_map: Optional[np.ndarray] = None,
+    ):
         self.preset = preset
         self.TOD_sim = TOD_sim
-        self.layout = layout 
-        self.full_beta_map = full_beta_map
+        self.layout = layout
+        self.beta_map = beta_map
 
         # Deduce shapes for 3D or 4D TOD_sim
         if self.TOD_sim.ndim == 3:
@@ -44,6 +51,8 @@ class AbstractChi2(ABC):
         elif self.TOD_sim.ndim == 4:
             # (ncomp, nfreq, npix, nsampling_ndet)
             self.ncomp, self.nfreq, self.npix, self.nsampling_ndet = self.TOD_sim.shape
+            self.seenpix_beta = self.beta_map == hp.UNSEEN
+
         else:
             raise TypeError("TOD_sim should have 3 or 4 dimensions.")
 
@@ -62,7 +71,9 @@ class AbstractChi2(ABC):
             if block.ndim == 3:  # 3D block: (ncomp, nsub, nsampling_ndet)
                 resh = block.reshape((self.ncomp * self.nsub * 1, self.nsampling_ndet))
             else:  # 4D block: (ncomp, nsub, npix, nsampling_ndet)
-                resh = block.reshape((self.ncomp * self.nsub * self.npix, self.nsampling_ndet))
+                resh = block.reshape(
+                    (self.ncomp * self.nsub * self.npix, self.nsampling_ndet)
+                )
             self.TOD_sim_fp.append(resh)
         self.TOD_sim_fp = np.asarray(self.TOD_sim_fp)
 
@@ -92,6 +103,29 @@ class AbstractChi2(ABC):
             self.preset.comm,
         )
         return self.Lqubic
+
+    def compute_qubic_chi_varying_beta(self, A):
+        ysim_parts = []
+        for i in range(self.nFP):
+            a_slice = A[
+                self.seenpix_beta[0], self.nsub * i : self.nsub * (i + 1)
+            ]  # (npix, nsub, ncomp)
+            vec = (
+                a_slice.T.reshape(self.ncomp * self.nsub * a_slice.shape[0])
+                @ self.TOD_sim_fp[i]
+            )
+            ysim_parts.append(vec)
+
+        ysim = np.concatenate(ysim_parts, axis=0)
+        residuals = ysim - self.preset.acquisition.TOD_qubic
+
+        Lqubic = 0.5 * _dot(
+            residuals.T,
+            self.preset.acquisition.invN.operands[0](residuals),
+            self.preset.comm,
+        )
+
+        return Lqubic
 
     # default call: subclasses may override if they need to alter behavior
     def __call__(self, x):
@@ -139,14 +173,11 @@ class MixedChi2(AbstractChi2):
 
 
 class Chi2(AbstractChi2):
-    def __init__(self, preset, TOD_sim, parametric=True, full_beta_map=None):
+    def __init__(self, preset, TOD_sim, parametric=True, beta_map=None):
         # original class raised on 4D TOD; keep that behaviour explicit
-        if TOD_sim.ndim == 4:
-            # match original behaviour
-            raise ValueError("d1 model is not implemented.")
-        super().__init__(preset, TOD_sim, full_beta_map=full_beta_map)
+        super().__init__(preset, TOD_sim, beta_map=beta_map)
         self.parametric = parametric
-        self.full_beta_map = full_beta_map
+        self.beta_map = beta_map
 
     def compute_mixing_matrix_parametric(self, nus, x):
         """
@@ -174,33 +205,67 @@ class Chi2(AbstractChi2):
         else:
             return self.compute_mixing_matrix_blind(x)
 
-    def compute_chi_square(self, x):
-        # QUBIC part (same for parametric or blind)
+    def compute_chi_square_fix_beta(self, x):
         A = self.compute_mixing_matrix(x)
-        Lqubic = self.compute_qubic_chi(A)
+        self.Lqubic = self.compute_qubic_chi(A)
 
-        Lplanck = 0
+        self.Lplanck = 0
         if self.parametric:
             Aext = A[self.nfreq :]
 
             # TODO : should we convolve here ? Tom : I think we should if convolutin_out==True, but fwhm_mapmaking is not adapted for that, we need to compute specific fwhm for planck
             H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext)
 
-            mycomp = self.preset.comp.components_iter.copy()
-            mycomp[:, ~self.preset.sky.seenpix] = 0
+            comp = self.preset.comp.components_iter.copy()
+            comp[:, ~self.preset.sky.seenpix] = 0
 
-            ysim_pl = H_planck(mycomp)
-            _residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
+            ysim_pl = H_planck(comp)
+            _residuals_pl = (
+                np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
+            )
 
-            Lplanck = 0.5 * _dot(
+            self.Lplanck = 0.5 * _dot(
                 _residuals_pl.T,
                 self.preset.acquisition.invN.operands[1](_residuals_pl),
                 self.preset.comm,
             )
 
-            self.Lplanck = Lplanck
+        return self.Lqubic, self.Lplanck
 
-        return Lqubic, Lplanck
+    def compute_chi_square_varying_beta(self, x):
+        ### Fill the full sky map of beta with the unknowns
+        beta_map = self.beta_map.copy()
+        x = x.reshape(((self.ncomp - 1) * self.npix))
+        beta_map[self.seenpix_beta] = x
+
+        ### Compute the mixing matrix for the full sky
+        A = self.compute_mixing_matrix_parametric(self.nus, beta_map)
+        Aext = A[:, self.nfreq :]
+
+        ### Qubic chi2
+        self.Lqubic = self.compute_qubic_chi_varying_beta(A)
+
+        ### Planck chi2
+        H_planck = self.preset.qubic.joint_out.external.get_operator(
+            A=Aext.transpose(1, 0, 2)
+        )
+        ysim_pl = H_planck(self.preset.comp.components_iter.copy())
+        residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external
+        self.Lplanck = 0.5 * _dot(
+            residuals_pl.T,
+            self.preset.acquisition.invN.operands[1](residuals_pl),
+            self.preset.comm,
+        )
+
+        return self.Lqubic, self.Lplanck
+
+    def compute_chi_square(self, x):
+        if self.TOD_sim.ndim == 3:
+            return self.compute_chi_square_fix_beta(x)
+        elif self.TOD_sim.ndim == 4:
+            return self.compute_chi_square_varying_beta(x)
+        else:
+            raise TypeError("TOD_sim should have 3 or 4 dimensions.")
 
     def __call__(self, x):
         Lqubic, Lplanck = self.compute_chi_square(x)

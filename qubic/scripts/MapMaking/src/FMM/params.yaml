@@ -1,50 +1,47 @@
-foldername: "test_w_precond"
+foldername: "test_Npointings_5000"
 filename: "test"
 
 CMB:
   cmb: true
-  seed: 1 # CMB realization
+  seed: 1                                  # CMB realization
   r: 0
   Alens: 1
 
 Foregrounds:
-  Dust: true # Thermal Dust emission
-  Synchrotron: false # Synchrotron emission
+  Dust: false                     # Thermal Dust emission
+  Synchrotron: false             # Synchrotron emission
 
 QUBIC:
   ### This section control the parameters related to QUBIC
 
-  instrument: "DB" # Instrumental design (MB, DB or UWB)
-  configuration: "FI" # Instrumental configuration (TD or FI)
-  npointings: 3000 # Number of time samples
-  nsub_in: 8 # Number of sub-acquisitions
-  nsub_out: 8
-  nrec:
-    2 # Number of reconstructed fr
-    # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
-  convolution_in: false # Angular resolution in the input TOD
-  convolution_out: false # Angular resolution in the reconstruction
-  bandpass_correction: true # Correction to keep the edges of the integration band constant
+  instrument: "DB"               # Instrumental design (MB, DB or UWB)
+  configuration: "FI"            # Instrumental configuration (TD or FI)
+  npointings: 5000               # Number of time samples
+  nsub_in: 16                     # Number of sub-acquisitions
+  nsub_out: 16
+  nrec: 2                        # Number of reconstructed fr
+                                 # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
+  convolution_in: true          # Angular resolution in the input TOD
+  convolution_out: false         # Angular resolution in the reconstruction
+  bandpass_correction: true      # Correction to keep the edges of the integration band constant
   NOISE:
-    ndet:
-      1 # Level of detector noise
-      # randomness not fixed for det and photon noise, to be checked
-    npho150: 1 # Level of photon noise at 150 GHz
-    npho220: 1 # Level of photon noise at 220 GHz
-    detector_nep: 4.7e-17 # NEP of detector noise
-    duration_150: 3 # Effective duration at 150 GHz
-    duration_220: 3 # Effective duration at 220 GHz
-    seed_noise: 172423528
+    ndet: 1                                # Level of detector noise
+                                           # randomness not fixed for det and photon noise, to be checked
+    npho150: 1                             # Level of photon noise at 150 GHz
+    npho220: 1                             # Level of photon noise at 220 GHz
+    detector_nep: 4.7e-17                  # NEP of detector noise 
+    duration_150: 3                        # Effective duration at 150 GHz
+    duration_220: 3                        # Effective duration at 220 GHz
+    seed_noise: 283
   SYNTHBEAM:
-    synthbeam_kmax: 1 # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+    synthbeam_kmax: 1                      # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1
-  dtheta: 15 # Angle for coverage
+  dtheta: 15                               # Angle for coverage
 
 SKY:
   ### This section control the reconstructed sky
-
-  nside: 128 # Nside of components
-  coverage_cut: 0.1 # Define a cut where the coverage is too low
+  nside: 256                               # Nside of components
+  coverage_cut: 0.2                        # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57
 
@@ -52,21 +49,21 @@ PLANCK:
   ### This section define which external data are we using
 
   external_data: true
-  weight_planck: 0 # Weight of Planck data within the QUBIC patch
-  level_noise_planck: 1 # Noise level for Planck data
-  seed_noise: 172423528
-  bandwidth_planck: 0.2 # Multiplicative factor to define the bandwidth of Planck's data
-  nsub_planck: 100 # Number of sub acquisitions for Planck's data
+  weight_planck: 0               # Weight of Planck data within the QUBIC patch
+  level_noise_planck: 1          # Noise level for Planck data
+  seed_noise: 283
+  bandwidth_planck: 0.2          # Multiplicative factor to define the bandwidth of Planck's data
+  nsub_planck: 100                # Number of sub acquisitions for Planck's data
 
 Pipeline:
-  mapmaking: true # Run MapMaking Pipeline
-  spectrum: false # Compute Power Spectra of the frequency maps
+  mapmaking: true                          # Run MapMaking Pipeline
+  spectrum: true                          # Compute Power Spectra of the frequency maps
 
 PCG:
-  ### This section control PCG parameters
+    ### This section control PCG parameters
 
-  n_iter_pcg: 150 # Number of PCG iterations #100
-  tol_pcg: 1.0e-10 # Tolerance for PCG
+  n_iter_pcg: 300                 # Number of PCG iterations #100
+  tol_pcg: 1.0e-10               # Tolerance for PCG
   preconditioner: false
   initial_guess_intensity_to_zero: true
   gif: false
@@ -78,6 +75,17 @@ Spectrum:
 
   dl: 30
   lmin: 40
-  lmax: 255
+  lmax: 511
   aposize: 10
   plot_spectrum: true
+
+
+
+
+
+
+
+
+
+
+

@@ -51,13 +51,17 @@ class QubicNoise:
         if wpho == 0:
             return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
         else:
-            return wpho * self.acq.get_noise(det_noise=False, photon_noise=True, seed=self.seed_photon)
+            return wpho * self.acq.get_noise(
+                det_noise=False, photon_noise=True, seed=self.seed_photon
+            )
 
     def detector_noise(self, wdet=1):
         if wdet == 0:
             return np.zeros((len(self.acq.instrument), len(self.acq.sampling)))
         else:
-            return wdet * self.acq.get_noise(det_noise=True, photon_noise=False, seed=self.seed_detector)
+            return wdet * self.acq.get_noise(
+                det_noise=True, photon_noise=False, seed=self.seed_detector
+            )
 
 
 class QubicTotNoise:
@@ -92,7 +96,14 @@ class QubicTotNoise:
         #     self.duration = duration
 
     def total_noise(self, wdet, wpho150, wpho220, seed_noise=None):
-        rng_noise = np.random.default_rng(seed=seed_noise)  # The way the randomness is treated is NOT GOOD, if doing more than one run (in parallel for example)
+        # rng_noise = np.random.default_rng(seed=seed_noise)  # The way the randomness is treated is NOT GOOD, if doing more than one run (in parallel for example)
+        comm = self.d["comm"]
+        rank = comm.Get_rank() if comm is not None else 0
+        nranks = comm.Get_size() if comm is not None else 1
+        # SeedSequence spawns one independent child stream per MPI rank so that
+        # detectors distributed across ranks never share the same random state.
+        ss = np.random.SeedSequence(seed_noise)
+        rng_noise = np.random.default_rng(ss.spawn(nranks)[rank])
         wpho = np.array([wpho150, wpho220])
         npho = []
         ndet = []
@@ -108,8 +119,11 @@ class QubicTotNoise:
                 comm=self.d["comm"],
                 size=self.d["nprocs_instrument"],
             )
-            npho.append(QnoiseBand.photon_noise(wpho[i]))
-            ndet.append(QnoiseBand.detector_noise(wdet))
+            pho = QnoiseBand.photon_noise(wpho[i])
+            det = QnoiseBand.detector_noise(wdet)
+
+            npho.append(pho)
+            ndet.append(det)
 
         if self.type == "UWB":
             return ndet[0] + npho[0] + npho[1]

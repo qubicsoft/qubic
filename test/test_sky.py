@@ -134,4 +134,4 @@ def test_sky2():
 
     for k in ("QU", "IQU"):
         assert_equal(cbiks[k], cbiks["I"])
-        assert_same(pT1s[k], pT1s["I"].astype(np.float32), rtol=15)
+        assert_same(pT1s[k], pT1s["I"].astype(np.float32), rtol=15) 

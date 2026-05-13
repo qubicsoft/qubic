@@ -435,4 +435,4 @@ class Namaster(object):
 
         covar_TE_TE = covar_02_02[:, 0, :, 0]
 
-        return covar_TE_TE
+        return covar_TE_TE 

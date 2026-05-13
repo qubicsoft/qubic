@@ -1,0 +1,13 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: name, datatype: string}
+# - {name: l_deg, unit: deg, datatype: float64}
+# - {name: b_deg, unit: deg, datatype: float64}
+# schema: astropy-2.0
+name l_deg b_deg
+left 155.409 -27.881
+left-center 80.831 -10.522
+right-center 325.33299999999997 -8.016
+right 199.102 -19.624
+milky-way 0 0

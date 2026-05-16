@@ -1,0 +1,14 @@
+# Path pattern to the input IV data files (supports wildcards)
+source = "/Volumes/Data/PycharmProjects/crd/data/iv/*"
+
+# Output directory where analysis results will be stored
+output = "data/iv_analysis"
+
+# If true, generate and save IV diagnostic plots
+iv_plots = true
+
+# If true, save the sign matrix computed during the IV analysis
+save_sign_matrix = true
+
+# Density parameter controlling smoothing / sampling resolution
+density = 30

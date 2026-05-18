@@ -30,7 +30,7 @@ nside: 64
 n_theta: 10000
 normalization: 1
 flat: False
-coverage_cut: 0.1
+coverage_cut: 0.2
 dtheta: 15
 seed: 1
 
@@ -41,7 +41,7 @@ nsub_in: 8                           # Number of sub-acquisitions used to integr
 nsub_rec: 8
 nrec: 2
 npointings: 100
-n_buffer: 10
+n_buffer: 20
 kmax: 1
 synthbeam_fraction: 1
 wdet: 0.01
@@ -54,7 +54,7 @@ atm: true
 
 # Reconstruction parameters
 preconditioner: false
-n_iter: 20
+n_iter: 30
 n_loop: 20
 iterative_iter: false
 convolutions: false
@@ -66,5 +66,5 @@ fit_wind: true
 # Wind
 wind: true
 wind_type: "constant"                # Can be : "constant" or "normal"
-wind_cst: [0.3, 0.5]                   # [wind_x, wind_y]
+wind_cst: [0, 0]                   # [wind_x, wind_y]
 wind_normal: [0, 1]                  # [wind_mean, wind_std]

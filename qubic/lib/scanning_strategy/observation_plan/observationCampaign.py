@@ -332,6 +332,17 @@ class ObservationCampaign:
             #obs_time = Time(datetime(self.config.run.year, self.config.run.month, day), scale='utc')
             self.prepare_observation_plan(obs_time)
 
+    def output_dir_from_utc_time(self, output_time: Time) -> Path:
+        """
+        Return the output directory associated with a UTC timestamp.
+
+        The directory is based on the UTC date of the actual observation window,
+        not on the local civil day that was used to build the constraint grid.
+        """
+
+        output_utc = output_time.to_datetime(timezone=dt_timezone.utc)
+        return self.output_dir / output_utc.strftime("%B_%Y") / output_utc.strftime("%Y_%m_%d")
+
     def prepare_observation_plan(self, obs_time: Time):
         """
         Prepare the directory structure and observation plan.
@@ -345,8 +356,13 @@ class ObservationCampaign:
         :return: None
         """
 
-        obs_local = obs_time.to_datetime(timezone=self.site.timezone)
-        obs_dir = self.output_dir / obs_local.strftime("%B_%Y") / obs_local.strftime("%Y_%m_%d")
+        # obs_local = obs_time.to_datetime(timezone=self.site.timezone)
+        # obs_dir = self.output_dir / obs_local.strftime("%B_%Y") / obs_local.strftime("%Y_%m_%d")
+
+        # Temporary day directory used while building the targets. Each target
+        # can later be relocated to the UTC date of its first real observation
+        # window, after the constraints have been evaluated.
+        obs_dir = self.output_dir_from_utc_time(obs_time)
 
         # obs_dir = self.output_dir / obs_time.strftime("%B_%Y") / obs_time.strftime("%Y_%m_%d")
 
@@ -440,10 +456,46 @@ class ObservationCampaign:
         :type target: Source
         :return: None
         """
+
+        # Configure once in the provisional directory assigned while creating
+        # the target. This gives the target valid paths before constraints are
+        # evaluated.
         target.configure()
 
+        provisional_plots_dir = Path(target.plots_dir)
+
         if self.config.tasks.run_constraints:
-            target.evaluate_constraints(make_plot=True)
+            # First evaluate the constraints without saving the grid plot. We
+            # need the valid windows before deciding the final output directory.
+            target.evaluate_constraints(make_plot=False)
+
+        # Decide the final output directory from the UTC start time of the first
+        # real ECSV observation window. If the target is not observable, this
+        # falls back to target.obs_time.
+        final_obs_dir = self.output_dir_from_utc_time(target.output_start_time())
+        final_obs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Relocate the target products to the final UTC observation-day folder.
+        # This must happen before saving constraint grids, polar plots and ECSV
+        # files, otherwise products whose first window starts after UTC midnight
+        # would remain in the previous day's folder.
+        target.results_dir = final_obs_dir
+        target.configure()
+
+        # The first configure() call may have created a provisional plots
+        # directory under the original day folder. If the source was relocated
+        # to another UTC observation-day folder, remove that provisional plots
+        # directory, but only if it is empty.
+        final_plots_dir = Path(target.plots_dir)
+
+        if provisional_plots_dir != final_plots_dir and provisional_plots_dir.exists():
+            try:
+                provisional_plots_dir.rmdir()
+            except OSError:
+                pass
+
+        if self.config.tasks.run_constraints:
+            target._plot_constraint_grid(target.constraints_grid, make_plot=True)
 
         if self.config.tasks.run_trajectory_plots:
             target.plot_trajectory(

@@ -371,6 +371,25 @@ class Source(ABC):
 
         return intervals
 
+    def output_start_time(self):
+        """
+        Return the timestamp that should define the output folder and filenames.
+
+        If the source has at least one real ECSV observation window, use the UTC
+        start time of the first such window. If the source is not observable on
+        this grid, fall back to `self.obs_time`, so diagnostic plots such as the
+        constraint grid can still be saved in a deterministic folder.
+        """
+
+        if not self.valid_time_intervals:
+            self.compute_valid_times_from_constraints()
+
+        ecsv_intervals = self.ecsv_time_intervals()
+        if ecsv_intervals:
+            return ecsv_intervals[0][0]
+
+        return self.obs_time
+
     def _parse_ylabels(self):
 
         def fmt_val(v):

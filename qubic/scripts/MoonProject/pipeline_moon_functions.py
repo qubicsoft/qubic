@@ -144,13 +144,39 @@ mean_2d_bin_data_jitted = mean_2d_bin_data
 
 #########################
 
+def healpix_patch(azt, elt, tod, nside, countcut=0, unseen_val=hp.UNSEEN): # , vec_centre, radius=25
+    # good_pix = hp.query_disc(nside, vec_centre, np.radians(radius))
+    cell_ids = hp.ang2pix(nside, azt, elt, lonlat=True)
+    df_pix = pd.DataFrame(tod).groupby(cell_ids)
+    patch = np.array(df_pix[0].mean())
+    hitcount = np.array((pd.DataFrame(np.ones_like(tod)).groupby(cell_ids))[0].sum()).astype(int)
+    print("patch", patch)
+    print("hitcount", hitcount)
+    cell_ids = np.array((pd.DataFrame(cell_ids).groupby(cell_ids))[0].mean()).astype(int)
+    print("cell_ids", cell_ids)
+    return patch, hitcount, cell_ids
+
+
+def healpix_patch_(azt, elt, tod, nside, countcut=0, unseen_val=hp.UNSEEN):
+    ips = hp.ang2pix(nside, azt, elt, lonlat=True)
+    mymap = np.zeros(12*nside**2)
+    mapcount = np.zeros(12*nside**2)
+    for i in range(len(azt)):
+        mymap[ips[i]] += tod[i]
+        mapcount[ips[i]] += 1
+    unseen = mapcount <= countcut
+    mymap[unseen] = unseen_val
+    mapcount[unseen] = unseen_val
+    mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
+    return mymap, mapcount
+
+
 def healpix_map(azt, elt, tod, flags=None, flaglimit=0, nside=128, countcut=0, unseen_val=hp.UNSEEN):
     if flags is None:
         flags = np.zeros(len(azt))
     
     ok = flags <= flaglimit 
     return healpix_map_(azt[ok], elt[ok], tod[ok], nside=nside, countcut=countcut, unseen_val=unseen_val)
-
 
 def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
 # def healpix_map_(elt, azt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
@@ -169,7 +195,7 @@ def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
 # Function to go from QubicSoft (Sims) indices (0-247) to QubicPack (data) indices (0-255)
 ### The 8 thermometers are not in QubicSoft
 
-# QP is real data, QS is QubicSoft
+# QP is real data (QubicPack), QS is QubicSoft
 def iQS2iQP(indexQS):
     qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
     return qpnumi+(qpasici-1)*128-1
@@ -911,7 +937,7 @@ xlim = [10540, 10640]
 
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True,
                           check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
-                          ObsDate=None, new_method_clean=True, theo_sb=None):
+                          ObsDate=None, new_method_clean=False, theo_sb=None):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -920,11 +946,12 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     # - filter the result (highpass, to get rid of large scales)
     # - add the removed peaks again (difference between raw peaks and linear fit of filtered data around peaks)
 
-    # we get the theoretical synthbeam
-    thetas = theo_sb[0] # shape (n_nus, npeaks)
-    phis = theo_sb[1]
-    n_nus = len(thetas)
-    n_peaks = len(thetas[0])
+    if theo_sb is not None:
+        # we get the theoretical synthbeam
+        thetas = theo_sb[0] # shape (n_nus, npeaks)
+        phis = theo_sb[1]
+        n_nus = len(thetas)
+        n_peaks = len(thetas[0])
 
     # freq_sampling = 157.36 # Hz
     freq_sampling = 1/np.median(tt[1:] - tt[:-1]) # Hz
@@ -940,9 +967,10 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
         mytod = tod.copy()
         # reso = 8
         ang_size = 40 # degrees
-        reso = ang_size*60/200 # arcmin/pix
-        # print(reso)
         xsize = 201
+        reso = ang_size*60/xsize # arcmin/pix
+        # print(reso)
+
 
     if clean_tod:
         min_plot = -5e3
@@ -1268,6 +1296,28 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
                 # return mapsb_forth, mapcount_forth, mapsb_back, mapcount_back
 
     mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
+
+    ### getting only the pixels with hits --> much lighter, can go to high NSIDE (>=512) but might be useless because data is too sparse
+    ### alternative that takes from both approaches could be to rebuild only a 25-degree disk centred on zenith at NSIDE=256
+    # patch, hitcount, cell_ids = healpix_patch(azt, elt, tod, nside, countcut=0, unseen_val=hp.UNSEEN)
+    # print(len(patch))
+    # print(12*nside**2)
+    # full_map = np.full(12*nside**2, hp.UNSEEN)
+    # full_map[cell_ids] = patch
+    # full_map_proj = hp.gnomview(mapsb, reso=reso, min=min_plot, max=max_plot, xsize=xsize,
+    #                 rot=center, return_projected_map=True, no_plot=True)
+    # X = np.arange(len(mapsb_proj))
+    # Y = np.arange(len(mapsb_proj[0]))
+    # XX, YY = np.meshgrid(X, Y) # pixel units, just for the interpolation
+    # no_UNSEEN_mask = ~mapsb_proj.mask
+    # full_map_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), full_map_proj[no_UNSEEN_mask])
+    # new_full_map_proj = full_map_interpolator(np.moveaxis([XX, YY], 0, -1))
+    # plt.figure()
+    # plt.imshow(full_map_proj)
+    # plt.show()
+    # plt.figure()
+    # plt.imshow(new_full_map_proj)
+    # plt.show()
 
     if doplot and False:
         
@@ -2288,7 +2338,7 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, tshift=0,
                       doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False,
-                      isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None, theo_sb=None):
+                      isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None, new_method_clean=False, theo_sb=None):
 
     if det_pos is None:
         data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=ObsDate[:4])
@@ -2336,7 +2386,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
                                                              TES_number=TESNum, nside=nside, 
                                                              doplot=doplot, check_back_forth=check_back_forth,
                                                              det_pos=det_pos, clean_tod=clean_tod, manual=manual,
-                                                             ObsDate=ObsDate, theo_sb=theo_sb)
+                                                             ObsDate=ObsDate, new_method_clean=new_method_clean, theo_sb=theo_sb)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
@@ -2355,7 +2405,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
                 tod = alltod[iTES, :]
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                            TES_number=TESNum, nside=nside, doplot=doplot, det_pos=det_pos,
-                                                           clean_tod=clean_tod, manual=manual, ObsDate=ObsDate, theo_sb=theo_sb)        
+                                                           clean_tod=clean_tod, manual=manual, ObsDate=ObsDate, new_method_clean=new_method_clean, theo_sb=theo_sb)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
                 # Directly assign the result to the correct index in allmaps
@@ -3069,14 +3119,15 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
         The coordinates of the array of points in the new system.
 
     """
-    try:
-        azt_zen = np.load("azt_zen.npy")
-        elt_zen = np.load("elt_zen.npy")
-        print(np.shape(azt_zen))
-        print(np.shape(elt_zen))
-        return azt_zen, elt_zen
-    except:
-        pass
+    if det_pos is not None:
+        try:
+            azt_zen = np.load("azt_zen.npy")
+            elt_zen = np.load("elt_zen.npy")
+            print(np.shape(azt_zen))
+            print(np.shape(elt_zen))
+            return azt_zen, elt_zen
+        except:
+            pass
 
     # az_source and el_source need to be either np.float_ or np.array
     sphere_radius = 1

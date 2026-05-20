@@ -116,6 +116,7 @@ class PresetAcquisition:
             self.preset_tools.params["QUBIC"]["NOISE"]["npho220"],
             self.preset_tools.params["PLANCK"]["level_noise_planck"],
             self.preset_sky.seenpix,
+            qubic_patch=self.preset_sky.total_patch,
         )
 
         ### Get convolution
@@ -299,6 +300,8 @@ class PresetAcquisition:
         self.TOD_qubic = (self.H.operands[0])(self.preset_comp.components_in) + noise_qubic
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
+        full_seenpix = np.zeros(12 * self.preset_sky.params_sky["nside"]**2, dtype=bool)
+        full_seenpix[self.preset_sky.total_patch] = self.preset_sky.seenpix
         ### Create external TOD
         # self.TOD_external = self.H.operands[1](self.components_in_convolved) + noise_external.ravel()
         # self.TOD_external_zero_outside_patch = self.components_in_convolved.copy()
@@ -306,7 +309,9 @@ class PresetAcquisition:
         # self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
         self.TOD_external = self.H.operands[1](self.preset_comp.components_in) + noise_external.ravel()
         self.TOD_external_zero_outside_patch = self.preset_comp.components_in.copy()
-        self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
+        # self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
+        self.TOD_external_zero_outside_patch[:, ~full_seenpix] = 0
+        del full_seenpix
         self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
 
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
@@ -369,7 +374,9 @@ class PresetAcquisition:
         )
         # Constant spectral index -> maps have shape (Ncomp, Npix, Nstk)
         istk = 0
-        mypix = self.preset_sky.seenpix
+        # mypix = self.preset_sky.seenpix
+        mypix = np.zeros(12 * self.preset_sky.params_sky["nside"]**2, dtype=bool)
+        mypix[self.preset_sky.total_patch] = self.preset_sky.seenpix
 
         for i, comp_name in enumerate(self.preset_comp.components_name_out):
             # self.preset_comp.components_iter[i] = C2(
@@ -394,7 +401,7 @@ class PresetAcquisition:
                 self.preset_comp.components_iter[i, mypix, istk] *= initial_factor
                 # To make it more uniform, either name the components "cmb", "dust", "sync", "co" or the files "qubic_patch_I_CMB", "qubic_patch_I_Dust", "qubic_patch_I_Synchrotron", "qubic_patch_I_CO"
                 self.preset_comp.components_iter[i, mypix, istk] += np.random.normal(0, self.preset_tools.params["INITIAL"]["sig_map_noise"], self.preset_comp.components_iter[i, mypix, istk].shape)
-
+        del mypix
         # else:
         #     self.allbeta = np.array([self.beta_iter])
         #     C1 = HealpixConvolutionGaussianOperator(fwhm=self.fwhm_qubic_rec, lmax=3*self.preset_tools.params['SKY']['nside'])

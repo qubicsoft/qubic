@@ -1366,7 +1366,7 @@ class QubicInstrument(Instrument):
     def _get_projection_operator(rotation, scene, nu, position, synthbeam, horn, primary_beam, thetafits, phifits, valfits, use_file, freqs, interp_projection=False, verbose=True):
         if use_file and interp_projection:
             # Fuse
-            ValueError("'use_file is True' case not implemented for the interpolated projection operator.")
+            raise ValueError("'use_file is True' case not implemented for the interpolated projection operator.")
 
         ndetectors = position.shape[0]
         ntimes = rotation.data.shape[0]
@@ -1419,7 +1419,7 @@ class QubicInstrument(Instrument):
         nscenetot = product(scene.shape[: scene.ndim])
         if nscene != nscenetot and interp_projection:
             # Fuse
-            ValueError("'nscene != nscenetot' case not implemented for the interpolated projection operator.")
+            raise ValueError("'nscene != nscenetot' case not implemented for the interpolated projection operator.")
 
         if interp_projection:
             # For each peak position we take the interpolation with the four neighbouring pixels

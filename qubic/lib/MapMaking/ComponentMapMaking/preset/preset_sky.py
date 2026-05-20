@@ -54,9 +54,30 @@ class PresetSky:
         self.preset_tools.mpi._print_message("    => Getting center of the QUBIC patch")
         self.center = equ2gal(self.params_sky["RA_center"], self.params_sky["DEC_center"])
 
+        ### We want to keep only the useful pixels in memory, in order to be able to go at higher NSIDE
+        dist_peak = np.sqrt(2)*np.radians(10)*self.preset_tools.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"] #+ np.radians(10) # the furthest peak from telescope l.o.s.
+        radius_patch_rad = np.radians(self.preset_tools.params["QUBIC"]["dtheta"]) + dist_peak  # to make it larger than self.seenpix_qubic
+        vec_centre_patch = hp.ang2vec(self.params_sky["RA_center"], self.params_sky["DEC_center"], lonlat=True) # equatorial coord
+        self.qubic_patch = hp.query_disc(self.params_sky["nside"], vec_centre_patch, radius_patch_rad)
+        self.total_patch = hp.query_disc(self.params_sky["nside"], vec_centre_patch, radius_patch_rad * (1 + self.preset_tools.params["QUBIC"]["apod"]))
+        # returns unique elements in cell_ids_large not in cell_ids, sorted
+        self.qubic_patch_apod = np.setdiff1d(self.total_patch, self.qubic_patch)
+        # del self.total_patch
+        dir_centre_patch = hp.rotator.vec2dir(vec_centre_patch)
+        vec_pix_apod = hp.pix2vec(self.params_sky["nside"], self.qubic_patch_apod)
+        dir_pix_apod = hp.rotator.vec2dir(vec_pix_apod)
+        # angular distance from the centre of the patch
+        dist_pix_apod = hp.rotator.angdist(dir_centre_patch, dir_pix_apod)
+        # the factor we need to multiply the pixels from the apodisation ring with
+        self.cos_apod = 1/2 * (1 + np.cos(np.pi*(dist_pix_apod - radius_patch_rad)/(self.preset_tools.params["QUBIC"]["apod"] * radius_patch_rad)))
+        del dist_pix_apod
+
         ### Compute coverage map
         self.preset_tools.mpi._print_message("    => Computing coverage")
-        self.coverage = preset_qubic.joint_out.qubic.coverage
+        # self.coverage = preset_qubic.joint_out.qubic.coverage --> it was previously computed when we initialised preset_qubic.joint_out
+        # self.coverage = preset_qubic.joint_out.qubic._get_coverage(qubic_patch=self.qubic_patch) # --> now preset_qubic has a size that doesn't depend on NSIDE!
+        self.coverage = preset_qubic.joint_out.qubic._get_coverage(qubic_patch=self.total_patch) # --> now preset_qubic has a size that doesn't depend on NSIDE!
+        # self.coverage = preset_qubic.joint_out.qubic._get_coverage()
         self.max_coverage = np.max(self.coverage)
 
         ### Compute seen pixels
@@ -84,13 +105,19 @@ class PresetSky:
 
         ### Build mask for weighted Planck data
         self.preset_tools.mpi._print_message("    => Creating mask")
-        self.mask = np.ones(12 * self.params_sky["nside"] ** 2)
+        # self.mask = np.ones(12 * self.params_sky["nside"] ** 2)
+        self.mask = np.ones_like(self.coverage)
         self.mask[self.seenpix] = self.preset_tools.params["PLANCK"]["weight_planck"]
         C = HealpixConvolutionGaussianOperator(
             fwhm=self.preset_tools.params["PLANCK"]["fwhm_weight_planck"],
             lmax=3 * self.params_sky["nside"] - 1,
         )
-        self.mask = C(self.mask)
+        # self.mask = C(self.mask)
+        full_mask = np.zeros(12 * self.params_sky["nside"] ** 2)
+        full_mask[self.total_patch] = self.mask
+        full_mask = C(full_mask)
+        self.mask = full_mask[self.total_patch]
+        del full_mask
 
         ### Initialize namaster
         self.preset_tools.mpi._print_message("    => Initializing Namaster")
@@ -138,13 +165,16 @@ class PresetSky:
         and computes the ell array and cl2dl conversion factor for power Spectrum analysis.
 
         """
-
+        full_seenpix = np.zeros(12 * self.params_sky["nside"] ** 2)
+        full_seenpix[self.total_patch] = self.seenpix
         self.namaster = nam.Namaster(
-            self.seenpix,
+            # self.seenpix,
+            full_seenpix,
             lmin=self.preset_tools.params["Spectrum"]["lmin"],
             lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
             delta_ell=self.preset_tools.params["Spectrum"]["dl"],
             aposize=self.preset_tools.params["Spectrum"]["aposize"],
         )
+        del full_seenpix
         self.ell, _ = self.namaster.get_binning(self.preset_tools.params["SKY"]["nside"])
         self.cl2dl = self.ell * (self.ell + 1) / (2 * np.pi)

@@ -52,7 +52,12 @@ class PresetInitialisation:
         Method that initialize and return all the preset instances that will be used in Component Map-Making Pipeline.
 
         """
+
+        import objsize
+        
         self.tools = PresetTools(self.comm, parameters_file)
+        print('Size of tools [KB]:', objsize.get_deep_size(self.tools)/1024.)
+
         self.seed_noise_qubic = self.tools.params["QUBIC"]["NOISE"]["seed_noise"]
         self.seed_noise_planck = self.tools.params["PLANCK"]["seed_noise"]
         self.seed_start_pcg = self.tools.params["PCG"]["seed_start"]
@@ -76,21 +81,27 @@ class PresetInitialisation:
 
         self.tools.mpi._print_message("========= External Data =========")
         self.external = PresetExternal(self.tools)
+        print('Size of external [KB]:', objsize.get_deep_size(self.external)/1024.)
 
         self.tools.mpi._print_message("========= QUBIC =========")
         self.qubic = PresetQubic(self.tools, self.external)
+        print('Size of qubic [KB]:', objsize.get_deep_size(self.qubic)/1024.)
 
         self.tools.mpi._print_message("========= Components =========")
         self.comp = PresetComponents(self.tools, self.qubic)
+        print('Size of comp [KB]:', objsize.get_deep_size(self.comp)/1024.)
 
         self.tools.mpi._print_message("========= Sky =========")
         self.sky = PresetSky(self.tools, self.qubic)
+        print('Size of sky [KB]:', objsize.get_deep_size(self.sky)/1024.)
 
         self.tools.mpi._print_message("========= GAIN =========")
         self.gain = PresetGain(self.tools, self.qubic)
+        print('Size of gain [KB]:', objsize.get_deep_size(self.gain)/1024.)
 
         self.tools.mpi._print_message("========= Mixing Matrix =========")
         self.mixingmatrix = PresetMixingMatrix(self.tools, self.qubic, self.comp)
+        print('Size of mixingmatrix [KB]:', objsize.get_deep_size(self.mixingmatrix)/1024.)
 
         self.tools.mpi._print_message("========= Acquisition =========")
         self.acquisition = PresetAcquisition(
@@ -105,6 +116,7 @@ class PresetInitialisation:
             self.mixingmatrix,
             self.gain,
         )
+        print('Size of acquisition [KB]:', objsize.get_deep_size(self.acquisition)/1024.)
 
         self.tools.display_simulation_configuration()
 

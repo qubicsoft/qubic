@@ -386,6 +386,15 @@ class QubicAcquisition(Acquisition):
         trans_inst = self.instrument.get_transmission_operator()
         trans_atm = self.scene.atmosphere.transmission
         response = self.get_detector_response_operator()
+        
+        # import objsize
+        # operator_names = ["distribution", "temp", "aperture", "filter", "projection", "hwp", "polarizer", "integ", "trans_inst", "trans_atm", "response"]
+        # total = 0
+        # for i_op, operator in enumerate([distribution, temp, aperture, filter, projection, hwp, polarizer, integ, trans_inst, trans_atm, response]):
+        #     mem_op = objsize.get_deep_size(operator)/1024.
+        #     print('Size of {} [KB]:'.format(operator_names[i_op]), mem_op)
+        #     total += mem_op
+        # print('Size of total [KB]:', total)
 
         with rule_manager(inplace=True):
             H = CompositionOperator(
@@ -402,6 +411,10 @@ class QubicAcquisition(Acquisition):
                     distribution,
                 ]
             )
+        
+        # Size of H is not depending on NSIDE
+        # print('Size of H [KB]:', objsize.get_deep_size(H)/1024.)
+
         if self.scene == "QU":
             H = self.get_subtract_grid_operator()(H)
         return H
@@ -433,7 +446,7 @@ class QubicAcquisition(Acquisition):
 
         # XXX HACK
         def callback(i):
-            p = f(self.sampling[self.block[i]], self.scene, verbose=False)
+            p = f(self.sampling[self.block[i]], self.scene, verbose=False, interp_projection=self.interp_projection)
             return p
 
         shapeouts = [(len(self.instrument), s.stop - s.start) + self.scene.shape[1:] for s in self.block]
@@ -515,7 +528,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None, qubic_patch=None):
         ### Define class arguments
         self.dict = dictionary
         self.nsub = nsub
@@ -640,10 +653,23 @@ class QubicMultiAcquisitions:
         ### Define the number of detector and sampling (for each processors)
         self.ndets = len(self.subacqs[0].instrument)
         self.nsamples = len(self.sampling)
-        self.coverage = self._get_coverage()
+        self.qubic_patch = qubic_patch
+        # self.coverage = self._get_coverage()
 
-    def _get_coverage(self):
-        out = self.H[0].T(np.ones(self.H[0].T.shapein))
+
+        # import objsize
+        # print('Size of scene [KB]:', objsize.get_deep_size(self.scene)/1024.)
+        # print('Size of multiinstrument [KB]:', objsize.get_deep_size(self.multiinstrument)/1024.)
+        # print('Size of subacqs [KB]:', objsize.get_deep_size(self.subacqs)/1024.)
+        # print('Size of H [KB]:', objsize.get_deep_size(self.H)/1024.)
+        # print('Size of H[0] [KB]:', objsize.get_deep_size(self.H[0])/1024.)
+
+
+    def _get_coverage(self, qubic_patch=None):
+        if qubic_patch is not None: 
+            out = self.H[0].T(np.ones(self.H[0].T.shapein))[qubic_patch]
+        else:
+            out = self.H[0].T(np.ones(self.H[0].T.shapein))
         if self.scene.kind != "I":
             out = out[..., 0].copy()
         out *= self.ndets * self.nsamples * self.sampling.period / np.sum(out)
@@ -715,8 +741,8 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
     """
 
-    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None):
-        QubicMultiAcquisitions.__init__(self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co, sampling=sampling)
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None, qubic_patch=None):
+        QubicMultiAcquisitions.__init__(self, dictionary, nsub=nsub, nrec=nrec, comps=comps, H=H, nu_co=nu_co, sampling=sampling, qubic_patch=qubic_patch)
 
         if self.dict["instrument_type"] == "DB":
             self.used_bands = [150, 220]
@@ -936,7 +962,7 @@ class PlanckAcquisition:
 
         return out * planck_ntot
 
-    def get_invntt_operator(self, planck_ntot, weight_planck=1.0, seenpix=None, beam_correction=0):
+    def get_invntt_operator(self, planck_ntot, weight_planck=1.0, seenpix=None, beam_correction=0, qubic_patch=None):
         """Planck inverse noise covariance matrix.
 
         Method to build Planck inverse noise covariance matrix, using sigma computed during the initialisation of the class.
@@ -978,7 +1004,13 @@ class PlanckAcquisition:
 
         beta = np.ones(npix)
         if seenpix is not None:
-            beta[seenpix] = weight_planck
+            if qubic_patch is not None:
+                full_seenpix = np.zeros(self.npix, dtype=bool)
+                full_seenpix[qubic_patch] = seenpix
+                beta[full_seenpix] = weight_planck
+                del full_seenpix
+            else:
+                beta[seenpix] = weight_planck
 
         scale = np.zeros(npix)  # we add a mask so to not divide by zero
         beta_pos = beta > 0
@@ -1198,7 +1230,7 @@ class JointAcquisitionFrequencyMapMaking:
 
 
 class JointAcquisitionComponentsMapMaking:
-    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None, weight_planck=1.0):
+    def __init__(self, d, comp, Nsub, nus_external, nsub_planck, nu_co=None, H=None, weight_planck=1.0, qubic_patch=None):
         self.d = d
         self.Nsub = Nsub
         self.comp = comp
@@ -1207,7 +1239,7 @@ class JointAcquisitionComponentsMapMaking:
         self.weight_planck = weight_planck
 
         ### Select the instrument model
-        self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co)
+        self.qubic = QubicInstrumentType(self.d, self.Nsub, nrec=2, comps=self.comp, H=H, nu_co=nu_co, qubic_patch=qubic_patch)
         self.scene = self.qubic.scene
 
         self.external = PlanckAcquisition(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck)
@@ -1236,10 +1268,10 @@ class JointAcquisitionComponentsMapMaking:
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 
-    def get_invntt_operator(self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot, seenpix=None):
+    def get_invntt_operator(self, qubic_ndet, qubic_npho150, qubic_npho220, planck_ntot, seenpix=None, qubic_patch=None):
         invNq = self.qubic.get_invntt_operator(qubic_ndet, qubic_npho150, qubic_npho220)
         R = ReshapeOperator(invNq.shapeout, invNq.shape[0])
 
-        invNe = self.external.get_invntt_operator(planck_ntot, weight_planck=self.weight_planck, seenpix=seenpix)
+        invNe = self.external.get_invntt_operator(planck_ntot, weight_planck=self.weight_planck, seenpix=seenpix, qubic_patch=qubic_patch)
 
         return BlockDiagonalOperator([R(invNq(R.T)), invNe], axisout=0)

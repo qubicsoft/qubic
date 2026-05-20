@@ -1,4 +1,4 @@
-foldername: "test_Npointings_5000"
+foldername: "test_conv"
 filename: "test"
 
 CMB:
@@ -22,7 +22,7 @@ QUBIC:
   nrec: 2                        # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
   convolution_in: true          # Angular resolution in the input TOD
-  convolution_out: false         # Angular resolution in the reconstruction
+  convolution_out: true         # Angular resolution in the reconstruction
   bandpass_correction: true      # Correction to keep the edges of the integration band constant
   NOISE:
     ndet: 1                                # Level of detector noise
@@ -40,7 +40,7 @@ QUBIC:
 
 SKY:
   ### This section control the reconstructed sky
-  nside: 256                               # Nside of components
+  nside: 128                               # Nside of components
   coverage_cut: 0.2                        # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57

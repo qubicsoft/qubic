@@ -150,6 +150,7 @@ def get_pointing(d):
     center = (d["RA_center"], d["DEC_center"])
 
     if d["random_pointing"] is True:
+        print('-------------- Random pointing ------------------')
         return create_random_pointings(
             center,
             d["npointings"],
@@ -163,6 +164,7 @@ def get_pointing(d):
         )
 
     elif d["repeat_pointing"] is True:
+        print('-------------- repeat pointing ------------------')
         return create_repeat_pointings(
             center,
             d["npointings"],
@@ -176,6 +178,7 @@ def get_pointing(d):
         )
 
     elif d["sweeping_pointing"] is True:
+        print('-------------- sweeping pointing ------------------')
         return create_sweeping_pointings(
             center,
             d["duration"],

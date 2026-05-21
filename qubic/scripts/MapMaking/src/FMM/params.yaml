@@ -29,9 +29,9 @@ QUBIC:
     ndet: 1                                # Level of detector noise
                                            # randomness not fixed for det and photon noise, to be checked
     npho150: 1                             # Level of photon noise at 150 GHz
-    npho220: 1                             # Level of photon noise at 220 GHz
-    detector_nep: 4.7e-17                  # NEP of detector noise 
-    duration_150: 3                        # Effective duration at 150 GHz
+    npho220: 0                            # Level of photon noise at 220 GHz
+    detector_nep: 2.05e-16                  # NEP of detector noise 
+    duration_150: 3                       # Effective duration at 150 GHz
     duration_220: 3                        # Effective duration at 220 GHz
     seed_noise: 283
   SYNTHBEAM:
@@ -39,6 +39,12 @@ QUBIC:
     synthbeam_fraction: 1
     synthbeam_kmax_out: 1
   dtheta: 15                               # Angle for coverage
+  POINTINGS:                               # Choose one pointing strategy 
+    random_pointing: True
+    sweeping_pointing: False
+    repeat_pointing: False
+    realistic_scanning_strategy: False
+    pointings_file:                       # HDF5 file containg pointings
 
 SKY:
   ### This section control the reconstructed sky

@@ -224,6 +224,10 @@ class PipelineComponentMapMaking:
             )
         ).T
 
+        print("shape U", U.shapein, U.shapeout)
+        print("shape H_i", H_i.shapein, H_i.shapeout)
+        print("shape self.preset.acquisition.invN", self.preset.acquisition.invN.shapein, self.preset.acquisition.invN.shapeout)
+
         ### Update components when pixels outside the patch are fixed (assumed to be 0)
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
 

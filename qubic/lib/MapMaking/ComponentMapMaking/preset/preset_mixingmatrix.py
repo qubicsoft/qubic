@@ -38,12 +38,23 @@ class PresetMixingMatrix:
         """
         ### Import preset Foregrounds, QUBIC & tools
         self.preset_tools = preset_tools
-        self.preset_qubic = preset_qubic
-        self.preset_comp = preset_comp
+        # self.preset_qubic = preset_qubic # too heavy
+        # self.preset_comp = preset_comp # too heavy
+
+        # until we find a better solution, we can just extract manually the interesting information
+        self.allnus_in = preset_qubic.joint_in.qubic.allnus
+        self.allnus_out = preset_qubic.joint_out.qubic.allnus
+        self.params_foregrounds = preset_comp.params_foregrounds
+        self.components_model_in = preset_comp.components_model_in
+        self.components_model_out = preset_comp.components_model_out
+        self.len_comp_in_minus1 = len(preset_comp.components_in) - 1
+        self.len_comp_out_minus1 = len(preset_comp.components_out) - 1
+        self.components_name_in = preset_comp.components_name_in
+        self.components_name_out = preset_comp.components_name_out
 
         ### Store frequencies
-        self.nus_eff_in = np.array(list(self.preset_qubic.joint_in.qubic.allnus) + list(self.preset_qubic.joint_in.external.allnus))
-        self.nus_eff_out = np.array(list(self.preset_qubic.joint_out.qubic.allnus) + list(self.preset_qubic.joint_out.external.allnus))
+        self.nus_eff_in = np.array(list(preset_qubic.joint_in.qubic.allnus) + list(preset_qubic.joint_in.external.allnus))
+        self.nus_eff_out = np.array(list(preset_qubic.joint_out.qubic.allnus) + list(preset_qubic.joint_out.external.allnus))
 
         ### Get input spectral index
         self.preset_tools.mpi._print_message("    => Building Mixing Matrix")
@@ -73,7 +84,7 @@ class PresetMixingMatrix:
         np.random.seed(1)
         extra = np.ones(len(nus))
 
-        if self.preset_comp.params_foregrounds["Dust"]["model"] != "d6":
+        if self.params_foregrounds["Dust"]["model"] != "d6":
             return np.ones(len(nus))
 
         else:
@@ -110,15 +121,15 @@ class PresetMixingMatrix:
         if beta_d is None:
             # beta_d = 1.54
             beta_d = np.random.normal(
-                        self.preset_comp.params_foregrounds['Dust']['beta_d_init'][0], 
-                        self.preset_comp.params_foregrounds['Dust']['beta_d_init'][1], 
+                        self.params_foregrounds['Dust']['beta_d_init'][0], 
+                        self.params_foregrounds['Dust']['beta_d_init'][1], 
                         1
                     )
         if beta_s is None:
             # beta_s = -3
             beta_s = np.random.normal(
-                        self.preset_comp.params_foregrounds['Synchrotron']['beta_s_init'][0], 
-                        self.preset_comp.params_foregrounds['Synchrotron']['beta_s_init'][1], 
+                        self.params_foregrounds['Synchrotron']['beta_s_init'][0], 
+                        self.params_foregrounds['Synchrotron']['beta_s_init'][1], 
                         1
                     )
             
@@ -128,9 +139,9 @@ class PresetMixingMatrix:
         A = np.zeros((nfreq, ncomp))
         
         # Check if the Dust model is 'd6' and not in initialization step
-        if self.preset_comp.params_foregrounds['Dust']['model'] == 'd6' and init == False:
+        if self.params_foregrounds['Dust']['model'] == 'd6' and init == False:
             # Compute extra scaling factor for Dust component
-            extra = self.extra_sed(nus, self.preset_comp.params_foregrounds['Dust']['l_corr'])
+            extra = self.extra_sed(nus, self.params_foregrounds['Dust']['l_corr'])
         else:
             # Default scaling factor is 1 for all frequencies
             extra = np.ones(nfreq)
@@ -211,16 +222,16 @@ class PresetMixingMatrix:
 
         if key == "in":
             nus_eff = self.nus_eff_in
-            comps = self.preset_comp.components_model_in
-            nus_qubic = self.preset_qubic.joint_in.qubic.allnus
+            comps = self.components_model_in
+            nus_qubic = self.allnus_in
         elif key == "out":
             nus_eff = self.nus_eff_out
-            comps = self.preset_comp.components_model_out
-            nus_qubic = self.preset_qubic.joint_out.qubic.allnus
+            comps = self.components_model_out
+            nus_qubic = self.allnus_out
 
         Adeco = np.ones((len(nus_eff), len(comps)))
 
-        if self.preset_comp.params_foregrounds["Dust"]["Dust_out"]:
+        if self.params_foregrounds["Dust"]["Dust_out"]:
             A = MixingMatrix(*comps)
             idust = A.components.index("Dust")
             for ii, i in enumerate(nus_qubic):
@@ -260,48 +271,48 @@ class PresetMixingMatrix:
 
         ### Compute mixing matrix
         if key == "in":
-            mixingmatrix = MixingMatrix(*self.preset_comp.components_model_in)
+            mixingmatrix = MixingMatrix(*self.components_model_in)
         elif key == "out":
-            mixingmatrix = MixingMatrix(*self.preset_comp.components_model_out)
+            mixingmatrix = MixingMatrix(*self.components_model_out)
         else:
             raise ValueError
         return mixingmatrix.eval(nus, *beta)
 
     def _get_beta_iter(self):
-        if self.preset_comp.params_foregrounds["Dust"]["model"] in ["d0", "d6"]:
+        if self.params_foregrounds["Dust"]["model"] in ["d0", "d6"]:
             beta_iter = np.array([])
-            if self.preset_comp.params_foregrounds["Dust"]["Dust_out"]:
+            if self.params_foregrounds["Dust"]["Dust_out"]:
                 beta_iter = np.append(
                     beta_iter,
                     np.random.normal(
-                        self.preset_comp.params_foregrounds["Dust"]["beta_init"][0],
-                        self.preset_comp.params_foregrounds["Dust"]["beta_init"][1],
+                        self.params_foregrounds["Dust"]["beta_init"][0],
+                        self.params_foregrounds["Dust"]["beta_init"][1],
                         1,
                     ),
                 )
-            if self.preset_comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]:
+            if self.params_foregrounds["Synchrotron"]["Synchrotron_out"]:
                 beta_iter = np.append(
                     beta_iter,
                     np.random.normal(
-                        self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"][0],
-                        self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"][1],
+                        self.params_foregrounds["Synchrotron"]["beta_init"][0],
+                        self.params_foregrounds["Synchrotron"]["beta_init"][1],
                         1,
                     ),
                 )
 
-            Adeco_iter = self.get_decorrelated_mixing_matrix(self.preset_comp.params_foregrounds["Dust"]["beta_init"][2], seed=42, key="out")
+            Adeco_iter = self.get_decorrelated_mixing_matrix(self.params_foregrounds["Dust"]["beta_init"][2], seed=42, key="out")
             A_iter = self.get_mixingmatrix(self.nus_eff_out, beta_iter, key="out") * Adeco_iter
 
             return beta_iter, A_iter
 
-        elif self.preset_comp.params_foregrounds["Dust"]["model"] == "d1":
-            npix = 12 * self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"] ** 2
-            beta_iter = np.zeros((len(self.preset_comp.components_out) - 1, npix))
+        elif self.params_foregrounds["Dust"]["model"] == "d1":
+            npix = 12 * self.params_foregrounds["Dust"]["nside_beta_out"] ** 2
+            beta_iter = np.zeros((self.len_comp_out_minus1, npix))
 
-            dust_beta_mean, dust_beta_sigma, _ = self.preset_comp.params_foregrounds["Dust"]["beta_init"]
-            sync_beta_mean, sync_beta_sigma = self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"]
+            dust_beta_mean, dust_beta_sigma, _ = self.params_foregrounds["Dust"]["beta_init"]
+            sync_beta_mean, sync_beta_sigma = self.params_foregrounds["Synchrotron"]["beta_init"]
 
-            for iname, name in enumerate(self.preset_comp.components_name_out):
+            for iname, name in enumerate(self.components_name_out):
                 if name == "CMB":
                     pass
                 elif name == "Dust":
@@ -314,7 +325,7 @@ class PresetMixingMatrix:
             return beta_iter, Amm_iter
 
         else:
-            raise TypeError(f"{self.preset_comp.params_foregrounds['Dust']['model']} is not yet implemented...")
+            raise TypeError(f"{self.params_foregrounds['Dust']['model']} is not yet implemented...")
 
     def get_beta_input(self):
         """Spectral index.
@@ -342,19 +353,19 @@ class PresetMixingMatrix:
             Raises if the chosen model is not implemented.
 
         """
-        model = self.preset_comp.params_foregrounds["Dust"]["model"]
+        model = self.params_foregrounds["Dust"]["model"]
 
         # d0 / d6 : fixed beta
         if model in ["d0", "d6"]:
-            if self.preset_comp.params_foregrounds["CO"]["CO_in"]:
-                self.beta_in = np.array([float(i._REF_BETA) for i in self.preset_comp.components_model_in[1:-1]])
+            if self.params_foregrounds["CO"]["CO_in"]:
+                self.beta_in = np.array([float(i._REF_BETA) for i in self.components_model_in[1:-1]])
             else:
-                self.beta_in = np.array([float(i._REF_BETA) for i in self.preset_comp.components_model_in[1:]])
+                self.beta_in = np.array([float(i._REF_BETA) for i in self.components_model_in[1:]])
 
             self.Amm_in = self.get_mixingmatrix(self.nus_eff_in, self.beta_in, key="in")
 
-            if self.preset_comp.params_foregrounds["Dust"]["Dust_in"]:
-                Adeco = self.get_decorrelated_mixing_matrix(lcorr=self.preset_comp.params_foregrounds["Dust"]["l_corr"], seed=1, key="in")
+            if self.params_foregrounds["Dust"]["Dust_in"]:
+                Adeco = self.get_decorrelated_mixing_matrix(lcorr=self.params_foregrounds["Dust"]["l_corr"], seed=1, key="in")
                 if self.preset_tools.rank == 0:
                     self.Amm_in *= Adeco
                 else:
@@ -363,18 +374,18 @@ class PresetMixingMatrix:
 
         # d1 : spatially varying beta
         elif model == "d1":
-            nside = self.preset_comp.params_foregrounds["Dust"]["nside_beta_in"]
+            nside = self.params_foregrounds["Dust"]["nside_beta_in"]
             npix = 12 * nside**2
-            ncomp = len(self.preset_comp.components_in) - 1
+            ncomp = self.len_comp_in_minus1
 
             self.beta_in = np.zeros((ncomp, npix))
 
-            for iname, name in enumerate(self.preset_comp.components_name_in):
+            for iname, name in enumerate(self.components_name_in):
                 if name == "CMB":
                     continue
                 idx = iname - 1
 
-                val, sigma, _ = self.preset_comp.params_foregrounds["Dust"]["beta_init"]
+                val, sigma, _ = self.params_foregrounds["Dust"]["beta_init"]
                 beta_map = np.random.normal(val, sigma, size=npix)
 
                 # # Physical constraints
@@ -400,7 +411,7 @@ class PresetMixingMatrix:
 
         """
 
-        if self.preset_comp.params_foregrounds["fit_mixing_matrix"]:
+        if self.params_foregrounds["fit_mixing_matrix"]:
             self._index_seenpix_beta = 0
         else:
             self._index_seenpix_beta = None

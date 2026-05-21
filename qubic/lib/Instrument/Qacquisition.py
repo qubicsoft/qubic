@@ -21,6 +21,7 @@ from pyoperators import (
     PackOperator,
     ReshapeOperator,
     SymmetricBandToeplitzOperator,
+    UnpackOperator,
     proxy_group,
     rule_manager,
 )
@@ -133,7 +134,7 @@ class QubicAcquisition(Acquisition):
         self.sigma = sigma
         self.forced_sigma = None
 
-    def get_coverage(self):
+    def get_coverage(self): # Never used I think
         """
         Return the acquisition scene coverage as given by H.T(1), normalized
         so that its integral over the sky is the number of detectors times
@@ -370,7 +371,7 @@ class QubicAcquisition(Acquisition):
         nu = self.instrument.filter.nu
         return self.scene.get_unit_conversion_operator(nu)
 
-    def get_operator(self):
+    def get_operator(self, qubic_patch=None, nside=None, nstokes=None):
         """
         Return the operator of the acquisition. Note that the operator is only
         linear if the scene temperature is differential (absolute=False).
@@ -379,6 +380,9 @@ class QubicAcquisition(Acquisition):
         temp = self.get_unit_conversion_operator()
         aperture = self.get_aperture_integration_operator()
         filter = self.get_filter_operator()
+        print("shape filter", filter.shapein, filter.shapeout)
+        remapping = self.get_remapping_operator(qubic_patch=qubic_patch, nside=nside, nstokes=nstokes)
+        print("shape remapping", remapping.shapein, remapping.shapeout)
         projection = self.get_projection_operator()
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
@@ -404,6 +408,7 @@ class QubicAcquisition(Acquisition):
                     integ,
                     polarizer,
                     hwp * projection,
+                    remapping,
                     filter,
                     aperture,
                     trans_atm,
@@ -427,6 +432,21 @@ class QubicAcquisition(Acquisition):
             [self.instrument.get_polarizer_operator(self.sampling[b], self.scene) for b in self.block],
             axisin=1,
         )
+    
+    def get_remapping_operator(self, qubic_patch=None, nside=None, nstokes=None):
+        """
+        Return the operator that maps the qubic_patch pixels into a 12 * nside**2 map of zeros.
+        """
+        if qubic_patch is not None:
+            mask = np.zeros((hp.nside2npix(nside), nstokes), dtype=bool)
+            mask[qubic_patch, :] = True
+            # return UnpackOperator(mask, dtype=float)
+            shapein = (len(qubic_patch), nstokes)
+            shapeout = (len(qubic_patch)*nstokes)
+            reshape = ReshapeOperator(shapein=shapein, shapeout=shapeout)
+            return UnpackOperator(mask, dtype=float)(reshape)
+        else:
+            return IdentityOperator()
 
     def get_projection_operator(self, verbose=True):
         """
@@ -608,7 +628,12 @@ class QubicMultiAcquisitions:
         else:
             self.sampling = sampling
         self.scene = QubicScene(self.dict)
-        self.npix = 12 * self.scene.nside**2
+        if qubic_patch is not None:
+            print("qubic_patch is not None")
+            self.npix = len(qubic_patch)
+            print("npix", self.npix)
+        else:
+            self.npix = 12 * self.scene.nside**2
 
         ### Compute pointing matrix
         self.subacqs = [QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.dict) for i in range(len(self.multiinstrument))]
@@ -640,7 +665,8 @@ class QubicMultiAcquisitions:
 
         ### Compute the pointing matrix if not already done
         if H is None:
-            self.H = [self.subacqs[i].get_operator() for i in range(len(self.subacqs))]
+            nstokes = 3
+            self.H = [self.subacqs[i].get_operator(qubic_patch=qubic_patch, nside=self.scene.nside, nstokes=nstokes) for i in range(len(self.subacqs))]
         else:
             self.H = H
 
@@ -653,7 +679,7 @@ class QubicMultiAcquisitions:
         ### Define the number of detector and sampling (for each processors)
         self.ndets = len(self.subacqs[0].instrument)
         self.nsamples = len(self.sampling)
-        self.qubic_patch = qubic_patch
+        # self.qubic_patch = qubic_patch
         # self.coverage = self._get_coverage()
 
 
@@ -665,11 +691,20 @@ class QubicMultiAcquisitions:
         # print('Size of H[0] [KB]:', objsize.get_deep_size(self.H[0])/1024.)
 
 
-    def _get_coverage(self, qubic_patch=None):
+    def _get_coverage(self, qubic_patch=None): # we now use this method outside of the initialisation
         if qubic_patch is not None: 
-            out = self.H[0].T(np.ones(self.H[0].T.shapein))[qubic_patch]
+            # print("shape H", self.H.shapein, self.H.shapeout)
+            print("shape qubic_patch", np.shape(qubic_patch))
+            print("shape H[0]", self.H[0].shapein, self.H[0].shapeout)
+            print("shape np.ones(self.H[0].T.shapein)", np.shape(np.ones(self.H[0].T.shapein)))
+            print("shape out", np.shape(self.H[0].T(np.ones(self.H[0].T.shapein))))
+            out = self.H[0].T(np.ones(self.H[0].T.shapein))#[qubic_patch] # now H has the right size already
         else:
+            print("shape H[0]", self.H[0].shapein, self.H[0].shapeout)
+            print("shape np.ones(self.H[0].T.shapein)", np.shape(np.ones(self.H[0].T.shapein)))
+            print("shape out", np.shape(self.H[0].T(np.ones(self.H[0].T.shapein))))
             out = self.H[0].T(np.ones(self.H[0].T.shapein))
+            ezt
         if self.scene.kind != "I":
             out = out[..., 0].copy()
         out *= self.ndets * self.nsamples * self.sampling.period / np.sum(out)
@@ -723,9 +758,11 @@ class QubicMultiAcquisitions:
 
             R = Operator(direct=reshape_fct, transpose=reshape_fct, shapein=(nc, self.npix, 3), shapeout=(3, self.npix, nc), flags="linear")
 
-            ### if pixelization of A is lower than the one of components
-            if hp.npix2nside(A.shape[0]) != self.scene.nside:
-                A = hp.ud_grade(A.T, self.scene.nside).T
+
+            # Alexandre: I don't know how to deal with that yet so I commented it
+            # ### if pixelization of A is lower than the one of components
+            # if hp.npix2nside(A.shape[0]) != self.scene.nside:
+            #     A = hp.ud_grade(A.T, self.scene.nside).T
 
             d = DenseBlockDiagonalOperator(A[:, np.newaxis, :], broadcast="rightward", shapein=(self.npix, nc))
 

@@ -46,14 +46,14 @@ class PresetComponents:
 
     """
 
-    def __init__(self, preset_tools, preset_qubic):
+    def __init__(self, preset_tools, preset_qubic, qubic_patch=None):
         """
         Initialize.
 
         """
         ### Import preset QUBIC & tools
         self.preset_tools = preset_tools
-        self.preset_qubic = preset_qubic
+        # removed self.preset_qubic = preset_qubic in order to save memory
 
         ### Define variable for Foregrounds parameters
         self.params_cmb = self.preset_tools.params["CMB"]
@@ -69,14 +69,14 @@ class PresetComponents:
 
         ### Define model for reconstruction
         self.preset_tools.mpi._print_message("    => Creating model")
-        self.components_model_in, self.components_name_in = self.preset_qubic.get_components_fgb(key="in")
-        self.components_model_out, self.components_name_out = self.preset_qubic.get_components_fgb(key="out")
+        self.components_model_in, self.components_name_in = preset_qubic.get_components_fgb(key="in")
+        self.components_model_out, self.components_name_out = preset_qubic.get_components_fgb(key="out")
 
         ### Compute true components
         self.preset_tools.mpi._print_message("    => Creating components")
 
-        self.components_in = self.get_components(self.skyconfig_in)
-        self.components_out = self.get_components(self.skyconfig_out)
+        self.components_in = self.get_components(self.skyconfig_in, qubic_patch=qubic_patch)
+        self.components_out = self.get_components(self.skyconfig_out, qubic_patch=qubic_patch)
         self.components_iter = self.components_out.copy()
 
         ### Monochromatic emission
@@ -84,6 +84,17 @@ class PresetComponents:
             self.nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0"]
         else:
             self.nu_co = None
+
+        # import objsize
+        # print('Size of params_cmb [KB]:', objsize.get_deep_size(self.params_cmb)/1024.)
+        # print('Size of params_foregrounds [KB]:', objsize.get_deep_size(self.params_foregrounds)/1024.)
+        # print('Size of skyconfig_in [KB]:', objsize.get_deep_size(self.skyconfig_in)/1024.)
+        # print('Size of skyconfig_out [KB]:', objsize.get_deep_size(self.skyconfig_out)/1024.)
+        # print('Size of components_model_in [KB]:', objsize.get_deep_size(self.components_model_in)/1024.)
+        # print('Size of components_in [KB]:', objsize.get_deep_size(self.components_in)/1024.)
+        # print('Size of components_out [KB]:', objsize.get_deep_size(self.components_out)/1024.)
+        # print('Size of components_iter [KB]:', objsize.get_deep_size(self.components_iter)/1024.)
+        # gezeh
 
     def get_sky_config(self, key):
         """Sky configuration.
@@ -193,7 +204,7 @@ class PresetComponents:
         # Return the polarized intensity map with cosine and sine components
         return p_map * np.array([cospolangle, sinpolangle])
 
-    def get_components(self, skyconfig):
+    def get_components(self, skyconfig, qubic_patch=None):
         """Components maps.
 
         Read configuration dictionary which contains every compoenent and their associated model.
@@ -222,7 +233,11 @@ class PresetComponents:
         """
 
         ### Initialization
-        components = np.zeros((len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
+        if qubic_patch is not None:
+            components = np.zeros((len(skyconfig), len(qubic_patch), 3))
+        else:
+            components = np.zeros((len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
+        
 
         ### Compute CMB power spectrum according Planck data
         mycls = self.give_cl_cmb(r=self.params_cmb["r"], Alens=self.params_cmb["Alens"])
@@ -267,6 +282,9 @@ class PresetComponents:
             else:
                 raise TypeError("Choose right foreground model (d0, s0, ...)")
 
-            components[icomp] = component_map.copy()
+            if qubic_patch is not None:
+                components[icomp, ...] = component_map[qubic_patch, ...]
+            else:
+                components[icomp] = component_map.copy()
 
         return components

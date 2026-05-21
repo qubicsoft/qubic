@@ -4,6 +4,9 @@ from qubic.lib.Instrument.Qacquisition import JointAcquisitionComponentsMapMakin
 from qubic.lib.MapMaking.ComponentMapMaking import Qcomponent_model as model_co
 from qubic.lib.Qdictionary import qubicDict
 
+# import to create qubic_patch
+import numpy as np
+import healpy as hp
 
 class PresetQubic:
     """Preset QUBIC.
@@ -52,6 +55,30 @@ class PresetQubic:
         else:
             nu_co = None
 
+        params_sky = self.preset_tools.params["SKY"]
+        ### We want to keep only the useful pixels in memory, in order to be able to go at higher NSIDE
+        # it has to be done before creating H
+        dist_peak = np.sqrt(2)*np.radians(10)*self.preset_tools.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"] #+ np.radians(10) # the furthest peak from telescope l.o.s.
+        radius_patch_rad = np.radians(self.preset_tools.params["QUBIC"]["dtheta"]) + dist_peak  # to make it larger than self.seenpix_qubic
+        vec_centre_patch = hp.ang2vec(params_sky["RA_center"], params_sky["DEC_center"], lonlat=True) # equatorial coord
+        inside_patch = hp.query_disc(params_sky["nside"], vec_centre_patch, radius_patch_rad)
+        self.qubic_patch = hp.query_disc(params_sky["nside"], vec_centre_patch, radius_patch_rad * (1 + self.preset_tools.params["QUBIC"]["apod"]))
+        # returns unique elements in cell_ids_large not in cell_ids, sorted
+        self.qubic_patch_apod = np.setdiff1d(self.qubic_patch, inside_patch)
+        # del self.qubic_patch
+        del inside_patch
+        dir_centre_patch = hp.rotator.vec2dir(vec_centre_patch)
+        vec_pix_apod = hp.pix2vec(params_sky["nside"], self.qubic_patch_apod)
+        dir_pix_apod = hp.rotator.vec2dir(vec_pix_apod)
+        # angular distance from the centre of the patch
+        dist_pix_apod = hp.rotator.angdist(dir_centre_patch, dir_pix_apod)
+        # the factor we need to multiply the pixels from the apodisation ring with
+        self.cos_apod = 1/2 * (1 + np.cos(np.pi*(dist_pix_apod - radius_patch_rad)/(self.preset_tools.params["QUBIC"]["apod"] * radius_patch_rad)))
+        del dist_pix_apod
+
+        ### To test without the patch
+        # self.qubic_patch = None
+
         ### Joint acquisition for QUBIC operator
         self.preset_tools.mpi._print_message("    => Building QUBIC operator")
         self.joint_in = JointAcquisitionComponentsMapMaking(
@@ -62,6 +89,7 @@ class PresetQubic:
             preset_external.params_external["nsub_planck"],
             nu_co=nu_co,
             weight_planck=preset_external.params_external["weight_planck"],
+            qubic_patch=self.qubic_patch,
         )
 
         if self.params_qubic["nsub_in"] == self.params_qubic["nsub_out"]:
@@ -78,6 +106,7 @@ class PresetQubic:
             nu_co=nu_co,
             H=H_tojoint,
             weight_planck=preset_external.params_external["weight_planck"],
+            qubic_patch=self.qubic_patch,
         )
 
     def get_dict(self):

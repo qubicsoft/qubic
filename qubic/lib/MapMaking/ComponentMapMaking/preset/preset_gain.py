@@ -23,8 +23,13 @@ class PresetGain:
 
         """
         ### Import preset QUBIC & tools
-        self.preset_qubic = preset_qubic
+        # self.preset_qubic = preset_qubic
         self.preset_tools = preset_tools
+
+        self.param_instrument = preset_qubic.params_qubic["instrument"]
+        self.params_gain = preset_qubic.params_qubic["GAIN"]
+        self.ndets = preset_qubic.joint_in.qubic.ndets
+        
 
         ### Get input detectors gain
         self.preset_tools.mpi._print_message("    => Getting detectors gain")
@@ -41,23 +46,23 @@ class PresetGain:
 
         """
 
-        np.random.seed(None) # rewrite randomness!
-        if self.preset_qubic.params_qubic["instrument"] == "UWB":
+        np.random.seed(self.params_gain["seed"]) # rewrite randomness!
+        if self.param_instrument == "UWB":
             self.gain_in = np.random.normal(
                 1,
-                self.preset_qubic.params_qubic["GAIN"]["sig_gain"],
-                self.preset_qubic.joint_in.qubic.ndets,
+                self.params_gain["sig_gain"],
+                self.ndets,
             )
-        else:
+        else: # what about MonoBand?
             self.gain_in = np.random.normal(
                 1,
-                self.preset_qubic.params_qubic["GAIN"]["sig_gain"],
-                (self.preset_qubic.joint_in.qubic.ndets, 2),
+                self.params_gain["sig_gain"],
+                (self.ndets, 2),
             )
 
         self.all_gain_in = join_data(self.preset_tools.comm, self.gain_in)
 
-        if self.preset_qubic.params_qubic["GAIN"]["fit_gain"]:
+        if self.params_gain["fit_gain"]:
             gain_err = 0.2
             self.gain_iter = np.random.uniform(
                 self.gain_in - gain_err / 2,

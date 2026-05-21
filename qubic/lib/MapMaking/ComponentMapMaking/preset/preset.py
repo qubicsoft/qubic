@@ -79,6 +79,12 @@ class PresetInitialisation:
                 for file_name in self.files_list:
                     create_folder_if_not_exists(self.comm, "CMM/{}/Plots/{}".format(self.tools.params["foldername"], file_name))
 
+
+        # in terms of memory use, we should probably not
+        # save the previous preset objects in the next ones
+        # i.e. not do self.preset_xxx = xxx at the initialisation
+        # maybe we could find a way to make the objects "inherit" the previous one
+
         self.tools.mpi._print_message("========= External Data =========")
         self.external = PresetExternal(self.tools)
         print('Size of external [KB]:', objsize.get_deep_size(self.external)/1024.)
@@ -86,14 +92,15 @@ class PresetInitialisation:
         self.tools.mpi._print_message("========= QUBIC =========")
         self.qubic = PresetQubic(self.tools, self.external)
         print('Size of qubic [KB]:', objsize.get_deep_size(self.qubic)/1024.)
-
-        self.tools.mpi._print_message("========= Components =========")
-        self.comp = PresetComponents(self.tools, self.qubic)
-        print('Size of comp [KB]:', objsize.get_deep_size(self.comp)/1024.)
-
+ 
         self.tools.mpi._print_message("========= Sky =========")
         self.sky = PresetSky(self.tools, self.qubic)
         print('Size of sky [KB]:', objsize.get_deep_size(self.sky)/1024.)
+        
+        self.tools.mpi._print_message("========= Components =========")
+        # self.comp = PresetComponents(self.tools, self.qubic, self.sky.total_patch)
+        self.comp = PresetComponents(self.tools, self.qubic, self.qubic.qubic_patch)
+        print('Size of comp [KB]:', objsize.get_deep_size(self.comp)/1024.)
 
         self.tools.mpi._print_message("========= GAIN =========")
         self.gain = PresetGain(self.tools, self.qubic)

@@ -1,4 +1,4 @@
-simulation_path: "FMM/test_Npointings_1000"
+simulation_path: "FMM/test_k_max_2_1_synthbeam_fraction_0.95"
 name: "test_qubic"
 
 Spectrum:

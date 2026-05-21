@@ -104,6 +104,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nsub_out"],
             H=H,
             is_external_data=self.params["PLANCK"]["external_data"],
+            k_max=self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax_out"]
         )
 
         ### Ensure that all processors have the same external dataset
@@ -353,7 +354,7 @@ class PipelineFrequencyMapMaking:
             "detector_nep": float(self.params["QUBIC"]["NOISE"]["detector_nep"]),
             "synthbeam_kmax": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"],
             "synthbeam_fraction": self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
-            "interp_projection": False,
+            "interp_projection": self.params["QUBIC"]["interp"],
             "instrument_type": self.params["QUBIC"]["instrument"],
             "config": self.params["QUBIC"]["configuration"],
         }

@@ -104,6 +104,7 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nsub_out"],
             H=H,
             is_external_data=self.params["PLANCK"]["external_data"],
+            k_max=self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax_out"]
         )
 
         ### Ensure that all processors have the same external dataset

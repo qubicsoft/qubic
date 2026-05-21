@@ -1287,9 +1287,11 @@ class PlanckAcquisition:
 
 class JointAcquisitionFrequencyMapMaking:
     def __init__(
-        self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False, sampling=None
+        self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False, sampling=None, k_max=None
     ):
         self.d = d
+        if k_max is not None:
+            self.d["synthbeam_kmax"] = k_max
         self.Nrec = Nrec
         self.Nsub = Nsub
         self.is_external_data = is_external_data

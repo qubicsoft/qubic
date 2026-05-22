@@ -4,7 +4,7 @@ import fgbuster.mixingmatrix as mm
 import healpy as hp
 import numpy as np
 import yaml
-from pyoperators import BlockDiagonalOperator, DiagonalOperator, PackOperator, ReshapeOperator
+from pyoperators import BlockDiagonalOperator, DiagonalOperator, PackOperator, ReshapeOperator, IdentityOperator
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 from qubic.lib.MapMaking.ComponentMapMaking.mixing_matrix.blindMM import BlindMM
@@ -16,6 +16,7 @@ from qubic.lib.MapMaking.Qmap_plotter import PlotsCMM, plot_cross_spectrum
 from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
 from qubic.lib.Qhdf5 import HDF5Dict
 from qubic.lib.Qspectra import Spectra
+from qubic.lib.Instrument.Qacquisition import QubicAcquisition
 
 
 class PipelineComponentMapMaking:
@@ -120,10 +121,15 @@ class PipelineComponentMapMaking:
             Boolean array that define the pixels observed by QUBIC.
 
         """
-
+        if self.preset.qubic.qubic_patch is not None:
+            shape_patch = np.shape(self.preset.acquisition.components_in_convolved)
+            shape_full = (shape_patch[0], 12 * self.preset.qubic.joint_out.qubic.scene.nside**2, shape_patch[2])
+            remapping = QubicAcquisition.get_remapping_operator(qubic_patch=self.preset.qubic.qubic_patch, shape_patch=shape_patch, shape_full=shape_full)
+        else:
+            remapping = IdentityOperator()
         if self._steps == 0:
             self.plots._display_allcomponents(
-                input_maps=self.preset.acquisition.components_in_convolved, reconstructed_maps=self.preset.comp.components_iter, ki=-1, reso=self.preset.tools.params["PCG"]["reso_plot"]
+                input_maps=remapping(self.preset.acquisition.components_in_convolved), reconstructed_maps=remapping(self.preset.comp.components_iter), ki=-1, reso=self.preset.tools.params["PCG"]["reso_plot"]
             )
 
         ### Initialize PCG starting point
@@ -178,15 +184,25 @@ class PipelineComponentMapMaking:
                 do_gif(
                     self.gif_folder,
                 )
-            self.plots.display_maps(input_maps=self.preset.acquisition.components_in_convolved, reconstructed_maps=self.preset.comp.components_iter, seenpix=seenpix, ki=self._steps)
+
+            remapped_comp_in_conv = remapping(self.preset.acquisition.components_in_convolved)
+            remapped_comp_iter = remapping(self.preset.comp.components_iter)
+            shape_patch = (len(seenpix),)
+            shape_full = (12 * self.preset.qubic.joint_out.qubic.scene.nside**2,)
+            remapping_1d = QubicAcquisition.get_remapping_operator(qubic_patch=self.preset.qubic.qubic_patch, shape_patch=shape_patch, shape_full=shape_full)
+
+            self.plots.display_maps(input_maps=remapped_comp_in_conv, reconstructed_maps=remapped_comp_iter, seenpix=remapping_1d(seenpix).astype(bool), ki=self._steps)
             self.plots._display_allcomponents(
-                input_maps=self.preset.acquisition.components_in_convolved,
-                reconstructed_maps=self.preset.comp.components_iter,
+                input_maps=remapped_comp_in_conv,
+                reconstructed_maps=remapped_comp_iter,
                 ki=self._steps,
                 gif=self.preset.tools.params["PCG"]["do_gif"],
                 reso=self.preset.tools.params["PCG"]["reso_plot"],
             )
             self.plots.plot_rms_iteration(self.preset.acquisition.rms_plot, ki=self._steps)
+
+            del remapped_comp_in_conv
+            del remapped_comp_iter
 
     def update_components(self, seenpix):
         r"""
@@ -209,7 +225,10 @@ class PipelineComponentMapMaking:
             gain=self.preset.gain.gain_iter,
             fwhm=self.preset.acquisition.fwhm_mapmaking,
             nu_co=self.preset.comp.nu_co,
+            qubic_patch = self.preset.qubic.qubic_patch
         )
+
+        print("shape before", (len(self.preset.comp.components_name_out) * sum(seenpix) * 3), (len(self.preset.comp.components_name_out), sum(seenpix), 3))
 
         U = (
             ReshapeOperator(

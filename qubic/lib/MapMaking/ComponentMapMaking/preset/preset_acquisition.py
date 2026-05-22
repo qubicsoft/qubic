@@ -290,6 +290,7 @@ class PresetAcquisition:
             A=self.preset_mixingmatrix.Amm_in,
             gain=self.preset_gain.gain_in,
             fwhm=self.fwhm_tod,
+            qubic_patch=self.qubic_patch,
         )
 
         ### Build noise variables

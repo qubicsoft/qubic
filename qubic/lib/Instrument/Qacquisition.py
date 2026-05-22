@@ -371,7 +371,7 @@ class QubicAcquisition(Acquisition):
         nu = self.instrument.filter.nu
         return self.scene.get_unit_conversion_operator(nu)
 
-    def get_operator(self, qubic_patch=None, nside=None, nstokes=None):
+    def get_operator(self):
         """
         Return the operator of the acquisition. Note that the operator is only
         linear if the scene temperature is differential (absolute=False).
@@ -380,9 +380,6 @@ class QubicAcquisition(Acquisition):
         temp = self.get_unit_conversion_operator()
         aperture = self.get_aperture_integration_operator()
         filter = self.get_filter_operator()
-        print("shape filter", filter.shapein, filter.shapeout)
-        remapping = self.get_remapping_operator(qubic_patch=qubic_patch, nside=nside, nstokes=nstokes)
-        print("shape remapping", remapping.shapein, remapping.shapeout)
         projection = self.get_projection_operator()
         hwp = self.get_hwp_operator()
         polarizer = self.get_polarizer_operator()
@@ -408,7 +405,6 @@ class QubicAcquisition(Acquisition):
                     integ,
                     polarizer,
                     hwp * projection,
-                    remapping,
                     filter,
                     aperture,
                     trans_atm,
@@ -433,16 +429,27 @@ class QubicAcquisition(Acquisition):
             axisin=1,
         )
     
-    def get_remapping_operator(self, qubic_patch=None, nside=None, nstokes=None):
+    # remapping = self.get_remapping_operator(qubic_patch=qubic_patch, nside=nside, nstokes=nstokes)
+    @staticmethod
+    def get_remapping_operator(qubic_patch=None, shape_patch=None, shape_full=None): # not useful to be in a class
         """
         Return the operator that maps the qubic_patch pixels into a 12 * nside**2 map of zeros.
         """
-        if qubic_patch is not None:
-            mask = np.zeros((hp.nside2npix(nside), nstokes), dtype=bool)
-            mask[qubic_patch, :] = True
+        if qubic_patch is not None: # we have here the issue that the shape will depend on nstokes and ncomp. a solution could be to input the shape direcly!
+            # mask = np.zeros((hp.nside2npix(nside), nstokes), dtype=bool)
+            mask = np.zeros(shape_full, dtype=bool)
+            dim_patch = np.argwhere(np.array(shape_patch) == len(qubic_patch))
+            if dim_patch == 0:
+                mask[qubic_patch, ...] = True
+            elif dim_patch == 1:
+                mask[:, qubic_patch, ...] = True
+            else:
+                raise ValueError("I don't understand the shape of the map {}".format(shape_patch))
             # return UnpackOperator(mask, dtype=float)
-            shapein = (len(qubic_patch), nstokes)
-            shapeout = (len(qubic_patch)*nstokes)
+            # shapein = (len(qubic_patch), nstokes)
+            # shapeout = (len(qubic_patch)*nstokes)
+            shapein = shape_patch
+            shapeout = (np.prod(np.array(shape_patch)),)
             reshape = ReshapeOperator(shapein=shapein, shapeout=shapeout)
             return UnpackOperator(mask, dtype=float)(reshape)
         else:
@@ -665,8 +672,11 @@ class QubicMultiAcquisitions:
 
         ### Compute the pointing matrix if not already done
         if H is None:
-            nstokes = 3
-            self.H = [self.subacqs[i].get_operator(qubic_patch=qubic_patch, nside=self.scene.nside, nstokes=nstokes) for i in range(len(self.subacqs))]
+            self.H = [self.subacqs[i].get_operator() for i in range(len(self.subacqs))]
+            # nstokes = 3
+            # remapping = QubicAcquisition.get_remapping_operator(qubic_patch=qubic_patch, nside=self.scene.nside, nstokes=nstokes)
+            # self.H = [self.subacqs[i].get_operator()(remapping) for i in range(len(self.subacqs))] # if we compute remapping outside get_operator
+            # self.H = [self.subacqs[i].get_operator(qubic_patch=qubic_patch, nside=self.scene.nside, nstokes=nstokes) for i in range(len(self.subacqs))] # if remapping is in get_operator
         else:
             self.H = H
 
@@ -698,7 +708,7 @@ class QubicMultiAcquisitions:
             print("shape H[0]", self.H[0].shapein, self.H[0].shapeout)
             print("shape np.ones(self.H[0].T.shapein)", np.shape(np.ones(self.H[0].T.shapein)))
             print("shape out", np.shape(self.H[0].T(np.ones(self.H[0].T.shapein))))
-            out = self.H[0].T(np.ones(self.H[0].T.shapein))#[qubic_patch] # now H has the right size already
+            out = self.H[0].T(np.ones(self.H[0].T.shapein))[qubic_patch] # Hqubic still has the full sky size, as the remapping is done right before convolution
         else:
             print("shape H[0]", self.H[0].shapein, self.H[0].shapeout)
             print("shape np.ones(self.H[0].T.shapein)", np.shape(np.ones(self.H[0].T.shapein)))
@@ -844,7 +854,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
             return BlockColumnOperator(Operator_list, axisout=0)
 
-    def get_operator(self, A=None, gain=None, fwhm=None):  # exactly the same for DB and UWB get_operator except for lmax=2 * self.dict["nside"] (which should be the same anyway?)
+    def get_operator(self, A=None, gain=None, fwhm=None, qubic_patch=None):  # exactly the same for DB and UWB get_operator except for lmax=2 * self.dict["nside"] (which should be the same anyway?)
         """
 
         Method to generate the pointing matrix.
@@ -867,8 +877,17 @@ class QubicInstrumentType(QubicMultiAcquisitions):
             ### Compute gaussian kernel to account for angular resolution
             if fwhm is None:
                 convolution = IdentityOperator()
+            elif qubic_patch is not None:
+                shape_full = self.H[isub].shapein # (npix, nstokes)
+                shape_patch = (len(qubic_patch), shape_full[1])
+                remapping = QubicAcquisition.get_remapping_operator(qubic_patch=qubic_patch, shape_patch=shape_patch, shape_full=shape_full)
+                convolution = HealpixConvolutionGaussianOperator(fwhm=fwhm[isub], lmax=3 * self.scene.nside - 1)(remapping)
             else:
                 convolution = HealpixConvolutionGaussianOperator(fwhm=fwhm[isub], lmax=3 * self.scene.nside - 1)
+
+            # print("shape Acomp", Acomp.shapein, Acomp.shapeout)
+            # print("shape remapping", remapping.shapein, remapping.shapeout)
+            # print("shape convolution", convolution.shapein, convolution.shapeout)
 
             ### Compose operator as H = Proj * C * A
             with rule_manager(inplace=True):
@@ -1137,7 +1156,7 @@ class PlanckAcquisition:
 
         return D
 
-    def get_operator(self, A=None, fwhm=None, comm=None, nu_co=None):
+    def get_operator(self, A=None, fwhm=None, comm=None, nu_co=None, qubic_patch=None):
         """Planck Acquisition Operator.
 
         Method to build the acquisition operator for Planck. This operator is composed at first by a convolution operator at Planck FWHM. Then, for the Component MapMaking, a Mixing Operator is added. Finally, we have the operator to turn maps into TOD.
@@ -1158,12 +1177,14 @@ class PlanckAcquisition:
         BlockColumnOperator
             Planck Acquisition Operator.
         """
-        Rmap2tod = ReshapeOperator((12 * self.nside**2, 3), (3 * 12 * self.nside**2))
-
+        # if qubic_patch is not None:
+        #     npix = len(qubic_patch)
+        # else:
+        #     npix = 12 * self.nside**2
+        npix = 12 * self.nside**2
+        Rmap2tod = ReshapeOperator((npix, 3), (3 * npix))
         Operator = []
-
         k = 0
-
         for _ in self.nus:
             ope_i = []
             for _ in range(self.nsub_planck):
@@ -1171,20 +1192,22 @@ class PlanckAcquisition:
                     C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
                 else:
                     C = IdentityOperator()
-
                 if A is not None:
                     D = self._get_mixing_operator(A=A[k])
                 else:
                     D = IdentityOperator()
-
-                ope_i += [C * D]
+                if qubic_patch is not None:
+                    shape_full = (C * D).shapein
+                    shape_patch = (shape_full[0], len(qubic_patch), shape_full[2])
+                    RM = QubicAcquisition.get_remapping_operator(qubic_patch, shape_patch=shape_patch, shape_full=shape_full)
+                    ope_i += [C * D * RM]
+                else:
+                    ope_i += [C * D]
                 k += 1
-
             if comm is not None:
                 Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
             else:
                 Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
-
         return BlockColumnOperator(Operator, axisout=0)
 
 
@@ -1282,7 +1305,7 @@ class JointAcquisitionComponentsMapMaking:
         self.external = PlanckAcquisition(nus=self.nus_external, nside=self.scene.nside, comps=self.comp, nsub_planck=self.nsub_planck)
         self.allnus = np.array(list(self.qubic.allnus) + list(self.external.allnus))
 
-    def get_operator(self, A, gain=None, fwhm=None, nu_co=None):
+    def get_operator(self, A, gain=None, fwhm=None, nu_co=None, qubic_patch=None):
         Aq = A[: self.Nsub]
         Ap = A[self.Nsub :]
 
@@ -1293,7 +1316,7 @@ class JointAcquisitionComponentsMapMaking:
             fwhm_q = fwhm[: self.Nsub]
             fwhm_p = fwhm[self.Nsub :]
 
-        Hq = self.qubic.get_operator(A=Aq, gain=gain, fwhm=fwhm_q)
+        Hq = self.qubic.get_operator(A=Aq, gain=gain, fwhm=fwhm_q, qubic_patch=qubic_patch)
         Rq = ReshapeOperator(Hq.shapeout, (Hq.shapeout[0] * Hq.shapeout[1]))
 
         try:
@@ -1301,7 +1324,7 @@ class JointAcquisitionComponentsMapMaking:
         except Exception:
             mpidist = None
 
-        He = self.external.get_operator(A=Ap, fwhm=fwhm_p, comm=mpidist)  # , nu_co=nu_co)
+        He = self.external.get_operator(A=Ap, fwhm=fwhm_p, comm=mpidist, qubic_patch=qubic_patch)  # , nu_co=nu_co)
 
         return BlockColumnOperator([Rq * Hq, He], axisout=0)
 

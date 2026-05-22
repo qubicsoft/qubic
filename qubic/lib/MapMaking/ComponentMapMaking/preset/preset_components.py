@@ -249,11 +249,8 @@ class PresetComponents:
                 ### Compute CMB power spectrum according Planck data
                 mycls = self.give_cl_cmb(r=self.params_cmb["r"], Alens=self.params_cmb["Alens"])
 
-                np.random.seed(skyconfig[comp_name])
+                np.random.seed(skyconfig[comp_name]) # Alexandre: do we always look at the same cmb?
                 component_map = hp.synfast(mycls, self.preset_tools.params["SKY"]["nside"], verbose=False, new=True).T
-
-                # # test
-                # component_map = np.zeros_like(component_map)
 
             # Dust and synchrotron case
             elif comp_name == "Dust" or comp_name == "Synchrotron":

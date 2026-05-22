@@ -7,6 +7,7 @@ from qubic.lib.Qdictionary import qubicDict
 # import to create qubic_patch
 import numpy as np
 import healpy as hp
+from pysimulators import CartesianEquatorial2GalacticOperator
 
 class PresetQubic:
     """Preset QUBIC.
@@ -61,6 +62,8 @@ class PresetQubic:
         dist_peak = np.sqrt(2)*np.radians(10)*self.preset_tools.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"] #+ np.radians(10) # the furthest peak from telescope l.o.s.
         radius_patch_rad = np.radians(self.preset_tools.params["QUBIC"]["dtheta"]) + dist_peak  # to make it larger than self.seenpix_qubic
         vec_centre_patch = hp.ang2vec(params_sky["RA_center"], params_sky["DEC_center"], lonlat=True) # equatorial coord
+        c2g = CartesianEquatorial2GalacticOperator()
+        vec_centre_patch = c2g(vec_centre_patch) # galactic (to match Qsamplings)
         inside_patch = hp.query_disc(params_sky["nside"], vec_centre_patch, radius_patch_rad)
         self.qubic_patch = hp.query_disc(params_sky["nside"], vec_centre_patch, radius_patch_rad * (1 + self.preset_tools.params["QUBIC"]["apod"]))
         # returns unique elements in cell_ids_large not in cell_ids, sorted

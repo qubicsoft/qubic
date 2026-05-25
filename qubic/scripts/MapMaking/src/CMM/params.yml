@@ -1,5 +1,5 @@
 save_iter: 1                                                                           # Save every 'save_iter' iteration
-foldername: "test_d0_353"                                                                  # Name of the saved folder
+foldername: "test_conv_true_w_planck_claude"                                                                  # Name of the saved folder
 filename: "test"                                                                       # Name of the saved file
 lastite: true                                                                          # Keep only the last iteration
 
@@ -11,18 +11,18 @@ CMB:
 
 Foregrounds:
   fit_components: true                                                                 # If true, component maps are reconstructed
-  fit_mixing_matrix: true                                                              # If true, mixing matrix is reconstructed
+  fit_mixing_matrix: false                                                              # If true, mixing matrix is reconstructed
   bin_mixing_matrix: 8
   blind_method: "minimize"                                                             # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
                                                                                        # 'alternate' or 'minimize'
     ### Thermal Dust emission
   Dust:
-    Dust_in: true
-    Dust_out: true
+    Dust_in: false
+    Dust_out: false
 
     type: "parametric"                                                                 # Reconstruction method
     model: "d0"
-    beta_init: [1.54, 0.05, 10000000]                                                  # PySM model
+    beta_init: [1.54, 0, 10000000]                                                  # PySM model
     nside_beta_in: 0                                                                   # Input pixelization for beta_d (in a case of d1 model)
     nside_beta_out: 0                                                                  # Output pixelization for beta_d (in a case of d1 model)
     nu0: 150.0                                                                         # Reference frequency (nu0_d)
@@ -53,11 +53,11 @@ QUBIC:
 
   instrument: "DB"                                                                     # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
   configuration: "FI"                                                                  # Instrumental configuration (TD or FI) # to be implemented in the code
-  npointings: 10000                                                                     # Number of time samples
-  nsub_in: 8                                                                           # Number of sub-acquisitions
-  nsub_out: 8                                                                          # Number of sub-acquisitions for the reconstruction
-  convolution_in: false                                                                # Angular resolution in the input TOD
-  convolution_out: false                                                               # Angular resolution in the reconstruction
+  npointings: 3000                                                                     # Number of time samples
+  nsub_in: 16                                                                           # Number of sub-acquisitions
+  nsub_out: 16                                                                          # Number of sub-acquisitions for the reconstruction
+  convolution_in: true                                                                # Angular resolution in the input TOD
+  convolution_out: true                                                               # Angular resolution in the reconstruction
   preconditioner: false
   NOISE:
     ndet: 1                                                                          # Level of detector noise
@@ -87,7 +87,7 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
   level_noise_planck: 1                                                              # Noise level for Planck data
-  nsub_planck: 3                                                                       # Number of integration step for Planck data
+  nsub_planck: 16                                                                       # Number of integration step for Planck data
   weight_planck: 1                                                                     # Weight of Planck data within the QUBIC patch
   fwhm_weight_planck: 0                                                                # FWHM for apodized QUBIC patch
   30GHz: false
@@ -96,20 +96,20 @@ PLANCK:
   100GHz: false
   143GHz: true
   217GHz: true
-  353GHz: true
+  353GHz: false
   seed_noise: 346207976
 
 Pipeline:
   mapmaking: true
-  spectrum: true
+  spectrum: false
 
 PCG:
     ### This section control PCG parameters
 
-  n_init_iter_pcg: 10
+  n_init_iter_pcg: 50
   n_iter_pcg: 10                                                                       # Number of PCG iterations
   tol_pcg: 1.0e-15                                                                     # Tolerance for PCG
-  n_iter_loop: 50                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+  n_iter_loop: 1                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
   ites_to_converge: 1                                                                  # should be less than n_iter_loop
   tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                                    # Fixing pixels outside QUBIC patch
@@ -126,4 +126,26 @@ INITIAL:
   sig_map_noise: 0                                                                     # Standard deviation of noise in first guess maps
 
   global_I: 1                                                                          # Global multiplicative factor of initial intensity within the QUBIC patch
-  qubic_patch_I_cmb: 1                                                                 # 
+  qubic_patch_I_cmb: 1                                                                 # Multiplicative factor of initial CMB within the QUBIC patch
+  qubic_patch_I_dust: 1                                                                # Multiplicative factor of initial Dust within the QUBIC patch
+  qubic_patch_I_sync: 1                                                                # Multiplicative factor of initial Sync within the QUBIC patch
+  qubic_patch_I_co: 1                                                                  # Multipliative factor of initial CO within the QUBIC patch
+
+  global_P: 1                                                                          # Global multiplicative factor of initial polarisation within the QUBIC patch
+  qubic_patch_P_cmb: 1                                                                 # Multiplicative factor of initial CMB within the QUBIC patch
+  qubic_patch_P_dust: 1                                                                # Multiplicative factor of initial Dust within the QUBIC patch
+  qubic_patch_P_sync: 1                                                                # Multiplicative factor of initial Sync within the QUBIC patch
+  qubic_patch_P_co: 1                                                                  # Multiplicative factor of initial CO within the QUBIC patch
+
+Spectrum:
+  dl: 30
+  lmin: 40
+  lmax: 255
+  aposize: 10
+  plot_spectrum: true
+
+Plots:
+  conv_beta: true                                                                      # Plot spectral indices convergence
+  conv_gain: false                                                                     # Plot gain convergence
+  conv_rms: true                                                                       # Plot RMS convergence
+  maps: true                                                                           # Plot maps convergence

@@ -1,4 +1,4 @@
-simulation_path: "CMM/parametric_d0_DB_test_noiseless"
+simulation_path: "CMM/parametric_d0_DB_test_d0_353"
 name: "test"
 
 Spectrum:
@@ -36,7 +36,7 @@ dust:
   Ad:
     fit: True 
     bound_min: 0
-    bound_max: 100
+    bound_max: 10
     init_average: 5
     init_std: 1
   alphad:

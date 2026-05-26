@@ -8,6 +8,8 @@ import numpy as np
 import yaml
 from getdist import MCSamples, plots
 from matplotlib.gridspec import GridSpec
+import matplotlib.ticker as mticker
+
 from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 
 
@@ -319,6 +321,12 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
                     _plot_errorbars(ax, i, j, color_main="blue", color_second="orange")
 
             kp += 1
+            ymin, ymax = ax.get_ylim()
+            ymax_abs = max(abs(ymin), abs(ymax))
+            ax.set_ylim(-ymax_abs, ymax_abs)
+            for ax in fig.axes:
+                ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
+                ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
 
     # title / legend / save / show
     if title is not None:

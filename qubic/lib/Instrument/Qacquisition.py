@@ -164,9 +164,7 @@ class QubicAcquisition(Acquisition):
 
     def get_noise(self, det_noise, photon_noise, seed=None, out=None):
         np.random.seed(seed)
-        out = self.instrument.get_noise(
-            self.sampling, self.scene, det_noise, photon_noise, out=out
-        )
+        out = self.instrument.get_noise(self.sampling, self.scene, det_noise, photon_noise, out=out)
         if self.effective_duration is not None:
             nsamplings = self.sampling.comm.allreduce(len(self.sampling))
             factor = np.sqrt(
@@ -204,10 +202,7 @@ class QubicAcquisition(Acquisition):
         Return the operator for the bolometer responses.
         """
         return BlockDiagonalOperator(
-            [
-                self.instrument.get_detector_response_operator(self.sampling[b])
-                for b in self.block
-            ],
+            [self.instrument.get_detector_response_operator(self.sampling[b]) for b in self.block],
             axisin=1,
         )
 
@@ -229,10 +224,7 @@ class QubicAcquisition(Acquisition):
         Return the operator for the bolometer responses.
         """
         return BlockDiagonalOperator(
-            [
-                self.instrument.get_hwp_operator(self.sampling[b], self.scene)
-                for b in self.block
-            ],
+            [self.instrument.get_hwp_operator(self.sampling[b], self.scene) for b in self.block],
             axisin=1,
         )
 
@@ -254,9 +246,7 @@ class QubicAcquisition(Acquisition):
         )
         if self.effective_duration is not None:
             nsamplings = self.comm.allreduce(len(self.sampling))
-            out /= (
-                nsamplings * self.sampling.period / (self.effective_duration * 31557600)
-            )
+            out /= nsamplings * self.sampling.period / (self.effective_duration * 31557600)
         return out
 
     def get_invntt_operator(
@@ -315,9 +305,7 @@ class QubicAcquisition(Acquisition):
         self.sigma = 0
         if det_noise != 0:
             self.sigma = (
-                self.instrument.detector.nep
-                / np.sqrt(2 * self.sampling.period)
-                * det_noise
+                self.instrument.detector.nep / np.sqrt(2 * self.sampling.period) * det_noise
             )
 
         if photon_noise != 0:
@@ -350,11 +338,7 @@ class QubicAcquisition(Acquisition):
 
             if self.effective_duration is not None:
                 nsamplings = self.sampling.comm.allreduce(len(self.sampling))
-                out /= (
-                    nsamplings
-                    * self.sampling.period
-                    / (self.effective_duration * 31557600)
-                )
+                out /= nsamplings * self.sampling.period / (self.effective_duration * 31557600)
             return out
 
         sampling_frequency = 1 / self.sampling.period
@@ -380,16 +364,12 @@ class QubicAcquisition(Acquisition):
                 twosided=True,
             )
         p[..., 0] = p[..., 1]
-        invntt = _psd2invntt(
-            p, new_bandwidth, self.instrument.detector.ncorr, fftw_flag=fftw_flag
-        )
+        invntt = _psd2invntt(p, new_bandwidth, self.instrument.detector.ncorr, fftw_flag=fftw_flag)
 
         print("non diagonal case")
         if self.effective_duration is not None:
             nsamplings = self.comm.allreduce(len(self.sampling))
-            invntt /= (
-                nsamplings * self.sampling.period / (self.effective_duration * 31557600)
-            )
+            invntt /= nsamplings * self.sampling.period / (self.effective_duration * 31557600)
 
         return SymmetricBandToeplitzOperator(
             shapein, invntt, fftw_flag=fftw_flag, nthreads=nthreads
@@ -488,8 +468,7 @@ class QubicAcquisition(Acquisition):
             return p
 
         shapeouts = [
-            (len(self.instrument), s.stop - s.start) + self.scene.shape[1:]
-            for s in self.block
+            (len(self.instrument), s.stop - s.start) + self.scene.shape[1:] for s in self.block
         ]
         proxies = proxy_group(len(self.block), callback, shapeouts=shapeouts)
         return BlockColumnOperator(proxies, axisout=1)
@@ -569,9 +548,7 @@ class QubicMultiAcquisitions:
 
     """
 
-    def __init__(
-        self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None
-    ):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None):
         ### Define class arguments
         self.dict = dictionary
         self.nsub = nsub
@@ -594,15 +571,11 @@ class QubicMultiAcquisitions:
             nprocs_sampling = comm.size
         elif nprocs_instrument is None:
             if nprocs_sampling < 1 or nprocs_sampling > comm.size:
-                raise ValueError(
-                    f"Invalid value for nprocs_sampling '{nprocs_sampling}'."
-                )
+                raise ValueError(f"Invalid value for nprocs_sampling '{nprocs_sampling}'.")
             nprocs_instrument = comm.size // nprocs_sampling
         else:
             if nprocs_instrument < 1 or nprocs_instrument > comm.size:
-                raise ValueError(
-                    f"Invalid value for nprocs_instrument '{nprocs_instrument}'."
-                )
+                raise ValueError(f"Invalid value for nprocs_instrument '{nprocs_instrument}'.")
             nprocs_sampling = comm.size // nprocs_instrument
         if nprocs_instrument * nprocs_sampling != comm.size:
             raise ValueError("Invalid MPI distribution of the acquisition.")
@@ -661,9 +634,7 @@ class QubicMultiAcquisitions:
 
         ### Compute pointing matrix
         self.subacqs = [
-            QubicAcquisition(
-                self.multiinstrument[i], self.sampling, self.scene, self.dict
-            )
+            QubicAcquisition(self.multiinstrument[i], self.sampling, self.scene, self.dict)
             for i in range(len(self.multiinstrument))
         ]
 
@@ -675,9 +646,7 @@ class QubicMultiAcquisitions:
 
             instrument_co = QubicInstrument(dmono, FRBW=0.25)
             self.multiinstrument.subinstruments += [instrument_co]
-            self.subacqs += [
-                QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)
-            ]
+            self.subacqs += [QubicAcquisition(instrument_co, self.sampling, self.scene, dmono)]
 
             self.allnus = np.append(self.allnus, nu_co)
 
@@ -792,9 +761,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
     """
 
-    def __init__(
-        self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None
-    ):
+    def __init__(self, dictionary, nsub, nrec, comps=[], H=None, nu_co=None, sampling=None):
         QubicMultiAcquisitions.__init__(
             self,
             dictionary,
@@ -834,10 +801,9 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 imin = irec * f
                 imax = (irec + 1) * f - 1
                 op_sum += [
-                    h[
-                        (self.allnus >= self.allnus[imin])
-                        * (self.allnus <= self.allnus[imax])
-                    ].sum(axis=0)
+                    h[(self.allnus >= self.allnus[imin]) * (self.allnus <= self.allnus[imax])].sum(
+                        axis=0
+                    )
                 ]
             block_list = []
             for iband in range(self.nFocalPlanes):
@@ -858,9 +824,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 * operator_H
                 * ReshapeOperator(
                     (self.nrec, self.npix, h[0].shapein[-1]),
-                    (
-                        operator_H.shapein
-                    ),  # this reshape ensures that it works even for nrec=2
+                    (operator_H.shapein),  # this reshape ensures that it works even for nrec=2
                 )
             )
 
@@ -884,9 +848,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                     iband * int(self.nsub // self.nFocalPlanes),
                     (iband + 1) * int(self.nsub // self.nFocalPlanes),
                 ]  # splitting nsub h
-                Operator_list.append(
-                    G_band * AdditionOperator(h[edges_band[0] : edges_band[1]])
-                )
+                Operator_list.append(G_band * AdditionOperator(h[edges_band[0] : edges_band[1]]))
 
             return BlockColumnOperator(Operator_list, axisout=0)
 
@@ -1070,9 +1032,7 @@ class PlanckAcquisition:
 
         return out * planck_ntot
 
-    def get_invntt_operator(
-        self, planck_ntot, weight_planck=1.0, seenpix=None, beam_correction=0
-    ):
+    def get_invntt_operator(self, planck_ntot, weight_planck=1.0, seenpix=None, beam_correction=0):
         """Planck inverse noise covariance matrix.
 
         Method to build Planck inverse noise covariance matrix, using sigma computed during the initialisation of the class.
@@ -1095,9 +1055,7 @@ class PlanckAcquisition:
         """
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
         sigma = np.asarray(self.sigma)
-        assert sigma.shape == (len(self.nus), 3), (
-            f"sigma must be shape (nus,3), got {sigma.shape}"
-        )
+        assert sigma.shape == (len(self.nus), 3), f"sigma must be shape (nus,3), got {sigma.shape}"
 
         npix = self.npix
 
@@ -1263,9 +1221,7 @@ class PlanckAcquisition:
             ope_i = []
             for _ in range(self.nsub_planck):
                 if fwhm is not None:
-                    C = HealpixConvolutionGaussianOperator(
-                        fwhm=fwhm[k], lmax=3 * self.nside - 1
-                    )
+                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
                 else:
                     C = IdentityOperator()
 
@@ -1278,9 +1234,7 @@ class PlanckAcquisition:
                 k += 1
 
             if comm is not None:
-                Operator.append(
-                    comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck)
-                )
+                Operator.append(comm * Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
             else:
                 Operator.append(Rmap2tod(AdditionOperator(ope_i) / self.nsub_planck))
 
@@ -1289,9 +1243,19 @@ class PlanckAcquisition:
 
 class JointAcquisitionFrequencyMapMaking:
     def __init__(
-        self, d, Nrec, Nsub, H=None, nsub_planck=1, is_external_data=False, sampling=None
+        self,
+        d,
+        Nrec,
+        Nsub,
+        H=None,
+        nsub_planck=1,
+        is_external_data=False,
+        sampling=None,
+        k_max=None,
     ):
         self.d = d
+        if k_max is not None:
+            self.d["synthbeam_kmax"] = k_max
         self.Nrec = Nrec
         self.Nsub = Nsub
         self.is_external_data = is_external_data
@@ -1324,9 +1288,7 @@ class JointAcquisitionFrequencyMapMaking:
                     (self.Nrec, sum(seenpix), nstokes),
                 )
                 * PackOperator(
-                    np.broadcast_to(
-                        seenpix[:, None], (self.Nrec, seenpix.size, nstokes)
-                    ).copy()
+                    np.broadcast_to(seenpix[:, None], (self.Nrec, seenpix.size, nstokes)).copy()
                 )
             ).T
         else:
@@ -1374,9 +1336,7 @@ class JointAcquisitionFrequencyMapMaking:
                 planck_ntot, weight_planck=weight_planck, seenpix=seenpix
             )
 
-            R_planck = ReshapeOperator(
-                invntt_planck143.shapeout, invntt_planck143.shape[0]
-            )
+            R_planck = ReshapeOperator(invntt_planck143.shapeout, invntt_planck143.shape[0])
 
             invN_143 = R_planck(invntt_planck143(R_planck.T))
             invN_217 = R_planck(invntt_planck217(R_planck.T))

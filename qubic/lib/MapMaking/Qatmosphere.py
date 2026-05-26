@@ -31,15 +31,15 @@ class AtmosphereProperties:
         self.params = params
         self.qubic_dict = self.get_qubic_dict()
 
-        np.random.seed(self.params["seed"])
+        self.rng = np.random.default_rng(self.params["seed"])
 
         ### Build atmospheric coordinates
         # Cartesian coordinates
         if self.params["h_grid"] == 1:
             # 2d model
-            self.altitude = (
-                self.params["h_qubic"] + self.params["altitude_atm_2d"]
-            ) * np.ones(self.params["h_grid"])
+            self.altitude = (self.params["h_qubic"] + self.params["altitude_atm_2d"]) * np.ones(
+                self.params["h_grid"]
+            )
         else:
             # 3d model, not yet implemented
             self.altitude = np.linspace(
@@ -58,7 +58,7 @@ class AtmosphereProperties:
             # Azimuth / Elevation coordinates
             x, y = np.meshgrid(self.x_list, self.y_list)
             z = np.ones(x.shape) * self.params["altitude_atm_2d"]
-            self.r, self.el, self.az = self.horizontal_plane_to_azel(x, y, z)
+            self.r, self.az, self.el = self.horizontal_plane_to_azel(x, y, z)
 
         ### Compute atmosphere temperature and mean water vapor density
         self.temperature = self.get_temperature_atm(
@@ -169,10 +169,7 @@ class AtmosphereProperties:
 
         if h is None:
             h = 2 * self.params["h_h2o"]
-        if h is not None:
-            return sigma_pwv / h
-        else:
-            raise ValueError("height of the water vapor h must be given")
+        return sigma_pwv / h
 
     def get_mean_water_vapor_density(self, altitude, rho_0, h_h2o):
         r"""Mean water vapor density.
@@ -187,6 +184,10 @@ class AtmosphereProperties:
         ----------
         altitude : array_like
             Array containing altitudes at which we want to compute the mean water vapor density.
+        rho_0 : float
+            Reference water vapor density at 5190 m, in :math:`g/m^{3}`.
+        h_h2o : float
+            Water vapor half-height in m.
 
         Returns
         -------
@@ -360,9 +361,7 @@ class AtmosphereProperties:
         ### Air properties
         air_molar_mass = CP.PropsSI("MOLARMASS", "Air")  # in kg/mol
         air_mass = air_molar_mass / c.Avogadro * 1e3  # in g
-        air_mass_density = CP.PropsSI(
-            "D", "T", temp_atm, "P", pressure_atm, "Air"
-        )  # in kg/m-3
+        air_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Air")  # in kg/m-3
         air_density = air_mass_density * 1e3 / air_mass  # in m-3
 
         ### Water properties
@@ -457,9 +456,7 @@ class AtmosphereProperties:
             [
                 np.trapz(
                     self.abs_spectrum[nus_edge_index[i] : nus_edge_index[i + 1]],
-                    x=self.integration_frequencies[
-                        nus_edge_index[i] : nus_edge_index[i + 1]
-                    ],
+                    x=self.integration_frequencies[nus_edge_index[i] : nus_edge_index[i + 1]],
                 )
                 / (nus_edges[i + 1] - nus_edges[i])
                 for i in range(N_bands)
@@ -483,11 +480,11 @@ class AtmosphereProperties:
         """
 
         ### Get the integrated absorption spectrum in the two QUBIC bands : 150 and 220 GHz
-        int_abs_spectrum_150, nus_150, bandwidths_150 = (
-            self.get_integrated_absorption_spectrum(band=150)
+        int_abs_spectrum_150, nus_150, bandwidths_150 = self.get_integrated_absorption_spectrum(
+            band=150
         )
-        int_abs_spectrum_220, nus_220, bandwidths_220 = (
-            self.get_integrated_absorption_spectrum(band=220)
+        int_abs_spectrum_220, nus_220, bandwidths_220 = self.get_integrated_absorption_spectrum(
+            band=220
         )
 
         return (
@@ -570,12 +567,12 @@ class AtmosphereMaps(AtmosphereProperties):
         """
 
         if self.params["2d"]:
-            exposant = -8 / 6
+            exponent = -8 / 6
         else:
-            exposant = -11 / 6
+            exponent = -11 / 6
 
         k_r0 = 2 * np.pi / r0
-        P = (k_r0**2 + k**2) ** exposant
+        P = (k_r0**2 + k**2) ** exponent
 
         if self.params["adjust"] and sigma_rho is not None and atm_size is not None:
             # Compute normalization constant C
@@ -647,20 +644,14 @@ class AtmosphereMaps(AtmosphereProperties):
 
         ### Compute the spatial frequencies & power spectrum.
         _, _, k = self.get_fourier_grid_2d(n_grid, size_atm)
-        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(
-            k, r0, sigma_rho, atm_size
-        )
+        kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(k, r0, sigma_rho, atm_size)
 
         ### Generate spatial fluctuations through random phases in Fourier space
-        phi = np.random.uniform(
-            0, 2 * np.pi, size=(self.params["n_grid"], self.params["n_grid"])
-        )
+        phi = self.rng.uniform(0, 2 * np.pi, size=(self.params["n_grid"], self.params["n_grid"]))
         delta_rho_k = np.sqrt(kolmogorov_spectrum) * np.exp(1j * phi)
 
         ### Apply inverse Fourier transform to obtain spatial fluctuations in real space
-        delta_rho = np.fft.ifft2(
-            delta_rho_k, s=(self.params["n_grid"], self.params["n_grid"])
-        ).real
+        delta_rho = np.fft.ifft2(delta_rho_k, s=(self.params["n_grid"], self.params["n_grid"])).real
 
         ### Normalize to ensure correct variance
         delta_rho *= sigma_rho / np.std(delta_rho)
@@ -864,9 +855,7 @@ class AtmosphereMaps(AtmosphereProperties):
         #! Warning : the Cl computed using CAMB are different from the ones computed using 'cl_from_angular_correlation_int' at large l
 
         ### Compute multipole moments and Dl angular power spectrum
-        ell, dlth = self.ctheta_2_dell(
-            theta_deg, ctheta, lmax, normalization=normalization
-        )
+        ell, dlth = self.ctheta_2_dell(theta_deg, ctheta, lmax, normalization=normalization)
 
         ### Convert from Dl to Cl
         dl2cl_factor = 2 * np.pi / (ell * (ell + 1))
@@ -877,7 +866,7 @@ class AtmosphereMaps(AtmosphereProperties):
 
         return ell, clth
 
-    def generate_spatial_fluctuation_sphercial_harmonics(
+    def generate_spatial_fluctuation_spherical_harmonics(
         self, sigma_rho=None, atm_size=None, Debug=False
     ):
         """Spatial fluctuation map from angular correlation function.
@@ -902,12 +891,11 @@ class AtmosphereMaps(AtmosphereProperties):
             theta, ctheta, self.lmax, normalization=self.params["normalization"]
         )
 
-        """
-        if self.params["adjust"]:
-            sum_cl = np.sum(clth)
-            C = sigma_rho * (atm_size**2) / sum_cl
-            clth *= C
-        """
+        # Alternative normalization (unused):
+        # if self.params["adjust"]:
+        #     sum_cl = np.sum(clth)
+        #     C = sigma_rho * (atm_size**2) / sum_cl
+        #     clth *= C
         if self.params["adjust"]:
             # var_theory = np.sum(np.fromiter(((2*l + 1) * clth[l] for l in range(self.lmax + 1)),float) )/ (4*np.pi)  #Calling np.sum(generator) is deprecated, and in the future will give a different result. Use np.sum(np.fromiter(generator)) or the python sum builtin instead.
             sigma_theo = np.std(clth)
@@ -949,11 +937,20 @@ class AtmosphereMaps(AtmosphereProperties):
                 atm_size=self.params["size_atm"],
             )
         else:
-            delta_rho = self.generate_spatial_fluctuation_sphercial_harmonics(
+            delta_rho = self.generate_spatial_fluctuation_spherical_harmonics(
                 sigma_rho=self.params["sigma_rho"], atm_size=self.params["size_atm"]
             )
 
         return delta_rho
+
+    def get_ref_temp_maps(self, maps, ref_freq=150):
+        ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
+        ref_abs = self.integrated_abs_spectrum[ref_idx]
+        return ref_abs * self.mean_water_vapor_density * self.temperature * maps * 1e6
+
+    def get_atm_mixing_matrix(self, ref_freq=150):
+        ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
+        return self.integrated_abs_spectrum / self.integrated_abs_spectrum[ref_idx]
 
     def get_temp_maps(self, maps):
         r"""Atmosphere maps.
@@ -1029,8 +1026,10 @@ class AtmosphereMaps(AtmosphereProperties):
         return r, az, el
 
     def azel_to_horizontal_plane(self, r, az, el):
-        r"""
+        r"""Azimuth-elevation to horizontal plane coordinates.
 
+        Convert spherical azimuth/elevation coordinates back to Cartesian coordinates
+        in the horizontal plane, as the inverse of :meth:`horizontal_plane_to_azel`.
 
         Parameters
         ----------
@@ -1059,6 +1058,18 @@ class AtmosphereMaps(AtmosphereProperties):
         return x, y, z
 
     def get_azel_coordinates(self):
+        """Azimuth-elevation coordinates of the flat atmosphere grid.
+
+        Iterate over the Cartesian atmosphere grid defined by :attr:`x_list` and :attr:`y_list`
+        and convert each point to azimuth and elevation using :meth:`horizontal_plane_to_azel`.
+
+        Returns
+        -------
+        azel : numpy.ndarray
+            Array of shape ``(n_grid * n_grid, 2)`` containing ``[azimuth, elevation]``
+            in radians for each grid point.
+
+        """
         az_list, el_list = [], []
         for ind_x in range(len(self.x_list)):
             for ind_y in range(len(self.y_list)):
@@ -1094,17 +1105,11 @@ class AtmosphereMaps(AtmosphereProperties):
         )
 
         ### Build healpy projection operator
-        rotation_azel2hp = Spherical2HealpixOperator(
-            self.params["nside"], "azimuth,elevation"
-        )
+        rotation_azel2hp = Spherical2HealpixOperator(self.params["nside"], "azimuth,elevation")
 
         ### Fill the healpy maps with the temperature maps using the operators
-        hp_maps_index = rotation_azel2hp(rotation_above_qubic(azel_coordinates)).astype(
-            int
-        )
-        hp_maps_2d = np.zeros(
-            (len(self.frequencies), hp.nside2npix(self.params["nside"]))
-        )
+        hp_maps_index = rotation_azel2hp(rotation_above_qubic(azel_coordinates)).astype(int)
+        hp_maps_2d = np.zeros((len(self.frequencies), hp.nside2npix(self.params["nside"])))
         for ifreq in range(len(self.frequencies)):
             hp_maps_2d[ifreq, hp_maps_index] = maps[ifreq].flatten()
 
@@ -1133,16 +1138,62 @@ class WindPerturbation:
         self.qubic_sampling = qubic_sampling
 
         self.npointings = self.qubic_sampling.index.size
+        self.rng = np.random.default_rng(self.params["seed"])
 
     def azel_to_cartesian(self, azimuth, elevation, altitude):
-        """AzEl to Cartesian coordinates."""
+        """AzEl to Cartesian coordinates.
+
+        Project a line-of-sight direction given as azimuth and elevation onto the
+        horizontal atmospheric plane at the given altitude, returning the (x, y)
+        intersection point.  The slant distance to the plane is
+        ``altitude / sin(elevation)``.
+
+        Parameters
+        ----------
+        azimuth : array_like
+            Azimuth angle in radians.
+        elevation : array_like
+            Elevation angle in radians (must be > 0).
+        altitude : float
+            Vertical height of the atmospheric layer above the instrument, in meters.
+
+        Returns
+        -------
+        x : array_like
+            East-West displacement on the atmospheric plane, in meters.
+        y : array_like
+            North-South displacement on the atmospheric plane, in meters.
+
+        """
 
         x = altitude / np.sin(elevation) * np.cos(elevation) * np.cos(azimuth)
         y = altitude / np.sin(elevation) * np.cos(elevation) * np.sin(azimuth)
         return x, y
 
     def cartesian_to_azel(self, x, y, z):
-        """Cartesian to AzEl cooordinates."""
+        """Cartesian to AzEl coordinates.
+
+        Convert a 3-D Cartesian point ``(x, y, z)`` to spherical azimuth and
+        elevation angles.  This is the inverse of :meth:`azel_to_cartesian` when
+        ``z`` is the atmospheric layer altitude.
+
+        Parameters
+        ----------
+        x : array_like
+            East-West displacement, in meters.
+        y : array_like
+            North-South displacement, in meters.
+        z : float or array_like
+            Vertical coordinate (atmospheric layer altitude), in meters.
+
+        Returns
+        -------
+        az : array_like
+            Azimuth in radians.
+        el : array_like
+            Elevation in radians.
+
+        """
 
         r = np.sqrt(x**2 + y**2 + z**2)
         el = np.pi / 2 - np.arccos(z / r)
@@ -1180,12 +1231,31 @@ class WindPerturbation:
             shape (2, npointings)
 
         """
-        wind_x = np.cumsum(np.random.normal(wind_mean[0], wind_std[0], self.npointings))
-        wind_y = np.cumsum(np.random.normal(wind_mean[1], wind_std[1], self.npointings))
+        wind_x = np.cumsum(self.rng.normal(wind_mean[0], wind_std[0], self.npointings))
+        wind_y = np.cumsum(self.rng.normal(wind_mean[1], wind_std[1], self.npointings))
 
         return wind_x, wind_y
 
     def get_wind(self):
+        """Wind field dispatcher.
+
+        Generate the cumulative wind displacement field according to
+        ``params["wind_type"]``.  Delegates to :meth:`get_constant_wind` or
+        :meth:`get_normal_wind`.
+
+        Returns
+        -------
+        wind_x : numpy.ndarray
+            Cumulative East-West wind displacement, shape ``(npointings,)``, in meters.
+        wind_y : numpy.ndarray
+            Cumulative North-South wind displacement, shape ``(npointings,)``, in meters.
+
+        Raises
+        ------
+        ValueError
+            If ``params["wind_type"]`` is not ``"constant"`` or ``"normal"``.
+
+        """
         if self.params["wind_type"] == "constant":
             wind_x, wind_y = self.get_constant_wind(
                 self.params["wind_cst"][0], self.params["wind_cst"][1]
@@ -1197,18 +1267,55 @@ class WindPerturbation:
             )
 
         else:
-            raise ValueError(
-                "Wind type not defined yet. Please enter 'constant' or 'normal'."
-            )
+            raise ValueError("Wind type not defined yet. Please enter 'constant' or 'normal'.")
 
         return wind_x, wind_y
 
     def get_deviated_index(self, pos_x, pos_y, wind_x, wind_y):
-        deviated_index_x = (np.round(wind_x) + np.round(pos_x)).astype(int)
-        deviated_index_y = (np.round(wind_y) + np.round(pos_y)).astype(int)
+        """Apply wind displacement to Cartesian pointing coordinates.
+
+        Add the cumulative wind displacement to the Cartesian coordinates of each
+        pointing on the atmospheric plane.
+
+        Parameters
+        ----------
+        pos_x : array_like
+            Original East-West positions on the atmospheric plane, in meters.
+        pos_y : array_like
+            Original North-South positions on the atmospheric plane, in meters.
+        wind_x : array_like
+            Cumulative East-West wind displacement, in meters.
+        wind_y : array_like
+            Cumulative North-South wind displacement, in meters.
+
+        Returns
+        -------
+        deviated_index_x : array_like
+            Displaced East-West positions, in meters.
+        deviated_index_y : array_like
+            Displaced North-South positions, in meters.
+
+        """
+        deviated_index_x = wind_x + pos_x
+        deviated_index_y = wind_y + pos_y
         return deviated_index_x, deviated_index_y
 
-    def get_deviated_coord(self):
+    def get_deviated_coord_plane(self):
+        """Wind-deviated pointing coordinates on the flat atmospheric plane.
+
+        Project each pointing onto the flat atmospheric plane, apply the cumulative
+        wind displacement in Cartesian coordinates, and convert back to azimuth and
+        elevation.  Returns the original coordinates unchanged when
+        ``params["wind"]`` is ``False``.
+
+        Returns
+        -------
+        deviated_az : numpy.ndarray
+            Wind-deviated azimuth in degrees, shape ``(npointings,)``.
+        deviated_el : numpy.ndarray
+            Wind-deviated elevation in degrees, shape ``(npointings,)``.
+
+        """
         azimuth, elevation = self.qubic_sampling.azimuth, self.qubic_sampling.elevation
         if not self.params["wind"]:
             return azimuth, elevation
@@ -1216,7 +1323,7 @@ class WindPerturbation:
         # Get wind
         wind_x, wind_y = self.get_wind()
 
-        # Compute deviated scanning strategy
+        # Compute deviated pointing coordinates
         x, y = self.azel_to_cartesian(
             np.radians(azimuth), np.radians(elevation), self.params["altitude_atm_2d"]
         )
@@ -1231,8 +1338,128 @@ class WindPerturbation:
 
         return deviated_az, deviated_el
 
+    def apply_wind_displacement(self, theta, phi, dx_rad, dy_rad, direction="backward"):
+        """Wind displacement.
+
+        Apply a wind displacement on the unit sphere using the exponential map.
+
+        Parameters
+        ----------
+        theta : array
+            Colatitude in radians (0 at North pole, pi at South pole).
+        phi : array
+            Longitude in radians (azimuth).
+        dx_rad, dy_rad : float or array
+            Angular wind shifts in radians: dx positive eastward, dy positive northward.
+        direction : {'forward', 'backward'}
+            If 'forward', shift in the direction the wind blows (p → p + v).
+            If 'backward', shift opposite the wind (p → p - v), e.g. for advection.
+
+        Returns
+        -------
+        new_theta, new_phi : array
+            Displaced coordinates in radians.
+        """
+
+        # Broadcast inputs
+        theta = np.asarray(theta)
+        phi = np.asarray(phi)
+        dx_rad = np.broadcast_to(dx_rad, theta.shape)
+        dy_rad = np.broadcast_to(dy_rad, theta.shape)
+
+        # Unit vectors on sphere
+        sin_t, cos_t = np.sin(theta), np.cos(theta)
+        sin_p, cos_p = np.sin(phi), np.cos(phi)
+
+        p = np.stack([sin_t * cos_p, sin_t * sin_p, cos_t], axis=-1)
+
+        # Local tangent basis
+        e_east = np.stack([-sin_p, cos_p, np.zeros_like(phi)], axis=-1)
+        e_north = np.stack([-cos_t * cos_p, -cos_t * sin_p, sin_t], axis=-1)
+
+        # Build wind vector (eastward dx, northward dy)
+        v = dx_rad[..., np.newaxis] * e_east + dy_rad[..., np.newaxis] * e_north
+
+        # Choose direction
+        if direction == "backward":
+            v = -v
+
+        # Exponential map
+        v_norm = np.linalg.norm(v, axis=-1, keepdims=True)
+        safe_norm = np.where(v_norm > 0, v_norm, 1.0)
+
+        new_p = p * np.cos(v_norm) + (v / safe_norm) * np.sin(v_norm)
+
+        # Back to angles
+        new_theta = np.arccos(np.clip(new_p[..., 2], -1.0, 1.0))
+        new_phi = np.arctan2(new_p[..., 1], new_p[..., 0]) % (2 * np.pi)
+
+        return new_theta, new_phi
+
+    def get_deviated_coord_sphere(self):
+        """Wind-deviated pointing coordinates on the sphere.
+
+        Convert the cumulative wind displacement to angular shifts
+        (``dx_rad = wind_x / h``, ``dy_rad = wind_y / h``) and apply them on the
+        unit sphere via :meth:`apply_wind_displacement` using the exponential map.
+        Returns the original coordinates unchanged when ``params["wind"]`` is ``False``
+        or the displacement is negligible.
+
+        Returns
+        -------
+        deviated_az : numpy.ndarray
+            Wind-deviated azimuth in degrees, shape ``(npointings,)``.
+        deviated_el : numpy.ndarray
+            Wind-deviated elevation in degrees, shape ``(npointings,)``.
+
+        """
+        azimuth, elevation = self.qubic_sampling.azimuth, self.qubic_sampling.elevation
+        if not self.params["wind"]:
+            return azimuth, elevation
+
+        wind_x, wind_y = self.get_wind()
+        h = self.params["altitude_atm_2d"]
+        dx_rad = wind_x / h
+        dy_rad = wind_y / h
+
+        if np.hypot(np.atleast_1d(dx_rad).max(), np.atleast_1d(dy_rad).max()) < 1e-12:
+            return azimuth, elevation
+
+        # Convert to radians
+        az_rad = np.radians(azimuth)
+        el_rad = np.radians(elevation)
+        theta = np.pi / 2 - el_rad
+        phi = az_rad
+
+        # Apply backward displacement to match advection semantics
+        new_theta, new_phi = self.apply_wind_displacement(
+            theta, phi, dx_rad, dy_rad, direction="backward"
+        )
+
+        new_az = np.degrees(new_phi)
+        new_el = np.degrees(np.pi / 2 - new_theta)
+        return new_az, new_el
+
     def get_deviated_qubic_sampling(self):
-        deviated_az, deviated_el = self.get_deviated_coord()
+        """Wind-deviated QubicSampling instance.
+
+        Build a new :class:`~qubic.lib.Qsamplings.QubicSampling` whose azimuth and
+        elevation have been shifted by the simulated wind field, using either the flat
+        or spherical geometry according to ``params["flat"]``.  All other sampling
+        attributes (pitch, HWP angle, time, period, geographic coordinates) are
+        inherited from the original :attr:`qubic_sampling`.  The returned sampling
+        has ``fix_az = True``.
+
+        Returns
+        -------
+        deviated_qubic_sampling : QubicSampling
+            Scanning strategy perturbed by the wind displacement.
+
+        """
+        if self.params["flat"]:
+            deviated_az, deviated_el = self.get_deviated_coord_plane()
+        else:
+            deviated_az, deviated_el = self.get_deviated_coord_sphere()
 
         deviated_qubic_sampling = QubicSampling(
             azimuth=deviated_az,
@@ -1245,5 +1472,75 @@ class WindPerturbation:
             longitude=self.qubic_sampling.longitude,
         )
         deviated_qubic_sampling.fix_az = True
-
         return deviated_qubic_sampling
+
+    def shift_healpy_map(
+        self,
+        m,
+        wx,
+        wy,
+        nest=False,
+        time_delta=1.0,
+        atm_altitude=1000.0,
+        verbose=False,
+    ):
+        """
+        Advect a HEALPix map using a horizontal wind field (wx, wy).
+
+        Parameters
+        ----------
+        m : array
+            Healpy map (npix,) or (nfreq, npix) or (nfreq, npix, nstokes)
+        wx, wy : float
+            Wind components in m/s (east, north)
+        time_delta : float
+            Time step in seconds
+        atm_altitude : float
+            Effective altitude (m) converting linear → angular displacement
+        """
+
+        m = np.asarray(m)
+
+        # --- Shape handling ---
+        if m.ndim == 1:
+            m_work = m[np.newaxis, :, np.newaxis]
+            squeeze = (0, 2)
+        elif m.ndim == 2:
+            m_work = m[np.newaxis, :, :]
+            squeeze = (0,)
+        elif m.ndim == 3:
+            m_work = m
+            squeeze = ()
+        else:
+            raise ValueError(f"Unsupported shape {m.shape}")
+
+        nfreq, npix, nstokes = m_work.shape
+        nside = hp.npix2nside(npix)
+        dx_rad = (wx * time_delta) / atm_altitude
+        dy_rad = (wy * time_delta) / atm_altitude
+
+        if np.hypot(dx_rad, dy_rad) < 1e-6:
+            return m.copy()
+
+        pix = np.arange(npix)
+        theta, phi = hp.pix2ang(nside, pix, nest=nest)
+
+        new_theta, new_phi = self.apply_wind_displacement(
+            theta, phi, dx_rad, dy_rad, direction="backward"
+        )
+
+        # --- Interpolation ---
+        m_shifted = np.empty_like(m_work)
+        for f in range(nfreq):
+            for s in range(nstokes):
+                m_shifted[f, :, s] = hp.get_interp_val(
+                    m_work[f, :, s],
+                    new_theta,
+                    new_phi,
+                    nest=nest,
+                )
+
+        if squeeze:
+            m_shifted = m_shifted.squeeze(axis=squeeze)
+
+        return m_shifted

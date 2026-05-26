@@ -17,6 +17,7 @@ from qubic.lib.Qfoldertools import create_folder_if_not_exists, do_gif
 from qubic.lib.Qhdf5 import HDF5Dict
 from qubic.lib.Qspectra import Spectra
 
+
 class PipelineComponentMapMaking:
     """
     Instance to reconstruct component maps using QUBIC abilities.
@@ -46,11 +47,19 @@ class PipelineComponentMapMaking:
         self.preset = PresetInitialisation(comm).initialize(parameters_file)
         self.plots = PlotsCMM(self.preset, dogif=True)
 
-        self.fsub = int(self.preset.qubic.joint_out.qubic.nsub / self.preset.comp.params_foregrounds["bin_mixing_matrix"])
+        self.fsub = int(
+            self.preset.qubic.joint_out.qubic.nsub
+            / self.preset.comp.params_foregrounds["bin_mixing_matrix"]
+        )
         self.allAmm_iter = None
 
         ### Create variables for stopping condition
-        self._rms_noise_qubic_patch_per_ite = np.empty((self.preset.tools.params["PCG"]["ites_to_converge"], len(self.preset.comp.components_name_out)))
+        self._rms_noise_qubic_patch_per_ite = np.empty(
+            (
+                self.preset.tools.params["PCG"]["ites_to_converge"],
+                len(self.preset.comp.components_name_out),
+            )
+        )
         self._rms_noise_qubic_patch_per_ite[:] = np.nan
 
     def get_preconditioner(self):
@@ -85,7 +94,12 @@ class PipelineComponentMapMaking:
         # nsub = self.preset_qubic.params_qubic["nsub_out"]
         # no_det = len(self.preset_qubic.joint_out.qubic.multiinstrument[0].detector)
 
-        H_i = self.preset.qubic.joint_out.get_operator(A=self.preset.acquisition.Amm_iter, gain=self.preset.gain.gain_iter, fwhm=self.preset.acquisition.fwhm_mapmaking, nu_co=self.preset.comp.nu_co)
+        H_i = self.preset.qubic.joint_out.get_operator(
+            A=self.preset.acquisition.Amm_iter,
+            gain=self.preset.gain.gain_iter,
+            fwhm=self.preset.acquisition.fwhm_mapmaking,
+            nu_co=self.preset.comp.nu_co,
+        )
 
         # we only need the first element because for CMM the H.T H is almost flat!
         sky_shape = (ncomp, npix, 3)
@@ -98,11 +112,16 @@ class PipelineComponentMapMaking:
                     Hv = H_i.T(H_i)(basis_vector)
                     diagonal[comp, pixel, stokes] = Hv[comp, pixel, stokes]
 
-        stacked_matrix = np.array([np.full((npix, 3), diagonal[comp, 0, 0]) for comp in range(ncomp)])
+        stacked_matrix = np.array(
+            [np.full((npix, 3), diagonal[comp, 0, 0]) for comp in range(ncomp)]
+        )
 
         stacked_matrix_inv = 1.0 / stacked_matrix
 
-        preconditioner_simpleinv = BlockDiagonalOperator([DiagonalOperator(comp, broadcast="rightward") for comp in stacked_matrix_inv], new_axisin=0)
+        preconditioner_simpleinv = BlockDiagonalOperator(
+            [DiagonalOperator(comp, broadcast="rightward") for comp in stacked_matrix_inv],
+            new_axisin=0,
+        )
 
         return preconditioner_simpleinv
 
@@ -122,12 +141,17 @@ class PipelineComponentMapMaking:
 
         if self._steps == 0:
             self.plots._display_allcomponents(
-                input_maps=self.preset.acquisition.components_in_convolved, reconstructed_maps=self.preset.comp.components_iter, ki=-1, reso=self.preset.tools.params["PCG"]["reso_plot"]
+                input_maps=self.preset.acquisition.components_in_convolved,
+                reconstructed_maps=self.preset.comp.components_iter,
+                ki=-1,
+                reso=self.preset.tools.params["PCG"]["reso_plot"],
             )
 
         ### Initialize PCG starting point
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
-        initial_maps = np.zeros_like(self.preset.comp.components_iter[:, seenpix, :])  # we should always start from zero, if you wish to start from Planck simply do weight_planck = 1.
+        initial_maps = np.zeros_like(
+            self.preset.comp.components_iter[:, seenpix, :]
+        )  # we should always start from zero, if you wish to start from Planck simply do weight_planck = 1.
 
         ### Update the preconditioner M
         self.preset.acquisition.M = self.get_preconditioner()
@@ -168,7 +192,9 @@ class PipelineComponentMapMaking:
         )["x"]
 
         ### Update components
-        self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
+        self.preset.comp.components_iter[:, seenpix, :] = (
+            results["x"].copy() + w * self.preset.acquisition.components_in_convolved[:, seenpix, :].copy()
+        )
 
         self.preset.acquisition.convergence.append(results["convergence"].copy())
         ### Plot if asked
@@ -177,7 +203,12 @@ class PipelineComponentMapMaking:
                 do_gif(
                     self.gif_folder,
                 )
-            self.plots.display_maps(input_maps=self.preset.acquisition.components_in_convolved, reconstructed_maps=self.preset.comp.components_iter, seenpix=seenpix, ki=self._steps)
+            self.plots.display_maps(
+                input_maps=self.preset.acquisition.components_in_convolved,
+                reconstructed_maps=self.preset.comp.components_iter,
+                seenpix=seenpix,
+                ki=self._steps,
+            )
             self.plots._display_allcomponents(
                 input_maps=self.preset.acquisition.components_in_convolved,
                 reconstructed_maps=self.preset.comp.components_iter,
@@ -226,10 +257,16 @@ class PipelineComponentMapMaking:
         self.preset.A = U.T * H_i.T * self.preset.acquisition.invN * H_i * U
 
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
-        weight_mask = np.where(seenpix[None, :, None], w, 1.0)  # the 1.0 adds planck outside the patch, the weight_planck adds planck inside the patch
-        x_planck_full = self.preset.comp.components_out * weight_mask
+        # Outside the patch: use the prior only when Planck data is actually available
+        # (weight_planck > 0). When weight_planck=0 we are doing pure-QUBIC reconstruction;
+        weight_mask = np.where(seenpix[None, :, None], w, 1.0)
+        x_planck_full = self.preset.acquisition.components_in_convolved * weight_mask
 
-        self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck_full)))
+        self.preset.b = U.T(
+            H_i.T
+            * self.preset.acquisition.invN
+            * (self.preset.acquisition.TOD_obs - H_i(x_planck_full))
+        )
 
         ### Run PCG
         self.call_pcg(self.preset.tools.params["PCG"]["n_iter_pcg"], seenpix=seenpix)
@@ -255,15 +292,18 @@ class PipelineComponentMapMaking:
             (
                 len(self.preset.comp.components_name_out),
                 self.preset.qubic.joint_out.qubic.nsub,
-                self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
+                self.preset.qubic.joint_out.qubic.ndets
+                * self.preset.qubic.joint_out.qubic.nsamples,
             )
         )
 
-        #! raise ValueError("Tom : is it correct to use this H here ?")
-        #! H should include FWHM mapmaking
         for i in range(len(self.preset.comp.components_name_out)):
             for j in range(self.preset.qubic.joint_out.qubic.nsub):
-                tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](self.preset.comp.components_iter[i]).ravel()
+                C_j = HealpixConvolutionGaussianOperator(
+                    fwhm=self.preset.acquisition.fwhm_mapmaking[j],
+                    lmax=3 * self.preset.sky.params_sky["nside"] - 1,
+                )
+                tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](C_j(self.preset.comp.components_iter[i])).ravel()
 
         return tod_comp
 
@@ -280,24 +320,38 @@ class PipelineComponentMapMaking:
         """
 
         constraints = []
-        n = (self.preset.comp.params_foregrounds["bin_mixing_matrix"] - 1) * (len(self.preset.comp.components_name_out) - 1)
+        n = (self.preset.comp.params_foregrounds["bin_mixing_matrix"] - 1) * (
+            len(self.preset.comp.components_name_out) - 1
+        )
 
         ### Dust only : constraint ==> SED is increasing
-        if self.preset.comp.params_foregrounds["Dust"]["Dust_out"] and not self.preset.comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]:
+        if (
+            self.preset.comp.params_foregrounds["Dust"]["Dust_out"]
+            and not self.preset.comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]
+        ):
             for i in range(n):
                 constraints.append({"type": "ineq", "fun": lambda x, i=i: x[i + 1] - x[i]})
 
         ### Synchrotron only : constraint ==> SED is decreasing
-        elif not self.preset.comp.params_foregrounds["Dust"]["Dust_out"] and self.preset.comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]:
+        elif (
+            not self.preset.comp.params_foregrounds["Dust"]["Dust_out"]
+            and self.preset.comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]
+        ):
             for i in range(n):
                 constraints.append({"type": "ineq", "fun": lambda x, i=i: x[i] - x[i + 1]})
 
         ### No component : constraint ==> None
-        elif not self.preset.comp.params_foregrounds["Dust"]["Dust_out"] and not self.preset.comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]:
+        elif (
+            not self.preset.comp.params_foregrounds["Dust"]["Dust_out"]
+            and not self.preset.comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]
+        ):
             return None
 
         ### Dust & Synchrotron : constraint ==> SED is increasing for one component and decrasing for the other one
-        elif self.preset.comp.params_foregrounds["Dust"]["Dust_out"] and self.preset.comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]:
+        elif (
+            self.preset.comp.params_foregrounds["Dust"]["Dust_out"]
+            and self.preset.comp.params_foregrounds["Synchrotron"]["Synchrotron_out"]
+        ):
             for i in range(n):
                 # Dust
                 if i % 2 == 0:
@@ -311,7 +365,7 @@ class PipelineComponentMapMaking:
     def get_tod_comp_superpixel(self, index):
         if self.preset.tools.rank == 0:
             print("Computing contribution of each super-pixel")
-            
+
         _index = np.zeros(12 * self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] ** 2)
         _index[index] = index.copy()
         _index_nside = hp.ud_grade(_index, self.preset.qubic.joint_out.external.nside)
@@ -320,7 +374,8 @@ class PipelineComponentMapMaking:
                 len(self.preset.comp.components_name_out),
                 self.preset.qubic.joint_out.qubic.nsub,
                 len(index),
-                self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
+                self.preset.qubic.joint_out.qubic.ndets
+                * self.preset.qubic.joint_out.qubic.nsamples,
             )
         )
 
@@ -328,8 +383,10 @@ class PipelineComponentMapMaking:
 
         for j in range(self.preset.qubic.params_qubic["nsub_out"]):
             for icomp in range(len(self.preset.comp.components_name_out)):
-                #! Check convolution here
-                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
+                C = HealpixConvolutionGaussianOperator(
+                    fwhm=self.preset.acquisition.fwhm_mapmaking[j],
+                    lmax=3 * self.preset.sky.params_sky["nside"] - 1,
+                )
 
                 maps_conv[icomp] = C(maps_conv[icomp, :, :])
                 for ii, i in enumerate(index):
@@ -337,7 +394,9 @@ class PipelineComponentMapMaking:
                     _i = _index_nside == i
                     for stk in range(3):
                         maps_conv_i[:, :, stk] *= _i
-                    tod_comp[icomp, j, ii] = self.preset.qubic.joint_out.qubic.H[j](maps_conv_i[icomp]).ravel()
+                    tod_comp[icomp, j, ii] = self.preset.qubic.joint_out.qubic.H[j](
+                        maps_conv_i[icomp]
+                    ).ravel()
         return tod_comp
 
     def update_mixing_matrix(self, beta, previous_mixingmatrix, icomp):
@@ -363,13 +422,17 @@ class PipelineComponentMapMaking:
         """
 
         ### Build mixing matrix according to the choosen model and the beta parameter
-        model_mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_out).eval(self.preset.qubic.joint_out.qubic.allnus, *beta)
+        model_mixingmatrix = mm.MixingMatrix(*self.preset.comp.components_out).eval(
+            self.preset.qubic.joint_out.qubic.allnus, *beta
+        )
 
         ### Update the mixing matrix according to the one computed using the beta parameter
         updated_mixingmatrix = previous_mixingmatrix
 
         for ii in range(self.preset.comp.params_foregrounds["bin_mixing_matrix"]):
-            updated_mixingmatrix[ii * self.fsub : (ii + 1) * self.fsub, icomp] = model_mixingmatrix[ii * self.fsub : (ii + 1) * self.fsub, icomp]
+            updated_mixingmatrix[ii * self.fsub : (ii + 1) * self.fsub, icomp] = model_mixingmatrix[
+                ii * self.fsub : (ii + 1) * self.fsub, icomp
+            ]
 
         return updated_mixingmatrix
 
@@ -384,7 +447,10 @@ class PipelineComponentMapMaking:
         # if any subsequent non-CO component has a different method -> parametric_blind
         if len(comps) > 1:
             for component in comps[2:]:
-                if component != "CO" and self.preset.comp.params_foregrounds[component]["type"] != method_0:
+                if (
+                    component != "CO"
+                    and self.preset.comp.params_foregrounds[component]["type"] != method_0
+                ):
                     return "parametric_blind"
         return method
 
@@ -394,7 +460,10 @@ class PipelineComponentMapMaking:
 
         # d1 model
         if self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"] != 0:
-            index_num = hp.ud_grade(self.preset.sky.seenpix, self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"])
+            index_num = hp.ud_grade(
+                self.preset.sky.seenpix,
+                self.preset.comp.params_foregrounds["Dust"]["nside_beta_out"],
+            )
             self.preset.mixingmatrix._index_seenpix_beta = np.where(index_num)[0]
 
             ### Simulated TOD for each components, nsub, npix with shape (npix, nsub, ncomp, nsnd)
@@ -494,7 +563,7 @@ class PipelineComponentMapMaking:
         #     self.preset.gain.gain_iter /= self.preset.gain.gain_iter[0]
         #     self.preset.gain.all_gain = np.concatenate((self.preset.gain.all_gain, np.array([self.preset.gain.gain_iter])), axis=0)
 
-        # elif self.preset.qubic.params_qubic["instrument"] == "DB": 
+        # elif self.preset.qubic.params_qubic["instrument"] == "DB":
         #     TODi_Q_150 = self.H_i.operands[0](self.preset.comp.components_iter)[: self.ndets * self.nsampling]
         #     TODi_Q_220 = self.H_i.operands[0](self.preset.comp.components_iter)[self.ndets * self.nsampling : 2 * self.ndets * self.nsampling]
 
@@ -543,12 +612,19 @@ class PipelineComponentMapMaking:
                 if (step + 1) % self.preset.tools.params["save_iter"] == 0:
                     if self.preset.tools.params["lastite"]:
                         if step != 0:
-                            os.remove("CMM/" + self.preset.tools.params["foldername"] + "/Dict/" + self.preset.tools.params["filename"] + f"_{str(self.preset.job_id)}.h5")
+                            os.remove(
+                                "CMM/"
+                                + self.preset.tools.params["foldername"]
+                                + "/Dict/"
+                                + self.preset.tools.params["filename"]
+                                + f"_{str(self.preset.job_id)}.h5"
+                            )
                         dictionary = {
                             "maps_in": self.preset.comp.components_in,
                             "maps_in_convolved": self.preset.acquisition.components_in_convolved,
                             "maps": self.preset.comp.components_iter,
-                            "maps_noise": self.preset.acquisition.components_in_convolved - self.preset.comp.components_iter,
+                            "maps_noise": self.preset.acquisition.components_in_convolved
+                            - self.preset.comp.components_iter,
                             "comps_name": self.preset.comp.components_name_out,
                             "beta": self.preset.acquisition.allbeta,
                             "beta_true": self.preset.mixingmatrix.beta_in,
@@ -573,9 +649,18 @@ class PipelineComponentMapMaking:
                             "convergence": self.preset.acquisition.convergence,
                             "TOD_qubic": self.preset.acquisition.TOD_qubic,
                             "TOD_external": self.preset.acquisition.TOD_external,
-                            "qubic_dict": {k: v for k, v in self.preset.qubic.dict.items() if k != "comm"},  # Need to remove the MPI communictor, which is not suppurted by pickle
+                            "qubic_dict": {
+                                k: v for k, v in self.preset.qubic.dict.items() if k != "comm"
+                            },  # Need to remove the MPI communictor, which is not suppurted by pickle
                         }
-                        HDF5Dict().save_dict("CMM/" + self.preset.tools.params["foldername"] + "/Dict/" + self.preset.tools.params["filename"] + f"_{str(self.preset.job_id)}.h5", dictionary)
+                        HDF5Dict().save_dict(
+                            "CMM/"
+                            + self.preset.tools.params["foldername"]
+                            + "/Dict/"
+                            + self.preset.tools.params["filename"]
+                            + f"_{str(self.preset.job_id)}.h5",
+                            dictionary,
+                        )
 
     def _stop_condition(self):
         """
@@ -650,7 +735,10 @@ class PipelineEnd2End:
         self.job_id = os.environ.get("SLURM_JOB_ID")
 
         self.folder = (
-            "CMM/" + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_" + self.params["foldername"] + "/Dict/"
+            "CMM/"
+            + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_"
+            + self.params["foldername"]
+            + "/Dict/"
         )
         self.file = self.folder + self.params["filename"] + f"_{self.job_id}.h5"
         self.file_spectrum = (

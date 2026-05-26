@@ -3,3 +3,6 @@
 #*.ipynb	diff=jupyternotebook
 
 #*.ipynb	merge=jupyternotebook
+
+*.ipynb linguist-generated=true
+*.html linguist-generated=true

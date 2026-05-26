@@ -1,4 +1,6 @@
 import argparse
+import os
+import tempfile
 
 from pyoperators import MPI
 from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineEnd2End
@@ -12,7 +14,9 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=None, help="Random seed for this job.")
     args = parser.parse_args()
 
-    # Set seed if provided
+    params_path = args.parameters_file
+    tmp_path = None
+
     if args.seed is not None:
         from ruamel.yaml import YAML
 
@@ -25,11 +29,19 @@ if __name__ == "__main__":
         params["QUBIC"]["NOISE"]["seed_noise"] = args.seed
         params["PLANCK"]["seed_noise"] = args.seed
 
-        with open(args.parameters_file, "w") as f:
-            yaml.dump(params, f)
-            
+        # Write to a per-job private temp file in /tmp so concurrent array jobs
+        # never touch the shared params file. tempfile guarantees a unique path
+        # and the finally block removes it even if the pipeline crashes.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
+            yaml.dump(params, tmp)
+            tmp_path = tmp.name
+
+        params_path = tmp_path
         print(f"INFO Using SEED={args.seed}")
 
-    # Initialize and run the pipeline
-    pipeline = PipelineEnd2End(comm, parameters_path=args.parameters_file)
-    pipeline.main(specific_file=args.file_spectrum)
+    try:
+        pipeline = PipelineEnd2End(comm, parameters_path=params_path)
+        pipeline.main(specific_file=args.file_spectrum)
+    finally:
+        if tmp_path is not None:
+            os.unlink(tmp_path)

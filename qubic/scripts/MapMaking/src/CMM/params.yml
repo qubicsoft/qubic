@@ -51,13 +51,14 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-  instrument: "DB"                                                                     # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
+  instrument: "UWB"                                                                     # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
   configuration: "FI"                                                                  # Instrumental configuration (TD or FI) # to be implemented in the code
   npointings: 3000                                                                     # Number of time samples
   nsub_in: 10                                                                           # Number of sub-acquisitions
   nsub_out: 10                                                                          # Number of sub-acquisitions for the reconstruction
   convolution_in: true                                                                # Angular resolution in the input TOD
   convolution_out: true                                                               # Angular resolution in the reconstruction
+  fwhm_rec: null                                                                       # UWB conv_out=False only: empirically measured PCG output FWHM (rad). null = use arithmetic mean of sub-band FWHMs (approximate for UWB).
   preconditioner: false
   NOISE:
     ndet: 1                                                                          # Level of detector noise
@@ -106,7 +107,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-  n_init_iter_pcg: 100
+  n_init_iter_pcg: 50
   n_iter_pcg: 10                                                                       # Number of PCG iterations
   tol_pcg: 1.0e-15                                                                     # Tolerance for PCG
   n_iter_loop: 1                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)

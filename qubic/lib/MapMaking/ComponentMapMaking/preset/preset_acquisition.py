@@ -223,14 +223,32 @@ class PresetAcquisition:
 
         elif conv_in and not conv_out:
             fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
-            for comp, comp_name in enumerate(self.preset_comp.components_name_out):
-                weights = self._get_component_weights(comp_name)
-                fwhm_qubic_rec[comp] = np.sum(weights * fwhm_qubic_tod)
-                for j, fwhm_j in enumerate(allfwhm):
-                    C_j = HealpixConvolutionGaussianOperator(fwhm=fwhm_j, lmax=3 * nside - 1)
-                    self.components_in_convolved[comp] += weights[j] * C_j(
-                        self.preset_comp.components_in[comp]
+            fwhm_rec_override = self.preset_qubic.params_qubic.get("fwhm_rec", None)
+            is_uwb = self.preset_qubic.params_qubic["instrument"] == "UWB"
+
+            if is_uwb and fwhm_rec_override is not None:
+                # For UWB, all sub-bands are summed into a single TOD (nFocalPlanes=1),
+                # so the PCG convergence beam differs from the arithmetic mean of sub-band
+                # beams. Use the user-calibrated effective FWHM instead.
+                fwhm_qubic_rec[:] = fwhm_rec_override
+                C_eff = HealpixConvolutionGaussianOperator(fwhm=fwhm_rec_override, lmax=3 * nside - 1)
+                for comp in range(len(self.preset_comp.components_name_out)):
+                    self.components_in_convolved[comp] = C_eff(self.preset_comp.components_in[comp])
+            else:
+                if is_uwb:
+                    self.preset_tools.mpi._print_message(
+                        "WARNING: UWB conv_out=False — using arithmetic mean of sub-band FWHMs "
+                        "as reconstruction reference. Set params['QUBIC']['fwhm_rec'] to the "
+                        "empirically measured PCG output FWHM for a consistent reference."
                     )
+                for comp, comp_name in enumerate(self.preset_comp.components_name_out):
+                    weights = self._get_component_weights(comp_name)
+                    fwhm_qubic_rec[comp] = np.sum(weights * fwhm_qubic_tod)
+                    for j, fwhm_j in enumerate(allfwhm):
+                        C_j = HealpixConvolutionGaussianOperator(fwhm=fwhm_j, lmax=3 * nside - 1)
+                        self.components_in_convolved[comp] += weights[j] * C_j(
+                            self.preset_comp.components_in[comp]
+                        )
 
         elif not conv_in and conv_out:
             fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))

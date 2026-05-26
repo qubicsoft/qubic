@@ -1,4 +1,4 @@
-foldername: "test_conv_false_w_planck"
+foldername: "test"
 filename: "test"
 
 CMB:
@@ -16,9 +16,9 @@ QUBIC:
 
   instrument: "DB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
-  npointings: 3000               # Number of time samples
-  nsub_in: 16                     # Number of sub-acquisitions
-  nsub_out: 16
+  npointings: 300               # Number of time samples
+  nsub_in: 8                     # Number of sub-acquisitions
+  nsub_out: 8
   nrec: 2                        # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
   convolution_in: true          # Angular resolution in the input TOD
@@ -48,7 +48,7 @@ QUBIC:
 
 SKY:
   ### This section control the reconstructed sky
-  nside: 256                               # Nside of components
+  nside: 128                               # Nside of components
   coverage_cut: 0.2                        # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57

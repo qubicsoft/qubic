@@ -1,5 +1,5 @@
 save_iter: 1                                                                           # Save every 'save_iter' iteration
-foldername: "test_conv_false_w_planck_claude"                                                                  # Name of the saved folder
+foldername: "test_conv_true_w_planck"                                                                  # Name of the saved folder
 filename: "test"                                                                       # Name of the saved file
 lastite: true                                                                          # Keep only the last iteration
 
@@ -54,10 +54,10 @@ QUBIC:
   instrument: "DB"                                                                     # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
   configuration: "FI"                                                                  # Instrumental configuration (TD or FI) # to be implemented in the code
   npointings: 3000                                                                     # Number of time samples
-  nsub_in: 16                                                                           # Number of sub-acquisitions
-  nsub_out: 16                                                                          # Number of sub-acquisitions for the reconstruction
+  nsub_in: 10                                                                           # Number of sub-acquisitions
+  nsub_out: 10                                                                          # Number of sub-acquisitions for the reconstruction
   convolution_in: true                                                                # Angular resolution in the input TOD
-  convolution_out: false                                                               # Angular resolution in the reconstruction
+  convolution_out: true                                                               # Angular resolution in the reconstruction
   preconditioner: false
   NOISE:
     ndet: 1                                                                          # Level of detector noise
@@ -87,7 +87,7 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
   level_noise_planck: 1                                                              # Noise level for Planck data
-  nsub_planck: 16                                                                       # Number of integration step for Planck data
+  nsub_planck: 10                                                                       # Number of integration step for Planck data
   weight_planck: 1                                                                     # Weight of Planck data within the QUBIC patch
   fwhm_weight_planck: 0                                                                # FWHM for apodized QUBIC patch
   30GHz: false
@@ -106,7 +106,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-  n_init_iter_pcg: 50
+  n_init_iter_pcg: 100
   n_iter_pcg: 10                                                                       # Number of PCG iterations
   tol_pcg: 1.0e-15                                                                     # Tolerance for PCG
   n_iter_loop: 1                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)

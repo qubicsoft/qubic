@@ -213,8 +213,9 @@ class Chi2(AbstractChi2):
         if self.parametric:
             Aext = A[self.nfreq :]
 
-            # TODO : should we convolve here ? Tom : I think we should if convolutin_out==True, but fwhm_mapmaking is not adapted for that, we need to compute specific fwhm for planck
-            H_planck = self.preset.qubic.joint_out.external.get_operator(A=Aext)
+            H_planck = self.preset.qubic.joint_out.external.get_operator(
+                A=Aext, fwhm=self.preset.acquisition.fwhm_mapmaking[self.nfreq:]
+            )
 
             comp = self.preset.comp.components_iter.copy()
             comp[:, ~self.preset.sky.seenpix] = 0
@@ -247,7 +248,8 @@ class Chi2(AbstractChi2):
 
         ### Planck chi2
         H_planck = self.preset.qubic.joint_out.external.get_operator(
-            A=Aext.transpose(1, 0, 2)
+            A=Aext.transpose(1, 0, 2),
+            fwhm=self.preset.acquisition.fwhm_mapmaking[self.nfreq:],
         )
         ysim_pl = H_planck(self.preset.comp.components_iter.copy())
         residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external

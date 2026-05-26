@@ -121,46 +121,33 @@ class PresetAcquisition:
         ### Get convolution
         self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_qubic_tod, self.fwhm_qubic_mapmaking, self.fwhm_qubic_rec = self.get_convolution()
-        #! Tom: need to update this
-        if (
-            self.preset_qubic.params_qubic["convolution_in"]
-            and self.preset_qubic.params_qubic["convolution_out"]
-        ):
-            self.fwhm_planck_tod = (
-                [self.fwhm_qubic_tod.min()]
-                * len(self.preset_external.external_nus)
-                * self.preset_external.params_external["nsub_planck"]
-            )
-        elif (
-            self.preset_qubic.params_qubic["convolution_in"]
-            and not self.preset_qubic.params_qubic["convolution_out"]
-        ):
-            self.fwhm_planck_tod = (
-                [self.fwhm_qubic_rec]
-                * len(self.preset_external.external_nus)
-                * self.preset_external.params_external["nsub_planck"]
-            )
-        elif (
-            not self.preset_qubic.params_qubic["convolution_in"]
-            and not self.preset_qubic.params_qubic["convolution_out"]
-        ):
-            self.fwhm_planck_tod = (
-                [0]
-                * len(self.preset_external.external_nus)
-                * self.preset_external.params_external["nsub_planck"]
-            )
-        self.fwhm_planck_mapmaking = (
-            [self.fwhm_qubic_mapmaking.min()]
-            * len(self.preset_external.external_nus)
+        n_planck_subs = (
+            len(self.preset_external.external_nus)
             * self.preset_external.params_external["nsub_planck"]
         )
+        conv_in = self.preset_qubic.params_qubic["convolution_in"]
+        conv_out = self.preset_qubic.params_qubic["convolution_out"]
+
+        if conv_in and conv_out:
+            # Degrade Planck to QUBIC's finest beam; maps are reconstructed at min(allfwhm),
+            # so the Planck reconstruction operator needs no additional convolution (fwhm=0).
+            self.fwhm_planck_tod = np.full(n_planck_subs, self.fwhm_qubic_tod.min())
+        elif conv_in and not conv_out:
+            # Use weighted-average reconstruction beam of the first component for Planck.
+            self.fwhm_planck_tod = np.full(n_planck_subs, self.fwhm_qubic_rec[0])
+        elif not conv_in and conv_out:
+            # No beam applied in TOD generation; Planck gets no convolution either.
+            self.fwhm_planck_tod = np.zeros(n_planck_subs)
+        else:  # not conv_in and not conv_out
+            self.fwhm_planck_tod = np.zeros(n_planck_subs)
+
+        self.fwhm_planck_mapmaking = np.full(n_planck_subs, self.fwhm_qubic_mapmaking.min())
+
         print("fwhm_qubic_tod : ", self.fwhm_qubic_tod.shape)
-        self.fwhm_planck_tod = np.array(self.fwhm_planck_tod)[..., 0]
         print("fwhm_planck_tod : ", self.fwhm_planck_tod.shape)
+
         self.fwhm_tod = np.concatenate((self.fwhm_qubic_tod, self.fwhm_planck_tod))
-        self.fwhm_mapmaking = np.concatenate(
-            (self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking)
-        )
+        self.fwhm_mapmaking = np.concatenate((self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking))
         self.fwhm_rec = self.fwhm_qubic_rec
 
         ### Get observed data

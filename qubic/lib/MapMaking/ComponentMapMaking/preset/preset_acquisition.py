@@ -122,10 +122,45 @@ class PresetAcquisition:
         self.preset_tools.mpi._print_message("    => Getting convolution")
         self.fwhm_qubic_tod, self.fwhm_qubic_mapmaking, self.fwhm_qubic_rec = self.get_convolution()
         #! Tom: need to update this
-        self.fwhm_planck_tod = [self.fwhm_qubic_tod.min()] * len(self.preset_external.external_nus) * self.preset_external.params_external["nsub_planck"]
-        self.fwhm_planck_mapmaking = [self.fwhm_qubic_mapmaking.min()] * len(self.preset_external.external_nus) * self.preset_external.params_external["nsub_planck"]
+        if (
+            self.preset_qubic.params_qubic["convolution_in"]
+            and self.preset_qubic.params_qubic["convolution_out"]
+        ):
+            self.fwhm_planck_tod = (
+                [self.fwhm_qubic_tod.min()]
+                * len(self.preset_external.external_nus)
+                * self.preset_external.params_external["nsub_planck"]
+            )
+        elif (
+            self.preset_qubic.params_qubic["convolution_in"]
+            and not self.preset_qubic.params_qubic["convolution_out"]
+        ):
+            self.fwhm_planck_tod = (
+                [self.fwhm_qubic_rec]
+                * len(self.preset_external.external_nus)
+                * self.preset_external.params_external["nsub_planck"]
+            )
+        elif (
+            not self.preset_qubic.params_qubic["convolution_in"]
+            and not self.preset_qubic.params_qubic["convolution_out"]
+        ):
+            self.fwhm_planck_tod = (
+                [0]
+                * len(self.preset_external.external_nus)
+                * self.preset_external.params_external["nsub_planck"]
+            )
+        self.fwhm_planck_mapmaking = (
+            [self.fwhm_qubic_mapmaking.min()]
+            * len(self.preset_external.external_nus)
+            * self.preset_external.params_external["nsub_planck"]
+        )
+        print("fwhm_qubic_tod : ", self.fwhm_qubic_tod.shape)
+        self.fwhm_planck_tod = np.array(self.fwhm_planck_tod)[..., 0]
+        print("fwhm_planck_tod : ", self.fwhm_planck_tod.shape)
         self.fwhm_tod = np.concatenate((self.fwhm_qubic_tod, self.fwhm_planck_tod))
-        self.fwhm_mapmaking = np.concatenate((self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking))
+        self.fwhm_mapmaking = np.concatenate(
+            (self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking)
+        )
         self.fwhm_rec = self.fwhm_qubic_rec
 
         ### Get observed data
@@ -286,7 +321,7 @@ class PresetAcquisition:
             gain=self.preset_gain.gain_in,
             fwhm=self.fwhm_tod,
         )
-    
+
         ### Build noise variables
         noise_external = self.preset_qubic.joint_in.external.get_noise(
             planck_ntot=self.preset_tools.params["PLANCK"]["level_noise_planck"],
@@ -306,10 +341,14 @@ class PresetAcquisition:
         # self.TOD_external_zero_outside_patch = self.components_in_convolved.copy()
         # self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
         # self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
-        self.TOD_external = self.H.operands[1](self.preset_comp.components_in) + noise_external.ravel()
+        self.TOD_external = (
+            self.H.operands[1](self.preset_comp.components_in) + noise_external.ravel()
+        )
         self.TOD_external_zero_outside_patch = self.preset_comp.components_in.copy()
         self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
-        self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
+        self.TOD_external_zero_outside_patch = (
+            self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
+        )
 
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         # _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
@@ -338,7 +377,9 @@ class PresetAcquisition:
         ### Observed TOD (Planck is assumed on the full sky)
 
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
-        self.TOD_obs_zero_outside = np.r_[self.TOD_qubic, self.TOD_external_zero_outside_patch.ravel()]
+        self.TOD_obs_zero_outside = np.r_[
+            self.TOD_qubic, self.TOD_external_zero_outside_patch.ravel()
+        ]
 
     def get_x0(self):
         """PCG starting point.
@@ -392,11 +433,18 @@ class PresetAcquisition:
                     key = "P"
 
                 initial_factor = (
-                    self.preset_tools.params["INITIAL"]["qubic_patch_{}_{}".format(key, comp_name[: min(4, len(comp_name))].lower())] * self.preset_tools.params["INITIAL"]["global_{}".format(key)]
+                    self.preset_tools.params["INITIAL"][
+                        "qubic_patch_{}_{}".format(key, comp_name[: min(4, len(comp_name))].lower())
+                    ]
+                    * self.preset_tools.params["INITIAL"]["global_{}".format(key)]
                 )
                 self.preset_comp.components_iter[i, mypix, istk] *= initial_factor
                 # To make it more uniform, either name the components "cmb", "dust", "sync", "co" or the files "qubic_patch_I_CMB", "qubic_patch_I_Dust", "qubic_patch_I_Synchrotron", "qubic_patch_I_CO"
-                self.preset_comp.components_iter[i, mypix, istk] += np.random.normal(0, self.preset_tools.params["INITIAL"]["sig_map_noise"], self.preset_comp.components_iter[i, mypix, istk].shape)
+                self.preset_comp.components_iter[i, mypix, istk] += np.random.normal(
+                    0,
+                    self.preset_tools.params["INITIAL"]["sig_map_noise"],
+                    self.preset_comp.components_iter[i, mypix, istk].shape,
+                )
 
         # else:
         #     self.allbeta = np.array([self.beta_iter])

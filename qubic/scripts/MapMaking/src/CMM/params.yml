@@ -1,5 +1,5 @@
 save_iter: 1                                                                           # Save every 'save_iter' iteration
-foldername: "test_conv_true_w_planck_claude"                                                                  # Name of the saved folder
+foldername: "test_conv_false_w_planck_claude"                                                                  # Name of the saved folder
 filename: "test"                                                                       # Name of the saved file
 lastite: true                                                                          # Keep only the last iteration
 
@@ -57,7 +57,7 @@ QUBIC:
   nsub_in: 16                                                                           # Number of sub-acquisitions
   nsub_out: 16                                                                          # Number of sub-acquisitions for the reconstruction
   convolution_in: true                                                                # Angular resolution in the input TOD
-  convolution_out: true                                                               # Angular resolution in the reconstruction
+  convolution_out: false                                                               # Angular resolution in the reconstruction
   preconditioner: false
   NOISE:
     ndet: 1                                                                          # Level of detector noise

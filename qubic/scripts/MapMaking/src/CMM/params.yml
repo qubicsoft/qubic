@@ -1,5 +1,5 @@
 save_iter: 1                                                                    # Save every 'save_iter' iteration
-foldername: "test_convo_in"                                                              # Name of the saved folder
+foldername: "test_convo_in_nside512_npointings5000_planck143-217"                                                              # Name of the saved folder
 filename: "test"                                                                # Name of the saved file
 lastite: true                                                                   # Keep only the last iteration
 
@@ -10,7 +10,7 @@ CMB:
   Alens: 1
 
 Foregrounds:
-    ### This section define the in/out foregrounds true
+    ### This section defines the in/out foregrounds true
   fit_mixing_matrix: false                                                     # If False, the beta reconstruction is skipped
   bin_mixing_matrix: 1
   blind_method: "minimize"                                                      # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
@@ -54,7 +54,7 @@ QUBIC:
 
     instrument: "DB"                                                            # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                         # Instrumental configuration (TD or FI) # to be implemented in the code
-    npointings: 1000                                                            # Number of time samples
+    npointings: 8000 #1000                                                            # Number of time samples
     nsub_in: 8                                                                  # Number of sub-acquisitions
     nsub_out: 8                                                                 # Number of sub-acquisitions for the reconstruction
     convolution_in: true                                                       # Angular resolution in the input TOD
@@ -72,15 +72,16 @@ QUBIC:
         synthbeam_kmax: 1                                                       # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
         synthbeam_fraction: 1                                                   # Fraction of synthesized beam
     dtheta: 15                                                                  # Angle for coverage
+    apod: 0.10                                                                  # Fraction of dtheta to add for apodisation (final patch radius is dtheta * (1 + apod))
     GAIN:
         sig_gain: 0                                                             # Standard deviation for input detector gains
         fit_gain: False                                                         # Fitting gain detectors
         seed: 44444                                                             # seed used to create input gain, not implemented yet
 
 SKY:
-    ### This section control the reconstructed sky
+    ### This section controls the reconstructed sky
 
-  nside: 256                                                                    # Nside of components
+  nside: 512                                                                    # Nside of components
   coverage_cut: 0.15                                                            # Percent of coverage to keep the pixels seen enough by QUBIC
   RA_center: 0
   DEC_center: -57
@@ -95,9 +96,9 @@ PLANCK:
     44GHz: false
     70GHz: false
     100GHz: false
-    143GHz: false
+    143GHz: true
     217GHz: true
-    353GHz: true
+    353GHz: false
     seed_noise: 22222
 
 Pipeline:
@@ -105,7 +106,7 @@ Pipeline:
     spectrum: false
 
 PCG:
-    ### This section control PCG parameters
+    ### This section controls PCG parameters
 
     n_init_iter_pcg: 100
     n_iter_pcg: 1                                                            # Number of PCG iterations
@@ -122,7 +123,7 @@ PCG:
 
 INITIAL:
 
-    ### This section control the initialization of the components 
+    ### This section controls the initialization of the components 
   fwhm0: 0   #.0078                                                             # Convolution kernel for the initial guess maps
   sig_map_noise: 0                                                              # Standard deviation of noise in first guess maps
 

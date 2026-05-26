@@ -6,6 +6,8 @@ from pysm3 import utils
 
 from qubic.data import PATH
 
+from qubic.lib.Instrument.Qacquisition import QubicAcquisition
+
 
 class PresetComponents:
     """Preset Components.
@@ -46,7 +48,7 @@ class PresetComponents:
 
     """
 
-    def __init__(self, preset_tools, preset_qubic, qubic_patch=None):
+    def __init__(self, preset_tools, preset_qubic, qubic_patch=None, apod_patch=None, apod_fact=None):
         """
         Initialize.
 
@@ -77,6 +79,12 @@ class PresetComponents:
 
         self.components_in = self.get_components(self.skyconfig_in, qubic_patch=qubic_patch)
         self.components_out = self.get_components(self.skyconfig_out, qubic_patch=qubic_patch)
+        self.components_iter = self.components_out.copy()
+
+        # apodise all maps once and for all
+        for component_maps in [self.components_in, self.components_out]:
+            mask = np.isin(qubic_patch, apod_patch) # returns True if qubic_patch pix in apod_patch
+            component_maps[:, mask, :] *= apod_fact[None, :, None]
         self.components_iter = self.components_out.copy()
 
         ### Monochromatic emission

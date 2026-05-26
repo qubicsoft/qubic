@@ -437,7 +437,7 @@ class QubicAcquisition(Acquisition):
         """
         if qubic_patch is not None: # we have here the issue that the shape will depend on nstokes and ncomp. a solution could be to input the shape direcly!
             # mask = np.zeros((hp.nside2npix(nside), nstokes), dtype=bool)
-            mask = np.zeros(shape_full, dtype=bool)
+            mask = np.zeros(shape_full, dtype=bool) # True is pixel we keep
             dim_patch = np.argwhere(np.array(shape_patch) == len(qubic_patch))
             if dim_patch == 0:
                 mask[qubic_patch, ...] = True
@@ -965,9 +965,14 @@ class PlanckAcquisition:
         self.allnus = []
 
         for nu in self.nus:
+            # this file is for nside=256
             _planckData = pickle.load(open(PATH + f"Planck{nu}GHz.pkl", "rb"))
 
-            self.sigma.append(_planckData[f"sigma{nu}"])
+            # the same operation needs to be done for noise when we use it
+            sigma_nside256 = np.array(_planckData[f"sigma{nu}"])
+            sigma = sigma_nside256 * self.nside/256
+            self.sigma.append(sigma)
+            # self.sigma.append(_planckData[f"sigma{nu}"])
             self.fwhm.append(_planckData[f"fwhm{nu}"])
             self.bandwidth.append(_planckData[f"bw{nu}"])
 

@@ -67,11 +67,11 @@ class PresetQubic:
         inside_patch = hp.query_disc(params_sky["nside"], vec_centre_patch, radius_patch_rad)
         self.qubic_patch = hp.query_disc(params_sky["nside"], vec_centre_patch, radius_patch_rad * (1 + self.preset_tools.params["QUBIC"]["apod"]))
         # returns unique elements in cell_ids_large not in cell_ids, sorted
-        self.qubic_patch_apod = np.setdiff1d(self.qubic_patch, inside_patch)
+        self.apod_patch = np.setdiff1d(self.qubic_patch, inside_patch)
         # del self.qubic_patch
         del inside_patch
         dir_centre_patch = hp.rotator.vec2dir(vec_centre_patch)
-        vec_pix_apod = hp.pix2vec(params_sky["nside"], self.qubic_patch_apod)
+        vec_pix_apod = hp.pix2vec(params_sky["nside"], self.apod_patch)
         dir_pix_apod = hp.rotator.vec2dir(vec_pix_apod)
         # angular distance from the centre of the patch
         dist_pix_apod = hp.rotator.angdist(dir_centre_patch, dir_pix_apod)

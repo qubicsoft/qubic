@@ -99,7 +99,10 @@ class PresetInitialisation:
         
         self.tools.mpi._print_message("========= Components =========")
         # self.comp = PresetComponents(self.tools, self.qubic, self.sky.total_patch)
-        self.comp = PresetComponents(self.tools, self.qubic, self.qubic.qubic_patch)
+        self.comp = PresetComponents(self.tools, self.qubic,
+                                     self.qubic.qubic_patch,
+                                     apod_patch=self.qubic.apod_patch,
+                                     apod_fact=self.qubic.cos_apod,)
         print('Size of comp [KB]:', objsize.get_deep_size(self.comp)/1024.)
 
         self.tools.mpi._print_message("========= GAIN =========")

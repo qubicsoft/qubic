@@ -619,7 +619,7 @@ class PipelineComponentMapMaking:
             self.update_components(seenpix=self.preset.sky.seenpix)
 
             ### Update self.preset.acquisition.beta_iter^{k} -> self.preset.acquisition.beta_iter^{k+1}
-            if self.preset.comp.params_foregrounds["fit_mixing_matrix"]:
+            if self.preset.comp.params_foregrounds["fit_mixing_matrix"]: # not adapted yet for qubic_patch
                 self.fit_mixing_matrix()
 
             ### Update self.gain.gain_iter^{k} -> self.gain.gain_iter^{k+1}

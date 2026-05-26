@@ -137,10 +137,16 @@ class PresetAcquisition:
         self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
         C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_qubic_tod))
         for icomp, _ in enumerate(self.preset_comp.components_name_out):
-            full_components_in = np.zeros((12 * self.preset_tools.params["SKY"]["nside"]**2, 3))
-            full_components_in[self.qubic_patch] = self.preset_comp.components_in[icomp]
-            self.components_in_convolved[icomp] = C(full_components_in)[self.qubic_patch]
-        del full_components_in
+            full_components = np.zeros((12 * self.preset_tools.params["SKY"]["nside"]**2, 3))
+            full_components[self.qubic_patch] = self.preset_comp.components_in[icomp]
+            # full_components[self.preset_qubic.qubic_patch_apod] *= self.preset_qubic.cos_apod # already apodised in preset_components
+            self.components_in_convolved[icomp] = C(full_components)[self.qubic_patch]
+            # self.preset_comp.components_iter are now convolved so that we can compare them to self.components_in_convolved
+            # otherwise, the pixels not seen by qubic will never be at the right resolution
+            full_components = np.zeros((12 * self.preset_tools.params["SKY"]["nside"]**2, 3))
+            full_components[self.qubic_patch] = self.preset_comp.components_iter[icomp]
+            self.preset_comp.components_iter[icomp] = C(full_components)[self.qubic_patch]
+        del full_components
 
         ### Get observed data
         self.preset_tools.mpi._print_message("    => Getting observational data")

@@ -58,7 +58,7 @@ QUBIC:
   nsub_out: 10                                                                          # Number of sub-acquisitions for the reconstruction
   convolution_in: true                                                                # Angular resolution in the input TOD
   convolution_out: true                                                               # Angular resolution in the reconstruction
-  fwhm_rec: null                                                                       # UWB conv_out=False only: empirically measured PCG output FWHM (rad). null = use arithmetic mean of sub-band FWHMs (approximate for UWB).
+  fwhm_rec: null                                                                       # conv_out=False only: override effective PCG reconstruction FWHM (rad). null = auto-compute from noise weights (correct for UWB and DB).
   preconditioner: false
   NOISE:
     ndet: 1                                                                          # Level of detector noise
@@ -90,7 +90,7 @@ PLANCK:
   level_noise_planck: 1                                                              # Noise level for Planck data
   nsub_planck: 10                                                                       # Number of integration step for Planck data
   weight_planck: 1                                                                     # Weight of Planck data within the QUBIC patch
-  fwhm_weight_planck: 0                                                                # FWHM for apodized QUBIC patch
+  fwhm_weight_planck: 1                                                                # FWHM for apodized QUBIC patch
   30GHz: false
   44GHz: false
   70GHz: false

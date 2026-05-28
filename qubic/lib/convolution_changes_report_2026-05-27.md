@@ -23,7 +23,7 @@ $$H_{\text{QUBIC},j} = P_j \circ B_j$$
 $P_j$ is the pointing operator (sampling), $B_j$ is a Gaussian convolution at
 full-width half-maximum $\theta_j$ (`allfwhm[j]`). The reconstruction solves:
 
-$$\hat{x} = \arg\min_x \;\|H_\text{out}(x) - \vec{d}\|^2_{N^{-1}}$$
+$$\hat{x} = \argmin_x \;\|H_\text{out}(x) - \vec{d}\|^2_{N^{-1}}$$
 
 using PCG, where $H_\text{out}$ is the reconstruction operator controlled by the
 `convolution_out` flag. To compute residuals, one must compare $\hat{x}$ to the
@@ -56,13 +56,13 @@ consistently: `fwhm_qubic_rec`, `fwhm_qubic_mapmaking`, and
 
 The reconstruction operator applies a partial beam removal per sub-band:
 
-$$\theta_j^\text{map} = \sqrt{\theta_j^2 - \theta_\min^2}, \quad \theta_\min = \min_k \theta_k$$
+$$\theta_j^\text{map} = \sqrt{\theta_j^2 - \theta_min^2}, \quad \theta_min = min_k \theta_k$$
 
 This deconvolves the sub-band-specific part of the beam so that all sub-bands,
-after reconstruction, contribute at the same resolution $\theta_\min$. The
+after reconstruction, contribute at the same resolution $\theta_min$. The
 reference input map is:
 
-$$\vec{s}_\text{ref} = B_{\theta_\min} * \vec{s}_\text{true}, \qquad \texttt{fwhm\_rec} = \theta_\min$$
+$$\vec{s}_\text{ref} = B_{\theta_min} * \vec{s}_\text{true}, \qquad \texttt{fwhm\_rec} = \theta_min$$
 
 **Case (`conv_in=True`, `conv_out=False`)**
 
@@ -110,7 +110,7 @@ bias in the joint reconstruction. The new assignment is:
 
 | `conv_in` | `conv_out` | `fwhm_planck_tod` | Reason |
 |---|---|---|---|
-| True | True | $\theta_\min = \min_j \theta_j$ | QUBIC reconstructs at $\theta_\min$; Planck must also target $\theta_\min$ |
+| True | True | $\theta_min = min_j \theta_j$ | QUBIC reconstructs at $\theta_min$; Planck must also target $\theta_min$ |
 | True | False | $\theta_\text{eff}$ (`fwhm_rec[0]`) | QUBIC PCG converges to $\theta_\text{eff}$; Planck must match |
 | False | * | $0$ | No beam in QUBIC TOD; Planck contributes unconvolved sky |
 
@@ -150,7 +150,7 @@ The map-making equation is solved in two parts. Defining
 $x_\text{prior} = w \cdot \vec{s}_\text{ref}$ (the Planck prior at reconstruction
 resolution), the PCG solves the residual problem:
 
-$$\hat{x}_\delta = \arg\min_{x} \; \| H_\text{out}(x + x_\text{prior}) - \vec{d} \|^2_{N^{-1}}$$
+$$\hat{x}_\delta = \argmin_{x} \; \| H_\text{out}(x + x_\text{prior}) - \vec{d} \|^2_{N^{-1}}$$
 
 which in practice is expanded as:
 
@@ -248,7 +248,7 @@ tod_comp[i, j] = H[j](C_j(components_iter[i])).ravel()
 
 The TOD model used in mixing matrix fitting must match the same forward operator
 as the map-making step. In the `conv_out=True` case, $H_{\text{out},j}$ includes
-partial beam removal with FWHM $\theta_j^\text{map} = \sqrt{\theta_j^2 - \theta_\min^2}$.
+partial beam removal with FWHM $\theta_j^\text{map} = \sqrt{\theta_j^2 - \theta_min^2}$.
 `get_tod_comp()` must include this same convolution; without it, the simulated TOD
 used for spectral index fitting was inconsistent with the reconstructed maps, which
 would bias the spectral index estimates.

@@ -133,8 +133,9 @@ class PresetAcquisition:
             # so the Planck reconstruction operator needs no additional convolution (fwhm=0).
             self.fwhm_planck_tod = np.full(n_planck_subs, self.fwhm_qubic_tod.min())
         elif conv_in and not conv_out:
-            # Use weighted-average reconstruction beam of the first component for Planck.
-            self.fwhm_planck_tod = np.full(n_planck_subs, self.fwhm_qubic_rec[0])
+            # Planck TOD is generated from components_in_convolved (GLS prediction), so no extra
+            # beam is needed here — the reconstruction beam is already baked into components_in_convolved.
+            self.fwhm_planck_tod = np.zeros(n_planck_subs)
         elif not conv_in and conv_out:
             # No beam applied in TOD generation; Planck gets no convolution either.
             self.fwhm_planck_tod = np.zeros(n_planck_subs)
@@ -159,44 +160,54 @@ class PresetAcquisition:
         self.get_x0()
 
     def _get_subband_weights(self):
-        return np.ones(len(self.preset_qubic.joint_in.qubic.allfwhm))
-
-    def _get_component_weights(self, comp_name):
-        base = self._get_subband_weights()
-        allnus = self.preset_qubic.joint_out.qubic.allnus
-        if comp_name == "Dust":
-            f = c.Dust(
-                nu0=self.preset_comp.params_foregrounds["Dust"]["nu0"],
-                beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_init"][0],
-                temp=20,
-            )
-            weights = base * f.eval(allnus) ** 2
-        elif comp_name == "Synchrotron":
-            f = c.Synchrotron(
-                nu0=self.preset_comp.params_foregrounds["Synchrotron"]["nu0"],
-                beta_pl=self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"][0],
-            )
-            weights = base * f.eval(allnus) ** 2
-        else:
-            weights = base.copy()
-        return weights / np.sum(weights)
-
-    def _compute_invn_weighted_fwhm(self, allfwhm):
         ndet = self.preset_qubic.params_qubic["NOISE"]["ndet"]
         npho150 = self.preset_qubic.params_qubic["NOISE"]["npho150"]
         npho220 = self.preset_qubic.params_qubic["NOISE"]["npho220"]
         is_uwb = self.preset_qubic.params_qubic["instrument"] == "UWB"
-
+        allfwhm = self.preset_qubic.joint_in.qubic.allfwhm
         nsub_per_band = len(allfwhm) // 2
-        # UWB 220 GHz: no detector noise (shared focal plane, attributed to 150 GHz only)
         sigma_150_sq = max(ndet**2 + npho150**2, 1e-30)
         sigma_220_sq = max(npho220**2 if is_uwb else ndet**2 + npho220**2, 1e-30)
-
         weights = np.zeros(len(allfwhm))
         weights[:nsub_per_band] = 1.0 / sigma_150_sq
         weights[nsub_per_band:] = 1.0 / sigma_220_sq
+        return weights
 
-        return np.sum(weights * allfwhm) / np.sum(weights)
+    def _build_mixing_matrix(self, allnus):
+        comp_names = self.preset_comp.components_name_out
+        nsub = len(allnus)
+        ncomp = len(comp_names)
+        A = np.zeros((nsub, ncomp))
+        for cidx, comp_name in enumerate(comp_names):
+            if comp_name == "Dust":
+                f = c.Dust(
+                    nu0=self.preset_comp.params_foregrounds["Dust"]["nu0"],
+                    beta_d=self.preset_comp.params_foregrounds["Dust"]["beta_init"][0],
+                    temp=20,
+                )
+                A[:, cidx] = f.eval(allnus)
+            elif comp_name == "Synchrotron":
+                f = c.Synchrotron(
+                    nu0=self.preset_comp.params_foregrounds["Synchrotron"]["nu0"],
+                    beta_pl=self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"][0],
+                )
+                A[:, cidx] = f.eval(allnus)
+            else:
+                A[:, cidx] = 1.0
+        return A
+
+    def _compute_gls_weights(self):
+        """
+        Returns W (ncomp, nsub): GLS component separation weights.
+        W = (A^T N^{-1} A)^{-1} A^T N^{-1}
+        W can have negative entries for sub-bands dominated by another component.
+        """
+        allnus = self.preset_qubic.joint_out.qubic.allnus
+        noise_inv = self._get_subband_weights()
+        A = self._build_mixing_matrix(allnus)
+        N_inv_A = noise_inv[:, None] * A
+        F = A.T @ N_inv_A
+        return np.linalg.inv(F) @ N_inv_A.T
 
     def get_convolution(self):
         """Convolutions.
@@ -239,15 +250,35 @@ class PresetAcquisition:
                 self.components_in_convolved[icomp] = C(self.preset_comp.components_in[icomp])
 
         elif conv_in and not conv_out:
-            fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
             fwhm_rec_override = self.preset_qubic.params_qubic.get("fwhm_rec", None)
-
-            fwhm_eff = fwhm_rec_override if fwhm_rec_override is not None else self._compute_invn_weighted_fwhm(fwhm_qubic_tod)
-            fwhm_qubic_rec[:] = fwhm_eff
-
-            C_eff = HealpixConvolutionGaussianOperator(fwhm=fwhm_eff, lmax=3 * nside - 1)
-            for comp in range(len(self.preset_comp.components_name_out)):
-                self.components_in_convolved[comp] = C_eff(self.preset_comp.components_in[comp])
+            fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
+            if fwhm_rec_override is not None:
+                fwhm_rec_list = fwhm_rec_override if isinstance(fwhm_rec_override, list) else [fwhm_rec_override] * len(self.preset_comp.components_name_out)
+                for icomp in range(len(self.preset_comp.components_name_out)):
+                    fwhm_comp = fwhm_rec_list[icomp]
+                    fwhm_qubic_rec[icomp] = fwhm_comp
+                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm_comp, lmax=3 * nside - 1)
+                    self.components_in_convolved[icomp] = C(self.preset_comp.components_in[icomp])
+            else:
+                # Full GLS prediction: components_in_convolved[i] = Σⱼ W[i,j] * Bⱼ(Σₖ A[j,k]*m_in[k])
+                # Accounts for cross-component leakage (e.g. CMB bleeding into Dust I through
+                # negative-weight 150 GHz sub-bands), which a single-component Gaussian cannot capture.
+                allnus = self.preset_qubic.joint_out.qubic.allnus
+                W = self._compute_gls_weights()  # (ncomp, nsub)
+                A = self._build_mixing_matrix(allnus)  # (nsub, ncomp)
+                ncomp = len(self.preset_comp.components_name_out)
+                for jsub in range(len(allnus)):
+                    sky_j = sum(
+                        A[jsub, k] * self.preset_comp.components_in[k] for k in range(ncomp)
+                    )
+                    B_j = HealpixConvolutionGaussianOperator(fwhm=fwhm_qubic_tod[jsub], lmax=3 * nside - 1)
+                    blurred_j = B_j(sky_j)
+                    for icomp in range(ncomp):
+                        self.components_in_convolved[icomp] += W[icomp, jsub] * blurred_j
+                # Dominant positive-band FWHM per component — used for fwhm_planck_tod and logging only
+                for icomp in range(ncomp):
+                    pos = W[icomp] > 0
+                    fwhm_qubic_rec[icomp] = np.sum(W[icomp, pos] * fwhm_qubic_tod[pos]) / np.sum(W[icomp, pos])
 
         elif not conv_in and conv_out:
             fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
@@ -341,17 +372,18 @@ class PresetAcquisition:
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
-        # self.TOD_external = self.H.operands[1](self.components_in_convolved) + noise_external.ravel()
-        # self.TOD_external_zero_outside_patch = self.components_in_convolved.copy()
-        # self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
-        # self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
-        self.TOD_external = (
-            self.H.operands[1](self.preset_comp.components_in) + noise_external.ravel()
-        )
-        self.TOD_external_zero_outside_patch = self.preset_comp.components_in.copy()
-        self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
+        # For conv_in=True, conv_out=False: Planck TOD is generated from components_in_convolved
+        # (the GLS prediction, beam already baked in) with fwhm_planck_tod=0. This makes inside-patch
+        # and outside-patch Planck constraints point to the same reference, eliminating the resolution
+        # discontinuity at the patch boundary. For other convolution modes, generate from raw m_in.
+        conv_in = self.preset_qubic.params_qubic["convolution_in"]
+        conv_out = self.preset_qubic.params_qubic["convolution_out"]
+        planck_source = self.components_in_convolved if (conv_in and not conv_out) else self.preset_comp.components_in
+        self.TOD_external = self.H.operands[1](planck_source) + noise_external.ravel()
+        planck_source_zeroed = planck_source.copy()
+        planck_source_zeroed[:, ~self.preset_sky.seenpix] = 0
         self.TOD_external_zero_outside_patch = (
-            self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
+            self.H.operands[1](planck_source_zeroed) + noise_external.ravel()
         )
 
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb

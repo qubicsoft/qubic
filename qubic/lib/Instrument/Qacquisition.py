@@ -702,19 +702,10 @@ class QubicMultiAcquisitions:
 
 
     def _get_coverage(self, qubic_patch=None): # we now use this method outside of the initialisation
-        if qubic_patch is not None: 
-            # print("shape H", self.H.shapein, self.H.shapeout)
-            print("shape qubic_patch", np.shape(qubic_patch))
-            print("shape H[0]", self.H[0].shapein, self.H[0].shapeout)
-            print("shape np.ones(self.H[0].T.shapein)", np.shape(np.ones(self.H[0].T.shapein)))
-            print("shape out", np.shape(self.H[0].T(np.ones(self.H[0].T.shapein))))
+        if qubic_patch is not None:
             out = self.H[0].T(np.ones(self.H[0].T.shapein))[qubic_patch] # Hqubic still has the full sky size, as the remapping is done right before convolution
         else:
-            print("shape H[0]", self.H[0].shapein, self.H[0].shapeout)
-            print("shape np.ones(self.H[0].T.shapein)", np.shape(np.ones(self.H[0].T.shapein)))
-            print("shape out", np.shape(self.H[0].T(np.ones(self.H[0].T.shapein))))
             out = self.H[0].T(np.ones(self.H[0].T.shapein))
-            ezt
         if self.scene.kind != "I":
             out = out[..., 0].copy()
         out *= self.ndets * self.nsamples * self.sampling.period / np.sum(out)
@@ -865,6 +856,8 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         """
         self.operator = []
 
+        lmax = 2 * self.scene.nside - 1
+
         for isub in range(self.nsub):
             ### Compute mixing matrix operator if mixing matrix is provided
             if A is None:
@@ -881,9 +874,9 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                 shape_full = self.H[isub].shapein # (npix, nstokes)
                 shape_patch = (len(qubic_patch), shape_full[1])
                 remapping = QubicAcquisition.get_remapping_operator(qubic_patch=qubic_patch, shape_patch=shape_patch, shape_full=shape_full)
-                convolution = HealpixConvolutionGaussianOperator(fwhm=fwhm[isub], lmax=3 * self.scene.nside - 1)(remapping)
+                convolution = HealpixConvolutionGaussianOperator(fwhm=fwhm[isub], lmax=lmax)(remapping)
             else:
-                convolution = HealpixConvolutionGaussianOperator(fwhm=fwhm[isub], lmax=3 * self.scene.nside - 1)
+                convolution = HealpixConvolutionGaussianOperator(fwhm=fwhm[isub], lmax=lmax)
 
             # print("shape Acomp", Acomp.shapein, Acomp.shapeout)
             # print("shape remapping", remapping.shapein, remapping.shapeout)
@@ -1190,11 +1183,12 @@ class PlanckAcquisition:
         Rmap2tod = ReshapeOperator((npix, 3), (3 * npix))
         Operator = []
         k = 0
+        lmax = 2 * self.nside - 1
         for _ in self.nus:
             ope_i = []
             for _ in range(self.nsub_planck):
                 if fwhm is not None:
-                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=3 * self.nside - 1)
+                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm[k], lmax=lmax)
                 else:
                     C = IdentityOperator()
                 if A is not None:

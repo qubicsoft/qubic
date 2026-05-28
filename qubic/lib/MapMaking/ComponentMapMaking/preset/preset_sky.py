@@ -109,6 +109,8 @@ class PresetSky:
         else:
             self.coverage_beta = None
 
+        self.lmax = 2 * self.params_sky["nside"] - 1
+
         ### Build mask for weighted Planck data
         self.preset_tools.mpi._print_message("    => Creating mask")
         # self.mask = np.ones(12 * self.params_sky["nside"] ** 2)
@@ -116,7 +118,7 @@ class PresetSky:
         self.mask[self.seenpix] = self.preset_tools.params["PLANCK"]["weight_planck"]
         C = HealpixConvolutionGaussianOperator(
             fwhm=self.preset_tools.params["PLANCK"]["fwhm_weight_planck"],
-            lmax=3 * self.params_sky["nside"] - 1,
+            lmax=self.lmax,
         )
         # self.mask = C(self.mask)
         full_mask = np.zeros(12 * self.params_sky["nside"] ** 2)

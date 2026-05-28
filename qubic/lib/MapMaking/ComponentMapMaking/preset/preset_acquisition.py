@@ -93,7 +93,7 @@ class PresetAcquisition:
         self.preset_tools = preset_tools
         self.preset_external = preset_external
         self.preset_qubic = preset_qubic
-        self.preset_sky = preset_sky
+        # self.preset_sky = preset_sky
         self.preset_comp = preset_comp
         self.preset_mixingmatrix = preset_mixing_matrix
         self.preset_gain = preset_gain
@@ -110,6 +110,7 @@ class PresetAcquisition:
 
         # self.qubic_patch = preset_sky.total_patch
         self.qubic_patch = preset_qubic.qubic_patch
+        self.seenpix = preset_sky.seenpix
 
         ### Inverse noise-covariance matrix
         self.preset_tools.mpi._print_message("    => Building inverse noise covariance matrix")
@@ -118,7 +119,7 @@ class PresetAcquisition:
             self.preset_tools.params["QUBIC"]["NOISE"]["npho150"],
             self.preset_tools.params["QUBIC"]["NOISE"]["npho220"],
             self.preset_tools.params["PLANCK"]["level_noise_planck"],
-            self.preset_sky.seenpix,
+            self.seenpix,
             qubic_patch=self.qubic_patch,
         )
 
@@ -133,18 +134,20 @@ class PresetAcquisition:
         self.fwhm_mapmaking = np.concatenate((self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking))
         self.fwhm_rec = self.fwhm_qubic_rec
 
+        self.lmax = preset_sky.lmax
+
         ### Build Planck maps
         self.components_in_convolved = np.zeros(np.shape(self.preset_comp.components_out))
-        C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_qubic_tod))
+        C = HealpixConvolutionGaussianOperator(np.min(self.fwhm_qubic_tod), lmax=self.lmax)
         for icomp, _ in enumerate(self.preset_comp.components_name_out):
             full_components = np.zeros((12 * self.preset_tools.params["SKY"]["nside"]**2, 3))
-            full_components[self.qubic_patch] = self.preset_comp.components_in[icomp]
+            full_components[self.qubic_patch] = self.preset_comp.components_in[icomp] # this can also be done with the remapping_operator from Qacquisition
             # full_components[self.preset_qubic.qubic_patch_apod] *= self.preset_qubic.cos_apod # already apodised in preset_components
             self.components_in_convolved[icomp] = C(full_components)[self.qubic_patch]
             # self.preset_comp.components_iter are now convolved so that we can compare them to self.components_in_convolved
             # otherwise, the pixels not seen by qubic will never be at the right resolution
             full_components = np.zeros((12 * self.preset_tools.params["SKY"]["nside"]**2, 3))
-            full_components[self.qubic_patch] = self.preset_comp.components_iter[icomp]
+            full_components[self.qubic_patch] = self.preset_comp.components_iter[icomp] # this can also be done with the remapping_operator from Qacquisition
             self.preset_comp.components_iter[icomp] = C(full_components)[self.qubic_patch]
         del full_components
 
@@ -303,7 +306,7 @@ class PresetAcquisition:
         noise_external = self.preset_qubic.joint_in.external.get_noise(
             planck_ntot=self.preset_tools.params["PLANCK"]["level_noise_planck"],
             weight_planck=self.preset_tools.params["PLANCK"]["weight_planck"],
-            seenpix=self.preset_sky.seenpix,
+            seenpix=self.seenpix,
             seed=self.seed_noise_planck,
         )
 
@@ -324,7 +327,7 @@ class PresetAcquisition:
 
         ### Create external TOD
         self.TOD_external_zero_outside_patch = self.components_in_convolved.copy()
-        self.TOD_external_zero_outside_patch[:, ~self.preset_sky.seenpix] = 0
+        self.TOD_external_zero_outside_patch[:, ~self.seenpix] = 0
         # self.TOD_external_zero_outside_patch = self.H.operands[1](self.TOD_external_zero_outside_patch) + noise_external.ravel()
 
         self.TOD_external = self.H.operands[1](self.preset_comp.components_in) + noise_external.ravel()
@@ -397,7 +400,7 @@ class PresetAcquisition:
             raise ValueError("I (Alexandre) removed this functionality for now.")
         # Constant spectral index -> maps have shape (Ncomp, Npix, Nstk)
         istk = 0
-        mypix = self.preset_sky.seenpix
+        mypix = self.seenpix
         # mypix = np.zeros(12 * self.preset_sky.params_sky["nside"]**2, dtype=bool)
         # mypix[self.preset_sky.total_patch] = self.preset_sky.seenpix
 

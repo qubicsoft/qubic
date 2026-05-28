@@ -282,11 +282,11 @@ class PipelineComponentMapMaking:
                 self.preset.qubic.joint_out.qubic.ndets * self.preset.qubic.joint_out.qubic.nsamples,
             )
         )
-
+        
         #! raise ValueError("Tom : is it correct to use this H here ?")
         for i in range(len(self.preset.comp.components_name_out)):
             for j in range(self.preset.qubic.joint_out.qubic.nsub):
-                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
+                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=self.preset.sky.lmax)
                 tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](C(self.preset.comp.components_iter[i])).ravel()
 
         return tod_comp
@@ -351,7 +351,7 @@ class PipelineComponentMapMaking:
 
         for j in range(self.preset.qubic.params_qubic["nsub_out"]):
             for icomp in range(len(self.preset.comp.components_name_out)):
-                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=3 * self.preset.sky.params_sky["nside"] - 1)
+                C = HealpixConvolutionGaussianOperator(fwhm=self.preset.acquisition.fwhm_mapmaking[j], lmax=self.preset.sky.lmax)
 
                 maps_conv[icomp] = C(self.preset.comp.components_iter[icomp, :, :]).copy()
                 for ii, i in enumerate(index):

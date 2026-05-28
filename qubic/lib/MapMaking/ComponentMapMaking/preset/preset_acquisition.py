@@ -92,7 +92,7 @@ class PresetAcquisition:
         ### Import preset Gain, Mixing Matrix, Foregrounds, Sky, QUBIC & tools
         self.preset_tools = preset_tools
         self.preset_external = preset_external
-        self.preset_qubic = preset_qubic
+        self.preset_qubic = preset_qubic # most of this object is H, that we use in _get_scalar_acquisition_operator
         # self.preset_sky = preset_sky
         self.preset_comp = preset_comp
         self.preset_mixingmatrix = preset_mixing_matrix
@@ -108,13 +108,14 @@ class PresetAcquisition:
         self.rms_plot = np.zeros((1, 2))
         self.convergence = []
 
+        ### Extract some useful objects
         # self.qubic_patch = preset_sky.total_patch
         self.qubic_patch = preset_qubic.qubic_patch
-        self.seenpix = preset_sky.seenpix
+        self.seenpix = preset_sky.seenpix # this allows for us not to copy preset_sky
 
         ### Inverse noise-covariance matrix
         self.preset_tools.mpi._print_message("    => Building inverse noise covariance matrix")
-        self.invN = self.preset_qubic.joint_out.get_invntt_operator(
+        self.invN = preset_qubic.joint_out.get_invntt_operator(
             self.preset_tools.params["QUBIC"]["NOISE"]["ndet"],
             self.preset_tools.params["QUBIC"]["NOISE"]["npho150"],
             self.preset_tools.params["QUBIC"]["NOISE"]["npho220"],
@@ -142,7 +143,7 @@ class PresetAcquisition:
         for icomp, _ in enumerate(self.preset_comp.components_name_out):
             full_components = np.zeros((12 * self.preset_tools.params["SKY"]["nside"]**2, 3))
             full_components[self.qubic_patch] = self.preset_comp.components_in[icomp] # this can also be done with the remapping_operator from Qacquisition
-            # full_components[self.preset_qubic.qubic_patch_apod] *= self.preset_qubic.cos_apod # already apodised in preset_components
+            # full_components[preset_qubic.qubic_patch_apod] *= preset_qubic.cos_apod # already apodised in preset_components
             self.components_in_convolved[icomp] = C(full_components)[self.qubic_patch]
             # self.preset_comp.components_iter are now convolved so that we can compare them to self.components_in_convolved
             # otherwise, the pixels not seen by qubic will never be at the right resolution

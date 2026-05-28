@@ -78,8 +78,8 @@ class PresetSky:
         ### Compute coverage map
         self.preset_tools.mpi._print_message("    => Computing coverage")
         # self.coverage = preset_qubic.joint_out.qubic.coverage --> it was previously computed when we initialised preset_qubic.joint_out
-        # self.coverage = preset_qubic.joint_out.qubic._get_coverage(qubic_patch=self.qubic_patch) # --> now preset_qubic has a size that doesn't depend on NSIDE!
-        self.coverage = preset_qubic.joint_out.qubic._get_coverage(qubic_patch=self.qubic_patch) # --> now preset_qubic has a size that doesn't depend on NSIDE!
+        # self.coverage = preset_qubic.joint_out.qubic._get_coverage(qubic_patch=self.qubic_patch)
+        self.coverage = preset_qubic.joint_out.qubic._get_coverage(qubic_patch=self.qubic_patch)
         # self.coverage = preset_qubic.joint_out.qubic._get_coverage()
         self.max_coverage = np.max(self.coverage)
 

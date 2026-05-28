@@ -175,7 +175,8 @@ class PipelineComponentMapMaking:
         )["x"]
 
         ### Update components
-        self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
+        # self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.comp.components_out[:, seenpix, :].copy()
+        self.preset.comp.components_iter[:, seenpix, :] = results["x"].copy() + w * self.preset.acquisition.components_in_convolved[:, seenpix, :].copy() # works only if we reconstruct all components!!
 
         self.preset.acquisition.convergence.append(results["convergence"].copy())
         ### Plot if asked
@@ -223,7 +224,7 @@ class PipelineComponentMapMaking:
         H_i = self.preset.qubic.joint_out.get_operator(
             A=self.preset.acquisition.Amm_iter,
             gain=self.preset.gain.gain_iter,
-            fwhm=self.preset.acquisition.fwhm_mapmaking,
+            fwhm=self.preset.acquisition.fwhm_mapmaking, # convolution included here
             nu_co=self.preset.comp.nu_co,
             qubic_patch = self.preset.qubic.qubic_patch
         )
@@ -252,7 +253,8 @@ class PipelineComponentMapMaking:
 
         w = self.preset.tools.params["PLANCK"]["weight_planck"]
         weight_mask = np.where(seenpix[None, :, None], w, 1.0)  # the 1.0 adds planck outside the patch, the weight_planck adds planck inside the patch
-        x_planck_full = self.preset.comp.components_out * weight_mask
+        # x_planck_full = self.preset.comp.components_out * weight_mask
+        x_planck_full = self.preset.acquisition.components_in_convolved * weight_mask # works only if we reconstruct all components!! Could be that we choose for all comps_out the corresponding comps_in
         self.preset.b = U.T(H_i.T * self.preset.acquisition.invN * (self.preset.acquisition.TOD_obs - H_i(x_planck_full)))
 
         ### Run PCG

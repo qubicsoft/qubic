@@ -10,6 +10,8 @@ from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_sky import PresetSky
 from qubic.lib.MapMaking.ComponentMapMaking.preset.preset_tools import PresetTools
 from qubic.lib.Qfoldertools import create_folder_if_not_exists
 
+import psutil
+
 
 class PresetInitialisation:
     """Preset initialization.
@@ -54,6 +56,9 @@ class PresetInitialisation:
         """
 
         import objsize
+        ### Alexandre: it seems that object replication is affecting the memory use
+        ### doing self.preset_qubic = preset_qubic (for example) seems to duplicate the object
+        ### instead of just adding a pointer to it, causing a high memory use
         
         self.tools = PresetTools(self.comm, parameters_file)
         print('Size of tools [KB]:', objsize.get_deep_size(self.tools)/1024.)
@@ -92,6 +97,8 @@ class PresetInitialisation:
         self.tools.mpi._print_message("========= QUBIC =========")
         self.qubic = PresetQubic(self.tools, self.external)
         print('Size of qubic [KB]:', objsize.get_deep_size(self.qubic)/1024.)
+        print("Size of H [KB]", objsize.get_deep_size(self.qubic.joint_out.qubic.H)/1024.)
+        print("Size of qubic_patch [KB]", objsize.get_deep_size(self.qubic.qubic_patch)/1024.)
  
         self.tools.mpi._print_message("========= Sky =========")
         self.sky = PresetSky(self.tools, self.qubic)
@@ -128,6 +135,14 @@ class PresetInitialisation:
         )
         print('Size of acquisition [KB]:', objsize.get_deep_size(self.acquisition)/1024.)
 
+        print('Size of total [KB]:', objsize.get_deep_size(self.tools, self.external, self.qubic, self.comp, self.gain, self.mixingmatrix, self.acquisition)/1024.)
+        print('Size of total without acquisition [KB]:', objsize.get_deep_size(self.tools, self.external, self.qubic, self.comp, self.gain, self.mixingmatrix)/1024.)
+        # print('Size of acquisition only [KB]:', objsize.get_exclusive_deep_size(self.acquisition)/1024.) # slow and doesn't seem to work well
+
+        process = psutil.Process()
+        print("Memory used [KB]:", process.memory_info().rss/1024.)
+
+        # azergib
         self.tools.display_simulation_configuration()
 
         return self

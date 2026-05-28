@@ -673,6 +673,44 @@ class PipelineComponentMapMaking:
 
         self._steps += 1
 
+    def compute_reference_components_in_convolved(self, seenpix):
+        """Compute components_in_convolved via a noiseless PCG on the signal-only TOD.
+
+        For conv_in=True, conv_out=False with synthbeam_kmax>0, the Gaussian GLS formula
+        misses the synthesized beam harmonic cross-pixel terms, causing sigma_I/sigma_QU > 1
+        even at the optimal fitted FWHM. Running the PCG on the noiseless (signal-only) TOD
+        gives the correct E[m_pcg] prediction, which includes those harmonic terms.
+
+        Called once before the main reconstruction loop. Uses n_init_iter_pcg iterations.
+        Only active for conv_in=True, conv_out=False.
+        """
+        conv_in = self.preset.qubic.params_qubic["convolution_in"]
+        conv_out = self.preset.qubic.params_qubic["convolution_out"]
+        if not (conv_in and not conv_out):
+            return
+
+        # Swap to signal-only TOD
+        TOD_obs_saved = self.preset.acquisition.TOD_obs
+        self.preset.acquisition.TOD_obs = self.preset.acquisition.TOD_obs_signal
+
+        # Force weight_planck=0 inside patch so the reference isn't regularized
+        # toward the (approximate) GLS components_in_convolved
+        w_saved = self.preset.tools.params["PLANCK"]["weight_planck"]
+        self.preset.tools.params["PLANCK"]["weight_planck"] = 0
+
+        # Run PCG with signal TOD (_steps==0 → uses n_init_iter_pcg iterations)
+        self.update_components(seenpix=seenpix)
+
+        # Store the PCG output as the new components_in_convolved (inside patch)
+        self.preset.acquisition.components_in_convolved[:, seenpix, :] = (
+            self.preset.comp.components_iter[:, seenpix, :].copy()
+        )
+
+        # Restore and reset for the main reconstruction loop
+        self.preset.acquisition.TOD_obs = TOD_obs_saved
+        self.preset.tools.params["PLANCK"]["weight_planck"] = w_saved
+        self.preset.comp.components_iter[:] = 0
+
     def run(self):
         """Pipeline.
 
@@ -692,6 +730,7 @@ class PipelineComponentMapMaking:
 
         self._info = True
         self._steps = 0
+        self.compute_reference_components_in_convolved(seenpix=self.preset.sky.seenpix)
         while self._info:
             ### Display iteration
             self.preset.tools._display_iter(self._steps)

@@ -367,8 +367,9 @@ class PresetAcquisition:
 
         noise_qubic = self.get_noise()
 
-        ### Create QUBIC TOD
-        self.TOD_qubic = (self.H.operands[0])(self.preset_comp.components_in) + noise_qubic
+        ### Create QUBIC TOD — store signal part separately for the reference PCG
+        self.TOD_qubic_signal = (self.H.operands[0])(self.preset_comp.components_in)
+        self.TOD_qubic = self.TOD_qubic_signal + noise_qubic
         self.nsampling_x_ndetectors = self.TOD_qubic.shape[0]
 
         ### Create external TOD
@@ -382,9 +383,8 @@ class PresetAcquisition:
         self.TOD_external = self.H.operands[1](planck_source) + noise_external.ravel()
         planck_source_zeroed = planck_source.copy()
         planck_source_zeroed[:, ~self.preset_sky.seenpix] = 0
-        self.TOD_external_zero_outside_patch = (
-            self.H.operands[1](planck_source_zeroed) + noise_external.ravel()
-        )
+        self.TOD_planck_signal_zeroed = self.H.operands[1](planck_source_zeroed)
+        self.TOD_external_zero_outside_patch = self.TOD_planck_signal_zeroed + noise_external.ravel()
 
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         # _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))
@@ -411,11 +411,12 @@ class PresetAcquisition:
         # self.TOD_external_zero_outside_patch = _r.T(maps_external)
 
         ### Observed TOD (Planck is assumed on the full sky)
-
         self.TOD_obs = np.r_[self.TOD_qubic, self.TOD_external]
         self.TOD_obs_zero_outside = np.r_[
             self.TOD_qubic, self.TOD_external_zero_outside_patch.ravel()
         ]
+        # Signal-only concatenated TOD used by reference PCG to compute components_in_convolved
+        self.TOD_obs_signal = np.r_[self.TOD_qubic_signal, self.TOD_planck_signal_zeroed]
 
     def get_x0(self):
         """PCG starting point.

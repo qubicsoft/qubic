@@ -1,5 +1,5 @@
 save_iter: 1                                                                           # Save every 'save_iter' iteration
-foldername: "test_conv_true_wo_planck_dust"                                                                  # Name of the saved folder
+foldername: "test_conv_true_wo_planck_dust_kmax_0"                                                                  # Name of the saved folder
 filename: "test"                                                                       # Name of the saved file
 lastite: true                                                                          # Keep only the last iteration
 
@@ -70,7 +70,7 @@ QUBIC:
     duration_220: 3                                                                    # Effective duration at 220 GHz
     seed_noise: 346207976
   SYNTHBEAM:
-    synthbeam_kmax: 1                                                                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+    synthbeam_kmax: 0                                                                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1                                                              # Fraction of synthesized beam
   dtheta: 15                                                                           # Angle for coverage
   GAIN:

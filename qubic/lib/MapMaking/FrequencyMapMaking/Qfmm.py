@@ -2,6 +2,8 @@
 import os
 import time
 
+import h5py
+
 import numpy as np
 import yaml
 from fgbuster.component_model import CMB, Dust, Synchrotron
@@ -59,6 +61,22 @@ class PipelineFrequencyMapMaking:
 
         ### Parameters file
         self.params = parameters_dict.copy()
+        self.path_tod = self.params.get("path_tod", None)
+
+        # Adjust simulation parameters when loading external TOD
+        if self.path_tod is not None:
+            with h5py.File(self.path_tod, "r") as _f:
+                _n_sims = int(_f.attrs.get("n_sims", 1))
+                _npointings_per_sim = int(
+                    _f.attrs.get("npointings_per_sim", self.params["QUBIC"]["npointings"])
+                )
+            _total_npointings = _n_sims * _npointings_per_sim
+            if _total_npointings != self.params["QUBIC"]["npointings"]:
+                self.params["QUBIC"]["npointings"] = _total_npointings
+                if self.rank == 0:
+                    print(
+                        f"path_tod: {_n_sims} combined sim(s) × {_npointings_per_sim} pointings → npointings set to {_total_npointings}"
+                    )
 
         ### Sky configuration
         self.skyconfig = self.get_sky_config()
@@ -90,16 +108,16 @@ class PipelineFrequencyMapMaking:
                 raise FileNotFoundError(f"Pointings file not found: {pointings_path}")
             sampling_data = HDF5Dict().load_dict(pointings_path)
             sampling = QubicSampling(
-                azimuth   = sampling_data["azimuth"],
-                elevation = sampling_data["elevation"],
-                angle_hwp = sampling_data["angle_hwp"],
-                time      = sampling_data["time"],
-                date_obs  = sampling_data["date_obs"],
-                latitude  = sampling_data["latitude"],
-                longitude = sampling_data["longitude"],
-                fix_az    = sampling_data["fix_az"],
+                azimuth=sampling_data["azimuth"],
+                elevation=sampling_data["elevation"],
+                angle_hwp=sampling_data["angle_hwp"],
+                time=sampling_data["time"],
+                date_obs=sampling_data["date_obs"],
+                latitude=sampling_data["latitude"],
+                longitude=sampling_data["longitude"],
+                fix_az=sampling_data["fix_az"],
             )
-            
+
         else:
             # Generate pointings using a realistic scanning strategy
             if self.params["QUBIC"]["POINTINGS"]["realistic_scanning_strategy"]:
@@ -110,18 +128,22 @@ class PipelineFrequencyMapMaking:
                 sampling = None
 
         ### Joint acquisition for TOD making
-        self.joint_tod = JointAcquisitionFrequencyMapMaking(
-            self.dict_in,
-            # self.params["QUBIC"]["instrument"],
-            self.params["QUBIC"]["nsub_in"],
-            self.params["QUBIC"]["nsub_in"],
-            H=None,
-            sampling=sampling,
-            is_external_data=self.params["PLANCK"]["external_data"],
-        )
+        if self.path_tod is None:
+            self.joint_tod = JointAcquisitionFrequencyMapMaking(
+                self.dict_in,
+                # self.params["QUBIC"]["instrument"],
+                self.params["QUBIC"]["nsub_in"],
+                self.params["QUBIC"]["nsub_in"],
+                H=None,
+                sampling=sampling,
+                is_external_data=self.params["PLANCK"]["external_data"],
+            )
 
         ### Joint acquisition
-        if self.params["QUBIC"]["nsub_in"] == self.params["QUBIC"]["nsub_out"]:
+        if (
+            self.path_tod is None
+            and self.params["QUBIC"]["nsub_in"] == self.params["QUBIC"]["nsub_out"]
+        ):
             H = self.joint_tod.qubic.H
         else:
             H = None
@@ -132,15 +154,17 @@ class PipelineFrequencyMapMaking:
             self.params["QUBIC"]["nrec"],
             self.params["QUBIC"]["nsub_out"],
             H=H,
-            sampling = sampling,
+            sampling=sampling,
             is_external_data=self.params["PLANCK"]["external_data"],
-            k_max=self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax_out"]
+            k_max=self.params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax_out"],
         )
 
         ### Ensure that all processors have the same external dataset
+        # When loading a pre-computed TOD, joint_tod is not built; fall back to joint.qubic.allnus
+        _allnus = self.joint_tod.qubic.allnus if self.path_tod is None else self.joint.qubic.allnus
         self.externaldata = PlanckMaps(
             self.skyconfig,
-            self.joint_tod.qubic.allnus,
+            _allnus,
             self.params["QUBIC"]["nrec"],
             nside=self.params["SKY"]["nside"],
         )
@@ -170,7 +194,7 @@ class PipelineFrequencyMapMaking:
         ### Build the Input Maps
         self.input_maps = InputMaps(
             self.skyconfig,
-            self.joint_tod.qubic.allnus,
+            _allnus,
             self.params["QUBIC"]["nrec"],
             nside=self.params["SKY"]["nside"],
         )
@@ -200,28 +224,29 @@ class PipelineFrequencyMapMaking:
             seenpix=self.seenpix,
         )
 
-        ### Noises
-        if self.params["PLANCK"]["external_data"]:
-            self.noise_planck = []
-            for i in range(2):
-                self.noise_planck.append(
-                    self.joint.planck_acquisition[i].get_noise(
-                        planck_ntot=self.params["PLANCK"]["level_noise_planck"],
-                        seed=self.params["PLANCK"]["seed_noise"],
-                        weight_planck=self.params["PLANCK"]["weight_planck"],
-                        seenpix=self.seenpix,
+        ### Noises (not needed when loading a pre-computed TOD)
+        if self.path_tod is None:
+            if self.params["PLANCK"]["external_data"]:
+                self.noise_planck = []
+                for i in range(2):
+                    self.noise_planck.append(
+                        self.joint.planck_acquisition[i].get_noise(
+                            planck_ntot=self.params["PLANCK"]["level_noise_planck"],
+                            seed=self.params["PLANCK"]["seed_noise"],
+                            weight_planck=self.params["PLANCK"]["weight_planck"],
+                            seenpix=self.seenpix,
+                        )
                     )
-                )
 
-        qubic_noise = QubicTotNoise(
-            self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene
-        )
-        self.noiseq = qubic_noise.total_noise(
-            self.params["QUBIC"]["NOISE"]["ndet"],
-            self.params["QUBIC"]["NOISE"]["npho150"],
-            self.params["QUBIC"]["NOISE"]["npho220"],
-            seed_noise=self.params["QUBIC"]["NOISE"]["seed_noise"],
-        ).ravel()
+            qubic_noise = QubicTotNoise(
+                self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene
+            )
+            self.noiseq = qubic_noise.total_noise(
+                self.params["QUBIC"]["NOISE"]["ndet"],
+                self.params["QUBIC"]["NOISE"]["npho150"],
+                self.params["QUBIC"]["NOISE"]["npho220"],
+                seed_noise=self.params["QUBIC"]["NOISE"]["seed_noise"],
+            ).ravel()
 
         ### Initialize plot instance
         self.plots = PlotsFMM(self.seenpix)
@@ -259,8 +284,9 @@ class PipelineFrequencyMapMaking:
 
         """
 
-        ### QUBIC Pointing matrix for TOD generation
-        self.H_in_qubic = self.joint_tod.qubic.get_operator(fwhm=self.fwhm_in)
+        ### QUBIC Pointing matrix for TOD generation (not needed when loading a pre-computed TOD)
+        if self.path_tod is None:
+            self.H_in_qubic = self.joint_tod.qubic.get_operator(fwhm=self.fwhm_in)
         ### Pointing matrix for reconstruction
         if self.params["PLANCK"]["external_data"]:
             self.H_out_all_pix = self.joint.get_operator(fwhm=self.fwhm_out)
@@ -436,12 +462,18 @@ class PipelineFrequencyMapMaking:
         """
 
         ### Define FWHMs
-        fwhm_in = np.zeros(self.params["QUBIC"]["nsub_in"])
+        # When loading a pre-computed TOD, joint_tod is not built; fwhm_in is zeros of length nsub_out
+        nsub_in = (
+            self.params["QUBIC"]["nsub_in"]
+            if self.path_tod is None
+            else self.params["QUBIC"]["nsub_out"]
+        )
+        fwhm_in = np.zeros(nsub_in)
         fwhm_out = np.zeros(self.params["QUBIC"]["nsub_out"])
         fwhm_rec = np.zeros(self.params["QUBIC"]["nrec"])
 
         ### FWHMs during map-making
-        if self.params["QUBIC"]["convolution_in"]:
+        if self.params["QUBIC"]["convolution_in"] and self.path_tod is None:
             fwhm_in = self.joint_tod.qubic.allfwhm.copy()
         if self.params["QUBIC"]["convolution_out"]:
             fwhm_out = np.array([])
@@ -554,6 +586,12 @@ class PipelineFrequencyMapMaking:
             Simulated TOD :math:`(N_{rec}, 12 \times N^{2}_{side}, N_{stk})`.
 
         """
+        if self.path_tod is not None:
+            data = HDF5Dict().load_dict(self.path_tod)
+            if self.rank == 0:
+                print(f"Loading pre-computed TOD from {self.path_tod}, shape: {data['tod'].shape}")
+            return data["tod"]
+
         TOD_QUBIC = self.H_in_qubic(self.input_maps.m_nu).ravel() + self.noiseq
 
         if not self.params["PLANCK"]["external_data"]:
@@ -779,6 +817,18 @@ class PipelineFrequencyMapMaking:
 
         ### Wait for all processes
         self.mpi._barrier()
+
+        ### If simulate_tod is True, save the TOD and stop
+        if self.params.get("simulate_tod", False):
+            tod_file = "FMM/" + self.params["foldername"] + "/Dict/tod.h5"
+            if self.rank == 0:
+                # Save the split index so the combining script can separate QUBIC and PLANCK parts
+                HDF5Dict().save_dict(
+                    tod_file, {"tod": self.TOD, "qubic_tod_size": len(self.noiseq)}
+                )
+                print(f"TOD saved to {tod_file}, shape: {self.TOD.shape}. Stopping.")
+            self.mpi._barrier()
+            return
 
         ### Define starting point for PCG depending on the presence of Planck
         if self.params["PLANCK"]["external_data"]:

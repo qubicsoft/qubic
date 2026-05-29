@@ -1,5 +1,7 @@
-foldername: "test"
+foldername: "test_kmax_5_1"
 filename: "test"
+path_tod: "FMM/test_kmax_5_1/Dict/tod_combined.h5"                       # Path to HDF5 file with pre-computed TOD (null to simulate)
+simulate_tod: false                                # If true, stop after TOD generation and save it to Dict/tod.h5
 
 CMB:
   cmb: true
@@ -8,7 +10,7 @@ CMB:
   Alens: 1
 
 Foregrounds:
-  Dust: false                     # Thermal Dust emission
+  Dust: true                     # Thermal Dust emission
   Synchrotron: false             # Synchrotron emission
 
 QUBIC:
@@ -35,7 +37,7 @@ QUBIC:
     duration_220: 3                        # Effective duration at 220 GHz
     seed_noise: 283
   SYNTHBEAM:
-    synthbeam_kmax: 1                      # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+    synthbeam_kmax: 5                      # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1
     synthbeam_kmax_out: 1
   dtheta: 15                               # Angle for coverage
@@ -57,7 +59,7 @@ PLANCK:
   ### This section define which external data are we using
 
   external_data: true
-  weight_planck: 1               # Weight of Planck data within the QUBIC patch
+  weight_planck: 0               # Weight of Planck data within the QUBIC patch
   level_noise_planck: 1          # Noise level for Planck data
   seed_noise: 283
   bandwidth_planck: 0.2          # Multiplicative factor to define the bandwidth of Planck's data
@@ -70,7 +72,7 @@ Pipeline:
 PCG:
     ### This section control PCG parameters
 
-  n_iter_pcg: 50                 # Number of PCG iterations #100
+  n_iter_pcg: 100                 # Number of PCG iterations #100
   tol_pcg: 1.0e-10               # Tolerance for PCG
   preconditioner: false
   initial_guess_intensity_to_zero: true

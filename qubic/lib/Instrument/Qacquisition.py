@@ -855,7 +855,8 @@ class QubicInstrumentType(QubicMultiAcquisitions):
 
         """
         self.operator = []
-
+        
+        # test lower lmax for polarisation (needs higher nside so that convolution kernels are a few pixels wide)
         lmax = 2 * self.scene.nside - 1
 
         for isub in range(self.nsub):
@@ -1183,6 +1184,7 @@ class PlanckAcquisition:
         Rmap2tod = ReshapeOperator((npix, 3), (3 * npix))
         Operator = []
         k = 0
+        # test lower lmax for polarisation (needs higher nside so that convolution kernels are a few pixels wide)
         lmax = 2 * self.nside - 1
         for _ in self.nus:
             ope_i = []

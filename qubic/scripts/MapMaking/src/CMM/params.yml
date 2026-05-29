@@ -1,5 +1,5 @@
 save_iter: 1                                                                    # Save every 'save_iter' iteration
-foldername: "test_convo_in_nside512_npointings5000_planck143-217"                                                              # Name of the saved folder
+foldername: "test_convo_inout_nside256_planck143-217"                                                              # Name of the saved folder
 filename: "test"                                                                # Name of the saved file
 lastite: true                                                                   # Keep only the last iteration
 
@@ -54,7 +54,7 @@ QUBIC:
 
     instrument: "DB"                                                            # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
     configuration: "FI"                                                         # Instrumental configuration (TD or FI) # to be implemented in the code
-    npointings: 8000 #1000                                                            # Number of time samples
+    npointings: 1000 #1000                                                            # Number of time samples
     nsub_in: 8                                                                  # Number of sub-acquisitions
     nsub_out: 8                                                                 # Number of sub-acquisitions for the reconstruction
     convolution_in: true                                                       # Angular resolution in the input TOD
@@ -71,6 +71,7 @@ QUBIC:
     SYNTHBEAM:
         synthbeam_kmax: 1                                                       # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
         synthbeam_fraction: 1                                                   # Fraction of synthesized beam
+        interp_projection: False                                                # Wether or not to use bilinear interpolation in the projection operator
     dtheta: 15                                                                  # Angle for coverage
     apod: 0.10                                                                  # Fraction of dtheta to add for apodisation (final patch radius is dtheta * (1 + apod))
     GAIN:
@@ -81,7 +82,7 @@ QUBIC:
 SKY:
     ### This section controls the reconstructed sky
 
-  nside: 512                                                                    # Nside of components
+  nside: 256                                                                    # Nside of components
   coverage_cut: 0.15                                                            # Percent of coverage to keep the pixels seen enough by QUBIC
   RA_center: 0
   DEC_center: -57

@@ -109,6 +109,7 @@ class PresetSky:
         else:
             self.coverage_beta = None
 
+        # test lower lmax for polarisation (needs higher nside so that convolution kernels are a few pixels wide)
         self.lmax = 2 * self.params_sky["nside"] - 1
 
         ### Build mask for weighted Planck data
@@ -179,7 +180,7 @@ class PresetSky:
             # self.seenpix,
             full_seenpix,
             lmin=self.preset_tools.params["Spectrum"]["lmin"],
-            lmax=3 * self.preset_tools.params["SKY"]["nside"] - 1,
+            lmax=self.lmax,
             delta_ell=self.preset_tools.params["Spectrum"]["dl"],
             aposize=self.preset_tools.params["Spectrum"]["aposize"],
         )

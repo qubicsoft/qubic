@@ -681,12 +681,16 @@ class PipelineComponentMapMaking:
         even at the optimal fitted FWHM. Running the PCG on the noiseless (signal-only) TOD
         gives the correct E[m_pcg] prediction, which includes those harmonic terms.
 
-        Called once before the main reconstruction loop. Uses n_init_iter_pcg iterations.
-        Only active for conv_in=True, conv_out=False.
+        Active only when all three hold:
+          - conv_in=True, conv_out=False
+          - synthbeam_kmax > 0  (kmax=0 → pure Gaussian beam, GLS is exact)
+          - use_reference_pcg=True in QUBIC params (default True; set False to disable)
         """
         conv_in = self.preset.qubic.params_qubic["convolution_in"]
         conv_out = self.preset.qubic.params_qubic["convolution_out"]
-        if not (conv_in and not conv_out):
+        kmax = self.preset.qubic.params_qubic["SYNTHBEAM"]["synthbeam_kmax"]
+        use_ref_pcg = self.preset.qubic.params_qubic.get("use_reference_pcg", True)
+        if not (conv_in and not conv_out and kmax > 0 and use_ref_pcg):
             return
 
         # Swap to signal-only TOD
@@ -698,7 +702,12 @@ class PipelineComponentMapMaking:
         w_saved = self.preset.tools.params["PLANCK"]["weight_planck"]
         self.preset.tools.params["PLANCK"]["weight_planck"] = 0
 
-        # Run PCG with signal TOD (_steps==0 → uses n_init_iter_pcg iterations)
+        # Use the true mixing matrix: the signal TOD was generated with Amm_in, and the
+        # reference PCG must be independent of the mixing matrix fit in the main loop.
+        Amm_iter_saved = self.preset.acquisition.Amm_iter
+        self.preset.acquisition.Amm_iter = self.preset.mixingmatrix.Amm_in.copy()
+
+        # Run PCG with signal TOD and true mixing matrix
         self.update_components(seenpix=seenpix)
 
         # Store the PCG output as the new components_in_convolved (inside patch)
@@ -706,9 +715,10 @@ class PipelineComponentMapMaking:
             self.preset.comp.components_iter[:, seenpix, :].copy()
         )
 
-        # Restore and reset for the main reconstruction loop
+        # Restore all modified state and reset for the main reconstruction loop
         self.preset.acquisition.TOD_obs = TOD_obs_saved
         self.preset.tools.params["PLANCK"]["weight_planck"] = w_saved
+        self.preset.acquisition.Amm_iter = Amm_iter_saved
         self.preset.comp.components_iter[:] = 0
 
     def run(self):

@@ -166,12 +166,22 @@ class PresetAcquisition:
         is_uwb = self.preset_qubic.params_qubic["instrument"] == "UWB"
         allfwhm = self.preset_qubic.joint_in.qubic.allfwhm
         nsub_per_band = len(allfwhm) // 2
-        sigma_150_sq = max(ndet**2 + npho150**2, 1e-30)
-        sigma_220_sq = max(npho220**2 if is_uwb else ndet**2 + npho220**2, 1e-30)
-        weights = np.zeros(len(allfwhm))
-        weights[:nsub_per_band] = 1.0 / sigma_150_sq
-        weights[nsub_per_band:] = 1.0 / sigma_220_sq
-        return weights
+
+        if is_uwb:
+            # UWB: all sub-bands share one focal plane with combined noise
+            # sigma_combined² = sigma_det² + sigma_pho_150² + sigma_pho_220².
+            # Uniform weights give standard (unweighted) LS component separation,
+            # consistent with QubicInstrumentType.get_invntt_operator for UWB.
+            sigma_combined_sq = max(ndet**2 + npho150**2 + npho220**2, 1e-30)
+            return np.ones(len(allfwhm)) / sigma_combined_sq
+        else:
+            # DB: independent focal planes with band-specific noise.
+            sigma_150_sq = max(ndet**2 + npho150**2, 1e-30)
+            sigma_220_sq = max(ndet**2 + npho220**2, 1e-30)
+            weights = np.zeros(len(allfwhm))
+            weights[:nsub_per_band] = 1.0 / sigma_150_sq
+            weights[nsub_per_band:] = 1.0 / sigma_220_sq
+            return weights
 
     def _build_mixing_matrix(self, allnus):
         comp_names = self.preset_comp.components_name_out

@@ -917,6 +917,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         else:  # doesn't matter for MB, because only the first is used anyway
             det_noise = [wdet, wdet]
         invn_list = []
+        subacqs = []
         for iband, band in enumerate(self.used_bands):
             d = self.dict.copy()
             d["filter_nu"] = band * 1e9
@@ -928,9 +929,17 @@ class QubicInstrumentType(QubicMultiAcquisitions):
                     det_noise=det_noise[iband], photon_noise=photon_noise[iband]
                 )
             )
+            subacqs.append(subacq)
         self.invn150 = invn_list[0]  # used in PresetAcquisition.get_approx_hth
         if self.dict["instrument_type"] == "UWB":
-            self.invN = np.sum(invn_list)
+            # UWB has one focal plane: actual noise per sample = ndet + npho_150 + npho_220
+            # (matches QubicTotNoise.total_noise). Combine band sigmas into one invN so that
+            # the PCG noise model is consistent with the noise realization.
+            sigma_combined = np.sqrt(
+                sum(np.atleast_1d(subacq.sigma) ** 2 for subacq in subacqs)
+            )
+            subacqs[0].forced_sigma = sigma_combined
+            self.invN = subacqs[0].get_invntt_operator(det_noise=0, photon_noise=0)
         else:
             self.invN = BlockDiagonalOperator(invn_list, axisout=0)
 

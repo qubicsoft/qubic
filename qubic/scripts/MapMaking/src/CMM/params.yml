@@ -1,5 +1,5 @@
 save_iter: 1                                                                           # Save every 'save_iter' iteration
-foldername: "test_conv_false_wo_planck_dust"                                                                  # Name of the saved folder
+foldername: "test_conv_true_wo_planck_dust"                                                                  # Name of the saved folder
 filename: "test"                                                                       # Name of the saved file
 lastite: true                                                                          # Keep only the last iteration
 
@@ -51,14 +51,15 @@ Foregrounds:
 QUBIC:
     ### This section control the parameters related to QUBIC
 
-  instrument: "DB"                                                                     # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
+  instrument: "UWB"                                                                     # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
   configuration: "FI"                                                                  # Instrumental configuration (TD or FI) # to be implemented in the code
   npointings: 3000                                                                     # Number of time samples
   nsub_in: 8                                                                           # Number of sub-acquisitions
   nsub_out: 8                                                                          # Number of sub-acquisitions for the reconstruction
   convolution_in: true                                                                # Angular resolution in the input TOD
-  convolution_out: false                                                               # Angular resolution in the reconstruction
+  convolution_out: true                                                               # Angular resolution in the reconstruction
   fwhm_rec: null # [0.007628603433902725, 0.004491045331158454]                                                                       # conv_out=False only: override effective PCG reconstruction FWHM (rad). null = auto-compute from noise weights (correct for UWB and DB).
+  use_reference_pcg: true                                                              # conv_in=True, conv_out=False, kmax>0 only: run a noiseless PCG to compute components_in_convolved exactly. Set false to use the GLS approximation instead (faster, sufficient for kmax=0 or single component).
   preconditioner: false
   NOISE:
     ndet: 1                                                                          # Level of detector noise

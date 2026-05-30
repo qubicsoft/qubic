@@ -199,17 +199,17 @@ class PipelineFrequencyMapMaking:
             nside=self.params["SKY"]["nside"],
         )
 
-        ### Convolve the Nsub input maps at QUBIC resolution
-        self.maps_input_convolved = self.input_maps.m_nu.copy()
-        for i in range(len(self.fwhm_in)):
-            C = HealpixConvolutionGaussianOperator(
-                self.fwhm_in[i], lmax=3 * self.params["SKY"]["nside"] - 1
-            )
-            self.maps_input_convolved[i] = C(self.input_maps.m_nu[i])
-
-        ### Initial maps
+        ### Initial maps (band-averaged using correct fsub_in stride)
         self.maps_input = self.get_input_map(m_nu=self.input_maps.m_nu)
-        self.maps_input_convolved = self.get_input_map(m_nu=self.maps_input_convolved)
+
+        ### Convolve band-averaged maps at the reconstruction reference resolution (fwhm_rec)
+        self.maps_input_convolved = self.maps_input.copy()
+        for i in range(self.params["QUBIC"]["nrec"]):
+            if self.fwhm_rec[i] > 0:
+                C = HealpixConvolutionGaussianOperator(
+                    self.fwhm_rec[i], lmax=3 * self.params["SKY"]["nside"] - 1
+                )
+                self.maps_input_convolved[i] = C(self.maps_input[i])
 
         ### Define reconstructed and TOD operator
         self.get_H()
@@ -568,10 +568,13 @@ class PipelineFrequencyMapMaking:
 
         """
 
-        m_nu_in = np.zeros((self.params["QUBIC"]["nrec"], 12 * self.params["SKY"]["nside"] ** 2, 3))
+        nrec = self.params["QUBIC"]["nrec"]
+        # Derive stride from the input array so this works for both nsub_in and nsub_out arrays.
+        fsub = len(m_nu) // nrec
+        m_nu_in = np.zeros((nrec, 12 * self.params["SKY"]["nside"] ** 2, 3))
 
-        for i in range(self.params["QUBIC"]["nrec"]):
-            m_nu_in[i] = np.mean(m_nu[i * self.fsub_out : (i + 1) * self.fsub_out], axis=0)
+        for i in range(nrec):
+            m_nu_in[i] = np.mean(m_nu[i * fsub : (i + 1) * fsub], axis=0)
 
         return m_nu_in
 
@@ -731,15 +734,14 @@ class PipelineFrequencyMapMaking:
 
         if self.params["PLANCK"]["external_data"]:
             x_planck = self.maps_input_convolved
-
-            weight_planck = self.params["PLANCK"]["weight_planck"]
-
-            # define a weight mask: 0 outside seenpix, weight inside seenpix, this will create what we want (outside based on boolean external_data, inside based on weight_planck)
-            weight_mask = np.where(
-                seenpix[None, :, None], weight_planck, 1.0
-            )  # the 1.0 adds planck outside the patch, the weight_planck adds planck inside the patch
-            x_planck_weighted = x_planck * weight_mask
-            b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck_weighted))
+            # Apply H to the full continuous x_planck (no masking).
+            # Masking first (setting inside-patch to 0) then convolving creates an artificial
+            # discontinuity at the patch boundary. For conv_out=True, the partial-deconvolution
+            # beam in H spreads outside-patch signal into the patch (boundary bleed), biasing
+            # the RHS and causing sigma_I / (sigma_Q/sqrt(2)) > 1. Using the full unmasked
+            # x_planck is equivalent in exact arithmetic (invN_P = 0 inside when weight_planck=0)
+            # but avoids the numerical discontinuity. The x_planck shift is added back below.
+            b = self.H_out.T * self.invN * (d - self.H_out_all_pix(x_planck))
         else:
             b = self.H_out.T * self.invN * d
 
@@ -789,15 +791,9 @@ class PipelineFrequencyMapMaking:
         solution = np.ones(self.maps_input.shape)  # * hp.UNSEEN
         if self.params["PLANCK"]["external_data"]:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"].copy()
-
-            weight_planck = self.params[
-                "PLANCK"
-            ][
-                "weight_planck"
-            ]  # we also need to add back the Planck contribution weighted if we were solving for difference
-            solution[:, self.seenpix, :] += (
-                weight_planck * self.maps_input_convolved[:, self.seenpix, :]
-            )
+            # The RHS was shifted by H(x_planck), so the PCG output is delta_m = m - x_planck.
+            # Add x_planck back to recover the full map.
+            solution[:, self.seenpix, :] += self.maps_input_convolved[:, self.seenpix, :]
         else:
             solution[:, seenpix, :] = solution_qubic_planck["x"]["x"][:, seenpix, :].copy()
 
@@ -832,16 +828,9 @@ class PipelineFrequencyMapMaking:
 
         ### Define starting point for PCG depending on the presence of Planck
         if self.params["PLANCK"]["external_data"]:
-            # if Planck is added inside the patch, PCG is reconstructing the DIFFERENCE to Planck, so the start shoud be 0
-            if self.params["PLANCK"]["weight_planck"] == 1.0:
-                starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
-            elif self.params["PLANCK"]["weight_planck"] == 0.0:
-                starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
-                if self.params["PCG"]["initial_guess_intensity_to_zero"] is False:
-                    starting_point[..., 0] = self.maps_input[:, self.seenpix, 0].copy()
-            # in every other case, we can start from 0
-            else:
-                starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
+            # PCG now solves for delta_m = m - maps_input_convolved (shifted formulation).
+            # x0 = 0 starts at maps_input_convolved, which is always a good initial point.
+            starting_point = np.zeros(self.maps_input[:, self.seenpix, :].shape)
         else:
             # no external data at all: previous behavior
             starting_point = np.zeros(self.maps_input.shape)

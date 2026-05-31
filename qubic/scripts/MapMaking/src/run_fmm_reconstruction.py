@@ -20,7 +20,7 @@ import numpy as np
 from pyoperators import MPI
 from ruamel.yaml import YAML
 
-from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineFrequencyMapMaking
+from qubic.lib.MapMaking.FrequencyMapMaking.Qfmm import PipelineEnd2End, PipelineFrequencyMapMaking
 from qubic.lib.Qfoldertools import create_folder_if_not_exists
 from qubic.lib.Qhdf5 import HDF5Dict
 
@@ -80,7 +80,6 @@ if __name__ == "__main__":
     params["path_tod"]     = args.noiseless_tod
     params["simulate_tod"] = False
     params["Pipeline"]["mapmaking"] = True
-    params["Pipeline"]["spectrum"]  = False
 
     slurm_job_id = os.environ.get("SLURM_JOB_ID", f"real{args.real_id:04d}")
     output_file = f"{dict_folder}/{filename}_real_{args.real_id:04d}_{slurm_job_id}.h5"
@@ -119,6 +118,18 @@ if __name__ == "__main__":
 
         if rank == 0:
             print(f"\n  Saved → {output_file}")
+
+        # ── Spectrum ──────────────────────────────────────────────────────────
+        if params["Pipeline"].get("spectrum", False):
+            spec_params = dict(params)
+            spec_params["Pipeline"] = {**params["Pipeline"], "mapmaking": False}
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp_spec:
+                yaml.dump(spec_params, tmp_spec)
+                tmp_spec_path = tmp_spec.name
+            try:
+                PipelineEnd2End(comm, tmp_spec_path).main(specific_file=output_file)
+            finally:
+                os.unlink(tmp_spec_path)
 
     finally:
         os.unlink(tmp_path)

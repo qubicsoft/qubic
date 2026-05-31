@@ -134,7 +134,9 @@ if __name__ == "__main__":
         print(f"{'=' * 50}\n")
 
         tod_qubic_chunks = []
+        tod_noiseless_qubic_chunks = []
         tod_planck = None
+        tod_noiseless_planck = None
 
         for chunk_file in tod_chunk_files:
             data = HDF5Dict().load_dict(chunk_file)
@@ -144,10 +146,16 @@ if __name__ == "__main__":
             tod_qubic_chunks.append(tod_full[:qubic_size])
             print(f"  Loaded {chunk_file} | QUBIC shape: {tod_full[:qubic_size].shape}")
 
+            if "tod_noiseless_qubic" in data:
+                tod_noiseless_qubic_chunks.append(data["tod_noiseless_qubic"])
+
             # Keep the PLANCK part from the first chunk (map-based, same for all sims)
             if tod_planck is None and qubic_size < len(tod_full):
                 tod_planck = tod_full[qubic_size:]
                 print(f"  PLANCK part shape: {tod_planck.shape} (taken from first chunk)")
+
+            if tod_noiseless_planck is None and "tod_noiseless_planck" in data:
+                tod_noiseless_planck = data["tod_noiseless_planck"]
 
         tod_qubic_combined = np.concatenate(tod_qubic_chunks, axis=0)
         if tod_planck is not None:
@@ -158,15 +166,19 @@ if __name__ == "__main__":
         print(f"\n  Combined TOD shape : {tod_combined.shape}")
         print(f"  QUBIC part size    : {len(tod_qubic_combined)}")
 
-        HDF5Dict().save_dict(
-            output_file,
-            {
-                "tod": tod_combined,
-                "qubic_tod_size": len(tod_qubic_combined),
-                "n_sims": args.n_sims,
-                "npointings_per_sim": params["QUBIC"]["npointings"],
-            },
-        )
+        save_dict = {
+            "tod": tod_combined,
+            "qubic_tod_size": len(tod_qubic_combined),
+            "n_sims": args.n_sims,
+            "npointings_per_sim": params["QUBIC"]["npointings"],
+        }
+        if tod_noiseless_qubic_chunks:
+            save_dict["tod_noiseless_qubic"] = np.concatenate(tod_noiseless_qubic_chunks, axis=0)
+            print(f"  Noiseless QUBIC TOD saved (shape: {save_dict['tod_noiseless_qubic'].shape})")
+        if tod_noiseless_planck is not None:
+            save_dict["tod_noiseless_planck"] = tod_noiseless_planck
+
+        HDF5Dict().save_dict(output_file, save_dict)
         print(f"\n  Combined TOD saved to {output_file}")
 
         # Clean up individual chunk files

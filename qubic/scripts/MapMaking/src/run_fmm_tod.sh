@@ -20,4 +20,4 @@ module load mpich
 mpirun -np $SLURM_NTASKS python run_fmm_tod.py "$1" \
     --n_sims "$N_SIMS" \
     --base_seed "$BASE_SEED" \
-    --job_id "$SLURM_ARRAY_TASK_ID"
+    --job_id "${SLURM_ARRAY_TASK_ID:-0}"

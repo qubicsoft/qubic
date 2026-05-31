@@ -90,6 +90,7 @@ class PipelineFrequencyMapMaking:
 
         ### Create folders
         create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Dict/")
+        create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/TOD/")
         create_folder_if_not_exists(self.comm, "FMM/" + self.params["foldername"] + "/Plots/")
 
         ### Center of the QUBIC patch
@@ -137,6 +138,7 @@ class PipelineFrequencyMapMaking:
                 H=None,
                 sampling=sampling,
                 is_external_data=self.params["PLANCK"]["external_data"],
+                k_max=1,
             )
 
         ### Joint acquisition
@@ -837,7 +839,7 @@ class PipelineFrequencyMapMaking:
 
         ### If simulate_tod is True, save the TOD and stop
         if self.params.get("simulate_tod", False):
-            tod_file = "FMM/" + self.params["foldername"] + "/Dict/tod.h5"
+            tod_file = "FMM/" + self.params["foldername"] + "/TOD/tod.h5"
             if self.rank == 0:
                 save_dict = {"tod": self.TOD, "qubic_tod_size": len(self.noiseq),
                              "tod_noiseless_qubic": self._tod_signal_qubic}

@@ -92,10 +92,10 @@ if __name__ == "__main__":
         params = yaml.load(f)
 
     foldername = params["foldername"]
-    dict_folder = f"FMM/{foldername}/Dict"
-    create_folder_if_not_exists(comm, dict_folder)
+    tod_folder = f"FMM/{foldername}/TOD"
+    create_folder_if_not_exists(comm, tod_folder)
 
-    output_file = args.output or f"{dict_folder}/tod_combined_{args.job_id:04d}.h5"
+    output_file = args.output or f"{tod_folder}/tod_combined_{args.job_id:04d}.h5"
 
     # Determine the base seed: explicit arg, or fall back to whatever is in the params file.
     # Offset by job_id * n_sims so concurrent array jobs never share a seed.
@@ -119,9 +119,9 @@ if __name__ == "__main__":
         _run_sim(comm, params)
 
         # Rank 0 renames tod.h5 so the next iteration does not overwrite it
-        chunk_file = f"{dict_folder}/tod_chunk_{args.job_id:04d}_{i:04d}.h5"
+        chunk_file = f"{tod_folder}/tod_chunk_{args.job_id:04d}_{i:04d}.h5"
         if rank == 0:
-            os.rename(f"{dict_folder}/tod.h5", chunk_file)
+            os.rename(f"{tod_folder}/tod.h5", chunk_file)
             print(f"  → chunk saved: {chunk_file}")
         tod_chunk_files.append(chunk_file)
 

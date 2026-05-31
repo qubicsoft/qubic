@@ -6,12 +6,11 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=40G
 #SBATCH --time=0-02:00:00
-#SBATCH --array=0-99
 #SBATCH --output=FMM/slurm_logs/fmm_rec_%A_%a.log
 
 # $1 = params.yaml
 # $2 = path to the noiseless TOD file (tod_combined_0000.h5)
-# Array range must match N_REAL in submit_all.sh
+# Array range is injected by submit_all.sh: --array=0-$((N_REAL - 1))
 
 BASE_SEED=100
 

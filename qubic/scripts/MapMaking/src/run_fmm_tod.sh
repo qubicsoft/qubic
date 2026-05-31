@@ -6,8 +6,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=40G
 #SBATCH --time=0-01:00:00
-#SBATCH --array=0-9
-#SBATCH --output=FMM/slurm_logs/fmm_tod_%A_%a.log
+#SBATCH --output=FMM/slurm_logs/fmm_tod_%j.log
 
 N_SIMS=10
 BASE_SEED=100

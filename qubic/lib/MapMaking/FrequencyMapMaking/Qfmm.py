@@ -595,7 +595,8 @@ class PipelineFrequencyMapMaking:
                 print(f"Loading pre-computed TOD from {self.path_tod}, shape: {data['tod'].shape}")
             return data["tod"]
 
-        TOD_QUBIC = self.H_in_qubic(self.input_maps.m_nu).ravel() + self.noiseq
+        self._tod_signal_qubic = self.H_in_qubic(self.input_maps.m_nu).ravel()
+        TOD_QUBIC = self._tod_signal_qubic + self.noiseq
 
         if not self.params["PLANCK"]["external_data"]:
             return TOD_QUBIC
@@ -619,6 +620,26 @@ class PipelineFrequencyMapMaking:
 
         TOD = np.r_[TOD_QUBIC, TOD_PLANCK]
         return TOD
+
+    def regenerate_noise(self, seed):
+        """Replace self.noiseq and self.noise_planck with new realizations using the given seed."""
+        qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
+        self.noiseq = qubic_noise.total_noise(
+            self.params["QUBIC"]["NOISE"]["ndet"],
+            self.params["QUBIC"]["NOISE"]["npho150"],
+            self.params["QUBIC"]["NOISE"]["npho220"],
+            seed_noise=seed,
+        ).ravel()
+        if self.params["PLANCK"]["external_data"]:
+            self.noise_planck = [
+                self.joint.planck_acquisition[i].get_noise(
+                    planck_ntot=self.params["PLANCK"]["level_noise_planck"],
+                    seed=seed,
+                    weight_planck=self.params["PLANCK"]["weight_planck"],
+                    seenpix=self.seenpix,
+                )
+                for i in range(2)
+            ]
 
     def get_preconditioner(self):
         """PCG Preconditioner."""
@@ -818,10 +839,17 @@ class PipelineFrequencyMapMaking:
         if self.params.get("simulate_tod", False):
             tod_file = "FMM/" + self.params["foldername"] + "/Dict/tod.h5"
             if self.rank == 0:
+                save_dict = {"tod": self.TOD, "qubic_tod_size": len(self.noiseq),
+                             "tod_noiseless_qubic": self._tod_signal_qubic}
+                if self.params["PLANCK"]["external_data"]:
+                    nrec = self.params["QUBIC"]["nrec"]
+                    nside = self.params["SKY"]["nside"]
+                    tod_noiseless_planck = np.zeros((max(nrec, 2), 12 * nside**2, 3))
+                    for irec in range(nrec):
+                        tod_noiseless_planck[irec] = self.maps_input_convolved[irec]
+                    save_dict["tod_noiseless_planck"] = tod_noiseless_planck.ravel()
                 # Save the split index so the combining script can separate QUBIC and PLANCK parts
-                HDF5Dict().save_dict(
-                    tod_file, {"tod": self.TOD, "qubic_tod_size": len(self.noiseq)}
-                )
+                HDF5Dict().save_dict(tod_file, save_dict)
                 print(f"TOD saved to {tod_file}, shape: {self.TOD.shape}. Stopping.")
             self.mpi._barrier()
             return

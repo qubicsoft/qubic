@@ -854,6 +854,16 @@ class PipelineFrequencyMapMaking:
             self.mpi._barrier()
             return
 
+        self._run_reconstruction(self.file)
+
+    def _run_reconstruction(self, output_file):
+        """Run PCG on self.TOD and save results to output_file.
+
+        self.TOD must be set before calling. Factored out of run() so that
+        multiple noise realizations can reuse the same pipeline object.
+        """
+        self.mapmaking_time_0 = time.time()
+
         ### Define starting point for PCG depending on the presence of Planck
         if self.params["PLANCK"]["external_data"]:
             # PCG now solves for delta_m = m - maps_input_convolved (shifted formulation).
@@ -937,7 +947,7 @@ class PipelineFrequencyMapMaking:
                 },  # I have to remove the MPI communicator, which is not supported by pickle
             }
 
-            HDF5Dict().save_dict(self.file, dict_solution)
+            HDF5Dict().save_dict(output_file, dict_solution)
 
         ### Wait for all processors
         self.mpi._barrier()

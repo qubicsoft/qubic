@@ -75,7 +75,13 @@ if __name__ == "__main__":
         "--output",
         type=str,
         default=None,
-        help="Output HDF5 file for combined TOD. Default: FMM/<foldername>/Dict/tod_combined.h5",
+        help="Output HDF5 file for combined TOD. Default: FMM/<foldername>/Dict/tod_combined_<job_id>.h5",
+    )
+    parser.add_argument(
+        "--job_id",
+        type=int,
+        default=0,
+        help="SLURM array task ID (default: 0). Used to namespace output files and offset seeds.",
     )
     args = parser.parse_args()
 
@@ -89,10 +95,12 @@ if __name__ == "__main__":
     dict_folder = f"FMM/{foldername}/Dict"
     create_folder_if_not_exists(comm, dict_folder)
 
-    output_file = args.output or f"{dict_folder}/tod_combined.h5"
+    output_file = args.output or f"{dict_folder}/tod_combined_{args.job_id:04d}.h5"
 
-    # Determine the base seed: explicit arg, or fall back to whatever is in the params file
+    # Determine the base seed: explicit arg, or fall back to whatever is in the params file.
+    # Offset by job_id * n_sims so concurrent array jobs never share a seed.
     base_seed = args.base_seed if args.base_seed is not None else params["QUBIC"]["NOISE"]["seed_noise"]
+    base_seed += args.job_id * args.n_sims
 
     tod_chunk_files = []
 
@@ -111,7 +119,7 @@ if __name__ == "__main__":
         _run_sim(comm, params)
 
         # Rank 0 renames tod.h5 so the next iteration does not overwrite it
-        chunk_file = f"{dict_folder}/tod_chunk_{i:04d}.h5"
+        chunk_file = f"{dict_folder}/tod_chunk_{args.job_id:04d}_{i:04d}.h5"
         if rank == 0:
             os.rename(f"{dict_folder}/tod.h5", chunk_file)
             print(f"  → chunk saved: {chunk_file}")

@@ -6,7 +6,8 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=40G
 #SBATCH --time=0-01:00:00
-#SBATCH --output=FMM/slurm_logs/fmm_tod_%j.log
+#SBATCH --array=0-9
+#SBATCH --output=FMM/slurm_logs/fmm_tod_%A_%a.log
 
 N_SIMS=10
 BASE_SEED=100
@@ -18,4 +19,5 @@ module load mpich
 
 mpirun -np $SLURM_NTASKS python run_fmm_tod.py "$1" \
     --n_sims "$N_SIMS" \
-    --base_seed "$BASE_SEED"
+    --base_seed "$BASE_SEED" \
+    --job_id "$SLURM_ARRAY_TASK_ID"

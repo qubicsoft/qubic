@@ -177,6 +177,26 @@ class PresetAcquisition:
             scalar_acquisition_operators[freq] = np.mean(acquisition_operators[freq](vector_ones))
         return scalar_acquisition_operators
 
+    # def _compute_invn_weighted_fwhm(self, allfwhm):
+    #     ndet = self.preset_qubic.params_qubic["NOISE"]["ndet"]
+    #     npho150 = self.preset_qubic.params_qubic["NOISE"]["npho150"]
+    #     is_mb = self.preset_tools.params["QUBIC"]["instrument"] == "MB"
+    #     is_uwb = self.preset_qubic.params_qubic["instrument"] == "UWB"
+    #     sigma_150_sq = max(ndet**2 + npho150**2, 1e-30)
+    #     weights = np.zeros(len(allfwhm))
+
+    #     if is_mb: # this will be the simple mean
+    #         weights[:] = 1.0 / sigma_150_sq
+    #     else:
+    #         nsub_per_band = len(allfwhm) // 2
+    #         npho220 = self.preset_qubic.params_qubic["NOISE"]["npho220"]
+    #         # UWB 220 GHz: no detector noise (shared focal plane, attributed to 150 GHz only)
+    #         sigma_220_sq = max(npho220**2 if is_uwb else ndet**2 + npho220**2, 1e-30)
+    #         weights[:nsub_per_band] = 1.0 / sigma_150_sq
+    #         weights[nsub_per_band:] = 1.0 / sigma_220_sq
+
+    #     return np.sum(weights * allfwhm) / np.sum(weights)
+    
     def get_convolution(self):
         """Convolutions.
 
@@ -199,23 +219,24 @@ class PresetAcquisition:
 
         """
 
-        # Initialize FWHM arrays to 0
-        fwhm_qubic_tod = self.preset_qubic.joint_in.qubic.allfwhm * 0
-        fwhm_qubic_mapmaking = self.preset_qubic.joint_in.qubic.allfwhm * 0
+        conv_in = self.preset_qubic.params_qubic["convolution_in"]
+        conv_out = self.preset_qubic.params_qubic["convolution_out"]
+        allfwhm = self.preset_qubic.joint_in.qubic.allfwhm
 
-        # Check if convolution_in is True
-        if self.preset_qubic.params_qubic["convolution_in"]:
-            fwhm_qubic_tod = self.preset_qubic.joint_in.qubic.allfwhm
-
-        # Check if convolution_out is True
-        if self.preset_qubic.params_qubic["convolution_out"]:
-            fwhm_qubic_mapmaking = np.sqrt(self.preset_qubic.joint_in.qubic.allfwhm**2 - np.min(self.preset_qubic.joint_in.qubic.allfwhm) ** 2)
+        # Initialize FWHM arrays to 0 if not conv_in, to the expected value otherwise
+        fwhm_qubic_tod = allfwhm if conv_in else allfwhm * 0
+        fwhm_qubic_mapmaking = (
+            np.sqrt(allfwhm**2 - np.min(allfwhm) ** 2) if conv_out else allfwhm * 0
+        )
 
         # Calculate the reconstructed FWHM based on convolution parameters
-        if self.preset_qubic.params_qubic["convolution_in"] and self.preset_qubic.params_qubic["convolution_out"]:
-            fwhm_qubic_rec = np.min(self.preset_qubic.joint_in.qubic.allfwhm)  # min of allfwhm
-        elif self.preset_qubic.params_qubic["convolution_in"] and not self.preset_qubic.params_qubic["convolution_out"]:
-            # fwhm_qubic_rec = np.full(len(self.preset_comp.components_model_out), np.mean(self.preset_qubic.joint_in.qubic.allfwhm))
+        if conv_in and conv_out:
+            fwhm_qubic_rec = np.min(allfwhm)  # min of allfwhm
+        elif conv_in and not conv_out:
+            # fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
+            # fwhm_eff = self._compute_invn_weighted_fwhm(fwhm_qubic_tod)
+            # fwhm_qubic_rec[:] = fwhm_eff
+            ## fwhm_qubic_rec = np.full(len(self.preset_comp.components_model_out), np.mean(allfwhm))
             scalar_acquisition_operators = self._get_scalar_acquisition_operator()
             fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
             for comp, comp_name in enumerate(self.preset_comp.components_name_out):
@@ -231,8 +252,6 @@ class PresetAcquisition:
                     )
                     factor = scalar_acquisition_operators * f_sync.eval(self.preset_qubic.joint_out.qubic.allnus)
                 fwhm_qubic_rec[comp] = np.sum(factor * fwhm_qubic_tod) / (np.sum(factor))
-        elif not self.preset_qubic.params_qubic["convolution_in"] and not self.preset_qubic.params_qubic["convolution_out"]:
-            fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
 
         # Print the FWHM values
         self.preset_tools.mpi._print_message(f"FWHM for TOD making : {fwhm_qubic_tod}")

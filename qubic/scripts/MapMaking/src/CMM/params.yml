@@ -1,5 +1,5 @@
 save_iter: 1                                                                           # Save every 'save_iter' iteration
-foldername: "test"                                                                  # Name of the saved folder
+foldername: "test_dust"                                                                  # Name of the saved folder
 filename: "test"                                                                       # Name of the saved file
 lastite: true                                                                          # Keep only the last iteration
 
@@ -11,8 +11,8 @@ CMB:
 
 Foregrounds:
   fit_components: true                                                                 # If true, component maps are reconstructed
-  fit_mixing_matrix: false                                                              # If true, mixing matrix is reconstructed
-  bin_mixing_matrix: 8
+  fit_mixing_matrix: true                                                              # If true, mixing matrix is reconstructed
+  bin_mixing_matrix: 6
   blind_method: "minimize"                                                             # Fit the mixing matrix with different methods when all the components are fitted with blind method: 'PCG', 
                                                                                        # 'alternate' or 'minimize'
     ### Thermal Dust emission
@@ -22,7 +22,7 @@ Foregrounds:
 
     type: "parametric"                                                                 # Reconstruction method
     model: "d0"
-    beta_init: [1.54, 0, 10000000]                                                  # PySM model
+    beta_init: [1.54, 0.01, 10000000]                                                  # PySM model
     nside_beta_in: 0                                                                   # Input pixelization for beta_d (in a case of d1 model)
     nside_beta_out: 0                                                                  # Output pixelization for beta_d (in a case of d1 model)
     nu0: 150.0                                                                         # Reference frequency (nu0_d)
@@ -54,12 +54,12 @@ QUBIC:
   instrument: "DB"                                                                     # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
   configuration: "FI"                                                                  # Instrumental configuration (TD or FI) # to be implemented in the code
   npointings: 3000                                                                     # Number of time samples
-  nsub_in: 8                                                                           # Number of sub-acquisitions
-  nsub_out: 8                                                                          # Number of sub-acquisitions for the reconstruction
-  convolution_in: true                                                                # Angular resolution in the input TOD
+  nsub_in: 16                                                                           # Number of sub-acquisitions
+  nsub_out: 16                                                                          # Number of sub-acquisitions for the reconstruction
+  convolution_in: false                                                                # Angular resolution in the input TOD
   convolution_out: false                                                               # Angular resolution in the reconstruction
   fwhm_rec: null # [0.007628603433902725, 0.004491045331158454]                                                                       # conv_out=False only: override effective PCG reconstruction FWHM (rad). null = auto-compute from noise weights (correct for UWB and DB).
-  use_reference_pcg: true                                                              # conv_in=True, conv_out=False, kmax>0 only: run a noiseless PCG to compute components_in_convolved exactly. Set false to use the GLS approximation instead (faster, sufficient for kmax=0 or single component).
+  use_reference_pcg: false                                                              # conv_in=True, conv_out=False, kmax>0 only: run a noiseless PCG to compute components_in_convolved exactly. Set false to use the GLS approximation instead (faster, sufficient for kmax=0 or single component).
   preconditioner: false
   NOISE:
     ndet: 1                                                                          # Level of detector noise
@@ -70,7 +70,7 @@ QUBIC:
     duration_220: 3                                                                    # Effective duration at 220 GHz
     seed_noise: 346207976
   SYNTHBEAM:
-    synthbeam_kmax: 0                                                                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+    synthbeam_kmax: 1                                                                  # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1                                                              # Fraction of synthesized beam
   dtheta: 15                                                                           # Angle for coverage
   GAIN:
@@ -81,7 +81,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-  nside: 256                                                                           # Nside of components
+  nside: 128                                                                           # Nside of components
   coverage_cut: 0.15                                                                   # Percent of coverage to keep the pixels seen enough by QUBIC
   RA_center: 0
   DEC_center: -57
@@ -89,29 +89,29 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
   level_noise_planck: 1                                                              # Noise level for Planck data
-  nsub_planck: 8                                                                       # Number of integration step for Planck data
-  weight_planck: 0                                                                     # Weight of Planck data within the QUBIC patch
-  fwhm_weight_planck: 1                                                                # FWHM for apodized QUBIC patch
+  nsub_planck: 100                                                                       # Number of integration step for Planck data
+  weight_planck: 1                                                                     # Weight of Planck data within the QUBIC patch
+  fwhm_weight_planck: 0                                                                # FWHM for apodized QUBIC patch
   30GHz: false
   44GHz: false
   70GHz: false
   100GHz: false
   143GHz: true
   217GHz: true
-  353GHz: false
+  353GHz: true
   seed_noise: 346207976
 
 Pipeline:
   mapmaking: true
-  spectrum: true
+  spectrum: false
 
 PCG:
     ### This section control PCG parameters
 
-  n_init_iter_pcg: 50
-  n_iter_pcg: 10                                                                       # Number of PCG iterations
-  tol_pcg: 1.0e-15                                                                     # Tolerance for PCG
-  n_iter_loop: 1                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+  n_init_iter_pcg: 20
+  n_iter_pcg: 15                                                                       # Number of PCG iterations
+  tol_pcg: 1.0e-5                                                                     # Tolerance for PCG
+  n_iter_loop: 100                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
   ites_to_converge: 1                                                                  # should be less than n_iter_loop
   tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                                    # Fixing pixels outside QUBIC patch

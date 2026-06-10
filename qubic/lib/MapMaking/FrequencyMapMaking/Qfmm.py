@@ -625,7 +625,9 @@ class PipelineFrequencyMapMaking:
 
     def regenerate_noise(self, seed):
         """Replace self.noiseq and self.noise_planck with new realizations using the given seed."""
-        qubic_noise = QubicTotNoise(self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene)
+        qubic_noise = QubicTotNoise(
+            self.dict_out, self.joint.qubic.sampling, self.joint.qubic.scene
+        )
         self.noiseq = qubic_noise.total_noise(
             self.params["QUBIC"]["NOISE"]["ndet"],
             self.params["QUBIC"]["NOISE"]["npho150"],
@@ -841,8 +843,11 @@ class PipelineFrequencyMapMaking:
         if self.params.get("simulate_tod", False):
             tod_file = "FMM/" + self.params["foldername"] + "/TOD/tod.h5"
             if self.rank == 0:
-                save_dict = {"tod": self.TOD, "qubic_tod_size": len(self.noiseq),
-                             "tod_noiseless_qubic": self._tod_signal_qubic}
+                save_dict = {
+                    "tod": self.TOD,
+                    "qubic_tod_size": len(self.noiseq),
+                    "tod_noiseless_qubic": self._tod_signal_qubic,
+                }
                 if self.params["PLANCK"]["external_data"]:
                     nrec = self.params["QUBIC"]["nrec"]
                     nside = self.params["SKY"]["nside"]

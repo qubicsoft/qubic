@@ -148,7 +148,9 @@ class PresetAcquisition:
         print("fwhm_planck_tod : ", self.fwhm_planck_tod.shape)
 
         self.fwhm_tod = np.concatenate((self.fwhm_qubic_tod, self.fwhm_planck_tod))
-        self.fwhm_mapmaking = np.concatenate((self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking))
+        self.fwhm_mapmaking = np.concatenate(
+            (self.fwhm_qubic_mapmaking, self.fwhm_planck_mapmaking)
+        )
         self.fwhm_rec = self.fwhm_qubic_rec
 
         ### Get observed data
@@ -160,27 +162,23 @@ class PresetAcquisition:
         self.get_x0()
 
     def _get_subband_weights(self):
-        ndet = self.preset_qubic.params_qubic["NOISE"]["ndet"]
-        npho150 = self.preset_qubic.params_qubic["NOISE"]["npho150"]
-        npho220 = self.preset_qubic.params_qubic["NOISE"]["npho220"]
         is_uwb = self.preset_qubic.params_qubic["instrument"] == "UWB"
         allfwhm = self.preset_qubic.joint_in.qubic.allfwhm
         nsub_per_band = len(allfwhm) // 2
+        qubic_invN = self.preset_qubic.joint_out.qubic.invN
 
         if is_uwb:
-            # UWB: all sub-bands share one focal plane with combined noise
-            # sigma_combined² = sigma_det² + sigma_pho_150² + sigma_pho_220².
-            # Uniform weights give standard (unweighted) LS component separation,
-            # consistent with QubicInstrumentType.get_invntt_operator for UWB.
-            sigma_combined_sq = max(ndet**2 + npho150**2 + npho220**2, 1e-30)
-            return np.ones(len(allfwhm)) / sigma_combined_sq
+            # UWB: one focal plane — invN.data is 1/sigma_combined² per detector.
+            # Uniform sub-band weights scaled by the mean detector precision.
+            weight = max(float(np.mean(qubic_invN.data)), 1e-30)
+            return np.ones(len(allfwhm)) * weight
         else:
-            # DB: independent focal planes with band-specific noise.
-            sigma_150_sq = max(ndet**2 + npho150**2, 1e-30)
-            sigma_220_sq = max(ndet**2 + npho220**2, 1e-30)
+            # DB: independent focal planes — operands[0]/[1] hold 150/220 GHz invN.
+            weight_150 = max(float(np.mean(qubic_invN.operands[0].data)), 1e-30)
+            weight_220 = max(float(np.mean(qubic_invN.operands[1].data)), 1e-30)
             weights = np.zeros(len(allfwhm))
-            weights[:nsub_per_band] = 1.0 / sigma_150_sq
-            weights[nsub_per_band:] = 1.0 / sigma_220_sq
+            weights[:nsub_per_band] = weight_150
+            weights[nsub_per_band:] = weight_220
             return weights
 
     def _build_mixing_matrix(self, allnus):
@@ -263,7 +261,11 @@ class PresetAcquisition:
             fwhm_rec_override = self.preset_qubic.params_qubic.get("fwhm_rec", None)
             fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
             if fwhm_rec_override is not None:
-                fwhm_rec_list = fwhm_rec_override if isinstance(fwhm_rec_override, list) else [fwhm_rec_override] * len(self.preset_comp.components_name_out)
+                fwhm_rec_list = (
+                    fwhm_rec_override
+                    if isinstance(fwhm_rec_override, list)
+                    else [fwhm_rec_override] * len(self.preset_comp.components_name_out)
+                )
                 for icomp in range(len(self.preset_comp.components_name_out)):
                     fwhm_comp = fwhm_rec_list[icomp]
                     fwhm_qubic_rec[icomp] = fwhm_comp
@@ -281,14 +283,18 @@ class PresetAcquisition:
                     sky_j = sum(
                         A[jsub, k] * self.preset_comp.components_in[k] for k in range(ncomp)
                     )
-                    B_j = HealpixConvolutionGaussianOperator(fwhm=fwhm_qubic_tod[jsub], lmax=3 * nside - 1)
+                    B_j = HealpixConvolutionGaussianOperator(
+                        fwhm=fwhm_qubic_tod[jsub], lmax=3 * nside - 1
+                    )
                     blurred_j = B_j(sky_j)
                     for icomp in range(ncomp):
                         self.components_in_convolved[icomp] += W[icomp, jsub] * blurred_j
                 # Dominant positive-band FWHM per component — used for fwhm_planck_tod and logging only
                 for icomp in range(ncomp):
                     pos = W[icomp] > 0
-                    fwhm_qubic_rec[icomp] = np.sum(W[icomp, pos] * fwhm_qubic_tod[pos]) / np.sum(W[icomp, pos])
+                    fwhm_qubic_rec[icomp] = np.sum(W[icomp, pos] * fwhm_qubic_tod[pos]) / np.sum(
+                        W[icomp, pos]
+                    )
 
         elif not conv_in and conv_out:
             fwhm_qubic_rec = np.zeros(len(self.preset_comp.components_model_out))
@@ -389,12 +395,18 @@ class PresetAcquisition:
         # discontinuity at the patch boundary. For other convolution modes, generate from raw m_in.
         conv_in = self.preset_qubic.params_qubic["convolution_in"]
         conv_out = self.preset_qubic.params_qubic["convolution_out"]
-        planck_source = self.components_in_convolved if (conv_in and not conv_out) else self.preset_comp.components_in
+        planck_source = (
+            self.components_in_convolved
+            if (conv_in and not conv_out)
+            else self.preset_comp.components_in
+        )
         self.TOD_external = self.H.operands[1](planck_source) + noise_external.ravel()
         planck_source_zeroed = planck_source.copy()
         planck_source_zeroed[:, ~self.preset_sky.seenpix] = 0
         self.TOD_planck_signal_zeroed = self.H.operands[1](planck_source_zeroed)
-        self.TOD_external_zero_outside_patch = self.TOD_planck_signal_zeroed + noise_external.ravel()
+        self.TOD_external_zero_outside_patch = (
+            self.TOD_planck_signal_zeroed + noise_external.ravel()
+        )
 
         #! Tom : Here, we are computing TOD from maps, then reshape to refound the maps, convolve the maps, and then reshape again to have the TOD... It is really dumb
         # _r = ReshapeOperator(self.TOD_external.shape, (len(self.preset_external.external_nus), 12 * self.preset_sky.params_sky["nside"] ** 2, 3))

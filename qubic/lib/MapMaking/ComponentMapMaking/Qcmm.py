@@ -218,7 +218,7 @@ class PipelineComponentMapMaking:
             )
             self.plots.plot_rms_iteration(self.preset.acquisition.rms_plot, ki=self._steps)
 
-    def update_components(self, seenpix):
+    def update_components(self, seenpix, max_iterations=None):
         r"""
         Method that solves the map-making equation :math:`(H^T . N^{-1} . H) . x = H^T . N^{-1} . d`, using OpenMP / MPI solver.
 
@@ -231,8 +231,13 @@ class PipelineComponentMapMaking:
         ----------
         seenpix : array_like
             Boolean array that define the pixels observed by QUBIC.
+        max_iterations : int, optional
+            Maximum number of PCG iterations. Defaults to `PCG: n_iter_pcg`.
 
         """
+        if max_iterations is None:
+            max_iterations = self.preset.tools.params["PCG"]["n_iter_pcg"]
+
         H_i = self.preset.qubic.joint_out.get_operator(
             A=self.preset.acquisition.Amm_iter,
             gain=self.preset.gain.gain_iter,
@@ -269,7 +274,7 @@ class PipelineComponentMapMaking:
         )
 
         ### Run PCG
-        self.call_pcg(self.preset.tools.params["PCG"]["n_iter_pcg"], seenpix=seenpix)
+        self.call_pcg(max_iterations, seenpix=seenpix)
 
     def get_tod_comp(self):
         """Component TOD.
@@ -594,7 +599,7 @@ class PipelineComponentMapMaking:
         #     self.preset.gain.all_gain - self.preset.gain.all_gain_in, alpha=0.03, ki=self._steps
         # )
 
-    def save_data(self, step):
+    def save_data(self, step, force=False):
         """Save data.
 
         Method that save data for each iterations.
@@ -604,12 +609,14 @@ class PipelineComponentMapMaking:
         ----------
         step : int
             Step number.
+        force : bool, optional
+            If True, save regardless of `save_iter`, by default False.
 
         """
 
         if self.preset.tools.rank == 0:
             if self.preset.tools.params["save_iter"] != 0:
-                if (step + 1) % self.preset.tools.params["save_iter"] == 0:
+                if force or (step + 1) % self.preset.tools.params["save_iter"] == 0:
                     if self.preset.tools.params["lastite"]:
                         if step != 0:
                             os.remove(
@@ -766,6 +773,13 @@ class PipelineComponentMapMaking:
 
             ### Stop the loop when self._steps > k
             self._stop_condition()
+
+        ### Run a final PCG with a larger number of iterations
+        iter_end = self.preset.tools.params["PCG"]["iter_end"]
+        if iter_end > 0:
+            self.update_components(seenpix=self.preset.sky.seenpix, max_iterations=iter_end)
+            self.preset.tools.comm.Barrier()
+            self.save_data(self._steps, force=True)
 
 
 class PipelineEnd2End:

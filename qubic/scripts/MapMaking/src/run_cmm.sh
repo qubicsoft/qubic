@@ -12,7 +12,6 @@
 mkdir -p CMM/slurm_logs
 
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
-module load mpich
 
 # Deterministic unique seed for each array element
 SEED=$((SLURM_JOB_ID * 10 + SLURM_ARRAY_TASK_ID))

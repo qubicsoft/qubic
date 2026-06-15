@@ -102,11 +102,12 @@ class MixedMM(FittingMM):
             axis=0,
         )
         print("allbeta", self.preset.acquisition.allbeta.shape)
-        self.plots.plot_beta_iteration(
-            self.preset.acquisition.allbeta[:, self.beta_indices - self.adjust_cmb],
-            truth=self.preset.mixingmatrix.beta_in[self.beta_indices - self.adjust_cmb],
-            ki=self._steps,
-        )
+        if self.preset.tools.rank == 0:
+            self.plots.plot_beta_iteration(
+                self.preset.acquisition.allbeta[:, self.beta_indices - self.adjust_cmb],
+                truth=self.preset.mixingmatrix.beta_in[self.beta_indices - self.adjust_cmb],
+                ki=self._steps,
+            )
 
         # Mixing Matrix
         self.selfCMM.allAmm_iter = np.concatenate((self.selfCMM.allAmm_iter, np.array([self.preset.acquisition.Amm_iter])), axis=0)

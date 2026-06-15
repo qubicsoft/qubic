@@ -59,8 +59,9 @@ class ParametricMM(FittingMM):
             axis=0,
         )
 
-        self.plots.plot_beta_iteration(
-            self.preset.acquisition.allbeta[..., self.seenpix_beta],
-            truth=self.preset.mixingmatrix.beta_in[:, self.seenpix_beta],
-            ki=self._steps,
-        )
+        if self.preset.tools.rank == 0:
+            self.plots.plot_beta_iteration(
+                self.preset.acquisition.allbeta[..., self.seenpix_beta],
+                truth=self.preset.mixingmatrix.beta_in[:, self.seenpix_beta],
+                ki=self._steps,
+            )

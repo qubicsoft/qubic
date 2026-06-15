@@ -515,7 +515,7 @@ class PlotsFMM:
 
         if filename is not None:
             plt.savefig(filename)
-        plt.close()
+            plt.close()
 
     def plot_FMM_old(
         self,

@@ -63,16 +63,15 @@ class PresetInitialisation:
         self.tools.mpi._print_message("    => Getting job ID")
         self.job_id = os.environ.get("SLURM_JOB_ID")
         self.tools.mpi._print_message("    => Creating folders")
-        if self.tools.rank == 0:
-            if self.tools.params["save_iter"] != 0:
-                self.tools.params["foldername"] = (
-                    f"{self.tools.params['Foregrounds']['Dust']['type']}_{self.tools.params['Foregrounds']['Dust']['model']}_{self.tools.params['QUBIC']['instrument']}_"
-                    + self.tools.params["foldername"]
-                )
-                create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Dict/")
-            if self.tools.params["Plots"]["maps"] or self.tools.params["Plots"]["conv_beta"]:
-                for file_name in self.files_list:
-                    create_folder_if_not_exists(self.comm, "CMM/{}/Plots/{}".format(self.tools.params["foldername"], file_name))
+        if self.tools.params["save_iter"] != 0:
+            self.tools.params["foldername"] = (
+                f"{self.tools.params['Foregrounds']['Dust']['type']}_{self.tools.params['Foregrounds']['Dust']['model']}_{self.tools.params['QUBIC']['instrument']}_"
+                + self.tools.params["foldername"]
+            )
+            create_folder_if_not_exists(self.comm, "CMM/" + self.tools.params["foldername"] + "/Dict/")
+        if self.tools.params["Plots"]["maps"] or self.tools.params["Plots"]["conv_beta"]:
+            for file_name in self.files_list:
+                create_folder_if_not_exists(self.comm, "CMM/{}/Plots/{}".format(self.tools.params["foldername"], file_name))
 
         self.tools.mpi._print_message("========= External Data =========")
         self.external = PresetExternal(self.tools)

@@ -70,9 +70,8 @@ class MixedMM(FittingMM):
             self.preset.acquisition.Amm_iter[:, comp] = v
 
         # Extract indices
-        (self.beta_indices,), _ = zip(*self.layout.beta_indices)
-        (self.Amm_indices,), _ = zip(*self.layout.beta_indices)
-        self.Amm_indices = np.atleast_1d(self.Amm_indices)
+        self.beta_indices = [comp for comp, _ in self.layout.beta_indices]
+        self.Amm_indices = [comp for comp, _, _ in self.layout.blind_indices]
 
         self._log(previous_beta, previous_amm)
         self._finalize()
@@ -80,11 +79,12 @@ class MixedMM(FittingMM):
     def _log(self, previous_beta, previous_amm):
         if self.preset.tools.rank != 0:
             return
+        beta_idx = [b - self.adjust_cmb for b in self.beta_indices]
         print("------------------- Beta -------------------")
-        print(f"Iteration k     : {previous_beta[self.beta_indices - self.adjust_cmb]}")
-        print(f"Iteration k + 1 : {self.preset.acquisition.beta_iter[self.beta_indices - self.adjust_cmb]}")
-        print(f"Truth           : {self.preset.mixingmatrix.beta_in[self.beta_indices - self.adjust_cmb]}")
-        print(f"Residuals       : {self.preset.mixingmatrix.beta_in[self.beta_indices - self.adjust_cmb] - self.preset.acquisition.beta_iter[self.beta_indices - self.adjust_cmb]}")
+        print(f"Iteration k     : {previous_beta[beta_idx]}")
+        print(f"Iteration k + 1 : {self.preset.acquisition.beta_iter[beta_idx]}")
+        print(f"Truth           : {self.preset.mixingmatrix.beta_in[beta_idx]}")
+        print(f"Residuals       : {self.preset.mixingmatrix.beta_in[beta_idx] - self.preset.acquisition.beta_iter[beta_idx]}")
         print("--------------- MixingMatrix ---------------")
         print(f"Iteration k     : {previous_amm[:, self.Amm_indices].ravel()}")
         print(f"Iteration k + 1 : {self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, self.Amm_indices].ravel()}")
@@ -103,9 +103,10 @@ class MixedMM(FittingMM):
         )
         print("allbeta", self.preset.acquisition.allbeta.shape)
         if self.preset.tools.rank == 0:
+            beta_idx = [b - self.adjust_cmb for b in self.beta_indices]
             self.plots.plot_beta_iteration(
-                self.preset.acquisition.allbeta[:, self.beta_indices - self.adjust_cmb],
-                truth=self.preset.mixingmatrix.beta_in[self.beta_indices - self.adjust_cmb],
+                self.preset.acquisition.allbeta[:, beta_idx],
+                truth=self.preset.mixingmatrix.beta_in[beta_idx],
                 ki=self._steps,
             )
 

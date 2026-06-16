@@ -461,7 +461,7 @@ class PresetAcquisition:
         ### Fix random state
         np.random.seed(self.seed_start_pcg)
 
-        self.beta_iter, self.Amm_iter = self.preset_mixingmatrix._get_beta_iter()
+        self.beta_iter, self.Amm_iter = self.preset_mixingmatrix._get_beta_iter(seenpix=self.preset_sky.seenpix)
 
         # Build beta map for spatially varying spectral index
         self.allbeta = np.array([self.beta_iter])

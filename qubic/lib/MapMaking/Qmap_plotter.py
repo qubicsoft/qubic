@@ -932,7 +932,9 @@ class PlotsCMM:
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki}.svg")
+                    previous_file = "CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki}.svg"
+                    if os.path.exists(previous_file):
+                        os.remove(previous_file)
             plt.close()
 
     def display_maps(self, input_maps, reconstructed_maps, seenpix, ki=0, reso=15, view="gnomview"):

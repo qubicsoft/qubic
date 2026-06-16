@@ -1,3 +1,4 @@
+import healpy as hp
 import numpy as np
 import pysm3
 import pysm3.units as u
@@ -267,7 +268,7 @@ class PresetMixingMatrix:
             raise ValueError
         return mixingmatrix.eval(nus, *beta)
 
-    def _get_beta_iter(self):
+    def _get_beta_iter(self, seenpix=None):
         if self.preset_comp.params_foregrounds["Dust"]["model"] in ["d0", "d6"]:
             beta_iter = np.array([])
             if self.preset_comp.params_foregrounds["Dust"]["Dust_out"]:
@@ -299,15 +300,29 @@ class PresetMixingMatrix:
             beta_iter = np.zeros((len(self.preset_comp.components_out) - 1, npix))
 
             dust_beta_mean, dust_beta_sigma, _ = self.preset_comp.params_foregrounds["Dust"]["beta_init"]
+            dust_iter_sigma = float(self.preset_comp.params_foregrounds["Dust"].get("beta_iter_sigma", dust_beta_sigma))
             sync_beta_mean, sync_beta_sigma = self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"]
 
             for iname, name in enumerate(self.preset_comp.components_name_out):
                 if name == "CMB":
                     pass
                 elif name == "Dust":
-                    beta_iter[iname - 1] = np.random.normal(dust_beta_mean, dust_beta_sigma, beta_iter[iname - 1].shape)
+                    beta_iter[iname - 1] = np.random.normal(dust_beta_mean, dust_iter_sigma, beta_iter[iname - 1].shape)
                 elif name == "Synchrotron":
                     beta_iter[iname - 1] = np.random.normal(sync_beta_mean, sync_beta_sigma, beta_iter[iname - 1].shape)
+
+            # Outside the QUBIC patch, beta_iter is never updated by the fit, yet its
+            # Amm_iter still enters update_components' b-vector (applied to the true
+            # full-sky maps). A random, never-corrected beta there injects a permanent,
+            # noise-independent bias into the in-patch reconstruction. Use the true beta
+            # outside the patch, since it is not part of the inference target anyway.
+            if seenpix is not None:
+                nside_beta_out = self.preset_comp.params_foregrounds["Dust"]["nside_beta_out"]
+                seenpix_beta = hp.ud_grade(seenpix.astype(float), nside_beta_out) != 0
+                beta_in_out = self.beta_in
+                if beta_in_out.shape[1] != npix:
+                    beta_in_out = np.array([hp.ud_grade(b, nside_beta_out) for b in beta_in_out])
+                beta_iter[:, ~seenpix_beta] = beta_in_out[:, ~seenpix_beta]
 
             Amm_iter = self.get_mixingmatrix(self.nus_eff_out, beta_iter, key="out")
             Amm_iter = np.transpose(Amm_iter, (1, 0, 2))
@@ -374,16 +389,13 @@ class PresetMixingMatrix:
                     continue
                 idx = iname - 1
 
-                val, sigma, _ = self.preset_comp.params_foregrounds["Dust"]["beta_init"]
+                if name == "Dust":
+                    val, sigma, _ = self.preset_comp.params_foregrounds["Dust"]["beta_init"]
+                elif name == "Synchrotron":
+                    val, sigma = self.preset_comp.params_foregrounds["Synchrotron"]["beta_init"]
+                else:
+                    raise ValueError(f"Unknown component {name} in d1 beta_in initialization")
                 beta_map = np.random.normal(val, sigma, size=npix)
-
-                # # Physical constraints
-                # if name == "Dust":
-                #     beta_map = np.clip(beta_map, 1.3, 1.8)
-                # elif name == "Synchrotron":
-                #     beta_map = np.clip(beta_map, -4.0, -2.0)
-                # else:
-                #     raise ValueError(f"Unknown component {name}")
 
                 self.beta_in[idx] = beta_map
 

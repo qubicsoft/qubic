@@ -22,5 +22,5 @@ class FittingMM(ABC):
 
         if self.preset.tools.rank == 0:
             if self.nfev % 1 == 0:
-                print(f"Iter = {self.nfev:4d}   x = {[np.round(v, 5) for v in x]}   qubic log(L) = {np.log(np.round(self.chi2.Lqubic, 5))}   planck log(L) = {np.log(np.round(self.chi2.Lplanck, 5))}")
+                print(f"Iter = {self.nfev:4d}   x = {[np.round(v, 5) for v in x]}   qubic chi2 = {self.chi2.Lqubic:.6g}   planck chi2 = {self.chi2.Lplanck:.6g}")
             self.nfev += 1

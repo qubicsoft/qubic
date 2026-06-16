@@ -71,9 +71,7 @@ class AbstractChi2(ABC):
             if block.ndim == 3:  # 3D block: (ncomp, nsub, nsampling_ndet)
                 resh = block.reshape((self.ncomp * self.nsub * 1, self.nsampling_ndet))
             else:  # 4D block: (ncomp, nsub, npix, nsampling_ndet)
-                resh = block.reshape(
-                    (self.ncomp * self.nsub * self.npix, self.nsampling_ndet)
-                )
+                resh = block.reshape((self.ncomp * self.nsub * self.npix, self.nsampling_ndet))
             self.TOD_sim_fp.append(resh)
         self.TOD_sim_fp = np.asarray(self.TOD_sim_fp)
 
@@ -110,10 +108,7 @@ class AbstractChi2(ABC):
             a_slice = A[
                 self.seenpix_beta[0], self.nsub * i : self.nsub * (i + 1)
             ]  # (npix, nsub, ncomp)
-            vec = (
-                a_slice.T.reshape(self.ncomp * self.nsub * a_slice.shape[0])
-                @ self.TOD_sim_fp[i]
-            )
+            vec = a_slice.T.reshape(self.ncomp * self.nsub * a_slice.shape[0]) @ self.TOD_sim_fp[i]
             ysim_parts.append(vec)
 
         ysim = np.concatenate(ysim_parts, axis=0)
@@ -139,7 +134,6 @@ class MixedChi2(AbstractChi2):
         super().__init__(preset, TOD_sim, layout=layout)
         self.layout = layout
 
-    # packing
     def unpack(self, x):
         beta = {}
         Amm = {}
@@ -158,7 +152,7 @@ class MixedChi2(AbstractChi2):
 
         # parametric
         for comp, b in beta.items():
-            model = mm.MixingMatrix(self.preset.comp.components_model_out[comp - 1])
+            model = mm.MixingMatrix(self.preset.comp.components_model_out[comp])
             A[:, comp] = model.eval(self.nus, b)[:, 0]
 
         # blind
@@ -214,16 +208,14 @@ class Chi2(AbstractChi2):
             Aext = A[self.nfreq :]
 
             H_planck = self.preset.qubic.joint_out.external.get_operator(
-                A=Aext, fwhm=self.preset.acquisition.fwhm_mapmaking[self.nfreq:]
+                A=Aext, fwhm=self.preset.acquisition.fwhm_mapmaking[self.nfreq :]
             )
 
             comp = self.preset.comp.components_iter.copy()
             comp[:, ~self.preset.sky.seenpix] = 0
 
             ysim_pl = H_planck(comp)
-            _residuals_pl = (
-                np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
-            )
+            _residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external_zero_outside_patch
 
             self.Lplanck = 0.5 * _dot(
                 _residuals_pl.T,
@@ -249,7 +241,7 @@ class Chi2(AbstractChi2):
         ### Planck chi2
         H_planck = self.preset.qubic.joint_out.external.get_operator(
             A=Aext.transpose(1, 0, 2),
-            fwhm=self.preset.acquisition.fwhm_mapmaking[self.nfreq:],
+            fwhm=self.preset.acquisition.fwhm_mapmaking[self.nfreq :],
         )
         ysim_pl = H_planck(self.preset.comp.components_iter.copy())
         residuals_pl = np.r_[ysim_pl] - self.preset.acquisition.TOD_external

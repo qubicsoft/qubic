@@ -384,8 +384,6 @@ class PipelineComponentMapMaking:
             )
         )
 
-        maps_conv = self.preset.comp.components_iter.copy()
-
         for j in range(self.preset.qubic.params_qubic["nsub_out"]):
             for icomp in range(len(self.preset.comp.components_name_out)):
                 C = HealpixConvolutionGaussianOperator(
@@ -393,6 +391,7 @@ class PipelineComponentMapMaking:
                     lmax=3 * self.preset.sky.params_sky["nside"] - 1,
                 )
 
+                maps_conv = self.preset.comp.components_iter.copy()
                 maps_conv[icomp] = C(maps_conv[icomp, :, :])
                 for ii, i in enumerate(index):
                     maps_conv_i = maps_conv.copy()

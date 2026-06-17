@@ -139,7 +139,7 @@ class PipelineComponentMapMaking:
 
         """
 
-        if self._steps == 0:
+        if self._steps == 0 and self.preset.tools.rank == 0:
             self.plots._display_allcomponents(
                 input_maps=self.preset.acquisition.components_in_convolved,
                 reconstructed_maps=self.preset.comp.components_iter,

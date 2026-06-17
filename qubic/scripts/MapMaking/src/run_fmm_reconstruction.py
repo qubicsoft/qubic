@@ -97,10 +97,12 @@ if __name__ == "__main__":
         # ── Load noiseless TOD from disk and add noise ────────────────────────
         if rank == 0:
             print("  Loading noiseless TOD from disk …")
-        data = HDF5Dict().load_dict(args.noiseless_tod)
-        tod_noiseless_qubic = data["tod_noiseless_qubic"]
+        data = HDF5Dict().load_dict(args.noiseless_tod, keys=["tod_noiseless_qubic"])
+        tod_qubic = data["tod_noiseless_qubic"]
+        del data
 
-        tod_qubic = tod_noiseless_qubic + fmm.noiseq
+        tod_qubic += fmm.noiseq
+        fmm.noiseq = None
 
         if fmm.params["PLANCK"]["external_data"]:
             nrec  = fmm.params["QUBIC"]["nrec"]

@@ -239,7 +239,7 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
         main = Dl[i, j, :nbins]
         main_err = Dl_err[i, j, :nbins] if Dl_err is not None else None
 
-        # plot main series
+        # plot Dl first, then Dl2 on top
         if mode == "Dl":
             ax.errorbar(ell_sel, main, yerr=main_err, capsize=5, color=color_main, fmt="-o", label=label_main)
         else:
@@ -247,7 +247,6 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
             yerr_main = Cl2BK(ell_sel, Dl2Cl(ell_sel, main_err)) if main_err is not None else None
             ax.errorbar(ell_sel, y_main, yerr=yerr_main, capsize=5, color=color_main, fmt="-o", label=label_main)
 
-        # optional second series (Dl - noise)
         if Dl2 is not None:
             sec = Dl2[i, j, :nbins]
             sec_err = Dl2_err[i, j, :nbins] if Dl2_err is not None else None
@@ -291,8 +290,8 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
                         j,
                         color_main="darkblue",
                         color_second="orange",
-                        label_main=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2}$",
-                        label_second=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2} - \mathcal{N}_{\ell}^{\nu_1 \times \nu_2}$",
+                        label_main=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2} - \mathcal{N}_{\ell}^{\nu_1 \times \nu_2}$",
+                        label_second=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2}$",
                     )
                 else:
                     _plot_errorbars(
@@ -314,8 +313,8 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
                         j,
                         color_main="blue",
                         color_second="orange",
-                        label_main=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2}$",
-                        label_second=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2} - \mathcal{N}_{\ell}^{\nu_1 \times \nu_2}$",
+                        label_main=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2} - \mathcal{N}_{\ell}^{\nu_1 \times \nu_2}$",
+                        label_second=r"$\mathcal{D}_{\ell}^{\nu_1 \times \nu_2}$",
                     )
                 else:
                     _plot_errorbars(ax, i, j, color_main="blue", color_second="orange")
@@ -325,7 +324,7 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
             ymax_abs = max(abs(ymin), abs(ymax))
             ax.set_ylim(-ymax_abs, ymax_abs)
             for ax in fig.axes:
-                ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
+                ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
                 ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
 
     # title / legend / save / show

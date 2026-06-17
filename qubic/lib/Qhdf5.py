@@ -39,9 +39,9 @@ class HDF5Dict:
         with h5py.File(filename, mode) as h5f:
             self._write_item(h5f, "data", data)
 
-    def load_dict(self, filename: str) -> Dict[str, Any]:
+    def load_dict(self, filename: str, keys: list[str] | None = None) -> Dict[str, Any]:
         with h5py.File(filename, "r") as h5f:
-            return self._read_group(h5f)
+            return self._read_group(h5f, keys=keys)
 
     def load_array(self, filename: str) -> np.ndarray:
         with h5py.File(filename, "r") as h5f:
@@ -150,7 +150,7 @@ class HDF5Dict:
 
         h5group.attrs[name] = json.dumps(value, default=repr)
 
-    def _read_group(self, h5group: h5py.Group) -> Dict[str, Any]:
+    def _read_group(self, h5group: h5py.Group, keys: list[str] | None = None) -> Dict[str, Any]:
         out: Dict[str, Any] = {}
 
         for k, v in h5group.attrs.items():
@@ -159,6 +159,8 @@ class HDF5Dict:
             out[k] = self._decode_attribute(v)
 
         for key in h5group:
+            if keys is not None and key not in keys:
+                continue
             obj = h5group[key]
 
             if isinstance(obj, h5py.Dataset):

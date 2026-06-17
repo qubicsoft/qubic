@@ -1392,7 +1392,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
                 ax.set_xticks([], minor=minor)
                 ax.set_yticks([], minor=minor)
             plt.tight_layout()
-            plt.savefig("figures/20260311_TES{}_v2.pdf".format(TES_number))
+            plt.savefig("figures/{}_TES{}_v2.pdf".format(ObsDate, TES_number))
             plt.show()
     return mapsb, mapcount
 
@@ -2210,7 +2210,36 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         sort_idx_old = np.argsort(QPidx_old)
         QPidx = QPidx[sort_idx_old]
         # QPidx = QPidx_old # if want old
-        tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False, year_data=year_data)
+        if type(datadir) is str:
+            tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False, year_data=year_data)
+        else: # should be a list or an array
+            # how do I get rid of this code duplication?
+            full_list = []
+            for _ in range(7): # 7 variables
+                full_list.append([])
+            for i, diri in enumerate(datadir):
+                vars = read_data(diri, remove_t0=False, year_data=year_data)
+                for i_var in range(7):
+                    full_list[i_var].append(vars[i_var])
+            argsort_tinit = np.argsort(full_list[5]) # tinit is variable 5
+            for i_var in range(7):
+                full_list[i_var] = [full_list[i_var][i_sort] for i_sort in argsort_tinit]
+            tt = np.concatenate(full_list[0])
+            alltod = np.concatenate(full_list[1], axis=1)
+            thk = np.concatenate(full_list[2])
+            az = np.concatenate(full_list[3])
+            el = np.concatenate(full_list[4])
+            tinit = np.array(full_list[5])
+            Tbath_raw = np.concatenate(full_list[6], axis=1)
+
+            # argsort_tinit = np.argsort(tinit)
+            # for i_arr, arr in enumerate([tt, alltod, thk, az, el, tinit, Tbath_raw]):
+            #     if i_arr in [1, 6]:
+            #         arr = arr[:, argsort_tinit]
+            #     else:
+            #         arr = arr[argsort_tinit]
+
+            
 
         # az = -az - np.max(np.abs(az)) # the map doesn't look great, there probably isn't an azimuth inversion then?
         az += az_qubic
@@ -2320,6 +2349,9 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         # azt, elt = RA, Dec
         # newazt, newelt = newRA, newDec
 
+
+        print("shape scantype", np.shape(scantype))
+        print("shape newazt", np.shape(newazt))
         data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath] # what will be read later if this function is reused
     else: # if the previous step was already done in previous execution
         print('Using data already stored in memory - not read from disk')
@@ -2382,6 +2414,16 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
                     newelt = newelt_[iTES]
                     # det_pos_i = det_pos[iTES]
             print("shape pos", np.shape(det_pos))
+            # plt.figure()
+            # plt.plot(azt)
+            # plt.plot(newazt)
+            # plt.show()
+
+            # plt.figure()
+            # plt.plot(elt)
+            # plt.plot(newelt)
+            # plt.show()
+            # aert
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
                                                              TES_number=TESNum, nside=nside, 
                                                              doplot=doplot, check_back_forth=check_back_forth,
@@ -2509,7 +2551,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
         return az_vel
     # medaz_dt_ = get_az_vel(thk, az, order=50) # high order necessary to remove glitches
     # medaz_dt = medfilt(medaz_dt_, median_size)
-    medaz_dt_ = get_az_vel(thk, az, order=2)
+    medaz_dt_ = get_az_vel(thk, az, order=10)
     medaz_dt = medaz_dt_
     
     if doplot:
@@ -3119,15 +3161,16 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
         The coordinates of the array of points in the new system.
 
     """
-    if det_pos is not None:
-        try:
-            azt_zen = np.load("azt_zen.npy")
-            elt_zen = np.load("elt_zen.npy")
-            print(np.shape(azt_zen))
-            print(np.shape(elt_zen))
-            return azt_zen, elt_zen
-        except:
-            pass
+    # if det_pos is not None:
+    #     try:
+    #         azt_zen = np.load("azt_zen.npy")
+    #         elt_zen = np.load("elt_zen.npy")
+    #         print(np.shape(azt_zen))
+    #         print(np.shape(elt_zen))
+    #         return azt_zen, elt_zen
+    #     except:
+    #         print("Didn't find one of the following files: '{}' and/or '{}'".format("azt_zen.npy", "elt_zen.npy"))
+    #         # pass
 
     # az_source and el_source need to be either np.float_ or np.array
     sphere_radius = 1
@@ -3136,9 +3179,10 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
         # the idea here is to compute the value of az and el for the given detector position
         # this position is fitted from maps centered at the line of sight of the telescope as if the source were at zenith
         if len(np.shape(det_pos)) == 1:
-            az_zen = det_pos[0]
-            el_zen = det_pos[1]
+            az_zen = np.array([det_pos[0]])
+            el_zen = np.array([det_pos[1]])
             ndets = 1
+            print("here we are!")
         else:
             az_zen = det_pos[:, 0]
             el_zen = det_pos[:, 1]
@@ -3148,16 +3192,20 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
             for idx_thermom in thermom:
                 az_zen[idx_thermom] = 0 # we remove the NaN
                 el_zen[idx_thermom] = 90 # we remove the NaN
-
+        
+        print("shapes before expansion", np.shape(az_zen), np.shape(el_zen))
         az_zen = np.expand_dims(az_zen, 1)
         el_zen = np.expand_dims(el_zen, 1)
+        print("shapes after", np.shape(az_zen), np.shape(el_zen))
         # final shape in cartesian coord should be (3, ndets, ntimes) otherwise it crashed (probably linked to how arrays are stored in memory)
         # print("shape det_pos", np.shape(az_zen))
         # below, the deltas are computed from the distance to zenith (90 - el_zen) and the direction (az_zen - 90)
         delta_az = (90 - el_zen) * np.cos(np.radians(az_zen - 90)) / np.cos(np.radians(np.expand_dims(elt_source, 0)))
         delta_el = (90 - el_zen) * np.sin(np.radians(az_zen - 90))
+        print("shapes source before", np.shape(azt_source), np.shape(elt_source))
         azt_source = np.expand_dims(azt_source, 0) + delta_az
         elt_source = np.expand_dims(elt_source, 0) + delta_el
+        print("shapes source after", np.shape(azt_source), np.shape(elt_source))
         # this should be (ndets, ntimes)?
         # print("shape azt_source", np.shape(azt_source))
         # print("shape elt_source", np.shape(elt_source))
@@ -3191,24 +3239,30 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
     angle_alpha[~np.isfinite(angle_alpha)] = 0 # at the pixel pointing at calsource or if problem for a scan
     angle_beta[~np.isfinite(angle_beta)] = 30 # if problem for a scan
 
-    # plt.figure()
-    # plt.plot(tt, angle_alpha)
-    # plt.show()
+    iTES = 0 #96 - 1
+    plt.figure()
+    plt.plot(tt, angle_alpha[iTES])
+    plt.show()
 
-    # plt.figure()
-    # plt.plot(tt, angle_beta)
-    # plt.show()
+    plt.figure()
+    plt.plot(tt, angle_beta[iTES])
+    plt.show()
 
-    # where_moon = np.logical_or(np.logical_and(tt>4224, tt<4225), np.logical_and(tt>4267, tt<4268))
-    # plt.figure()
-    # plt.scatter(angle_alpha, angle_beta, s=1)
-    # plt.scatter(angle_alpha[where_moon], angle_beta[where_moon], s=4, c="r", zorder=1000)
-    # plt.xlabel("angle_alpha")
-    # plt.ylabel("angle_beta")
-    # plt.axvline(x=0)
-    # plt.axhline(y=0)
-    # plt.show()
-    # ar
+
+    # On this plot, the Moon (red dots) should appear close to alpha, beta = 0, 0
+    # Careful, here the position of the Moon is hard-coded
+    # intervals_moon = [[4224, 4225], [4267, 4268]] # 2026-03-13
+    intervals_moon = [[10198, 10200], [10246, 10248]] # 2022-...
+    where_moon = np.logical_or(np.logical_and(tt>intervals_moon[0][0], tt<intervals_moon[0][1]), np.logical_and(tt>intervals_moon[1][0], tt<intervals_moon[1][1]))
+    plt.figure()
+    plt.scatter(angle_alpha[iTES], angle_beta[iTES], s=1)
+    plt.scatter(angle_alpha[iTES, where_moon], angle_beta[iTES, where_moon], s=4, c="r", zorder=1000)
+    plt.xlabel("angle_alpha")
+    plt.ylabel("angle_beta")
+    plt.axvline(x=0, c="k", ls="--")
+    plt.axhline(y=0, c="k", ls="--")
+    plt.show()
+    ar
 
     # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
     new_pointing = spherical2cartesian(sphere_radius, angle_alpha, 90 - angle_beta, coord="horizontal", axis="first") # beta is 90 - elevation!
@@ -3222,10 +3276,10 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
     _, azt_zen, elt_zen = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
 
     # print("final shape", np.shape(azt_zen))
-    if det_pos is not None:
-        np.save("azt_zen.npy", azt_zen)
-        np.save("elt_zen.npy", elt_zen)
-        print("saved!", flush=True)
+    # if det_pos is not None:
+    #     np.save("azt_zen.npy", azt_zen)
+    #     np.save("elt_zen.npy", elt_zen)
+    #     print("saved!", flush=True)
     return azt_zen, elt_zen
 
 # in this method, instead of correcting the azimuth to conserve the angle to the meridian at casource azimuth,

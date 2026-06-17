@@ -1673,7 +1673,7 @@ class QubicInstrument(Instrument):
         val *= solid_angle / scene.solid_angle * len(horn)
         return theta, phi, val
     
-    # @staticmethod
+    @staticmethod
     def _peak_angles_unsorted(scene, nu, position, synthbeam, horn, primary_beam):
         """
         Compute the angles and intensity of the synthetic beam peaks.

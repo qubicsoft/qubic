@@ -144,6 +144,7 @@ mean_2d_bin_data_jitted = mean_2d_bin_data
 
 #########################
 
+# trying to build only patch instead of full map?
 def healpix_patch(azt, elt, tod, nside, countcut=0, unseen_val=hp.UNSEEN): # , vec_centre, radius=25
     # good_pix = hp.query_disc(nside, vec_centre, np.radians(radius))
     cell_ids = hp.ang2pix(nside, azt, elt, lonlat=True)
@@ -995,9 +996,10 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
                 dist_peak = np.abs(np.degrees(dist_angle(tod_pos, peak_pos)))
                 # we should add a selection on the peak's position:
                 # if it is too close to the border of the map the peak is not counted
-                if np.min(dist_peak[scantype == 0]) < dist_min:
-                    # print("skipped the peak", i_nu, i_peak)
-                    continue
+                # might not be so needed? to be checked
+                # if np.min(dist_peak[scantype == 0]) < dist_min:
+                #     # print("skipped the peak", i_nu, i_peak)
+                #     continue
                 tod_close = dist_peak < dist_min
                 protected_tod[tod_close] = 1
         # Just to avoid having different numbers of start and end peaks
@@ -1319,27 +1321,28 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
     # plt.imshow(new_full_map_proj)
     # plt.show()
 
-    if doplot and False:
+    if doplot and True:
         
-        mapsb_proj = hp.gnomview(mapsb, reso=reso, min=1e-3, max=1e4, xsize=xsize,
-                                rot=center, return_projected_map=True, no_plot=True)
+        # mapsb_proj = hp.gnomview(mapsb, reso=reso, min=1e-3, max=1e4, xsize=xsize,
+        #                         rot=center, return_projected_map=True, no_plot=True)
         
-        # plt.figure()
-        fig, ax = plt.subplots(1, 1, figsize=(10, 7), subplot_kw={'projection': 'rectilinear'})
+        # # plt.figure()
+        # fig, ax = plt.subplots(1, 1, figsize=(10, 7), subplot_kw={'projection': 'rectilinear'})
 
-        no_UNSEEN_mask = ~mapsb_proj.mask
-        mapsb_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), mapsb_proj[no_UNSEEN_mask])
-        new_mapsb_proj = mapsb_interpolator(np.moveaxis([XX, YY], 0, -1))
-        ax.imshow(new_mapsb_proj, origin="lower")
-        for i in range(n_nus):
-            # hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
-            #                 marker='x', cmap='Reds')#, rot=center)
-            ax.scatter(phis[i,:], np.pi/2 - thetas[i,:], c=np.ones_like(thetas[i,:]), 
-                            marker='x', cmap='Reds')
-        # plt.savefig("figures/mapsb.pdf")
-        plt.tight_layout()
-        plt.savefig("figures/map_interp_TES_{}.pdf".format(TES_number), dpi=300)
-        plt.show()
+        # no_UNSEEN_mask = ~mapsb_proj.mask
+        # # mapsb_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), mapsb_proj[no_UNSEEN_mask])
+        # new_mapsb_proj = mapsb_interpolator(np.moveaxis([XX, YY], 0, -1))
+        # # new_mapsb_proj = mapsb_proj
+        # ax.imshow(new_mapsb_proj, origin="lower")
+        # for i in range(n_nus):
+        #     # hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
+        #     #                 marker='x', cmap='Reds')#, rot=center)
+        #     ax.scatter(phis[i,:], np.pi/2 - thetas[i,:], c=np.ones_like(thetas[i,:]), 
+        #                     marker='x', cmap='Reds')
+        # # plt.savefig("figures/mapsb.pdf")
+        # plt.tight_layout()
+        # plt.savefig("figures/map_interp_TES_{}.pdf".format(TES_number), dpi=300)
+        # plt.show()
     
         plt.figure()
         # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, xsize=xsize,
@@ -1348,14 +1351,17 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
                     title="final map", rot=center)
         # hp.gnomview(mapsb, reso=10, xsize=xsize,
         #             title="final map", rot=center)
-        for i in range(n_nus):
-            hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
-                           marker='x', cmap='Reds')
+        if theo_sb is not None: 
+            for i in range(n_nus):
+                # hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
+                #             marker='x', cmap='Reds')
+                hp.projscatter(thetas[i,:], phis[i,:], c="r", 
+                            marker='x')
         # plt.savefig("figures/mapsb.pdf")
         plt.tight_layout()
         plt.savefig("figures/map_TES_{}.pdf".format(TES_number), dpi=300)
         plt.show()
-        azr
+        # azr
         
     if doplot and False:
         mapsb_2, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], comparison_tod[mask_map], nside=nside)
@@ -1514,8 +1520,13 @@ class gauss2dfit:
     
 
 class gaussfitsphere:
-    def __init__(self, elt, azt):
+    def __init__(self, elt, azt, mask=None):
         self.pix_pos = spherical2cartesian(1, azt, elt, coord="horizontal", axis="last") # here we save the coordinates of each pixel of the map
+        # the mask is here to put the masked pixels to zero so they don't influence the fit
+        if mask is None:
+            self.mask = np.zeros_like(elt)
+        else:
+            self.mask = mask
     def __call__(self, x, pars):
         # amp, eltc, aztc, sig = pars # sig in degrees
         # aztc = np.float_(aztc)
@@ -1526,11 +1537,35 @@ class gaussfitsphere:
             shape_pix_pos = np.shape(self.pix_pos)
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
         centre_pos = self.pix_pos[int(ic), int(jc)]
-        dist_rad = np.degrees(dist_angle(self.pix_pos, centre_pos))
-        mygauss = amp * np.exp(-0.5*dist_rad**2/sig**2)
-        return np.ravel(mygauss)
+        dist_deg = np.degrees(dist_angle(self.pix_pos, centre_pos))
+        mygauss = amp * np.exp(-0.5*dist_deg**2/sig**2)
+        return np.ravel(mygauss * (1 - self.mask))
+    
+class gaussfitgnomproj:
+    def __init__(self, elt, azt, nside, rot, mask=None):
+        self.pix_pos = spherical2cartesian(1, azt, elt, coord="horizontal", axis="last") # here we save the coordinates of each pixel of the map
+        self.rot = rot
+        useful_patch = hp.query_disc(nside, vec_centre, np.radians(radius))
+        # the mask is here to put the masked pixels to zero so they don't influence the fit
+        if mask is None:
+            self.mask = np.zeros_like(elt)
+        else:
+            self.mask = mask
+    def __call__(self, x, pars):
+        # amp, eltc, aztc, sig = pars # sig in degrees
+        # aztc = np.float_(aztc)
+        # eltc = np.float_(eltc)
+        # centre_pos = spherical2cartesian(1, aztc, eltc, coord="horizontal", axis="last")
+        amp, ic, jc, sig = pars # here the position is given in pixels and later converted to azel
+        if np.isnan(ic) or np.isnan(jc): # for some reason, maybe when we fall outise of the image, ic or jc can be NaNs
+            shape_pix_pos = np.shape(self.pix_pos)
+            return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
+        centre_pos = self.pix_pos[int(ic), int(jc)]
+        dist_deg = np.degrees(dist_angle(self.pix_pos, centre_pos))
+        mygauss = amp * np.exp(-0.5*dist_deg**2/sig**2)
+        return np.ravel(mygauss * (1 - self.mask))
 
-    rho = 1
+    # rho = 1
 
 class filtgauss2dfit:
     def __init__(self, ipos, jpos, scantype, allipos, alljpos, nside): # it seems that I should use ipos = elt and jpos = -azt
@@ -1697,6 +1732,11 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     # iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     iipos = ipos # already 2D
     jjpos = jpos
+
+    # we want to keep the mask for the fit
+    mask_badpix = mapij.mask
+    mapij = mapij.data
+    mapij[mask_badpix] = 0
     
     ### Displays the image as an array
     mm, ss = ft.meancut(mapij[mapij>1e-3], 3)
@@ -1706,7 +1746,8 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         maxi = np.max(mapij)
 
     # g2d = gauss2dfit(iipos, jjpos) # has to be in the same order as in m from the fit
-    g2d = gaussfitsphere(iipos, jjpos) # elt, azt
+    # mask_badpix = None
+    g2d = gaussfitsphere(iipos, jjpos, mask=mask_badpix) # elt, azt
 
     # test_gauss = g2d(None, np.array([1, 90, 0, 1])).reshape((xs, xs))
     # plt.figure()
@@ -1761,7 +1802,7 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     else:
         max_i = guess[1]
         max_j = guess[2]
-        
+
     ### Do the fit putting the UNSEEN to a very low weight
     errpix = iipos*0 + ss
     errpix[mapij==0] *= 1e5
@@ -1793,6 +1834,21 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
                 axs[i].set_xlabel('Azimuth [degrees]')
             axs[2].set_title('Residuals')
         axs = pmp.plot_fit_img(mapij, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=m.values[1], jfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
+
+        # plt.show()
+        ### Look at result after shifting the fit a little (by eye)
+        # amp, ii, jj, fwhm = m.values
+        # ii += 4
+        # jj -= 0
+        # fitted_ = np.reshape(g2d(ipos, [amp, ii, jj, fwhm]), (xs, xs))
+        # fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(16, 5))
+        # axs[1].imshow(fitted_, origin=origin, vmin=mini, vmax=maxi)
+        # im = axs[2].imshow(mapij - fitted_, origin=origin, vmin=mini, vmax=maxi)
+        # axs[0].set_ylabel('Elevation [degrees]')
+        # for i in range(3):
+        #     axs[i].set_xlabel('Azimuth [degrees]')
+        # axs[2].set_title('Residuals')
+        # axs = pmp.plot_fit_img(mapij, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=ii, jfit=jj, vmin=mini, vmax=maxi, ms=ms, origin=origin)
         return m, fitted, axs, ijres, ijerr
     return m, fitted, ijres, ijerr
     
@@ -1801,9 +1857,9 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
 def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, azelguess=None, axs=None, pack=None):
     ### get the gnomview back into a np.array in order to fit it
     mm = mymap.copy()
-    badpix = mm == hp.UNSEEN
-    mm[badpix] = 0          ### Set bad pixels to zero before returning the np.array()
-    mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
+    # badpix = mm == hp.UNSEEN
+    # mm[badpix] = 0          ### Set bad pixels to zero before returning the np.array()
+    mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True)#.data
 
     # hp.gnomview creates and shows a map with azt (abs) and elt (ord) growing starting from the lower-right angle of the image
     # whereas plt.imshow of a gnomview map shows an image with azt (abs) and elt (ord) growing from the upper-right corner
@@ -3161,16 +3217,16 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
         The coordinates of the array of points in the new system.
 
     """
-    # if det_pos is not None:
-    #     try:
-    #         azt_zen = np.load("azt_zen.npy")
-    #         elt_zen = np.load("elt_zen.npy")
-    #         print(np.shape(azt_zen))
-    #         print(np.shape(elt_zen))
-    #         return azt_zen, elt_zen
-    #     except:
-    #         print("Didn't find one of the following files: '{}' and/or '{}'".format("azt_zen.npy", "elt_zen.npy"))
-    #         # pass
+    if det_pos is not None and False:
+        try:
+            azt_zen = np.load("azt_zen.npy")
+            elt_zen = np.load("elt_zen.npy")
+            print(np.shape(azt_zen))
+            print(np.shape(elt_zen))
+            return azt_zen, elt_zen
+        except:
+            print("Didn't find one of the following files: '{}' and/or '{}'".format("azt_zen.npy", "elt_zen.npy"))
+            # pass
 
     # az_source and el_source need to be either np.float_ or np.array
     sphere_radius = 1
@@ -3239,30 +3295,31 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
     angle_alpha[~np.isfinite(angle_alpha)] = 0 # at the pixel pointing at calsource or if problem for a scan
     angle_beta[~np.isfinite(angle_beta)] = 30 # if problem for a scan
 
-    iTES = 0 #96 - 1
-    plt.figure()
-    plt.plot(tt, angle_alpha[iTES])
-    plt.show()
+    if det_pos is not None:
+        iTES = 0 #96 - 1
+        plt.figure()
+        plt.plot(tt, angle_alpha[iTES])
+        plt.show()
 
-    plt.figure()
-    plt.plot(tt, angle_beta[iTES])
-    plt.show()
+        plt.figure()
+        plt.plot(tt, angle_beta[iTES])
+        plt.show()
 
 
-    # On this plot, the Moon (red dots) should appear close to alpha, beta = 0, 0
-    # Careful, here the position of the Moon is hard-coded
-    # intervals_moon = [[4224, 4225], [4267, 4268]] # 2026-03-13
-    intervals_moon = [[10198, 10200], [10246, 10248]] # 2022-...
-    where_moon = np.logical_or(np.logical_and(tt>intervals_moon[0][0], tt<intervals_moon[0][1]), np.logical_and(tt>intervals_moon[1][0], tt<intervals_moon[1][1]))
-    plt.figure()
-    plt.scatter(angle_alpha[iTES], angle_beta[iTES], s=1)
-    plt.scatter(angle_alpha[iTES, where_moon], angle_beta[iTES, where_moon], s=4, c="r", zorder=1000)
-    plt.xlabel("angle_alpha")
-    plt.ylabel("angle_beta")
-    plt.axvline(x=0, c="k", ls="--")
-    plt.axhline(y=0, c="k", ls="--")
-    plt.show()
-    ar
+        # On this plot, the Moon (red dots) should appear close to alpha, beta = 0, 0
+        # Careful, here the position of the Moon is hard-coded
+        # intervals_moon = [[4224, 4225], [4267, 4268]] # 2026-03-13
+        intervals_moon = [[10198, 10200], [10246, 10248]] # 2022-...
+        where_moon = np.logical_or(np.logical_and(tt>intervals_moon[0][0], tt<intervals_moon[0][1]), np.logical_and(tt>intervals_moon[1][0], tt<intervals_moon[1][1]))
+        plt.figure()
+        plt.scatter(angle_alpha[iTES], angle_beta[iTES], s=1)
+        plt.scatter(angle_alpha[iTES, where_moon], angle_beta[iTES, where_moon], s=4, c="r", zorder=1000)
+        plt.xlabel("angle_alpha")
+        plt.ylabel("angle_beta")
+        plt.axvline(x=0, c="k", ls="--")
+        plt.axhline(y=0, c="k", ls="--")
+        plt.show()
+        # ar
 
     # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
     new_pointing = spherical2cartesian(sphere_radius, angle_alpha, 90 - angle_beta, coord="horizontal", axis="first") # beta is 90 - elevation!

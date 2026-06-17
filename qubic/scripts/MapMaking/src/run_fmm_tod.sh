@@ -4,8 +4,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=40G
-#SBATCH --time=0-01:00:00
+#SBATCH --mem=50G
+#SBATCH --time=0-04:00:00
 #SBATCH --output=FMM/slurm_logs/fmm_tod_%j.log
 
 N_SIMS=10

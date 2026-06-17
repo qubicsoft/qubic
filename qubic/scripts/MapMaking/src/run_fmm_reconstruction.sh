@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=40G
+#SBATCH --mem=80G
 #SBATCH --time=0-02:00:00
 #SBATCH --output=FMM/slurm_logs/fmm_rec_%A_%a.log
 

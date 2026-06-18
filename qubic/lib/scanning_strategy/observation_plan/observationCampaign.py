@@ -330,7 +330,17 @@ class ObservationCampaign:
             obs_time_local = local_tz.localize(datetime(self.config.run.year, self.config.run.month, day, 0, 0, 0))
             obs_time = Time(obs_time_local.astimezone(dt_timezone.utc))
             #obs_time = Time(datetime(self.config.run.year, self.config.run.month, day), scale='utc')
-            self.prepare_observation_plan(obs_time)
+            # Daily products: constraint grids and polar plots.
+            # ECSV files are written later from a continuous monthly grid, to avoid
+            # splitting real observing windows at civil-day boundaries.
+            self.prepare_observation_plan(
+                obs_time,
+                write_trajectories=False,
+                write_polar_plots=False,
+            )
+
+        if self.config.tasks.write_trajectories or self.config.tasks.run_trajectory_plots:
+            self.write_monthly_trajectories()
 
     def output_dir_from_utc_time(self, output_time: Time) -> Path:
         """
@@ -343,7 +353,11 @@ class ObservationCampaign:
         output_utc = output_time.to_datetime(timezone=dt_timezone.utc)
         return self.output_dir / output_utc.strftime("%B_%Y") / output_utc.strftime("%Y_%m_%d")
 
-    def prepare_observation_plan(self, obs_time: Time):
+    def prepare_observation_plan(
+            self,
+            obs_time: Time,
+            write_trajectories: bool = True,
+            write_polar_plots: bool = True):
         """
         Prepare the directory structure and observation plan.
 
@@ -371,7 +385,11 @@ class ObservationCampaign:
         targets = self.select_observation_targets(obs_time, obs_dir)
 
         for target in targets:
-            self.process_observation_target(target)
+            self.process_observation_target(
+                target,
+                write_trajectories=write_trajectories,
+                write_polar_plots=write_polar_plots,
+            )
 
     def select_observation_targets(self, obs_time: Time, obs_dir: Path) -> List[Source]:
         """
@@ -426,6 +444,66 @@ class ObservationCampaign:
 
         return targets
 
+    def write_monthly_trajectories(self):
+        """
+        Write ECSV files from one continuous monthly time grid.
+
+        Daily constraint grids and polar plots are still produced by the normal
+        day-by-day pipeline. ECSV files, however, must represent real continuous
+        observability windows. Therefore they are computed once on a grid covering
+        the whole configured month, so a window crossing a civil-day boundary is not
+        split into separate files.
+        """
+
+        local_tz = self.site.timezone
+        year = self.config.run.year
+        month = self.config.run.month
+
+        month_start_local = local_tz.localize(
+            datetime(year, month, 1, 0, 0, 0)
+        )
+
+        if month == 12:
+            next_month_start_local = local_tz.localize(
+                datetime(year + 1, 1, 1, 0, 0, 0)
+            )
+        else:
+            next_month_start_local = local_tz.localize(
+                datetime(year, month + 1, 1, 0, 0, 0)
+            )
+
+        month_start = Time(month_start_local.astimezone(dt_timezone.utc))
+        month_stop = Time(next_month_start_local.astimezone(dt_timezone.utc)) - 1 * u.microsecond
+
+        # Use the first local day only to instantiate the configured target list.
+        # Their time grids are immediately replaced by the monthly grid below.
+        targets = self.select_observation_targets(month_start, self.output_dir)
+
+        with tqdm.tqdm(
+                total=len(targets),
+                iterable=targets,
+                desc="Writing monthly continuous ECSV trajectories",
+                file=sys.stdout,
+                colour="green",
+                dynamic_ncols=True,
+        ) as pbar:
+
+            for target in pbar:
+                pbar.set_description(f"Monthly ECSV `{target.name}`")
+
+                target.set_time_grid_from_range(month_start, month_stop)
+                target.evaluate_constraints(make_plot=False)
+
+                if self.config.tasks.run_trajectory_plots:
+                    target.plot_trajectory(
+                        loc_time_resolution=u.Quantity(self.config.run.trajectory_time_resolution),
+                        make_plot=True,
+                        base_output_dir=self.output_dir,
+                    )
+
+                if self.config.tasks.write_trajectories:
+                    target.write_trajectory(base_output_dir=self.output_dir)
+
     def create_moon_target(self, obs_time: Time, obs_dir: Path) -> PointSource:
         """
         Creates a moon target as a PointSource object initialized with the provided
@@ -445,7 +523,11 @@ class ObservationCampaign:
             is_fixed=False,
             results_dir=obs_dir)
 
-    def process_observation_target(self, target: Source):
+    def process_observation_target(
+            self,
+            target: Source,
+            write_trajectories: bool = True,
+            write_polar_plots: bool = True):
         """
         Processes the given observation target by configuring it and optionally
         performing tasks such as evaluating constraints, plotting trajectories,
@@ -497,12 +579,12 @@ class ObservationCampaign:
         if self.config.tasks.run_constraints:
             target._plot_constraint_grid(target.constraints_grid, make_plot=True)
 
-        if self.config.tasks.run_trajectory_plots:
+        if self.config.tasks.run_trajectory_plots and write_polar_plots:
             target.plot_trajectory(
                 loc_time_resolution=u.Quantity(self.config.run.trajectory_time_resolution),
                 make_plot=True)
 
-        if self.config.tasks.write_trajectories:
+        if self.config.tasks.write_trajectories and write_trajectories:
             target.write_trajectory()
 
         if self.config.tasks.plot_sidereal and target.is_fixed:

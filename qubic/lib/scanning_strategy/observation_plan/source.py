@@ -108,7 +108,12 @@ def load_sources_from_file(
 
         # Coordinate ICRS for fixed sources only.
         # Solar-system bodies are kept dynamic and will be evaluated on the full time grid.
-        if coord is None and "ra" in tbl.colnames if hasattr(tbl, "colnames") else "ra" in tbl:
+        # if coord is None and "ra" in tbl.colnames if hasattr(tbl, "colnames") else "ra" in tbl:
+        #     ra, dec = tbl["ra"][0], tbl["dec"][0]
+        #     coord = SkyCoord(ra, dec, unit=unit, frame="icrs")
+        has_ra = "ra" in tbl.colnames if hasattr(tbl, "colnames") else "ra" in tbl
+
+        if is_fixed and coord is None and has_ra:
             ra, dec = tbl["ra"][0], tbl["dec"][0]
             coord = SkyCoord(ra, dec, unit=unit, frame="icrs")
 
@@ -264,6 +269,26 @@ class Source(ABC):
 
         self.time_grid = time_grid_from_range([start, end], time_resolution=self.time_resolution)
 
+    def set_time_grid_from_range(self, start: Time, stop: Time):
+        """
+        Set the source time grid explicitly from a start and stop time.
+
+        This is used by the monthly ECSV writer, where continuous observation
+        windows must be found on a grid longer than a single local civil day.
+        Resetting `constraints_grid` and `valid_time_intervals` ensures that the
+        constraints are re-evaluated on the new grid.
+        """
+
+        self.time_grid = time_grid_from_range(
+            [start, stop],
+            time_resolution=self.time_resolution,
+        )
+        self.constraints_grid = np.array([])
+        self.valid_time_intervals = []
+
+        if not self.is_fixed:
+            self.coord = None
+
     def compute_valid_times_from_constraints(self):
         """
         Get continuous time intervals during which the observation of the source is possible, i.e.
@@ -307,69 +332,19 @@ class Source(ABC):
         """
         Return continuous observation windows for ECSV output.
 
-        The constraint grid is built on one local day, from local midnight
-        to the following local midnight. A real observing window can therefore
-        be split into two pieces by that artificial boundary: one piece at the
-        beginning of the local day and one piece at the end of the same local
-        day. For ECSV files only, join those two edge pieces into one continuous
-        local-night window crossing midnight.
+        The intervals are obtained directly from `self.valid_time_intervals`,
+        computed from consecutive True samples in the constraint mask.
+
+        No artificial first/last daily merge is applied here: ECSV files are now
+        generated from a monthly continuous time grid, so windows are split only
+        when the constraints actually become invalid, not when a civil-day boundary
+        is crossed.
         """
 
         if not self.valid_time_intervals:
             self.compute_valid_times_from_constraints()
 
-        # Work on a copy: this method must not modify
-        # `self.valid_time_intervals`, because that list is also used by the
-        # constraint-grid logic and by the polar plots.
-        intervals = list(self.valid_time_intervals)
-
-        # If there are zero or one valid intervals, there is nothing to merge.
-        # In that case the ECSV intervals are identical to the standard valid
-        # intervals.
-        if len(intervals) < 2:
-            return intervals
-
-        # Because the time grid is ordered from local midnight to local
-        # midnight, a window crossing midnight can only be split into the first
-        # and last intervals of the list.
-        first_start, first_stop = intervals[0]
-        last_start, last_stop = intervals[-1]
-
-        # Check whether the first valid interval starts exactly at the first
-        # sample of the grid, i.e. at local midnight of the selected observing
-        # day. A small tolerance is used to avoid floating-point precision
-        # issues in Astropy Time differences.
-        starts_at_local_midnight = abs((first_start - self.time_grid[0]).to_value(u.s)) < 0.5
-
-        # Check whether the last valid interval reaches the end of the local
-        # day covered by the grid. The tolerance is one time-resolution step,
-        # because the stop value can be either the last grid sample or the first
-        # boundary after the last valid sample, depending on how the interval was
-        # constructed.
-        reaches_end_of_local_day = abs((last_stop - self.time_grid[-1]).to_value(u.s)) <= self.time_resolution.to_value(u.s)
-
-        # If both conditions are true, the first and last intervals are not two
-        # independent observing windows. They are the same physical observing
-        # window, split only because the grid stops at local midnight.
-        if starts_at_local_midnight and reaches_end_of_local_day:
-
-            # Move the early-morning block to the following local day by adding
-            # one day to its stop time, and use the evening block as the start.
-            # Example for a grid built on local date 2026-05-12:
-            #   first interval: [2026-05-12 00:00, 2026-05-12 07:22]
-            #   last interval:  [2026-05-12 21:33, 2026-05-12 23:58]
-            # These two blocks are on the same local grid day only because the
-            # grid is cut at midnight. For the ECSV file, the early-morning
-            # block is interpreted as the continuation of the evening block into
-            # the following local date, so they become:
-            #   [2026-05-12 21:33, 2026-05-13 07:22]
-            merged = [last_start, first_stop + 1 * u.day]
-
-            # Keep any intermediate valid windows unchanged, and append the
-            # merged night-crossing interval as one single ECSV window.
-            intervals = intervals[1:-1] + [merged]
-
-        return intervals
+        return list(self.valid_time_intervals)
 
     def output_start_time(self):
         """
@@ -939,7 +914,7 @@ class Source(ABC):
 
         self.logger.info(f"Saved sidereal time plot to %s", save_path)
 
-    def write_trajectory(self, dest: str | None = None):
+    def write_trajectory(self, dest: str | None = None, base_output_dir: Path | None = None):
         """
         Write one ECSV file per continuous valid observation window.
 
@@ -963,7 +938,7 @@ class Source(ABC):
         if self.coord is None:
             raise RuntimeError("Coordinates not initialized: load the source first")
 
-        dest = dest or self.plots_dir
+        # dest = dest or self.plots_dir
 
         # Loop over each valid time interval
         for start, stop in self.ecsv_time_intervals():
@@ -975,8 +950,13 @@ class Source(ABC):
             # Name ECSV files by the UTC start time of the observation window.
             name = f"{self.name}-{start_utc.strftime('%Y%m%d_%H_%M')}"
 
-            # sample times in the interval
-            tw = time_grid_from_range([start, stop], time_resolution=self.time_resolution)
+            # Sample times in the interval. `stop` is the first non-valid grid
+            # sample after the window, so the ECSV interval is semi-open:
+            # [start, stop).
+            tw = time_grid_from_range(
+                [start, stop - 1 * u.microsecond],
+                time_resolution=self.time_resolution,
+            )
 
             # saving central coords of the extended region
             if self.coord.isscalar:
@@ -996,7 +976,7 @@ class Source(ABC):
                 azimuths.extend(sc_altaz.az.deg)
             else:
                 # Mask the global time grid to this interval
-                mask = (self.time_grid >= start) & (self.time_grid <= stop)
+                mask = (self.time_grid >= start) & (self.time_grid < stop)
                 times_sel = self.time_grid[mask]
 
                 if len(times_sel) == 0:
@@ -1022,16 +1002,28 @@ class Source(ABC):
             times_local = [t.strftime('%Y-%m-%d %H:%M:%S') for t in times_local]
             times_utc = [t.strftime('%Y-%m-%d %H:%M:%S') for t in times_utc]
 
+            if base_output_dir is not None and dest is None:
+                output_dir = (
+                        Path(base_output_dir)
+                        / start_utc.strftime('%B_%Y')
+                        / start_utc.strftime('%Y_%m_%d')
+                        / f"{self.name}_plots"
+                )
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / f"{name}.ecsv"
+            else:
+                output_path = Path(dest or self.plots_dir) / f"{name}.ecsv"
+
             # Build QTable and write to ECSV
             table = QTable([times_utc, times_local, ras, decs, elevations, azimuths],
                            names=("time_utc", "time_local", "ra", "dec", "elevation", "azimuth"))
 
-            savepath = os.path.join(dest, f"{name}.ecsv")
+            table.write(output_path,
+                        format='ascii.ecsv',
+                        overwrite=True)
 
-            table.write(savepath, format="ascii.ecsv", overwrite=True)
             self.logger.info(f"Wrote valid observation times with RA/DEC to %s - %s",
-                             dest, start.strftime('%Y/%m/%d %H:%S'))
-
+                             output_path, start.strftime('%Y/%m/%d %H:%M'))
     @classmethod
     @abstractmethod
     def load_sources(
@@ -1052,7 +1044,11 @@ class Source(ABC):
         ...
 
     @abstractmethod
-    def plot_trajectory(self, loc_time_resolution: u.Quantity, make_plot: bool = False):
+    def plot_trajectory(
+            self,
+            loc_time_resolution: u.Quantity,
+            make_plot: bool = False,
+            base_output_dir: Path | None = None):
         ...
 
 
@@ -1062,9 +1058,15 @@ class PointSource(Source):
         if not self.time_grid:
             self.compute_time_grid()
 
-        if not self.coord:
-            self.coord = get_body(self.name, time=self.time_grid,
-                                  location=self.qubic_site.location)
+        if self.coord is None and not self.is_fixed:
+            self.coord = get_body(
+                self.name,
+                time=self.time_grid,
+                location=self.qubic_site.location,
+            )
+
+        if self.coord is None:
+            raise RuntimeError(f"Coordinates not initialized for fixed source `{self.name}`.")
 
     @classmethod
     def load_sources(cls, *args, **kwargs):
@@ -1095,7 +1097,11 @@ class PointSource(Source):
         self.constraints_grid = grid
         self._plot_constraint_grid(grid, make_plot)
 
-    def plot_trajectory(self, loc_time_resolution: u.Quantity, make_plot: bool = False):
+    def plot_trajectory(
+            self,
+            loc_time_resolution: u.Quantity,
+            make_plot: bool = False,
+            base_output_dir: Path | None = None):
         """
         Plot the sky trajectory of the source and the Sun during valid observation intervals.
 
@@ -1118,27 +1124,71 @@ class PointSource(Source):
 
         add_label = True
 
-        for start, stop in self.valid_time_intervals:
-            tw = time_grid_from_range([start, stop], time_resolution=loc_time_resolution)
+        for start, stop in self.ecsv_time_intervals():
+            # `stop` is the first non-valid grid sample after the window, so
+            # sample the polar plot on the semi-open interval [start, stop).
+            tw = time_grid_from_range(
+                [start, stop - 1 * u.microsecond],
+                time_resolution=loc_time_resolution,
+            )
             altaz = AltAz(obstime=tw, location=self.qubic_site.location)
+
+            # if self.coord.isscalar:
+            #     source = self.coord.transform_to(altaz)
+            # else:
+            #     source = get_body(self.name, time=tw, location=self.qubic_site.location)
+            #
+            # sun = get_body("sun", time=tw, location=self.qubic_site.location)
 
             if self.coord.isscalar:
                 source = self.coord.transform_to(altaz)
             else:
-                source = get_body(self.name, time=tw, location=self.qubic_site.location)
+                source = get_body(
+                    self.name,
+                    time=tw,
+                    location=self.qubic_site.location
+                ).transform_to(altaz)
 
-            sun = get_body("sun", time=tw, location=self.qubic_site.location)
+            sun = get_body(
+                "sun",
+                time=tw,
+                location=self.qubic_site.location
+            ).transform_to(altaz)
 
-            # altaz_frame = AltAz(obstime=tw, location=self.qubic_site.location)
-            # disk_altaz = source.transform_to(altaz_frame)
-            # print(disk_altaz.alt.deg, tw.strftime('%H:%M'))
+            mask = (self.time_grid >= start) & (self.time_grid < stop)
+            times_sel = self.time_grid[mask]
+
+            if len(times_sel) == 0:
+                continue
+
+            altaz_sep = AltAz(obstime=times_sel, location=self.qubic_site.location)
+
+            if self.coord.isscalar:
+                source_sep = self.coord.transform_to(altaz_sep)
+            else:
+                source_sep = get_body(
+                    self.name,
+                    time=times_sel,
+                    location=self.qubic_site.location,
+                ).transform_to(altaz_sep)
+
+            sun_sep = get_body(
+                "sun",
+                time=times_sel,
+                location=self.qubic_site.location,
+            ).transform_to(altaz_sep)
+
+            sun_separation = source_sep.separation(sun_sep).to(u.deg)
+            min_sun_separation = np.nanmin(sun_separation.value)
+
+            plt.figure(figsize=(8, 8))
 
             plot_sky(
                 source, self.qubic_site, tw,
                 style_kwargs={
                     "marker": "o",
                     "label": f"{self.name}: {start.datetime.strftime('%H:%M')}"
-                             f"-{stop.datetime.strftime('%H:%M')}"
+                             f"-{stop.datetime.strftime('%H:%M')} UTC"
                 },
                 north_to_east_ccw=False)
 
@@ -1147,28 +1197,43 @@ class PointSource(Source):
                 style_kwargs={
                     "marker": "*",
                     "color": "gold",
-                    "label": "sun" if add_label else ""
+                    "label": "Sun"
                 },
                 north_to_east_ccw=False)
 
-            add_label = False
+            safe_name = self.name.replace("-", r"\,")
+            obs_local_date = start.to_datetime(timezone=self.qubic_site.timezone).strftime("%Y-%m-%d")
+            title = (
+                    r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {obs_local_date}\n" +
+                    rf"Time Resolution: ${round(loc_time_resolution.value)} \, {loc_time_resolution.unit}$" +
+                    f" - Min Sun separation: {min_sun_separation:.1f}" + r"$^\circ$"
+            )
 
-        safe_name = self.name.replace("-", r"\,")
-        obs_local_date = self.obs_time.to_datetime(timezone=self.qubic_site.timezone).strftime("%Y-%m-%d")
-        title = (r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {obs_local_date}\n" +
-                 rf"Time Resolution: ${round(loc_time_resolution.value)} \, {loc_time_resolution.unit}$")
+            plt.legend(loc="upper right", bbox_to_anchor=(1.50, 1))
+            fig = plt.gcf()
+            fig.suptitle(title)
+            fig.tight_layout()
+            plt.gca().set_facecolor("whitesmoke")
 
-        plt.legend(loc="upper right", bbox_to_anchor=(1.50, 1))
-        fig = plt.gcf()
-        fig.suptitle(title)
-        fig.tight_layout()
-        plt.gca().set_facecolor("whitesmoke")
-        if make_plot:
-            first_start = self.ecsv_time_intervals()[0][0]
-            first_start_utc = first_start.to_datetime(timezone=dt_timezone.utc)
-            plot_name = f"{self.name}-{first_start_utc.strftime('%Y%m%d_%H_%M')}_polar_plot"
-            plt.savefig(os.path.join(self.plots_dir, plot_name), dpi=600)
-        plt.close()
+            if make_plot:
+                start_utc = start.to_datetime(timezone=dt_timezone.utc)
+                plot_name = f"{self.name}-{start_utc.strftime('%Y%m%d_%H_%M')}_polar_plot"
+
+                if base_output_dir is not None:
+                    output_dir = (
+                            Path(base_output_dir)
+                            / start_utc.strftime('%B_%Y')
+                            / start_utc.strftime('%Y_%m_%d')
+                            / f"{self.name}_plots"
+                    )
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    output_path = output_dir / plot_name
+                else:
+                    output_path = Path(self.plots_dir) / plot_name
+
+                plt.savefig(output_path, dpi=600)
+
+            plt.close()
 
 
 class ExtendedSource(Source):
@@ -1291,12 +1356,7 @@ class ExtendedSource(Source):
     def evaluate_constraints(self, make_plot: bool = False):
         """
         Evaluate each constraint on the predefined time grid for an extended source
-        (using region_coord) and optionally display a heatmap of the results.
-
-        Parameters
-        ----------
-        make_plot : bool
-            If True, generate and show a plot of the constraints grid
+        using region_coord and optionally display a heatmap of the results.
         """
 
         if not self.time_grid:
@@ -1308,17 +1368,26 @@ class ExtendedSource(Source):
         grid = np.zeros((len(self.constraints), len(self.time_grid)))
 
         for i, c in enumerate(self.constraints):
-            grid[i, :] = np.all(
-                c(times=self.time_grid,
-                  observer=self.qubic_site,
-                  targets=self.region_coord,
-                  grid_times_targets=True),
-                axis=0)
+            cond = c(
+                times=self.time_grid,
+                observer=self.qubic_site,
+                targets=self.region_coord,
+                grid_times_targets=True,
+            )
+
+            if np.ndim(cond) == 2:
+                cond = np.all(cond, axis=0)
+
+            grid[i, :] = cond
 
         self.constraints_grid = grid
         self._plot_constraint_grid(grid, make_plot)
 
-    def plot_trajectory(self, loc_time_resolution: u.Quantity, make_plot: bool = False):
+    def plot_trajectory(
+            self,
+            loc_time_resolution: u.Quantity,
+            make_plot: bool = False,
+            base_output_dir: Path | None = None):
         """
         Plot the altitude trajectories of the disk center and the two edge points
         ("top" = center + radius, "bottom" = center – radius), alongside the Sun and Moon.
@@ -1338,72 +1407,103 @@ class ExtendedSource(Source):
         if not self.valid_time_intervals:
             return
 
-        add_label = True
-
-        for start, stop in self.valid_time_intervals:
-            tw = time_grid_from_range([start, stop], time_resolution=loc_time_resolution)
+        for start, stop in self.ecsv_time_intervals():
+            # `stop` is the first non-valid grid sample after the window, so
+            # sample the polar plot on the semi-open interval [start, stop).
+            tw = time_grid_from_range(
+                [start, stop - 1 * u.microsecond],
+                time_resolution=loc_time_resolution,
+            )
             altaz = AltAz(obstime=tw, location=self.qubic_site.location)
 
-            # center
             center_altaz = self.coord.transform_to(altaz)
-
-            #  shift +\- radius
-            # offset = self.radius
-            # top_altaz = SkyCoord(
-            #     alt=np.minimum(center_altaz.alt + offset, 90 * u.deg),
-            #     az=center_altaz.az, frame=altaz
-            # )
-            # bottom_altaz = SkyCoord(
-            #     alt=np.maximum(center_altaz.alt - offset, -90 * u.deg),
-            #     az=center_altaz.az, frame=altaz
-            # )
-
             sun = get_body("sun", time=tw, location=self.qubic_site.location).transform_to(altaz)
             moon = get_body("moon", time=tw, location=self.qubic_site.location).transform_to(altaz)
 
-            plot_sky(center_altaz, self.qubic_site, tw,
-                     style_kwargs={"marker": "o",
-                                   "label": f'Center: {start.datetime.strftime("%H:%M")} - {stop.datetime.strftime("%H:%M")} UTC'},
-                     north_to_east_ccw=False)
+            # Diagnostic value for the plot title.
+            # Use the same time grid used for constraints/ECSV files, not only the
+            # coarser polar-plot grid. For extended sources, use the whole sampled patch,
+            # not only the center.
+            mask = (self.time_grid >= start) & (self.time_grid < stop)
+            times_sel = self.time_grid[mask]
 
-            # plot_sky(top_altaz, self.qubic_site, tw,
-            #          style_kwargs={"marker": "^",
-            #                        "label": f"Top (+{offset})" if add_label else ""},
-            #          north_to_east_ccw=False)
-            #
-            # plot_sky(bottom_altaz, self.qubic_site, tw,
-            #          style_kwargs={"marker": "v",
-            #                        "label": f"Bottom (–{offset})" if add_label else ""},
-            #          north_to_east_ccw=False)
+            if len(times_sel) == 0:
+                continue
 
-            plot_sky(sun, self.qubic_site, tw,
-                     style_kwargs={"marker": "*", "color": "gold",
-                                   "label": "Sun" if add_label else ""},
-                     north_to_east_ccw=False)
+            altaz_sep = AltAz(obstime=times_sel, location=self.qubic_site.location)
 
-            plot_sky(moon, self.qubic_site, tw,
-                     style_kwargs={"marker": "+", "color": "red",
-                                   "label": "Moon" if add_label else ""},
-                     north_to_east_ccw=False)
-            add_label = False
+            region_altaz = self.region_coord[:, np.newaxis].transform_to(altaz_sep)
 
-        plt.legend(loc="upper right", bbox_to_anchor=(1.60, 1))
-        fig = plt.gcf()
+            sun_sep = get_body(
+                "sun",
+                time=times_sel,
+                location=self.qubic_site.location,
+            ).transform_to(altaz_sep)
 
-        safe_name = self.name.replace("-", r"\,")
-        obs_local_date = self.obs_time.to_datetime(timezone=self.qubic_site.timezone).strftime("%Y-%m-%d")
-        title = (
-                r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {obs_local_date}\n"
-                                          r"QUBIC Patch Radius " + f"{self.radius.value:.1f}" + r"$ ^ \circ$ - " +
-                rf"Time Resolution: ${round(loc_time_resolution.value)} \, {loc_time_resolution.unit}$")
+            sun_separation = region_altaz.separation(sun_sep)
+            min_sun_separation = np.nanmin(sun_separation.to_value(u.deg))
 
-        fig.suptitle(title)
-        fig.tight_layout()
-        plt.gca().set_facecolor("whitesmoke")
+            plt.figure(figsize=(8, 8))
 
-        if make_plot:
-            first_start = self.ecsv_time_intervals()[0][0]
-            first_start_utc = first_start.to_datetime(timezone=dt_timezone.utc)
-            plot_name = f"{self.name}-{first_start_utc.strftime('%Y%m%d_%H_%M')}_polar_plot"
-            plt.savefig(os.path.join(self.plots_dir, plot_name), dpi=600)
-        plt.close()
+            plot_sky(
+                center_altaz, self.qubic_site, tw,
+                style_kwargs={
+                    "marker": "o",
+                    "label": f'Center: {start.datetime.strftime("%H:%M")} - '
+                             f'{stop.datetime.strftime("%H:%M")} UTC'
+                },
+                north_to_east_ccw=False)
+
+            plot_sky(
+                sun, self.qubic_site, tw,
+                style_kwargs={
+                    "marker": "*",
+                    "color": "gold",
+                    "label": "Sun"
+                },
+                north_to_east_ccw=False)
+
+            plot_sky(
+                moon, self.qubic_site, tw,
+                style_kwargs={
+                    "marker": "+",
+                    "color": "red",
+                    "label": "Moon"
+                },
+                north_to_east_ccw=False)
+
+            plt.legend(loc="upper right", bbox_to_anchor=(1.60, 1))
+            fig = plt.gcf()
+
+            safe_name = self.name.replace("-", r"\,")
+            obs_local_date = start.to_datetime(timezone=self.qubic_site.timezone).strftime("%Y-%m-%d")
+            title = (
+                    r"$\bf{Polar\ plot:}$ " + f"${safe_name}$ on {obs_local_date}\n"
+                                              r"QUBIC Patch Radius " + f"{self.radius.value:.1f}" + r"$ ^ \circ$ - " +
+                    rf"Time Resolution: ${round(loc_time_resolution.value)} \, {loc_time_resolution.unit}$" +
+                    f" - Min Sun-patch separation: {min_sun_separation:.1f}" + r"$^\circ$"
+            )
+
+            fig.suptitle(title)
+            fig.tight_layout()
+            plt.gca().set_facecolor("whitesmoke")
+
+            if make_plot:
+                start_utc = start.to_datetime(timezone=dt_timezone.utc)
+                plot_name = f"{self.name}-{start_utc.strftime('%Y%m%d_%H_%M')}_polar_plot"
+
+                if base_output_dir is not None:
+                    output_dir = (
+                            Path(base_output_dir)
+                            / start_utc.strftime('%B_%Y')
+                            / start_utc.strftime('%Y_%m_%d')
+                            / f"{self.name}_plots"
+                    )
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    output_path = output_dir / plot_name
+                else:
+                    output_path = Path(self.plots_dir) / plot_name
+
+                plt.savefig(output_path, dpi=600)
+
+            plt.close()

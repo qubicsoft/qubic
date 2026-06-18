@@ -31,7 +31,7 @@ point_sources_file = "../data/sources/point_sources.csv"
 
 [run]
 year = 2026
-month = 5
+month = 6
 radius = 14.0
 radial_samples = 50
 polar_angle_samples = 100

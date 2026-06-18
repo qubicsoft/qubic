@@ -33,11 +33,17 @@ class SunSeparationConstraint(Constraint):
 
         targets = np.atleast_1d(targets)
 
-        disk_altaz = targets[:, np.newaxis].transform_to(altaz_frame)
-
         sun = get_body("sun", time=times, location=observer.location).transform_to(altaz_frame)
 
-        solar_separation = disk_altaz.separation(sun)
+        # Moving-source case: one target coordinate for each time sample.
+        # Compare targets[i] with times[i], not all targets against all times.
+        if len(targets) == len(times):
+            disk_altaz = targets.transform_to(altaz_frame)
+            solar_separation = disk_altaz.separation(sun)
+        else:
+            # Static/extended-source case.
+            disk_altaz = targets[:, np.newaxis].transform_to(altaz_frame)
+            solar_separation = disk_altaz.separation(sun)
 
         if self.min is None and self.max is not None:
             mask = self.max >= solar_separation
@@ -51,9 +57,13 @@ class SunSeparationConstraint(Constraint):
                              "SunSeparationConstraint.")
 
         sun_below_horizon = sun.alt < 0 * sun.alt.unit
+
+        if mask.ndim == 1:
+            mask |= sun_below_horizon
+            return mask
+
         mask |= sun_below_horizon[np.newaxis, :]
         return np.all(mask, axis=0)
-
 
 class MoonSeparationConstraint(Constraint):
     """
@@ -92,9 +102,15 @@ class MoonSeparationConstraint(Constraint):
         # the former calculates the separation in the frame of the moon coord
         # which is GCRS, and that is what we want.
 
-        disk_altaz = targets[:, np.newaxis].transform_to(altaz_frame)
-
-        moon_separation = disk_altaz.separation(moon)
+        # Moving-source case: one target coordinate for each time sample.
+        # Compare targets[i] with times[i], not all targets against all times.
+        if len(targets) == len(times):
+            disk_altaz = targets.transform_to(altaz_frame)
+            moon_separation = disk_altaz.separation(moon)
+        else:
+            # Static/extended-source case.
+            disk_altaz = targets[:, np.newaxis].transform_to(altaz_frame)
+            moon_separation = disk_altaz.separation(moon)
 
         if self.min is None and self.max is not None:
             mask = self.max >= moon_separation
@@ -108,6 +124,12 @@ class MoonSeparationConstraint(Constraint):
                              "MoonSeparationConstraint.")
 
         moon_below_horizon = moon.alt < 0 * moon.alt.unit
+
+        if mask.ndim == 1:
+            mask |= moon_below_horizon
+
+            return mask
+
         mask |= moon_below_horizon[np.newaxis, :]
 
         return np.all(mask, axis=0)

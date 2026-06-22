@@ -12,9 +12,7 @@ from qubic.lib.Calibration.source_calibration.skydip.atmosphere import run_atmos
 from qubic.lib.Calibration.source_calibration.skydip.config_calibration import load_skydip_calibration_config
 from qubic.lib.Calibration.source_calibration.common.io import prepare_datasets_from_config, iter_saved_datasets
 from qubic.lib.Calibration.source_calibration.skydip.calibration import SkydipCalibrationSegment, DatasetConversionFactorSummary
-from qubic.lib.Calibration.source_calibration.common.noise import (
-    compute_all_skydip_noise_spectra,
-    DatasetNoiseSummary)
+from qubic.lib.Calibration.source_calibration.common.noise import compute_all_skydip_noise_spectra, DatasetNoiseSummary
 
 @dataclass()
 class DatasetNoiseVsTauResult:
@@ -23,7 +21,7 @@ class DatasetNoiseVsTauResult:
     n_tes: int
 
     tau_eff: float
-    mean_median_conversion_factor_adu_per_k: float
+    median_conversion_factor_adu_per_k: float
 
     mean_knee_frequency_hz: float
     std_knee_frequency_hz: float
@@ -31,7 +29,6 @@ class DatasetNoiseVsTauResult:
     mean_plateau_asd_k_per_sqrt_hz: float
     std_plateau_asd_k_per_sqrt_hz: float
     mean_plateau_mad_k_per_sqrt_hz: float
-
 
 
 def main(config_path: Path):
@@ -63,6 +60,13 @@ def main(config_path: Path):
 
         # Trovo gli intervalli skydip per il dataset corrente
         skydip_intervals = SkydipIntervals.from_dataset(dataset=dataset, config=config)
+
+        if len(skydip_intervals.idx_pairs) == 0:
+            logger.warning(
+                "Skipping dataset %s because no valid skydip intervals were found.",
+                dataset.dataset_name,
+            )
+            continue
 
         logger.info("Found %d skydips for dataset %s",
                     len(skydip_intervals.idx_pairs),
@@ -121,6 +125,14 @@ def main(config_path: Path):
                 tes_idx=tes_idx,
             )
 
+            if len(tod_segments) == 0:
+                logger.warning(
+                    "Skipping dataset %s, TES %s because no TOD skydip segments were found.",
+                    dataset.dataset_name,
+                    tes_idx,
+                )
+                continue
+
             calibrated_segments = SkydipCalibrationSegment.from_tod_segments(
                 tod_segments=tod_segments,
                 dataset=dataset,
@@ -157,24 +169,14 @@ def main(config_path: Path):
             # lista per i valori di ASD ad una data frequenza (per tutti i dataset), plottare i valori di ASD
             #  vs tau
 
-            raw_noise_spectra = compute_all_skydip_noise_spectra(
-                segments=tod_segments,
-                config=config,
-            )
+            raw_noise_spectra = compute_all_skydip_noise_spectra(segments=tod_segments, config=config)
 
-            plotting.plot_skydip_noise_spectra(
-                noise_spectra=raw_noise_spectra,
-                output_path=(
-                        dataset.noise_plots_dir
-                        / f"tes_{tes_idx}"
-                        / "raw_skydip_noise_spectra.html"
-                ),
-                title=f"{dataset.dataset_name} - TES {tes_idx} - raw skydip noise spectra",
-                show=config.plots.show,
-                y_key="asd_adu_per_sqrt_hz",
-                linewidth=config.plots.linewidth,
-                alpha=config.plots.alpha,
-            )
+            plotting.plot_skydip_noise_spectra(noise_spectra=raw_noise_spectra,
+                                               config=config,
+                                               tes_idx=tes_idx,
+                                               output_dir=dataset.noise_plots_dir,
+                                               is_calibrated=False)
+
 
             calibrated_noise_spectra = compute_all_skydip_noise_spectra(
                 segments=calibrated_segments,
@@ -182,25 +184,14 @@ def main(config_path: Path):
                 conversion_factor_adu_per_k=conversion_summary.dataset_conversion_factor_adu_per_k,
             )
 
-            plotting.plot_skydip_noise_spectra(
-                noise_spectra=calibrated_noise_spectra,
-                output_path=(
-                        dataset.noise_plots_dir
-                        / f"tes_{tes_idx}"
-                        / "calibrated_skydip_noise_spectra.html"
-                ),
-                title=f"{dataset.dataset_name} - TES {tes_idx} - calibrated skydip noise spectra",
-                show=config.plots.show,
-                y_key="asd_k_per_sqrt_hz",
-                linewidth=config.plots.linewidth,
-                alpha=config.plots.alpha,
-            )
+            plotting.plot_skydip_noise_spectra(noise_spectra=calibrated_noise_spectra,
+                                               config=config,
+                                               tes_idx=tes_idx,
+                                               output_dir=dataset.noise_plots_dir,
+                                               is_calibrated=True)
 
-
-            noise_summary = DatasetNoiseSummary.from_spectra(
-                noise_spectra=calibrated_noise_spectra,
-                tau_eff=atmosphere.tau,
-            )
+            noise_summary = DatasetNoiseSummary.from_spectra(noise_spectra=calibrated_noise_spectra,
+                                                             tau_eff=atmosphere.tau)
 
             dataset_knee_frequencies_hz.append(noise_summary.knee_frequency_hz)
             dataset_plateau_asds_k_per_sqrt_hz.append(noise_summary.plateau_asd_k_per_sqrt_hz)
@@ -221,7 +212,7 @@ def main(config_path: Path):
                 tes_indices=tuple(analyzed_tes_indices),
                 n_tes=len(analyzed_tes_indices),
                 tau_eff=float(atmosphere.tau),
-                mean_median_conversion_factor_adu_per_k=float(np.nanmean(conversion_factor_values)),
+                median_conversion_factor_adu_per_k=float(np.nanmean(conversion_factor_values)),
                 mean_knee_frequency_hz=float(np.nanmean(knee_values)),
                 std_knee_frequency_hz=(
                     float(np.nanstd(knee_values, ddof=1))

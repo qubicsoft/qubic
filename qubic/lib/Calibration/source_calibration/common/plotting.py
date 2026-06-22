@@ -832,112 +832,11 @@ def plot_noise_plateau_vs_tau(noise_vs_tau_results: list,
     if show:
         fig.show(renderer=renderer)
 
-
-def plot_atmospheric_spectrum(spectrum,
-                              y_key: str,
-                              output_path: str | Path | None = None,
-                              title: str | None = None,
-                              x_key: str = "frequency_GHz",
-                              show: bool = True,
-                              renderer: str = "browser",
-                              linewidth: float = 2.0,
-                              alpha: float = 0.95) -> None:
-    """
-    Plot a generic atmospheric quantity versus frequency using Plotly.
-
-    Parameters
-    ----------
-    spectrum
-        AtmosphericSpectrum-like object. It must expose either:
-        - a pandas DataFrame attribute `data` containing `x_key` and `y_key`, or
-        - direct attributes named as `x_key` and `y_key`.
-    y_key
-        Quantity to plot on the y-axis. Typical values are "tau" and "Tb_K".
-    output_path
-        Optional output HTML path.
-    title
-        Optional plot title.
-    x_key
-        Quantity to plot on the x-axis. Default is "frequency_GHz".
-    show
-        If True, display the figure.
-    renderer
-        Plotly renderer used when show=True.
-    linewidth
-        Width of the plotted line.
-    alpha
-        Trace opacity.
-    """
-    if (hasattr(spectrum, "data")
-        and getattr(spectrum.data, "dtype", None) is not None
-        and getattr(spectrum.data.dtype, "names", None) is not None
-        and x_key in spectrum.data.dtype.names
-        and y_key in spectrum.data.dtype.names):
-
-        x = np.asarray(spectrum.data[x_key], dtype=np.float64)
-        y = np.asarray(spectrum.data[y_key], dtype=np.float64)
-
-    else:
-        if not hasattr(spectrum, x_key):
-            raise ValueError(f"Spectrum object does not have x attribute '{x_key}'.")
-        if not hasattr(spectrum, y_key):
-            raise ValueError(f"Spectrum object does not have y attribute '{y_key}'.")
-        x = np.asarray(getattr(spectrum, x_key), dtype=np.float64)
-        y = np.asarray(getattr(spectrum, y_key), dtype=np.float64)
-
-    if x.ndim != 1 or y.ndim != 1:
-        raise ValueError("x and y data must be 1D arrays.")
-    if x.size != y.size:
-        raise ValueError("x and y data must have the same length.")
-
-    axis_titles = {
-        "frequency_GHz": "Frequency [GHz]",
-        "tau": "Tau",
-        "Tb_K": "Tb [K]",
-        "Trj_K": "Trj [K]",
-        "tx": "Transmission",
-    }
-
-    default_titles = {
-        "tau": "Atmospheric opacity vs frequency",
-        "Tb_K": "Brightness temperature vs frequency",
-        "Trj_K": "Rayleigh-Jeans brightness temperature vs frequency",
-        "tx": "Atmospheric transmission vs frequency",
-    }
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=x,
-            y=y,
-            mode="lines",
-            name=y_key,
-            line=dict(width=linewidth),
-            opacity=alpha,
-        )
-    )
-    fig.update_layout(
-        title=title or default_titles.get(y_key, f"{y_key} vs {x_key}"),
-        xaxis_title=axis_titles.get(x_key, x_key),
-        yaxis_title=axis_titles.get(y_key, y_key),
-    )
-
-    if output_path is not None:
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.write_html(output_path)
-
-    if show:
-        fig.show(renderer=renderer)
-
 def plot_skydip_noise_spectra(noise_spectra: list,
-                              output_path: str | Path | None = None,
-                              title: str | None = None,
-                              show: bool = True,
-                              renderer: str = "browser",
-                              y_key: str = "asd_k_per_sqrt_hz",
-                              linewidth: float = 1.6,
-                              alpha: float = 0.85) -> None:
+                              config: SkydipCalibrationConfig,
+                              tes_idx: int,
+                              output_dir: Path,
+                              is_calibrated: bool = False):
     """
     Plot the skydip noise spectra.
 
@@ -948,71 +847,45 @@ def plot_skydip_noise_spectra(noise_spectra: list,
         - "asd_adu_per_sqrt_hz" for raw spectra in ADU/sqrt(Hz);
         - "asd_k_per_sqrt_hz" for calibrated spectra in K/sqrt(Hz).
     """
+    if is_calibrated:
+        y_axis_title = "ASD [ADU/√Hz]"
+        title = "Calibrated skydip noise spectra"
+        output_file = (Path(output_dir) / f"tes_{tes_idx}" / "calibrated_skydip_noise_spectra.html")
 
-    supported_y_keys = {
-        "asd_adu_per_sqrt_hz",
-        "asd_k_per_sqrt_hz",
-    }
-
-    if y_key not in supported_y_keys:
-        raise ValueError(
-            f"Unsupported y_key '{y_key}'. "
-            f"Supported values are {sorted(supported_y_keys)}."
-        )
-
-    if not noise_spectra:
-        raise ValueError("noise_spectra is empty.")
-
-    y_axis_title = {
-        "asd_adu_per_sqrt_hz": "ASD [ADU/√Hz]",
-        "asd_k_per_sqrt_hz": "ASD [K/√Hz]",
-    }[y_key]
-
-    default_title = {
-        "asd_adu_per_sqrt_hz": "Raw skydip noise spectra",
-        "asd_k_per_sqrt_hz": "Calibrated skydip noise spectra",
-    }[y_key]
+    else:
+        y_axis_title = "ASD [K/√Hz]"
+        title = "Raw skydip noise spectra"
+        output_file = (Path(output_dir) / f"tes_{tes_idx}" / "raw_skydip_noise_spectra.html")
 
     fig = go.Figure()
     n_plotted = 0
 
     for spectrum in noise_spectra:
-        frequency_hz = np.asarray(spectrum.frequency_hz, dtype=np.float64)
-        y_value = getattr(spectrum, y_key)
 
-        if y_value is None:
+        if is_calibrated:
+            asd = spectrum.asd_k_per_sqrt_hz
+
+        else:
+            asd = spectrum.asd_adu_per_sqrt_hz
+
+        if asd is None:
             continue
 
-        y = np.asarray(y_value, dtype=np.float64)
-
-        valid = (
-            np.isfinite(frequency_hz)
-            & np.isfinite(y)
-            & (frequency_hz > 0)
-            & (y > 0)
-        )
-
-        if np.count_nonzero(valid) < 2:
-            continue
-
-        frequency_hz = frequency_hz[valid]
-        y = y[valid]
-
-        order = np.argsort(frequency_hz)
-        frequency_hz = frequency_hz[order]
-        y = y[order]
+        order = np.argsort(spectrum.frequency_hz)
+        frequency_hz = spectrum.frequency_hz[order]
+        asd = asd[order]
 
         fig.add_trace(
             go.Scatter(
                 x=frequency_hz,
-                y=y,
+                y=asd,
                 mode="lines",
                 name=(
                     f"Skydip {spectrum.skydip_id} "
                     f"({spectrum.direction}, az={spectrum.azimuth_mean:.0f})"
                 ),
-                line=dict(width=linewidth),
-                opacity=alpha,
+                line=dict(width=config.plots.linewidth),
+                opacity=config.plots.alpha,
                 hovertemplate=(
                     f"Skydip {spectrum.skydip_id}<br>"
                     f"direction: {spectrum.direction}<br>"
@@ -1025,14 +898,9 @@ def plot_skydip_noise_spectra(noise_spectra: list,
 
         n_plotted += 1
 
-    if n_plotted == 0:
-        raise ValueError(
-            f"No finite spectra could be plotted for y_key='{y_key}'. "
-            "For calibrated spectra, make sure asd_k_per_sqrt_hz is not None."
-        )
 
     fig.update_layout(
-        title=title or default_title,
+        title=title,
         xaxis_title="Frequency [Hz]",
         yaxis_title=y_axis_title,
         showlegend=True,
@@ -1041,10 +909,12 @@ def plot_skydip_noise_spectra(noise_spectra: list,
     fig.update_xaxes(type="log")
     fig.update_yaxes(type="log")
 
-    if output_path is not None:
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.write_html(output_path)
+    if output_dir is not None:
+        output_file = (Path(output_dir) / f"tes_{tes_idx}" / "raw_skydip_noise_spectra.html")
 
-    if show:
-        fig.show(renderer=renderer)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+
+        fig.write_html(output_file)
+
+    if config.plots.show:
+        fig.show(renderer="browser")

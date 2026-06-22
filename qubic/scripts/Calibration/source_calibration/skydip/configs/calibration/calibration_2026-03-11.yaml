@@ -1,0 +1,45 @@
+paths:
+  root: /Volumes/Data/PycharmProjects/calibration/qubic/scripts/Calibration/source_calibration/skydip
+
+  runs:
+    - dataset: data/input/2026-03-11/2026-03-11_16.48.15__SkyDip
+      output: data/output/2026-03-11/2026-03-11_16.48.15__SkyDip
+      atmospheric_config: configs/atmosphere/atmosphere_2026-03-11.yaml
+
+    - dataset: data/input/2026-03-11/2026-03-11_16.37.17__SkyDip
+      output: data/output/2026-03-11/2026-03-11_16.37.17__SkyDip
+      atmospheric_config: configs/atmosphere/atmosphere_2026-03-11.yaml
+
+tod_processing:
+  centered: false
+  normalized: false
+
+calibration:
+  tes_indices: 95 # it could be a list [95, 96, 97, 98] or all
+  run_am_if_missing: true
+
+preprocessing:
+  az_velocity_threshold: 0.5 deg/s
+  el_velocity_threshold: 0.5 deg/s
+  min_block_duration: 20.0 s
+  el_smooth_window: 101
+  el_polyorder: 3
+
+#  up_left_extension: 3.0 s
+#  down_right_extension: 1.0 s
+
+plots:
+  linewidth: 0.9
+  alpha: 0.9
+  fit_linewidth: 2.0
+  fit_alpha: 0.95
+  show: false
+
+noise:
+  nperseg: 1024
+  window: "hann"
+  noverlap: None
+  scaling: "density"
+  detrend: "constant"
+  selected_frequency: 100 u.Hz
+  enabled: true

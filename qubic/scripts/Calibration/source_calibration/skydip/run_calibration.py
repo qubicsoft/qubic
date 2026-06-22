@@ -185,7 +185,7 @@ def main(config_path: Path):
             plotting.plot_skydip_noise_spectra(
                 noise_spectra=calibrated_noise_spectra,
                 output_path=(
-                        dataset.noise_plots_dirOkay
+                        dataset.noise_plots_dir
                         / f"tes_{tes_idx}"
                         / "calibrated_skydip_noise_spectra.html"
                 ),

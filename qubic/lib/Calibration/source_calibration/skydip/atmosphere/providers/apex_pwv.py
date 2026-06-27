@@ -33,8 +33,6 @@ class ApexPWVTimeSeries:
         5. ordina tutto temporalmente.
         """
 
-        csv_path = csv_path.expanduser().resolve()
-
         times: list[datetime] = []
         pwv_values: list[float] = []
 
@@ -46,10 +44,8 @@ class ApexPWVTimeSeries:
 
             missing_columns = {time_column, pwv_column} - set(reader.fieldnames)
             if missing_columns:
-                raise ValueError(
-                    f"Missing required columns in {csv_path}: {sorted(missing_columns)}. "
-                    f"Available columns are: {reader.fieldnames}"
-                )
+                raise ValueError(f"Missing required columns in {csv_path}: {sorted(missing_columns)}. "
+                                 f"Available columns are: {reader.fieldnames}")
 
             for row in reader:
                 try:
@@ -108,41 +104,3 @@ class ApexPWVTimeSeries:
             )
 
         return float(np.nanmedian(pwv_window))
-
-if __name__ == "__main__":
-
-    from qubic.lib.Calibration.source_calibration.common import io
-    from qubic.lib.Calibration.source_calibration.skydip.atmosphere.config_atmosphere import load_atmosphere_config
-
-    config_path = Path(sys.argv[1]).expanduser().resolve()
-    config = load_atmosphere_config(config_path)
-
-    dataset = io.read_qubic_dataset(dataset_path=config.dataset_path)
-
-    skydip_start_time_utc = dataset.start_time_utc
-    skydip_stop_time_utc = dataset.stop_time_utc
-    skydip_duration_s = dataset.duration_s
-
-    apex = ApexPWVTimeSeries.from_csv(config.apex_pwv_csv)
-
-    times, pwv = apex.select_range(start_time_utc=skydip_start_time_utc,
-                                   stop_time_utc=skydip_stop_time_utc)
-
-    print("APEX PWV time series")
-    print(f"  config_path: {config_path}")
-    print(f"  source_path: {apex.source_path}")
-    print(f"  n_samples: {apex.pwv_mm.size}")
-    print(f"  first_time_utc: {apex.time_utc[0].isoformat()}")
-    print(f"  last_time_utc: {apex.time_utc[-1].isoformat()}")
-    print(f"  pwv_min_mm: {np.nanmin(apex.pwv_mm):.4f}")
-    print(f"  pwv_max_mm: {np.nanmax(apex.pwv_mm):.4f}")
-    print(f"  dataset_name: {config.dataset_path.name}")
-    print(f"  dataset_duration_s: {skydip_duration_s:.3f}")
-    print(f"  skydip_start_time_utc: {skydip_start_time_utc.isoformat()}")
-    print(f"  skydip_stop_time_utc: {skydip_stop_time_utc.isoformat()}")
-    print(f"  selected_samples_skydip: {pwv.size}")
-
-    if pwv.size > 0:
-        print(f"  selected_first_time_utc: {times[0].isoformat()}")
-        print(f"  selected_last_time_utc: {times[-1].isoformat()}")
-        print(f"  median_pwv_skydip_mm: {np.nanmedian(pwv):.4f}")

@@ -1,18 +1,19 @@
 # list of paths
 paths:
-  root: /Volumes/Data/PycharmProjects/calibration/qubic/scripts/Calibration/source_calibration/skydip/data
-  dataset: dataset/2026-05-22/2026-05-22_09.58.32__SkyDip
-  weather: weather/2026-05-22
-  output: output/2026-05-22_09.58.32__SkyDip/atmosphere
+  root: /Volumes/Data/PycharmProjects/calibration/qubic/scripts/Calibration/source_calibration/skydip/
+  input: data/weather/2026-05-06
 
 apex:
-  pwv_csv: wdb_query_1155982_eso.csv
+  pwv_csv: data/weather/2026-05-06/wdb_query_4142337_eso.csv
 
 weather_station:
-  csv: 20260522.csv
+  weather_csv: data/weather/2026-05-06/20260506.csv
   datetime_column_index: 0
   temperature_column_index: 1
   delimiter: ","
+
+parameters_estimation:
+  parameter_strategy: band_average
 
 am:
   executable: /Volumes/Data/am-13.0/src/am
@@ -24,3 +25,4 @@ am:
   frequency_max: 170 GHz
   step: 10 MHz
   zenith_angle: 0 deg
+

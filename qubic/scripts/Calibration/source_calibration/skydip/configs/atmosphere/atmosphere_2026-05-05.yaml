@@ -1,0 +1,28 @@
+# list of paths
+paths:
+  root: /Volumes/Data/PycharmProjects/calibration/qubic/scripts/Calibration/source_calibration/skydip/
+  input: data/weather/2026-05-05
+
+apex:
+  pwv_csv: data/weather/2026-05-05/wdb_query_4142421_eso.csv
+
+weather_station:
+  weather_csv: data/weather/2026-05-05/20260505.csv
+  datetime_column_index: 0
+  temperature_column_index: 1
+  delimiter: ","
+
+parameters_estimation:
+  parameter_strategy: band_average
+
+am:
+  executable: /Volumes/Data/am-13.0/src/am
+  cookbook_dir: /Volumes/Data/am-13.0/cookbook
+  site: ALMA
+  season: MAM
+  h2o_percentile: 50
+  frequency_min: 130 GHz
+  frequency_max: 170 GHz
+  step: 10 MHz
+  zenith_angle: 0 deg
+

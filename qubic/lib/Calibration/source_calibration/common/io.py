@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from qubicpack.qubicfp import qubicfp
 from qubic.lib.Calibration.source_calibration.skydip.config_calibration import SkydipCalibrationConfig, load_skydip_calibration_config
-from qubic.lib.Calibration.source_calibration.common.utils import parse_utc_datetime, parse_tes_indices
+from qubic.lib.Calibration.source_calibration.common.utils import parse_utc_datetime, parse_tes_indices, capture_external_output
 
 
 @dataclass(slots=True)
@@ -84,10 +84,17 @@ class QubicDataset:
         dataset_path = run.dataset
         output_dir = run.output
 
-        qubic = qubicfp()
-        qubic.read_qubicstudio_dataset(str(dataset_path))
+        if logger is not None:
+            logger.info("Reading QUBICStudio dataset: %s", dataset_path.name)
 
-        time, signals = qubic.tod()
+        qubic = qubicfp()
+        qubic.verbosity = 0
+
+        with capture_external_output() as (stdout_buffer, stderr_buffer):
+            qubic.read_qubicstudio_dataset(str(dataset_path))
+            time, signals = qubic.tod()
+
+        # time, signals = qubic.tod()
         time -= time[0]
 
         if config.tod_processing.centered:
@@ -260,6 +267,7 @@ def prepare_datasets_from_config(config: SkydipCalibrationConfig,
     for run_index, run in enumerate(config.paths.runs):
 
         if logger is not None:
+            logger.info("-" * 60)
             logger.info(
                 "Preparing dataset %d/%d: %s",
                 run_index + 1,
@@ -292,6 +300,7 @@ def iter_saved_datasets(config: SkydipCalibrationConfig,
     for run_index, run in enumerate(config.paths.runs):
 
         if logger is not None:
+            logger.info("=" * 80)
             logger.info(
                 "Loading saved dataset %d/%d: %s",
                 run_index + 1,

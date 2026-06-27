@@ -59,8 +59,8 @@ class PreprocessingConfig:
     min_block_duration: u.Quantity
     el_smooth_window: int
     el_polyorder: int
-    # up_left_extension: u.Quantity
-    # down_right_extension: u.Quantity
+    up_left_extension: u.Quantity
+    down_right_extension: u.Quantity
 
 
 @dataclass(frozen=True)

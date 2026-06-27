@@ -81,11 +81,9 @@ class SkydipNoiseSpectrum:
             asd_k_per_sqrt_hz=asd_k_per_sqrt_hz,
         )
 
-def compute_all_skydip_noise_spectra(
-    segments: list,
-    config: SkydipCalibrationConfig,
-    conversion_factor_adu_per_k: float | None = None,
-) -> list[SkydipNoiseSpectrum]:
+def compute_all_skydip_noise_spectra(segments: list,
+                                     config: SkydipCalibrationConfig,
+                                     conversion_factor_adu_per_k: float | None = None) -> list[SkydipNoiseSpectrum]:
 
     noise_spectra: list[SkydipNoiseSpectrum] = []
 

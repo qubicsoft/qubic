@@ -119,6 +119,9 @@ class SkydipIntervals:
 
         min_block_duration = _to_value(config.preprocessing.min_block_duration, u.s)
 
+        up_left_extension = _to_value(config.preprocessing.up_left_extension, u.s)
+        down_right_extension = _to_value(config.preprocessing.down_right_extension, u.s)
+
         el_smooth_window = config.preprocessing.el_smooth_window
         el_polyorder = config.preprocessing.el_polyorder
 
@@ -162,24 +165,33 @@ class SkydipIntervals:
             # ma dentro un solo blocco di azimuth costante
             for local_idx, sign in enumerate(block_dir):
 
-                # Plateau o zona quasi piatta.
-                # se trovi uno zero
                 if sign == 0:
 
-                    #  chiudi una run già aperta, ma non ne apri una nuova
+                    # Chiude una run già aperta, ma prima la espande
+                    # su eventuali plateau adiacenti.
                     if run_start is not None:
                         run_stop = local_idx - 1
 
-                        if dataset.time[block[run_stop]] - dataset.time[block[run_start]] >= min_block_duration:
-                            start_idx = int(block[run_start])
-                            stop_idx = int(block[run_stop])
+                        expanded_start, expanded_stop = _expand_run_over_zero_velocity_edges(
+                            block=block,
+                            block_dir=block_dir,
+                            tm=dataset.time,
+                            run_start=run_start,
+                            run_stop=run_stop,
+                            run_sign=run_sign,
+                            up_left_extension=up_left_extension,
+                            down_right_extension=down_right_extension,
+                        )
+
+                        if dataset.time[block[expanded_stop]] - dataset.time[block[expanded_start]] >= min_block_duration:
+                            start_idx = int(block[expanded_start])
+                            stop_idx = int(block[expanded_stop])
 
                             idx_pairs.append([start_idx, stop_idx])
                             directions.append("up" if run_sign > 0 else "down")
                             azimuth_mean.append(float(np.nanmean(block_az)))
                             block_ids.append(block_id)
 
-                        # chiusura run aperta e salta al prossimo blocco
                         run_start = None
                         run_sign = 0
 
@@ -191,15 +203,23 @@ class SkydipIntervals:
                     run_sign = int(sign)
                     continue
 
-                # Se stavi salendo e ora scendi, oppure viceversa,
-                # la run precedente è finita.
-                # Arriviamo a questo punto solo se una nuova run e' stata gia' aperta
                 if sign != run_sign:
                     run_stop = local_idx - 1
 
-                    if dataset.time[block[run_stop]] - dataset.time[block[run_start]] >= min_block_duration:
-                        start_idx = int(block[run_start])
-                        stop_idx = int(block[run_stop])
+                    expanded_start, expanded_stop = _expand_run_over_zero_velocity_edges(
+                        block=block,
+                        block_dir=block_dir,
+                        tm=dataset.time,
+                        run_start=run_start,
+                        run_stop=run_stop,
+                        run_sign=run_sign,
+                        up_left_extension=up_left_extension,
+                        down_right_extension=down_right_extension,
+                    )
+
+                    if dataset.time[block[expanded_stop]] - dataset.time[block[expanded_start]] >= min_block_duration:
+                        start_idx = int(block[expanded_start])
+                        stop_idx = int(block[expanded_stop])
 
                         idx_pairs.append([start_idx, stop_idx])
                         directions.append("up" if run_sign > 0 else "down")
@@ -212,9 +232,20 @@ class SkydipIntervals:
             if run_start is not None:
                 run_stop = len(block_dir) - 1
 
-                if dataset.time[block[run_stop]] - dataset.time[block[run_start]] >= min_block_duration:
-                    start_idx = int(block[run_start])
-                    stop_idx = int(block[run_stop])
+                expanded_start, expanded_stop = _expand_run_over_zero_velocity_edges(
+                    block=block,
+                    block_dir=block_dir,
+                    tm=dataset.time,
+                    run_start=run_start,
+                    run_stop=run_stop,
+                    run_sign=run_sign,
+                    up_left_extension=up_left_extension,
+                    down_right_extension=down_right_extension,
+                )
+
+                if dataset.time[block[expanded_stop]] - dataset.time[block[expanded_start]] >= min_block_duration:
+                    start_idx = int(block[expanded_start])
+                    stop_idx = int(block[expanded_stop])
 
                     idx_pairs.append([start_idx, stop_idx])
                     directions.append("up" if run_sign > 0 else "down")
@@ -284,40 +315,40 @@ class SkydipIntervals:
         return segments
 
 
-# def _expand_run_over_zero_velocity_edges(block: np.ndarray,
-#                                          block_dir: np.ndarray,
-#                                          tm: np.ndarray,
-#                                          run_start: int,
-#                                          run_stop: int,
-#                                          run_sign: int,
-#                                          up_left_extension: float = 3.0,
-#                                          down_right_extension: float = 1.0) -> tuple[int, int]:
-#     """
-#     Expand a monotonic run over adjacent zero-velocity samples with an asymmetric
-#     rule:
-#     - for an upward run, extend on the low-elevation side (left edge);
-#     - for a downward run, extend on the low-elevation side (right edge).
-#     """
-#     if run_sign == 0:
-#         return run_start, run_stop
-#
-#     left = run_start
-#     right = run_stop
-#
-#     if run_sign > 0:
-#         while left > 0 and block_dir[left - 1] == 0:
-#             trial_left = left - 1
-#             if tm[block[run_start]] - tm[block[trial_left]] > up_left_extension:
-#                 break
-#             left = trial_left
-#     else:
-#         while right < len(block_dir) - 1 and block_dir[right + 1] == 0:
-#             trial_right = right + 1
-#             if tm[block[trial_right]] - tm[block[run_stop]] > down_right_extension:
-#                 break
-#             right = trial_right
-#
-#     return left, right
+def _expand_run_over_zero_velocity_edges(block: np.ndarray,
+                                         block_dir: np.ndarray,
+                                         tm: np.ndarray,
+                                         run_start: int,
+                                         run_stop: int,
+                                         run_sign: int,
+                                         up_left_extension: float = 3.0,
+                                         down_right_extension: float = 1.0) -> tuple[int, int]:
+    """
+    Expand a monotonic run over adjacent zero-velocity samples with an asymmetric
+    rule:
+    - for an upward run, extend on the low-elevation side (left edge);
+    - for a downward run, extend on the low-elevation side (right edge).
+    """
+    if run_sign == 0:
+        return run_start, run_stop
+
+    left = run_start
+    right = run_stop
+
+    if run_sign > 0:
+        while left > 0 and block_dir[left - 1] == 0:
+            trial_left = left - 1
+            if tm[block[run_start]] - tm[block[trial_left]] > up_left_extension:
+                break
+            left = trial_left
+    else:
+        while right < len(block_dir) - 1 and block_dir[right + 1] == 0:
+            trial_right = right + 1
+            if tm[block[trial_right]] - tm[block[run_stop]] > down_right_extension:
+                break
+            right = trial_right
+
+    return left, right
 
 # def find_skydip_intervals(dataset: "QubicDataset",
 #                           config: SkydipCalibrationConfig) -> SkydipIntervals:

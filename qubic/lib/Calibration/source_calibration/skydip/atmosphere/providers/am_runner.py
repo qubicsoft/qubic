@@ -1,6 +1,4 @@
-import sys
 import subprocess
-import numpy as np
 import astropy.units as u
 from pathlib import Path
 from dataclasses import dataclass
@@ -148,82 +146,3 @@ def write_am_spectrum_to_csv(config: AMRunConfig,
 
     return written_csv
 
-
-if __name__ == "__main__":
-
-    from qubic.lib.Calibration.source_calibration.common import io
-    from qubic.lib.Calibration.source_calibration.skydip.atmosphere.config_atmosphere import load_atmosphere_config
-    from qubic.lib.Calibration.source_calibration.skydip.atmosphere.providers.am_template import AmTemplateLibrary
-    from qubic.lib.Calibration.source_calibration.skydip.atmosphere.providers.apex_pwv import ApexPWVTimeSeries
-    from qubic.lib.Calibration.source_calibration.skydip.atmosphere.providers.weather_station import WeatherStationTimeSeries
-
-    config_path = Path(sys.argv[1]).expanduser().resolve()
-
-    atmosphere_config = load_atmosphere_config(config_path)
-
-    dataset = io.read_qubic_dataset(dataset_path=atmosphere_config.dataset_path)
-
-    skydip_start_time_utc = dataset.start_time_utc
-    skydip_stop_time_utc = dataset.stop_time_utc
-    skydip_duration_s = dataset.duration_s
-
-    library = AmTemplateLibrary.default()
-    template = library.get(site=atmosphere_config.am.site,
-                           season=atmosphere_config.am.season,
-                           h2o_percentile=atmosphere_config.am.h2o_percentile)
-
-    apex = ApexPWVTimeSeries.from_csv(atmosphere_config.apex_pwv_csv)
-    pwv_apex_mm = apex.median_pwv_between(start_time_utc=skydip_start_time_utc,
-                                          stop_time_utc=skydip_stop_time_utc)
-
-    water_vapor_scale = template.water_vapor_scale_from_pwv(pwv_apex_mm)
-
-    weather = WeatherStationTimeSeries.from_csv(csv_path=atmosphere_config.weather_station_csv,
-                                                datetime_column_index=atmosphere_config.weather_station.datetime_column_index,
-                                                temperature_column_index=atmosphere_config.weather_station.temperature_column_index,
-                                                delimiter=atmosphere_config.weather_station.delimiter)
-
-    tground_k = weather.mean_temperature_K_between(start_time_utc=skydip_start_time_utc,
-                                                   stop_time_utc=skydip_stop_time_utc)
-
-    am_config = AMRunConfig(am_executable=atmosphere_config.am.executable,
-                            cookbook_dir=atmosphere_config.am.cookbook_dir,
-                            template=template,
-                            f_min_ghz=atmosphere_config.am.freq_min_ghz,
-                            f_max_ghz=atmosphere_config.am.freq_max_ghz,
-                            step_mhz=atmosphere_config.am.step_mhz,
-                            zenith_angle_deg=atmosphere_config.am.zenith_angle_deg,
-                            tground_k=tground_k,
-                            water_vapor_scale=water_vapor_scale)
-
-    output_csv = atmosphere_config.weather_dir / f"{am_config.output_stem()}.csv"
-
-    print("AM runner config")
-    print(f"  config_path: {config_path}")
-    print(f"  dataset_name: {atmosphere_config.dataset_path.name}")
-    print(f"  dataset_duration_s: {skydip_duration_s:.3f}")
-    print(f"  skydip_start_time_utc: {skydip_start_time_utc.isoformat()}")
-    print(f"  skydip_stop_time_utc: {skydip_stop_time_utc.isoformat()}")
-    print(f"  pwv_apex_mm: {pwv_apex_mm:.4f}")
-    print(f"  template_pwv_scale1_mm: {template.pwv_scale1_mm:.4f}")
-    print(f"  water_vapor_scale: {water_vapor_scale:.4f}")
-    print(f"  tground_k: {tground_k:.4f}")
-    print(f"  amc_path: {am_config.amc_path}")
-    print(f"  amc_path_exists: {am_config.amc_path.exists()}")
-    print(f"  output_csv: {output_csv}")
-    print("  command:")
-    print("    " + " ".join(am_config.command()))
-
-    try:
-
-        generated_csv = write_am_spectrum_to_csv(config=am_config,
-                                                 output_csv=output_csv)
-
-        print(f"  generated_csv: {generated_csv}")
-
-    except RuntimeError as exc:
-
-        print("\nAM execution failed. Full diagnostic follows:\n")
-        print(exc)
-
-        raise

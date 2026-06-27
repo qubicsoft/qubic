@@ -1,8 +1,39 @@
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
+import logging
+import io
+import contextlib
 
 
+@contextlib.contextmanager
+def capture_external_output():
+    stdout_buffer = io.StringIO()
+    stderr_buffer = io.StringIO()
+
+    with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(stderr_buffer):
+        yield stdout_buffer, stderr_buffer
+
+
+class ColoredFormatter(logging.Formatter):
+    """
+    Formatter with ANSI colors for console logging.
+    Colors are used only in the terminal, not in the log file.
+    """
+
+    COLORS = {
+        logging.DEBUG: "\033[36m",      # cyan
+        logging.INFO: "\033[32m",       # green
+        logging.WARNING: "\033[33m",    # yellow
+        logging.ERROR: "\033[31m",      # red
+        logging.CRITICAL: "\033[35m",   # magenta
+    }
+    RESET = "\033[0m"
+
+    def format(self, record: logging.LogRecord) -> str:
+        message = super().format(record)
+        color = self.COLORS.get(record.levelno, self.RESET)
+        return f"{color}{message}{self.RESET}"
 
 def parse_tes_indices(tes_indices: int | list[int] | Literal["all"], n_tes: int) -> list[int]:
     """

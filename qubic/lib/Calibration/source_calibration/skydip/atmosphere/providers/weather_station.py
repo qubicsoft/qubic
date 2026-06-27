@@ -1,5 +1,5 @@
-import sys
 import csv
+import sys
 import numpy as np
 from pathlib import Path
 from datetime import datetime
@@ -31,8 +31,6 @@ class WeatherStationTimeSeries:
                  temperature_column_index: int = 1,
                  delimiter: str = ",") -> "WeatherStationTimeSeries":
 
-        csv_path = csv_path.expanduser().resolve()
-
         times: list[datetime] = []
         temperatures_C: list[float] = []
 
@@ -49,6 +47,7 @@ class WeatherStationTimeSeries:
                 try:
                     time_utc = parse_ground_temperature_datetime(time_text)
                     temperature_C = float(temperature_text)
+
                 except ValueError:
                     continue
 
@@ -107,41 +106,3 @@ class WeatherStationTimeSeries:
         return (self.mean_temperature_C_between(
                 start_time_utc=start_time_utc,
                 stop_time_utc=stop_time_utc) + KELVIN_OFFSET)
-
-if __name__ == "__main__":
-
-    from qubic.lib.Calibration.source_calibration.common import io
-    from qubic.lib.Calibration.source_calibration.skydip.atmosphere.config_atmosphere import load_atmosphere_config
-
-
-    config_path = Path(sys.argv[1]).expanduser().resolve()
-    config = load_atmosphere_config(config_path)
-    dataset = io.read_qubic_dataset(dataset_path=config.dataset_path)
-
-    weather = WeatherStationTimeSeries.from_csv(csv_path=config.weather_station_csv,
-                                                datetime_column_index=config.weather_station.datetime_column_index,
-                                                temperature_column_index=config.weather_station.temperature_column_index,
-                                                delimiter=config.weather_station.delimiter)
-
-    times, temperatures_C = weather.select_range(start_time_utc=dataset.start_time_utc,
-                                                 stop_time_utc=dataset.stop_time_utc)
-
-    print("Weather-station time series")
-    print(f"  config_path: {config_path}")
-    print(f"  source_path: {weather.source_path}")
-    print(f"  n_samples: {weather.temperature_C.size}")
-    print(f"  first_time_utc: {weather.time_utc[0].isoformat()}")
-    print(f"  last_time_utc: {weather.time_utc[-1].isoformat()}")
-    print(f"  temperature_min_C: {np.nanmin(weather.temperature_C):.4f}")
-    print(f"  temperature_max_C: {np.nanmax(weather.temperature_C):.4f}")
-    print(f"  dataset_name: {config.dataset_path.name}")
-    print(f"  dataset_duration_s: {dataset.duration_s:.3f}")
-    print(f"  skydip_start_time_utc: {dataset.start_time_utc.isoformat()}")
-    print(f"  skydip_stop_time_utc: {dataset.stop_time_utc.isoformat()}")
-    print(f"  selected_samples_skydip: {temperatures_C.size}")
-
-    if temperatures_C.size > 0:
-        print(f"  selected_first_time_utc: {times[0].isoformat()}")
-        print(f"  selected_last_time_utc: {times[-1].isoformat()}")
-        print(f"  mean_temperature_C: {np.nanmean(temperatures_C):.4f}")
-        print("  mean_temperature_K: "f"{weather.mean_temperature_K_between(dataset.start_time_utc, dataset.stop_time_utc):.4f}")

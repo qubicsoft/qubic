@@ -6,7 +6,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class AmTemplate:
     """
-    Metadata for one ALMA AM cookbook atmospheric template.
+    Metadata for one AM cookbook atmospheric template.
 
     pwv_scale1_mm is the PWV represented by the template when the AM H2O
     scale factor is equal to 1.0.
@@ -16,8 +16,10 @@ class AmTemplate:
     season: str
     h2o_percentile: int
     # e' il PWV di riferimento del template
-    # ex: se water_vapor_scale = 1.0,
-    # il template MAM_50 rappresenta un'atmosfera con PWV = 1.22496 mm
+    # PWV rappresentato dal template quando non scali il vapore acqueo,
+    # cioe' quando water_vapor_scale = 1.0,
+    # In questo caso, ad es., il template MAM_50 rappresenta un'atmosfera
+    # con PWV = 1.22496 mm
     pwv_scale1_mm: float
     uses_tground: bool = True
 
@@ -99,65 +101,24 @@ class AmTemplateLibrary:
             f"h2o_percentile={h2o_percentile}. Available templates: {available}."
         )
 
-    def get_scaled(
-        self,
-        pwv_apex_mm: float,
-        season: str,
-        h2o_percentile: int = 50,
-        site: str = "ALMA",
-    ) -> ScaledAmTemplate:
+    def get_scaled(self,
+                   pwv_apex_mm: float,
+                   season: str,
+                   h2o_percentile: int = 50,
+                   site: str = "ALMA") -> ScaledAmTemplate:
         """
         Select an AM template and compute the water-vapor scale factor
         from the APEX PWV measured during one dataset.
         """
 
-        template = self.get(
-            site=site,
-            season=season,
-            h2o_percentile=h2o_percentile,
-        )
+        # scelgo il template giusto
+        template = self.get(site=site,
+                            season=season,
+                            h2o_percentile=h2o_percentile)
 
-        water_vapor_scale = template.water_vapor_scale_from_pwv(
-            pwv_mm=pwv_apex_mm,
-        )
+        # calcolo il fattore di scala del vapore acqueo
+        water_vapor_scale = template.water_vapor_scale_from_pwv(pwv_mm=pwv_apex_mm)
 
-        return ScaledAmTemplate(
-            template=template,
-            pwv_apex_mm=pwv_apex_mm,
-            water_vapor_scale=water_vapor_scale,
-        )
-
-if __name__ == "__main__":
-    from qubic.lib.Calibration.source_calibration.common import io
-    from qubic.lib.Calibration.source_calibration.skydip.atmosphere.providers.apex_pwv import ApexPWVTimeSeries
-    from qubic.lib.Calibration.source_calibration.skydip.atmosphere.config_atmosphere import load_atmosphere_config
-
-    config_path = Path(sys.argv[1]).expanduser().resolve()
-    config = load_atmosphere_config(config_path)
-
-    # test con PWV derivato da APEX
-    dataset = io.read_qubic_dataset(dataset_path=config.dataset_path)
-    apex = ApexPWVTimeSeries.from_csv(config.apex_pwv_csv)
-    pwv_apex_mm = apex.median_pwv_between(start_time_utc=dataset.start_time_utc,
-                                          stop_time_utc=dataset.stop_time_utc)
-
-    library = AmTemplateLibrary.default()
-
-    template = library.get(site=config.am.site,
-                           season=config.am.season,
-                           h2o_percentile=config.am.h2o_percentile)
-
-    print("AM template library")
-    print(f"  config_path: {config_path}")
-    print(f"  executable: {config.am.executable}")
-    print(f"  cookbook_dir: {config.am.cookbook_dir}")
-    print(f"  site: {config.am.site}")
-    print(f"  season: {config.am.season}")
-    print(f"  h2o_percentile: {config.am.h2o_percentile}")
-    print(f"  template_name: {template.name}")
-    print(f"  template_filename: {template.filename}")
-    print(f"  template_path: {template.path(config.am.cookbook_dir)}")
-    print(f"  template_path_exists: {template.path(config.am.cookbook_dir).exists()}")
-    print(f"  pwv_scale1_mm: {template.pwv_scale1_mm:.5f}")
-    print(f"  pwv_apex_mm: {pwv_apex_mm:.5f}")
-    print(f"  water_vapor_scale: {template.water_vapor_scale_from_pwv(pwv_apex_mm):.5f}")
+        return ScaledAmTemplate(template=template,
+                                pwv_apex_mm=pwv_apex_mm,
+                                water_vapor_scale=water_vapor_scale)

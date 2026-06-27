@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime
+from dataclasses import dataclass, field
 
 from qubic.lib.Calibration.source_calibration.skydip.atmosphere.config_atmosphere import load_atmosphere_config
 from qubic.lib.Calibration.source_calibration.skydip.atmosphere.providers.apex_pwv import ApexPWVTimeSeries
@@ -24,6 +24,7 @@ class Atmosphere:
 
     # attributi che NON passo dall'esterno,
     # ma che vengono creati automaticamente
+    # pwv mediano calcolato sull'intervallo temporale del dataset
     pwv: float = field(init=False)
     t_ground_k: float = field(init=False)
     scaled_am_template: ScaledAmTemplate = field(init=False)
@@ -37,31 +38,41 @@ class Atmosphere:
         config = load_atmosphere_config(self.config)
 
         # retrieve PWV from Apex
+        # apex_object contiene:
+        # apex_object.time_utc: array NumPy che contiene i tempi associati (di tipo datetime) ) ai campioni PWV,
+        # apex_object.source_path: path risolto completo del file APEX CSV,
+        # apex_object.pwv_mm: array NumPy che contiene i PWV APEX in mm letti dal CSV
         apex_object= ApexPWVTimeSeries.from_csv(csv_path=config.apex_pwv_csv)
         self.pwv = apex_object.median_pwv_between(start_time_utc=self.start_obs,
-                                             stop_time_utc=self.end_obs)
+                                                  stop_time_utc=self.end_obs)
 
         # retrieve ground temperature from weather station
-        weather_station = WeatherStationTimeSeries.from_csv(
-            csv_path=config.weather_station_csv,
-            datetime_column_index=config.weather_station.datetime_column_index,
-            temperature_column_index=config.weather_station.temperature_column_index,
-            delimiter=config.weather_station.delimiter)
+        # weather_station contiene:
+        # weather_station.time_utc: array NumPy che contiene i tempi associati (di tipo datetime) ai campioni di temperatura,
+        # weather_station.source_path: path risolto completo del file CSV,
+        # weather_station.temperature_C: array NumPy che contiene i campioni di temperatura in Celsius letti dal CSV
+        weather_station = WeatherStationTimeSeries.from_csv(csv_path=config.weather_station_csv,
+                                                            datetime_column_index=config.weather_station.datetime_column_index,
+                                                            temperature_column_index=config.weather_station.temperature_column_index,
+                                                            delimiter=config.weather_station.delimiter)
 
         self.t_ground_k = weather_station.mean_temperature_K_between(start_time_utc=self.start_obs,
-                                                               stop_time_utc=self.end_obs)
+                                                                     stop_time_utc=self.end_obs)
 
-
-        # run AM using the scaled template with respect APEX pwv e and QUBIC ground temperature
+        # Costruisco una libreria di template AM disponibili
         template_library = AmTemplateLibrary.default()
 
-        self.scaled_am_template = template_library.get_scaled(
-            pwv_apex_mm=self.pwv,
-            site=config.am.site,
-            season=config.am.season,
-            h2o_percentile=config.am.h2o_percentile,
-        )
-
+        # Sceglie il template giusto in base a site, season, h2o_percentile.
+        # Calcola il fattore di scala del vapore acqueo usando il PWV APEX del dataset.
+        # Restituisce un oggetto ScaledAmTemplat che contiene:
+        # self.scaled_am_template.template: oggetto AMTemplate in uso
+        # self.scaled_am_template.pwv_apex_mm: PWV APEX del dataset
+        # self.scaled_am_template.water_vapor_scale: fattore di scala del vapore acqueo
+        self.scaled_am_template = template_library.get_scaled(pwv_apex_mm=self.pwv,
+                                                              site=config.am.site,
+                                                              season=config.am.season,
+                                                              h2o_percentile=config.am.h2o_percentile)
+        # run am usando lo scaled_am_template
         self.am_config = AMRunConfig(
             am_executable=config.am_executable,
             cookbook_dir=config.am_cookbook_dir,

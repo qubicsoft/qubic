@@ -783,8 +783,14 @@ def plot_noise_plateau_vs_tau(noise_vs_tau_results: list,
         n_tes_values[i] for i in order
     ]
 
+    dataset_labels = [
+        name.replace("__SkyDip", "")
+        for name in dataset_names
+    ]
+
     customdata = np.column_stack(
         [
+            dataset_names,
             knee_values,
             n_tes_values,
         ]
@@ -796,9 +802,10 @@ def plot_noise_plateau_vs_tau(noise_vs_tau_results: list,
         go.Scatter(
             x=tau_values,
             y=plateau_values,
-            mode="markers+lines",
+            mode="markers+lines+text",
             name="Dataset mean plateau ASD",
-            text=dataset_names,
+            text=dataset_labels,
+            textposition="top center",
             customdata=customdata,
             error_y=dict(
                 type="data",
@@ -806,11 +813,11 @@ def plot_noise_plateau_vs_tau(noise_vs_tau_results: list,
                 visible=True,
             ),
             hovertemplate=(
-                "Dataset: %{text}<br>"
+                "Dataset: %{customdata[0]}<br>"
                 "tau: %{x:.4g}<br>"
                 "plateau ASD: %{y:.4g} K/√Hz<br>"
-                "mean knee frequency: %{customdata[0]:.4g} Hz<br>"
-                "n TES: %{customdata[1]:.0f}"
+                "mean knee frequency: %{customdata[1]:.4g} Hz<br>"
+                "n TES: %{customdata[2]:.0f}"
                 "<extra></extra>"
             ),
         )
@@ -820,9 +827,10 @@ def plot_noise_plateau_vs_tau(noise_vs_tau_results: list,
         title=title or "Dataset-averaged skydip noise plateau versus atmospheric tau",
         xaxis_title="Tau",
         yaxis_title="Mean plateau ASD [K/√Hz]",
+        yaxis=dict(type="log"),
         showlegend=True,
     )
-    fig.update_yaxes(type="log")
+
 
     if output_path is not None:
         output_path = Path(output_path)
@@ -848,12 +856,12 @@ def plot_skydip_noise_spectra(noise_spectra: list,
         - "asd_k_per_sqrt_hz" for calibrated spectra in K/sqrt(Hz).
     """
     if is_calibrated:
-        y_axis_title = "ASD [ADU/√Hz]"
+        y_axis_title = "ASD [K/√Hz]"
         title = "Calibrated skydip noise spectra"
         output_file = (Path(output_dir) / f"tes_{tes_idx}" / "calibrated_skydip_noise_spectra.html")
 
     else:
-        y_axis_title = "ASD [K/√Hz]"
+        y_axis_title = "ASD [ADU/√Hz]"
         title = "Raw skydip noise spectra"
         output_file = (Path(output_dir) / f"tes_{tes_idx}" / "raw_skydip_noise_spectra.html")
 
@@ -910,7 +918,6 @@ def plot_skydip_noise_spectra(noise_spectra: list,
     fig.update_yaxes(type="log")
 
     if output_dir is not None:
-        output_file = (Path(output_dir) / f"tes_{tes_idx}" / "raw_skydip_noise_spectra.html")
 
         output_file.parent.mkdir(parents=True, exist_ok=True)
 

@@ -10,6 +10,7 @@ import pandas as pd
 import jax
 import jax.numpy as jnp
 from fast_histogram import histogram2d
+import glob
 
 import fitting as fit
 import pickle
@@ -358,20 +359,20 @@ def get_new_azel(azt, elt, azmoon, elmoon):
 
 
 def spherical2cartesian(rho, theta, phi, coord="spherical", axis="first"): # axis is the axis where the coords for each point will be
-    print("in spherical2cartesian", flush=True)
+    # print("in spherical2cartesian", flush=True)
     if coord == "horizontal": # theta is azimuth and phi is elevation
-        print("coord == 'horizontal'", flush=True)
+        # print("coord == 'horizontal'", flush=True)
         theta_ = theta.copy()
         theta = np.pi/2 - np.radians(phi.copy())
         phi = np.radians(theta_)
-        print("go get it", flush=True)
+        # print("go get it", flush=True)
         # theta, phi = np.pi/2 - np.radians(phi), np.radians(theta)
     elif coord != "spherical":
         raise ValueError("Argument coord = {} not understood.".format(coord))
     x = rho * np.sin(theta) * np.cos(phi)
     y = rho * np.sin(theta) * np.sin(phi)
     z = rho * np.cos(theta)
-    print("x, y, z alright", flush=True)
+    # print("x, y, z alright", flush=True)
     res = np.array([x, y, z])
     if axis == "first":
         return res
@@ -422,20 +423,20 @@ def cartesian2spherical(x, y, z, coord="spherical", axis="first"):
 #     return res_nonorm/np.linalg.norm(res_nonorm, axis=0)
 
 def get_perp_vect(point_A, point_B, point_C): # get the vector perpendicular to the plane with these three points of shape (3, ...)
-    print("np.shape(point_A)", np.shape(point_A), flush=True)
-    print("np.shape(point_B)", np.shape(point_B), flush=True)
-    print("np.shape(point_C)", np.shape(point_C), flush=True)
+    # print("np.shape(point_A)", np.shape(point_A), flush=True)
+    # print("np.shape(point_B)", np.shape(point_B), flush=True)
+    # print("np.shape(point_C)", np.shape(point_C), flush=True)
     vec_1 = point_A - match_shape(point_C, point_A.shape)
-    print("np.shape(vec_1)", np.shape(vec_1), flush=True)
+    # print("np.shape(vec_1)", np.shape(vec_1), flush=True)
     vec_2 = point_B - match_shape(point_C, point_B.shape)
-    print("np.shape(vec_2)", np.shape(vec_2), flush=True)
+    # print("np.shape(vec_2)", np.shape(vec_2), flush=True)
     vec_2 = match_shape(vec_2, np.shape(vec_1))
-    print("np.shape(vec_2)", np.shape(vec_2), flush=True)
+    # print("np.shape(vec_2)", np.shape(vec_2), flush=True)
     res_nonorm = np.cross(vec_1, vec_2, axis=0)
-    print("shapes vec_1, vec_2, res_nonorm")
-    print(np.shape(vec_1))
-    print(np.shape(vec_2))
-    print(np.shape(res_nonorm))
+    # print("shapes vec_1, vec_2, res_nonorm")
+    # print(np.shape(vec_1))
+    # print(np.shape(vec_2))
+    # print(np.shape(res_nonorm))
     return res_nonorm/np.linalg.norm(res_nonorm, axis=0)
 
 def get_plane(point_A, point_B, point_C, offset=0): # plane equation ax + by + cz + d = 0
@@ -1265,7 +1266,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             mapsb_fb_proj = []
             for mapsb_ in [mapsb_forth, mapsb_back]:
                 mapsb_proj = hp.gnomview(mapsb_, reso=reso, min=min_plot, max=max_plot, xsize=xsize,
-                        rot=center, return_projected_map=True, no_plot=True)
+                        rot=center, return_projected_map=True, no_plot=False)
                 X = np.arange(len(mapsb_proj))
                 Y = np.arange(len(mapsb_proj[0]))
                 XX, YY = np.meshgrid(X, Y) # pixel units, just for the interpolation
@@ -2267,14 +2268,18 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     MySite = EarthLocation(lat=ObsSite['lat'], lon=ObsSite['lon'], height=ObsSite['height'])
     # utcoffset = ObsSite['UTC_Offset']
 
-    dt0 = datetime.utcfromtimestamp(int((tt + tinit)[0]))
+    # print("tt in get_azel_moon", np.min(tt), np.max(tt))
+
+    dt0 = datetime.utcfromtimestamp(int((tt + tinit)[0])) # starting time
     print(dt0)
 
     nbtime = 100
-    tt_hours_loc = tt/3600
+    tt_hours_loc = (tt - tt[0])/3600 # number of hours since starting time
     delta_time = np.linspace(np.min(tt_hours_loc), np.max(tt_hours_loc), nbtime)*u.hour
 
     alltimes = Time(dt0) + delta_time
+
+    # print("alltimes in get_azel_moon", np.min(alltimes), np.max(alltimes))
 
     ### Local coordinates
     frame_Site = AltAz(obstime=alltimes, location=MySite)
@@ -2288,6 +2293,8 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
 
     azmoon = np.interp(tt_hours_loc, delta_time/u.hour, myazmoon)
     elmoon = np.interp(tt_hours_loc, delta_time/u.hour, myelmoon)
+
+    # print("azel moon in get_azel_moon", np.min(azmoon), np.max(azmoon), np.min(elmoon), np.max(elmoon))
     if doplot:
         plt.figure()
         plt.plot(myazmoon, myelmoon, 'ro')
@@ -2297,6 +2304,8 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
 
 
 def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None, tshift=0, year_data="2022"):
+    print("start_tt is now ignored and put to zero?")
+    start_tt = 0
     if data is None: # first read the data from disk if needed
         ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
         FPidentity = pt.make_id_focalplane()
@@ -2315,6 +2324,83 @@ def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, 
         sort_idx_old = np.argsort(QPidx_old)
         QPidx = QPidx[sort_idx_old]
         # QPidx = QPidx_old # if want old
+
+        tt_full = []
+        alltod_full = []
+        azt_full = []
+        elt_full = []
+        newazt_full = []
+        newelt_full = []
+        scantype_full = []
+        Tbath_full = []
+
+        for i, diri in enumerate(datadir):
+            print("\nreading file", i, diri)
+            vars = read_data(diri, remove_t0=False, year_data=year_data)
+            if vars is None:
+                print("\nSkipping data...")
+                continue
+            tt, alltod, thk, az, el, tinit_, Tbath_raw = vars
+
+            if i == 0: # first file
+                tinit = tinit_
+                print("tinit = {}".format(tinit))
+            else:
+                if tinit_ <= tinit:
+                    raise ValueError("The initial time {} is smaller than the one from the first file {}. Files might not be sorted well.".format(tinit_, tinit))
+
+            # alltod = alltod[:, start_tt:]
+            # tt = tt[start_tt:]
+
+            # need to put tt[0] to zero, but be careful of real time
+            tt -= tinit + tshift # tshift seen in plotting back and forth images
+            thk -= tinit
+
+            ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
+            azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+    
+            ### Identify scan types and numbers
+            _, azt, elt, scantype, _ = identify_scans(thk, az, el, 
+                                                    tt=tt, doplot=False, 
+                                                    plotrange=[tt[0], tt[0] + 2000], 
+                                                    thr_speedmin=speedmin)
+            
+            Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
+
+            # good solution
+            file_name = str(tinit)
+            newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=4, det_pos=det_pos, file_name=file_name) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+            # newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0, det_pos=det_pos, file_name=file_name) # put tilt_az=0 for simulated maps
+
+            tt_full.append(tt)
+            alltod_full.append(alltod)
+            azt_full.append(azt)
+            elt_full.append(elt)
+            newazt_full.append(newazt)
+            newelt_full.append(newelt)
+            scantype_full.append(scantype)
+            Tbath_full.append(Tbath)
+
+        tt = np.concatenate(tt_full)
+        alltod = np.concatenate(alltod_full, axis=1)
+        azt = np.concatenate(azt_full)
+        elt = np.concatenate(elt_full)
+        axis = int(det_pos is not None)
+        newazt = np.concatenate(newazt_full, axis=axis)
+        newelt = np.concatenate(newelt_full, axis=axis)
+        scantype = np.concatenate(scantype_full)
+        Tbath = np.concatenate(Tbath_full)
+
+        print("shape scantype", np.shape(scantype))
+        print("shape newazt", np.shape(newazt))
+        data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath] # what will be read later if this function is reused
+    else: # if the previous step was already done in previous execution
+        print('Using data already stored in memory - not read from disk')
+        tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = data
+    return data, tt.copy(), tinit, alltod.copy(), QPidx.copy(), azt.copy(), elt.copy(), newazt.copy(), newelt.copy(), scantype.copy(), Tbath.copy()
+
+        ######### Old code that analyses all the files at the same time ########
+    if skibiddi: # just to avoid syntax error
         if type(datadir) is str:
             tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False, year_data=year_data)
         else: # should be a list or an array
@@ -2495,6 +2581,19 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
         print(np.shape(newazt_))
         print(np.shape(newelt_))
 
+    # azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=True)
+    # fig, axs = plt.subplots(1, 2)
+    # axs[1].set_title("az")
+    # axs[1].plot(tt, azt, c="b")
+    # axs[1].scatter(tt, newazt, c="g")
+    # axs[1].plot(tt, azmoon, c="r")
+    # axs[0].set_title("el")
+    # axs[0].plot(tt, elt, c="b")
+    # axs[0].scatter(tt, newelt, c="g")
+    # axs[0].plot(tt, elmoon, c="r")
+    # plt.show()
+    # # azer
+    # return 0, data, 0, 0, 0, 0
     # newazt, newelt = azt, elt
 
     ### Loop over TES to do the maps
@@ -3297,7 +3396,7 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
             az_zen = np.array([det_pos[0]])
             el_zen = np.array([det_pos[1]])
             ndets = 1
-            print("here we are!")
+            # print("here we are!")
         else:
             az_zen = det_pos[:, 0]
             el_zen = det_pos[:, 1]
@@ -3308,10 +3407,10 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
                 az_zen[idx_thermom] = 0 # we remove the NaN
                 el_zen[idx_thermom] = 90 # we remove the NaN
         
-        print("shapes before expansion", np.shape(az_zen), np.shape(el_zen))
+        # print("shapes before expansion", np.shape(az_zen), np.shape(el_zen))
         az_zen = np.expand_dims(az_zen, 1)
         el_zen = np.expand_dims(el_zen, 1)
-        print("shapes after", np.shape(az_zen), np.shape(el_zen))
+        # print("shapes after", np.shape(az_zen), np.shape(el_zen))
         # final shape in cartesian coord should be (3, ndets, ntimes) otherwise it crashed (probably linked to how arrays are stored in memory)
         # print("shape det_pos", np.shape(az_zen))
         # below, the deltas are computed from the distance to zenith (90 - el_zen) and the direction (az_zen - 90)
@@ -3324,10 +3423,10 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
         # and it might be more accurate instead of converting to az, el (?)
         # actually probably not, the azimuth conversion has to be done just for the elevation of the source (which is known)
         # and the elevation conversion is absolute
-        print("shapes source before", np.shape(azt_source), np.shape(elt_source))
+        # print("shapes source before", np.shape(azt_source), np.shape(elt_source))
         azt_source = np.expand_dims(azt_source, 0) + delta_az
         elt_source = np.expand_dims(elt_source, 0) + delta_el
-        print("shapes source after", np.shape(azt_source), np.shape(elt_source))
+        # print("shapes source after", np.shape(azt_source), np.shape(elt_source))
         # this should be (ndets, ntimes)?
         # print("shape azt_source", np.shape(azt_source))
         # print("shape elt_source", np.shape(elt_source))
@@ -3336,33 +3435,37 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
     azt_zen = np.zeros_like(azt_source)
     elt_zen = np.zeros_like(azt_source)
     len_batch = int(1e5) # number of pointings treated at the same time
-    print("shape azt", np.shape(azt))
+    # print("shape azt", np.shape(azt))
     one_more = int(len(azt)%len_batch > 0)
     n_iter = len(azt)//len_batch + one_more
     for i_iter in range(n_iter):
         print("Computing alpha, beta for the {}-point batch {}/{}".format(len_batch, i_iter + 1, n_iter))
         lower_bound = i_iter*len_batch
-        higher_bound = min((i_iter + 1)*len_batch, len(azt) - 1)
+        higher_bound = min((i_iter + 1)*len_batch, len(azt))
         azt_i = azt[lower_bound:higher_bound]
         elt_i = elt[lower_bound:higher_bound]
-        azt_source_i = azt_source[:, lower_bound:higher_bound]
-        elt_source_i = elt_source[:, lower_bound:higher_bound]
+        if det_pos is not None:
+            azt_source_i = azt_source[:, lower_bound:higher_bound]
+            elt_source_i = elt_source[:, lower_bound:higher_bound]
+        else:
+            azt_source_i = azt_source[lower_bound:higher_bound]
+            elt_source_i = elt_source[lower_bound:higher_bound]
         # we get the vector perpendicular to the horizontal great circle at pointing
         perp_vect_pointing = get_perp_vect_horiz_great_circle(azt_i, elt_i, tilt_az=tilt_az, sphere_radius=sphere_radius, sphere_centre=sphere_centre)
-        print("perp_vect_pointing OK", flush=True)
+        # print("perp_vect_pointing OK", flush=True)
 
         # we get vector perpendicular to the great circle going through pointing and calsource
-        print("shape azel source", np.shape(azt_source_i), np.shape(elt_source_i))
+        # print("shape azel source", np.shape(azt_source_i), np.shape(elt_source_i))
         calsource = spherical2cartesian(sphere_radius, azt_source_i, elt_source_i, coord="horizontal", axis="first")
-        print("calsource OK", np.shape(calsource), flush=True)
-        print("shape azel pointing", np.shape(azt_i), np.shape(elt_i))
+        # print("calsource OK", np.shape(calsource), flush=True)
+        # print("shape azel pointing", np.shape(azt_i), np.shape(elt_i))
         pointing = spherical2cartesian(sphere_radius, azt_i, elt_i, coord="horizontal", axis="first")
-        print("pointing OK", np.shape(pointing), flush=True)
+        # print("pointing OK", np.shape(pointing), flush=True)
         del azt_i, elt_i, azt_source_i, elt_source_i
         # print(np.shape(calsource))
         # print(np.shape(pointing))
         perp_vec_gc_pointing_calsrc = get_perp_vect(calsource, pointing, sphere_centre)
-        print("shape perp_vec_gc_pointing_calsrc", np.shape(perp_vec_gc_pointing_calsrc))
+        # print("shape perp_vec_gc_pointing_calsrc", np.shape(perp_vec_gc_pointing_calsrc))
 
         # we want the coords to be the last axis
         vec_calsource = np.moveaxis(calsource, 0, -1) # sphere centre is [0, 0, 0]
@@ -3370,7 +3473,7 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
         # the angle between the pointing and the calsource in degrees
         angle_beta = np.abs(np.degrees(dist_angle(vec_calsource, vec_pointing)))
 
-        print("angle_beta == 0:", np.argwhere(angle_beta == 0))
+        # print("angle_beta == 0:", np.argwhere(angle_beta == 0))
 
         # print(np.shape(perp_vect_pointing))
         # print(np.shape(perp_vec_gc_pointing_calsrc))
@@ -3380,14 +3483,17 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
 
         angle_alpha[~np.isfinite(angle_alpha)] = 0 # at the pixel pointing at calsource or if problem for a scan
         angle_beta[~np.isfinite(angle_beta)] = 30 # if problem for a scan
-        print("all angles computed", flush=True)
+        # print("all angles computed", flush=True)
 
         # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
         new_pointing = spherical2cartesian(sphere_radius, angle_alpha, 90 - angle_beta, coord="horizontal", axis="first") # beta is 90 - elevation!
         pre_rotation_matrix = get_simple_rotation_matrix("z", np.radians(90)) # rotation x --> y
 
         new_pointing = np.einsum("ij,j...k->i...k", pre_rotation_matrix, new_pointing)
-        _, azt_zen[:, lower_bound:higher_bound], elt_zen[:, lower_bound:higher_bound] = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
+        if det_pos is not None:
+            _, azt_zen[:, lower_bound:higher_bound], elt_zen[:, lower_bound:higher_bound] = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
+        else:
+            _, azt_zen[lower_bound:higher_bound], elt_zen[lower_bound:higher_bound] = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
 
 
     ######### This is the version that was used to test the method on smaller datasets (e.g. 2026/03/13 Moon data) ##########
@@ -3777,3 +3883,50 @@ def update_dict(config, instrument_type, nf_sub, nside, dictfilename='qubic/qubi
     d['synthbeam_kmax'] = 1
     return d
 
+
+
+def observation_dirs(ObsDate, datadir, more=None):
+
+    dict_obs = {
+        "2026-05-03": -1,
+        "2026-05-04": -1, 
+        "2026-05-05": -1, 
+        "2026-06-23": -1, 
+        "2026-06-24": 16, 
+        "2026-06-25": -1, 
+        "2026-06-26": -1
+    }
+
+    year_data = ObsDate[:4]
+    recent_obs = ["2026-05-03", "2026-05-04", "2026-05-05", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26"]
+    
+    if year_data == "2022":
+        dirs = glob.glob(datadir + ObsDate + '/*')
+    else:
+        # dirs = glob.glob(datadir + ObsDate + '/*')
+        # dirs = glob.glob(datadir + ObsDate + '/*Moon_instrument_not_quite_ready')
+        # dirs = glob.glob(datadir + ObsDate + '/2026-03-11_06.45.41__Moon_instrument_not_quite_ready')
+        # dirs = glob.glob(datadir + ObsDate + '/2026-03-11_06.46.21__Moon_instrument_not_quite_ready')
+        # dirs = glob.glob(datadir + ObsDate + '/2026-03-11_15.39.59__Moon_el30')
+        # dirs = glob.glob(datadir + ObsDate + "/*Moon_el60")
+        # dirs = glob.glob(datadir + ObsDate + "/2026-03-11_07.58.25__Moon_el60")
+        if ObsDate == "2026-03-13":
+            dirs = glob.glob(datadir + ObsDate + "/*Moon")
+        # dirs = glob.glob(datadir + ObsDate + "/*07.54.24__Moon")
+        if ObsDate in recent_obs:
+            dirs = glob.glob(datadir + ObsDate + "/*moon_scans")
+    # print(dirs)
+    dirs.sort()
+    if ObsDate == "2026-03-13":
+        i_file = 1 # only 1 works for 2026-03-13
+        datafiles = dirs[i_file]
+    if ObsDate == "2026-06-24":
+        if more == "fall":
+            datafiles = dirs[:16]
+        elif more == "rise":
+            datafiles = dirs[16:]
+    elif ObsDate in recent_obs:
+        datafiles = dirs
+    print(datafiles)
+    
+    return datafiles

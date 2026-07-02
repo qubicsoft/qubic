@@ -1,4 +1,4 @@
-simulation_path: "CMM/parametric_d0_DB_test_d0_353"
+simulation_path: "CMM/parametric_d0_DB_test_pipeline"
 name: "test"
 
 Spectrum:

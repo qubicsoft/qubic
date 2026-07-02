@@ -1,4 +1,4 @@
-foldername: "test_kmax_3_1_99"
+foldername: "test_tod"
 filename: "test"
 path_tod: null #"FMM/test_kmax_3_1/Dict/tod_combined.h5"                       # Path to HDF5 file with pre-computed TOD (null to simulate)
 simulate_tod: false                                # If true, stop after TOD generation and save it to Dict/tod.h5
@@ -10,7 +10,7 @@ CMB:
   Alens: 1
 
 Foregrounds:
-  Dust: false                     # Thermal Dust emission
+  Dust: True                     # Thermal Dust emission
   Synchrotron: false             # Synchrotron emission
 
 QUBIC:
@@ -18,9 +18,9 @@ QUBIC:
 
   instrument: "DB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
-  npointings: 5000               # Number of time samples
-  nsub_in: 40                     # Number of sub-acquisitions
-  nsub_out: 16
+  npointings: 300               # Number of time samples
+  nsub_in: 8                     # Number of sub-acquisitions
+  nsub_out: 8
   nrec: 2                        # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
   convolution_in: true          # Angular resolution in the input TOD
@@ -50,7 +50,7 @@ QUBIC:
 
 SKY:
   ### This section control the reconstructed sky
-  nside: 256                               # Nside of components
+  nside: 128                               # Nside of components
   coverage_cut: 0.2                        # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57
@@ -73,7 +73,7 @@ PCG:
     ### This section control PCG parameters
 
   n_iter_pcg: 300                 # Number of PCG iterations #100
-  tol_pcg: 1.0e-10               # Tolerance for PCG
+  tol_pcg: 1.0e-18               # Tolerance for PCG
   preconditioner: true
   initial_guess_intensity_to_zero: true
   gif: false

@@ -1,0 +1,71 @@
+CMB:
+  Alens: 1
+  cmb: true
+  r: 0
+  seed: 1
+Foregrounds:
+  Dust: true
+  Synchrotron: false
+PCG:
+  fwhm_plot: 0
+  gif: false
+  initial_guess_intensity_to_zero: true
+  n_iter_pcg: 2
+  preconditioner: true
+  resolution_plot: 15
+  tol_pcg: 1.0e-18
+PLANCK:
+  bandwidth_planck: 0.2
+  external_data: true
+  level_noise_planck: 1
+  nsub_planck: 100
+  seed_noise: 283
+  weight_planck: 0
+Pipeline:
+  mapmaking: true
+  spectrum: false
+QUBIC:
+  NOISE:
+    detector_nep: 4.7e-17
+    duration_150: 3
+    duration_220: 3
+    ndet: 1
+    npho150: 1
+    npho220: 1
+    seed_noise: 283
+  POINTINGS:
+    pointings_file: null
+    random_pointing: true
+    realistic_scanning_strategy: false
+    repeat_pointing: false
+    sweeping_pointing: false
+  SYNTHBEAM:
+    synthbeam_fraction: 1
+    synthbeam_kmax: 3
+    synthbeam_kmax_out: 1
+  bandpass_correction: true
+  configuration: FI
+  convolution_in: true
+  convolution_out: false
+  dtheta: 15
+  instrument: DB
+  interp: false
+  npointings: 200
+  nrec: 2
+  nsub_in: 8
+  nsub_out: 8
+SKY:
+  DEC_center: -57
+  RA_center: 0
+  coverage_cut: 0.2
+  nside: 32
+Spectrum:
+  aposize: 10
+  dl: 30
+  lmax: 511
+  lmin: 30
+  plot_spectrum: true
+filename: test
+foldername: test_npointings_check
+path_tod: null
+simulate_tod: false

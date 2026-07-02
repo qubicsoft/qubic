@@ -13,6 +13,7 @@ from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from scipy.optimize import minimize
 
 from qubic.lib.Instrument.Qacquisition import JointAcquisitionFrequencyMapMaking
+from qubic.lib.Instrument.Qinstrument import compute_freq
 from qubic.lib.Instrument.Qnoise import QubicTotNoise
 from qubic.lib.MapMaking.FrequencyMapMaking.FMM_errors_checking import ErrorChecking
 from qubic.lib.MapMaking.Qcg import pcg
@@ -162,8 +163,22 @@ class PipelineFrequencyMapMaking:
         )
 
         ### Ensure that all processors have the same external dataset
-        # When loading a pre-computed TOD, joint_tod is not built; fall back to joint.qubic.allnus
-        _allnus = self.joint_tod.qubic.allnus if self.path_tod is None else self.joint.qubic.allnus
+        # When loading a pre-computed TOD, joint_tod is not built; compute allnus directly
+        # from nsub_in (the nsub used to generate the TOD) instead of falling back to
+        # joint.qubic.allnus, which is built from nsub_out and can differ.
+        if self.path_tod is None:
+            _allnus = self.joint_tod.qubic.allnus
+        else:
+            _f_bands = [150] if self.dict_in["instrument_type"] == "MB" else [150, 220]
+            _allnus = []
+            for _f_band in _f_bands:
+                _, _, _nus_subbands_i, _, _, _ = compute_freq(
+                    _f_band,
+                    Nfreq=int(self.params["QUBIC"]["nsub_in"] / len(_f_bands)),
+                    relative_bandwidth=self.dict_in["filter_relative_bandwidth"],
+                )
+                _allnus += list(_nus_subbands_i)
+            _allnus = np.array(_allnus)
         self.externaldata = PlanckMaps(
             self.skyconfig,
             _allnus,
@@ -655,7 +670,6 @@ class PipelineFrequencyMapMaking:
         nsub_out = self.params["QUBIC"]["nsub_out"]
         fsub = nsub_out // nrec
         npix = 12 * nside**2
-        no_det = len(self.joint.qubic.multiinstrument[0].detector)
         H_qubic = self.joint.qubic.operator
 
         stacked_dptdp_inv = np.empty((nrec, npix), dtype=float)
@@ -686,32 +700,32 @@ class PipelineFrequencyMapMaking:
                         "Expected both DiagonalOperator and ProjectionOperator in H_single.operands"
                     )
 
-                indices = P.matrix.data.index  # shape (no_det * point_per_det, ncol)
+                # scale per-det sums by diagonal D squared
+                D_sq = (D.data**2).astype(float)
+                # Use the local detector count from D itself rather than the function-level
+                # `no_det`: under MPI detector-axis splitting, the actual per-rank detector
+                # count for this sub-band's operands can differ from
+                # multiinstrument[0].detector, which would otherwise build out-of-bounds
+                # det_ids when indexing D_sq below.
+                no_det_local = D_sq.shape[0]
+
+                indices = P.matrix.data.index  # shape (no_det_local * point_per_det, ncol)
                 weights = P.matrix.data.r11  # same shape as indices
                 total_rows, ncols = indices.shape
-                point_per_det = total_rows // no_det
+                point_per_det = total_rows // no_det_local
 
                 flat_idx = indices.ravel()
                 flat_w = weights.ravel()
                 per_det_count = point_per_det * ncols
-                det_ids = np.repeat(np.arange(no_det), per_det_count)
+                det_ids = np.repeat(np.arange(no_det_local), per_det_count)
 
-                # build combined index = det_id * npix + pixel_index
-                combined_index = det_ids * npix + flat_idx
-                weights_squared = flat_w * flat_w
-
-                # bincount over combined index to get per-det contributions
-                minlength = no_det * npix
-                per_det_flat = np.bincount(
-                    combined_index, weights=weights_squared, minlength=minlength
-                )
-                mapPtP_perdet_seq = per_det_flat.reshape((no_det, npix))
-
-                # scale per-det sums by diagonal D squared
-                D_sq = (D.data**2).astype(float)
-
-                # scale and sum across detectors to compute dptdp
-                dptdp = (D_sq[:, np.newaxis] * mapPtP_perdet_seq).sum(axis=0)
+                # Fold the per-detector D_sq weight directly into the bincount weights and
+                # accumulate straight into pixel space. This is mathematically identical to
+                # building a dense (no_det, npix) per-detector grid and summing over detectors,
+                # but avoids ever materializing that grid (no_det * npix can be many GB at
+                # realistic nside/detector counts).
+                weighted = flat_w * flat_w * D_sq[det_ids]
+                dptdp = np.bincount(flat_idx, weights=weighted, minlength=npix)
 
                 # safe inversion
                 dptdp_inv = np.zeros_like(dptdp, dtype=float)
@@ -1031,7 +1045,7 @@ class PipelineEnd2End:
                     "Nls": DlBB_noise,
                     "parameters": self.params,
                     "delta_ell": self.params["Spectrum"]["dl"],
-                    "fsky": self.spectrum.dictionary["fsky"],
+                    "fsky": self.spectrum.namaster.fsky,
                 }
 
                 if self.params["Spectrum"]["plot_spectrum"]:

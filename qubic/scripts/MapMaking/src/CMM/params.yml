@@ -1,6 +1,7 @@
 save_iter: 1                                                                           # Save every 'save_iter' iteration
-foldername: "test_pcg_end"                                                                  # Name of the saved folder
+foldername: "test_diff_nsub"                                                                  # Name of the saved folder
 filename: "test"                                                                       # Name of the saved file
+lastite: false                                                                          # Keep only the last iteration
 lastite: false                                                                          # Keep only the last iteration
 
 CMB:
@@ -54,8 +55,8 @@ QUBIC:
   instrument: "DB"                                                                     # Instrumental design (DB, UWB or MB), respectively for the Dual Bands, Ultra Wide Band and Multi Band configurations
   configuration: "FI"                                                                  # Instrumental configuration (TD or FI) # to be implemented in the code
   npointings: 3000                                                                     # Number of time samples
-  nsub_in: 16                                                                           # Number of sub-acquisitions
-  nsub_out: 16                                                                          # Number of sub-acquisitions for the reconstruction
+  nsub_in: 14                                                                           # Number of sub-acquisitions
+  nsub_out: 8                                                                          # Number of sub-acquisitions for the reconstruction
   convolution_in: false                                                                # Angular resolution in the input TOD
   convolution_out: false                                                               # Angular resolution in the reconstruction
   fwhm_rec: null # [0.007628603433902725, 0.004491045331158454]                                                                       # conv_out=False only: override effective PCG reconstruction FWHM (rad). null = auto-compute from noise weights (correct for UWB and DB).
@@ -81,7 +82,7 @@ QUBIC:
 SKY:
     ### This section control the reconstructed sky
 
-  nside: 256                                                                           # Nside of components
+  nside: 128                                                                           # Nside of components
   coverage_cut: 0.15                                                                   # Percent of coverage to keep the pixels seen enough by QUBIC
   RA_center: 0
   DEC_center: -57
@@ -89,7 +90,7 @@ SKY:
 PLANCK:
     ### This section define which external data are we using
   level_noise_planck: 1                                                              # Noise level for Planck data
-  nsub_planck: 100                                                                       # Number of integration step for Planck data
+  nsub_planck: 10                                                                       # Number of integration step for Planck data
   weight_planck: 1                                                                     # Weight of Planck data within the QUBIC patch
   fwhm_weight_planck: 0                                                                # FWHM for apodized QUBIC patch
   30GHz: false
@@ -112,7 +113,7 @@ PCG:
   n_iter_pcg: 5                                                                       # Number of PCG iterations
   iter_end: 100                                                                          # Number of PCG iterations for a final run after the main loop (0 to disable)
   tol_pcg: 1.0e-20                                                                     # Tolerance for PCG
-  n_iter_loop: 200                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+  n_iter_loop: 20                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
   ites_to_converge: 1                                                                  # should be less than n_iter_loop
   tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                                    # Fixing pixels outside QUBIC patch

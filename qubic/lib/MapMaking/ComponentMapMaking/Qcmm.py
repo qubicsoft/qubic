@@ -193,7 +193,8 @@ class PipelineComponentMapMaking:
 
         ### Update components
         self.preset.comp.components_iter[:, seenpix, :] = (
-            results["x"].copy() + w * self.preset.acquisition.components_in_convolved[:, seenpix, :].copy()
+            results["x"].copy()
+            + w * self.preset.acquisition.components_in_convolved[:, seenpix, :].copy()
         )
 
         self.preset.acquisition.convergence.append(results["convergence"].copy())
@@ -308,7 +309,9 @@ class PipelineComponentMapMaking:
                     fwhm=self.preset.acquisition.fwhm_mapmaking[j],
                     lmax=3 * self.preset.sky.params_sky["nside"] - 1,
                 )
-                tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](C_j(self.preset.comp.components_iter[i])).ravel()
+                tod_comp[i, j] = self.preset.qubic.joint_out.qubic.H[j](
+                    C_j(self.preset.comp.components_iter[i])
+                ).ravel()
 
         return tod_comp
 
@@ -616,57 +619,56 @@ class PipelineComponentMapMaking:
         if self.preset.tools.rank == 0:
             if self.preset.tools.params["save_iter"] != 0:
                 if force or (step + 1) % self.preset.tools.params["save_iter"] == 0:
-                    if self.preset.tools.params["lastite"]:
-                        if step != 0:
-                            os.remove(
-                                "CMM/"
-                                + self.preset.tools.params["foldername"]
-                                + "/Dict/"
-                                + self.preset.tools.params["filename"]
-                                + f"_{str(self.preset.job_id)}.h5"
-                            )
-                        dictionary = {
-                            "maps_in": self.preset.comp.components_in,
-                            "maps_in_convolved": self.preset.acquisition.components_in_convolved,
-                            "maps": self.preset.comp.components_iter,
-                            "maps_noise": self.preset.acquisition.components_in_convolved
-                            - self.preset.comp.components_iter,
-                            "comps_name": self.preset.comp.components_name_out,
-                            "beta": self.preset.acquisition.allbeta,
-                            "beta_true": self.preset.mixingmatrix.beta_in,
-                            "index_beta": self.preset.mixingmatrix._index_seenpix_beta,
-                            "g": self.preset.gain.all_gain_in,
-                            "gi": self.preset.gain.all_gain,
-                            "all_gain": self.preset.gain.all_gain_iter,
-                            "A": self.preset.acquisition.Amm_iter,
-                            "Atrue": self.preset.mixingmatrix.Amm_in,
-                            "G": self.preset.gain.all_gain_in,
-                            "nus_in": self.preset.mixingmatrix.nus_eff_in,
-                            "nus_out": self.preset.mixingmatrix.nus_eff_out,
-                            "center": self.preset.sky.center,
-                            "coverage": self.preset.sky.coverage,
-                            "seenpix": self.preset.sky.seenpix,
-                            "seenpix_beta": self.preset.mixingmatrix._index_seenpix_beta,
-                            "fsky": self.preset.sky.fsky,
-                            "fwhm_in": self.preset.acquisition.fwhm_tod,
-                            "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
-                            "fwhm_rec": self.preset.acquisition.fwhm_rec,
-                            "parameters": self.preset.tools.params,
-                            "convergence": self.preset.acquisition.convergence,
-                            "TOD_qubic": self.preset.acquisition.TOD_qubic,
-                            "TOD_external": self.preset.acquisition.TOD_external,
-                            "qubic_dict": {
-                                k: v for k, v in self.preset.qubic.dict.items() if k != "comm"
-                            },  # Need to remove the MPI communictor, which is not suppurted by pickle
-                        }
-                        HDF5Dict().save_dict(
+                    if self.preset.tools.params["lastite"] and step != 0:
+                        os.remove(
                             "CMM/"
                             + self.preset.tools.params["foldername"]
                             + "/Dict/"
                             + self.preset.tools.params["filename"]
-                            + f"_{str(self.preset.job_id)}.h5",
-                            dictionary,
+                            + f"_{str(self.preset.job_id)}.h5"
                         )
+                    dictionary = {
+                        "maps_in": self.preset.comp.components_in,
+                        "maps_in_convolved": self.preset.acquisition.components_in_convolved,
+                        "maps": self.preset.comp.components_iter,
+                        "maps_noise": self.preset.acquisition.components_in_convolved
+                        - self.preset.comp.components_iter,
+                        "comps_name": self.preset.comp.components_name_out,
+                        "beta": self.preset.acquisition.allbeta,
+                        "beta_true": self.preset.mixingmatrix.beta_in,
+                        "index_beta": self.preset.mixingmatrix._index_seenpix_beta,
+                        "g": self.preset.gain.all_gain_in,
+                        "gi": self.preset.gain.all_gain,
+                        "all_gain": self.preset.gain.all_gain_iter,
+                        "A": self.preset.acquisition.Amm_iter,
+                        "Atrue": self.preset.mixingmatrix.Amm_in,
+                        "G": self.preset.gain.all_gain_in,
+                        "nus_in": self.preset.mixingmatrix.nus_eff_in,
+                        "nus_out": self.preset.mixingmatrix.nus_eff_out,
+                        "center": self.preset.sky.center,
+                        "coverage": self.preset.sky.coverage,
+                        "seenpix": self.preset.sky.seenpix,
+                        "seenpix_beta": self.preset.mixingmatrix._index_seenpix_beta,
+                        "fsky": self.preset.sky.fsky,
+                        "fwhm_in": self.preset.acquisition.fwhm_tod,
+                        "fwhm_out": self.preset.acquisition.fwhm_mapmaking,
+                        "fwhm_rec": self.preset.acquisition.fwhm_rec,
+                        "parameters": self.preset.tools.params,
+                        "convergence": self.preset.acquisition.convergence,
+                        "TOD_qubic": self.preset.acquisition.TOD_qubic,
+                        "TOD_external": self.preset.acquisition.TOD_external,
+                        "qubic_dict": {
+                            k: v for k, v in self.preset.qubic.dict.items() if k != "comm"
+                        },  # Need to remove the MPI communictor, which is not suppurted by pickle
+                    }
+                    HDF5Dict().save_dict(
+                        "CMM/"
+                        + self.preset.tools.params["foldername"]
+                        + "/Dict/"
+                        + self.preset.tools.params["filename"]
+                        + f"_{str(self.preset.job_id)}.h5",
+                        dictionary,
+                    )
 
     def _stop_condition(self):
         """
@@ -821,15 +823,14 @@ class PipelineEnd2End:
 
             self.mapmaking.run()
 
-        if self.params["Pipeline"]["spectrum"]:
-            if self.comm.Get_rank() == 0:
-                create_folder_if_not_exists(
-                    self.comm,
-                    "CMM/"
-                    + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_"
-                    + self.params["foldername"]
-                    + "/Spectrum/",
-                )
+        if self.params["Pipeline"]["spectrum"] and self.comm.Get_rank() == 0:
+            create_folder_if_not_exists(
+                self.comm,
+                "CMM/"
+                + f"{self.params['Foregrounds']['Dust']['type']}_{self.params['Foregrounds']['Dust']['model']}_{self.params['QUBIC']['instrument']}_"
+                + self.params["foldername"]
+                + "/Spectrum/",
+            )
 
             if self.mapmaking is not None:
                 self.spectrum = Spectra(self.file)

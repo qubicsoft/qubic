@@ -163,7 +163,7 @@ class PresetAcquisition:
 
     def _get_subband_weights(self):
         is_uwb = self.preset_qubic.params_qubic["instrument"] == "UWB"
-        allfwhm = self.preset_qubic.joint_in.qubic.allfwhm
+        allfwhm = self.preset_qubic.joint_out.qubic.allfwhm
         nsub_per_band = len(allfwhm) // 2
         qubic_invN = self.preset_qubic.joint_out.qubic.invN
 
@@ -276,15 +276,16 @@ class PresetAcquisition:
                 # Accounts for cross-component leakage (e.g. CMB bleeding into Dust I through
                 # negative-weight 150 GHz sub-bands), which a single-component Gaussian cannot capture.
                 allnus = self.preset_qubic.joint_out.qubic.allnus
-                W = self._compute_gls_weights()  # (ncomp, nsub)
-                A = self._build_mixing_matrix(allnus)  # (nsub, ncomp)
+                allfwhm_out = self.preset_qubic.joint_out.qubic.allfwhm
+                W = self._compute_gls_weights()  # (ncomp, nsub_out)
+                A = self._build_mixing_matrix(allnus)  # (nsub_out, ncomp)
                 ncomp = len(self.preset_comp.components_name_out)
                 for jsub in range(len(allnus)):
                     sky_j = sum(
                         A[jsub, k] * self.preset_comp.components_in[k] for k in range(ncomp)
                     )
                     B_j = HealpixConvolutionGaussianOperator(
-                        fwhm=fwhm_qubic_tod[jsub], lmax=3 * nside - 1
+                        fwhm=allfwhm_out[jsub], lmax=3 * nside - 1
                     )
                     blurred_j = B_j(sky_j)
                     for icomp in range(ncomp):
@@ -292,7 +293,7 @@ class PresetAcquisition:
                 # Dominant positive-band FWHM per component — used for fwhm_planck_tod and logging only
                 for icomp in range(ncomp):
                     pos = W[icomp] > 0
-                    fwhm_qubic_rec[icomp] = np.sum(W[icomp, pos] * fwhm_qubic_tod[pos]) / np.sum(
+                    fwhm_qubic_rec[icomp] = np.sum(W[icomp, pos] * allfwhm_out[pos]) / np.sum(
                         W[icomp, pos]
                     )
 

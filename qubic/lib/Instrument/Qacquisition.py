@@ -982,7 +982,10 @@ class PlanckAcquisition:
         for nu in self.nus:
             _planckData = pickle.load(open(PATH + f"Planck{nu}GHz.pkl", "rb"))
 
-            self.sigma.append(_planckData[f"sigma{nu}"])
+            noise_map = np.asarray(_planckData[f"noise{nu}"])
+            if hp.npix2nside(noise_map.shape[0]) != self.nside:
+                noise_map = hp.ud_grade(noise_map.T, self.nside, power=1).T
+            self.sigma.append(noise_map)
             self.fwhm.append(_planckData[f"fwhm{nu}"])
             self.bandwidth.append(_planckData[f"bw{nu}"])
 
@@ -1064,16 +1067,28 @@ class PlanckAcquisition:
         """
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
         sigma = np.asarray(self.sigma)
-        assert sigma.shape == (len(self.nus), 3), f"sigma must be shape (nus,3), got {sigma.shape}"
-
         npix = self.npix
+        assert sigma.shape == (len(self.nus), npix, 3), f"sigma must be shape (nus,npix,3), got {sigma.shape}"
+
+        # Compute the patch-exclusion scale (weight_planck inside seenpix, 1 outside) first,
+        # so that planck_ntot == 0 (noiseless Planck TOD) still respects weight_planck == 0
+        # instead of bypassing it with a flat IdentityOperator.
+        beta = np.ones(npix)
+        if seenpix is not None:
+            beta[seenpix] = weight_planck
+
+        scale = np.zeros(npix)  # we add a mask so to not divide by zero
+        beta_pos = beta > 0
+        scale[beta_pos] = beta[beta_pos] ** 2  # previously 1.0 / (beta[beta_pos] ** 2)
 
         if planck_ntot == 0:
-            return IdentityOperator(
-                shapein=(3 * len(self.nus) * npix)
-            )  # in FMM, len(self.nus) is always 1, in CMM it is over the range
+            # Noiseless Planck TOD: pixels excluded by weight_planck must still get zero
+            # weight; included pixels get a finite placeholder weight (their residual is
+            # exactly zero by construction, so its value does not affect the solution).
+            weight = np.broadcast_to(scale[None, :, None], (len(self.nus), npix, 3)).copy()
+            return DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)
 
-        sigma_perpix = np.broadcast_to(sigma[:, None], (len(self.nus), npix, 3))
+        sigma_perpix = sigma  # already per-pixel, no broadcast needed
 
         if beam_correction != 0:
             factor = (
@@ -1093,14 +1108,6 @@ class PlanckAcquisition:
         base_weight = 1.0 / (
             (sigma_perpix * planck_ntot) ** 2
         )  # this is invN before correcting for the patch
-
-        beta = np.ones(npix)
-        if seenpix is not None:
-            beta[seenpix] = weight_planck
-
-        scale = np.zeros(npix)  # we add a mask so to not divide by zero
-        beta_pos = beta > 0
-        scale[beta_pos] = beta[beta_pos] ** 2  # previously 1.0 / (beta[beta_pos] ** 2)
 
         weight = base_weight * scale[None, :, None]
         invN = DiagonalOperator(weight, broadcast="leftward", shapein=weight.shape)

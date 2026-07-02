@@ -945,18 +945,28 @@ def get_angular_profile_average(
     vecpix = hp.pix2vec(ns, np.arange(12 * ns**2))
     angs = np.degrees(np.arccos(np.dot(vec0, vecpix)))
     rng = np.array([0, thmax])
+
+    if np.ndim(maps) == 1:
+        xx, avg, dx, dy, _ = ft.profile(angs, maps, nbins=nbins, plot=False, rng=rng)
+        if doplot:
+            plt.plot(xx, avg, "o-", label=label + " Average")
+            plt.xlabel("Angle [deg.]")
+            plt.ylabel("")
+            plt.legend(fontsize=fontsize)
+        return xx, avg
+
     xx, yyI, dx, dyI, _ = ft.profile(angs, maps[:, 0], nbins=nbins, plot=False, rng=rng)
     xx, yyQ, dx, dyQ, _ = ft.profile(angs, maps[:, 1], nbins=nbins, plot=False, rng=rng)
     xx, yyU, dx, dyU, _ = ft.profile(angs, maps[:, 2], nbins=nbins, plot=False, rng=rng)
-    avg = np.sqrt((yyI**2 + yyQ**2 / 2 + yyU**2 / 2) / 3)
+    avg = (yyI + yyQ / np.sqrt(2) + yyU / np.sqrt(2)) / 3
     if doplot:
-        plt.plot(xx, avg, "o", label=label + " Average")
+        plt.plot(xx, avg, "o-", label=label + " Average")
         if allstokes:
             plt.plot(xx, yyI, label=label + " I", alpha=0.3)
             plt.plot(xx, yyQ / np.sqrt(2), label=label + " Q/sqrt(2)", alpha=0.3)
             plt.plot(xx, yyU / np.sqrt(2), label=label + " U/sqrt(2)", alpha=0.3)
         plt.xlabel("Angle [deg.]")
-        plt.ylabel("RMS")
+        plt.ylabel("")
         plt.legend(fontsize=fontsize)
     if separate:
         return xx, dyI, dyQ, dyU

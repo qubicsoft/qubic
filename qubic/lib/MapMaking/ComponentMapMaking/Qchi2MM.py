@@ -9,7 +9,7 @@ from pyoperators import MPI
 
 
 @dataclass
-class ParamLayout:
+class MMLayout:
     beta_indices: list  # [(comp_index, position_in_x)]
     blind_indices: list  # [(comp_index, start, length)]
     ndim: int
@@ -35,7 +35,7 @@ class AbstractChi2(ABC):
         self,
         preset,
         TOD_sim,
-        layout: Optional[ParamLayout] = None,
+        layout: Optional[MMLayout] = None,
         beta_map: Optional[np.ndarray] = None,
     ):
         self.preset = preset
@@ -130,7 +130,7 @@ class AbstractChi2(ABC):
 
 
 class MixedChi2(AbstractChi2):
-    def __init__(self, preset, TOD_sim, layout: ParamLayout):
+    def __init__(self, preset, TOD_sim, layout: MMLayout):
         super().__init__(preset, TOD_sim, layout=layout)
         self.layout = layout
 

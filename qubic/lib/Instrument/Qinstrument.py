@@ -185,6 +185,7 @@ class QubicInstrument(Instrument):
         self.nu2 = 220e9
         self.nu2_up = self.nu2 * (1 + self.FRBW / 2) + epsilon
         self.nu2_down = self.nu2 * (1 - self.FRBW / 2) - epsilon
+
         if (filter_nu <= self.nu1_up) and (filter_nu >= self.nu1_down):
             d["optics"] = d["optics"].replace(d["optics"][-7:-4], "150")
         elif (filter_nu <= self.nu2_up) and (filter_nu >= self.nu2_down):

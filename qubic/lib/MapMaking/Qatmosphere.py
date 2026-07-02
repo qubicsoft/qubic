@@ -27,16 +27,12 @@ from qubic.lib.Qsamplings import QubicSampling
 
 class AtmosphereProperties:
     def __init__(self, params):
-        ### Import parameters files
         self.params = params
         self.qubic_dict = self.get_qubic_dict()
 
         self.rng = np.random.default_rng(self.params["seed"])
 
-        ### Build atmospheric coordinates
-        # Cartesian coordinates
         if self.params["h_grid"] == 1:
-            # 2d model
             self.altitude = (self.params["h_qubic"] + self.params["altitude_atm_2d"]) * np.ones(
                 self.params["h_grid"]
             )
@@ -47,7 +43,6 @@ class AtmosphereProperties:
                 self.params["altitude_atm_2d"],
                 self.params["h_grid"],
             )
-        # Import atmosphere coordinates for the flat atmosphere case
         if self.params["flat"]:
             self.x_list = np.linspace(
                 -self.params["size_atm"], self.params["size_atm"], self.params["n_grid"]
@@ -55,12 +50,10 @@ class AtmosphereProperties:
             self.y_list = np.linspace(
                 -self.params["size_atm"], self.params["size_atm"], self.params["n_grid"]
             )
-            # Azimuth / Elevation coordinates
             x, y = np.meshgrid(self.x_list, self.y_list)
             z = np.ones(x.shape) * self.params["altitude_atm_2d"]
             self.r, self.az, self.el = self.horizontal_plane_to_azel(x, y, z)
 
-        ### Compute atmosphere temperature and mean water vapor density
         self.temperature = self.get_temperature_atm(
             self.altitude, self.params["temp_ground"], self.params["h_temp"]
         )
@@ -68,7 +61,6 @@ class AtmosphereProperties:
             self.altitude, self.params["rho_0"], self.params["h_h2o"]
         )
 
-        ### Compute absorption coefficients
         (
             self.mol_absorption_coeff,
             self.self_absorption_coeff,
@@ -76,13 +68,11 @@ class AtmosphereProperties:
             self.integration_frequencies,
         ) = self.atm_absorption_coeff()
 
-        ### Compute absorption spectrum
         self.abs_spectrum = self.absorption_spectrum()
         self.integrated_abs_spectrum, self.frequencies, self.bandwidths = (
             self.integrated_absorption_spectrum()
         )
 
-        ### Compute water vapor density's standard deviation
         self.sigma_rho = self.get_sigma_rho(
             sigma_pwv=self.params["sigma_pwv"], h=2 * self.params["h_h2o"]
         )
@@ -121,7 +111,6 @@ class AtmosphereProperties:
             "nprocs_sampling": 1,
             "photon_noise": False,
             "nhwp_angles": 3,
-            #'effective_duration':3,
             "effective_duration150": 3,
             "effective_duration220": 3,
             "type_instrument": "two",
@@ -135,12 +124,10 @@ class AtmosphereProperties:
             "kind": "IQU",
         }
 
-        ### Get the default dictionary
         dictfilename = "dicts/pipeline_demo.dict"
         dict_qubic = qubicDict()
         dict_qubic.read_from_file(dictfilename)
 
-        ### Modify the dictionary
         for i in args.keys():
             dict_qubic[str(i)] = args[i]
 
@@ -248,43 +235,15 @@ class AtmosphereProperties:
 
         """
 
-        # Spectras for the line-by-line absorption-coefficient were produced using .amc files that looks like that:
-
-        # f 130 GHz  250 GHz  0.005 GHz
-        # output f  k
-
-        # layer
-        # P 500 hPa
-        # T 280 K
-        # column h2o_lines 1 mm_pwv
-
-        # And for the continuum absorption:
-
-        # f 130 GHz  250 GHz  0.005 GHz
-        # output f  k
-
-        # layer
-        # P 550 hPa
-        # T 280 K
-        # h 3000 m
-        # column h2o_self_continuum 1 mm_pwv
-
-        # Then we only need to execute a command line like: am file_name.amc > file_name.out .
-
-        # The file 'file_name.out' is created and contains two colomns, one for the frequency, and one for the absorption coefficient.
-        # Be careful, am results are in cm and not in m.
-
         frequencies = []
         mol_absorption_coeff = []
         self_absorption_coeff = []
         air_absorption_coeff = []
 
-        ### Initialize atmosppheric properties
         pressure = self.params["pressure_atm"]
         temp = self.params["temp_ground"]
         pwv = self.params["pwv"]
 
-        ### Import absorption coefficients from molecular absorption lines
         with open(
             self.params["path_am_files"] + f"h2o_lines_{pressure}hPa_{temp}K_{pwv}mm.out",
             "r",
@@ -293,12 +252,10 @@ class AtmosphereProperties:
                 frequencies.append(float(line.split()[0]))
                 mol_absorption_coeff.append(float(line.split()[1]) * (1e-2) ** 2)
 
-        ### Import absorption coefficients from self-induced collisions continuum
         with open(self.params["path_am_files"] + "h2o_self_continuum.out", "r") as file:
             for line in file:
                 self_absorption_coeff.append(float(line.split()[1]) * (1e-2) ** 5)
 
-        ### Import absorption coefficients from air-induced collisions continuum
         with open(self.params["path_am_files"] + "h2o_air_continuum.out", "r") as file:
             for line in file:
                 air_absorption_coeff.append(float(line.split()[1]) * (1e-2) ** 5)
@@ -354,21 +311,17 @@ class AtmosphereProperties:
 
         """
 
-        ### Import physical constants
         temp_atm = self.temperature  # in K
         pressure_atm = self.params["pressure_atm"] * 100  # in Pa
 
-        ### Air properties
         air_molar_mass = CP.PropsSI("MOLARMASS", "Air")  # in kg/mol
         air_mass = air_molar_mass / c.Avogadro * 1e3  # in g
         air_mass_density = CP.PropsSI("D", "T", temp_atm, "P", pressure_atm, "Air")  # in kg/m-3
         air_density = air_mass_density * 1e3 / air_mass  # in m-3
 
-        ### Water properties
         water_molar_mass = CP.PropsSI("MOLARMASS", "Water")  # in kg/mol
         water_mass = water_molar_mass / c.Avogadro * 1e3  # in g
 
-        ### Compute water vapor density
         if params_file:
             water_vapor_density = self.mean_water_vapor_density / water_mass  # in m-3
         else:
@@ -399,10 +352,8 @@ class AtmosphereProperties:
 
         """
 
-        ### Import gas properties
         water_mass, water_vapor_density, air_density = self.get_gas_properties()
 
-        ### Compute coeff
         abs_spectrum = (
             self.mol_absorption_coeff
             + water_vapor_density * self.self_absorption_coeff
@@ -431,18 +382,15 @@ class AtmosphereProperties:
         """
         #! Verify if the integration is made properly !!!
 
-        ### Verify the given band
         if band not in [150, 220]:
             raise ValueError("Band must be either 150 or 220 GHz.")
 
-        ### Evaluate the frequency band edges
         freq_min, freq_max = (
             self.integration_frequencies[0],
             self.integration_frequencies[-1],
         )
         freq_step = (freq_max - freq_min) / (len(self.integration_frequencies) - 1)
 
-        ### Compute the frequency sub-bands within the QUBIC band and their associated indexes
         _, nus_edges, nus, bandwidths, _, N_bands = compute_freq(
             band=band,
             Nfreq=int(self.params["nsub_in"] / 2),
@@ -450,7 +398,6 @@ class AtmosphereProperties:
         )
         nus_edge_index = np.round((nus_edges - freq_min) / freq_step).astype(int)
 
-        ### Integrate the absorption spectrum over the frequency sub-bands using the trapezoidal method
         # Need to normalize by the bandwidth to get average absorption coefficient
         integrated_abs_spectrum = np.array(
             [
@@ -479,7 +426,6 @@ class AtmosphereProperties:
 
         """
 
-        ### Get the integrated absorption spectrum in the two QUBIC bands : 150 and 220 GHz
         int_abs_spectrum_150, nus_150, bandwidths_150 = self.get_integrated_absorption_spectrum(
             band=150
         )
@@ -496,19 +442,15 @@ class AtmosphereProperties:
 
 class AtmosphereMaps(AtmosphereProperties):
     def __init__(self, params):
-        ### Import parameters and the class describing the atmosphere
         self.params = params
         AtmosphereProperties.__init__(self, params)
 
-        ### Compute the maximum multipole according to the resolution of the map
         self.lmax = 3 * self.params["nside"] - 1
 
-        ### Build water vapor density map
         self.delta_rho_map = self.get_water_vapor_density_fluctuation_2d_map(
             flat=self.params["flat"]
         )
 
-        ### Build the temperature maps of the atmosphere
         self.atm_temp_maps = self.get_temp_maps(self.delta_rho_map)
 
     def get_fourier_grid_2d(self, n_grid, size_atm):
@@ -534,11 +476,9 @@ class AtmosphereMaps(AtmosphereProperties):
 
         """
 
-        ### Generate spatial frequency in Fourier space
         k_distrib_y = np.fft.fftfreq(n_grid, d=2 * size_atm / n_grid) * 2 * np.pi
         k_distrib_x = np.fft.fftfreq(n_grid, d=2 * size_atm / n_grid) * 2 * np.pi
 
-        ### Build 2d grid and compute the norm of the spatial frequencies
         kx, ky = np.meshgrid(k_distrib_x, k_distrib_y, indexing="ij")
         k_norm = np.sqrt(kx**2 + ky**2)
 
@@ -575,7 +515,6 @@ class AtmosphereMaps(AtmosphereProperties):
         P = (k_r0**2 + k**2) ** exponent
 
         if self.params["adjust"] and sigma_rho is not None and atm_size is not None:
-            # Compute normalization constant C
             dk = np.pi / atm_size
             sum_kk = np.sum(P) * dk**2
             C = sigma_rho / sum_kk
@@ -606,7 +545,6 @@ class AtmosphereMaps(AtmosphereProperties):
 
         """
 
-        ### Compute the normalization constant
         res, _ = quad(
             lambda x: self.kolmogorov_spectrum(x, r0, sigma_rho, atm_size),
             np.min(k),
@@ -642,18 +580,14 @@ class AtmosphereMaps(AtmosphereProperties):
         """
         #! At some point, we will need to normalize these fluctuations using real data. We can maybe use :math:`\sigma_{PWV}` that can be estimated with figure 4 in Morris 2021.
 
-        ### Compute the spatial frequencies & power spectrum.
         _, _, k = self.get_fourier_grid_2d(n_grid, size_atm)
         kolmogorov_spectrum = self.normalized_kolmogorov_spectrum(k, r0, sigma_rho, atm_size)
 
-        ### Generate spatial fluctuations through random phases in Fourier space
         phi = self.rng.uniform(0, 2 * np.pi, size=(self.params["n_grid"], self.params["n_grid"]))
         delta_rho_k = np.sqrt(kolmogorov_spectrum) * np.exp(1j * phi)
 
-        ### Apply inverse Fourier transform to obtain spatial fluctuations in real space
         delta_rho = np.fft.ifft2(delta_rho_k, s=(self.params["n_grid"], self.params["n_grid"])).real
 
-        ### Normalize to ensure correct variance
         delta_rho *= sigma_rho / np.std(delta_rho)
 
         if Debug:
@@ -723,7 +657,6 @@ class AtmosphereMaps(AtmosphereProperties):
 
         """
 
-        ### Compute the distance between two points separeted by the angle theta on the surface of the sphere
         r = 2 * h_atm * np.sin(np.radians(theta) / 2)
 
         return self.kolmogorov_correlation_function(r, r0)
@@ -755,15 +688,11 @@ class AtmosphereMaps(AtmosphereProperties):
 
         #! It should be possible to speed the computation by using the function np.polynomial.legendre.leggauss
 
-        ###Compute the integrand for the integral
         def integrand(cos_theta):
-            # Compute theta from cos(theta)
             theta = np.degrees(np.arccos(cos_theta))
 
-            # Compute the legendre polynomial of order l
             legendre = sp.legendre(ell)(cos_theta)
 
-            # Return the product of the angular correlation function and the legendre polynomial
             return (
                 self.angular_correlation(
                     theta,
@@ -773,7 +702,6 @@ class AtmosphereMaps(AtmosphereProperties):
                 * legendre
             )
 
-        ### Integrate over cos(theta)
         res, _ = quad(integrand, -1, 1)
 
         return 2 * np.pi * res
@@ -807,23 +735,18 @@ class AtmosphereMaps(AtmosphereProperties):
 
         """
 
-        ### Compute the Legendre polynomials up to lmax+1, and the theta values
-        ### These cos_theta do not contain cos(theta)=1 so we have to do this case separately
+        # These cos_theta do not contain cos(theta)=1 so we have to do this case separately
         cos_theta, legendre = np.polynomial.legendre.leggauss(lmax + 1)
         xdeg = np.degrees(np.arccos(cos_theta))
 
-        ### Replace C(theta=0) by 0
         myctheta = ctheta.copy()
         myctheta[0] = 0
 
-        ### Fill the array that should include polarization (we put zeros there) with the values of our imput c(theta) interpolated at the cos_theta locations
         allctheta = np.zeros((len(cos_theta), 4))
         allctheta[:, 0] = np.interp(xdeg, theta_deg, myctheta)
 
-        ### Call the camb function that does the transform from C(theta) to Dl
         dlth = cc.corr2cl(allctheta, cos_theta, legendre, lmax)
 
-        ### Compute the multipole moments
         ell = np.arange(lmax + 1)
 
         ### the special case cos(theta)=1 corresponds to theta=0 and add 2pi times c(theta=0) to the Dl
@@ -854,14 +777,12 @@ class AtmosphereMaps(AtmosphereProperties):
 
         #! Warning : the Cl computed using CAMB are different from the ones computed using 'cl_from_angular_correlation_int' at large l
 
-        ### Compute multipole moments and Dl angular power spectrum
         ell, dlth = self.ctheta_2_dell(theta_deg, ctheta, lmax, normalization=normalization)
 
-        ### Convert from Dl to Cl
         dl2cl_factor = 2 * np.pi / (ell * (ell + 1))
         clth = dlth * dl2cl_factor
 
-        ### Correct for the special case l=0, as the convertion factor is not valid
+        # Correct for the special case l=0, as the convertion factor is not valid
         clth[0] = self.cl_from_angular_correlation_int(0)
 
         return ell, clth
@@ -880,29 +801,20 @@ class AtmosphereMaps(AtmosphereProperties):
             Spatial fluctuation map, generated accorging HEALPix formalism.
         """
 
-        ### Compute angular correlation function
         theta = np.linspace(0, 180, self.params["n_theta"])
         ctheta = self.angular_correlation(
             theta, self.params["altitude_atm_2d"], self.params["correlation_length"]
         )
 
-        ### Compute spherical harmonics from angular correlation function
         _, clth = self.ctheta_2_cell(
             theta, ctheta, self.lmax, normalization=self.params["normalization"]
         )
 
-        # Alternative normalization (unused):
-        # if self.params["adjust"]:
-        #     sum_cl = np.sum(clth)
-        #     C = sigma_rho * (atm_size**2) / sum_cl
-        #     clth *= C
         if self.params["adjust"]:
-            # var_theory = np.sum(np.fromiter(((2*l + 1) * clth[l] for l in range(self.lmax + 1)),float) )/ (4*np.pi)  #Calling np.sum(generator) is deprecated, and in the future will give a different result. Use np.sum(np.fromiter(generator)) or the python sum builtin instead.
             sigma_theo = np.std(clth)
             C = sigma_rho / np.sqrt(sigma_theo)
             clth *= C
 
-        ### Build fluctuations map
         delta_rho = hp.synfast(clth, nside=self.params["nside"], lmax=self.lmax)
 
         return delta_rho
@@ -927,7 +839,6 @@ class AtmosphereMaps(AtmosphereProperties):
 
         """
 
-        ### Build water vapor density fluctuations
         if flat:
             delta_rho = self.generate_spatial_fluctuations_fourier(
                 self.params["n_grid"],
@@ -974,7 +885,6 @@ class AtmosphereMaps(AtmosphereProperties):
 
         """
 
-        ### Compute the associated temperature maps from the wapor density maps, using the equation 12 from Morris 2021
         if len(maps.shape) == 1:
             temp_maps = (
                 self.integrated_abs_spectrum[:, np.newaxis]
@@ -990,8 +900,7 @@ class AtmosphereMaps(AtmosphereProperties):
                 * maps
             )  # flat maps
 
-        ### Convert them into micro Kelvin CMB
-        # temp_maps -= Planck18.Tcmb0.value
+        # Convert them into micro Kelvin CMB
         temp_maps *= 1e6
 
         return temp_maps
@@ -1093,10 +1002,7 @@ class AtmosphereMaps(AtmosphereProperties):
 
         """
 
-        ### Build list of azimuth and elevation coordinates for each point of the atmosphere
         azel_coordinates = self.get_azel_coordinates()
-
-        ### Build rotation operator
 
         rotation_above_qubic = Cartesian2SphericalOperator("azimuth,elevation")(
             Rotation3dOperator("ZY'", longitude, 90 - latitude, degrees=True)(
@@ -1104,10 +1010,8 @@ class AtmosphereMaps(AtmosphereProperties):
             )
         )
 
-        ### Build healpy projection operator
         rotation_azel2hp = Spherical2HealpixOperator(self.params["nside"], "azimuth,elevation")
 
-        ### Fill the healpy maps with the temperature maps using the operators
         hp_maps_index = rotation_azel2hp(rotation_above_qubic(azel_coordinates)).astype(int)
         hp_maps_2d = np.zeros((len(self.frequencies), hp.nside2npix(self.params["nside"])))
         for ifreq in range(len(self.frequencies)):
@@ -1320,10 +1224,8 @@ class WindPerturbation:
         if not self.params["wind"]:
             return azimuth, elevation
 
-        # Get wind
         wind_x, wind_y = self.get_wind()
 
-        # Compute deviated pointing coordinates
         x, y = self.azel_to_cartesian(
             np.radians(azimuth), np.radians(elevation), self.params["altitude_atm_2d"]
         )
@@ -1361,36 +1263,29 @@ class WindPerturbation:
             Displaced coordinates in radians.
         """
 
-        # Broadcast inputs
         theta = np.asarray(theta)
         phi = np.asarray(phi)
         dx_rad = np.broadcast_to(dx_rad, theta.shape)
         dy_rad = np.broadcast_to(dy_rad, theta.shape)
 
-        # Unit vectors on sphere
         sin_t, cos_t = np.sin(theta), np.cos(theta)
         sin_p, cos_p = np.sin(phi), np.cos(phi)
 
         p = np.stack([sin_t * cos_p, sin_t * sin_p, cos_t], axis=-1)
 
-        # Local tangent basis
         e_east = np.stack([-sin_p, cos_p, np.zeros_like(phi)], axis=-1)
         e_north = np.stack([-cos_t * cos_p, -cos_t * sin_p, sin_t], axis=-1)
 
-        # Build wind vector (eastward dx, northward dy)
         v = dx_rad[..., np.newaxis] * e_east + dy_rad[..., np.newaxis] * e_north
 
-        # Choose direction
         if direction == "backward":
             v = -v
 
-        # Exponential map
         v_norm = np.linalg.norm(v, axis=-1, keepdims=True)
         safe_norm = np.where(v_norm > 0, v_norm, 1.0)
 
         new_p = p * np.cos(v_norm) + (v / safe_norm) * np.sin(v_norm)
 
-        # Back to angles
         new_theta = np.arccos(np.clip(new_p[..., 2], -1.0, 1.0))
         new_phi = np.arctan2(new_p[..., 1], new_p[..., 0]) % (2 * np.pi)
 
@@ -1425,7 +1320,6 @@ class WindPerturbation:
         if np.hypot(np.atleast_1d(dx_rad).max(), np.atleast_1d(dy_rad).max()) < 1e-12:
             return azimuth, elevation
 
-        # Convert to radians
         az_rad = np.radians(azimuth)
         el_rad = np.radians(elevation)
         theta = np.pi / 2 - el_rad
@@ -1501,7 +1395,6 @@ class WindPerturbation:
 
         m = np.asarray(m)
 
-        # --- Shape handling ---
         if m.ndim == 1:
             m_work = m[np.newaxis, :, np.newaxis]
             squeeze = (0, 2)
@@ -1529,7 +1422,6 @@ class WindPerturbation:
             theta, phi, dx_rad, dy_rad, direction="backward"
         )
 
-        # --- Interpolation ---
         m_shifted = np.empty_like(m_work)
         for f in range(nfreq):
             for s in range(nstokes):

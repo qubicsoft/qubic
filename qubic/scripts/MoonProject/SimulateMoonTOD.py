@@ -102,7 +102,7 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site, moon_spectrum):
     # deltazt, deltelt = 4.5658359258853585, 1.4750926931640054
     deltazt, deltelt = 0, 0
 
-    ### Now we need to got to local coordinates az,el...
+    ### Now we need to go to local coordinates az,el...
     altaz = SkyCoord(newra*u.deg, newdec*u.deg, frame='icrs').transform_to(frame_obs) 
     newaz = altaz.az.value + deltazt # trying to shift by hand the pointings
     newel = altaz.alt.value + deltelt

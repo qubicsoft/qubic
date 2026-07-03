@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 from fast_histogram import histogram2d
 import glob
+from scipy.optimize import curve_fit
 
 import fitting as fit
 import pickle
@@ -909,9 +910,12 @@ def detect_peaks_TOD(tt, mytod, resolution, doplot=False, freq_sampling=157.36):
         # zf
     return filtmapsn
 
-def remove_peaks(tt, tod, peaks_detected, interval, mask, control_size=None):
+def remove_peaks(tt, tod, peaks_detected, interval, mask=None, control_size=None):
     index = np.arange(len(tod))
-    index_masked = index[mask]
+    if mask is not None:
+        index_masked = index[mask]
+    else:
+        index_masked = index
 
     # plt.figure()
     # plt.plot(tt, tod)
@@ -944,7 +948,7 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 # xlim = [9480, 9550]
 xlim = [10540, 10640]
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_number="", nside=256, doplot=True,
+def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TES_number="", nside=256, doplot=True,
                           check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
                           ObsDate=None, new_method_clean=False, theo_sb=None):
 
@@ -1005,7 +1009,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
                 # we should add a selection on the peak's position:
                 # if it is too close to the border of the map the peak is not counted
                 # not needed for simulations
-                # if np.min(dist_peak[scantype == 0]) < dist_min: # needed for real data because of low frequency noise!
+                # if np.min(dist_peak[scantype == 0]) < dist_min: # needed for real data because of low frequency noise! --> see with Noah how to remove it
                 #     # print("skipped the peak", i_nu, i_peak)
                 #     continue
                 tod_close = dist_peak < dist_min
@@ -1064,6 +1068,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             # might have to go even higher for the peaks aligned with elevation scans
             # distance=None helps with order 1 peaks that are a bit irregular (close to border of map/dead time)
             # kept distance=10s to remove some foregrounds
+            widths = peaks_properties["widths"]
         elif ObsDate == "2026-03-11":
             mask_elt = np.ones_like(elt, dtype=bool)
             # Filter the TOD
@@ -1101,18 +1106,28 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
 
             # peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
             peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 10*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
+            widths = peaks_properties["widths"]
 
         else: #if ObsDate == "2026-03-13":
             # Filter the TOD
-            mask_elt = np.ones_like(elt, dtype=bool)
-            mytod_1 = my_filt(mytod.copy())
-            tod_ma_filt = my_filt_2(mytod.copy()) # bandpass instead of moving average then highpass
-            prominence = (5*np.std(tod_ma_filt[mask_elt]), None) # 3 good filter
-            # prominence = None
-            data_peaks = tod_ma_filt
-            peaks_detected, peaks_properties = find_peaks(data_peaks, height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
-
-        widths = peaks_properties["widths"]
+            mytod_1 = np.zeros_like(mytod)
+            data_peaks = np.zeros_like(mytod)
+            widths = []
+            peaks_detected = []
+            for i in range(np.max(ifile)):
+                mask_elt = None
+                mask = ifile == i
+                first_index = np.min(np.argwhere(mask))
+                mytod_1[mask] = my_filt(mytod[mask])
+                tod_ma_filt = my_filt_2(mytod[mask]) # bandpass instead of moving average then highpass
+                prominence = (5*np.std(tod_ma_filt), None) # 3 good filter
+                # prominence = None
+                data_peaks[mask] = tod_ma_filt
+                peaks_detected_, peaks_properties = find_peaks(data_peaks[mask], height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
+                peaks_detected.append(peaks_detected_ + first_index)
+                widths.append(peaks_properties["widths"])
+            peaks_detected = np.concatenate(peaks_detected)
+            widths = np.concatenate(widths)
 
         if doplot and True:
             plt.figure()
@@ -1160,6 +1175,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             # print(bin_id)
 
             peaks_detected_ = np.isin(np.arange(len(tt)), peaks_detected)
+            if mask_elt is None:
+                mask_elt = np.ones_like(peaks_detected_, dtype=bool)
+
             plt.figure()
             plt.plot(tt, mytod, label="raw TOD")
             # plt.scatter(binned_tt, binned_TOD, c="g", label="binned TOD", zorder=1000)
@@ -1266,7 +1284,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, TES_numbe
             mapsb_fb_proj = []
             for mapsb_ in [mapsb_forth, mapsb_back]:
                 mapsb_proj = hp.gnomview(mapsb_, reso=reso, min=min_plot, max=max_plot, xsize=xsize,
-                        rot=center, return_projected_map=True, no_plot=False)
+                        rot=center, return_projected_map=True, no_plot=True)
                 X = np.arange(len(mapsb_proj))
                 Y = np.arange(len(mapsb_proj[0]))
                 XX, YY = np.meshgrid(X, Y) # pixel units, just for the interpolation
@@ -1579,13 +1597,17 @@ class gaussfitgnomproj:
         # plt.imshow(elt)
         # plt.show()
 
-    def __call__(self, x, pars):
-        amp, ic, jc, sig = pars # here the position is given in pixels and later converted to azel
+    # def __call__(self, x, pars):
+    def __call__(self, ij, amp, ic, jc, sig): # for curve_fit this time, not minuit
+        # amp, ic, jc, sig = pars # here the position is given in pixels and later converted to azel
         if np.isnan(ic) or np.isnan(jc): # for some reason, maybe when we fall outise of the image, ic or jc can be NaNs
             shape_pix_pos = np.shape(self.pix_pos_proj)
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
+        ic = (ic - 1)*1e8 # trick to force curve_fit to do bigger steps (otherwise it stays at initial position)
+        jc = (jc - 1)*1e8
         centre_pos = self.pix_pos_proj[int(ic), int(jc)] # this is the vector associated with the pixel after proj, but it should be perfectly usable with vectors of pixels before proj
         dist_deg = np.abs(np.degrees(dist_angle(self.pix_pos_patch, centre_pos)))
+        print("params", amp, ic, jc, sig)
         # print("pos centre", ic, jc)
         # print(centre_pos)
         # print(cartesian2spherical(centre_pos[0], centre_pos[1], centre_pos[2], coord="horizontal", axis="last"))
@@ -1760,7 +1782,8 @@ def map_to_TOD(hp_map, newazt, newelt):
 class empty_class():
     pass
 
-def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
+def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1,
+                mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
     # iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     iipos = ipos # already 2D
     jjpos = jpos
@@ -1810,7 +1833,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         # plt.figure()
         # plt.imshow(filtmapsn * 1e4)
         # plt.show()
-
         maxii = filtmapsn == np.nanmax(filtmapsn)
         ### in data coords
         # max_i = np.mean(iipos[maxii])
@@ -1820,9 +1842,8 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         iipix, jjpix = np.meshgrid(np.arange(Ni), np.arange(Nj), indexing="ij")
         max_i = int(np.mean(iipix[maxii]))
         max_j = int(np.mean(jjpix[maxii]))
-        # guess = np.array([1e6, max_i, max_j, reso_img/conv_reso_fwhm])
-
-        guess = np.array([1e6, 95, 77, 0.5]) # fine-tuned for test
+        guess = np.array([1e6, max_i, max_j, reso_img/conv_reso_fwhm])
+        # guess = np.array([1e6, 95, 77, 0.5]) # fine-tuned for test
         if verbose:
             print("guess: amp = {}, i = {}, j = {}, sig = {}".format(guess[0], guess[1], guess[2], guess[3]))
 
@@ -1841,27 +1862,47 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     errpix = iipos*0 + ss
     errpix[mapij==0] *= 1e5
 
-    data = fit.Data(np.ravel(iipos), np.ravel(mapij), np.ravel(errpix), g2d)
+    ######### Minuit #########
+    # data = fit.Data(np.ravel(iipos), np.ravel(mapij), np.ravel(errpix), g2d)
+    # m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.5/conv_reso_fwhm]], renorm=renorm)
+    # # m: amplitude, elevation (i), azimuth ((-)j), sigma Gaussian fit
+    # where_res = np.array([int(m.values[1]), int(m.values[2])])
+    # # adjust fit "by ha,d" for testing purposes
+    # # delta_fit = np.array([5, 2])
+    # # where_res += delta_fit
+    # # ifit = m.values[1]
+    # # jfit = m.values[2]
+    # ijerr = np.array([m.errors[1], m.errors[2]]) * reso/60 # pix to deg
+    # # g2d_ = gaussfitsphere(iipos, jjpos, mask=mask_badpix) # elt, azt
+    # ### Image of the fitted Gaussian
+    # fitted = np.reshape(g2d(ipos, m.values), (xs, xs))
 
-    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.5/conv_reso_fwhm]], renorm=renorm)
-    # m: amplitude, elevation (i), azimuth ((-)j), sigma Gaussian fit
-    where_res = np.array([int(m.values[1]), int(m.values[2])])
-    # adjust fit "by ha,d" for testing purposes
-    delta_fit = np.array([5, 2])
-    where_res += delta_fit
-    # ifit = m.values[1]
-    # jfit = m.values[2]
+    ######## curve_fit #######
+    # ii, jj = np.meshgrid(np.arange(int(max_i - distok), int(max_i + distok) + 1), np.arange(int(max_j - distok), int(max_j + distok) + 1))
+    xx = None
+    # bounds=[[1e3, max_i - distok, max_j - distok, 0.6/conv_reso_fwhm], [1e8, max_i + distok, max_j + distok, 1.5/conv_reso_fwhm]]
+    # popt, pcov = curve_fit(g2d, xx, mapij.ravel(), p0=guess, bounds=bounds)#, sigma=errpix.ravel())
+    fact_renorm = 1e8 # trick to force curve_fit to do bigger steps (otherwise it stays at initial position)
+    guess[1] = guess[1]/fact_renorm + 1
+    guess[2] = guess[2]/fact_renorm + 1
+    popt, pcov = curve_fit(g2d, xx, mapij.ravel(), p0=guess)#, sigma=errpix.ravel())
+    fitted = np.reshape(g2d(ipos, popt[0], popt[1], popt[2], popt[3]), (xs, xs))
+    popt[1] = (popt[1] - 1)*fact_renorm
+    popt[2] = (popt[2] - 1)*fact_renorm
+    where_res = np.array([int(popt[1]), int(popt[2])])
+    ijerr = np.array([pcov[1], pcov[2]]) * reso/60 # pix to deg
+    m = type("Foo", (object,), {})()
+    m.values = popt
+    m.errors = pcov
+
     ifit = where_res[0]
     jfit = where_res[1]
     ires = iipos[where_res[0], where_res[1]]
     jres = jjpos[where_res[0], where_res[1]]
     ijres = np.array([ires, jres])
 
-    ijerr = np.array([m.errors[1], m.errors[2]]) * reso/60 # pix to deg
 
-    # g2d_ = gaussfitsphere(iipos, jjpos, mask=mask_badpix) # elt, azt
-    ### Image of the fitted Gaussian
-    fitted = np.reshape(g2d(ipos, m.values), (xs, xs))
+
 
     if doplot:
         origin = "upper" #"lower" swaps the y-axis and the guess doesn't match, default is "upper", and lower matches the hp.gnomview display orientation
@@ -2303,261 +2344,111 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     return azmoon, elmoon
 
 
-def format_data(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None, tshift=0, year_data="2022"):
-    print("start_tt is now ignored and put to zero?")
-    start_tt = 0
-    if data is None: # first read the data from disk if needed
-        ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
-        FPidentity = pt.make_id_focalplane()
-        quadrant = 3
-        QPidx = np.array([FPidentity[fp_idx].QPindex for fp_idx in range(len(FPidentity)) if FPidentity[fp_idx].quadrant == quadrant]).reshape(17, 17)
-        if quadrant == 3: # TD quadrant = 3
-            QPidx[11:15, 0] = np.array([4, 36, 68, 100]) - 1 # thermometers of quadrant 3
-            QPidx[-1, 2:6] = np.array([132, 164, 196, 228]) - 1 # thermometers of quadrant 3
-        elif quadrant == 2:
-            QPidx[2:6, 0] = np.array([4, 36, 68, 100]) - 1 # thermometers (might not be the right numbers at the right place)
-            QPidx[0, 11:15] = np.array([132, 164, 196, 228]) - 1 # thermometers
-        QPidx_old = QPidx.flatten()[QPidx.flatten()>=0]
-        QPidx = np.flip(np.flip(QPidx, axis=0).T, axis=0)
-        QPidx = QPidx.flatten()
-        QPidx = QPidx[QPidx>=0]
-        sort_idx_old = np.argsort(QPidx_old)
-        QPidx = QPidx[sort_idx_old]
-        # QPidx = QPidx_old # if want old
+def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=0, year_data="2022", doplot=False):
+    ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
+    FPidentity = pt.make_id_focalplane()
+    quadrant = 3
+    QPidx = np.array([FPidentity[fp_idx].QPindex for fp_idx in range(len(FPidentity)) if FPidentity[fp_idx].quadrant == quadrant]).reshape(17, 17)
+    if quadrant == 3: # TD quadrant = 3
+        QPidx[11:15, 0] = np.array([4, 36, 68, 100]) - 1 # thermometers of quadrant 3
+        QPidx[-1, 2:6] = np.array([132, 164, 196, 228]) - 1 # thermometers of quadrant 3
+    elif quadrant == 2:
+        QPidx[2:6, 0] = np.array([4, 36, 68, 100]) - 1 # thermometers (might not be the right numbers at the right place)
+        QPidx[0, 11:15] = np.array([132, 164, 196, 228]) - 1 # thermometers
+    QPidx_old = QPidx.flatten()[QPidx.flatten()>=0]
+    QPidx = np.flip(np.flip(QPidx, axis=0).T, axis=0)
+    QPidx = QPidx.flatten()
+    QPidx = QPidx[QPidx>=0]
+    sort_idx_old = np.argsort(QPidx_old)
+    QPidx = QPidx[sort_idx_old]
+    # QPidx = QPidx_old # if want old
 
-        tt_full = []
-        alltod_full = []
-        azt_full = []
-        elt_full = []
-        newazt_full = []
-        newelt_full = []
-        scantype_full = []
-        Tbath_full = []
+    tt_full = []
+    alltod_full = []
+    azt_full = []
+    elt_full = []
+    newazt_full = []
+    newelt_full = []
+    scantype_full = []
+    Tbath_full = []
+    ifile_full = []
 
-        for i, diri in enumerate(datadir):
-            print("\nreading file", i, diri)
-            vars = read_data(diri, remove_t0=False, year_data=year_data)
-            if vars is None:
-                print("\nSkipping data...")
-                continue
-            tt, alltod, thk, az, el, tinit_, Tbath_raw = vars
-
-            if i == 0: # first file
-                tinit = tinit_
-                print("tinit = {}".format(tinit))
-            else:
-                if tinit_ <= tinit:
-                    raise ValueError("The initial time {} is smaller than the one from the first file {}. Files might not be sorted well.".format(tinit_, tinit))
-
-            # alltod = alltod[:, start_tt:]
-            # tt = tt[start_tt:]
-
-            # need to put tt[0] to zero, but be careful of real time
-            tt -= tinit + tshift # tshift seen in plotting back and forth images
-            thk -= tinit
-
-            ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
-            azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
-    
-            ### Identify scan types and numbers
-            _, azt, elt, scantype, _ = identify_scans(thk, az, el, 
-                                                    tt=tt, doplot=False, 
-                                                    plotrange=[tt[0], tt[0] + 2000], 
-                                                    thr_speedmin=speedmin)
-            
-            Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
-
-            # good solution
-            file_name = str(tinit)
-            newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=4, det_pos=det_pos, file_name=file_name) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
-            # newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0, det_pos=det_pos, file_name=file_name) # put tilt_az=0 for simulated maps
-
-            tt_full.append(tt)
-            alltod_full.append(alltod)
-            azt_full.append(azt)
-            elt_full.append(elt)
-            newazt_full.append(newazt)
-            newelt_full.append(newelt)
-            scantype_full.append(scantype)
-            Tbath_full.append(Tbath)
-
-        tt = np.concatenate(tt_full)
-        alltod = np.concatenate(alltod_full, axis=1)
-        azt = np.concatenate(azt_full)
-        elt = np.concatenate(elt_full)
-        axis = int(det_pos is not None)
-        newazt = np.concatenate(newazt_full, axis=axis)
-        newelt = np.concatenate(newelt_full, axis=axis)
-        scantype = np.concatenate(scantype_full)
-        Tbath = np.concatenate(Tbath_full)
-
-        print("shape scantype", np.shape(scantype))
-        print("shape newazt", np.shape(newazt))
-        data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath] # what will be read later if this function is reused
-    else: # if the previous step was already done in previous execution
-        print('Using data already stored in memory - not read from disk')
-        tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = data
-    return data, tt.copy(), tinit, alltod.copy(), QPidx.copy(), azt.copy(), elt.copy(), newazt.copy(), newelt.copy(), scantype.copy(), Tbath.copy()
-
-        ######### Old code that analyses all the files at the same time ########
-    if skibiddi: # just to avoid syntax error
-        if type(datadir) is str:
-            tt, alltod, thk, az, el, tinit, Tbath_raw = read_data(datadir, remove_t0=False, year_data=year_data)
-        else: # should be a list or an array
-            # how do I get rid of this code duplication?
-            full_list = []
-            for _ in range(7): # 7 variables
-                full_list.append([])
-            for i, diri in enumerate(datadir):
-                print("\nreading file", i, diri)
-                vars = read_data(diri, remove_t0=False, year_data=year_data)
-                if vars is not None:
-                    print("\nAdding data...")
-                    for i_var in range(7):
-                        full_list[i_var].append(vars[i_var])
-            argsort_tinit = np.argsort(full_list[5]) # tinit is variable 5
-            for i_var in range(7):
-                full_list[i_var] = [full_list[i_var][i_sort] for i_sort in argsort_tinit]
-            tt = np.concatenate(full_list[0])
-            alltod = np.concatenate(full_list[1], axis=1)
-            thk = np.concatenate(full_list[2])
-            az = np.concatenate(full_list[3])
-            el = np.concatenate(full_list[4])
-            tinit = np.array(full_list[5])
-            Tbath_raw = np.concatenate(full_list[6], axis=1)
-            del full_list
-
-            # for var_arr in [tt, alltod, thk, az, el, tinit, Tbath_raw]:
-            #     print(np.shape(var_arr))
-            # azet
-
-            # argsort_tinit = np.argsort(tinit)
-            # for i_arr, arr in enumerate([tt, alltod, thk, az, el, tinit, Tbath_raw]):
-            #     if i_arr in [1, 6]:
-            #         arr = arr[:, argsort_tinit]
-            #     else:
-            #         arr = arr[argsort_tinit]
-
-            
-
-        # az = -az - np.max(np.abs(az)) # the map doesn't look great, there probably isn't an azimuth inversion then?
+    for i, diri in enumerate(datadir):
+        print("\nreading file", i, diri)
+        vars = read_data(diri, remove_t0=False, year_data=year_data)
+        if vars is None:
+            print("\nSkipping data...")
+            continue
+        tt, alltod, thk, az, el, tinit_, Tbath_raw = vars
         az += az_qubic
-        print("tinit = {}".format(tinit))
+        file_name = str(tt[0])
 
-        # print("shape Tbath_raw", np.shape(Tbath_raw))
-        # fig, ax = plt.subplots()
-        # ax2 = ax.twinx()
-        # ax.plot(Tbath_raw[0], -Tbath_raw[1], c='r')
-        # ax2.plot(tt, alltod[72], c='g')
-        # plt.show()
+        if i == 0: # first file
+            tinit = tinit_
+            print("tinit = {}".format(tinit))
+        else:
+            if tinit_ <= tinit:
+                raise ValueError("The initial time {} is smaller than the one from the first file {}. Files might not be sorted well.".format(tinit_, tinit))
 
-        # Remove the first start_tt points (out of 1998848 for 2022 data)
-        tinit = tt[start_tt]
-        print("tinit = {}".format(tinit))
-        alltod = alltod[:, start_tt:]
-        tt = tt[start_tt:]
         # need to put tt[0] to zero, but be careful of real time
-        # Also, I would have to adjust the mount time?
-        # if len(np.shape(tshift)) == 0 :
-        #     tt -= tinit + tshift # tshift seen in plotting back and forth images
-        # elif len(np.shape(tshift)) == 1:
-        #     tt_ASIC1 = tt - (tinit - tshift[0])
-        #     tt_ASIC2 = tt - (tinit - tshift[1])
-        #     tt = np.array([tt_ASIC1, tt_ASIC2])
         tt -= tinit + tshift # tshift seen in plotting back and forth images
         thk -= tinit
 
-        # print(np.min(thk), np.max(thk))
-        # print(np.min(tt), np.max(tt))
-        # plt.figure()
-        # plt.plot(thk, thk, lw=6, label="thk")
-        # plt.plot(tt, tt, lw=2, label="tt")
-        # plt.legend()
-        # plt.show()
-        # at
-
-        # print(np.shape(tt))
-        # print(np.shape(alltod))
-        # print("tinit = {}".format(tinit))
-
         ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
-        azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=True)
- 
-        # print("mean az el Moon", np.mean(azmoon), np.mean(elmoon))
-        # print("mean az el pointing", np.mean(az), np.mean(el))
+        azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
 
-        # fig, axs = plt.subplots(1, 2)
-        # ax = axs[0]
-        # ax.plot(thk, az, label="az")
-        # ax.plot(tt, azmoon, label="azmoon")
-        # ax.legend()
-        # ax = axs[1]
-        # ax.plot(thk, el, label="el")
-        # ax.plot(tt, elmoon, label="elmoon")
-        # ax.legend()        
-        # plt.show()
-
-        # aze
         ### Identify scan types and numbers
         _, azt, elt, scantype, _ = identify_scans(thk, az, el, 
-                                                tt=tt, doplot=True, 
-                                                plotrange=[0, 2000], 
+                                                tt=tt, doplot=False, 
+                                                plotrange=[tt[0], tt[0] + 2000], 
                                                 thr_speedmin=speedmin)
         
         Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
 
-        # New coordinates centered on the Moon: we might want to do this separately for each TES (i.e. not in this function) once we have their positions on the sky!
-        # newazt, newelt = get_new_azel(azt, elt, azmoon, elmoon) # az - el transfo
-        # newazt, newelt = azt - azmoon, elt - elmoon # no complicated corretion for Moon movement in azimuth, trying here to fit the real Moon postion for each TES --> position of order 0 in Moon maps?
-        
         # good solution
-        file_name = str(tinit)
-        # newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=4, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
-        newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0, det_pos=det_pos, file_name=file_name) # put tilt_az=0 for simulated maps
-        # newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=0) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
-        
-        # newazt2, newelt2 = get_new_azel_v2(azt, elt, azmoon, elmoon)
-        # newazt, newelt = get_new_azel_v2(azt, elt, azmoon, elmoon) # great circle
-        # newazt, newelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos) # ?
-        # newazt, newelt = get_new_azel_v4(azt, elt, azmoon, elmoon) # small circle
-        # newazt, newelt = get_new_azel_v5(azt, elt, azmoon, elmoon, moon_pos_fit=det_pos)
+        tilt_az = 0
+        print("tilt_az =", tilt_az)
+        newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=tilt_az, det_pos=det_pos, file_name=file_name) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
 
-        # fig, axs = plt.subplots(1, 2, figsize=(15, 5))
-        # ax = axs[0]
-        # ax.plot(newazt, label="newazt = (azt - azmoon)*cos(elt)")
-        # ax.plot(newazt2, label="two rotations")
-        # ax.set_xlabel("time [s]")
-        # ax.set_ylabel("azimuth [deg]")
-        # ax.set_xlim([2e4, 16e4])
-        # ax.legend()
-        # ax = axs[1]
-        # ax.plot(newelt, label="newelt = (elt - elmoon)")
-        # ax.plot(newelt2, label="two rotations")
-        # ax.set_xlabel("time [s]")
-        # ax.set_ylabel("elevation [deg]")
-        # ax.set_xlim([2e4, 16e4])
-        # ax.set_ylim([17.5, 20.5])
-        # ax.legend()
-        # plt.show()
-        # azr
+        tt_full.append(tt)
+        alltod_full.append(alltod)
+        azt_full.append(azt)
+        elt_full.append(elt)
+        newazt_full.append(newazt)
+        newelt_full.append(newelt)
+        scantype_full.append(scantype)
+        Tbath_full.append(Tbath)
+        ifile_full.append(np.full_like(tt, i, dtype=int))
 
-        # If RA Dec coordinates
-        # RAmoon, Decmoon = hor2equ(azmoon, elmoon, tt - tt[0], date_obs="2022-07-14 01:54:17", # hardcoded for now, as a test
-        #     latitude=ObsSite["lat"].value, longitude=ObsSite["lon"].value)
-        # RA, Dec = hor2equ(azt, elt, tt, date_obs="2022-07-14 01:54:17", # hardcoded for now, as a test
-        #     latitude=ObsSite["lat"].value, longitude=ObsSite["lon"].value)
-        # newRA, newDec = get_new_azel(RA, Dec, RAmoon, Decmoon)
-        # azt, elt = RA, Dec
-        # newazt, newelt = newRA, newDec
+    tt = np.concatenate(tt_full)
+    alltod = np.concatenate(alltod_full, axis=1)
+    azt = np.concatenate(azt_full)
+    elt = np.concatenate(elt_full)
+    axis = int(det_pos is not None)
+    newazt = np.concatenate(newazt_full, axis=axis)
+    newelt = np.concatenate(newelt_full, axis=axis)
+    scantype = np.concatenate(scantype_full)
+    Tbath = np.concatenate(Tbath_full)
+    ifile = np.concatenate(ifile_full)
 
+    print("shape scantype", np.shape(scantype))
+    print("shape newazt", np.shape(newazt))
+    data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, ifile] # the data that could be useful later in the analysis
+    if doplot and det_pos is None:
+        azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+        fig, axs = plt.subplots(1, 2)
+        axs[0].set_title("az")
+        axs[0].plot(tt, azmoon, c="r", label="moon")
+        axs[0].plot(tt, azt, c="b", label="azt")
+        axs[0].scatter(tt, newazt, s=1, c="g", label="newazt")
+        axs[1].set_title("el")
+        axs[1].plot(tt, elmoon, c="r", label="moon")
+        axs[1].plot(tt, elt, c="b", label="elt")
+        axs[1].scatter(tt, newelt, s=1, c="g", label="newelt")
+        plt.legend()
+        plt.show()
+    return data
 
-        print("shape scantype", np.shape(scantype))
-        print("shape newazt", np.shape(newazt))
-        data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath] # what will be read later if this function is reused
-    else: # if the previous step was already done in previous execution
-        print('Using data already stored in memory - not read from disk')
-        tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = data
-    return data, tt.copy(), tinit, alltod.copy(), QPidx.copy(), azt.copy(), elt.copy(), newazt.copy(), newelt.copy(), scantype.copy(), Tbath.copy()
 
 def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None, isok_arr=None):
     print('Using data already stored in memory - not read from disk and computing different azel for each det')
@@ -2569,33 +2460,11 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
     allnewazt, allnewelt = get_new_azel_v5(azt, elt, azmoon, elmoon, det_pos)
     return tt, tinit, alltod, QPidx, azt, elt, allnewazt, allnewelt, scantype, Tbath
 
-def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, speedmin=0.05, tshift=0,
+def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tshift=0,
                       doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False,
                       isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None, new_method_clean=False, theo_sb=None):
-
-    if det_pos is None:
-        data, tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=ObsDate[:4])
-    else:
-        data, tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath = format_data(az_qubic, start_tt, ObsSite, speedmin, data, datadir, tshift=tshift, year_data=ObsDate[:4], det_pos=det_pos)
-        # tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath = format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data, datadir, det_pos, isok_arr, tshift=tshift)
-        print(np.shape(newazt_))
-        print(np.shape(newelt_))
-
-    # azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=True)
-    # fig, axs = plt.subplots(1, 2)
-    # axs[1].set_title("az")
-    # axs[1].plot(tt, azt, c="b")
-    # axs[1].scatter(tt, newazt, c="g")
-    # axs[1].plot(tt, azmoon, c="r")
-    # axs[0].set_title("el")
-    # axs[0].plot(tt, elt, c="b")
-    # axs[0].scatter(tt, newelt, c="g")
-    # axs[0].plot(tt, elmoon, c="r")
-    # plt.show()
-    # # azer
-    # return 0, data, 0, 0, 0, 0
-    # newazt, newelt = azt, elt
-
+    
+    tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath, ifile = data
     ### Loop over TES to do the maps
     print('\nLooping coaddition mapmaking over selected TES')
     print('nside = ',nside)
@@ -2627,6 +2496,9 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
                     newazt = newazt_[iTES]
                     newelt = newelt_[iTES]
                     # det_pos_i = det_pos[iTES]
+            else:
+                newazt = newazt_
+                newelt = newelt_
             print("shape pos", np.shape(det_pos))
             # plt.figure()
             # plt.plot(azt)
@@ -2638,8 +2510,8 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             # plt.plot(newelt)
             # plt.show()
             # aert
-            allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
-                                                             TES_number=TESNum, nside=nside, 
+            allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
+                                                             TES_number=TESNum, nside=nside,
                                                              doplot=doplot, check_back_forth=check_back_forth,
                                                              det_pos=det_pos, clean_tod=clean_tod, manual=manual,
                                                              ObsDate=ObsDate, new_method_clean=new_method_clean, theo_sb=theo_sb)
@@ -2659,7 +2531,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
                 # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before? (use this in 2022 analysis?)
             else:
                 tod = alltod[iTES, :]
-            map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt,
+            map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
                                                            TES_number=TESNum, nside=nside, doplot=doplot, det_pos=det_pos,
                                                            clean_tod=clean_tod, manual=manual, ObsDate=ObsDate, new_method_clean=new_method_clean, theo_sb=theo_sb)        
             # Use lock to ensure safe access to shared memory inside the inner function
@@ -2694,6 +2566,9 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
             newazt = newazt_
             newelt = newelt_
             print(np.shape(newazt), np.shape(newelt))
+        else:
+            newazt = newazt_
+            newelt = newelt_
 
         scantype[0] = 0 # in order to not have peaks too close to start of scan (there would be no start point)
         allmaps = parallel_coadded_maps(allTESNum, alltod, tt, azt, elt, 
@@ -2713,7 +2588,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, start_tt=10000, data=None, sp
     else:
         # center = [np.mean(newazt), np.mean(newelt)]
         center = [0, 90] # zenith
-    return allmaps, data, center, newazt, newelt, scantype
+    return allmaps, center, newazt, newelt, scantype
 
 
 # from QdataHandling
@@ -3375,15 +3250,19 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
         The coordinates of the array of points in the new system.
 
     """
-    if det_pos is not None and file_name is not None:
+    dir_files = "azt_elt_files/"
+    if det_pos is not None and file_name is not None and False:
         try:
-            azt_zen = np.load("azt_zen_{}.npy".format(file_name))
-            elt_zen = np.load("elt_zen_{}.npy".format(file_name))
+            azt_zen = np.load(dir_files + "azt_zen_{}.npy".format(file_name))
+            elt_zen = np.load(dir_files + "elt_zen_{}.npy".format(file_name))
             print(np.shape(azt_zen))
             print(np.shape(elt_zen))
-            return azt_zen, elt_zen
+            if np.any(np.array(np.shape(azt_zen)) == len(azt)):
+                return azt_zen, elt_zen
+            else:
+                print("The shape of azt_zen retrieved from azt_zen_{}.npy ({}) doens't correspond to azt shape ({}).".format(file_name, np.shape(azt_zen), np.shape(azt)))
         except:
-            print("Didn't find one of the following files: '{}' and/or '{}'".format("azt_zen.npy", "elt_zen.npy"))
+            print("Didn't find one of the following files: '{}' and/or '{}'".format("azt_zen_{}.npy".format(file_name), "elt_zen_{}.npy".format(file_name)))
             # pass
 
     # az_source and el_source need to be either np.float_ or np.array
@@ -3567,8 +3446,8 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
 
     print("final shape", np.shape(azt_zen))
     if det_pos is not None and file_name is not None:
-        np.save("azt_zen_{}.npy".format(file_name), azt_zen)
-        np.save("elt_zen_{}.npy".format(file_name), elt_zen)
+        np.save(dir_files + "azt_zen_{}.npy".format(file_name), azt_zen)
+        np.save(dir_files + "elt_zen_{}.npy".format(file_name), elt_zen)
         print("saved {}".format(file_name), flush=True)
     return azt_zen, elt_zen
 

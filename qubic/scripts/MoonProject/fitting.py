@@ -48,7 +48,7 @@ class Data:
         if self.diag == True:
             myminimizer = minimizer(self.x[ok], self.y[ok], self.errors[ok], self.model)
         else:
-            print('Non diagoal covariance not yet implemented: using only diagonal')
+            print('Non diagonal covariance not yet implemented: using only diagonal')
             myminimizer = minimizer(self.x[ok], self.y[ok], self.errors[ok], self.model)
 
         ### Instanciate the minuit object

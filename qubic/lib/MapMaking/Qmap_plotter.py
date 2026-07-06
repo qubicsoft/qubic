@@ -122,7 +122,23 @@ def Cl2BK(ell, Cl):
     return 100 * ell * Cl / (2 * np.pi)
 
 
-def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, label_model="CMB + Dust", nbins=None, nrec=2, mode="Dl", figsize=None, title=None, name=None, dpi=300):
+def plot_cross_spectrum(
+    nus,
+    ell,
+    Dl,
+    Dl_err,
+    ymodel,
+    Dl2=None,
+    Dl2_err=None,
+    label_model="CMB + Dust",
+    nbins=None,
+    nrec=2,
+    mode="Dl",
+    figsize=None,
+    title=None,
+    name=None,
+    dpi=300,
+):
     """
         Plot the upper-triangle matrix of cross-angular power spectra D_ell (and optional model).
 
@@ -234,28 +250,62 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
             else:
                 ax.plot(ell_sel, Cl2BK(ell_sel, Dl2Cl(ell_sel, y)), "--r")
 
-    def _plot_errorbars(ax, i, j, color_main, color_second=None, label_main=None, label_second=None):
+    def _plot_errorbars(
+        ax, i, j, color_main, color_second=None, label_main=None, label_second=None
+    ):
         """Add errorbars in either 'Dl' or transformed mode."""
         main = Dl[i, j, :nbins]
         main_err = Dl_err[i, j, :nbins] if Dl_err is not None else None
 
         # plot Dl first, then Dl2 on top
         if mode == "Dl":
-            ax.errorbar(ell_sel, main, yerr=main_err, capsize=5, color=color_main, fmt="-o", label=label_main)
+            ax.errorbar(
+                ell_sel,
+                main,
+                yerr=main_err,
+                capsize=5,
+                color=color_main,
+                fmt="-o",
+                label=label_main,
+            )
         else:
             y_main = Cl2BK(ell_sel, Dl2Cl(ell_sel, main))
             yerr_main = Cl2BK(ell_sel, Dl2Cl(ell_sel, main_err)) if main_err is not None else None
-            ax.errorbar(ell_sel, y_main, yerr=yerr_main, capsize=5, color=color_main, fmt="-o", label=label_main)
+            ax.errorbar(
+                ell_sel,
+                y_main,
+                yerr=yerr_main,
+                capsize=5,
+                color=color_main,
+                fmt="-o",
+                label=label_main,
+            )
 
         if Dl2 is not None:
             sec = Dl2[i, j, :nbins]
             sec_err = Dl2_err[i, j, :nbins] if Dl2_err is not None else None
             if mode == "Dl":
-                ax.errorbar(ell_sel, sec, yerr=sec_err, capsize=5, color=color_second or "orange", fmt="-o", label=label_second)
+                ax.errorbar(
+                    ell_sel,
+                    sec,
+                    yerr=sec_err,
+                    capsize=5,
+                    color=color_second or "orange",
+                    fmt="-o",
+                    label=label_second,
+                )
             else:
                 y_sec = Cl2BK(ell_sel, Dl2Cl(ell_sel, sec))
                 yerr_sec = Cl2BK(ell_sel, Dl2Cl(ell_sel, sec_err)) if sec_err is not None else None
-                ax.errorbar(ell_sel, y_sec, yerr=yerr_sec, capsize=5, color=color_second or "orange", fmt="-o", label=label_second)
+                ax.errorbar(
+                    ell_sel,
+                    y_sec,
+                    yerr=yerr_sec,
+                    capsize=5,
+                    color=color_second or "orange",
+                    fmt="-o",
+                    label=label_second,
+                )
 
     # iterate over upper triangle (including diagonal)
     for i in range(len(nus)):
@@ -268,7 +318,9 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
                 if mode == "Dl":
                     ax.set_ylabel(r"$\mathcal{D}_{\ell}$", fontsize=2 * ft_axis)
                 else:
-                    ax.set_ylabel(r"100 $ \frac{\ell \mathcal{C}_{\ell}}{2 \pi}$", fontsize=2 * ft_axis)
+                    ax.set_ylabel(
+                        r"100 $ \frac{\ell \mathcal{C}_{\ell}}{2 \pi}$", fontsize=2 * ft_axis
+                    )
             # set tick label rotation and size per-axis so small/large figures
             # and varying `n` use the computed `ft_axis` consistently
             ax.tick_params(axis="x", labelrotation=30, labelsize=ft_axis)
@@ -278,7 +330,14 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
             _model_plot(ax, i, j, kp)
 
             ax.patch.set_alpha(0.2)
-            ax.annotate(f"{nus[i]}x{nus[j]}", xy=(0.1, 0.9), fontsize=ft_nus, xycoords="axes fraction", color="black", weight="bold")
+            ax.annotate(
+                f"{nus[i]}x{nus[j]}",
+                xy=(0.1, 0.9),
+                fontsize=ft_nus,
+                xycoords="axes fraction",
+                color="black",
+                weight="bold",
+            )
 
             # facecolor + plotting choices exactly as original
             if i < nrec and j < nrec:
@@ -324,8 +383,8 @@ def plot_cross_spectrum(nus, ell, Dl, Dl_err, ymodel, Dl2=None, Dl2_err=None, la
             ymax_abs = max(abs(ymin), abs(ymax))
             ax.set_ylim(-ymax_abs, ymax_abs)
             for ax in fig.axes:
-                ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%d'))
-                ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
+                ax.xaxis.set_major_formatter(mticker.FormatStrFormatter("%d"))
+                ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.2f"))
 
     # title / legend / save / show
     if title is not None:
@@ -487,6 +546,7 @@ class PlotsFMM:
             for istk in range(Nstk):
                 max_out = np.max(np.abs(m_out[inu, self.seenpix, istk]))
                 max_res = np.max(np.abs(res[inu, self.seenpix, istk]))
+
                 hp.gnomview(
                     m_out[inu, :, istk],
                     rot=center,
@@ -495,7 +555,7 @@ class PlotsFMM:
                     min=-max_out,
                     max=max_out,
                     sub=(Nf, 6, k),
-                    title=f"{nus[inu]:.1f} GHz - Output {self.stk[istk]}",
+                    title=f"{nus[inu]:.0f} GHz - Output {self.stk[istk]}",
                     notext=True,
                 )
 
@@ -507,7 +567,7 @@ class PlotsFMM:
                     min=-max_res,
                     max=max_res,
                     sub=(Nf, 6, k + 1),
-                    title=f"{nus[inu]:.1f} GHz - Residuals {self.stk[istk]}",
+                    title=f"{nus[inu]:.0f} GHz - Residuals {self.stk[istk]}",
                     notext=True,
                 )
                 k += 2
@@ -679,7 +739,9 @@ class PlotsCMM:
 
         # True binned values
         for ic in range(nc):
-            means = np.array([A_in[inu * fsub : (inu + 1) * fsub, ic].mean() for inu in range(nf_out)])
+            means = np.array(
+                [A_in[inu * fsub : (inu + 1) * fsub, ic].mean() for inu in range(nf_out)]
+            )
             plt.scatter(
                 nus_out,
                 means,
@@ -735,19 +797,28 @@ class PlotsCMM:
         niter = beta.shape[0]
         it = np.arange(niter)
 
-        fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]})
+        fig, (ax_top, ax_bot) = plt.subplots(
+            2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]}
+        )
 
         # Colors
         cmap_comp = plt.get_cmap("tab10")
         ncomp = beta.shape[1] if beta.ndim >= 2 else 1
         colors_comp = cmap_comp.colors[:ncomp]
 
-        # TOP : beta evolution        
+        # TOP : beta evolution
         if beta.ndim == 1:
             ax_top.plot(it, beta, lw=2, color=colors_comp[0], label=r"$\beta$")
 
             if errors is not None:
-                ax_top.fill_between(it, beta - errors, beta + errors, color=colors_comp[0], alpha=0.25, label=r"$1\sigma$")
+                ax_top.fill_between(
+                    it,
+                    beta - errors,
+                    beta + errors,
+                    color=colors_comp[0],
+                    alpha=0.25,
+                    label=r"$1\sigma$",
+                )
 
             if truth is not None:
                 ax_top.axhline(truth, ls="--", color="k", lw=1.5, label="Truth")
@@ -755,7 +826,9 @@ class PlotsCMM:
         elif beta.ndim == 3 and beta.shape[-1] == 1:
             for ic in range(beta.shape[1]):
                 name = self.preset.comp.components_name_out[ic + 1]
-                ax_top.plot(it, beta[:, ic], color=colors_comp[ic], lw=2, label=rf"$\beta_{{{name}}}$")
+                ax_top.plot(
+                    it, beta[:, ic], color=colors_comp[ic], lw=2, label=rf"$\beta_{{{name}}}$"
+                )
 
             if truth is not None:
                 for ic, val in enumerate(truth):
@@ -809,12 +882,20 @@ class PlotsCMM:
 
             elif beta.ndim == 3 and beta.shape[-1] == 1:
                 for ic in range(beta.shape[1]):
-                    ax_bot.plot(it, np.abs(beta[:, ic] - truth[ic]), color=colors_comp[ic], lw=2, alpha=0.8)
+                    ax_bot.plot(
+                        it, np.abs(beta[:, ic] - truth[ic]), color=colors_comp[ic], lw=2, alpha=0.8
+                    )
 
             else:
                 for ic in range(beta.shape[1]):
                     for ib in range(beta.shape[2]):
-                        ax_bot.plot(it, np.abs(beta[:, ic, ib] - truth[ic, ib]), color=colors_beta[ib], lw=1.3, alpha=0.35)
+                        ax_bot.plot(
+                            it,
+                            np.abs(beta[:, ic, ib] - truth[ic, ib]),
+                            color=colors_beta[ib],
+                            lw=1.3,
+                            alpha=0.35,
+                        )
 
         ax_bot.set_yscale("log")
         ax_bot.set_xlabel("Iteration")
@@ -875,7 +956,11 @@ class PlotsCMM:
                     k += 1
 
             plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allres_iter{ki + 1}.svg")
+            plt.savefig(
+                "CMM/"
+                + self.preset.tools.params["foldername"]
+                + f"/Plots/allcomps/allres_iter{ki + 1}.svg"
+            )
 
             plt.close()
 
@@ -927,11 +1012,19 @@ class PlotsCMM:
                     k += 1
 
             plt.tight_layout()
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki + 1}.svg")
+            plt.savefig(
+                "CMM/"
+                + self.preset.tools.params["foldername"]
+                + f"/Plots/allcomps/allcomps_iter{ki + 1}.svg"
+            )
 
             if self.preset.tools.rank == 0:
                 if ki > 0 and gif is False:
-                    previous_file = "CMM/" + self.preset.tools.params["foldername"] + f"/Plots/allcomps/allcomps_iter{ki}.svg"
+                    previous_file = (
+                        "CMM/"
+                        + self.preset.tools.params["foldername"]
+                        + f"/Plots/allcomps/allcomps_iter{ki}.svg"
+                    )
                     if os.path.exists(previous_file):
                         os.remove(previous_file)
             plt.close()
@@ -1025,7 +1118,9 @@ class PlotsCMM:
 
             plt.close()
 
-        self.preset.acquisition.rms_plot = np.concatenate((self.preset.acquisition.rms_plot, rms_i), axis=0)
+        self.preset.acquisition.rms_plot = np.concatenate(
+            (self.preset.acquisition.rms_plot, rms_i), axis=0
+        )
 
     def plot_gain_iteration(self, gain, figsize=(8, 6), ki=0):
         """
@@ -1064,11 +1159,19 @@ class PlotsCMM:
             plt.xlim(-0.1, 0.1)
             plt.ylim(0, 100)
             plt.axvline(0, ls="--", color="black")
-            plt.savefig("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/gain_iter{ki + 1}.svg")
+            plt.savefig(
+                "CMM/"
+                + self.preset.tools.params["foldername"]
+                + f"/Plots/A_iter/gain_iter{ki + 1}.svg"
+            )
 
             if self.preset.tools.rank == 0:
                 if ki > 0:
-                    os.remove("CMM/" + self.preset.tools.params["foldername"] + f"/Plots/A_iter/gain_iter{ki}.svg")
+                    os.remove(
+                        "CMM/"
+                        + self.preset.tools.params["foldername"]
+                        + f"/Plots/A_iter/gain_iter{ki}.svg"
+                    )
 
             plt.close()
 

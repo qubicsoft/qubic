@@ -73,10 +73,6 @@ class AtmosphereProperties:
             self.integrated_absorption_spectrum()
         )
 
-        self.sigma_rho = self.get_sigma_rho(
-            sigma_pwv=self.params["sigma_pwv"], h=2 * self.params["h_h2o"]
-        )
-
     def get_qubic_dict(self, key="in"):
         """QUBIC dictionary.
 
@@ -132,31 +128,6 @@ class AtmosphereProperties:
             dict_qubic[str(i)] = args[i]
 
         return dict_qubic
-
-    def get_sigma_rho(self, sigma_pwv, h=None):
-        r"""Water vapor density's standard deviation
-
-        Compute sigma_rho from sigma_pwv at altitude h, with sigma_pwv taken from Table 1 in Sugiyama 2024.
-        The formula, being $\sigma_{\rho(h)} = \frac{\sigma_{PWV}}{h}$ , comes from a scale approximation.
-        h should be defined as 2*h_h2o, with h_h2o the water vapor half-height.
-
-        Parameters
-        ----------
-        sigma_pwv : float
-            PWV's STD in mm.(1 mm of water over a 1 m^2 area is equivalent to 1 kg/m^2, the actual dimension of the PWD per definition.)
-        h : float
-            height of the considered water vapor in m.
-
-        Returns
-        -------
-        sigma_rho : float
-            Water vapor density's standard deviation in kg/m^3
-
-        """
-
-        if h is None:
-            h = 2 * self.params["h_h2o"]
-        return sigma_pwv / h
 
     def get_mean_water_vapor_density(self, altitude, rho_0, h_h2o):
         r"""Mean water vapor density.
@@ -810,12 +781,10 @@ class AtmosphereMaps(AtmosphereProperties):
             theta, ctheta, self.lmax, normalization=self.params["normalization"]
         )
 
-        if self.params["adjust"]:
-            sigma_theo = np.std(clth)
-            C = sigma_rho / np.sqrt(sigma_theo)
-            clth *= C
-
         delta_rho = hp.synfast(clth, nside=self.params["nside"], lmax=self.lmax)
+
+        if self.params["adjust"]:
+            delta_rho *= sigma_rho / np.std(delta_rho)
 
         return delta_rho
 
@@ -871,12 +840,18 @@ class AtmosphereMaps(AtmosphereProperties):
         .. math::
             dT( \textbf{r}, \nu) = \alpha_b(\nu) \rho(\textbf{r}) T_{atm}(\textbf{r}) dV .
 
+        :math:`\alpha_b(\nu)` has units of :math:`m^{2}/g`, so :math:`\alpha_b(\nu) \rho(\textbf{r})` is an absorption
+        coefficient per unit length (:math:`m^{-1}`): it must be integrated over the line-of-sight depth :math:`dV`
+        of the emitting layer to give a dimensionless optical depth, following Morris 2021 equation 8, where the
+        fluctuation covariance scales with the local mean density. We approximate this single thin layer as having
+        an effective depth of :math:`2 h_{H_2O}` (the water vapor full-width).
+
         And then, convert it in micro Kelvin CMB.
 
         Parameters
         ----------
         maps : array_like
-            Water vapor density 2d map.
+            Water vapor density fractional fluctuation 2d map.
 
         Returns
         -------
@@ -885,11 +860,14 @@ class AtmosphereMaps(AtmosphereProperties):
 
         """
 
+        layer_depth = 2 * self.params["h_h2o"]
+
         if len(maps.shape) == 1:
             temp_maps = (
                 self.integrated_abs_spectrum[:, np.newaxis]
                 * self.mean_water_vapor_density
                 * self.temperature
+                * layer_depth
                 * maps
             )  # maps obtained with spherical harmonics (flat =False)
         else:
@@ -897,6 +875,7 @@ class AtmosphereMaps(AtmosphereProperties):
                 self.integrated_abs_spectrum[:, np.newaxis, np.newaxis]
                 * self.mean_water_vapor_density
                 * self.temperature
+                * layer_depth
                 * maps
             )  # flat maps
 

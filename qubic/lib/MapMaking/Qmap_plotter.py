@@ -546,7 +546,6 @@ class PlotsFMM:
             for istk in range(Nstk):
                 max_out = np.max(np.abs(m_out[inu, self.seenpix, istk]))
                 max_res = np.max(np.abs(res[inu, self.seenpix, istk]))
-
                 hp.gnomview(
                     m_out[inu, :, istk],
                     rot=center,
@@ -555,7 +554,7 @@ class PlotsFMM:
                     min=-max_out,
                     max=max_out,
                     sub=(Nf, 6, k),
-                    title=f"{nus[inu]:.0f} GHz - Output {self.stk[istk]}",
+                    title=f"{nus[inu]:.1f} GHz - Output {self.stk[istk]}",
                     notext=True,
                 )
 
@@ -567,7 +566,7 @@ class PlotsFMM:
                     min=-max_res,
                     max=max_res,
                     sub=(Nf, 6, k + 1),
-                    title=f"{nus[inu]:.0f} GHz - Residuals {self.stk[istk]}",
+                    title=f"{nus[inu]:.1f} GHz - Residuals {self.stk[istk]}",
                     notext=True,
                 )
                 k += 2
@@ -980,8 +979,11 @@ class PlotsCMM:
 
         stk = ["I", "Q", "U"]
         if self.params["Plots"]["maps"]:
-            maps_in = input_maps
-            maps_rec = reconstructed_maps
+            maps_in = input_maps.copy()
+            maps_rec = reconstructed_maps.copy()
+
+            maps_in[:, ~self.preset.sky.seenpix, :] = hp.UNSEEN
+            maps_rec[:, ~self.preset.sky.seenpix, :] = hp.UNSEEN
             maps_res = maps_rec - maps_in
 
             Nmaps, _, Nstk = maps_res.shape

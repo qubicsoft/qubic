@@ -2,10 +2,10 @@
 #SBATCH --job-name=FMM
 #SBATCH --partition=htc
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=5
+#SBATCH --cpus-per-task=10
 #SBATCH --mem=80G
-#SBATCH --time=2-00:00:00
+#SBATCH --time=0-10:00:00
 #SBATCH --output=FMM/slurm_logs/multiple_jobs_%A_%a.log
 #SBATCH --array=1-300
 

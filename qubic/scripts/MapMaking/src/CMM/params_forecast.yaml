@@ -1,5 +1,5 @@
 save_iter: 1                                                                           # Save every 'save_iter' iteration
-foldername: "beta_conv"                                                                  # Name of the saved folder
+foldername: "test_nu_ref_150"                                                                  # Name of the saved folder
 filename: "test"                                                                       # Name of the saved file
 lastite: false                                                                          # Keep only the last iteration
 
@@ -22,11 +22,11 @@ Foregrounds:
 
     type: "parametric"                                                                 # Reconstruction method
     model: "d0"
-    beta_init: [1.54, 0.02, 1000000]                                                  # PySM model
+    beta_init: [1.54, 0.02, 10000000]                                                  # PySM model
     nside_beta_in: 0                                                                   # Input pixelization for beta_d (in a case of d1 model)
     nside_beta_out: 0                                                                  # Output pixelization for beta_d (in a case of d1 model)
-    nu0: 353.0                                                                         # Reference frequency (nu0_d)
-    l_corr: 1000000                                                                   # Decorrelation level (seen only with d6 model)
+    nu0: 150.0                                                                         # Reference frequency (nu0_d)
+    l_corr: 10000000                                                                   # Decorrelation level (seen only with d6 model)
     amplification: 1                                                                   # Amplification of the dust contribution
 
 
@@ -82,7 +82,7 @@ SKY:
     ### This section control the reconstructed sky
 
   nside: 256                                                                           # Nside of components
-  coverage_cut: 0.20                                                                   # Percent of coverage to keep the pixels seen enough by QUBIC
+  coverage_cut: 0.2                                                                   # Percent of coverage to keep the pixels seen enough by QUBIC
   RA_center: 0
   DEC_center: -57
 
@@ -103,16 +103,16 @@ PLANCK:
 
 Pipeline:
   mapmaking: true
-  spectrum: false
+  spectrum: true
 
 PCG:
     ### This section control PCG parameters
 
   n_init_iter_pcg: 15
-  n_iter_pcg: 15                                                                       # Number of PCG iterations
+  n_iter_pcg: 5                                                                       # Number of PCG iterations
   iter_end: 150                                                                          # Number of PCG iterations for a final run after the main loop (0 to disable)
   tol_pcg: 1.0e-20                                                                     # Tolerance for PCG
-  n_iter_loop: 50                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
+  n_iter_loop: 100                                                                       # Number of loop (1 loop is PCG + beta fitting + gain reconstruction)
   ites_to_converge: 1                                                                  # should be less than n_iter_loop
   tol_rms: 1.0e-20
     #fix_pixels_outside_patch: True                                                    # Fixing pixels outside QUBIC patch

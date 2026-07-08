@@ -688,13 +688,18 @@ class PlotsCMM:
         self.dogif = dogif
         self.params = self.preset.tools.params
 
-    def plot_sed(self, nus_in, A_in, nus_out, A_out, figsize=(8, 6), ki=0, gif=False):
+    def plot_sed(
+        self, nus_in, A_in, nus_out, A_out, A_out_err=None, nus_out_bw=None, figsize=(8, 6), ki=0, gif=False
+    ):
         """
         Plots the Spectral Energy Distribution (SED) and saves the plot as a svg file.
 
         Parameters:
         nus (array-like): Array of frequency values.
         A (array-like): Array of amplitude values.
+        A_out_err (array-like, optional): 1-sigma uncertainty on A_out, same shape. Defaults to None (no error bars).
+        nus_out_bw (array-like, optional): Full bandwidth (GHz) of each nus_out subband, same length as
+            nus_out. Drawn as horizontal error bars. Defaults to None (no bandwidth shown).
         figsize (tuple, optional): Size of the figure. Defaults to (8, 6).
         truth (array-like, optional): Array of true values for comparison. Defaults to None.
         ki (int, optional): Iteration index for file naming. Defaults to 0.
@@ -720,73 +725,124 @@ class PlotsCMM:
         if fg["Synchrotron"]["Synchrotron_out"]:
             labels.append(f"Sync ({fg['Synchrotron']['model']})")
 
-        plt.figure(figsize=figsize)
-        plt.title(f"Mixing matrix fit (blind) – iteration #{ki + 1}")
+        # One fixed color per plot element (not per component): makes Model / True
+        # binned / Fitted instantly distinguishable regardless of how many
+        # components are shown. Components are instead told apart via linestyle/marker.
+        color_model, color_true, color_fit = "#2a78d6", "#008300", "#e34948"
+        linestyles = ["-", "--", "-.", ":"]
+        markers = ["o", "s", "^", "D"]
+        xerr = nus_out_bw / 2 if nus_out_bw is not None else None
 
-        colors = plt.cm.tab10.colors  # color palette for components
+        # True binned values (same binning as the "True binned" markers below)
+        true_binned = np.array(
+            [
+                [A_in[inu * fsub : (inu + 1) * fsub, ic].mean() for inu in range(nf_out)]
+                for ic in range(nc)
+            ]
+        ).T  # (nf_out, nc)
+
+        # A pull panel ((Fitted - True) / sigma) is only meaningful when sigma is known.
+        if A_out_err is not None:
+            fig, (ax, ax_pull) = plt.subplots(
+                2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]}
+            )
+        else:
+            fig, ax = plt.subplots(figsize=figsize)
+            ax_pull = None
+
+        fig.suptitle(f"Mixing matrix fit (blind) – iteration #{ki + 1}")
 
         # True continuous SEDs
         for ic in range(nc):
-            plt.plot(
+            ax.plot(
                 nus_in,
                 A_in[:, ic],
-                color=colors[ic % 10],
+                color=color_model,
+                ls=linestyles[ic % len(linestyles)],
                 alpha=0.7,
                 lw=2,
                 label=f"Model: {labels[ic]}",
             )
 
-        # True binned values
+        # True binned values, with subband bandwidth shown as horizontal error bars
         for ic in range(nc):
-            means = np.array(
-                [A_in[inu * fsub : (inu + 1) * fsub, ic].mean() for inu in range(nf_out)]
-            )
-            plt.scatter(
+            ax.errorbar(
                 nus_out,
-                means,
-                color=colors[ic % 10],
-                marker="o",
-                s=60,
+                true_binned[:, ic],
+                xerr=xerr,
+                color=color_true,
+                marker=markers[ic % len(markers)],
+                markersize=8,
+                ls="",
+                capsize=4,
                 label=f"True binned: {labels[ic]}",
                 zorder=3,
             )
 
-        # Fitted values (cross on top)
+        # Fitted values (hollow points on top), with 1-sigma / bandwidth error bars when available
         for ic in range(nc):
-            plt.scatter(
+            yerr = A_out_err[:, ic] if A_out_err is not None else None
+            ax.errorbar(
                 nus_out,
                 A_out[:, ic],
-                color=colors[ic % 10],
-                marker="x",
-                s=80,
-                lw=2,
+                yerr=yerr,
+                xerr=xerr,
+                color=color_fit,
+                marker=markers[ic % len(markers)],
+                markerfacecolor="none",
+                markersize=8,
+                mew=2,
+                ls="",
+                capsize=4,
                 label=f"Fitted: {labels[ic]}",
                 zorder=4,
             )
 
         # Axes & scaling
-        plt.xlabel("Frequency [GHz]")
-        plt.ylabel("Mixing matrix element")
-        plt.xlim(120, 260)
-        plt.yscale("log")
+        ax.set_ylabel("Mixing matrix element")
+        ax.set_xlim(120, 260)
+        ax.set_yscale("log")
 
         Amin = np.min(A_in[A_in > 0])
         Amax = np.max(A_in)
-        plt.ylim(Amin * 0.5, Amax * 2.0)
+        ax.set_ylim(Amin * 0.5, Amax * 2.0)
 
-        plt.legend()
-        plt.tight_layout()
+        ax.legend()
+
+        # Pull panel: (Fitted - True binned) / sigma_fit. Absolute error bars on the
+        # log-scale plot above can be too small to see (sub-percent sigma vs. a
+        # multi-decade y-range); the pull makes "how many sigma off" visible directly.
+        if ax_pull is not None:
+            for ic in range(nc):
+                pull = (A_out[:, ic] - true_binned[:, ic]) / A_out_err[:, ic]
+                ax_pull.plot(
+                    nus_out,
+                    pull,
+                    color=color_fit,
+                    marker=markers[ic % len(markers)],
+                    markerfacecolor="none",
+                    markersize=8,
+                    mew=2,
+                    ls="",
+                )
+            ax_pull.axhline(0, color="black", lw=1)
+            ax_pull.axhspan(-1, 1, color="gray", alpha=0.15)
+            ax_pull.set_xlabel("Frequency [GHz]")
+            ax_pull.set_ylabel(r"(Fit $-$ True) / $\sigma$")
+        else:
+            ax.set_xlabel("Frequency [GHz]")
+
+        fig.tight_layout()
 
         out = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki + 1}.svg"
-        plt.savefig(out)
+        fig.savefig(out)
+        plt.close(fig)
 
         # Cleanup previous iteration
         if self.preset.tools.rank == 0 and ki > 0 and not gif:
             prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki}.svg"
             if os.path.exists(prev):
                 os.remove(prev)
-
-        plt.close()
 
     def plot_beta_iteration(self, beta, figsize=(8, 6), truth=None, ki=0, errors=None):
         if not self.params["Plots"]["conv_beta"]:

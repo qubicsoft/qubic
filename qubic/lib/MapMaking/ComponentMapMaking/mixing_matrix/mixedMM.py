@@ -1,8 +1,9 @@
+import fgbuster.mixingmatrix as mm
 import numpy as np
 from scipy.optimize import minimize
 
 from qubic.lib.MapMaking.ComponentMapMaking.mixing_matrix.fittingMM import FittingMM
-from qubic.lib.MapMaking.ComponentMapMaking.Qchi2MM import MixedChi2, ParamLayout
+from qubic.lib.MapMaking.ComponentMapMaking.Qchi2MM import MixedChi2, MMLayout, finite_diff_hessian
 from qubic.lib.Qfoldertools import do_gif
 
 
@@ -45,7 +46,7 @@ class MixedMM(FittingMM):
 
         x0 = np.asarray(x0, dtype=float)
 
-        self.layout = ParamLayout(
+        self.layout = MMLayout(
             beta_indices=beta_indices,
             blind_indices=blind_indices,
             ndim=len(x0),
@@ -68,6 +69,32 @@ class MixedMM(FittingMM):
 
         for comp, v in Amm.items():
             self.preset.acquisition.Amm_iter[:, comp] = v
+
+        # 1-sigma uncertainty. L-BFGS-B's hess_inv is a rank-limited quasi-Newton
+        # approximation built only from the gradient history of *this* minimize() call:
+        # it can be unreliable if the fit converges in few iterations or if parameters
+        # are correlated. Cross-check it against a Hessian computed directly from the
+        # objective (finite differences) and use that one for the reported error bars.
+        # Blind components map 1:1 onto per-frequency mixing-matrix values; parametric
+        # components (fitted spectral index) are propagated through the SED derivative
+        # dA/dbeta via linear error propagation: sigma_A(nu) = |dA/dbeta(nu)| * sigma_beta.
+        sigma_x_lbfgs = np.sqrt(np.diag(np.asarray(res.hess_inv.todense())))
+        H_fd = finite_diff_hessian(self.chi2, res.x)
+        sigma_x = np.sqrt(np.diag(np.linalg.inv(H_fd)))
+        if self.preset.tools.rank == 0:
+            print(f"nit = {res.nit}, success = {res.success}")
+            print(f"sigma (L-BFGS-B hess_inv)  : {sigma_x_lbfgs}")
+            print(f"sigma (finite-diff Hessian): {sigma_x}")
+        sigma_beta, sigma_Amm = self.chi2.unpack(sigma_x)
+
+        Amm_iter_err = np.zeros_like(self.preset.acquisition.Amm_iter)
+        for comp, v in sigma_Amm.items():
+            Amm_iter_err[:, comp] = v
+        for comp, sb in sigma_beta.items():
+            model = mm.MixingMatrix(self.preset.comp.components_model_out[comp])
+            dA_dbeta = model.diff(self.chi2.nus, beta[comp])[0][:, 0]
+            Amm_iter_err[:, comp] = np.abs(dA_dbeta) * sb
+        self.preset.acquisition.Amm_iter_err = Amm_iter_err
 
         # Extract indices
         self.beta_indices = [comp for comp, _ in self.layout.beta_indices]
@@ -117,6 +144,8 @@ class MixedMM(FittingMM):
             self.preset.mixingmatrix.Amm_in[np.ix_(range(self.preset.qubic.joint_in.qubic.nsub), self.Amm_indices)],
             self.preset.qubic.joint_out.qubic.allnus,
             self.preset.acquisition.Amm_iter[np.ix_(range(self.preset.qubic.joint_out.qubic.nsub), self.Amm_indices)],
+            A_out_err=self.preset.acquisition.Amm_iter_err[np.ix_(range(self.preset.qubic.joint_out.qubic.nsub), self.Amm_indices)],
+            nus_out_bw=self.preset.qubic.joint_out.qubic.allnus_bw[: self.preset.qubic.joint_out.qubic.nsub],
             ki=self._steps,
             gif=self.preset.tools.params["PCG"]["do_gif"],
         )

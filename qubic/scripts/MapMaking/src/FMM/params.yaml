@@ -1,4 +1,4 @@
-foldername: "test_tod"
+foldername: "test_nrec_4_"
 filename: "test"
 path_tod: null #"FMM/test_kmax_3_1/Dict/tod_combined.h5"                       # Path to HDF5 file with pre-computed TOD (null to simulate)
 simulate_tod: false                                # If true, stop after TOD generation and save it to Dict/tod.h5
@@ -18,26 +18,26 @@ QUBIC:
 
   instrument: "DB"               # Instrumental design (MB, DB or UWB)
   configuration: "FI"            # Instrumental configuration (TD or FI)
-  npointings: 300               # Number of time samples
-  nsub_in: 8                     # Number of sub-acquisitions
-  nsub_out: 8
-  nrec: 2                        # Number of reconstructed fr
+  npointings: 2000               # Number of time samples
+  nsub_in: 16                     # Number of sub-acquisitions
+  nsub_out: 16
+  nrec: 4                        # Number of reconstructed fr
                                  # must be a diviser of nsub_out because there is no weight in the way the nrec H are built from nsub_out H
   convolution_in: true          # Angular resolution in the input TOD
   convolution_out: false         # Angular resolution in the reconstruction
   bandpass_correction: true      # Correction to keep the edges of the integration band constant
   interp: false
   NOISE:
-    ndet: 1                                # Level of detector noise
+    ndet: 0.1                                # Level of detector noise
                                            # randomness not fixed for det and photon noise, to be checked
-    npho150: 1                             # Level of photon noise at 150 GHz
-    npho220: 1                             # Level of photon noise at 220 GHz
+    npho150: 0.1                             # Level of photon noise at 150 GHz
+    npho220: 0.1                             # Level of photon noise at 220 GHz
     detector_nep: 4.7e-17                  # NEP of detector noise 
     duration_150: 3                        # Effective duration at 150 GHz
     duration_220: 3                        # Effective duration at 220 GHz
     seed_noise: 283
   SYNTHBEAM:
-    synthbeam_kmax: 3                      # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
+    synthbeam_kmax: 1                      # Order of synthesized beam diffraction (synthbeam_kmax = 1 means 9 peaks)
     synthbeam_fraction: 1
     synthbeam_kmax_out: 1
   dtheta: 15                               # Angle for coverage
@@ -50,7 +50,7 @@ QUBIC:
 
 SKY:
   ### This section control the reconstructed sky
-  nside: 128                               # Nside of components
+  nside: 256                               # Nside of components
   coverage_cut: 0.2                        # Define a cut where the coverage is too low
   RA_center: 0
   DEC_center: -57
@@ -60,14 +60,14 @@ PLANCK:
 
   external_data: true
   weight_planck: 0               # Weight of Planck data within the QUBIC patch
-  level_noise_planck: 1          # Noise level for Planck data
+  level_noise_planck: 0.1          # Noise level for Planck data
   seed_noise: 283
   bandwidth_planck: 0.2          # Multiplicative factor to define the bandwidth of Planck's data
   nsub_planck: 100                # Number of sub acquisitions for Planck's data
 
 Pipeline:
   mapmaking: true                          # Run MapMaking Pipeline
-  spectrum: true                          # Compute Power Spectra of the frequency maps
+  spectrum: false                          # Compute Power Spectra of the frequency maps
 
 PCG:
     ### This section control PCG parameters

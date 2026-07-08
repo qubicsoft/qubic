@@ -23,6 +23,62 @@ def _dot(x, y, comm):
     return d
 
 
+def finite_diff_hessian(func, x0, rel_step=1e-3, min_step=1e-6):
+    """Central finite-difference Hessian of a scalar `func` at `x0`.
+
+    Cross-check for scipy's L-BFGS-B `hess_inv`: that's a rank-limited quasi-Newton
+    approximation built only from the gradient history seen during the optimizer's
+    own run, which can be inaccurate if the fit converged in few iterations or if
+    parameters are correlated. This computes the Hessian directly from `func`
+    instead, at the cost of O(n^2) extra evaluations.
+
+    Parameters
+    ----------
+    func : callable
+        Scalar objective (e.g. an AbstractChi2 instance, returning 0.5*chi2).
+    x0 : array_like
+        Point at which to evaluate the Hessian (typically the fit optimum).
+    rel_step : float
+        Per-parameter step size as a fraction of |x0_i| (floored at min_step).
+
+    Returns
+    -------
+    H : ndarray, shape (n, n)
+        Symmetric Hessian matrix.
+    """
+    x0 = np.asarray(x0, dtype=float)
+    n = len(x0)
+    steps = np.maximum(np.abs(x0) * rel_step, min_step)
+    f0 = func(x0)
+    H = np.zeros((n, n))
+
+    for i in range(n):
+        xp = x0.copy()
+        xp[i] += steps[i]
+        xm = x0.copy()
+        xm[i] -= steps[i]
+        H[i, i] = (func(xp) - 2 * f0 + func(xm)) / steps[i] ** 2
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            xpp = x0.copy()
+            xpp[i] += steps[i]
+            xpp[j] += steps[j]
+            xpm = x0.copy()
+            xpm[i] += steps[i]
+            xpm[j] -= steps[j]
+            xmp = x0.copy()
+            xmp[i] -= steps[i]
+            xmp[j] += steps[j]
+            xmm = x0.copy()
+            xmm[i] -= steps[i]
+            xmm[j] -= steps[j]
+            val = (func(xpp) - func(xpm) - func(xmp) + func(xmm)) / (4 * steps[i] * steps[j])
+            H[i, j] = H[j, i] = val
+
+    return H
+
+
 class AbstractChi2(ABC):
     """
     Common base class for chi2-like objects.

@@ -57,6 +57,8 @@ class PresetAcquisition:
         Spectral indeices, if d1 :math:`(iter, 12 \times Nside_{\beta}^2, N_{comp}-1)`, if not :math:`(iter, N_{comp}-1)`.
     Amm_iter: array_like
         Mixing matrix.
+    Amm_iter_err: array_like
+        1-sigma uncertainty on Amm_iter, from the inverse Hessian of the mixing-matrix fit.
 
     """
 
@@ -463,6 +465,7 @@ class PresetAcquisition:
         np.random.seed(self.seed_start_pcg)
 
         self.beta_iter, self.Amm_iter = self.preset_mixingmatrix._get_beta_iter(seenpix=self.preset_sky.seenpix)
+        self.Amm_iter_err = np.zeros_like(self.Amm_iter)
 
         # Build beta map for spatially varying spectral index
         self.allbeta = np.array([self.beta_iter])

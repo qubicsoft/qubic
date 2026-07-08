@@ -586,6 +586,7 @@ class QubicMultiAcquisitions:
 
         # There was code duplication in the previous version
         self.allnus = []
+        self.allnus_bw = []
         self.allnus_rec = []
         if self.dict["instrument_type"] == "MB":  # to be implemented on dictionary level
             print("Only the 150 GHz band will be used.")
@@ -596,7 +597,7 @@ class QubicMultiAcquisitions:
             f_bands = [150, 220]
         for i, f_band in enumerate(f_bands):
             ### Compute frequencies on the edges
-            _, _, nus_subbands_i, _, _, _ = compute_freq(
+            _, _, nus_subbands_i, deltas_i, _, _ = compute_freq(
                 f_band,
                 Nfreq=int(self.nsub / len(f_bands)),
                 relative_bandwidth=self.dict["filter_relative_bandwidth"],
@@ -616,10 +617,12 @@ class QubicMultiAcquisitions:
                 )
             ### Join 150 and 220 GHz band if needed
             self.allnus += list(nus_subbands_i)
+            self.allnus_bw += list(deltas_i)
             self.allnus_rec += list(nus_i)
 
         ### Convert lists to numpy arrays
         self.allnus = np.array(self.allnus)
+        self.allnus_bw = np.array(self.allnus_bw)
         self.allnus_rec = np.array(self.allnus_rec)
 
         ### Multi-frequency instrument

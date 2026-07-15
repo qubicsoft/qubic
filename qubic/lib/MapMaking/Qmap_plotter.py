@@ -688,8 +688,45 @@ class PlotsCMM:
         self.dogif = dogif
         self.params = self.preset.tools.params
 
+    def _find_band_gap(self, nus, nus_bw=None):
+        """Locate the gap between QUBIC's two physical frequency bands (150/220 GHz for
+        DB/UWB instruments), assuming `nus` is sorted ascending (as built by the
+        instrument model: one band fully below the other).
+
+        Uses each channel's actual bandwidth (center +/- bandwidth/2), not just its
+        center frequency, so the reported gap edges match the true (un)observed range
+        rather than the gap between the two nearest channel centers.
+
+        Returns (gap_idx, edge_lo, edge_hi): gap_idx is the index of the last channel
+        of the lower band; edge_lo/edge_hi are the physical edges of the gap. Returns
+        None if there's no clear gap (e.g. a single-band "MB" instrument).
+        """
+        nus = np.asarray(nus)
+        if len(nus) < 2:
+            return None
+        bw = np.asarray(nus_bw) if nus_bw is not None else np.zeros_like(nus)
+
+        gaps = np.diff(nus)
+        gap_idx = np.argmax(gaps)
+        if gaps[gap_idx] < 2 * np.median(gaps):
+            return None  # no real band gap
+
+        edge_lo = nus[gap_idx] + bw[gap_idx] / 2
+        edge_hi = nus[gap_idx + 1] - bw[gap_idx + 1] / 2
+        return gap_idx, edge_lo, edge_hi
+
     def plot_sed(
-        self, nus_in, A_in, nus_out, A_out, A_out_err=None, nus_out_bw=None, figsize=(8, 6), ki=0, gif=False
+        self,
+        nus_in,
+        A_in,
+        nus_out,
+        A_out,
+        A_out_err=None,
+        nus_out_bw=None,
+        nus_in_bw=None,
+        figsize=(8, 6),
+        ki=0,
+        gif=False,
     ):
         """
         Plots the Spectral Energy Distribution (SED) and saves the plot as a svg file.
@@ -700,6 +737,9 @@ class PlotsCMM:
         A_out_err (array-like, optional): 1-sigma uncertainty on A_out, same shape. Defaults to None (no error bars).
         nus_out_bw (array-like, optional): Full bandwidth (GHz) of each nus_out subband, same length as
             nus_out. Drawn as horizontal error bars. Defaults to None (no bandwidth shown).
+        nus_in_bw (array-like, optional): Full bandwidth (GHz) of each nus_in subband, same length as
+            nus_in. Used to find the true edges of QUBIC's two frequency bands (150/220 GHz),
+            where the "Model" line is drawn dashed since there is no data there. Defaults to None.
         figsize (tuple, optional): Size of the figure. Defaults to (8, 6).
         truth (array-like, optional): Array of true values for comparison. Defaults to None.
         ki (int, optional): Iteration index for file naming. Defaults to 0.
@@ -752,17 +792,52 @@ class PlotsCMM:
 
         fig.suptitle(f"Mixing matrix fit (blind) – iteration #{ki + 1}")
 
-        # True continuous SEDs
+        # Illustrate QUBIC's two physical frequency bands (150 / 220 GHz): find the true
+        # gap between them (from each channel's actual bandwidth, not just its center)
+        # and shade each band. The "Model" line itself is drawn dashed across the gap
+        # further down, since there is no data/observation in between.
+        band_gap = self._find_band_gap(nus_in, nus_in_bw)
+        if band_gap is not None:
+            _, edge_lo, edge_hi = band_gap
+            bw0 = nus_in_bw[0] / 2 if nus_in_bw is not None else 0
+            bw1 = nus_in_bw[-1] / 2 if nus_in_bw is not None else 0
+            for a in [ax] if ax_pull is None else [ax, ax_pull]:
+                a.axvspan(nus_in[0] - bw0, edge_lo, color="gray", alpha=0.06, zorder=0)
+                a.axvspan(edge_hi, nus_in[-1] + bw1, color="gray", alpha=0.06, zorder=0)
+
+        # True continuous SEDs, dashed across the inter-band gap (no data there)
         for ic in range(nc):
-            ax.plot(
-                nus_in,
-                A_in[:, ic],
-                color=color_model,
-                ls=linestyles[ic % len(linestyles)],
-                alpha=0.7,
-                lw=2,
-                label=f"Model: {labels[ic]}",
-            )
+            ls = linestyles[ic % len(linestyles)]
+            if band_gap is not None:
+                gap_idx = band_gap[0]
+                ax.plot(
+                    nus_in[: gap_idx + 1],
+                    A_in[: gap_idx + 1, ic],
+                    color=color_model,
+                    ls=ls,
+                    alpha=0.7,
+                    lw=2,
+                    label=f"Model: {labels[ic]}",
+                )
+                ax.plot(nus_in[gap_idx + 1 :], A_in[gap_idx + 1 :, ic], color=color_model, ls=ls, alpha=0.7, lw=2)
+                ax.plot(
+                    nus_in[gap_idx : gap_idx + 2],
+                    A_in[gap_idx : gap_idx + 2, ic],
+                    color=color_model,
+                    ls="--",
+                    alpha=0.7,
+                    lw=2,
+                )
+            else:
+                ax.plot(
+                    nus_in,
+                    A_in[:, ic],
+                    color=color_model,
+                    ls=ls,
+                    alpha=0.7,
+                    lw=2,
+                    label=f"Model: {labels[ic]}",
+                )
 
         # True binned values, with subband bandwidth shown as horizontal error bars
         for ic in range(nc):
@@ -772,14 +847,15 @@ class PlotsCMM:
                 xerr=xerr,
                 color=color_true,
                 marker=markers[ic % len(markers)],
-                markersize=8,
+                markersize=5,
                 ls="",
-                capsize=4,
+                capsize=3,
+                elinewidth=1.2,
                 label=f"True binned: {labels[ic]}",
                 zorder=3,
             )
 
-        # Fitted values (hollow points on top), with 1-sigma / bandwidth error bars when available
+        # Fitted values (plain point on top), with 1-sigma / bandwidth error bars when available
         for ic in range(nc):
             yerr = A_out_err[:, ic] if A_out_err is not None else None
             ax.errorbar(
@@ -788,12 +864,11 @@ class PlotsCMM:
                 yerr=yerr,
                 xerr=xerr,
                 color=color_fit,
-                marker=markers[ic % len(markers)],
-                markerfacecolor="none",
-                markersize=8,
-                mew=2,
+                marker="o",
+                markersize=5,
                 ls="",
-                capsize=4,
+                capsize=3,
+                elinewidth=1.2,
                 label=f"Fitted: {labels[ic]}",
                 zorder=4,
             )
@@ -819,10 +894,8 @@ class PlotsCMM:
                     nus_out,
                     pull,
                     color=color_fit,
-                    marker=markers[ic % len(markers)],
-                    markerfacecolor="none",
-                    markersize=8,
-                    mew=2,
+                    marker="o",
+                    markersize=5,
                     ls="",
                 )
             ax_pull.axhline(0, color="black", lw=1)
@@ -838,11 +911,15 @@ class PlotsCMM:
         fig.savefig(out)
         plt.close(fig)
 
-        # Cleanup previous iteration
+        # Cleanup previous iteration. Concurrent jobs sharing the same foldername can
+        # race here (both check-then-remove the same file); a FileNotFoundError just
+        # means another process already removed it, which is fine.
         if self.preset.tools.rank == 0 and ki > 0 and not gif:
             prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/A_iter{ki}.svg"
-            if os.path.exists(prev):
+            try:
                 os.remove(prev)
+            except FileNotFoundError:
+                pass
 
     def plot_beta_iteration(self, beta, figsize=(8, 6), truth=None, ki=0, errors=None):
         if not self.params["Plots"]["conv_beta"]:
@@ -964,8 +1041,82 @@ class PlotsCMM:
 
         if ki > 0:
             old = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/beta_iter{ki}.svg"
-            if os.path.exists(old):
+            try:
                 os.remove(old)
+            except FileNotFoundError:
+                pass
+
+        plt.close(fig)
+
+    def plot_mixing_matrix_iteration(self, A_history, truth=None, nus=None, name="", figsize=(9, 6), ki=0):
+        """
+        Plot the convergence of each mixing-matrix element (one per frequency bin of a
+        single component) across outer-loop iterations, alongside its residual to the truth.
+
+        Parameters
+        ----------
+        A_history : array_like, shape (Niter, Nelements)
+            Fitted mixing-matrix element value at each outer iteration.
+        truth : array_like or None, shape (Nelements,)
+            True mixing-matrix element value for comparison.
+        nus : array_like or None, shape (Nelements,)
+            Frequency (GHz) of each element, used to color/label them. Defaults to
+            the bin index if not provided.
+        name : str
+            Component name (e.g. "Dust"), used in the title and filename.
+        ki : int
+            Iteration index for file naming.
+        """
+        if not self.params["Plots"]["conv_beta"]:
+            return
+
+        A_history = np.asarray(A_history)
+        niter, n_elem = A_history.shape
+        it = np.arange(niter)
+        nus = np.asarray(nus) if nus is not None else np.arange(n_elem)
+
+        fig, (ax_top, ax_bot) = plt.subplots(
+            2, 1, figsize=figsize, sharex=True, gridspec_kw={"height_ratios": [3, 1]}
+        )
+
+        cmap = cm.get_cmap("jet", n_elem)
+        colors = [cmap(ie) for ie in range(n_elem)]
+
+        for ie in range(n_elem):
+            ax_top.plot(it, A_history[:, ie], color=colors[ie], lw=1.7, alpha=0.8)
+            if truth is not None:
+                ax_top.axhline(truth[ie], ls="--", color=colors[ie], alpha=0.4)
+
+        norm = mcolors.Normalize(vmin=nus.min(), vmax=nus.max())
+        sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+        sm.set_array([])
+        cbar = fig.colorbar(sm, ax=ax_top, pad=0.02, aspect=30)
+        cbar.set_label("Frequency [GHz]")
+
+        ax_top.set_ylabel("Mixing matrix element")
+        ax_top.set_title(f"{name} mixing matrix convergence – iteration #{ki + 1}")
+        ax_top.grid(alpha=0.3)
+
+        if truth is not None:
+            for ie in range(n_elem):
+                ax_bot.plot(it, np.abs(A_history[:, ie] - truth[ie]), color=colors[ie], lw=1.3, alpha=0.8)
+            ax_bot.set_yscale("log")
+            ax_bot.set_ylabel(r"$|A - A_{\mathrm{true}}|$")
+
+        ax_bot.set_xlabel("Iteration")
+        ax_bot.grid(alpha=0.3)
+
+        fig.tight_layout()
+
+        fname = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/Amm_conv_{name}_iter{ki + 1}.svg"
+        fig.savefig(fname)
+
+        if ki > 0:
+            old = f"CMM/{self.preset.tools.params['foldername']}/Plots/A_iter/Amm_conv_{name}_iter{ki}.svg"
+            try:
+                os.remove(old)
+            except FileNotFoundError:
+                pass
 
         plt.close(fig)
 
@@ -1083,8 +1234,10 @@ class PlotsCMM:
                         + self.preset.tools.params["foldername"]
                         + f"/Plots/allcomps/allcomps_iter{ki}.svg"
                     )
-                    if os.path.exists(previous_file):
+                    try:
                         os.remove(previous_file)
+                    except FileNotFoundError:
+                        pass
             plt.close()
 
     def display_maps(self, input_maps, reconstructed_maps, seenpix, ki=0, reso=15, view="gnomview"):
@@ -1171,8 +1324,10 @@ class PlotsCMM:
 
             if self.preset.tools.rank == 0 and ki > 0:
                 prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/{s}/maps_iter{ki}.svg"
-                if os.path.exists(prev):
+                try:
                     os.remove(prev)
+                except FileNotFoundError:
+                    pass
 
             plt.close()
 
@@ -1225,11 +1380,14 @@ class PlotsCMM:
 
             if self.preset.tools.rank == 0:
                 if ki > 0:
-                    os.remove(
-                        "CMM/"
-                        + self.preset.tools.params["foldername"]
-                        + f"/Plots/A_iter/gain_iter{ki}.svg"
-                    )
+                    try:
+                        os.remove(
+                            "CMM/"
+                            + self.preset.tools.params["foldername"]
+                            + f"/Plots/A_iter/gain_iter{ki}.svg"
+                        )
+                    except FileNotFoundError:
+                        pass
 
             plt.close()
 
@@ -1255,7 +1413,9 @@ class PlotsCMM:
 
         if self.preset.tools.rank == 0 and ki > 0:
             prev = f"CMM/{self.preset.tools.params['foldername']}/Plots/rms_iter{ki}.svg"
-            if os.path.exists(prev):
+            try:
                 os.remove(prev)
+            except FileNotFoundError:
+                pass
 
         plt.close()

@@ -17,12 +17,13 @@ from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Qsamplings import QubicSampling
 
 # TODO : Adjust rho_0 with PWV
-# TODO : Verify conversion into µK_CMB
 # TODO : Adjust pressure with density
 # TODO : Verify frequency dependence of the atmosphere
 # TODO : Verify if the atmosphere is in the same frame as the qubic
 # TODO : Add the possibility to have a 3d atmosphere
 # TODO : Verify that get_integrated_absorption_spectrum works as expected, i.e. tha same way as in MM pipeline to build maps
+
+T_CMB = 2.7255  # CMB temperature in K, Fixsen 2009
 
 
 class AtmosphereProperties:
@@ -237,6 +238,34 @@ class AtmosphereProperties:
             np.array(air_absorption_coeff),
             frequencies,
         )
+
+    def rj_to_cmb_factor(self, nu):
+        r"""Rayleigh-Jeans to CMB thermodynamic temperature conversion factor.
+
+        The atmosphere temperature fluctuations are computed from radiative transfer as a
+        Rayleigh-Jeans (antenna) temperature, :math:`\Delta T_{RJ} \approx \alpha_b(\nu) \rho(\textbf{r}) T_{atm}(\textbf{r}) dV`.
+        To express them as a CMB thermodynamic temperature, they must be multiplied by :
+
+        .. math::
+            g(\nu) = \frac{(e^x - 1)^2}{x^2 e^x}, \quad x = \frac{h \nu}{k_B T_{CMB}} ,
+
+        so that :math:`\Delta T_{CMB} = g(\nu) \Delta T_{RJ}`.
+
+        Parameters
+        ----------
+        nu : array_like
+            Frequency, in GHz.
+
+        Returns
+        -------
+        factor : array_like
+            Multiplicative Rayleigh-Jeans to CMB conversion factor.
+
+        """
+
+        x = c.h * (np.asarray(nu) * 1e9) / (c.k * T_CMB)
+
+        return (np.exp(x) - 1) ** 2 / (x**2 * np.exp(x))
 
     def get_gas_properties(self, params_file=True):
         r"""Gas properties.
@@ -826,11 +855,38 @@ class AtmosphereMaps(AtmosphereProperties):
     def get_ref_temp_maps(self, maps, ref_freq=150):
         ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
         ref_abs = self.integrated_abs_spectrum[ref_idx]
-        return ref_abs * self.mean_water_vapor_density * self.temperature * maps * 1e6
+        rj_to_cmb = self.rj_to_cmb_factor(self.frequencies[ref_idx])
+        return ref_abs * self.mean_water_vapor_density * self.temperature * maps * rj_to_cmb * 1e6
 
     def get_atm_mixing_matrix(self, ref_freq=150):
         ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
-        return self.integrated_abs_spectrum / self.integrated_abs_spectrum[ref_idx]
+        rj_to_cmb = self.rj_to_cmb_factor(self.frequencies)
+        abs_spectrum_cmb = self.integrated_abs_spectrum * rj_to_cmb
+        return abs_spectrum_cmb / abs_spectrum_cmb[ref_idx]
+
+    def get_mean_atm_temperature(self):
+        r"""Mean atmosphere temperature.
+
+        Compute the mean (monopole) atmospheric brightness temperature contribution, i.e. the DC term of
+        equation 12 from Morris 2021 : :math:`\bar{T}(\nu) = \tau_0(\nu) T_{atm}`, where
+        :math:`\tau_0(\nu) = \alpha_b(\nu) \bar{\rho} \times 2 h_{H_2O}` is the mean optical depth of the
+        water vapor layer. This is the spatially uniform temperature added by the atmosphere on top of the
+        spatial fluctuations returned by :meth:`get_temp_maps`, which is built from a zero-mean fluctuation
+        map and therefore does not contain this term.
+
+        Converted from Rayleigh-Jeans to CMB thermodynamic temperature using :meth:`rj_to_cmb_factor`.
+
+        Returns
+        -------
+        mean_temp : array_like
+            Mean atmospheric brightness temperature per QUBIC sub-band, in micro Kelvin CMB.
+
+        """
+
+        layer_depth = 2 * self.params["h_h2o"]
+        tau0 = self.integrated_abs_spectrum * self.mean_water_vapor_density * layer_depth
+
+        return tau0 * self.temperature * self.rj_to_cmb_factor(self.frequencies) * 1e6
 
     def get_temp_maps(self, maps):
         r"""Atmosphere maps.
@@ -846,7 +902,8 @@ class AtmosphereMaps(AtmosphereProperties):
         fluctuation covariance scales with the local mean density. We approximate this single thin layer as having
         an effective depth of :math:`2 h_{H_2O}` (the water vapor full-width).
 
-        And then, convert it in micro Kelvin CMB.
+        This gives a Rayleigh-Jeans (antenna) temperature, which is converted to CMB thermodynamic
+        temperature using :meth:`rj_to_cmb_factor`, and then to micro Kelvin CMB.
 
         Parameters
         ----------
@@ -862,9 +919,12 @@ class AtmosphereMaps(AtmosphereProperties):
 
         layer_depth = 2 * self.params["h_h2o"]
 
+        # Rayleigh-Jeans (antenna) to CMB thermodynamic temperature conversion, per frequency
+        abs_spectrum_cmb = self.integrated_abs_spectrum * self.rj_to_cmb_factor(self.frequencies)
+
         if len(maps.shape) == 1:
             temp_maps = (
-                self.integrated_abs_spectrum[:, np.newaxis]
+                abs_spectrum_cmb[:, np.newaxis]
                 * self.mean_water_vapor_density
                 * self.temperature
                 * layer_depth
@@ -872,7 +932,7 @@ class AtmosphereMaps(AtmosphereProperties):
             )  # maps obtained with spherical harmonics (flat =False)
         else:
             temp_maps = (
-                self.integrated_abs_spectrum[:, np.newaxis, np.newaxis]
+                abs_spectrum_cmb[:, np.newaxis, np.newaxis]
                 * self.mean_water_vapor_density
                 * self.temperature
                 * layer_depth

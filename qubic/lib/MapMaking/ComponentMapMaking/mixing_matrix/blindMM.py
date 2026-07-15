@@ -41,6 +41,7 @@ class BlindMM(FittingMM):
                     self.preset.acquisition.Amm_iter[: self.preset.qubic.joint_out.qubic.nsub, 1:], n_bins, fsub_out
                 ),
                 nus_out_bw=self._bin_bandwidth(self.preset.qubic.joint_out.qubic.allnus_bw, n_bins, fsub_out),
+                nus_in_bw=self.preset.qubic.joint_in.qubic.allnus_bw[: self.preset.qubic.joint_in.qubic.nsub],
                 ki=self._steps - 1,
                 gif=self.preset.tools.params["PCG"]["do_gif"],
             )
@@ -119,9 +120,27 @@ class BlindMM(FittingMM):
                 self.preset.acquisition.Amm_iter_err[: self.preset.qubic.joint_out.qubic.nsub, 1:], n_bins, fsub_out
             ),
             nus_out_bw=self._bin_bandwidth(self.preset.qubic.joint_out.qubic.allnus_bw, n_bins, fsub_out),
+            nus_in_bw=self.preset.qubic.joint_in.qubic.allnus_bw[: self.preset.qubic.joint_in.qubic.nsub],
             ki=self._steps,
             gif=self.preset.tools.params["PCG"]["do_gif"],
         )
+
+        # Convergence of each (binned) mixing-matrix element across outer iterations,
+        # one plot per foreground component (skip column 0, the fixed CMB scaling).
+        nsub_out = self.preset.qubic.joint_out.qubic.nsub
+        nus_binned = self._bin_by_freq(self.preset.qubic.joint_out.qubic.allnus, n_bins, fsub_out)
+        for icomp in range(1, len(self.preset.comp.components_name_out)):
+            A_history = np.array(
+                [self._bin_by_freq(snap[:nsub_out, icomp], n_bins, fsub_out) for snap in self.selfCMM.allAmm_iter]
+            )
+            truth = self._bin_by_freq(self.preset.mixingmatrix.Amm_in[:nsub_out, icomp], n_bins, fsub_out)
+            self.plots.plot_mixing_matrix_iteration(
+                A_history,
+                truth=truth,
+                nus=nus_binned,
+                name=self.preset.comp.components_name_out[icomp],
+                ki=self._steps,
+            )
 
         if self.preset.tools.params["PCG"]["do_gif"]:
             do_gif(

@@ -146,9 +146,26 @@ class MixedMM(FittingMM):
             self.preset.acquisition.Amm_iter[np.ix_(range(self.preset.qubic.joint_out.qubic.nsub), self.Amm_indices)],
             A_out_err=self.preset.acquisition.Amm_iter_err[np.ix_(range(self.preset.qubic.joint_out.qubic.nsub), self.Amm_indices)],
             nus_out_bw=self.preset.qubic.joint_out.qubic.allnus_bw[: self.preset.qubic.joint_out.qubic.nsub],
+            nus_in_bw=self.preset.qubic.joint_in.qubic.allnus_bw[: self.preset.qubic.joint_in.qubic.nsub],
             ki=self._steps,
             gif=self.preset.tools.params["PCG"]["do_gif"],
         )
+
+        # Convergence of each mixing-matrix element across outer iterations, one plot
+        # per blindly-fit component (each raw frequency is its own free parameter here,
+        # unlike BlindMM's binned fit).
+        nsub_out = self.preset.qubic.joint_out.qubic.nsub
+        nus_out = self.preset.qubic.joint_out.qubic.allnus[:nsub_out]
+        for comp in self.Amm_indices:
+            A_history = np.array([snap[:nsub_out, comp] for snap in self.selfCMM.allAmm_iter])
+            truth = self.preset.mixingmatrix.Amm_in[:nsub_out, comp]
+            self.plots.plot_mixing_matrix_iteration(
+                A_history,
+                truth=truth,
+                nus=nus_out,
+                name=self.preset.comp.components_name_out[comp],
+                ki=self._steps,
+            )
 
         if self.preset.tools.params["PCG"]["do_gif"]:
             do_gif(

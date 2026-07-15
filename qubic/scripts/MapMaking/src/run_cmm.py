@@ -29,6 +29,7 @@ if __name__ == "__main__":
 
         params["QUBIC"]["NOISE"]["seed_noise"] = args.seed
         params["PLANCK"]["seed_noise"] = args.seed
+        params["PCG"]["seed_start"] = args.seed
 
         # Write to a per-job private temp file in /tmp so concurrent array jobs
         # never touch the shared params file. tempfile guarantees a unique path

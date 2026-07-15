@@ -641,6 +641,7 @@ class PipelineComponentMapMaking:
                         "gi": self.preset.gain.all_gain,
                         "all_gain": self.preset.gain.all_gain_iter,
                         "A": self.preset.acquisition.Amm_iter,
+                        "A_history": self.allAmm_iter,
                         "A_err": self.preset.acquisition.Amm_iter_err,
                         "Atrue": self.preset.mixingmatrix.Amm_in,
                         "G": self.preset.gain.all_gain_in,

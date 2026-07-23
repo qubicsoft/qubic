@@ -12,7 +12,70 @@ from qubic.lib.Calibration.source_calibration.skydip.atmosphere import run_atmos
 from qubic.lib.Calibration.source_calibration.skydip.config_calibration import load_skydip_calibration_config
 from qubic.lib.Calibration.source_calibration.common.io import prepare_datasets_from_config, iter_saved_datasets
 from qubic.lib.Calibration.source_calibration.skydip.calibration import SkydipCalibrationSegment, DatasetConversionFactorSummary
-from qubic.lib.Calibration.source_calibration.common.noise import compute_all_skydip_noise_spectra, DatasetNoiseSummary
+from qubic.lib.Calibration.source_calibration.common.noise import (
+    compute_all_skydip_noise_spectra,
+    DatasetNoiseSummary,
+    DatasetNoiseInFrequencyRange,
+)
+from scipy.interpolate import RegularGridInterpolator
+
+
+def external_trend_function(path: str, az0: np.ndarray, el0: np.ndarray) -> np.ndarray:
+
+    trend_map = np.load(path)
+
+    # TODO:
+    #  put the last value at 180 for TES 95
+    #  put the last value at 360 for TES 127
+    az_grid = np.linspace(0.0, 360.0, 360)
+    el_grid = np.linspace(30.0, 70.0, 600)
+
+    trend_map = np.asarray(trend_map, dtype=np.float64)
+
+    if trend_map.shape == (el_grid.size, az_grid.size):
+        values = trend_map.T
+    elif trend_map.shape == (az_grid.size, el_grid.size):
+        values = trend_map
+    else:
+        raise ValueError(
+            "External trend map has incompatible shape. "
+            f"Got {trend_map.shape}, expected "
+            f"{(el_grid.size, az_grid.size)} or {(az_grid.size, el_grid.size)}."
+        )
+
+    az0 = np.asarray(az0, dtype=np.float64)
+    el0 = np.asarray(el0, dtype=np.float64)
+
+    az0_clipped = np.clip(az0, az_grid[0], az_grid[-1])
+    el0_clipped = np.clip(el0, el_grid[0], el_grid[-1])
+
+    interpolator = RegularGridInterpolator(
+        points=(az_grid, el_grid),
+        values=values,
+        method="linear",
+        bounds_error=False,
+        fill_value=np.nan,
+    )
+
+    points = np.column_stack(
+        [
+            az0_clipped.ravel(),
+            el0_clipped.ravel(),
+        ]
+    )
+
+    trend = interpolator(points).reshape(az0.shape)
+
+    if not np.all(np.isfinite(trend)):
+        trend = np.nan_to_num(
+            trend,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+
+    return trend
+
 
 @dataclass()
 class DatasetNoiseVsTauResult:
@@ -23,12 +86,22 @@ class DatasetNoiseVsTauResult:
     tau_eff: float
     median_conversion_factor_adu_per_k: float
 
-    mean_knee_frequency_hz: float
-    std_knee_frequency_hz: float
+    # From DatasetNoiseInFrequencyRange.from_spectra_frequency_range
+    mean_plateau_asd: float
+    std_plateau_asd: float
 
-    mean_plateau_asd_k_per_sqrt_hz: float
-    std_plateau_asd_k_per_sqrt_hz: float
-    mean_plateau_mad_k_per_sqrt_hz: float
+    # From DatasetNoiseSummary.from_spectra
+    mean_fit_knee_freq: float
+    std_fit_knee_freq: float
+
+    mean_fit_white_noise_asd: float
+    std_fit_white_noise_asd: float
+
+    mean_fit_alpha: float
+    std_fit_alpha: float
+
+    mean_fit_cutoff_frequency_hz: float
+    std_fit_cutoff_frequency_hz: float
 
 
 def main(config_path: Path):
@@ -122,11 +195,15 @@ def main(config_path: Path):
                            exc)
             continue
 
-        dataset_knee_frequencies_hz = []
-        dataset_plateau_asds_k_per_sqrt_hz = []
-        dataset_plateau_mads_k_per_sqrt_hz = []
+        dataset_plateau_asds = []
+        dataset_plateau_stds = []
         dataset_conversion_factors_adu_per_k = []
         analyzed_tes_indices = []
+
+        dataset_fit_knee_freqs = []
+        dataset_fit_white_noise_asds = []
+        dataset_fit_alphas = []
+        dataset_fit_cutoff_frequencies_hz = []
 
         for tes_idx in tes_indices:
 
@@ -134,7 +211,12 @@ def main(config_path: Path):
             logger.info("Analyzing TES %s", tes_idx)
             logger.info("-" * 15)
 
-            # trend = external_trend_function(dataset.interp_azimuth, dataset.interp_elevation)
+            # TODO: DECONMENT TO REMOVE TREND AND ADD "NEW" TO THE
+            #  OUTPUT FILES IN THE CONFIG YAML
+            # trend = external_trend_function(path="blind_signal_127.npy",
+            #                                 az0=dataset.interp_azimuth,
+            #                                 el0=dataset.interp_elevation)
+            #
             # dataset.signals[tes_idx, :] -= trend
 
             # Plot semplice dei TOD selezionati nel config
@@ -225,38 +307,84 @@ def main(config_path: Path):
 
             raw_noise_spectra = compute_all_skydip_noise_spectra(segments=tod_segments, config=config)
 
-            plotting.plot_skydip_noise_spectra(noise_spectra=raw_noise_spectra,
-                                               config=config,
-                                               tes_idx=tes_idx,
-                                               output_dir=dataset.noise_plots_dir,
-                                               is_calibrated=False)
+            raw_noise_fit_summary = DatasetNoiseSummary.from_spectra(
+                noise_spectra=raw_noise_spectra,
+                tau_eff=atmosphere.tau,
+                asd_unit="ADU",
+            )
+
+            plotting.plot_skydip_noise_spectra(
+                noise_spectra=raw_noise_spectra,
+                config=config,
+                tes_idx=tes_idx,
+                output_dir=dataset.noise_plots_dir,
+                is_calibrated=False,
+                fit_white_noise_asd=raw_noise_fit_summary.mean_white_noise_asd,
+                fit_knee_frequency_hz=raw_noise_fit_summary.mean_knee_frequency_hz,
+                fit_alpha=raw_noise_fit_summary.mean_alpha,
+                fit_cutoff_frequency_hz=raw_noise_fit_summary.mean_cutoff_frequency_hz,
+            )
 
             # posso passargli tod_segments in quanto la calibrazione la fa al suo interno
             calibrated_noise_spectra = compute_all_skydip_noise_spectra(segments=tod_segments,
                                                                         config=config,
                                                                         conversion_factor_adu_per_k=median_conversion_factor)
 
-            plotting.plot_skydip_noise_spectra(noise_spectra=calibrated_noise_spectra,
-                                               config=config,
-                                               tes_idx=tes_idx,
-                                               output_dir=dataset.noise_plots_dir,
-                                               is_calibrated=True)
-
-            noise_summary = DatasetNoiseSummary.from_spectra(noise_spectra=calibrated_noise_spectra,
-                                                             tau_eff=atmosphere.tau)
-
-            dataset_knee_frequencies_hz.append(noise_summary.knee_frequency_hz)
-            dataset_plateau_asds_k_per_sqrt_hz.append(noise_summary.plateau_asd_k_per_sqrt_hz)
-            dataset_plateau_mads_k_per_sqrt_hz.append(noise_summary.plateau_mad_k_per_sqrt_hz)
-            dataset_conversion_factors_adu_per_k.append(
-                conversion_summary.dataset_conversion_factor_adu_per_k
+            # da noise fit summary voglio ottenere:
+            # frequenza di ginocchio media
+            # ASD nella regione white noise
+            # alpha
+            noise_fit_summary = DatasetNoiseSummary.from_spectra(
+                noise_spectra=calibrated_noise_spectra,
+                tau_eff=atmosphere.tau,
+                asd_unit="K",
             )
+
+            plotting.plot_skydip_noise_spectra(
+                noise_spectra=calibrated_noise_spectra,
+                config=config,
+                tes_idx=tes_idx,
+                output_dir=dataset.noise_plots_dir,
+                is_calibrated=True,
+                fit_white_noise_asd=noise_fit_summary.mean_white_noise_asd,
+                fit_knee_frequency_hz=noise_fit_summary.mean_knee_frequency_hz,
+                fit_alpha=noise_fit_summary.mean_alpha,
+                fit_cutoff_frequency_hz=noise_fit_summary.mean_cutoff_frequency_hz)
+
+            # dal noise range summary voglio ottenere l'ASD media nel range di frequenze e la sua std
+            noise_range_summary = DatasetNoiseInFrequencyRange.from_spectra_frequency_range(
+                noise_spectra=calibrated_noise_spectra,
+                config=config,
+                tes_idx=tes_idx)
+
+            dataset_plateau_asds.append(noise_range_summary.mean_asd_k_per_sqrt_hz)
+            dataset_plateau_stds.append(noise_range_summary.std_asd_k_per_sqrt_hz)
+
+            dataset_fit_knee_freqs.append(noise_fit_summary.mean_knee_frequency_hz)
+            dataset_fit_white_noise_asds.append(noise_fit_summary.mean_white_noise_asd)
+            dataset_fit_alphas.append(noise_fit_summary.mean_alpha)
+            dataset_fit_cutoff_frequencies_hz.append(
+                noise_fit_summary.mean_cutoff_frequency_hz
+            )
+
+            # Lista dei conversion factor per tutti i TES analizzati
+            dataset_conversion_factors_adu_per_k.append(conversion_summary.dataset_conversion_factor_adu_per_k)
             analyzed_tes_indices.append(int(tes_idx))
 
         if analyzed_tes_indices:
-            knee_values = np.asarray(dataset_knee_frequencies_hz, dtype=np.float64)
-            plateau_values = np.asarray(dataset_plateau_asds_k_per_sqrt_hz, dtype=np.float64)
-            plateau_mad_values = np.asarray(dataset_plateau_mads_k_per_sqrt_hz, dtype=np.float64)
+            # ottenuti da noise range summary
+            plateau_values = np.asarray(dataset_plateau_asds, dtype=np.float64)
+            plateau_stds = np.asarray(dataset_plateau_stds, dtype=np.float64)
+
+            # ottenuti da dataset noise summary
+            fit_knee_values = np.asarray(dataset_fit_knee_freqs, dtype=np.float64)
+            fit_white_noise_asds = np.asarray(dataset_fit_white_noise_asds, dtype=np.float64)
+            fit_alphas = np.asarray(dataset_fit_alphas, dtype=np.float64)
+            fit_cutoff_frequencies_hz = np.asarray(
+                dataset_fit_cutoff_frequencies_hz,
+                dtype=np.float64,
+            )
+
             conversion_factor_values = np.asarray(dataset_conversion_factors_adu_per_k, dtype=np.float64)
 
             dataset_noise_result = DatasetNoiseVsTauResult(
@@ -265,29 +393,85 @@ def main(config_path: Path):
                 n_tes=len(analyzed_tes_indices),
                 tau_eff=float(atmosphere.tau),
                 median_conversion_factor_adu_per_k=float(np.nanmean(conversion_factor_values)),
-                mean_knee_frequency_hz=float(np.nanmean(knee_values)),
-                std_knee_frequency_hz=(
-                    float(np.nanstd(knee_values, ddof=1))
-                    if knee_values.size > 1
-                    else 0.0
+                # ottenuti da noise range summary
+                mean_plateau_asd=float(np.nanmean(plateau_values)),
+                std_plateau_asd=(float(np.nanstd(plateau_values, ddof=1))
+                                 if plateau_values.size > 1
+                                 else 0.0),
+                # ottenuti da dataset noise summary
+                mean_fit_knee_freq=float(np.nanmean(fit_knee_values)),
+                std_fit_knee_freq=(float(np.nanstd(fit_knee_values, ddof=1))
+                                           if fit_knee_values.size > 1
+                                           else 0.0),
+                mean_fit_white_noise_asd=float(np.nanmean(fit_white_noise_asds)),
+                std_fit_white_noise_asd=(float(np.nanstd(fit_white_noise_asds, ddof=1))
+                                                       if fit_white_noise_asds.size > 1
+                                                       else 0.0),
+                mean_fit_alpha=float(np.nanmean(fit_alphas)),
+                std_fit_alpha=(float(np.nanstd(fit_alphas, ddof=1))
+                               if fit_alphas.size > 1
+                               else 0.0),
+                mean_fit_cutoff_frequency_hz=float(
+                    np.nanmean(fit_cutoff_frequencies_hz)
                 ),
-                mean_plateau_asd_k_per_sqrt_hz=float(np.nanmean(plateau_values)),
-                std_plateau_asd_k_per_sqrt_hz=(
-                    float(np.nanstd(plateau_values, ddof=1))
-                    if plateau_values.size > 1
+                std_fit_cutoff_frequency_hz=(
+                    float(np.nanstd(fit_cutoff_frequencies_hz, ddof=1))
+                    if fit_cutoff_frequencies_hz.size > 1
                     else 0.0
-                ),
-                mean_plateau_mad_k_per_sqrt_hz=float(np.nanmean(plateau_mad_values)),
-            )
+                ))
 
             noise_vs_tau_results.append(dataset_noise_result)
 
     noise_vs_tau_output_dir = Path(config.paths.runs[0].output).parents[1]
 
+
     plotting.plot_noise_plateau_vs_tau(
         noise_vs_tau_results=noise_vs_tau_results,
-        output_path=noise_vs_tau_output_dir/ "noise_plateau_vs_tau.html",
+        output_path=noise_vs_tau_output_dir / "noise_plateau_vs_tau.html",
+        show=config.plots.show)
+
+    plotting.plot_noise_fit_parameter_vs_tau(
+        noise_vs_tau_results=noise_vs_tau_results,
+        y_attribute="mean_fit_knee_freq",
+        y_error_attribute="std_fit_knee_freq",
+        y_label="Knee frequency [Hz]",
+        title="Fit knee frequency vs tau",
+        output_path=noise_vs_tau_output_dir / "fit_knee_frequency_vs_tau.html",
         show=config.plots.show,
+        log_y=True,
+    )
+
+    plotting.plot_noise_fit_parameter_vs_tau(
+        noise_vs_tau_results=noise_vs_tau_results,
+        y_attribute="mean_fit_white_noise_asd",
+        y_error_attribute="std_fit_white_noise_asd",
+        y_label="White noise ASD [K / sqrt(Hz)]",
+        title="Fit white noise ASD vs tau",
+        output_path=noise_vs_tau_output_dir / "fit_white_noise_asd_vs_tau.html",
+        show=config.plots.show,
+        log_y=True,
+    )
+
+    plotting.plot_noise_fit_parameter_vs_tau(
+        noise_vs_tau_results=noise_vs_tau_results,
+        y_attribute="mean_fit_alpha",
+        y_error_attribute="std_fit_alpha",
+        y_label="Alpha",
+        title="Fit alpha vs tau",
+        output_path=noise_vs_tau_output_dir / "fit_alpha_vs_tau.html",
+        show=config.plots.show,
+        log_y=False,
+    )
+
+    plotting.plot_noise_fit_parameter_vs_tau(
+        noise_vs_tau_results=noise_vs_tau_results,
+        y_attribute="mean_fit_cutoff_frequency_hz",
+        y_error_attribute="std_fit_cutoff_frequency_hz",
+        y_label="Cutoff frequency [Hz]",
+        title="Fit cutoff frequency vs tau",
+        output_path=noise_vs_tau_output_dir / "fit_cutoff_frequency_vs_tau.html",
+        show=config.plots.show,
+        log_y=True,
     )
 
 

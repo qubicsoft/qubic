@@ -18,29 +18,29 @@ paths:
       output: data/output/2026-03-16/2026-03-16_12.57.47__SkyDip
       atmospheric_config: configs/atmosphere/atmosphere_2026-03-16.yaml
 
-#    - dataset: data/input/2026-05-02/2026-05-02_12.01.22__SkyDip
-#      output: data/output/2026-05-02/2026-05-02_12.01.22__SkyDip
-#      atmospheric_config: configs/atmosphere/atmosphere_2026-05-02.yaml
+    - dataset: data/input/2026-05-02/2026-05-02_12.01.22__SkyDip
+      output: data/output/2026-05-02/2026-05-02_12.01.22__SkyDip
+      atmospheric_config: configs/atmosphere/atmosphere_2026-05-02.yaml
 #
 #    - dataset: data/input/2026-05-04/2026-05-04_12.11.52__SkyDip
 #      output: data/output/2026-05-04/2026-05-04_12.11.52__SkyDip
 #      atmospheric_config: configs/atmosphere/atmosphere_2026-05-04.yaml
 #
-#    - dataset: data/input/2026-05-05/2026-05-05_10.28.23__SkyDip
-#      output: data/output/2026-05-05/2026-05-05_10.28.23__SkyDip
-#      atmospheric_config: configs/atmosphere/atmosphere_2026-05-05.yaml
-#
-#    - dataset: data/input/2026-05-06/2026-05-06_01.02.42__SkyDip
-#      output: data/output/2026-05-06/2026-05-06_01.02.42__SkyDip
-#      atmospheric_config: configs/atmosphere/atmosphere_2026-05-06.yaml
+    - dataset: data/input/2026-05-05/2026-05-05_10.28.23__SkyDip
+      output: data/output/2026-05-05/2026-05-05_10.28.23__SkyDip
+      atmospheric_config: configs/atmosphere/atmosphere_2026-05-05.yaml
 
-    - dataset: data/input/2026-05-13/2026-05-13_10.31.27__SkyDip
-      output: data/output/2026-05-13/2026-05-13_10.31.27__SkyDip
-      atmospheric_config: configs/atmosphere/atmosphere_2026-05-13.yaml
+    - dataset: data/input/2026-05-06/2026-05-06_01.02.42__SkyDip
+      output: data/output/2026-05-06/2026-05-06_01.02.42__SkyDip
+      atmospheric_config: configs/atmosphere/atmosphere_2026-05-06.yaml
 
-    - dataset: data/input/2026-05-14/2026-05-14_10.31.08__SkyDip
-      output: data/output/2026-05-14/2026-05-14_10.31.08__SkyDip
-      atmospheric_config: configs/atmosphere/atmosphere_2026-05-14.yaml
+##    - dataset: data/input/2026-05-13/2026-05-13_10.31.27__SkyDip
+##      output: data/output/2026-05-13/2026-05-13_10.31.27__SkyDip
+##      atmospheric_config: configs/atmosphere/atmosphere_2026-05-13.yaml
+
+##    - dataset: data/input/2026-05-14/2026-05-14_10.31.08__SkyDip
+##      output: data/output/2026-05-14/2026-05-14_10.31.08__SkyDip
+##      atmospheric_config: configs/atmosphere/atmosphere_2026-05-14.yaml
 
 #    - dataset: data/input/2026-05-20/2026-05-20_00.04.31__SkyDip
 #      output: data/output/2026-05-20/2026-05-20_00.04.31__SkyDip
@@ -89,3 +89,4 @@ noise:
   detrend: "constant"
   selected_frequency: 100 u.Hz
   enabled: true
+  frequency_range: [10, 15]

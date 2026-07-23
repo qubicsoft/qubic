@@ -5,6 +5,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+
 from qubic.lib.Calibration.Qfiber import pix2tes, pix_grid
 
 from qubic.lib.Calibration.source_calibration.common.io import QubicDataset
@@ -460,6 +461,11 @@ def plot_focal_plane_tods(dataset: QubicDataset,
                 ),
                 opacity=config.plots.alpha,
                 showlegend=False,
+                customdata=np.full(
+                    x.shape,
+                    global_tes_idx,
+                    dtype=np.int64,
+                ),
                 hovertemplate=(
                     f"TES {global_tes_idx}<br>"
                     f"ASIC {asic_id}<br>"
@@ -524,7 +530,14 @@ def plot_focal_plane_tods(dataset: QubicDataset,
     )
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    fig.write_html(output_file)
+
+    post_script_path = Path(__file__).parent / "post_script.js"
+    post_script = post_script_path.read_text(encoding="utf-8")
+
+    fig.write_html(
+        output_file,
+        post_script=post_script,
+    )
 
     if config.plots.show:
         fig.show(renderer="browser")
@@ -727,17 +740,17 @@ def plot_noise_plateau_vs_tau(noise_vs_tau_results: list,
     )
 
     plateau_values = np.asarray(
-        [result.mean_plateau_asd_k_per_sqrt_hz for result in noise_vs_tau_results],
+        [result.mean_plateau_asd for result in noise_vs_tau_results],
         dtype=np.float64,
     )
 
     plateau_errors = np.asarray(
-        [result.std_plateau_asd_k_per_sqrt_hz for result in noise_vs_tau_results],
+        [result.std_plateau_asd for result in noise_vs_tau_results],
         dtype=np.float64,
     )
 
     knee_values = np.asarray(
-        [result.mean_knee_frequency_hz for result in noise_vs_tau_results],
+        [result.mean_fit_knee_freq for result in noise_vs_tau_results],
         dtype=np.float64,
     )
 
@@ -750,10 +763,9 @@ def plot_noise_plateau_vs_tau(noise_vs_tau_results: list,
     ]
 
     valid = (
-        np.isfinite(tau_values)
-        & np.isfinite(plateau_values)
-        & np.isfinite(plateau_errors)
-        & np.isfinite(knee_values)
+            np.isfinite(tau_values)
+            & np.isfinite(plateau_values)
+            & np.isfinite(plateau_errors)
     )
 
     if not np.any(valid):
@@ -840,11 +852,152 @@ def plot_noise_plateau_vs_tau(noise_vs_tau_results: list,
     if show:
         fig.show(renderer=renderer)
 
+
+def plot_noise_fit_parameter_vs_tau(
+        noise_vs_tau_results: list,
+        y_attribute: str,
+        y_error_attribute: str,
+        y_label: str,
+        title: str,
+        output_path,
+        show: bool = False,
+        log_y: bool = False):
+    """
+    Plot a fitted noise parameter versus atmospheric tau.
+
+    This function is meant for parameters obtained from
+    DatasetNoiseSummary.from_spectra, for example:
+    - fitted knee frequency
+    - fitted white-noise ASD
+    - fitted alpha
+    """
+
+    if len(noise_vs_tau_results) == 0:
+        return
+
+
+
+    tau_values = np.asarray(
+        [result.tau_eff for result in noise_vs_tau_results],
+        dtype=np.float64,
+    )
+
+    y_values = np.asarray(
+        [getattr(result, y_attribute) for result in noise_vs_tau_results],
+        dtype=np.float64,
+    )
+
+    y_errors = np.asarray(
+        [getattr(result, y_error_attribute) for result in noise_vs_tau_results],
+        dtype=np.float64,
+    )
+
+    dataset_names = [
+        result.dataset_name for result in noise_vs_tau_results
+    ]
+
+    n_tes_values = np.asarray(
+        [result.n_tes for result in noise_vs_tau_results],
+        dtype=np.int64,
+    )
+
+    valid = (
+        np.isfinite(tau_values)
+        & np.isfinite(y_values)
+        & np.isfinite(y_errors)
+    )
+
+    tau_values = tau_values[valid]
+    y_values = y_values[valid]
+    y_errors = y_errors[valid]
+    n_tes_values = n_tes_values[valid]
+
+    dataset_names = [
+        dataset_name
+        for dataset_name, keep in zip(dataset_names, valid)
+        if keep
+    ]
+
+    if tau_values.size == 0:
+        return
+
+    order = np.argsort(tau_values)
+
+    tau_values = tau_values[order]
+    y_values = y_values[order]
+    y_errors = y_errors[order]
+    n_tes_values = n_tes_values[order]
+
+    dataset_names = [
+        dataset_names[i]
+        for i in order
+    ]
+
+    customdata = np.column_stack(
+        [
+            dataset_names,
+            n_tes_values,
+            y_errors,
+        ]
+    )
+
+    dataset_labels = [
+        name.replace("__SkyDip", "")
+        for name in dataset_names
+    ]
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=tau_values,
+            y=y_values,
+            error_y=dict(
+                type="data",
+                array=y_errors,
+                visible=True,
+            ),
+            mode="markers+lines+text",
+            text=dataset_labels,
+            textposition="top center",
+            customdata=customdata,
+            hovertemplate=(
+                    "Dataset: %{customdata[0]}<br>"
+                    "n TES: %{customdata[1]}<br>"
+                    "tau: %{x:.6g}<br>"
+                    f"{y_label}: " + "%{y:.6g}<br>"
+                                     "std: %{customdata[2]:.6g}"
+                                     "<extra></extra>"
+            ),
+        )
+    )
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Tau",
+        yaxis_title=y_label,
+    )
+
+    if log_y:
+        fig.update_yaxes(type="log")
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_html(str(output_path))
+
+    if show:
+        fig.show()
+
+
 def plot_skydip_noise_spectra(noise_spectra: list,
                               config: SkydipCalibrationConfig,
                               tes_idx: int,
                               output_dir: Path,
-                              is_calibrated: bool = False):
+                              is_calibrated: bool = False,
+                              fit_white_noise_asd: float | None = None,
+                              fit_knee_frequency_hz: float | None = None,
+                              fit_alpha: float | None = None,
+                              fit_cutoff_frequency_hz: float | None = None):
     """
     Plot the skydip noise spectra.
 
@@ -867,6 +1020,7 @@ def plot_skydip_noise_spectra(noise_spectra: list,
 
     fig = go.Figure()
     n_plotted = 0
+    plotted_frequencies = []
 
     for spectrum in noise_spectra:
 
@@ -882,6 +1036,16 @@ def plot_skydip_noise_spectra(noise_spectra: list,
         order = np.argsort(spectrum.frequency_hz)
         frequency_hz = spectrum.frequency_hz[order]
         asd = asd[order]
+
+        finite_positive = (
+                np.isfinite(frequency_hz)
+                & np.isfinite(asd)
+                & (frequency_hz > 0.0)
+                & (asd > 0.0)
+        )
+
+        if np.any(finite_positive):
+            plotted_frequencies.append(frequency_hz[finite_positive])
 
         fig.add_trace(
             go.Scatter(
@@ -905,6 +1069,66 @@ def plot_skydip_noise_spectra(noise_spectra: list,
         )
 
         n_plotted += 1
+
+    if (
+        fit_white_noise_asd is not None
+        and fit_knee_frequency_hz is not None
+        and fit_alpha is not None
+        and fit_cutoff_frequency_hz is not None
+        and len(plotted_frequencies) > 0
+    ):
+        all_frequencies = np.concatenate(plotted_frequencies)
+
+        fit_frequency_min = float(np.nanmin(all_frequencies))
+        fit_frequency_max = float(np.nanmax(all_frequencies))
+
+        if (
+            np.isfinite(fit_frequency_min)
+            and np.isfinite(fit_frequency_max)
+            and fit_frequency_min > 0.0
+            and fit_frequency_max > fit_frequency_min
+        ):
+            fit_frequency = np.logspace(
+                np.log10(fit_frequency_min),
+                np.log10(fit_frequency_max),
+                500,
+            )
+
+            fit_asd = (
+                fit_white_noise_asd
+                * np.sqrt(1.0 + (fit_knee_frequency_hz / fit_frequency) ** fit_alpha)
+                * np.exp(-fit_frequency / fit_cutoff_frequency_hz)
+            )
+
+            fit_unit = "K/√Hz" if is_calibrated else "ADU/√Hz"
+
+            fig.add_trace(
+                go.Scatter(
+                    x=fit_frequency,
+                    y=fit_asd,
+                    mode="lines",
+                    name=(
+                        "Mean fit "
+                        f"(A={fit_white_noise_asd:.3g} {fit_unit}, "
+                        f"f_knee={fit_knee_frequency_hz:.3g} Hz, "
+                        f"alpha={fit_alpha:.3g}, "
+                        f"f_cut={fit_cutoff_frequency_hz:.3g} Hz)"
+                    ),
+                    line=dict(
+                        width=config.plots.fit_linewidth,
+                        dash="dash",
+                    ),
+                    hovertemplate=(
+                        "Mean fit<br>"
+                        "frequency: %{x:.4g} Hz<br>"
+                        f"A: {fit_white_noise_asd:.4g} {fit_unit}<br>"
+                        f"f_knee: {fit_knee_frequency_hz:.4g} Hz<br>"
+                        f"alpha: {fit_alpha:.4g}<br>"
+                        f"f_cutoff: {fit_cutoff_frequency_hz:.4g} Hz"
+                        "<extra></extra>"
+                    ),
+                )
+            )
 
 
     fig.update_layout(

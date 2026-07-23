@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.signal import welch
+from scipy.optimize import curve_fit
 from dataclasses import dataclass, field
 
 from qubic.lib.Calibration.source_calibration.skydip.config_calibration import SkydipCalibrationConfig
@@ -103,13 +104,46 @@ def compute_all_skydip_noise_spectra(segments: list,
 @dataclass(frozen=True)
 class DatasetNoiseSummary:
     tau_eff: float
+    asd_unit: str
 
-    knee_frequency_hz: float
-    plateau_asd_k_per_sqrt_hz: float
-    plateau_mad_k_per_sqrt_hz: float
+    mean_knee_frequency_hz: float
+    std_knee_frequency_hz: float
 
-    frequency_hz: np.ndarray
-    median_asd_k_per_sqrt_hz: np.ndarray
+    mean_white_noise_asd: float
+    std_white_noise_asd: float
+
+    mean_alpha: float
+    std_alpha: float
+
+    mean_cutoff_frequency_hz: float
+    std_cutoff_frequency_hz: float
+
+    n_successful_fits: int
+    n_failed_fits: int
+
+
+    @staticmethod
+    def _asd_model(
+            frequency_hz: np.ndarray,
+            white_noise_asd_k_per_sqrt_hz: float,
+            knee_frequency_hz: float,
+            alpha: float,
+            cutoff_frequency_hz: float) -> np.ndarray:
+        """
+        ASD model:
+
+        ASD(f) = white_noise_asd
+                 * sqrt(1 + (f_knee / f)^alpha)
+                 * exp(-f / f_cutoff)
+        """
+
+        frequency_hz = np.asarray(frequency_hz, dtype=np.float64)
+
+        return (
+            white_noise_asd_k_per_sqrt_hz
+            * np.sqrt(1.0 + (knee_frequency_hz / frequency_hz) ** alpha)
+            * np.exp(-frequency_hz / cutoff_frequency_hz)
+        )
 
     @classmethod
     def from_spectra(
@@ -117,70 +151,263 @@ class DatasetNoiseSummary:
             noise_spectra: list[SkydipNoiseSpectrum],
             tau_eff: float,
             plateau_fraction: float = 0.25,
-            tolerance: float = 0.10):
+            asd_unit: str = "K") -> "DatasetNoiseSummary":
 
-        calibrated_spectra = []
+        if asd_unit not in ("K", "ADU"):
+            raise ValueError(
+                "asd_unit must be either 'K' or 'ADU'. "
+                f"Got {asd_unit!r}."
+            )
+
+        selected_spectra = []
 
         for spectrum in noise_spectra:
-            if spectrum.asd_k_per_sqrt_hz is None:
-                raise ValueError("Expected calibrated spectra.")
+            if asd_unit == "K":
+                if spectrum.asd_k_per_sqrt_hz is None:
+                    raise ValueError(
+                        "Expected calibrated spectra when asd_unit='K'."
+                    )
 
-            calibrated_spectra.append(spectrum)
+            selected_spectra.append(spectrum)
 
-        if len(calibrated_spectra) == 0:
-            raise ValueError("No calibrated noise spectra were provided.")
+        if len(selected_spectra) == 0:
+            raise ValueError("No noise spectra were provided.")
 
-        #  se gli skydip hanno lunghezze diverse, welch può restituire
-        #  griglie di frequenza diverse. Quindi per combinarle devi
-        #  scegliere una griglia comune
-        reference_frequency = calibrated_spectra[0].frequency_hz
+        fit_knee_frequencies_hz = []
+        fit_white_noise_asds = []
+        fit_alphas = []
+        fit_cutoff_frequencies_hz = []
 
-        # nterpoli tutte le ASD su quella griglia
-        asd_matrix = []
+        n_failed_fits = 0
 
-        for spectrum in calibrated_spectra:
-            asd_interp = np.interp(
-                reference_frequency,
-                spectrum.frequency_hz,
-                spectrum.asd_k_per_sqrt_hz,
+        for spectrum in selected_spectra:
+
+            frequency_hz = np.asarray(spectrum.frequency_hz, dtype=np.float64)
+
+            if asd_unit == "K":
+                asd = np.asarray(spectrum.asd_k_per_sqrt_hz, dtype=np.float64)
+            else:
+                asd = np.asarray(spectrum.asd_adu_per_sqrt_hz, dtype=np.float64)
+
+            valid_fit = (
+                    np.isfinite(frequency_hz)
+                    & np.isfinite(asd)
+                    & (frequency_hz > 0.0)
+                    & (asd > 0.0)
             )
-            asd_matrix.append(asd_interp)
 
-        # shape = (n_skydips, n_frequencies)
-        asd_matrix = np.asarray(asd_matrix)
+            fit_frequency = frequency_hz[valid_fit]
+            fit_asd = asd[valid_fit]
 
-        #  ASD rappresentativa del dataset/TES
-        median_asd = np.nanmedian(asd_matrix, axis=0)
+            if fit_frequency.size < 4:
+                n_failed_fits += 1
+                continue
 
-        #  Prendi l’ultimo pezzo dello spettro
-        n_freq = reference_frequency.size
-        plateau_start_idx = int((1.0 - plateau_fraction) * n_freq)
+            n_freq = fit_frequency.size
+            plateau_start_idx = int((1.0 - plateau_fraction) * n_freq)
+            plateau_start_idx = max(0, min(plateau_start_idx, n_freq - 1))
 
-        plateau_values = median_asd[plateau_start_idx:]
-        plateau_asd = float(np.nanmedian(plateau_values))
-        plateau_mad = float(np.nanmedian(np.abs(plateau_values - plateau_asd)))
+            high_frequency_asd = fit_asd[plateau_start_idx:]
+            initial_white_noise_asd = float(np.nanmedian(high_frequency_asd))
 
-        #  Trovare la frequenza di ginocchio
-        lower = plateau_asd * (1.0 - tolerance)
-        upper = plateau_asd * (1.0 + tolerance)
-        inside_plateau = (median_asd >= lower) & (median_asd <= upper)
+            if not np.isfinite(initial_white_noise_asd) or initial_white_noise_asd <= 0.0:
+                initial_white_noise_asd = float(np.nanmedian(fit_asd))
 
-        knee_idx = plateau_start_idx
+            if not np.isfinite(initial_white_noise_asd) or initial_white_noise_asd <= 0.0:
+                n_failed_fits += 1
+                continue
 
-        for i in range(n_freq):
-            fraction_inside = np.mean(inside_plateau[i:])
-            if fraction_inside > 0.8:
-                knee_idx = i
-                break
+            initial_knee_frequency_hz = float(np.nanmedian(fit_frequency))
+            initial_alpha = 1.0
+            initial_cutoff_frequency_hz = float(fit_frequency[-1])
 
-        knee_frequency_hz = float(reference_frequency[knee_idx])
+            lower_bounds = [
+                0.0,
+                fit_frequency[0],
+                0.0,
+                fit_frequency[0],
+            ]
+
+            upper_bounds = [
+                np.inf,
+                fit_frequency[-1],
+                10.0,
+                np.inf,
+            ]
+
+            try:
+                best_fit_parameters, _ = curve_fit(
+                    cls._asd_model,
+                    fit_frequency,
+                    fit_asd,
+                    p0=[
+                        initial_white_noise_asd,
+                        initial_knee_frequency_hz,
+                        initial_alpha,
+                        initial_cutoff_frequency_hz,
+                    ],
+                    bounds=(lower_bounds, upper_bounds),
+                    maxfev=20000,
+                )
+
+            except (RuntimeError, ValueError):
+                n_failed_fits += 1
+                continue
+
+            white_noise_asd = float(best_fit_parameters[0])
+            knee_frequency_hz = float(best_fit_parameters[1])
+            alpha = float(best_fit_parameters[2])
+            cutoff_frequency_hz = float(best_fit_parameters[3])
+
+            if not (
+                    np.isfinite(white_noise_asd)
+                    and np.isfinite(knee_frequency_hz)
+                    and np.isfinite(alpha)
+                    and np.isfinite(cutoff_frequency_hz)
+            ):
+                n_failed_fits += 1
+                continue
+
+            fit_white_noise_asds.append(white_noise_asd)
+            fit_knee_frequencies_hz.append(knee_frequency_hz)
+            fit_alphas.append(alpha)
+            fit_cutoff_frequencies_hz.append(cutoff_frequency_hz)
+
+        fit_knee_frequencies_hz = np.asarray(
+            fit_knee_frequencies_hz,
+            dtype=np.float64,
+        )
+
+        fit_white_noise_asds = np.asarray(
+            fit_white_noise_asds,
+            dtype=np.float64,
+        )
+
+        fit_alphas = np.asarray(
+            fit_alphas,
+            dtype=np.float64,
+        )
+
+        fit_cutoff_frequencies_hz = np.asarray(
+            fit_cutoff_frequencies_hz,
+            dtype=np.float64,
+        )
+
+        if fit_knee_frequencies_hz.size == 0:
+            raise ValueError("All skydip noise spectrum fits failed.")
 
         return cls(
             tau_eff=float(tau_eff),
-            knee_frequency_hz=knee_frequency_hz,
-            plateau_asd_k_per_sqrt_hz=plateau_asd,
-            plateau_mad_k_per_sqrt_hz=plateau_mad,
-            frequency_hz=reference_frequency,
-            median_asd_k_per_sqrt_hz=median_asd,
+
+            mean_knee_frequency_hz=float(np.nanmean(fit_knee_frequencies_hz)),
+            std_knee_frequency_hz=float(np.nanstd(fit_knee_frequencies_hz)),
+
+            asd_unit=("K/√Hz" if asd_unit == "K" else "ADU/√Hz"),
+
+            mean_white_noise_asd=float(
+                np.nanmean(fit_white_noise_asds)
+            ),
+            std_white_noise_asd=float(
+                np.nanstd(fit_white_noise_asds)
+            ),
+
+            mean_alpha=float(np.nanmean(fit_alphas)),
+            std_alpha=float(np.nanstd(fit_alphas)),
+
+            mean_cutoff_frequency_hz=float(
+                np.nanmean(fit_cutoff_frequencies_hz)
+            ),
+            std_cutoff_frequency_hz=float(
+                np.nanstd(fit_cutoff_frequencies_hz)
+            ),
+
+            n_successful_fits=int(fit_knee_frequencies_hz.size),
+            n_failed_fits=int(n_failed_fits),
         )
 
+
+
+
+
+@dataclass(frozen=True)
+class DatasetNoiseInFrequencyRange:
+    tes_idx: int
+    frequency_min_hz: float
+    frequency_max_hz: float
+    mean_asd_k_per_sqrt_hz: float
+    std_asd_k_per_sqrt_hz: float
+    n_spectra: int
+
+    @classmethod
+    def from_spectra_frequency_range(cls,
+                                     noise_spectra: list[SkydipNoiseSpectrum],
+                                     config: SkydipCalibrationConfig,
+                                     tes_idx: int) -> "DatasetNoiseInFrequencyRange":
+        """
+        Compute the mean calibrated ASD in a frequency interval.
+
+        The frequency interval is read from config.noise.frequency_range.
+        The method averages ASD values inside the selected frequency band
+        for each skydip spectrum, then averages the resulting values across
+        all valid skydips.
+        """
+
+        if len(config.noise.frequency_range) != 2:
+            raise ValueError(
+                "config.noise.frequency_range must contain exactly two values: "
+                "[fmin, fmax]."
+            )
+
+        fmin_hz, fmax_hz = (float(value) for value in config.noise.frequency_range)
+
+        if fmin_hz >= fmax_hz:
+            raise ValueError(
+                "config.noise.frequency_range must satisfy fmin < fmax. "
+                f"Got fmin={fmin_hz} Hz and fmax={fmax_hz} Hz."
+            )
+
+        mean_asd_per_spectrum = []
+
+        for spectrum in noise_spectra:
+
+            frequency_hz = np.asarray(spectrum.frequency_hz, dtype=np.float64)
+            asd_k = spectrum.asd_k_per_sqrt_hz
+
+            if asd_k is None:
+                continue
+
+            asd_k = np.asarray(asd_k, dtype=np.float64)
+
+            valid = (
+                np.isfinite(frequency_hz)
+                & np.isfinite(asd_k)
+                & (frequency_hz >= fmin_hz)
+                & (frequency_hz <= fmax_hz)
+            )
+
+            if not np.any(valid):
+                continue
+
+            mean_asd_per_spectrum.append(
+                float(np.nanmean(asd_k[valid]))
+            )
+
+        if not mean_asd_per_spectrum:
+            raise ValueError(
+                "No valid ASD values were found in the selected frequency range "
+                f"[{fmin_hz}, {fmax_hz}] Hz for TES {tes_idx}."
+            )
+
+        mean_asd_per_spectrum = np.asarray(
+            mean_asd_per_spectrum,
+            dtype=np.float64,
+        )
+
+        return cls(
+            tes_idx=tes_idx,
+            frequency_min_hz=float(fmin_hz),
+            frequency_max_hz=float(fmax_hz),
+            mean_asd_k_per_sqrt_hz=float(np.nanmean(mean_asd_per_spectrum)),
+            std_asd_k_per_sqrt_hz=float(np.nanstd(mean_asd_per_spectrum)),
+            n_spectra=int(mean_asd_per_spectrum.size),
+        )

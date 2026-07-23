@@ -81,6 +81,7 @@ class NoiseConfig:
     detrend: str
     selected_frequency: u.Quantity
     enabled: bool
+    frequency_range: list[float]
 
 
 @dataclass(frozen=True)

@@ -52,7 +52,7 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site, moon_spectrum):
     tt -= tinit
     date_obs = str(datetime.utcfromtimestamp(tinit))
     print('Observations started at: {} UTC (old)'.format(date_obs))
-    ### This QubicSampling object is just useful for corrd conversion
+    ### This QubicSampling object is just useful for coord conversion
     # qs = Qsamplings.QubicSampling(azimuth=azt, elevation=elt, time=tt,
     #                date_obs=date_obs, longitude=longitude, latitude=latitude)
     

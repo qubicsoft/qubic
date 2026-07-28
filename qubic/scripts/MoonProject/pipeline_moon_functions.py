@@ -950,7 +950,7 @@ xlim = [10540, 10640]
 
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TES_number="", nside=256, doplot=True,
                           check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
-                          ObsDate=None, new_method_clean=False, theo_sb=None):
+                          ObsDate=None, new_method_clean=False, theo_sb=None, more=""):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -958,6 +958,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
     # - remove the detected peaks from raw TOD and replace them by a linear fit of raw data around peaks
     # - filter the result (highpass, to get rid of large scales)
     # - add the removed peaks again (difference between raw peaks and linear fit of filtered data around peaks)
+
+    if more != "":
+        more = "_" + more
 
     if theo_sb is not None:
         # we get the theoretical synthbeam
@@ -976,6 +979,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
         reso=10
         xsize = 200 # default
     elif ObsDate[:4] == "2026":
+        # if ObsDate == "2026-05-03": # actually not in here either, it is another issue
+        #     mytod = -tod.copy()
+        # else:
         # not in 2026
         mytod = tod.copy()
         # reso = 8
@@ -1009,9 +1015,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
                 # we should add a selection on the peak's position:
                 # if it is too close to the border of the map the peak is not counted
                 # not needed for simulations
-                # if np.min(dist_peak[scantype == 0]) < dist_min: # needed for real data because of low frequency noise! --> see with Noah how to remove it
-                #     # print("skipped the peak", i_nu, i_peak)
-                #     continue
+                if np.min(dist_peak[scantype == 0]) < dist_min: # needed for real data because of low frequency noise! --> see with Noah how to remove it
+                    # print("skipped the peak", i_nu, i_peak)
+                    continue
                 tod_close = dist_peak < dist_min
                 protected_tod[tod_close] = 1
         # Just to avoid having different numbers of start and end peaks
@@ -1114,7 +1120,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
             data_peaks = np.zeros_like(mytod)
             widths = []
             peaks_detected = []
-            for i in range(np.max(ifile)):
+            for i in range(np.max(ifile) + 1):
+                print("i", i)
                 mask_elt = None
                 mask = ifile == i
                 first_index = np.min(np.argwhere(mask))
@@ -1126,6 +1133,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
                 peaks_detected_, peaks_properties = find_peaks(data_peaks[mask], height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
                 peaks_detected.append(peaks_detected_ + first_index)
                 widths.append(peaks_properties["widths"])
+            print("peaks_detected", peaks_detected)
             peaks_detected = np.concatenate(peaks_detected)
             widths = np.concatenate(widths)
 
@@ -1424,7 +1432,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
                 ax.set_xticks([], minor=minor)
                 ax.set_yticks([], minor=minor)
             plt.tight_layout()
-            plt.savefig("figures/{}_TES{}_v2.pdf".format(ObsDate, TES_number))
+            plt.savefig("figures/{}{}_TES{}_v2.pdf".format(ObsDate, more, TES_number))
             plt.show()
     return mapsb, mapcount
 
@@ -1605,9 +1613,12 @@ class gaussfitgnomproj:
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
         ic = (ic - 1)*1e8 # trick to force curve_fit to do bigger steps (otherwise it stays at initial position)
         jc = (jc - 1)*1e8
+        if ic > self.xs or jc > self.xs: # if we fall outside of map
+            shape_pix_pos = np.shape(self.pix_pos_proj)
+            return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
         centre_pos = self.pix_pos_proj[int(ic), int(jc)] # this is the vector associated with the pixel after proj, but it should be perfectly usable with vectors of pixels before proj
         dist_deg = np.abs(np.degrees(dist_angle(self.pix_pos_patch, centre_pos)))
-        print("params", amp, ic, jc, sig)
+        # print("params", amp, ic, jc, sig)
         # print("pos centre", ic, jc)
         # print(centre_pos)
         # print(cartesian2spherical(centre_pos[0], centre_pos[1], centre_pos[2], coord="horizontal", axis="last"))
@@ -1889,12 +1900,15 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     fitted = np.reshape(g2d(ipos, popt[0], popt[1], popt[2], popt[3]), (xs, xs))
     popt[1] = (popt[1] - 1)*fact_renorm
     popt[2] = (popt[2] - 1)*fact_renorm
+    guess[1] = (guess[1] - 1)*fact_renorm
+    guess[2] = (guess[2] - 1)*fact_renorm
     where_res = np.array([int(popt[1]), int(popt[2])])
-    ijerr = np.array([pcov[1], pcov[2]]) * reso/60 # pix to deg
     m = type("Foo", (object,), {})()
     m.values = popt
-    m.errors = pcov
-
+    # m.errors = pcov
+    m.errors = np.diag(pcov) # to be compatible with old code
+    ijerr = np.array([m.errors[1], m.errors[2]]) * reso/60 # pix to deg
+    
     ifit = where_res[0]
     jfit = where_res[1]
     ires = iipos[where_res[0], where_res[1]]
@@ -2291,10 +2305,18 @@ def read_data(datadir, remove_t0=True, year_data="2022"):
     az = a.azimuth()
     el = a.elevation()
     Tbath = a.Tbath
+    print("tt[0]", tt[0])
     if year_data == "2022":
         thk = a.timeaxis(datatype='hk')
+    elif tt[0] < 1774994400: # before the 01/04/2026 (might not be the best date))
+        print("Using extern data for thk.")
+        thk = a.timeaxis(datatype='extern', asic=1) # there is no intern hk in 2026-03-13 data
+        print("shape thk", np.shape(thk))
+        print("shape az", np.shape(az))
+        print(az)
+        print("shape el", np.shape(el))
+        print(el)
     else:
-        # thk = a.timeaxis(datatype='extern', asic=1) # there is no intern hk in 2026-03-11 data
         thk = a.timeaxis(datatype='AZ') # since qubicpack update, that's how thk is read to fit azel data
     tinit = tt[0]
     if remove_t0:
@@ -2406,9 +2428,10 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
         Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
 
         # good solution
-        tilt_az = 0
-        print("tilt_az =", tilt_az)
-        newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, tilt_az=tilt_az, det_pos=det_pos, file_name=file_name) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+        # boresight_angle = 0 # simus
+        boresight_angle = -3.5 # real data
+        print("boresight_angle =", boresight_angle)
+        newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, boresight_angle=boresight_angle, det_pos=det_pos, file_name=file_name) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
 
         tt_full.append(tt)
         alltod_full.append(alltod)
@@ -2462,9 +2485,27 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tshift=0,
                       doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False,
-                      isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None, new_method_clean=False, theo_sb=None):
+                      isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None,
+                      new_method_clean=False, theo_sb=None, more=""):
     
     tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath, ifile = data
+    if tinit < 1774994400: # before the 01/04/2026 (might not be the best date)
+        # the first data points are the telescope going to start position
+        nskip = 10000
+        tinit += tt[nskip]
+        tt = tt[nskip:]
+        alltod = alltod[:, nskip:]
+        azt = azt[nskip:]
+        elt = elt[nskip:]
+        if det_pos is None:
+            newazt_ = newazt_[nskip:]
+            newelt_ = newelt_[nskip:]
+        else:
+            newazt_ = newazt_[:, nskip:]
+            newelt_ = newelt_[:, nskip:]
+        scantype = scantype[nskip:]
+        Tbath = Tbath[nskip:]
+        ifile = ifile[nskip:]
     ### Loop over TES to do the maps
     print('\nLooping coaddition mapmaking over selected TES')
     print('nside = ',nside)
@@ -2514,7 +2555,8 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tsh
                                                              TES_number=TESNum, nside=nside,
                                                              doplot=doplot, check_back_forth=check_back_forth,
                                                              det_pos=det_pos, clean_tod=clean_tod, manual=manual,
-                                                             ObsDate=ObsDate, new_method_clean=new_method_clean, theo_sb=theo_sb)
+                                                             ObsDate=ObsDate, new_method_clean=new_method_clean,
+                                                             theo_sb=theo_sb, more=more)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
@@ -2533,7 +2575,8 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tsh
                 tod = alltod[iTES, :]
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
                                                            TES_number=TESNum, nside=nside, doplot=doplot, det_pos=det_pos,
-                                                           clean_tod=clean_tod, manual=manual, ObsDate=ObsDate, new_method_clean=new_method_clean, theo_sb=theo_sb)        
+                                                           clean_tod=clean_tod, manual=manual, ObsDate=ObsDate, new_method_clean=new_method_clean,
+                                                           theo_sb=theo_sb, more=more)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
                 # Directly assign the result to the correct index in allmaps
@@ -3202,8 +3245,8 @@ def dist_angle(vec_A, vec_B):
     return sign_angle * angle # radians
 
 # get vector perp to horizontal great circle from az el position
-def get_perp_vect_horiz_great_circle(azimuth, elevation, tilt_az=0, sphere_centre=np.array([0, 0, 0]), sphere_radius=1):
-    perp_direction = spherical2cartesian(sphere_radius, centre_coord_at_0(azimuth + 180 + tilt_az), 90 - elevation, coord="horizontal", axis="first")
+def get_perp_vect_horiz_great_circle(azimuth, elevation, sphere_centre=np.array([0, 0, 0]), sphere_radius=1):
+    perp_direction = spherical2cartesian(sphere_radius, centre_coord_at_0(azimuth + 180), 90 - elevation, coord="horizontal", axis="first")
     # print("shape perp_direction", np.shape(perp_direction))
     perp_vect = perp_direction - match_shape(sphere_centre, perp_direction.shape)
     # print("shape perp_vect", np.shape(perp_vect))
@@ -3229,7 +3272,7 @@ def get_perp_vect_horiz_great_circle(azimuth, elevation, tilt_az=0, sphere_centr
 #     return R
 
 
-def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=None, file_name=None):
+def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, det_pos=None, file_name=None):
     """
     This function computes the coorinates of a point or an array of points with respect to a
     given source, taking the source as the zenith of the new coordinates system.
@@ -3240,7 +3283,7 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
         The original coordinates of the array of N points.
     azt_source, elt_source : arrays (N,) or np.float_
         The original coordinates of the source.
-    tilt_az : float
+    boresight_angle : float
         The boresight rotation to apply (to be checked) in order to retrieve a vertical beam,
         in degrees. Default is 0.
 
@@ -3330,7 +3373,7 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
             azt_source_i = azt_source[lower_bound:higher_bound]
             elt_source_i = elt_source[lower_bound:higher_bound]
         # we get the vector perpendicular to the horizontal great circle at pointing
-        perp_vect_pointing = get_perp_vect_horiz_great_circle(azt_i, elt_i, tilt_az=tilt_az, sphere_radius=sphere_radius, sphere_centre=sphere_centre)
+        perp_vect_pointing = get_perp_vect_horiz_great_circle(azt_i, elt_i, sphere_radius=sphere_radius, sphere_centre=sphere_centre)
         # print("perp_vect_pointing OK", flush=True)
 
         # we get vector perpendicular to the great circle going through pointing and calsource
@@ -3366,7 +3409,7 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, tilt_az=0, det_pos=
 
         # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
         new_pointing = spherical2cartesian(sphere_radius, angle_alpha, 90 - angle_beta, coord="horizontal", axis="first") # beta is 90 - elevation!
-        pre_rotation_matrix = get_simple_rotation_matrix("z", np.radians(90)) # rotation x --> y
+        pre_rotation_matrix = get_simple_rotation_matrix("z", np.radians(90 + boresight_angle)) # rotation x --> y # boresight_angle is used here to make the final beam "vertical"
 
         new_pointing = np.einsum("ij,j...k->i...k", pre_rotation_matrix, new_pointing)
         if det_pos is not None:
@@ -3777,7 +3820,8 @@ def observation_dirs(ObsDate, datadir, more=None):
     }
 
     year_data = ObsDate[:4]
-    recent_obs = ["2026-05-03", "2026-05-04", "2026-05-05", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26"]
+    recent_obs = ["2026-05-03", "2026-05-04", "2026-05-05", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26",
+                  "2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26"]
     
     if year_data == "2022":
         dirs = glob.glob(datadir + ObsDate + '/*')
@@ -3797,15 +3841,121 @@ def observation_dirs(ObsDate, datadir, more=None):
     # print(dirs)
     dirs.sort()
     if ObsDate == "2026-03-13":
-        i_file = 1 # only 1 works for 2026-03-13
-        datafiles = dirs[i_file]
+        i_file = 1 # only #1 works for 2026-03-13
+        datafiles = [dirs[i_file]]
     if ObsDate == "2026-06-24":
         if more == "fall":
             datafiles = dirs[:16]
         elif more == "rise":
             datafiles = dirs[16:]
+    elif ObsDate == "2026-05-03":
+        if more == "fall": # not really rise nor fall? let's try
+            datafiles = dirs[:45]
+        elif more == "rise":
+            datafiles = dirs[45:]
+    elif ObsDate == "2026-07-24":
+        if more == "fall":
+            datafiles = dirs[:21]
+        elif more == "rise":
+            datafiles = dirs[21:]
     elif ObsDate in recent_obs:
         datafiles = dirs
     print(datafiles)
     
     return datafiles
+
+
+def do_aperture_photometry(map_in, rot, reso): # not tested
+    """
+    The aperture photometry is to be done on maps with the Moon at zenith
+    for the detector studied. In this basic version, only the order 0 is considered.
+    """
+    radius_moon = 1 #deg
+    radius_aperture = 2 #deg
+    xsize = len(map_in)
+    gnom_proj = hp.projector.GnomonicProj(rot=rot, reso=reso, xsize=xsize)
+
+    x, y = gnom_proj.ij2xy()
+    azt_proj, elt_proj = gnom_proj.xy2ang(x=x.flatten(), y=y.flatten(), lonlat=True)
+    azt_proj = azt_proj.reshape(np.shape(x))
+    elt_proj = elt_proj.reshape(np.shape(y))
+
+    area_aperture_photo = np.logical_and(elt_proj > radius_moon, elt_proj < radius_aperture)
+    data_aperture = map_in[area_aperture_photo]
+
+    sky_emission = np.median(data_aperture)
+
+    # check if data is normally distributed
+    if True:
+        plt.figure()
+        plt.hist(data_aperture)
+        plt.show()
+
+    # we compute the standard error of the median
+    sky_emission_error = 1.2533 * np.std(data_aperture) / np.sum(area_aperture_photo)
+
+    return sky_emission, sky_emission_error
+
+
+def do_aperture_photometry_advanced(map_in, theo_sb, rot, reso, const_el=False): # not tested
+    """
+    The aperture photometry is to be done on maps with the Moon at zenith
+    for the detector studied. For this "advanced" version, we take the sky close to each peak.
+
+    Should we compute the sky emission for each peak and frequency, or just each peak?
+    Considering that it varies with elevation, in the case of a non-constant-elevation scan,
+    this could have an effect.
+    But then the error would be larger given the smaller number of pixels used to estimate it.
+    """
+    rho = 1
+    radius_moon = 1 #deg
+    radius_aperture = 2 #deg
+    xsize = len(map_in)
+    gnom_proj = hp.projector.GnomonicProj(rot=rot, reso=reso, xsize=xsize)
+
+    thetas = theo_sb[0] # shape (n_nus, npeaks)
+    phis = theo_sb[1]
+    n_nus = len(thetas)
+    n_peaks = len(thetas[0])
+
+    x, y = gnom_proj.ij2xy()
+    azt_proj, elt_proj = gnom_proj.xy2ang(x=x.flatten(), y=y.flatten(), lonlat=True)
+    azt_proj = azt_proj.reshape(np.shape(x))
+    elt_proj = elt_proj.reshape(np.shape(y))
+
+    pix_pos = spherical2cartesian(rho, azt_proj, elt_proj, coord="horizontal", axis="last")
+
+    if const_el: # if the scan is done at constant elevation, we don't need to differenciate
+                 # between the frequencies
+        sky_emission = np.zeros(n_peaks)
+    else:
+        raise ValueError("Only constant elevation scan implemented so far.")
+        sky_emission = np.zeros((n_peaks, n_nus))
+    sky_emission_error = np.zeros_like(sky_emission)
+
+    for i_peak in range(n_peaks):
+        mask_close = np.ones_like(map_in, dtype=bool) # too close = 0, if too close to one peak = 0
+        mask_far = np.zeros_like(map_in, dtype=bool) # too far = 0, if close enough to one peak > 0
+        for i_nu in range(n_nus):
+            el_peak = 90 - np.degrees(thetas[i_nu, i_peak])
+            az_peak = np.degrees(phis[i_nu, i_peak])
+            # we compute an angular distance from the cartesian positions
+            peak_pos = spherical2cartesian(rho, az_peak, el_peak, coord="horizontal", axis="last")
+            dist_peak = np.abs(np.degrees(dist_angle(pix_pos, peak_pos)))
+            mask_close = np.logical_and(mask_close, dist_peak > radius_moon)
+            mask_far = np.logical_or(mask_far, dist_peak < radius_aperture)
+            # area_aperture_photo = np.logical_and(dist_peak > radius_moon, dist_peak < radius_aperture)
+            # data_aperture = map_in[area_aperture_photo]
+        area_aperture_photo = np.logical_and(mask_close, mask_far)
+        data_aperture = map_in[area_aperture_photo]
+
+        # const_el case
+        sky_emission[i_peak] = np.median(data_aperture)
+        # we compute the standard error of the median as if it were normally distributed
+        sky_emission_error[i_peak] = 1.2533 * np.std(data_aperture) / np.sum(area_aperture_photo)
+
+    # sky_emission = np.median(data_aperture)
+    # # we compute the standard error of the median as if it were normally distributed
+    # sky_emission_error = 1.2533 * np.std(data_aperture) / np.sum(area_aperture_photo)
+
+    return sky_emission, sky_emission_error

@@ -948,9 +948,9 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 # xlim = [9480, 9550]
 xlim = [10540, 10640]
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TES_number="", nside=256, doplot=True,
+def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tbath=None, T1K=None, TES_number="", nside=256, doplot=True,
                           check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
-                          ObsDate=None, new_method_clean=False, theo_sb=None, more=""):
+                          ObsName=None, new_method_clean=False, theo_sb=None, more="", simu=False):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -958,6 +958,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
     # - remove the detected peaks from raw TOD and replace them by a linear fit of raw data around peaks
     # - filter the result (highpass, to get rid of large scales)
     # - add the removed peaks again (difference between raw peaks and linear fit of filtered data around peaks)
+
+    ObsDate = ObsName[:10]
 
     if more != "":
         more = "_" + more
@@ -1015,9 +1017,10 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
                 # we should add a selection on the peak's position:
                 # if it is too close to the border of the map the peak is not counted
                 # not needed for simulations
-                if np.min(dist_peak[scantype == 0]) < dist_min: # needed for real data because of low frequency noise! --> see with Noah how to remove it
-                    # print("skipped the peak", i_nu, i_peak)
-                    continue
+                if not simu:
+                    if np.min(dist_peak[scantype == 0]) < dist_min: # needed for real data because of low frequency noise! --> see with Noah how to remove it
+                        # print("skipped the peak", i_nu, i_peak)
+                        continue
                 tod_close = dist_peak < dist_min
                 protected_tod[tod_close] = 1
         # Just to avoid having different numbers of start and end peaks
@@ -1044,14 +1047,21 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
         # if True: # plot with raw tod vs filtered tod
             # ar
             # peaks_detected_ = np.isin(np.arange(len(tt)), pos_peak)
-            plt.figure()
-            plt.plot(tt, mytod, label="raw TOD")
+            fig, ax = plt.subplots(1, 1, figsize=(7, 4))
+            ax.plot(tt, mytod, label="raw TOD")
+            ax.set_ylabel("Signal [ADU]")
+            if Tbath is not None:
+                ax1 = ax.twinx()
+                ax1.plot(tt, Tbath)
+                ax1.set_ylabel("Tbath [K]")
             # plt.scatter(tt[pos_peak], mytod[pos_peak], c="r", label="peaks_detected", zorder=1000)
-            plt.scatter(tt[protected_tod == 1], mytod[protected_tod == 1], c="r", s=1, label="peaks_detected", zorder=1000)
+            ax.scatter(tt[protected_tod == 1], mytod[protected_tod == 1], c="r", s=1, label="peaks_detected", zorder=1000)
             # plt.scatter(tt[scantype == 0], mytod[scantype == 0], c="g", s=1, label="scantype == 0", zorder=1000)
-            plt.plot(tt, tod_no_peak, label="tod_no_peak")
-            plt.plot(tt, mytod_4, label="filtered with peaks added")
-            plt.legend()
+            ax.plot(tt, tod_no_peak, label="tod_no_peak")
+            ax.plot(tt, mytod_4, label="filtered with peaks added")
+            ax.legend()
+            fig.tight_layout()
+            # plt.savefig("figures/{}_TES{}_TOD.pdf".format(ObsName, TES_number))
             plt.show()
         final_tod = mytod_4
 
@@ -1124,6 +1134,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
                 print("i", i)
                 mask_elt = None
                 mask = ifile == i
+                if np.sum(mask) == 0: # happens when we skip a bad file when reading the data
+                    print("No data in file {}".format(i))
+                    continue
                 first_index = np.min(np.argwhere(mask))
                 mytod_1[mask] = my_filt(mytod[mask])
                 tod_ma_filt = my_filt_2(mytod[mask]) # bandpass instead of moving average then highpass
@@ -1186,19 +1199,35 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
             if mask_elt is None:
                 mask_elt = np.ones_like(peaks_detected_, dtype=bool)
 
-            plt.figure()
-            plt.plot(tt, mytod, label="raw TOD")
+            fig, ax = plt.subplots(1, 1, figsize=(15, 8))
+            ax.set_title("{}, TES {}".format(ObsName, TES_number))
+            ax.plot(tt, mytod, label="raw TOD")
+            if Tbath is not None:
+                color_ax1 = "g"
+                ax1 = ax.twinx()
+                ax1.plot(tt, Tbath, c=color_ax1, ls="--")
+                ax1.set_ylabel("Tbath [K]", color=color_ax1)
+                ax1.tick_params(axis='y', labelcolor=color_ax1)
+            if T1K is not None:
+                color_ax2 = "r"
+                ax2 = ax.twinx()
+                ax2.plot(tt, T1K, c=color_ax2, ls="--")
+                ax2.set_ylabel("T1K [K]", color=color_ax2)
+                ax2.tick_params(axis='y', labelcolor=color_ax2)
+                if Tbath is not None:
+                    ax2.spines['right'].set_position(('outward', 100)) # so that ax1 and ax2 yaxis don't collide
             # plt.scatter(binned_tt, binned_TOD, c="g", label="binned TOD", zorder=1000)
             # plt.plot(tt, test_tod, label="test_tod")
             # plt.plot(tt, tod_no_peak, label="TOD no peak")
-            plt.scatter(tt[peaks_detected_ & mask_elt], mytod[peaks_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
+            ax.scatter(tt[peaks_detected_ & mask_elt], mytod[peaks_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
             # plt.plot(tt, mytod_3, label="filtered")
-            plt.plot(tt, mytod_4, label="filtered with peaks added")
-            plt.legend()
-            plt.tight_layout()
-            plt.savefig("figures/TOD_TES_{}.pdf".format(TES_number), dpi=300)
+            ax.plot(tt, mytod_4, label="filtered with peaks added")
+            ax.set_ylabel('Signal [ADU]', color="k")
+            ax.legend()
+            fig.tight_layout()
+            # plt.savefig("figures/TOD_TES_{}.pdf".format(TES_number), dpi=300)
+            plt.savefig("figures/{}_TES{}_TOD.pdf".format(ObsName, TES_number), dpi=150)
             plt.show()
-
 
             # fit_lagrange_scans(tt, mytod, scantype)
             # azr
@@ -1308,8 +1337,11 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, TE
 
             if doplot:
                 fig, axs = plt.subplots(1, 3)
+                axs[0].set_title("forth")
                 axs[0].imshow(mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
+                axs[0].set_title("back")
                 axs[1].imshow(mapsb_fb_proj[1], vmin=min_plot, vmax=max_plot)
+                axs[0].set_title("back - forth")
                 axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
                 plt.show()
 
@@ -2277,7 +2309,10 @@ def cos_window(Nx, Ny, lx=None,ly=None):
 def read_data(datadir, remove_t0=True, year_data="2022"):
     """
     Reads QUBIC raw data: time and TOD, as well azimuth, elevation and 
-    their corresponding time
+    their corresponding time.
+
+    In the qubicpack/data/TD_TEMPERATURE_LABELS.txt you can find all
+    the labels.
 
     Parameters
     ----------
@@ -2304,10 +2339,14 @@ def read_data(datadir, remove_t0=True, year_data="2022"):
     tt, alltod = a.tod()
     az = a.azimuth()
     el = a.elevation()
-    Tbath = a.Tbath
+    tTbath = a.Tbath
+    tT1K = [a.timeaxis('1K stage'), a.get_hk("1K stage")] # it is the label used when plotting temperature plots (time, temperature)
     print("tt[0]", tt[0])
+    print("year_data", year_data)
     if year_data == "2022":
-        thk = a.timeaxis(datatype='hk')
+        thk = a.timeaxis(datatype='hk') # had to add a fix in qubicpack/tools.assign_pointing_data method
+        print("len(thk)", len(thk))
+        print("len(az)", len(az))
     elif tt[0] < 1774994400: # before the 01/04/2026 (might not be the best date))
         print("Using extern data for thk.")
         thk = a.timeaxis(datatype='extern', asic=1) # there is no intern hk in 2026-03-13 data
@@ -2325,7 +2364,7 @@ def read_data(datadir, remove_t0=True, year_data="2022"):
         tt -= tinit
         thk -= tinit
     del(a)
-    return tt, alltod, thk, az, el, tinit, Tbath
+    return tt, alltod, thk, az, el, tinit, tTbath, tT1K
 
 def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     MySite = EarthLocation(lat=ObsSite['lat'], lon=ObsSite['lon'], height=ObsSite['height'])
@@ -2366,7 +2405,7 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     return azmoon, elmoon
 
 
-def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=0, year_data="2022", doplot=False):
+def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=0, year_data="2022", doplot=False, simu=False):
     ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
     FPidentity = pt.make_id_focalplane()
     quadrant = 3
@@ -2393,7 +2432,9 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
     newelt_full = []
     scantype_full = []
     Tbath_full = []
+    T1K_full = []
     ifile_full = []
+    tinit = None
 
     for i, diri in enumerate(datadir):
         print("\nreading file", i, diri)
@@ -2401,11 +2442,16 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
         if vars is None:
             print("\nSkipping data...")
             continue
-        tt, alltod, thk, az, el, tinit_, Tbath_raw = vars
+        tt, alltod, thk, az, el, tinit_, tTbath_hk, tT1K_hk = vars
+        if len(thk) != len(az) or len(thk) != len(el):
+            raise ValueError("thk has shape '{}' while az is '{}' and el '{}'".format(len(thk), len(az), len(el)))
+        if len(thk) < 20: # in case something went wring in the acquisition, the file might be very small and unusable
+            print("Housekeeping data has less than 20 data points, skipped...")
+            continue
         az += az_qubic
         file_name = str(tt[0])
 
-        if i == 0: # first file
+        if tinit is None: # first good file
             tinit = tinit_
             print("tinit = {}".format(tinit))
         else:
@@ -2425,11 +2471,14 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
                                                 plotrange=[tt[0], tt[0] + 2000], 
                                                 thr_speedmin=speedmin)
         
-        Tbath = np.interp(tt + tinit, Tbath_raw[0], Tbath_raw[1])
+        Tbath = np.interp(tt + tinit, tTbath_hk[0], tTbath_hk[1])
+        T1K = np.interp(tt + tinit, tT1K_hk[0], tT1K_hk[1])
 
         # good solution
-        # boresight_angle = 0 # simus
-        boresight_angle = -3.5 # real data
+        if simu:
+            boresight_angle = 0 # simus
+        else:
+            boresight_angle = -3.5 # real data
         print("boresight_angle =", boresight_angle)
         newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, boresight_angle=boresight_angle, det_pos=det_pos, file_name=file_name) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
 
@@ -2441,6 +2490,7 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
         newelt_full.append(newelt)
         scantype_full.append(scantype)
         Tbath_full.append(Tbath)
+        T1K_full.append(T1K)
         ifile_full.append(np.full_like(tt, i, dtype=int))
 
     tt = np.concatenate(tt_full)
@@ -2452,22 +2502,23 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
     newelt = np.concatenate(newelt_full, axis=axis)
     scantype = np.concatenate(scantype_full)
     Tbath = np.concatenate(Tbath_full)
+    T1K = np.concatenate(T1K_full)
     ifile = np.concatenate(ifile_full)
 
     print("shape scantype", np.shape(scantype))
     print("shape newazt", np.shape(newazt))
-    data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, ifile] # the data that could be useful later in the analysis
+    data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile] # the data that could be useful later in the analysis
     if doplot and det_pos is None:
         azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
         fig, axs = plt.subplots(1, 2)
         axs[0].set_title("az")
-        axs[0].plot(tt, azmoon, c="r", label="moon")
         axs[0].plot(tt, azt, c="b", label="azt")
         axs[0].scatter(tt, newazt, s=1, c="g", label="newazt")
+        axs[0].plot(tt, azmoon, c="r", label="moon")
         axs[1].set_title("el")
-        axs[1].plot(tt, elmoon, c="r", label="moon")
         axs[1].plot(tt, elt, c="b", label="elt")
         axs[1].scatter(tt, newelt, s=1, c="g", label="newelt")
+        axs[1].plot(tt, elmoon, c="r", label="moon")
         plt.legend()
         plt.show()
     return data
@@ -2485,10 +2536,12 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
 
 def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tshift=0,
                       doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False,
-                      isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsDate=None,
+                      isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsName=None,
                       new_method_clean=False, theo_sb=None, more=""):
     
-    tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath, ifile = data
+    ObsDate = ObsName[:10]
+    
+    tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath, T1K, ifile = data
     if tinit < 1774994400: # before the 01/04/2026 (might not be the best date)
         # the first data points are the telescope going to start position
         nskip = 10000
@@ -2505,6 +2558,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tsh
             newelt_ = newelt_[:, nskip:]
         scantype = scantype[nskip:]
         Tbath = Tbath[nskip:]
+        T1K = T1K[nskip:]
         ifile = ifile[nskip:]
     ### Loop over TES to do the maps
     print('\nLooping coaddition mapmaking over selected TES')
@@ -2552,10 +2606,10 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tsh
             # plt.show()
             # aert
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
-                                                             TES_number=TESNum, nside=nside,
+                                                             Tbath=Tbath, T1K=T1K, TES_number=TESNum, nside=nside,
                                                              doplot=doplot, check_back_forth=check_back_forth,
                                                              det_pos=det_pos, clean_tod=clean_tod, manual=manual,
-                                                             ObsDate=ObsDate, new_method_clean=new_method_clean,
+                                                             ObsName=ObsName, new_method_clean=new_method_clean,
                                                              theo_sb=theo_sb, more=more)
             print('OK', flush=True)
     else:
@@ -2575,7 +2629,7 @@ def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tsh
                 tod = alltod[iTES, :]
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
                                                            TES_number=TESNum, nside=nside, doplot=doplot, det_pos=det_pos,
-                                                           clean_tod=clean_tod, manual=manual, ObsDate=ObsDate, new_method_clean=new_method_clean,
+                                                           clean_tod=clean_tod, manual=manual, ObsName=ObsName, new_method_clean=new_method_clean,
                                                            theo_sb=theo_sb, more=more)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
@@ -3807,21 +3861,12 @@ def update_dict(config, instrument_type, nf_sub, nside, dictfilename='qubic/qubi
 
 
 
-def observation_dirs(ObsDate, datadir, more=None):
-
-    dict_obs = {
-        "2026-05-03": -1,
-        "2026-05-04": -1, 
-        "2026-05-05": -1, 
-        "2026-06-23": -1, 
-        "2026-06-24": 16, 
-        "2026-06-25": -1, 
-        "2026-06-26": -1
-    }
+def observation_dirs(ObsDate, datadir, rise_or_set=None):
 
     year_data = ObsDate[:4]
-    recent_obs = ["2026-05-03", "2026-05-04", "2026-05-05", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26",
-                  "2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26"]
+    recent_obs = ["2026-05-03", "2026-05-04", "2026-05-05", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26"]
+                  
+    july_2026 = ["2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26", "2026-07-27", "2026-07-28", "2026-07-29"]
     
     if year_data == "2022":
         dirs = glob.glob(datadir + ObsDate + '/*')
@@ -3838,26 +3883,49 @@ def observation_dirs(ObsDate, datadir, more=None):
         # dirs = glob.glob(datadir + ObsDate + "/*07.54.24__Moon")
         if ObsDate in recent_obs:
             dirs = glob.glob(datadir + ObsDate + "/*moon_scans")
+        if ObsDate in july_2026:
+            observation_sep = [0, 21, 42, 64, 86, 108, 130, 152, 174, 195, 216, 237, 257] # index of the first file of each observation
+            observations = ["2026-07-23_rise",
+                            "2026-07-24_set", "2026-07-24_rise",
+                            "2026-07-25_set", "2026-07-25_rise",
+                            "2026-07-26_set", "2026-07-26_rise",
+                            "2026-07-27_set", "2026-07-27_rise",
+                            "2026-07-28_set", "2026-07-28_rise",
+                            "2026-07-29_set"]
+            i_obs = observations.index(ObsDate + "_" + rise_or_set)
+            dirs = []
+            for date in july_2026:
+                dirs.append(glob.glob(datadir + date + "/*moon_scans"))
+            dirs = np.concatenate(dirs)
+            dirs.sort()
+            print("Found {} files in the '{}' group of observations.".format(len(dirs), "july_2026"))
+            datafiles = dirs[observation_sep[i_obs]:observation_sep[i_obs + 1]]
+            return datafiles
     # print(dirs)
     dirs.sort()
     if ObsDate == "2026-03-13":
         i_file = 1 # only #1 works for 2026-03-13
         datafiles = [dirs[i_file]]
     if ObsDate == "2026-06-24":
-        if more == "fall":
+        if rise_or_set == "set":
             datafiles = dirs[:16]
-        elif more == "rise":
+        elif rise_or_set == "rise":
             datafiles = dirs[16:]
     elif ObsDate == "2026-05-03":
-        if more == "fall": # not really rise nor fall? let's try
+        if rise_or_set == "set": # not really rise nor set? let's try
             datafiles = dirs[:45]
-        elif more == "rise":
+        elif rise_or_set == "rise":
             datafiles = dirs[45:]
-    elif ObsDate == "2026-07-24":
-        if more == "fall":
-            datafiles = dirs[:21]
-        elif more == "rise":
-            datafiles = dirs[21:]
+    # elif ObsDate == "2026-07-24":
+    #     if rise_or_set == "set":
+    #         datafiles = dirs[:21]
+    #     elif rise_or_set == "rise":
+    #         datafiles = dirs[21:]
+    # elif ObsDate == "2026-07-25": # this method is bad, I could list all files and choose from them?
+    #     if rise_or_set == "set":
+    #         datafiles = dirs[:21]
+    #     elif rise_or_set == "rise":
+    #         datafiles = dirs[21:]
     elif ObsDate in recent_obs:
         datafiles = dirs
     print(datafiles)

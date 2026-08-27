@@ -1,13 +1,15 @@
 # This file is the concatenated version of pipeline_moon_filter_TOD_create_maps_2026.ipynb
 # Its purpose is to:
-# 0. - read TOD
+# 0. - read TOD one observation set at a time
+#    - clean the known azel dependant signal? Earth magnetic field
 # 1. - change the coordinates to ones where the Moon position in the sky is the zenith at all times
 #      (thus keeping the real distances between detector apparent Moon position and real position)
-#    - clean it and build maps in coordinates where the telescope/mount los sees the Moon at zenith
-# 2. - measure the position, in this configuration, between the los of the telescope and the one of each TES
+#    - clean it and build maps in coordinates where the telescope/mount l.o.s. sees the Moon at zenith (peak detection)
+# 2. - measure the position, in this configuration, between the l.o.s. of the telescope and the one of each TES
 # 3. - change the coordinates to ones where the Moon position in the sky is the zenith at all times for each detector this time
-#    - clean it and build maps in coordinates where the telescope/mount los sees the Moon at zenith for each detector
-#    - we now have maps where angles and distances between order 0 and 1 should be
+#    - clean it and build maps in coordinates where the telescope/mount l.o.s. sees the Moon at zenith for each detector
+#      (theoretical peak positions)
+#    - we now have, for each observation, maps where angles and distances between order 0 and 1 should be the right ones
 # 4. - use these maps to fit the synthbeam of each detector on its associated Moon map
 #    - this should give us the spectrum of the Moon (before any atmosphere mitigation!)
 
@@ -59,28 +61,20 @@ mydatadir = '/Users/huchet/Documents/code/data/ComissioningTD/'
 mydatadir2 = "/Users/huchet/Documents/code/scripts/MoonProject/"
 mydatadir3 = "/Users/huchet/Documents/code/data/"
 
+# ObsPeriod that could be one observation "2026-07-23_rise", one day "2026-07-23" or one group of observations "july_2026"?
 # ObsDate = '2022-07-14'
 # ObsDate = '2026-03-11'
-ObsDate = '2026-03-13'
+# ObsDate = '2026-03-13' # good map
+# ObsDate = "2026-05-03"
+# ObsDate = "2026-06-24" #23, 24, 25, 26 # none of these data have the Moon in it (or well-hidden)
+ObsDate = "2026-07-25" # 23, 24, 25, 26, 27, 28, 29
+scanning = "rise"
+ObsName = "{}_{}".format(ObsDate, scanning)
+# "2026-07-26_rise" not as good as the others for TES 218
+# both "2026-07-28_rise" and "2026-07-29_fall" too noisy, the Moon is (barely) visible only in a small number of TES
 year_data = ObsDate[:4]
-ObsSession = 0
-if year_data == "2022":
-    dirs = glob.glob(mydatadir + ObsDate + '/*')
-else:
-    # dirs = glob.glob(mydatadir + ObsDate + '/*')
-    # dirs = glob.glob(mydatadir + ObsDate + '/*Moon_instrument_not_quite_ready')
-    # dirs = glob.glob(mydatadir + ObsDate + '/2026-03-11_06.45.41__Moon_instrument_not_quite_ready')
-    # dirs = glob.glob(mydatadir + ObsDate + '/2026-03-11_06.46.21__Moon_instrument_not_quite_ready')
-    # dirs = glob.glob(mydatadir + ObsDate + '/2026-03-11_15.39.59__Moon_el30')
-    # dirs = glob.glob(mydatadir + ObsDate + "/*Moon_el60")
-    # dirs = glob.glob(mydatadir + ObsDate + "/2026-03-11_07.58.25__Moon_el60")
-    dirs = glob.glob(mydatadir + ObsDate + "/*Moon")
-    # dirs = glob.glob(mydatadir + ObsDate + "/*07.54.24__Moon")
-# print(dirs)
-i_file = 1 # only 1 works for 2026-03-13
-datadir = dirs[i_file]
-print(datadir)
-dir_plots = "/Users/huchet/qubic/qubic/scripts/MoonProject/figures/"
+datadir = pmf.observation_dirs(ObsDate, mydatadir, rise_or_fall=scanning)
+print("{} folders, from {} to {}".format(len(datadir), datadir[0], datadir[-1]))
 
 
 #### Observing sites
@@ -94,7 +88,7 @@ LaPuna_QUBIC = {'lat':-24.186583*u.deg,
                 'UTC_Offset':-3*u.hour}
 if year_data == "2022":
     Obs_Site = Salta_CNEA
-elif year_data == "2026":
+elif int(year_data) >= 2025:
     Obs_Site = LaPuna_QUBIC
 
 
@@ -103,7 +97,7 @@ nb_TES = 256
 allTESNum = np.arange(nb_TES) + 1
 
 # Same for all maps
-nside = 256 # 256, 340
+nside = 512 # 256, 340
 if year_data == "2022":
     azqubic = 116.4
 else:

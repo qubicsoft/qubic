@@ -3,6 +3,7 @@ from scipy.interpolate import interp1d, RegularGridInterpolator, LinearNDInterpo
 import matplotlib.pyplot as plt
 from scipy.fft import fftfreq, fft2, ifft2, fft, ifft
 import sys
+import os
 import healpy as hp
 import time
 from scipy.signal import butter, filtfilt, bessel, sosfiltfilt, find_peaks
@@ -32,7 +33,7 @@ from astropy.visualization import quantity_support
 quantity_support()
 import astropy.units as u
 from astropy.time import Time
-from astropy.coordinates import EarthLocation, AltAz, get_moon
+from astropy.coordinates import EarthLocation, AltAz, get_moon, get_body
 
 #### QUBIC IMPORT
 import qubicpack as qp
@@ -1059,6 +1060,14 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             # plt.scatter(tt[scantype == 0], mytod[scantype == 0], c="g", s=1, label="scantype == 0", zorder=1000)
             ax.plot(tt, tod_no_peak, label="tod_no_peak")
             ax.plot(tt, mytod_4, label="filtered with peaks added")
+            if simu:
+                ax1_color = "purple"
+                ax1 = ax.twinx()
+                plot_ax1 = np.abs(mytod - mytod_4)/np.abs(mytod)
+                plot_ax1[np.abs(mytod - mytod_4)<1e2] = 0
+                ax1.plot(tt, plot_ax1, c=ax1_color)
+                ax1.set_ylim([0, 1e-1])
+                ax1.set_ylabel("abs(raw - filtered)/abs(raw)\nif abs(raw - filtered)>1e2 else 0", color=ax1_color)
             ax.legend()
             fig.tight_layout()
             # plt.savefig("figures/{}_TES{}_TOD.pdf".format(ObsName, TES_number))
@@ -2333,8 +2342,13 @@ def read_data(datadir, remove_t0=True, year_data="2022"):
     
     a = qubicfp()
     a.read_qubicstudio_dataset(datadir)
-    if a.nodata: # added a nodata attribute in read_qubicstudio_dataset in order to get rid of the empty files easily
-        print("\nThis file ({}) has no data and will not be taken into account.\n".format(datadir))
+    # if a.nodata: # added a nodata attribute in read_qubicstudio_dataset in order to get rid of the empty files easily
+    #     print("\nThis file ({}) has no data and will not be taken into account.\n".format(datadir))
+    #     return None
+    try: # the nodata method is better but harder to redo everytime I update qubicpack
+        tt, alltod = a.tod()
+    except:
+        print("\nThis file ({}) couldn't be read and will not be taken into account.\n".format(datadir))
         return None
     tt, alltod = a.tod()
     az = a.azimuth()
@@ -2733,7 +2747,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
         az_vel[:order] = (azimuth[1:order + 1] - azimuth[:order])/(time[1:order + 1] - time[:order])
         az_vel[-order:] = (azimuth[-order:] - azimuth[-order - 1:-1])/(time[-order:] - time[-order - 1:-1])
         dt_ = time[2*order:] - time[:-2*order]
-        az_vel[order:-order] = (az[2*order:] - az[:-2*order])/dt_
+        az_vel[order:-order] = (azimuth[2*order:] - azimuth[:-2*order])/dt_
         return az_vel
     # medaz_dt_ = get_az_vel(thk, az, order=50) # high order necessary to remove glitches
     # medaz_dt = medfilt(medaz_dt_, median_size)
@@ -3859,7 +3873,118 @@ def update_dict(config, instrument_type, nf_sub, nside, dictfilename='qubic/qubi
     d['synthbeam_kmax'] = 1
     return d
 
+# from https://stackoverflow.com/questions/8151300/ignore-case-in-glob-on-linux
+def insensitive_glob(pattern): # glob.glob but insensitive to case
+    def either(c):
+        return f'[{c.lower()}{c.upper()}]' if c.isalpha() else c
+    return glob.glob(''.join(map(either, pattern)))
 
+def observation_dirs_(ObsDate, rise_or_set, datadir, min_el=15, max_el=85):
+    """Function that returns the folders containing the chosen observation.
+
+    It uses astropy to find the folders using the start date and Moon rising
+    or setting information. The location of the telescope is La Puna.
+
+    Parameters
+    ----------
+    ObsDate : str
+        The date of the start of the observation (UTC) in the format "yyyy-mm-dd".
+    rise_or_set: str
+        Wether the Moon is rising ("rise") or setting ("set").
+    datadir: str
+        The data directory where the dated folders are.
+    min_el, max_el: float
+        The minimum and maximum Moon elevations to take into account in degrees.
+        Default is respectively 15° and 85 degrees.
+        
+    Returns
+    -------
+    datafiles: numpy 1D array
+        The array containing the paths to the data files.
+    """
+
+    LaPuna_QUBIC = {"lat":-24.186583*u.deg,
+                "lon":-66.478*u.deg,
+                "height":4869*u.m,
+                "UTC_Offset":-3*u.hour}
+    ObsSite = LaPuna_QUBIC
+    
+    ObsSite = EarthLocation(lat=ObsSite["lat"], lon=ObsSite["lon"], height=ObsSite["height"])
+    ####utcoffset = -3*u.hour  # Eastern Daylight Time
+
+    # from the beginning of the day and for 48 hours
+    tinit = Time(ObsDate + "T00:00:00", format='isot', scale='utc')
+    print("tinit", tinit)
+    two_days = tinit + np.arange(86400 * 2)*u.second # every second
+
+    ### Moon
+    moon_gcrs = get_body('Moon', two_days, ObsSite)
+    moon_azel = moon_gcrs.transform_to(AltAz(obstime=two_days, location=ObsSite))
+
+    moon_el = moon_azel.alt.deg
+    two_days_unix = two_days.to_value("unix")
+
+
+    ### we find the elevation extrema in order to separate Moon rising and setting
+
+    def get_az_vel(time, azimuth, order=2): # get the angular azimuth velocity
+        az_vel = np.zeros(len(time))
+        az_vel[:order] = (azimuth[1:order + 1] - azimuth[:order])/(time[1:order + 1] - time[:order])
+        az_vel[-order:] = (azimuth[-order:] - azimuth[-order - 1:-1])/(time[-order:] - time[-order - 1:-1])
+        dt_ = time[2*order:] - time[:-2*order]
+        az_vel[order:-order] = (azimuth[2*order:] - azimuth[:-2*order])/dt_
+        return az_vel
+    
+    el_vel = get_az_vel(two_days, moon_el, order=2)
+    sign_ = el_vel[:-1]*el_vel[1:] # the only negative values are when the sign changes
+    sign_change = np.zeros_like(el_vel, dtype=bool) # to keep the same number of points as el_vel
+    sign_change[:-1] = sign_ <= 0 # the zero case has to be taken into account even if unlikely
+    where_change = np.argwhere(sign_change)
+
+    if el_vel[sign_change][0] == 0: # unlikely but we never know
+        sign_check = el_vel[where_change[0] - 1]
+    else:
+        sign_check = el_vel[sign_change][0]
+    if sign_check < 0: # that means the first observation started that day should be rising
+        order = np.array(["rise", "set"])
+    else:
+        order = np.array(["set", "rise"])
+
+    def get_extremum(xleft, yleft, xright, yright): # linear approx
+        b = (yright - yleft*xright/xleft)/(1 - xright/xleft)
+        a = (yleft - b)/xleft
+        return -b/a
+
+    extrem_time_unix = get_extremum(two_days_unix[where_change], el_vel[where_change], two_days_unix[where_change + 1], el_vel[where_change + 1])
+
+    # plt.figure()
+    # plt.plot(two_days_unix, moon_el)
+    # for extr_t in extrem_time_unix:
+    #     plt.axvline(x=extr_t, c="r")
+    # plt.show()
+
+    # plt.figure()
+    # plt.plot(two_days_unix, el_vel)
+    # for extr_t in extrem_time_unix:
+    #     plt.axvline(x=extr_t, c="r")
+    # plt.show()
+
+    # we get all the files
+    alldirs = np.array(insensitive_glob(datadir + '/*/*moon*')) # might not be clever when the number of datasets reaches a great number
+    allnames = [dir.split(os.sep)[-1] for dir in alldirs] # the name of the files
+    alldates = np.array([name[:19].replace("_", "T").replace(".", ":") for name in allnames]) # the starting time of each observation file
+    alldates_unix = Time(alldates, format='isot', scale='utc').to_value("unix") # converted to unix time
+    argsort_dates = np.argsort(alldates_unix)
+    alldirs = alldirs[argsort_dates] # dirs sorted
+    alldates_unix = alldates_unix[argsort_dates] # times sorted (.sort() returns None no idea why)
+
+    # we select the files between the two extrema
+    first_extr = int(np.argwhere(order == rise_or_set)) # the extremum index just before the start of the acquisition
+    selection = np.logical_and(extrem_time_unix[first_extr] < alldates_unix, alldates_unix < extrem_time_unix[first_extr + 1])
+    selected_files = alldirs[selection]
+
+    print(selected_files)
+    return selected_files
 
 def observation_dirs(ObsDate, datadir, rise_or_set=None):
 
@@ -3867,6 +3992,8 @@ def observation_dirs(ObsDate, datadir, rise_or_set=None):
     recent_obs = ["2026-05-03", "2026-05-04", "2026-05-05", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26"]
                   
     july_2026 = ["2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26", "2026-07-27", "2026-07-28", "2026-07-29"]
+
+    august_2026 = ["2026-08-25", "2026-08-26", "2026-08-27"]
     
     if year_data == "2022":
         dirs = glob.glob(datadir + ObsDate + '/*')
@@ -3883,7 +4010,10 @@ def observation_dirs(ObsDate, datadir, rise_or_set=None):
         # dirs = glob.glob(datadir + ObsDate + "/*07.54.24__Moon")
         if ObsDate in recent_obs:
             dirs = glob.glob(datadir + ObsDate + "/*moon_scans")
+        obs_group = None
         if ObsDate in july_2026:
+            obs_group = july_2026
+            obs_group_name = "july_2026"
             observation_sep = [0, 21, 42, 64, 86, 108, 130, 152, 174, 195, 216, 237, 257] # index of the first file of each observation
             observations = ["2026-07-23_rise",
                             "2026-07-24_set", "2026-07-24_rise",
@@ -3892,13 +4022,23 @@ def observation_dirs(ObsDate, datadir, rise_or_set=None):
                             "2026-07-27_set", "2026-07-27_rise",
                             "2026-07-28_set", "2026-07-28_rise",
                             "2026-07-29_set"]
+        elif ObsDate in august_2026:
+            obs_group = august_2026
+            obs_group_name = "august_2026"
+            observation_sep = [0, 22, 44, 64, 86, 108, 130, 152, 174, 195, 216, 237, 257] # index of the first file of each observation
+            observations = ["2026-08-25_rise",
+                            "2026-08-26_set", "2026-08-26_rise",
+                            "2026-08-27_set", "2026-08-27_rise",
+                            "2026-08-28_set", "2026-08-28_rise",
+                            "2026-08-29_set"]
+        if obs_group is not None:
             i_obs = observations.index(ObsDate + "_" + rise_or_set)
             dirs = []
-            for date in july_2026:
+            for date in obs_group:
                 dirs.append(glob.glob(datadir + date + "/*moon_scans"))
             dirs = np.concatenate(dirs)
             dirs.sort()
-            print("Found {} files in the '{}' group of observations.".format(len(dirs), "july_2026"))
+            print("Found {} files in the '{}' group of observations.".format(len(dirs), obs_group_name))
             datafiles = dirs[observation_sep[i_obs]:observation_sep[i_obs + 1]]
             return datafiles
     # print(dirs)

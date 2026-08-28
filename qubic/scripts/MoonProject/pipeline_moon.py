@@ -1,4 +1,5 @@
-# This file is the concatenated version of pipeline_moon_filter_TOD_create_maps_2026.ipynb
+# This file is the concatenated version of pipeline_moon_filter_TOD_create_maps_2026.ipynb and of new_SimulateMoon-RealData.ipynb
+# in order to have one pipeline for simulation and data.
 # Its purpose is to:
 # 0. - read TOD one observation set at a time
 #    - clean the known azel dependant signal? Earth magnetic field

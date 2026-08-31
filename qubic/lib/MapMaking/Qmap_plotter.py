@@ -1192,6 +1192,7 @@ class PlotsCMM:
             maps_in[:, ~self.preset.sky.seenpix, :] = hp.UNSEEN
             maps_rec[:, ~self.preset.sky.seenpix, :] = hp.UNSEEN
             maps_res = maps_rec - maps_in
+            maps_res[:, ~self.preset.sky.seenpix, :] = hp.UNSEEN
 
             Nmaps, _, Nstk = maps_res.shape
             k = 0

@@ -125,7 +125,7 @@ class AtmosphereProperties:
         dict_qubic = qubicDict()
         dict_qubic.read_from_file(dictfilename)
 
-        for i in args.keys():
+        for i in args:
             dict_qubic[str(i)] = args[i]
 
         return dict_qubic
@@ -161,10 +161,10 @@ class AtmosphereProperties:
         """Temperature.
 
         Compute the temperature of the atmosphere depending on the altitude, using the average ground temperature and a typical height that depend on the observation site.
-        The corresponding equation to compute the temperature, taken from equation (13) in Morris 2021, is :
+        The corresponding equation to compute the temperature, taken from equation (14) in Morris 2021, is :
 
         .. math::
-            T_{atm}(h) = T_{atm}(0) e^{h / h_T} .
+            T_{atm}(h) = T_{atm}(0) e^{-h / h_T} .
 
         Parameters
         ----------
@@ -380,7 +380,7 @@ class AtmosphereProperties:
             The frequencies at which the absorption spectrum is computed, in GHz.
 
         """
-        #! Verify if the integration is made properly !!!
+        #! Verify that the integration is made properly !!!
 
         if band not in [150, 220]:
             raise ValueError("Band must be either 150 or 220 GHz.")
@@ -856,7 +856,16 @@ class AtmosphereMaps(AtmosphereProperties):
         ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
         ref_abs = self.integrated_abs_spectrum[ref_idx]
         rj_to_cmb = self.rj_to_cmb_factor(self.frequencies[ref_idx])
-        return ref_abs * self.mean_water_vapor_density * self.temperature * maps * rj_to_cmb * 1e6
+        layer_depth = 2 * self.params["h_h2o"]
+        return (
+            ref_abs
+            * self.mean_water_vapor_density
+            * self.temperature
+            * layer_depth
+            * maps
+            * rj_to_cmb
+            * 1e6
+        )
 
     def get_atm_mixing_matrix(self, ref_freq=150):
         ref_idx = np.argmin(np.abs(self.frequencies - ref_freq))
@@ -868,11 +877,14 @@ class AtmosphereMaps(AtmosphereProperties):
         r"""Mean atmosphere temperature.
 
         Compute the mean (monopole) atmospheric brightness temperature contribution, i.e. the DC term of
-        equation 12 from Morris 2021 : :math:`\bar{T}(\nu) = \tau_0(\nu) T_{atm}`, where
+        the isothermal, optically-thin reduction of equation 11 from Morris 2021 :
+        :math:`\bar{T}(\nu) = \tau_0(\nu) T_{atm}`, where
         :math:`\tau_0(\nu) = \alpha_b(\nu) \bar{\rho} \times 2 h_{H_2O}` is the mean optical depth of the
-        water vapor layer. This is the spatially uniform temperature added by the atmosphere on top of the
-        spatial fluctuations returned by :meth:`get_temp_maps`, which is built from a zero-mean fluctuation
-        map and therefore does not contain this term.
+        water vapor layer, using the same effective layer depth of :math:`2 h_{H_2O}` assumed in
+        :meth:`get_temp_maps` (this depth is our own approximation, not from Morris 2021). This is the
+        spatially uniform temperature added by the atmosphere on top of the spatial fluctuations returned
+        by :meth:`get_temp_maps`, which is built from a zero-mean fluctuation map and therefore does not
+        contain this term.
 
         Converted from Rayleigh-Jeans to CMB thermodynamic temperature using :meth:`rj_to_cmb_factor`.
 

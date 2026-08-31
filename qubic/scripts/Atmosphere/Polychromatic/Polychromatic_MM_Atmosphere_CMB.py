@@ -1,6 +1,8 @@
+import os
 import pickle as pkl
 
 import healpy as hp
+import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from pyoperators import (
@@ -13,7 +15,7 @@ from pyoperators import (
     ReshapeOperator,
 )
 from pyoperators.iterative.core import AbnormalStopIteration
-from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
+from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator, Spherical2HealpixOperator
 
 from qubic.lib.Instrument.Qacquisition import QubicInstrumentType
 from qubic.lib.Instrument.Qinstrument import compute_freq
@@ -30,6 +32,9 @@ with open("params.yml", "r") as file:
     params = yaml.safe_load(file)
 
 np.random.seed(params["seed"])
+
+plot_dir = "Plots"
+os.makedirs(plot_dir, exist_ok=True)
 
 # Call the class which builds the atmosphere maps
 atm = AtmosphereMaps(params)
@@ -54,6 +59,62 @@ qubic_patch = np.array([0, -57])
 center_gal = equ2gal(qubic_patch[0], qubic_patch[1])
 center_local = np.array([np.mean(q_sampling_gal.azimuth), np.mean(q_sampling_gal.elevation)])
 
+az, el = q_sampling_gal.azimuth, q_sampling_gal.elevation
+
+fig, axs = plt.subplots(1, 5, figsize=(25, 5))
+
+# Azimuth plot
+axs[0].plot(az)
+axs[0].set_title("Azimuth")
+axs[0].set_xlabel("Time samples")
+axs[0].set_ylabel("Angles (degrees)")
+
+# Elevation plot
+axs[1].plot(el)
+axs[1].set_title("Elevation")
+axs[1].set_xlabel("Time samples")
+axs[1].set_ylabel("Angles (degrees)")
+
+# Scanning strategy plot
+axs[2].plot(az, el)
+axs[2].set_title("Scanning strategy")
+axs[2].set_xlabel("Azimuth (degrees)")
+axs[2].set_ylabel("Elevation (degrees)")
+
+# Equatorial coordinates plot
+axs[3].plot(
+    (q_sampling_gal.equatorial[:, 0] + 180) % 360 - 180, q_sampling_gal.equatorial[:, 1]
+)
+axs[3].set_title("Equatorial coordinates")
+axs[3].set_xlabel("Right ascension (degrees)")
+axs[3].set_ylabel("Declination (degrees)")
+
+# Galactic coordinates plot
+axs[4].plot(q_sampling_gal.galactic[:, 0], q_sampling_gal.galactic[:, 1])
+axs[4].set_title("Galactic coordinates")
+axs[4].set_xlabel("Longitude (degrees)")
+axs[4].set_ylabel("Latitude (degrees)")
+
+fig.suptitle("Qubic Sampling")
+plt.tight_layout()
+fig.savefig(f"{plot_dir}/scanning_strategy.png")
+plt.close(fig)
+
+test_gal = np.zeros(hp.nside2npix(params["nside"]))
+index = np.array(
+    Spherical2HealpixOperator(params["nside"], "azimuth, elevation")(
+        np.radians(q_sampling_gal.galactic)
+    ),
+    dtype="int",
+)
+test_gal[index] = 1
+hp.mollview(test_gal, title="test_gal", cmap="viridis")
+plt.savefig(f"{plot_dir}/test_gal_mollview.png")
+plt.close()
+hp.gnomview(test_gal, title="test_gal", cmap="viridis", reso=15, rot=center_gal)
+plt.savefig(f"{plot_dir}/test_gal_gnomview.png")
+plt.close()
+
 # Local coordinates: same sampling as the galactic one, just interpreted as fixed to the
 # instrument's az/el frame instead of the sky (fix_az=True) -- this is how the atmosphere
 # component (fixed relative to the ground) is distinguished from the CMB (fixed on the sky).
@@ -72,6 +133,27 @@ q_sampling_local.angle_hwp = q_sampling_gal.angle_hwp
 
 q_sampling_local.fix_az = True
 
+test_local = np.zeros(hp.nside2npix(params["nside"]))
+index = np.array(
+    Spherical2HealpixOperator(params["nside"], "azimuth, elevation")(
+        np.radians([q_sampling_local.azimuth, q_sampling_local.elevation]).T
+    ),
+    dtype="int",
+)
+test_local[index] = 1
+hp.mollview(test_local, title="test_local", cmap="viridis")
+plt.savefig(f"{plot_dir}/test_local_mollview.png")
+plt.close()
+hp.gnomview(
+    test_local,
+    title="test_local",
+    cmap="viridis",
+    reso=15,
+    rot=(np.mean(q_sampling_local.azimuth), np.mean(q_sampling_local.elevation)),
+)
+plt.savefig(f"{plot_dir}/test_local_gnomview.png")
+plt.close()
+
 ### Input maps
 # CMB
 cl_cmb = CMBModel(None).give_cl_cmb(r=0, Alens=1)
@@ -80,9 +162,53 @@ cmb_map = hp.synfast(cl_cmb, params["nside"], new=True, verbose=False).T
 cmb_maps = np.ones((params["nsub_in"], hp.nside2npix(params["nside"]), 3))
 cmb_maps *= cmb_map[None]
 
+hp.mollview(cmb_map[:, 0], cmap="jet", title="CMB map", unit=r"$µK_{CMB}$")
+plt.savefig(f"{plot_dir}/cmb_map.png")
+plt.close()
+
 # Atmosphere
 atm_maps = np.zeros(cmb_maps.shape)
 atm_maps[..., 0] = atm.get_temp_maps(atm.delta_rho_map) / 1e3
+
+index_nu = 0
+hp.mollview(
+    atm_maps[index_nu, :, 0],
+    cmap="jet",
+    unit="µK_CMB",
+    title="Atmosphere map {:.2f} GHz".format(atm.frequencies[index_nu]),
+)
+plt.savefig(f"{plot_dir}/atm_map_first_freq_mollview.png")
+plt.close()
+hp.gnomview(
+    atm_maps[index_nu, :, 0],
+    rot=center_local,
+    reso=20,
+    title="Atmosphere map {:.2f} GHz".format(atm.frequencies[index_nu]),
+    unit=r"$µK_{CMB}$",
+    cmap="jet",
+)
+plt.savefig(f"{plot_dir}/atm_map_first_freq_gnomview.png")
+plt.close()
+
+index_nu = -1
+hp.mollview(
+    atm_maps[index_nu, :, 0],
+    cmap="jet",
+    unit="µK_CMB",
+    title="Atmosphere map {:.2f} GHz".format(atm.frequencies[index_nu]),
+)
+plt.savefig(f"{plot_dir}/atm_map_last_freq_mollview.png")
+plt.close()
+hp.gnomview(
+    atm_maps[index_nu, :, 0],
+    rot=center_local,
+    reso=20,
+    title="Atmosphere map {:.2f} GHz".format(atm.frequencies[index_nu]),
+    unit=r"$µK_{CMB}$",
+    cmap="jet",
+)
+plt.savefig(f"{plot_dir}/atm_map_last_freq_gnomview.png")
+plt.close()
 
 # Apply convolutions
 fwhm_synthbeam150 = 0.006853589624526168
@@ -146,6 +272,19 @@ covnorm_local = coverage_local / coverage_local.max()
 seenpix_local = covnorm_local > params["coverage_cut"]
 
 seenpix = np.array([seenpix_gal, seenpix_local])
+
+hp.mollview(coverage_gal, title="Galactic Coverage")
+plt.savefig(f"{plot_dir}/coverage_gal_mollview.png")
+plt.close()
+hp.gnomview(coverage_gal, rot=center_gal, reso=20, title="Galactic Coverage")
+plt.savefig(f"{plot_dir}/coverage_gal_gnomview.png")
+plt.close()
+hp.mollview(coverage_local, title="Local Coverage")
+plt.savefig(f"{plot_dir}/coverage_local_mollview.png")
+plt.close()
+hp.gnomview(coverage_local, rot=center_local, reso=20, title="Local Coverage")
+plt.savefig(f"{plot_dir}/coverage_local_gnomview.png")
+plt.close()
 
 ### Build QUBIC operators
 # Galactic coordinates
@@ -266,6 +405,82 @@ except AbnormalStopIteration as e:
     result = algo.finalize()
     success = False
     message = str(e)
+
+plt.plot(result["convergence"])
+plt.yscale("log")
+plt.xlabel("Iteration")
+plt.ylabel("Convergence")
+plt.savefig(f"{plot_dir}/convergence.png")
+plt.close()
+
+input = true_maps.copy()
+output = result["x"].copy()
+residual = output - input
+stk = ["I", "Q", "U"]
+
+# One triptych (Input / Output / Residual) per reconstructed Stokes parameter -- I (istk=0)
+# and Q (istk=1); U isn't reconstructed here. Residual color scale is +/- 3 sigma of the
+# residual within the seen pixels of each map.
+for istk in [0, 1]:
+    plt.figure(figsize=(15, 12))
+    k = 1
+    reso = 20
+
+    for imap in range(input.shape[0]):
+        if imap == 0:
+            map_name = "CMB"
+            center = center_gal
+            input[imap, ~seenpix_gal, :] = hp.UNSEEN
+            output[imap, ~seenpix_gal, :] = hp.UNSEEN
+            residual[imap, ~seenpix_gal, :] = hp.UNSEEN
+        else:
+            map_name = "Atm"
+            center = center_local
+            input[imap, ~seenpix_local, :] = hp.UNSEEN
+            output[imap, ~seenpix_local, :] = hp.UNSEEN
+            residual[imap, ~seenpix_local, :] = hp.UNSEEN
+
+        sigma = np.std(residual[imap, seenpix[imap], istk])
+        nsigma = 3
+
+        hp.gnomview(
+            input[imap, :, istk],
+            reso=reso,
+            rot=center,
+            min=min_input[imap, istk],
+            max=max_input[imap, istk],
+            cmap="jet",
+            sub=(input.shape[0], 3, k),
+            title=f"{stk[istk]} - Input - {map_name}",
+            notext=True,
+        )
+        hp.gnomview(
+            output[imap, :, istk],
+            reso=reso,
+            rot=center,
+            min=min_input[imap, istk],
+            max=max_input[imap, istk],
+            cmap="jet",
+            sub=(input.shape[0], 3, k + 1),
+            title=f"{stk[istk]} - Output - {map_name}",
+            notext=True,
+        )
+        hp.gnomview(
+            residual[imap, :, istk],
+            reso=reso,
+            rot=center,
+            min=-nsigma * sigma,
+            max=nsigma * sigma,
+            cmap="jet",
+            sub=(input.shape[0], 3, k + 2),
+            title=f"{stk[istk]} - Residual - {map_name}",
+            notext=True,
+        )
+        k += 3
+
+    plt.tight_layout()
+    plt.savefig(f"{plot_dir}/maps_triptych_{stk[istk]}.png")
+    plt.close()
 
 dict_solution = {
     "result": result,

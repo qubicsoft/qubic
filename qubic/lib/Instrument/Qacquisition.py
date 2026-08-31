@@ -490,39 +490,39 @@ class QubicAcquisition(Acquisition):
         return BlockRowOperator([I, -I], axisin=0, partitionin=partitionin)  # ?
 
     def get_observation(self, map, convolution=True, noiseless=False):
-         """
-         tod = map2tod(acquisition, map)
-         tod, convolved_map = map2tod(acquisition, map, convolution=True)
-         Parameters
-         ----------
-         map : I, QU or IQU maps
-             Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
-             with npix = 12 * nside**2
-         noiseless : boolean, optional
-             If True, no noise is added to the observation.
-         convolution : boolean, optional
-             Set to True to convolve the input map by a gaussian and return it.
-         Returns
-         -------
-         tod : array
-             The Time-Ordered-Data of shape (ndetectors, ntimes).
-         convolved_map : array, optional
-             The convolved map, if the convolution keyword is set.
-         """
-         if convolution:
-             convolution = self.get_convolution_peak_operator()
-             map = convolution(map)
+        """
+        tod = map2tod(acquisition, map)
+        tod, convolved_map = map2tod(acquisition, map, convolution=True)
+        Parameters
+        ----------
+        map : I, QU or IQU maps
+            Temperature, QU or IQU maps of shapes npix, (npix, 2), (npix, 3)
+            with npix = 12 * nside**2
+        noiseless : boolean, optional
+            If True, no noise is added to the observation.
+        convolution : boolean, optional
+            Set to True to convolve the input map by a gaussian and return it.
+        Returns
+        -------
+        tod : array
+            The Time-Ordered-Data of shape (ndetectors, ntimes).
+        convolved_map : array, optional
+            The convolved map, if the convolution keyword is set.
+        """
+        if convolution:
+            convolution = self.get_convolution_peak_operator()
+            map = convolution(map)
 
-         H = self.get_operator()
-         tod = H(map)
+        H = self.get_operator()
+        tod = H(map)
 
-         if not noiseless:
-             tod += self.get_noise(det_noise=True, photon_noise=False)
+        if not noiseless:
+            tod += self.get_noise(det_noise=True, photon_noise=False)
 
-         if convolution:
-             return tod, map
+        if convolution:
+            return tod, map
 
-         return tod
+        return tod
 
     def get_preconditioner(self, cov):
         if cov is not None:
@@ -908,8 +908,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         if wdet == 0 and wpho150 == 0 and wpho220 == 0:
             return IdentityOperator(
                 shapein=(
-                    self.nFocalPlanes,
-                    len(self.multiinstrument[0]),
+                    self.nFocalPlanes * len(self.multiinstrument[0]),
                     len(self.sampling),
                 )
             )
@@ -924,7 +923,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
         for iband, band in enumerate(self.used_bands):
             d = self.dict.copy()
             d["filter_nu"] = band * 1e9
-            d["effective_duration"] = self.dict["effective_duration{}".format(band)]
+            d["effective_duration"] = self.dict[f"effective_duration_{band}"]
             inst = QubicInstrument(d)
             subacq = QubicAcquisition(inst, self.sampling, self.scene, d)
             invn_list.append(
@@ -938,9 +937,7 @@ class QubicInstrumentType(QubicMultiAcquisitions):
             # UWB has one focal plane: actual noise per sample = ndet + npho_150 + npho_220
             # (matches QubicTotNoise.total_noise). Combine band sigmas into one invN so that
             # the PCG noise model is consistent with the noise realization.
-            sigma_combined = np.sqrt(
-                sum(np.atleast_1d(subacq.sigma) ** 2 for subacq in subacqs)
-            )
+            sigma_combined = np.sqrt(sum(np.atleast_1d(subacq.sigma) ** 2 for subacq in subacqs))
             subacqs[0].forced_sigma = sigma_combined
             self.invN = subacqs[0].get_invntt_operator(det_noise=0, photon_noise=0)
         else:
@@ -1071,7 +1068,9 @@ class PlanckAcquisition:
         #! Tom: I never saw the beam_correction argument being used, but I kept it just in case
         sigma = np.asarray(self.sigma)
         npix = self.npix
-        assert sigma.shape == (len(self.nus), npix, 3), f"sigma must be shape (nus,npix,3), got {sigma.shape}"
+        assert sigma.shape == (len(self.nus), npix, 3), (
+            f"sigma must be shape (nus,npix,3), got {sigma.shape}"
+        )
 
         # Compute the patch-exclusion scale (weight_planck inside seenpix, 1 outside) first,
         # so that planck_ntot == 0 (noiseless Planck TOD) still respects weight_planck == 0

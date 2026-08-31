@@ -211,7 +211,11 @@ class Namaster(object):
 
         """
         nside = hp.npix2nside(len(map[0]))
-        self.ell_binned, b = self.get_binning(nside)
+        ### get_binning() already sets self.ell_binned to the lmin-filtered array as a side
+        ### effect; only `b` (the NmtBin) is needed here. Do not reassign self.ell_binned from
+        ### the (unfiltered) return value, or it ends up longer than the spectra this method
+        ### actually returns/stores.
+        _, b = self.get_binning(nside)
         mask_binned = np.where(self.ell_binned >= self.lmin)
 
         if mask_apo is None:
@@ -363,6 +367,7 @@ class Namaster(object):
         return covar_EE_EE
 
     def get_covariance_BB_BB(self, cl_bb):
+        self.get_covariance_coeff()
         w22 = self.w[1]
         n_ell = len(cl_bb)
         cl_eb = np.zeros(n_ell)
@@ -381,7 +386,16 @@ class Namaster(object):
             wb=w22,
         )
 
-        covar_22_22 = np.reshape(covar_22_22, (len(self.ell_binned), 4, len(self.ell_binned), 4))
+        ### w22 (like every NmtWorkspace here) is built over ALL bandpowers from ell=2 -- it has
+        ### no notion of the post-hoc lmin filtering applied to self.ell_binned (see get_spectra).
+        ### So covar_22_22's bandpower axis is longer than len(self.ell_binned) whenever lmin > 2
+        ### (true for every production config, e.g. lmin=30/40). Reshape using the workspace's
+        ### actual (unfiltered) bandpower count, then keep only the trailing bins that match
+        ### self.ell_binned -- lmin filtering only ever drops the lowest bins, never reorders them.
+        n_bands_full = int(round(np.sqrt(covar_22_22.size / 16)))
+        covar_22_22 = np.reshape(covar_22_22, (n_bands_full, 4, n_bands_full, 4))
+        nkeep = len(self.ell_binned)
+        covar_22_22 = covar_22_22[-nkeep:, :, -nkeep:, :]
 
         # covar_EE_EE = covar_22_22[:, 0, :, 0]
         # covar_EE_EB = covar_22_22[:, 0, :, 1]

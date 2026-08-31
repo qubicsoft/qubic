@@ -1,8 +1,8 @@
 ### Atmosphere parameters
 
-path_am_files: "../absorption_coefficient/"
+path_am_files: "/pbs/home/t/tlaclave/sps/qubic/qubic/scripts/Atmosphere/absorption_coefficient/"
 
-# Physical parameters
+# Physical parameters
 correlation_length: 500              # Atmospheric correlation maximum lenght in m (directly measured outer scale, ACT 2024, arXiv:2410.13064)
 altitude_atm_2d: 1000                # Altitude of the atmosphere above QUBIC for 2D model in m
 rho_0: 1.15                          # Reference water vapor density in g/m³ (Morris et al. 2021, ACT/Cerro Toco fits, day/night+season average)
@@ -19,28 +19,27 @@ pwv: 1                               # Precipitable Water Vapor, ie the integral
 sigma_rho: 0.014                     # Target std of the fractional water vapor density fluctuation (dimensionless). Derived (not fit) from ACT's measured line-of-sight PWV turbulence delta_w_z ~ 0.015 mm, "typical for a winter night" (arXiv:2410.13064), converted via rho_0/h_h2o
 adjust: True
 
-# Simulation parameters
+# Simulation parameters
 n_grid: 1000                         # Number of squares in the grid
 h_grid: 1                            # Number of sqares for the altitude, i for 2d model
 h_qubic: 4869                        # QUBIC altitude in m
-size_atm: 10000                      # Lenght of the atm in m
+size_atm: 1000                      # Lenght of the atm in m
 2d: True                             # Determine if you want to simulate a 2d atm
-nside: 64
+nside: 128
 n_theta: 10000
 normalization: 1
 flat: False
-coverage_cut: 0.01
+coverage_cut: 0.1
 dtheta: 15
 seed: 1
 
 ### Map-making parameters
 
-# Qubic parameters
+# Qubic parameters
 nsub_in: 8                           # Number of sub-acquisitions used to integrate over the atm spectrum
 nsub_rec: 8
 nrec: 2
-npointings: 300
-n_buffer: 50
+npointings: 1000
 kmax: 1
 synthbeam_fraction: 1
 wdet: 0.01
@@ -48,23 +47,23 @@ wpho150: 0.01
 wpho220: 0.01
 
 # Sky parameters
-cmb: false
+cmb: true
 atm: true
 
 # Reconstruction parameters
 preconditioner: false
-n_iter: 20
-n_iter_final: 1500
-n_loop: 20
+n_iter: 1000
+n_loop: 1
 iterative_iter: false
+n_iter_final: 0                    # maxiter for the final PCG run after the reconstruction loop
+tol: 5.0e-9                   # tol for the final PCG run after the reconstruction loop
 convolutions: false
 sweeping_pointings: true             # If false: random pointings
 fit_mixing_matrix: false
 fix_maps: true
-fit_wind: true
 
 # Wind
-wind: true
+wind: false
 wind_type: "constant"                # Can be : "constant" or "normal"
-wind_cst: [0, 1]                   # [wind_x, wind_y]
+wind_cst: [-1, 0]                   # [wind_x, wind_y]
 wind_normal: [0, 1]                  # [wind_mean, wind_std]

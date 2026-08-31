@@ -42,19 +42,21 @@ nrec: 2
 npointings: 1000
 kmax: 1
 synthbeam_fraction: 1
-wdet: 1
-wpho150: 1
-wpho220: 1
+wdet: 0.01
+wpho150: 0.01
+wpho220: 0.01
 
 # Sky parameters
-cmb: true
+cmb: false
 atm: true
 
 # Reconstruction parameters
 preconditioner: false
-n_iter: 5
-n_loop: 5
+n_iter: 200
+n_loop: 1
 iterative_iter: false
+n_iter_final: 0                    # maxiter for the final PCG run after the reconstruction loop
+tol: 5.0e-9                   # tol for the final PCG run after the reconstruction loop
 convolutions: false
 sweeping_pointings: true             # If false: random pointings
 fit_mixing_matrix: false
@@ -63,5 +65,5 @@ fix_maps: true
 # Wind
 wind: true
 wind_type: "constant"                # Can be : "constant" or "normal"
-wind_cst: [-1, 0]                   # [wind_x, wind_y]
+wind_cst: [0, 0.2]                   # [wind_x, wind_y]
 wind_normal: [0, 1]                  # [wind_mean, wind_std]

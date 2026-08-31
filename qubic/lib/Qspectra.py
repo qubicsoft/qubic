@@ -55,18 +55,23 @@ class Spectra:
             for jrec in range(irec, nmaps):
                 print(f"======== Cross-spectra with maps {irec} x {jrec} ========")
 
+                ### After matching, both maps carry the beam of whichever map was coarser
+                ### to begin with -- that common beam, not the matching kernel, is what
+                ### must be deconvolved by NaMaster's beam_correction.
+                fwhm_common = max(self.fwhm[irec], self.fwhm[jrec])
+
                 if self.fwhm[irec] > self.fwhm[jrec]:
-                    fwhm = np.sqrt(self.fwhm[irec] ** 2 - self.fwhm[jrec] ** 2)
-                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+                    fwhm_match = np.sqrt(self.fwhm[irec] ** 2 - self.fwhm[jrec] ** 2)
+                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm_match)
                     map1 = maps[irec]
                     map2 = C(maps[jrec])
                 else:
-                    fwhm = np.sqrt(self.fwhm[jrec] ** 2 - self.fwhm[irec] ** 2)
-                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm)
+                    fwhm_match = np.sqrt(self.fwhm[jrec] ** 2 - self.fwhm[irec] ** 2)
+                    C = HealpixConvolutionGaussianOperator(fwhm=fwhm_match)
                     map1 = C(maps[irec])
                     map2 = maps[jrec]
 
-                BBspectra[irec, jrec, :] = self._get_BB_spectra(map=map1.T, map2=map2.T, fwhm=fwhm)
+                BBspectra[irec, jrec, :] = self._get_BB_spectra(map=map1.T, map2=map2.T, fwhm=fwhm_common)
 
                 if irec != jrec:
                     BBspectra[jrec, irec] = BBspectra[irec, jrec]

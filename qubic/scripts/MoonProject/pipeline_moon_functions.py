@@ -222,6 +222,17 @@ def get_ObsSite(name):
         raise ValueError("Site name '{}' is unknown. Only 'salta' is implemented for now.")
     return Obs_Site
 
+def get_vel(time, position, order=2):
+    """Function to get the velocity from time and position.
+    """
+    vel = np.zeros(len(time))
+    vel[:order] = (position[1:order + 1] - position[:order])/(time[1:order + 1] - time[:order])
+    vel[-order:] = (position[-order:] - position[-order - 1:-1])/(time[-order:] - time[-order - 1:-1])
+    dt_ = time[2*order:] - time[:-2*order]
+    vel[order:-order] = (position[2*order:] - position[:-2*order])/dt_
+    return vel
+
+
 
 def sparse_2d_to_fullmap(mymap, ipos_grid, jpos_grid):
     # time_0 = time.time()
@@ -1045,33 +1056,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
         mytod_3 = my_filt(tod_no_peak.copy())
         mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, pos_peak, interval=interval_peak, mask=mask_elt)
         if doplot and True: # plot with raw tod vs filtered tod
-        # if True: # plot with raw tod vs filtered tod
-            # ar
-            # peaks_detected_ = np.isin(np.arange(len(tt)), pos_peak)
-            fig, ax = plt.subplots(1, 1, figsize=(7, 4))
-            ax.plot(tt, mytod, label="raw TOD")
-            ax.set_ylabel("Signal [ADU]")
-            if Tbath is not None:
-                ax1 = ax.twinx()
-                ax1.plot(tt, Tbath)
-                ax1.set_ylabel("Tbath [K]")
-            # plt.scatter(tt[pos_peak], mytod[pos_peak], c="r", label="peaks_detected", zorder=1000)
-            ax.scatter(tt[protected_tod == 1], mytod[protected_tod == 1], c="r", s=1, label="peaks_detected", zorder=1000)
-            # plt.scatter(tt[scantype == 0], mytod[scantype == 0], c="g", s=1, label="scantype == 0", zorder=1000)
-            ax.plot(tt, tod_no_peak, label="tod_no_peak")
-            ax.plot(tt, mytod_4, label="filtered with peaks added")
-            if simu:
-                ax1_color = "purple"
-                ax1 = ax.twinx()
-                plot_ax1 = np.abs(mytod - mytod_4)/np.abs(mytod)
-                plot_ax1[np.abs(mytod - mytod_4)<1e2] = 0
-                ax1.plot(tt, plot_ax1, c=ax1_color)
-                ax1.set_ylim([0, 1e-1])
-                ax1.set_ylabel("abs(raw - filtered)/abs(raw)\nif abs(raw - filtered)>1e2 else 0", color=ax1_color)
-            ax.legend()
-            fig.tight_layout()
-            # plt.savefig("figures/{}_TES{}_TOD.pdf".format(ObsName, TES_number))
-            plt.show()
+            pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, mytod_4, protected_tod == 1, Tbath=Tbath, T1K=T1K, savefig=True)
         final_tod = mytod_4
 
 
@@ -1208,35 +1193,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             if mask_elt is None:
                 mask_elt = np.ones_like(peaks_detected_, dtype=bool)
 
-            fig, ax = plt.subplots(1, 1, figsize=(15, 8))
-            ax.set_title("{}, TES {}".format(ObsName, TES_number))
-            ax.plot(tt, mytod, label="raw TOD")
-            if Tbath is not None:
-                color_ax1 = "g"
-                ax1 = ax.twinx()
-                ax1.plot(tt, Tbath, c=color_ax1, ls="--")
-                ax1.set_ylabel("Tbath [K]", color=color_ax1)
-                ax1.tick_params(axis='y', labelcolor=color_ax1)
-            if T1K is not None:
-                color_ax2 = "r"
-                ax2 = ax.twinx()
-                ax2.plot(tt, T1K, c=color_ax2, ls="--")
-                ax2.set_ylabel("T1K [K]", color=color_ax2)
-                ax2.tick_params(axis='y', labelcolor=color_ax2)
-                if Tbath is not None:
-                    ax2.spines['right'].set_position(('outward', 100)) # so that ax1 and ax2 yaxis don't collide
-            # plt.scatter(binned_tt, binned_TOD, c="g", label="binned TOD", zorder=1000)
-            # plt.plot(tt, test_tod, label="test_tod")
-            # plt.plot(tt, tod_no_peak, label="TOD no peak")
-            ax.scatter(tt[peaks_detected_ & mask_elt], mytod[peaks_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
-            # plt.plot(tt, mytod_3, label="filtered")
-            ax.plot(tt, mytod_4, label="filtered with peaks added")
-            ax.set_ylabel('Signal [ADU]', color="k")
-            ax.legend()
-            fig.tight_layout()
-            # plt.savefig("figures/TOD_TES_{}.pdf".format(TES_number), dpi=300)
-            plt.savefig("figures/{}_TES{}_TOD.pdf".format(ObsName, TES_number), dpi=150)
-            plt.show()
+            pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, mytod_4, peaks_detected_ & mask_elt, Tbath=Tbath, T1K=T1K, savefig=True)
 
             # fit_lagrange_scans(tt, mytod, scantype)
             # azr
@@ -1345,13 +1302,14 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 mapsb_fb_proj.append(new_mapsb_proj)
 
             if doplot:
-                fig, axs = plt.subplots(1, 3)
+                fig, axs = plt.subplots(1, 3, figsize=(18, 6))
                 axs[0].set_title("forth")
                 axs[0].imshow(mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
-                axs[0].set_title("back")
+                axs[1].set_title("back")
                 axs[1].imshow(mapsb_fb_proj[1], vmin=min_plot, vmax=max_plot)
-                axs[0].set_title("back - forth")
+                axs[2].set_title("back - forth")
                 axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
+                fig.savefig("figures/{}_{}_back-forth_plot.pdf".format(ObsName, TES_number), dpi=150)
                 plt.show()
 
         else:
@@ -1423,7 +1381,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
         # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, xsize=xsize,
         #             title="gaussian map", rot=center)
         hp.gnomview(mapsb, reso=reso, min=-5e3, max=1.2e4, xsize=xsize,
-                    title="final map", rot=center)
+                    title="{}, TES {}".format(ObsName, TES_number), rot=center)
         # hp.gnomview(mapsb, reso=10, xsize=xsize,
         #             title="final map", rot=center)
         if theo_sb is not None: 
@@ -1431,7 +1389,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 # hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
                 #             marker='x', cmap='Reds')
                 hp.projscatter(thetas[i,:], phis[i,:], c="r", 
-                            marker='x')
+                            marker='.')
         # plt.savefig("figures/mapsb.pdf")
         plt.tight_layout()
         plt.savefig("figures/map_TES_{}.pdf".format(TES_number), dpi=300)
@@ -1654,7 +1612,7 @@ class gaussfitgnomproj:
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
         ic = (ic - 1)*1e8 # trick to force curve_fit to do bigger steps (otherwise it stays at initial position)
         jc = (jc - 1)*1e8
-        if ic > self.xs or jc > self.xs: # if we fall outside of map
+        if not 0 < ic < self.xs or  not 0 < jc < self.xs: # if we fall outside of map
             shape_pix_pos = np.shape(self.pix_pos_proj)
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
         centre_pos = self.pix_pos_proj[int(ic), int(jc)] # this is the vector associated with the pixel after proj, but it should be perfectly usable with vectors of pixels before proj
@@ -2420,6 +2378,19 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
 
 
 def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=0, year_data="2022", doplot=False, simu=False):
+    # wrapper that reads data and correct for tshift before separating scans
+
+    # first read data from observation files
+    data_step_one = read_many_files(az_qubic, datadir, year_data)
+
+    # then correct for tshift and separate scans
+    data = compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos, tshift, doplot, simu)
+    return data
+
+
+def read_many_files(az_qubic, datadir=None, tt_=None, year_data="2022"):
+    # we read data from observation files
+
     ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
     FPidentity = pt.make_id_focalplane()
     quadrant = 3
@@ -2440,15 +2411,13 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
 
     tt_full = []
     alltod_full = []
-    azt_full = []
-    elt_full = []
-    newazt_full = []
-    newelt_full = []
-    scantype_full = []
     Tbath_full = []
     T1K_full = []
     ifile_full = []
     tinit = None
+    thk_full = []
+    az_full = []
+    el_full = []
 
     for i, diri in enumerate(datadir):
         print("\nreading file", i, diri)
@@ -2463,7 +2432,6 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
             print("Housekeeping data has less than 20 data points, skipped...")
             continue
         az += az_qubic
-        file_name = str(tt[0])
 
         if tinit is None: # first good file
             tinit = tinit_
@@ -2471,59 +2439,73 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
         else:
             if tinit_ <= tinit:
                 raise ValueError("The initial time {} is smaller than the one from the first file {}. Files might not be sorted well.".format(tinit_, tinit))
-
-        # need to put tt[0] to zero, but be careful of real time
-        tt -= tinit + tshift # tshift seen in plotting back and forth images
-        thk -= tinit
-
-        ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
-        azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
-
-        ### Identify scan types and numbers
-        _, azt, elt, scantype, _ = identify_scans(thk, az, el, 
-                                                tt=tt, doplot=False, 
-                                                plotrange=[tt[0], tt[0] + 2000], 
-                                                thr_speedmin=speedmin)
         
         Tbath = np.interp(tt + tinit, tTbath_hk[0], tTbath_hk[1])
         T1K = np.interp(tt + tinit, tT1K_hk[0], tT1K_hk[1])
 
-        # good solution
-        if simu:
-            boresight_angle = 0 # simus
-        else:
-            boresight_angle = -3.5 # real data
-        print("boresight_angle =", boresight_angle)
-        newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, boresight_angle=boresight_angle, det_pos=det_pos, file_name=file_name) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
-
         tt_full.append(tt)
         alltod_full.append(alltod)
-        azt_full.append(azt)
-        elt_full.append(elt)
-        newazt_full.append(newazt)
-        newelt_full.append(newelt)
-        scantype_full.append(scantype)
         Tbath_full.append(Tbath)
         T1K_full.append(T1K)
         ifile_full.append(np.full_like(tt, i, dtype=int))
+        thk_full.append(thk)
+        az_full.append(az)
+        el_full.append(el)
 
     tt = np.concatenate(tt_full)
     alltod = np.concatenate(alltod_full, axis=1)
-    azt = np.concatenate(azt_full)
-    elt = np.concatenate(elt_full)
-    axis = int(det_pos is not None)
-    newazt = np.concatenate(newazt_full, axis=axis)
-    newelt = np.concatenate(newelt_full, axis=axis)
-    scantype = np.concatenate(scantype_full)
     Tbath = np.concatenate(Tbath_full)
     T1K = np.concatenate(T1K_full)
     ifile = np.concatenate(ifile_full)
+    thk = np.concatenate(thk_full)
+    az = np.concatenate(az_full)
+    el = np.concatenate(el_full)
+
+    # this is the data before correcting for the time shift
+    data_step_one = [tt, tinit, alltod, QPidx, Tbath, T1K, ifile, thk, az, el] # the data that could be useful later in the analysis
+
+    return data_step_one
+
+
+def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshift=0, doplot=False, simu=False):
+    # we correct for tshift and then separate data by scan
+
+    # the concatenated data from the files of the observation
+    tt, tinit, alltod, QPidx, Tbath, T1K, ifile, thk, az, el = data_step_one
+    thk = thk.copy() # we will modify the values in thk otherwise
+    tt = tt.copy()
+
+    # need to put tt[0] to zero, but be careful of real time
+    # tshift seen in plotting back and forth images or with the Earth magnetic field. In the second case, tshift has shape (len(tt),)
+    if np.shape(tshift):
+        # tshift_ = np.interp(thk - tinit, tt_, tshift)
+        tshift_ = np.interp(thk, tt, tshift) # let's use tt because it's the same as tt_ but with tinit
+        # tshift_ = np.interp(tt - tinit, tt_, tshift)
+    else:
+        tshift_ = tshift
+    tt -= tinit #+ tshift_
+    thk -= tinit - tshift_ # now correcting the thk instead of tt because we trust more tt
+
+    ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
+    azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+
+    ### Identify scan types and numbers
+    _, azt, elt, scantype, _ = identify_scans(thk, az, el, 
+                                            tt=tt, doplot=False, 
+                                            plotrange=[tt[0], tt[0] + 2000], 
+                                            thr_speedmin=speedmin)
+    # good solution
+    if simu:
+        boresight_angle = 0 # simus
+    else:
+        boresight_angle = -3.5 #-3.5 # real data
+    print("boresight_angle =", boresight_angle)
+    newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, boresight_angle=boresight_angle, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
 
     print("shape scantype", np.shape(scantype))
     print("shape newazt", np.shape(newazt))
-    data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile] # the data that could be useful later in the analysis
+    data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile, thk, az, el] # the data that could be useful later in the analysis
     if doplot and det_pos is None:
-        azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
         fig, axs = plt.subplots(1, 2)
         axs[0].set_title("az")
         axs[0].plot(tt, azt, c="b", label="azt")
@@ -2548,14 +2530,14 @@ def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadi
     allnewazt, allnewelt = get_new_azel_v5(azt, elt, azmoon, elmoon, det_pos)
     return tt, tinit, alltod, QPidx, azt, elt, allnewazt, allnewelt, scantype, Tbath
 
-def make_coadded_maps(datadir, ObsSite, allTESNum, data=None, speedmin=0.05, tshift=0,
-                      doplot=True, nside=256, az_qubic=0, parallel=False, check_back_forth=False,
+def make_coadded_maps(allTESNum, data=None,
+                      doplot=True, nside=256, parallel=False, check_back_forth=False,
                       isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsName=None,
                       new_method_clean=False, theo_sb=None, more=""):
     
     ObsDate = ObsName[:10]
     
-    tt, tinit, alltod, QPidx, azt, elt, newazt_, newelt_, scantype, Tbath, T1K, ifile = data
+    tt, tinit, alltod, _, azt, elt, newazt_, newelt_, scantype, Tbath, T1K, ifile, _, _, _ = data
     if tinit < 1774994400: # before the 01/04/2026 (might not be the best date)
         # the first data points are the telescope going to start position
         nskip = 10000
@@ -2720,7 +2702,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
     el : np.array()
             elevation in degrees at the housekeeping sampling rate
     tt : Optional : np.array()
-            None buy default, if not None:
+            None by default, if not None:
             time samples (seconds) at the TOD sampling rate
             Then. the output will also containe az,el and scantype interpolated at TOD sampling rate
     thr_speedmin : Optional : float
@@ -2742,16 +2724,11 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
             same as scantype_hk, but interpolated at TOD sampling rate
     """
 
-    def get_az_vel(time, azimuth, order=2): # get the angular azimuth velocity
-        az_vel = np.zeros(len(time))
-        az_vel[:order] = (azimuth[1:order + 1] - azimuth[:order])/(time[1:order + 1] - time[:order])
-        az_vel[-order:] = (azimuth[-order:] - azimuth[-order - 1:-1])/(time[-order:] - time[-order - 1:-1])
-        dt_ = time[2*order:] - time[:-2*order]
-        az_vel[order:-order] = (azimuth[2*order:] - azimuth[:-2*order])/dt_
-        return az_vel
-    # medaz_dt_ = get_az_vel(thk, az, order=50) # high order necessary to remove glitches
+    # medaz_dt_ = get_vel(thk, az, order=50) # high order necessary to remove glitches
     # medaz_dt = medfilt(medaz_dt_, median_size)
-    medaz_dt_ = get_az_vel(thk, az, order=10)
+    fs = np.median(thk[1:] - thk[:-1]) # sampling frequency
+    order = int(1/fs) # ~1s # interval in points usde to compute slope
+    medaz_dt_ = get_vel(thk, az, order=order)
     medaz_dt = medaz_dt_
     
     if doplot:
@@ -2766,7 +2743,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
         plt.xlim(plotrange[0],plotrange[1])
         plt.show()
     ### Identify regions of change
-    # Low velocity -> Bad
+    # Low velocity => Bad
     c0 = np.abs(medaz_dt) < thr_speedmin
     # Positive velicity => Good
     cpos = (~c0) * (medaz_dt >= 0)
@@ -2774,7 +2751,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
     cneg = (~c0) * (medaz_dt < 0)
 
     ### Scan identification at HK sampling
-    scantype_hk = np.zeros(len(thk), dtype='int')-10
+    scantype_hk = np.zeros(len(thk), dtype='int') - 10
     scantype_hk[c0] = 0
     scantype_hk[cpos] = 1
     scantype_hk[cneg] = -1
@@ -2801,14 +2778,12 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
         ### Some plotting (a lot), moved to other file not to take too much space here
         pmp.plots_identify_scans(thk, plotrange, az, medaz_dt, c0, cpos, cneg, dead_time, el, scantype_hk)
 
-        
-
     vmean = 0.5 * (np.abs(np.mean(medaz_dt[cpos])) +  np.abs(np.mean(medaz_dt[cneg])))
     if tt is not None:
         ### We propagate these at TOD sampling rate  (this is an "step interpolation": we do not want intermediatee values")
         scantype = interp1d(thk, scantype_hk, kind='previous', fill_value='extrapolate')(tt)
         scantype = scantype.astype(int)
-        count_them = np.sum(scantype==0) + np.sum(scantype<=-1) + np.sum(scantype>=1)
+        count_them = np.sum(scantype == 0) + np.sum(scantype <= -1) + np.sum(scantype >= 1)
         if count_them != len(scantype):
             ValueError('Bad Scan counting at data sampling level - Error')
         ### Interpolate azimuth and elevation to TOD sampling
@@ -2840,6 +2815,9 @@ def get_DBscan_res(x_fit, y_fit, x_theo, y_theo, x_err, y_err, FWHM, errFWHM, vi
     err_delta_el = y_err
 
     params_dbscan = np.array([delta_az, delta_el, err_delta_az, err_delta_el, FWHM, errFWHM]).T
+    not_finite = ~np.isfinite(params_dbscan)
+    params_dbscan[not_finite] = np.random.randint(low=1e5, high=1e6, size=len(params_dbscan[not_finite])) # get rid of NaN and inf
+    print(np.min(params_dbscan), np.max(params_dbscan))
     rng_nan = np.random.default_rng(seed=12345)
     params_dbscan[np.isnan(params_dbscan)] = rng_nan.uniform(low=1, high=2, size=(len(params_dbscan[np.isnan(params_dbscan)]),)) * 1e8
 
@@ -3340,7 +3318,7 @@ def get_perp_vect_horiz_great_circle(azimuth, elevation, sphere_centre=np.array(
 #     return R
 
 
-def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, det_pos=None, file_name=None):
+def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, det_pos=None):
     """
     This function computes the coorinates of a point or an array of points with respect to a
     given source, taking the source as the zenith of the new coordinates system.
@@ -3361,21 +3339,6 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
         The coordinates of the array of points in the new system.
 
     """
-    dir_files = "azt_elt_files/"
-    if det_pos is not None and file_name is not None and False:
-        try:
-            azt_zen = np.load(dir_files + "azt_zen_{}.npy".format(file_name))
-            elt_zen = np.load(dir_files + "elt_zen_{}.npy".format(file_name))
-            print(np.shape(azt_zen))
-            print(np.shape(elt_zen))
-            if np.any(np.array(np.shape(azt_zen)) == len(azt)):
-                return azt_zen, elt_zen
-            else:
-                print("The shape of azt_zen retrieved from azt_zen_{}.npy ({}) doens't correspond to azt shape ({}).".format(file_name, np.shape(azt_zen), np.shape(azt)))
-        except:
-            print("Didn't find one of the following files: '{}' and/or '{}'".format("azt_zen_{}.npy".format(file_name), "elt_zen_{}.npy".format(file_name)))
-            # pass
-
     # az_source and el_source need to be either np.float_ or np.array
     sphere_radius = 1
     sphere_centre = np.array([0, 0, 0])
@@ -3555,11 +3518,6 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
         
     # _, azt_zen, elt_zen = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
 
-    print("final shape", np.shape(azt_zen))
-    if det_pos is not None and file_name is not None:
-        np.save(dir_files + "azt_zen_{}.npy".format(file_name), azt_zen)
-        np.save(dir_files + "elt_zen_{}.npy".format(file_name), elt_zen)
-        print("saved {}".format(file_name), flush=True)
     return azt_zen, elt_zen
 
 # in this method, instead of correcting the azimuth to conserve the angle to the meridian at casource azimuth,
@@ -3879,7 +3837,14 @@ def insensitive_glob(pattern): # glob.glob but insensitive to case
         return f'[{c.lower()}{c.upper()}]' if c.isalpha() else c
     return glob.glob(''.join(map(either, pattern)))
 
-def observation_dirs_(ObsDate, rise_or_set, datadir, min_el=15, max_el=85):
+def find_sign_change(x, y):
+    sign_ = y[:-1]*y[1:] # the only negative values are when the sign changes
+    sign_change = np.zeros_like(y, dtype=bool) # to keep the same number of points as y
+    sign_change[:-1] = sign_ <= 0 # the zero case has to be taken into account even if unlikely
+    where_change = np.nonzero(sign_change)[0] #np.argwhere(sign_change)
+    return where_change
+
+def observation_dirs(ObsDate, rise_or_set, datadir):
     """Function that returns the folders containing the chosen observation.
 
     It uses astropy to find the folders using the start date and Moon rising
@@ -3900,8 +3865,24 @@ def observation_dirs_(ObsDate, rise_or_set, datadir, min_el=15, max_el=85):
     Returns
     -------
     datafiles: numpy 1D array
-        The array containing the paths to the data files.
+        The array containing the paths to the data files of the observation.
     """
+
+    # all datasets:
+    # july 2026
+    # ["2026-07-23_rise",
+    # "2026-07-24_set", "2026-07-24_rise",
+    # "2026-07-25_set", "2026-07-25_rise",
+    # "2026-07-26_set", "2026-07-26_rise",
+    # "2026-07-27_set", "2026-07-27_rise",
+    # "2026-07-28_set", "2026-07-28_rise",
+    # "2026-07-29_set"]
+    # august 2026
+    # ["2026-08-25_rise",
+    # "2026-08-26_set", "2026-08-26_rise",
+    # "2026-08-27_set", "2026-08-27_rise",
+    # "2026-08-28_set", "2026-08-28_rise",
+    # "2026-08-29_set"]
 
     LaPuna_QUBIC = {"lat":-24.186583*u.deg,
                 "lon":-66.478*u.deg,
@@ -3910,11 +3891,9 @@ def observation_dirs_(ObsDate, rise_or_set, datadir, min_el=15, max_el=85):
     ObsSite = LaPuna_QUBIC
     
     ObsSite = EarthLocation(lat=ObsSite["lat"], lon=ObsSite["lon"], height=ObsSite["height"])
-    ####utcoffset = -3*u.hour  # Eastern Daylight Time
 
     # from the beginning of the day and for 48 hours
     tinit = Time(ObsDate + "T00:00:00", format='isot', scale='utc')
-    print("tinit", tinit)
     two_days = tinit + np.arange(86400 * 2)*u.second # every second
 
     ### Moon
@@ -3926,16 +3905,7 @@ def observation_dirs_(ObsDate, rise_or_set, datadir, min_el=15, max_el=85):
 
 
     ### we find the elevation extrema in order to separate Moon rising and setting
-
-    def get_az_vel(time, azimuth, order=2): # get the angular azimuth velocity
-        az_vel = np.zeros(len(time))
-        az_vel[:order] = (azimuth[1:order + 1] - azimuth[:order])/(time[1:order + 1] - time[:order])
-        az_vel[-order:] = (azimuth[-order:] - azimuth[-order - 1:-1])/(time[-order:] - time[-order - 1:-1])
-        dt_ = time[2*order:] - time[:-2*order]
-        az_vel[order:-order] = (azimuth[2*order:] - azimuth[:-2*order])/dt_
-        return az_vel
-    
-    el_vel = get_az_vel(two_days, moon_el, order=2)
+    el_vel = get_vel(two_days, moon_el, order=2)
     sign_ = el_vel[:-1]*el_vel[1:] # the only negative values are when the sign changes
     sign_change = np.zeros_like(el_vel, dtype=bool) # to keep the same number of points as el_vel
     sign_change[:-1] = sign_ <= 0 # the zero case has to be taken into account even if unlikely
@@ -3957,18 +3927,6 @@ def observation_dirs_(ObsDate, rise_or_set, datadir, min_el=15, max_el=85):
 
     extrem_time_unix = get_extremum(two_days_unix[where_change], el_vel[where_change], two_days_unix[where_change + 1], el_vel[where_change + 1])
 
-    # plt.figure()
-    # plt.plot(two_days_unix, moon_el)
-    # for extr_t in extrem_time_unix:
-    #     plt.axvline(x=extr_t, c="r")
-    # plt.show()
-
-    # plt.figure()
-    # plt.plot(two_days_unix, el_vel)
-    # for extr_t in extrem_time_unix:
-    #     plt.axvline(x=extr_t, c="r")
-    # plt.show()
-
     # we get all the files
     alldirs = np.array(insensitive_glob(datadir + '/*/*moon*')) # might not be clever when the number of datasets reaches a great number
     allnames = [dir.split(os.sep)[-1] for dir in alldirs] # the name of the files
@@ -3980,98 +3938,12 @@ def observation_dirs_(ObsDate, rise_or_set, datadir, min_el=15, max_el=85):
 
     # we select the files between the two extrema
     first_extr = int(np.argwhere(order == rise_or_set)) # the extremum index just before the start of the acquisition
+    # first_extr = np.nonzero(order == rise_or_set) # the extremum index just before the start of the acquisition
     selection = np.logical_and(extrem_time_unix[first_extr] < alldates_unix, alldates_unix < extrem_time_unix[first_extr + 1])
     selected_files = alldirs[selection]
 
     print(selected_files)
     return selected_files
-
-def observation_dirs(ObsDate, datadir, rise_or_set=None):
-
-    year_data = ObsDate[:4]
-    recent_obs = ["2026-05-03", "2026-05-04", "2026-05-05", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26"]
-                  
-    july_2026 = ["2026-07-23", "2026-07-24", "2026-07-25", "2026-07-26", "2026-07-27", "2026-07-28", "2026-07-29"]
-
-    august_2026 = ["2026-08-25", "2026-08-26", "2026-08-27"]
-    
-    if year_data == "2022":
-        dirs = glob.glob(datadir + ObsDate + '/*')
-    else:
-        # dirs = glob.glob(datadir + ObsDate + '/*')
-        # dirs = glob.glob(datadir + ObsDate + '/*Moon_instrument_not_quite_ready')
-        # dirs = glob.glob(datadir + ObsDate + '/2026-03-11_06.45.41__Moon_instrument_not_quite_ready')
-        # dirs = glob.glob(datadir + ObsDate + '/2026-03-11_06.46.21__Moon_instrument_not_quite_ready')
-        # dirs = glob.glob(datadir + ObsDate + '/2026-03-11_15.39.59__Moon_el30')
-        # dirs = glob.glob(datadir + ObsDate + "/*Moon_el60")
-        # dirs = glob.glob(datadir + ObsDate + "/2026-03-11_07.58.25__Moon_el60")
-        if ObsDate == "2026-03-13":
-            dirs = glob.glob(datadir + ObsDate + "/*Moon")
-        # dirs = glob.glob(datadir + ObsDate + "/*07.54.24__Moon")
-        if ObsDate in recent_obs:
-            dirs = glob.glob(datadir + ObsDate + "/*moon_scans")
-        obs_group = None
-        if ObsDate in july_2026:
-            obs_group = july_2026
-            obs_group_name = "july_2026"
-            observation_sep = [0, 21, 42, 64, 86, 108, 130, 152, 174, 195, 216, 237, 257] # index of the first file of each observation
-            observations = ["2026-07-23_rise",
-                            "2026-07-24_set", "2026-07-24_rise",
-                            "2026-07-25_set", "2026-07-25_rise",
-                            "2026-07-26_set", "2026-07-26_rise",
-                            "2026-07-27_set", "2026-07-27_rise",
-                            "2026-07-28_set", "2026-07-28_rise",
-                            "2026-07-29_set"]
-        elif ObsDate in august_2026:
-            obs_group = august_2026
-            obs_group_name = "august_2026"
-            observation_sep = [0, 22, 44, 64, 86, 108, 130, 152, 174, 195, 216, 237, 257] # index of the first file of each observation
-            observations = ["2026-08-25_rise",
-                            "2026-08-26_set", "2026-08-26_rise",
-                            "2026-08-27_set", "2026-08-27_rise",
-                            "2026-08-28_set", "2026-08-28_rise",
-                            "2026-08-29_set"]
-        if obs_group is not None:
-            i_obs = observations.index(ObsDate + "_" + rise_or_set)
-            dirs = []
-            for date in obs_group:
-                dirs.append(glob.glob(datadir + date + "/*moon_scans"))
-            dirs = np.concatenate(dirs)
-            dirs.sort()
-            print("Found {} files in the '{}' group of observations.".format(len(dirs), obs_group_name))
-            datafiles = dirs[observation_sep[i_obs]:observation_sep[i_obs + 1]]
-            return datafiles
-    # print(dirs)
-    dirs.sort()
-    if ObsDate == "2026-03-13":
-        i_file = 1 # only #1 works for 2026-03-13
-        datafiles = [dirs[i_file]]
-    if ObsDate == "2026-06-24":
-        if rise_or_set == "set":
-            datafiles = dirs[:16]
-        elif rise_or_set == "rise":
-            datafiles = dirs[16:]
-    elif ObsDate == "2026-05-03":
-        if rise_or_set == "set": # not really rise nor set? let's try
-            datafiles = dirs[:45]
-        elif rise_or_set == "rise":
-            datafiles = dirs[45:]
-    # elif ObsDate == "2026-07-24":
-    #     if rise_or_set == "set":
-    #         datafiles = dirs[:21]
-    #     elif rise_or_set == "rise":
-    #         datafiles = dirs[21:]
-    # elif ObsDate == "2026-07-25": # this method is bad, I could list all files and choose from them?
-    #     if rise_or_set == "set":
-    #         datafiles = dirs[:21]
-    #     elif rise_or_set == "rise":
-    #         datafiles = dirs[21:]
-    elif ObsDate in recent_obs:
-        datafiles = dirs
-    print(datafiles)
-    
-    return datafiles
-
 
 def do_aperture_photometry(map_in, rot, reso): # not tested
     """
@@ -4167,3 +4039,34 @@ def do_aperture_photometry_advanced(map_in, theo_sb, rot, reso, const_el=False):
     # sky_emission_error = 1.2533 * np.std(data_aperture) / np.sum(area_aperture_photo)
 
     return sky_emission, sky_emission_error
+
+
+def check_tshift_live(ObsDate, azqubic, Obs_Site, speedmin, datadir):
+    """Function to check for a possible shift between science time and mount
+    time by comparing the azel positions of the telescope with the variations
+    of the signal measured by a TES strongly responsive to the Earth magnetic
+    field.
+
+    For now, TES 128 is chosen because it seems to be a blind TES with a squid
+    strongly correlated to the Earth magnetic field.
+    """
+
+    # we need to read the data in the function to be sure the tshift used is zero?
+    data_TOD = format_data(azqubic, Obs_Site, speedmin, datadir=datadir, tshift=0,
+                           year_data=ObsDate[:4],
+                           det_pos=None,
+                           doplot=True)
+    # the data we need is all here
+    tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile = data_TOD
+
+    TESNum = 128 # TES 128 is blind and responsive to the Earth magnitic field
+    iTES = TESNum - 1
+
+    tod = alltod[iTES, :]
+
+    plt.figure()
+    plt.plot(tt, azt)
+    plt.plot(tt, elt)
+    plt.plot(tt, tod)
+    plt.show()
+    azet

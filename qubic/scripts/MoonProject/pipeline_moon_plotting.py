@@ -332,3 +332,31 @@ def plots_identify_scans(thk, plotrange, az, medaz_dt, c0, cpos, cneg, dead_time
     #plt.tight_layout()
     # sys.exit()
     plt.show()
+
+
+def plot_tod_filtering(ObsName, TES_number, tt, tod, tod_filtered, peaks, Tbath=None, T1K=None, savefig=False):
+    fig, ax = plt.subplots(1, 1, figsize=(15, 8))
+    ax.set_title("{}, TES {}".format(ObsName, TES_number))
+    ax.plot(tt, tod, label="raw TOD")
+    if Tbath is not None:
+        color_ax1 = "g"
+        ax1 = ax.twinx()
+        ax1.plot(tt, Tbath, c=color_ax1, ls="--")
+        ax1.set_ylabel("Tbath [K]", color=color_ax1)
+        ax1.tick_params(axis='y', labelcolor=color_ax1)
+    if T1K is not None:
+        color_ax2 = "r"
+        ax2 = ax.twinx()
+        ax2.plot(tt, T1K, c=color_ax2, ls="--")
+        ax2.set_ylabel("T1K [K]", color=color_ax2)
+        ax2.tick_params(axis='y', labelcolor=color_ax2)
+        if Tbath is not None:
+            ax2.spines['right'].set_position(('outward', 100)) # so that ax1 and ax2 yaxis don't collide
+    ax.scatter(tt[peaks], tod[peaks], c="r", label="peaks_detected", zorder=1000)
+    ax.plot(tt, tod_filtered, label="filtered with peaks added")
+    ax.set_ylabel('Signal [ADU]', color="k")
+    ax.legend()
+    fig.tight_layout()
+    if savefig:
+        plt.savefig("figures/{}_TES{}_TOD.pdf".format(ObsName, TES_number), dpi=150)
+    plt.show()

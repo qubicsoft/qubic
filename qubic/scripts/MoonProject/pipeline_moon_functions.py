@@ -26,7 +26,6 @@ from iminuit.cost import LeastSquares
 ### General imports
 from joblib import Parallel, delayed
 from multiprocessing import Manager, Lock
-from scipy.signal import medfilt
 
 ### Astropy configuration
 from astropy.visualization import quantity_support
@@ -37,11 +36,9 @@ from astropy.coordinates import EarthLocation, AltAz, get_moon, get_body
 
 #### QUBIC IMPORT
 import qubicpack as qp
-from qubicpack.pix2tes import tes2pix
 from qubicpack.qubicfp import qubicfp
 import qubicpack.pixel_translation as pt
 import qubic.lib.Calibration.Qfiber as ft
-from qubicpack.pointing import read_pointing_bindat
 
 from qubic.lib import Qdictionary
 from qubic.lib.Instrument import Qacquisition
@@ -49,13 +46,6 @@ from qubic.lib.Instrument import Qacquisition
 import pipeline_moon_plotting as pmp
 
 #########################
-
-from qubic.lib.Qbeams import BeamFitted, BeamGaussian, MultiFreqBeam
-from qubic.lib.Calibration.Qcalibration import QubicCalibration
-from qubic.lib.Qripples import BeamGaussianRippled, ConvolutionRippledGaussianOperator
-from qubic.lib.Qutilities import _compress_mask
-from qubic.lib.Instrument.Qinstrument import SyntheticBeam
-from qubic.lib.Qsamplings import hor2equ
 
 from qubic.lib.Qdictionary import qubicDict
 from qubic.lib.Instrument.Qinstrument import QubicMultibandInstrument
@@ -74,13 +64,6 @@ AU_meters = 149597870700 # m
 # plt.style.use('default')
 
 #########################
-
-# def timer(f, *args):
-#     starttime = time.time()
-#     result = f(*args)
-#     result = jax.block_until_ready(result) # ensure the result is done running for timing purposes
-#     endtime = time.time()
-#     return endtime - starttime
 
 def centre_coord_at_0(coord):
     return np.mod(coord - 180, 360) - 180
@@ -150,7 +133,7 @@ mean_2d_bin_data_jitted = mean_2d_bin_data
 #########################
 
 # trying to build only patch instead of full map?
-def healpix_patch(azt, elt, tod, nside, countcut=0, unseen_val=hp.UNSEEN): # , vec_centre, radius=25
+def healpix_patch(azt, elt, tod, nside): # , vec_centre, radius=25
     # good_pix = hp.query_disc(nside, vec_centre, np.radians(radius))
     cell_ids = hp.ang2pix(nside, azt, elt, lonlat=True)
     df_pix = pd.DataFrame(tod).groupby(cell_ids)
@@ -161,20 +144,6 @@ def healpix_patch(azt, elt, tod, nside, countcut=0, unseen_val=hp.UNSEEN): # , v
     cell_ids = np.array((pd.DataFrame(cell_ids).groupby(cell_ids))[0].mean()).astype(int)
     print("cell_ids", cell_ids)
     return patch, hitcount, cell_ids
-
-
-def healpix_patch_(azt, elt, tod, nside, countcut=0, unseen_val=hp.UNSEEN):
-    ips = hp.ang2pix(nside, azt, elt, lonlat=True)
-    mymap = np.zeros(12*nside**2)
-    mapcount = np.zeros(12*nside**2)
-    for i in range(len(azt)):
-        mymap[ips[i]] += tod[i]
-        mapcount[ips[i]] += 1
-    unseen = mapcount <= countcut
-    mymap[unseen] = unseen_val
-    mapcount[unseen] = unseen_val
-    mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
-    return mymap, mapcount
 
 
 def healpix_map(azt, elt, tod, flags=None, flaglimit=0, nside=128, countcut=0, unseen_val=hp.UNSEEN):
@@ -231,118 +200,6 @@ def get_vel(time, position, order=2):
     dt_ = time[2*order:] - time[:-2*order]
     vel[order:-order] = (position[2*order:] - position[:-2*order])/dt_
     return vel
-
-
-
-def sparse_2d_to_fullmap(mymap, ipos_grid, jpos_grid):
-    # time_0 = time.time()
-    # mymap_2 = mymap**2
-    # mymap_OK = (np.isfinite(mymap)) & (mymap_2 > 1e-5*np.max(np.isfinite(mymap_2)))
-    mymap_OK = np.isfinite(mymap)
-    # mymap_OK = mymap != 0
-    # mymap_OK = np.ascontiguousarray(mymap_OK_[:])
-    # mymap_OK = jax.block_until_ready(mymap_OK) # ensure the result is done running for timing purposes
-    # time_1 = time.time()
-    # print("elated time in = {}".format(time_1 - time_0))
-
-    # Ni, Nj = np.shape(ipos_grid)
-    # plt.figure()
-    # plt.imshow(mymap.reshape(Ni, Nj))
-    # plt.show()
-
-    # 2D interpolation
-    # interp = LinearNDInterpolator(list(zip(np.ravel(ipos_grid)[mymap_OK], np.ravel(jpos_grid)[mymap_OK])), mymap[mymap_OK], fill_value=0)
-    interp = LinearNDInterpolator(list(zip((ipos_grid).reshape(-1)[mymap_OK], (jpos_grid).reshape(-1)[mymap_OK])), mymap[mymap_OK], fill_value=0)
-    # time_2 = time.time()
-    # print("elated time in = {}".format(time_2 - time_1))
-    mymap_interp = interp(ipos_grid, jpos_grid)
-    # time_3 = time.time()
-    # print("elated time in = {}".format(time_3 - time_2))
-
-    # hp.gnomview result puts a decreasing azt as j coord
-    mymap_interp = np.flip(mymap_interp, axis=1)
-    # time_4 = time.time()
-    # print("elated time in = {}".format(time_4 - time_3))
-
-    # plt.figure()
-    # img = plt.imshow(mymap_interp)
-    # plt.colorbar(img)
-    # plt.show()
-    # sys.exit()
-    return mymap_interp
-
-# def TOD_to_flat_map(azt, elt, vals, img_azt, img_elt):
-def TOD_to_flat_map(ipos, jpos, vals, ipos_img, jpos_img):
-    """
-    Create a flat (Ni, Nj) map from fake TOD created from a flat map (in order to skip the HEALPix stage).
-    It is the invert of img_to_TOD.
-    ipos, jpos: arrays (n)
-        Positions of TOD n points in i and j directions
-    vals: array (n)
-        Values of TOD n points
-    ipos_img: array (Ni)
-        Positions of image Ni points in i direction
-    jpos_img: array (Nj)
-        Positions of image Nj points in j direction
-    """
-
-    coord = [ipos, jpos]
-    Ni = len(ipos_img)
-    Nj = len(jpos_img)
-    img_coord = [ipos_img, jpos_img]
-    min_coord = np.min(img_coord)
-    max_coord = np.max(img_coord)
-    Npix = [Ni, Nj]
-
-    i_range = np.linspace(min_coord, max_coord, Ni)
-    j_range = np.linspace(min_coord, max_coord, Nj)
-    ipos_grid, jpos_grid = np.meshgrid(i_range, j_range, indexing="ij")
-
-    azel_pixsize = []
-    azel_bin = []
-    for k in range(len(coord)):
-        azel_pixsize.append((min_coord - max_coord)/(Npix[k] - 1)) # There are Npix - 1 pixels between the center of the left-most and the center of the right-most pixels
-        azel_bin.append(np.linspace(min_coord - azel_pixsize[k]/2, max_coord + azel_pixsize[k]/2, Npix[k] + 1)) # Edges of pixels
-    
-    # Le code prend plus de temps qu'avant ??
-
-    # time_0 = time.time()
-    # timer(mean_bin_data_nd, coord, vals, azel_bin)
-    # # timer(mean_2d_bin_data, coord, vals, azel_bin)
-    # timer(mean_2d_bin_data_jitted, coord, vals, azel_bin)
-    # sys.exit()
-    mymap = mean_bin_data_nd(pos=coord, values=vals, bins=azel_bin)#.reshape(Ni, Nj)
-    # mymap = np.ravel(mean_2d_bin_data(pos=coord, values=vals, bins=azel_bin))#.reshape(Ni, Nj)
-    # mymap = mean_2d_bin_data_jitted(pos=coord, values=vals, bins=azel_bin).reshape(-1)
-    # mymap = jax.block_until_ready(mymap) # ensure the result is done running for timing purposes
-    # time_0_0 = time.time()
-    # print("elated time = {}".format(time_0_0 - time_0))
-    # mymap = mean_2d_bin_data_jitted(pos=coord, values=vals, bins=azel_bin)
-    # mymap = mean_2d_bin_data(pos=coord, values=vals, bins=azel_bin)
-    # mymap = mymap.reshape(-1)
-    # mymap_ = np.ravel(mymap_)
-    # mymap = jax.block_until_ready(mymap) # ensure the result is done running for timing purposes
-    # time_1 = time.time()
-    # print("elated time = {}".format(time_1 - time_0_0))
-    # sys.exit()
-
-    # mymap_interp_test = sparse_2d_to_fullmap(mymap_test, ipos_grid, jpos_grid)
-    mymap_interp = sparse_2d_to_fullmap(mymap, ipos_grid, jpos_grid)
-
-    # time_2 = time.time()
-    # print("elated time = {}".format(time_2 - time_1))
-
-    # print("total time = {}".format(time_2 - time_0))
-
-    # plt.figure()
-    # img = plt.imshow(mymap_interp - mymap_interp_test)
-    # plt.colorbar(img)
-    # plt.show()
-
-    # sys.exit()
-
-    return mymap_interp
-
 
 #######################
 
@@ -413,43 +270,11 @@ def cartesian2spherical(x, y, z, coord="spherical", axis="first"):
     else:
         raise ValueError("Argument axis = {} not understood.".format(axis))
 
-# def get_perp_vect(point_A, point_B, point_C): # get the vector perpendicular to the plane with these three points
-#     if len(np.shape(point_A)) == 2:
-#         vec_1 = (point_A - point_C[:, None])
-#     else:
-#         vec_1 = (point_A - point_C)
-#     if len(np.shape(point_B)) == 2:
-#         vec_2 = (point_B - point_C[:, None])
-#         if len(np.shape(point_A)) == 2:
-#             res_nonorm = np.cross(vec_1, vec_2, axis=0)
-#         else:
-#             res_nonorm = np.cross(vec_1[:, None], vec_2, axis=0)
-#     else:
-#         vec_2 = (point_B - point_C)
-#         if len(np.shape(point_A)) != 1:
-#             raise ValueError("Not the right shape for point_A")
-#         res_nonorm = np.cross(vec_1, vec_2, axis=0)
-#     print("shapes vec_1, vec_2, res_nonorm")
-#     print(np.shape(vec_1))
-#     print(np.shape(vec_2))
-#     print(np.shape(res_nonorm))
-#     return res_nonorm/np.linalg.norm(res_nonorm, axis=0)
-
 def get_perp_vect(point_A, point_B, point_C): # get the vector perpendicular to the plane with these three points of shape (3, ...)
-    # print("np.shape(point_A)", np.shape(point_A), flush=True)
-    # print("np.shape(point_B)", np.shape(point_B), flush=True)
-    # print("np.shape(point_C)", np.shape(point_C), flush=True)
-    vec_1 = point_A - match_shape(point_C, point_A.shape)
-    # print("np.shape(vec_1)", np.shape(vec_1), flush=True)
-    vec_2 = point_B - match_shape(point_C, point_B.shape)
-    # print("np.shape(vec_2)", np.shape(vec_2), flush=True)
+    vec_1 = point_A - match_shape(point_C, point_A.shape) # vec_1 = CA
+    vec_2 = point_B - match_shape(point_C, point_B.shape) # vec_2 = CB
     vec_2 = match_shape(vec_2, np.shape(vec_1))
-    # print("np.shape(vec_2)", np.shape(vec_2), flush=True)
     res_nonorm = np.cross(vec_1, vec_2, axis=0)
-    # print("shapes vec_1, vec_2, res_nonorm")
-    # print(np.shape(vec_1))
-    # print(np.shape(vec_2))
-    # print(np.shape(res_nonorm))
     return res_nonorm/np.linalg.norm(res_nonorm, axis=0)
 
 def get_plane(point_A, point_B, point_C, offset=0): # plane equation ax + by + cz + d = 0
@@ -504,95 +329,6 @@ def get_simple_rotation_matrix(axis, angle):
     return R
 
 
-def get_new_azel_v2(azt, elt, azmoon, elmoon): # 2 rotations
-    rho_sphere = 1
-    moon_sph = np.radians(np.array([90 - elmoon, azmoon]))
-    moon_pos = spherical2cartesian(rho_sphere, moon_sph[0], moon_sph[1])
-    los_sph = np.radians(np.array([90 - elt, azt]))
-    los_pos = spherical2cartesian(rho_sphere, los_sph[0], los_sph[1])
-
-    # rho, theta, phi = cartesian2spherical(moon_pos[0], moon_pos[1], moon_pos[2])
-    # print(np.all(np.isclose(rho, 1)))
-    # rho, theta, phi = cartesian2spherical(los_pos[0], los_pos[1], los_pos[2])
-    # print(np.all(np.isclose(rho, 1)))
-
-    # target_pos = np.array([rho_sphere, 0, 0])
-    # rotation_matrix = get_rotation_matrix(moon_pos, target_pos) # doesn't keep elevation ~parallel to xOy, so problem
-
-    ### instead do two consecutive rotations: around Oz, then Oy!
-    # n_time = len(azt)
-    # # target_pos1 = np.array([np.sqrt(rho_sphere**2 - moon_pos[2]**2), np.zeros(n_time), moon_pos[2]]) # find the x at which y=0, z=0
-    # # rotation_matrix1 = get_rotation_matrix(moon_pos, target_pos1)
-    # angle_start = np.arctan2(moon_pos[1], moon_pos[0])
-    # start_pos = np.array([rho_sphere * np.cos(angle_start), rho_sphere * np.sin(angle_start), np.zeros(n_time)])
-    # target_pos1 = np.array([rho_sphere, 0, 0])
-    # rotation_matrix1 = get_rotation_matrix(start_pos, target_pos1)
-    # moon_pos2 =  np.einsum("il,ikl->kl", moon_pos, rotation_matrix1)
-    # target_pos2 = np.array([rho_sphere, 0, 0])
-    # rotation_matrix2 = get_rotation_matrix(moon_pos2, target_pos2)
-
-    ### simpler code
-    rotation_matrix1 = get_simple_rotation_matrix("z", np.radians(azmoon))
-    rotation_matrix2 = get_simple_rotation_matrix("y", np.radians(-elmoon))
-
-    ### the last axis of both arrays becomes the first one in order to use np.dot
-    # los_pos = np.moveaxis(los_pos, -1, 0)
-    # rotation_matrix = np.moveaxis(rotation_matrix, -1, 0)
-    # new_los_pos = np.dot(los_pos, rotation_matrix) # crashes
-    # new_los_pos = np.vecmat(los_pos, rotation_matrix) # not yet in numpy 1.26...
-    print("shape los_sph", np.shape(los_pos))
-    # print("shape rotation_matrix", np.shape(rotation_matrix))
-    # new_los_pos = np.einsum("il,ikl->kl", los_pos, rotation_matrix) # computation working!
-    print("shape rotation_matrix", np.shape(rotation_matrix1), np.shape(rotation_matrix2))
-    new_los_pos = np.einsum("il,ikl->kl", los_pos, rotation_matrix1)
-    new_los_pos = np.einsum("il,ikl->kl", new_los_pos, rotation_matrix2)
-
-    ### to see if we get always (0, 0, 0) for the Moon positions
-    for i in range(3):
-        print(moon_pos[i])
-    new_moon_pos = np.einsum("il,ikl->kl", moon_pos, rotation_matrix1)
-    print("First rotation")
-    for i in range(3):
-        print(new_moon_pos[i])
-    new_moon_pos = np.einsum("il,ikl->kl", new_moon_pos, rotation_matrix2)
-    print("Second rotation")
-    for i in range(3):
-        print(new_moon_pos[i])
-    print(np.allclose(new_moon_pos[1], np.zeros_like(new_moon_pos[1])))
-    print(np.allclose(new_moon_pos[2], np.zeros_like(new_moon_pos[2])))
-    print(np.shape(new_los_pos))
-    x, y, z = new_los_pos
-    print(np.shape(x), np.shape(y), np.shape(z))
-    res = cartesian2spherical(x, y, z)
-    rho, theta, phi = res[..., 0], res[..., 1], res[..., 2]
-    if not np.all(np.isclose(rho, 1)):
-        raise ValueError("The radius of the sphere is not one.")
-    
-    newazt = np.degrees(phi)
-    newelt = 90 - np.degrees(theta)
-    return newazt, newelt
-
-
-def get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr): # this was to get the position of each detector separately I guess
-    newazt_ = (azt - azmoon) * np.cos(np.radians(elt))
-    newelt_ = (elt - elmoon)
-    newelt = newelt_[:, None] - det_pos[..., 1]
-    newazt = (newazt_[:, None] - det_pos[..., 0]) * np.cos(np.radians(newelt_[:, None]))
-    if isok_arr is not None:
-        nb_notok = np.sum(~isok_arr)
-        print(np.shape(np.tile(newazt_, (1, nb_notok)).reshape(len(newazt_), nb_notok)))
-        newazt[:, ~isok_arr] = np.tile(newazt_, (1, nb_notok)).reshape(len(newazt_), nb_notok)
-        newelt[:, ~isok_arr] = np.tile(newelt_, (1, nb_notok)).reshape(len(newazt_), nb_notok)
-
-    # elt_ = elt - det_pos[..., 1]
-    # azt_ = (azt - det_pos[..., 0]) * np.cos(np.radians(det_pos[..., 1]))
-    # newazt = (azt_ - azmoon) * np.cos(np.radians(elt_))
-    # newelt = (elt_ - elmoon)
-
-    # newazt = (azt - azmoon - det_pos[..., 0]) * np.cos(np.radians(elt))
-    # newelt = (elt - elmoon - det_pos[..., 1])
-    return newazt, newelt
-
 def get_circle_values(A, B, C):
     # https://stackoverflow.com/questions/20314306/find-arc-circle-equation-given-three-points-in-space-3d
     # get circle centre and radius from 3 points in cartesian coordinates
@@ -611,279 +347,11 @@ def get_circle_values(A, B, C):
     return P, R
 
 
-def get_new_azel_v4(azt, elt, azmoon, elmoon): # trying to get a conversion that keeps angles and distances
-    rho = 1
-    origin = np.array([0, 0, 0])
-    # azt = azmoon + 1e-10
-    # elt = elmoon + np.linspace(-30, 20, len(elmoon))
-    # azt = azmoon + np.linspace(-30, 20, len(elmoon))
-    # elt = elmoon
-    pointing_pos = spherical2cartesian(rho, azt, elt, coord="horizontal", axis="last") #B
-    moon_pos = spherical2cartesian(rho, azmoon, elmoon, coord="horizontal", axis="last") #A
-    opp_moon_pos = spherical2cartesian(rho, azmoon - 180, elmoon, coord="horizontal", axis="last") # the point opposite from the Moon on the horizontal small circle going through the Moon
-
-    # we apply a first rotation around the z axis to put the Moon on the y=0 plane
-    # this rotation shoudn't distort the image because the Moon stays at a constant elevation
-    rotation_matrix1 = get_simple_rotation_matrix("z", np.radians(azmoon))
-    new_pointing_pos = np.einsum("li,ikl->lk", pointing_pos, rotation_matrix1)
-    new_moon_pos = np.einsum("li,ikl->lk", moon_pos, rotation_matrix1)
-    new_opp_moon_pos = np.einsum("li,ikl->lk", opp_moon_pos, rotation_matrix1)
-
-    centres, radii = get_circle_values(new_pointing_pos, new_moon_pos, new_opp_moon_pos) # centres #C of the small circle that contains the Moon position and the pointing position
-
-    vec_A = new_moon_pos - centres
-    vec_B = new_pointing_pos - centres
-    # print("shapes vec_A, vec_B", np.shape(vec_A), np.shape(vec_B))
-
-    angle_small_circle = np.arccos(np.einsum("ij,ij->i", vec_A, vec_B)/(np.linalg.norm(vec_A, axis=-1) * np.linalg.norm(vec_B, axis=-1))) # compute the angle between CA and CB
-    sign_angle = np.sign(np.cross(vec_A, vec_B, axis=-1)[..., 2]) # the sign of the z component should give us the sign of the angle
-    # print("sign_angle", sign_angle)
-    angle_small_circle *= sign_angle
-    # print("angle", np.shape(angle_small_circle), np.min(angle_small_circle), np.max(angle_small_circle))
-    dist_pointing = radii * angle_small_circle # it might be better to keep the distance rather than the angle
-    # print("radii", np.min(radii), np.max(radii), radii)
-    # print("dist_pointing", np.shape(dist_pointing), np.min(dist_pointing), np.max(dist_pointing), dist_pointing)
-    # print("norm centres", np.min(np.linalg.norm(centres, axis=-1)), np.max(np.linalg.norm(centres, axis=-1)))
-    perp_vec_pointing_plane = (centres - origin)/np.linalg.norm(centres - origin, axis=-1)[:, None] # origin of coordinate system is (0, 0, 0) here. This vector is the perpendicular vector to the plane with pointing and Moon
-    # angle_between_planes = np.arccos(np.einsum("j,ij->i", perp_vec_horiz_plane, perp_vec_pointing_plane)/(np.linalg.norm(perp_vec_horiz_plane) * np.linalg.norm(perp_vec_pointing_plane, axis=-1))) # compute the angle between the plane that holds the horizontal small circle with the Moon and the plane that holds the small circle going through the pointing and the Moon
-    
-    vec_horizon_moon = (np.array([1, 0, 0]) - origin)/np.linalg.norm(np.array([1, 0, 0]) - origin, axis=-1) # vector position of the Moon in the newazt, newelt system
-    other_vec = np.cross(perp_vec_pointing_plane, vec_horizon_moon)
-    # print("norm perp_vec_pointing_plane", np.min(np.linalg.norm(perp_vec_pointing_plane, axis=-1)), np.max(np.linalg.norm(perp_vec_pointing_plane, axis=-1)))
-    # print("norm vec_horizon_moon", np.min(np.linalg.norm(vec_horizon_moon)), np.max(np.linalg.norm(vec_horizon_moon)))
-    # print("np.linalg.norm(other_vec, axis=-1)", np.min(np.linalg.norm(other_vec, axis=-1)), np.max(np.linalg.norm(other_vec, axis=-1)))
-    other_vec /= np.linalg.norm(other_vec, axis=-1)[:, None] # get rid of norm(sin(angle(perp_vec, vec_horiz)))
-    # print("other_vec", other_vec)
-    # print("norm other_vec", np.linalg.norm(other_vec, axis=-1))
-    # print(np.shape(other_vec))
-    angle_final_great_circle = dist_pointing/rho # the angular distance to keep the same length for the circle arc
-    # angle_final_great_circle = angle_small_circle
-    new_pointing = rho * (np.cos(angle_final_great_circle[:, None]) * vec_horizon_moon + np.sin(angle_final_great_circle[:, None]) * other_vec) # get the geodesic on the sphere between the two points
-    
-    # ax = plt.figure().add_subplot(projection='3d')
-
-    # # draw sphere
-    # u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
-    # x = np.cos(u)*np.sin(v)
-    # y = np.sin(u)*np.sin(v)
-    # z = np.cos(v)
-    # ax.plot_wireframe(x, y, z, color="r")
-
-    # # Prepare arrays x, y, z
-    # theta = np.linspace(-2 * np.pi, 2 * np.pi, 100)
-    # for i in range(1):
-    #     direction = rho * (np.cos(theta[:, None]) * vec_horizon_moon + np.sin(theta[:, None]) * other_vec[i*100])
-    #     print(np.linalg.norm(vec_horizon_moon))
-    #     print(np.linalg.norm(other_vec[i*100]))
-    #     print(rho)
-    #     print(np.linalg.norm(direction, axis=-1))
-    #     x, y, z = direction[..., 0], direction[..., 1], direction[..., 2]
-    #     ax.scatter(x, y, z, label="{}".format(i*100))
-    # plt.legend()
-    # plt.ylim([-1, 1])
-
-    # # draw a vector
-    # ax.quiver(0, 0, 0, vec_horizon_moon[0], vec_horizon_moon[1], vec_horizon_moon[2], length=1.0, color="k")
-    # ax.quiver(0, 0, 0, other_vec[0, 0], other_vec[0, 1], other_vec[0, 2], length=1.0, color="orange")
-    # ax.quiver(0, 0, 0, perp_vec_pointing_plane[0, 0], perp_vec_pointing_plane[0, 1], perp_vec_pointing_plane[0, 2], length=1.0, color="green")
-    # direction = rho * (np.cos(angle_final_great_circle[0]) * vec_horizon_moon + np.sin(angle_final_great_circle[0]) * other_vec[0])
-    # ax.quiver(0, 0, 0, direction[0], direction[1], direction[2], length=1.0)
-    # plt.show()
-
-    # sys.exit()
-
-
-    res = cartesian2spherical(new_pointing[:, 0], new_pointing[:, 1], new_pointing[:, 2], coord="horizontal", axis="last")
-    rho, newazt, newelt = res[..., 0], res[..., 1], res[..., 2]
-    
-    # print("azt", np.min(azt), np.max(azt))
-    # print("newazt", np.min(newazt), np.max(newazt))
-    # newazt_ = (azt - azmoon) * np.cos(np.radians(elt))
-    # print("newazt_", np.min(newazt_), np.max(newazt_))
-    # print("newelt", np.min(newelt), np.max(newelt))
-    # newelt_ = (elt - elmoon)
-    # print("newelt_", np.min(newelt_), np.max(newelt_))
-
-    return newazt, newelt
-
-
-def get_new_azel_v5(azt, elt, azmoon, elmoon, delta_moon_pos_fit): # second round: when Moon position in known, do the rotations from scratch?
-    # We have to run a loop on all TES in order for the kernel not to crash!
-    if delta_moon_pos_fit.ndim == 1:
-        ndets = 1
-    elif delta_moon_pos_fit.ndim == 2:
-        ndets = len(delta_moon_pos_fit)
-    else:
-        raise ValueError("delta_moon_pos_fit.ndim = {}".format(delta_moon_pos_fit.ndim))
-    ntimes = len(azt)
-    new_los_pos_all = np.zeros((3, ndets, ntimes))
-    ndet_per_loop = 10 # by batches of 10?
-    print(delta_moon_pos_fit)
-    for iloop in range(len(delta_moon_pos_fit)//ndet_per_loop + 1):
-        max_idx = min((iloop + 1)*ndet_per_loop, len(delta_moon_pos_fit))
-        print("iloop", iloop, max_idx)
-        moon_pos_loop = delta_moon_pos_fit[iloop*ndet_per_loop:max_idx]
-        shape_pos = np.shape(moon_pos_loop)
-        moon_pos_flat = moon_pos_loop.reshape(np.prod(shape_pos))
-        moon_pos_flat[np.isnan(moon_pos_flat)] = 0
-        moon_pos_ = np.reshape(moon_pos_flat, shape_pos)
-        rho_sphere = 1
-        azmoon_ = azmoon[None, :] + moon_pos_[..., 0, None] # we add a correction for each detector
-        elmoon_ = elmoon[None, :] + moon_pos_[..., 1, None]
-        # shape = (ndets, ntimes)
-        # moon_sph = np.radians(np.array([90 - elmoon_, azmoon_]))
-        # moon_pos = spherical2cartesian(rho_sphere, moon_sph[0], moon_sph[1])
-        los_sph = np.radians(np.array([90 - elt[None, :], azt[None, :]]))
-        los_pos = spherical2cartesian(rho_sphere, los_sph[0], los_sph[1])
-        # shape = (3, ndets, ntimes)
-
-        ### simpler code
-        rotation_matrix1 = get_simple_rotation_matrix("z", np.radians(azmoon_))
-        rotation_matrix2 = get_simple_rotation_matrix("y", np.radians(-elmoon_))
-
-        # print("shape los_sph", np.shape(los_pos))
-        # print("shape rotation_matrix", np.shape(rotation_matrix))
-        # new_los_pos = np.einsum("il,ikl->kl", los_pos, rotation_matrix) # computation working!
-        # print("shape rotation_matrix", np.shape(rotation_matrix1), np.shape(rotation_matrix2))
-        new_los_pos = np.einsum("ijl,ikjl->kjl", los_pos, rotation_matrix1)
-        new_los_pos = np.einsum("ijl,ikjl->kjl", new_los_pos, rotation_matrix2)
-
-        ### to see if we get always (0, 0, 0) for the Moon positions
-        # for i in range(3):
-        #     print(moon_pos[i])
-        # new_moon_pos = np.einsum("ijl,ikjl->kjl", moon_pos, rotation_matrix1)
-        # print("First rotation")
-        # for i in range(3):
-        #     print(new_moon_pos[i])
-        # new_moon_pos = np.einsum("ijl,ikjl->kjl", new_moon_pos, rotation_matrix2)
-        # print("Second rotation")
-        # for i in range(3):
-        #     print(new_moon_pos[i])
-        # print(np.allclose(new_moon_pos[1], np.zeros_like(new_moon_pos[1])))
-        # print(np.allclose(new_moon_pos[2], np.zeros_like(new_moon_pos[2])))
-        # print(np.shape(new_los_pos))
-        # new_los_pos_all[:, iloop*ndet_per_loop:(iloop + 1)*ndet_per_loop] = new_los_pos # doesn't raise an error because if slicing goes too high it is just ignored??
-        new_los_pos_all[:, iloop*ndet_per_loop:max_idx] = new_los_pos
-    print("idx range = ", iloop*ndet_per_loop, (iloop + 1)*ndet_per_loop)
-    print(np.shape(new_los_pos_all))
-    x, y, z = new_los_pos_all
-    # print(np.shape(x), np.shape(y), np.shape(z))
-    res = cartesian2spherical(x, y, z)
-    rho, theta, phi = res[0], res[1], res[2]
-    if not np.all(np.isclose(rho, 1)):
-        raise ValueError("The radius of the sphere is not one.")
-        
-    newazt = np.degrees(phi)
-    newelt = 90 - np.degrees(theta)
-    print("shapes newazt, newelt = ", np.shape(newazt), np.shape(newelt))
-    return newazt, newelt
-
-
-def decorel_azel(mytod, azt, elt, scantype, resolution=0.04, doplot=True, nbins=50, n_el=20):
-    ### Profiling in Azimuth and elevation
-    el_lims = np.linspace(np.min(elt)-0.0001, np.max(elt)+0.0001, n_el+1)
-    el_av = 0.5 * (el_lims[1:] + el_lims[:-1])
-
-    okall = np.abs(scantype) > 0 
-    okpos = scantype > 0 
-    okneg = scantype < 0 
-    oks = [okpos, okneg]
-    oks_names = ['+ scans', '- scans']
-    minaz = np.min(azt[okall])
-    maxaz = np.max(azt[okall])
-    xaz = np.linspace(minaz, maxaz, nbins)
-    az_lims = np.linspace(minaz, maxaz, nbins + 1)
-    az_av = 0.5 * (az_lims[1:] + az_lims[:-1])
-
-    ### Use gaussian smoothing to remove noise
-    azt_smoothed_stack = np.zeros((nbins, n_el, 2))
-
-    if doplot: 
-        plt.figure()
-    for i in range(len(oks)):
-        if doplot: 
-            plt.subplot(1,2,i+1)
-            plt.xlabel('Az')
-            plt.ylabel('TOD')
-            plt.title(oks_names[i])
-        for j in range(n_el):
-            ok = oks[i] & (elt >= el_lims[j]) & (elt < el_lims[j+1])
-            if np.sum(ok)==0:
-                break
-            xc, yc, dx, dy, _ = ft.profile(azt[ok], mytod[ok], rng=[minaz, maxaz], nbins=nbins, mode=False, dispersion=True, plot=False, cutbad=False) # pourquoi est-ce que cela marchait avec cutbad=True avant ? Bins différents ?
-
-            plt.figure()
-            plt.title("Result from Qfiber.profile")
-            plt.scatter(azt[ok], mytod[ok], s=1, c="r", label='Input TOD')
-            plt.plot(xc, yc, label="profile")
-            plt.legend()
-            plt.show()
-
-            gauss_kernel = gaussian(xc, np.mean(xc), resolution) # resolution in degrees (azimuth) # 1.5 degree?
-
-            azt_smoothed_stack[:, j, i] = np.convolve(yc, gauss_kernel, mode='same')
-            azt_smoothed_stack[:, j, i] = np.roll(azt_smoothed_stack[:, j, i], -1) # because mode='same' shifts the max of convolution by one
-
-            # print(np.shape(azt_smoothed_stack[:, j, i]))
-            # sys.exit()
-
-            # d'abord rendre cela périodique !! regarder si plus d'un scan par bin d'élévation
-            # et changer le code en conséquence
-            # faire des bins en scan plutôt qu'élévation ? 118 scans (x2 +/-)
-
-            # fitted = np.interp(xaz, xc, azt_smoothed_stack[:, j, i])
-            # fit_func = BarycentricInterpolator(xc, azt_smoothed_stack[:, j, i])
-
-            fit_func = interp1d(xc, azt_smoothed_stack[:, j, i], kind="quadratic", fill_value="extrapolate")
-            fitted = fit_func(xaz)
-            if j ==1:
-                plt.figure()
-                plt.title("Result from Gaussian filter")
-                plt.subplot(2,1,1)
-                # plt.plot(tt, tod, label='Input TOD')
-                plt.scatter(azt[ok], mytod[ok], s=1, c="r", label='Input TOD')
-                plt.plot(xc, azt_smoothed_stack[:, j, i], c="b", label='Smoothed TOD')
-                plt.legend()
-                plt.subplot(2,1,2)
-                plt.scatter(azt[ok], mytod[ok] - interp1d(az_av, azt_smoothed_stack[:, j, i], kind="quadratic", fill_value="extrapolate")(azt[ok]), s=1)
-                plt.show()
-                sys.exit()
-
-            if doplot:
-                plt.title("Test?")
-                pl = plt.errorbar(xc, yc, yerr=dy, xerr=dx, fmt='o')
-                plt.plot(xaz, fitted, color=pl[0].get_color(), label = oks_names[i] + ' - El = {0:5.1f}'.format(np.mean(elt[ok])))
-    #if doplot: legend()
-
-    ### Now interpolate this to remove it to the data
-    nscans = np.max(np.abs(scantype))
-    min_scan = np.min(np.abs(scantype[scantype != 0])) # added this to prevent crash if we removed this data already
-    for i in range(min_scan, nscans+1):
-        okp = scantype == i
-        okn = scantype == (-i)
-        for k, ok in enumerate([okp, okn]):
-            if not True in ok:
-                continue
-            the_el = np.median(elt[ok])
-            # print(i, the_el)
-            this_el_stack = np.array([interp1d(el_av, azt_smoothed_stack[j, :, k], kind="quadratic", fill_value="extrapolate")(the_el) for j in range(nbins)])
-            mytod[ok] -= interp1d(az_av, this_el_stack, kind="quadratic", fill_value="extrapolate")(azt[ok])
-                    
-    ### And interpolate for scantype==0 regions
-    # bad_chunks = get_chunks(mytod, scantype, 0)
-    # mytod = linear_rescale_chunks(mytod, bad_chunks, sz=100)
-    return mytod
-
-
 def detect_peaks_TOD(tt, mytod, resolution, doplot=False, freq_sampling=157.36):
 
     mytod = mytod.copy()
-    # plt.figure()
-    # plt.plot(tt, mytod)
     slope = (mytod[-1] - mytod[0])/(tt[-1] - tt[0])
     mytod -= (slope * tt + (mytod[0] - slope*tt[0]))
-    # plt.plot(tt, mytod)
-    # plt.show()
 
     # freq_sampling = 157.36 # Hz
     ### Use gaussian smoothing to remove noise
@@ -993,12 +461,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
         reso=10
         xsize = 200 # default
     elif ObsDate[:4] == "2026":
-        # if ObsDate == "2026-05-03": # actually not in here either, it is another issue
-        #     mytod = -tod.copy()
-        # else:
-        # not in 2026
         mytod = tod.copy()
-        # reso = 8
         ang_size = 40 # degrees
         xsize = 201
         reso = ang_size*60/xsize # arcmin/pix
@@ -1212,53 +675,6 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             plt.savefig("figures/moon_tod_.png")
             plt.show()
 
-            # tt_min, tt_max = 4200, 5000
-            # interval = 50 # how many points to apodise
-            # mask_sample_moon = np.logical_and(tt>tt_min, tt<tt_max)
-            # TOD_sample_moon = mytod[mask_sample_moon]
-            # tt_sample_moon = tt[mask_sample_moon]
-            # slope = (np.median(TOD_sample_moon[-interval:]) - np.median(TOD_sample_moon[:interval]))/(np.median(tt_sample_moon[-interval:]) - np.median(tt_sample_moon[interval:]))
-            # origin = np.median(TOD_sample_moon[interval:]) - slope*np.median(tt_sample_moon[interval:])
-            # TOD_sample_moon -= slope*tt_sample_moon + origin
-            # spectrum_sample_moon = np.abs(fft(TOD_sample_moon))**2
-            # fft_freqs = fftfreq(len(TOD_sample_moon))
-
-
-            # fig, ax = plt.subplots()
-            # ax.set_title("raw TOD spectrum")
-            # ax.plot(fft_freqs, spectrum_sample_moon)
-            # ax.set_yscale("log")
-            # ax.set_xlabel("freq [Hz]")
-            # ax.set_ylabel("amplitude [arbitrary units]")
-            # ax.set_yticks([])
-            # plt.tight_layout()
-            # plt.savefig("figures/moon_tod_spectrum.pdf")
-            # plt.show()
-
-            # zae
-        if doplot and False:
-            fig, ax = plt.subplots(figsize=(10, 7))
-            ax.plot(tt, -tod, label="TOD")
-            # ax.plot(tt, tod_ma, label="tod_ma")
-            # ax.plot(tt, tod_ma_flat, label="tod_ma_flat")
-            # ax.plot(tt, mytod_1, label="filtered TOD")
-            # ax.plot(tt, mytod_2, label="filtered TOD 2")
-            # ax.plot(tt, tod_diff, label="diff")
-            plt.xlim(xlim)
-            plt.ylim(pmp.get_ylim(tt, xlim, -tod))
-            ax.legend()
-            ax.set_xlabel("Time [s]")
-            ax.set_ylabel("Flux [ADU]")
-            plt.tight_layout()
-            plt.savefig("tod_filtering.pdf")
-            plt.show()
-
-        # Map-making
-
-        # newelt = -newelt
-        # Calculate center of maps from pointing w.r.t. Moon
-        # center=[np.mean(newazt), np.mean(newelt)]
-
         final_tod = mytod_4 # good filter
         # final_tod = mytod # no filter
         comparison_tod = mytod_1
@@ -1267,13 +683,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
     mask_scan = scantype != 0
     mask_map = mask_scan# * mask_elt
 
-    if det_pos is None:
-        # center = [np.mean(newazt), np.mean(newelt)]
-        center = [0, 90] # zenith
-    else:
-        # center = det_pos
-        # center = [0, 0] # because of the rotation applied, the Moon is supposed to be at the centre
-        center = [0, 90] # zenith
+    center = [0, 90] # zenith
 
     # To compare the map created with only forth scans with the map created with only back scans
     if check_back_forth:
@@ -1321,96 +731,24 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                         title="back scans", rot=center)
                 hp.gnomview(mapsb_forth - mapsb_back, reso=reso, sub=(1, 3, 3), min=min_plot, max=max_plot, xsize=xsize,
                         title="forth - back scans", rot=center)
-                # hp.gnomview(mapsb_forth, reso=10, sub=(1, 3, 1), 
-                #         title="forth scans", rot=center)
-                # hp.gnomview(mapsb_back, reso=10, sub=(1, 3, 2), 
-                #         title="back scans", rot=center)
-                # hp.gnomview(mapsb_forth - mapsb_back, reso=10, sub=(1, 3, 3), 
-                #         title="forth - back scans", rot=center)
                 plt.show()
-                # return mapsb_forth, mapcount_forth, mapsb_back, mapcount_back
 
     mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
 
-    ### getting only the pixels with hits --> much lighter, can go to high NSIDE (>=512) but might be useless because data is too sparse
-    ### alternative that takes from both approaches could be to rebuild only a 25-degree disk centred on zenith at NSIDE=256
-    # patch, hitcount, cell_ids = healpix_patch(azt, elt, tod, nside, countcut=0, unseen_val=hp.UNSEEN)
-    # print(len(patch))
-    # print(12*nside**2)
-    # full_map = np.full(12*nside**2, hp.UNSEEN)
-    # full_map[cell_ids] = patch
-    # full_map_proj = hp.gnomview(mapsb, reso=reso, min=min_plot, max=max_plot, xsize=xsize,
-    #                 rot=center, return_projected_map=True, no_plot=True)
-    # X = np.arange(len(mapsb_proj))
-    # Y = np.arange(len(mapsb_proj[0]))
-    # XX, YY = np.meshgrid(X, Y) # pixel units, just for the interpolation
-    # no_UNSEEN_mask = ~mapsb_proj.mask
-    # full_map_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), full_map_proj[no_UNSEEN_mask])
-    # new_full_map_proj = full_map_interpolator(np.moveaxis([XX, YY], 0, -1))
-    # plt.figure()
-    # plt.imshow(full_map_proj)
-    # plt.show()
-    # plt.figure()
-    # plt.imshow(new_full_map_proj)
-    # plt.show()
-
     if doplot and True:
         
-        # mapsb_proj = hp.gnomview(mapsb, reso=reso, min=1e-3, max=1e4, xsize=xsize,
-        #                         rot=center, return_projected_map=True, no_plot=True)
-        
-        # # plt.figure()
-        # fig, ax = plt.subplots(1, 1, figsize=(10, 7), subplot_kw={'projection': 'rectilinear'})
-
-        # no_UNSEEN_mask = ~mapsb_proj.mask
-        # # mapsb_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), mapsb_proj[no_UNSEEN_mask])
-        # new_mapsb_proj = mapsb_interpolator(np.moveaxis([XX, YY], 0, -1))
-        # # new_mapsb_proj = mapsb_proj
-        # ax.imshow(new_mapsb_proj, origin="lower")
-        # for i in range(n_nus):
-        #     # hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
-        #     #                 marker='x', cmap='Reds')#, rot=center)
-        #     ax.scatter(phis[i,:], np.pi/2 - thetas[i,:], c=np.ones_like(thetas[i,:]), 
-        #                     marker='x', cmap='Reds')
-        # # plt.savefig("figures/mapsb.pdf")
-        # plt.tight_layout()
-        # plt.savefig("figures/map_interp_TES_{}.pdf".format(TES_number), dpi=300)
-        # plt.show()
-    
         plt.figure()
-        # hp.gnomview(testmap, reso=10, sub=(1, 2, 1), min=-5e3, max=1.2e4, xsize=xsize,
-        #             title="gaussian map", rot=center)
         hp.gnomview(mapsb, reso=reso, min=-5e3, max=1.2e4, xsize=xsize,
                     title="{}, TES {}".format(ObsName, TES_number), rot=center)
-        # hp.gnomview(mapsb, reso=10, xsize=xsize,
-        #             title="final map", rot=center)
         if theo_sb is not None: 
             for i in range(n_nus):
-                # hp.projscatter(thetas[i,:], phis[i,:], c=np.ones_like(thetas[i,:]), 
-                #             marker='x', cmap='Reds')
                 hp.projscatter(thetas[i,:], phis[i,:], c="r", 
                             marker='.')
-        # plt.savefig("figures/mapsb.pdf")
         plt.tight_layout()
         plt.savefig("figures/map_TES_{}.pdf".format(TES_number), dpi=300)
         plt.show()
         # azr
         
-    if doplot and False:
-        mapsb_2, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], comparison_tod[mask_map], nside=nside)
-        plt.figure()
-        hp.gnomview(mapsb_2, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, xsize=xsize,
-                    title="final map 2", rot=center)
-        plt.savefig("figures/mapsb_2.pdf")
-        plt.show()
-
-
-        plt.figure()
-        hp.gnomview(mapsb_2 - mapsb, reso=10, sub=(1, 2, 2), min=-5e3, max=1.2e4, xsize=xsize,
-                    title="mapsb_2 - mapsb", rot=center)
-        plt.savefig("figures/mapsb_2-mapsb.pdf")
-        plt.show()
-        # stop
     if also_tod:
         return mapsb, mapcount, final_tod
     
@@ -1561,10 +899,6 @@ class gaussfitsphere:
         else:
             self.mask = mask
     def __call__(self, x, pars):
-        # amp, eltc, aztc, sig = pars # sig in degrees
-        # aztc = np.float_(aztc)
-        # eltc = np.float_(eltc)
-        # centre_pos = spherical2cartesian(1, aztc, eltc, coord="horizontal", axis="last")
         amp, ic, jc, sig = pars # here the position is given in pixels and later converted to azel
         if np.isnan(ic) or np.isnan(jc): # for some reason, maybe when we fall outise of the image, ic or jc can be NaNs
             shape_pix_pos = np.shape(self.pix_pos)
@@ -1589,22 +923,10 @@ class gaussfitgnomproj:
         # self.useful_pix = hp.query_disc(self.nside, vec_centre, np.radians(radius))
         self.useful_pix = np.arange(12*nside**2)
         self.pix_pos_patch = hp.pix2vec(self.nside, self.useful_pix) # here we save the coordinates of each pixel of the patch before proj
-        # print(np.shape(self.pix_pos_patch))
         # self.pix_pos_patch = np.swapaxes(self.pix_pos_patch, axis1=0, axis2=-1)
         self.pix_pos_patch = np.moveaxis(self.pix_pos_patch, source=[0, 1], destination=[1, 0])
         self.pix_pos_proj = spherical2cartesian(1, azt, elt, coord="horizontal", axis="last") # here we save the coordinates of each pixel of the map after proj
-        # print("proj shape", np.shape(self.pix_pos_proj))
-        # pos_centre_test = [259, 246]
-        # print(azt[pos_centre_test[0], pos_centre_test[1]], elt[pos_centre_test[0], pos_centre_test[1]])
-        # print(self.pix_pos_proj[pos_centre_test[0], pos_centre_test[1]])
-        # plt.figure()
-        # plt.imshow(azt)
-        # plt.show()
-        # plt.figure()
-        # plt.imshow(elt)
-        # plt.show()
 
-    # def __call__(self, x, pars):
     def __call__(self, ij, amp, ic, jc, sig): # for curve_fit this time, not minuit
         # amp, ic, jc, sig = pars # here the position is given in pixels and later converted to azel
         if np.isnan(ic) or np.isnan(jc): # for some reason, maybe when we fall outise of the image, ic or jc can be NaNs
@@ -1617,180 +939,11 @@ class gaussfitgnomproj:
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
         centre_pos = self.pix_pos_proj[int(ic), int(jc)] # this is the vector associated with the pixel after proj, but it should be perfectly usable with vectors of pixels before proj
         dist_deg = np.abs(np.degrees(dist_angle(self.pix_pos_patch, centre_pos)))
-        # print("params", amp, ic, jc, sig)
-        # print("pos centre", ic, jc)
-        # print(centre_pos)
-        # print(cartesian2spherical(centre_pos[0], centre_pos[1], centre_pos[2], coord="horizontal", axis="last"))
-        # plt.figure()
-        # hp.mollview(dist_deg, rot=self.rot)
-        # plt.show()
-        # agez
         mygauss = amp * np.exp(-0.5*dist_deg**2/sig**2)
         full_map = np.zeros(12*self.nside**2)
         full_map[self.useful_pix] = mygauss
         proj_map = hp.gnomview(full_map, rot=self.rot, reso=self.reso, xsize=self.xs, return_projected_map=True, no_plot=True).data
         return np.ravel(proj_map * (1 - self.mask))
-
-class filtgauss2dfit:
-    def __init__(self, ipos, jpos, scantype, allipos, alljpos, nside): # it seems that I should use ipos = elt and jpos = -azt
-        # self.xx = xx
-        # self.yy = yy
-        self.ipos = ipos
-        self.jpos = jpos
-        self.scantype = scantype
-        # We can cut newazt and newelt to the values of xx and yy?
-        self.allipos = allipos
-        self.alljpos = alljpos
-        self.nside = nside
-        # self.amp_azt = np.array([np.min(self.xx), np.max(self.xx)])
-        # self.amp_elt = np.array([np.min(self.yy), np.max(self.yy)])
-        self.Npix = 1000
-        self.allipos_range = np.linspace(np.min(allipos), np.max(allipos), self.Npix)
-        self.alljpos_range = np.linspace(np.min(alljpos), np.max(alljpos), self.Npix)
-        self.iipos_large, self.jjpos_large = np.meshgrid(self.allipos_range, self.alljpos_range, indexing="ij")
-        self.amp_ipos = np.array([np.min(self.iipos_large), np.max(self.iipos_large)])
-        self.amp_jpos = np.array([np.min(self.jjpos_large), np.max(self.jjpos_large)])
-
-        self.nIter = 0
-    def __call__(self, x, pars):
-        amp, xc, yc, sig = pars
-        # mygauss = amp * np.exp(-0.5*((self.xx - xc)**2+(self.yy - yc)**2)/sig**2)
-        mygauss = amp * np.exp(-0.5*((self.iipos_large - xc)**2+(self.jjpos_large - yc)**2)/sig**2)
-
-        # mygauss = jax.block_until_ready(mygauss)
-        # timer(img_to_TOD, mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
-        # sys.exit()
-        my_gauss_tod = img_to_TOD(mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
-        # timer(img_to_TOD, mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
-        # timer(img_to_TOD_jitted, mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos)
-        # sys.exit()
-        # my_gauss_tod = np.array(img_to_TOD_jitted(mygauss, self.amp_ipos, self.amp_jpos, self.allipos, self.alljpos))
-
-        # my_gauss_tod = jax.block_until_ready(my_gauss_tod)
-        # timer(my_filt, my_gauss_tod)
-        # sys.exit()
-        my_gauss_tod = my_filt(my_gauss_tod)
-
-        # myfiltgauss_hp, _ = healpix_map(azt=self.alljpos[self.scantype > 0], elt=self.allipos[self.scantype > 0], tod=my_gauss_tod[self.scantype > 0], nside=self.nside)
-        # rot = np.array([0, 0, 0])
-        # reso = 5
-        # xs = 201
-        # myfiltgauss = hp.gnomview(myfiltgauss_hp, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
-        # myfiltgauss[myfiltgauss == hp.UNSEEN] = 0
-
-        # plt.figure()
-        # plt.imshow(myfiltgauss)
-        # plt.show()
-        # sys.exit()
-
-        # Get a flat map from the TOD without passing through Healpy --> it actually takes more time...
-        myfiltgauss = TOD_to_flat_map(self.allipos[self.scantype > 0], self.alljpos[self.scantype > 0], my_gauss_tod[self.scantype > 0], self.ipos, self.jpos)
-
-        # plt.figure()
-        # plt.imshow(myfiltgauss)
-        # plt.show()
-        # sys.exit()
-
-        self.nIter += 1
-
-        return np.ravel(myfiltgauss)
-    
-
-def get_dict(params):
-    """QUBIC dictionary.
-
-    Method to modify the qubic dictionary.
-
-    Parameters
-    ----------
-    key : str, optional
-        Can be "in" or "out".
-        It is used to build respectively the instances to generate the TODs or to reconstruct the sky maps,
-        by default "in".
-
-    Returns
-    -------
-    dict_qubic: dict
-        Modified QUBIC dictionary.
-
-    """
-    ### Arguments used when simulating the maps
-
-    args = {
-                "npointings": params["QUBIC"]["npointings"],
-                "nf_recon": params["QUBIC"]["nrec"],
-                "nf_sub": params["QUBIC"]["nsub_in"],
-                "nside": params["SKY"]["nside"],
-                "MultiBand": True,
-                "period": 1,
-                "RA_center": params["SKY"]["RA_center"],
-                "DEC_center": params["SKY"]["DEC_center"],
-                "filter_nu": 150 * 1e9,
-                "noiseless": False,
-                "beam_shape": 'gaussian',
-                #"comm": comm,
-                "dtheta": params["QUBIC"]["dtheta"],
-                "nprocs_sampling": 1,
-                #"nprocs_instrument": comm.size,
-                "photon_noise": True,
-                "nhwp_angles": 3,
-                #'effective_duration':3,
-                "effective_duration150": 3,
-                "effective_duration220": 3,
-                "filter_relative_bandwidth": 0.25,
-                "type_instrument": "two",
-                "TemperatureAtmosphere150": None,
-                "TemperatureAtmosphere220": None,
-                "EmissivityAtmosphere150": None,
-                "EmissivityAtmosphere220": None,
-                "detector_nep": float(params["QUBIC"]["NOISE"]["detector_nep"]),
-                "synthbeam_kmax": params["QUBIC"]["SYNTHBEAM"]["synthbeam_kmax"] #,
-                #"synthbeam_fraction": params["QUBIC"]["SYNTHBEAM"]["synthbeam_fraction"],
-            }
-
-    dictfilename = "pipeline_demo.dict"
-    qubic_dict = Qdictionary.qubicDict()
-    qubic_dict.read_from_file(dictfilename)
-
-    for i in args.keys():
-        qubic_dict[str(i)] = args[i]
-    return qubic_dict
-
-
-def img_to_TOD(img, amp_azt, amp_elt, newazt, newelt):
-    # To create fake TOD quickly from an input image
-    Npix = np.shape(img) # vérifier ordre lignes colonnes (lignes = azimuth ou elevation ?)
-    azel_arr = []
-    amplitude = np.array([amp_azt, amp_elt]) # Here amplitude contains the intervals in azimuth and elevation for the pixels' centers
-    for i, coord in enumerate(["az", "el"]):
-        azel_arr.append(np.linspace(amplitude[i, 0], amplitude[i, 1], Npix[i]))
-    # print("new azt in ({}, {}), new elt in ({}, {})".format(np.min(azel_arr[0]), np.max(azel_arr[0]), np.min(azel_arr[1]), np.max(azel_arr[1])))
-    # print(np.min(newazt), np.max(newazt), np.min(newelt), np.max(newelt))
-    grid_interp = RegularGridInterpolator( (azel_arr[0], azel_arr[1]), img, method='linear' ) # linear is faster than nearest??
-    img_tod = grid_interp((newazt, newelt))
-    return img_tod
-def img_to_TOD_(img, amp_azt, amp_elt, newazt, newelt):
-    # To create fake TOD quickly from an input image
-    Npix = jnp.shape(img) # vérifier ordre lignes colonnes (lignes = azimuth ou elevation ?)
-    azel_arr = []
-    amplitude = jnp.array([amp_azt, amp_elt]) # Here amplitude contains the intervals in azimuth and elevation for the pixels' centers
-    for i, coord in enumerate(["az", "el"]):
-        azel_arr.append(jnp.linspace(amplitude[i, 0], amplitude[i, 1], Npix[i]))
-    # print("new azt in ({}, {}), new elt in ({}, {})".format(jnp.min(azel_arr[0]), jnp.max(azel_arr[0]), jnp.min(azel_arr[1]), jnp.max(azel_arr[1])))
-    # print(jnp.min(newazt), jnp.max(newazt), jnp.min(newelt), jnp.max(newelt))
-    grid_interp = jax.scipy.interpolate.RegularGridInterpolator( (azel_arr[0], azel_arr[1]), img, method='nearest' ) 
-    img_tod = grid_interp((newazt, newelt))
-    return img_tod
-img_to_TOD_jitted = jax.jit(img_to_TOD_)
-
-def map_to_TOD(hp_map, newazt, newelt):
-    # To create fake TOD quickly from an input HEALPix map
-    # Use azimuth, elevation as latitude and longitude in degrees
-    map_tod = hp.get_interp_val(hp_map, newazt, newelt, lonlat=True)
-    return map_tod
-
-class empty_class():
-    pass
 
 def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1,
                 mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
@@ -1953,23 +1106,8 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
 def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, azelguess=None, axs=None, pack=None):
     ### get the gnomview back into a np.array in order to fit it
     mm = mymap.copy()
-    # badpix = mm == hp.UNSEEN
-    # mm[badpix] = 0          ### Set bad pixels to zero before returning the np.array()
     mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True)#.data
 
-    # hp.gnomview creates and shows a map with azt (abs) and elt (ord) growing starting from the lower-right angle of the image
-    # whereas plt.imshow of a gnomview map shows an image with azt (abs) and elt (ord) growing from the upper-right corner
-    # i_elt = -(np.arange(xs) - (xs - 1)/2)*reso/60     # elevation - elevation_moon (hence minus sign)
-    # j_azt = -i_elt.copy()                             # azimuth - azimuth_moon (evolves in the opposite direction to elevation)
-    # i_elt += rot[1]
-    # j_azt += rot[0]
-
-    # # # flipped ??
-    # i_elt = (np.arange(xs) - (xs - 1)/2)*reso/60     # elevation - elevation_moon (hence minus sign)
-    # j_azt = -i_elt.copy()                             # azimuth - azimuth_moon (evolves in the opposite direction to elevation)
-    # print(np.min(i_elt), np.max(i_elt))
-    # print(np.min(j_azt), np.max(j_azt))
-    
     gnom_proj = hp.projector.GnomonicProj(rot=rot, reso=reso, xsize=xs)
     x, y = gnom_proj.ij2xy()
     azt_proj, elt_proj = gnom_proj.xy2ang(x=x.flatten(), y=y.flatten(), lonlat=True)
@@ -1981,16 +1119,6 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
 
     nside = int(np.sqrt(len(mm)/12))
     g2d = gaussfitgnomproj(i_elt, j_azt, nside, rot, reso, xs, mask=mapxy.mask)
-
-    # print(np.min(i_elt), np.max(i_elt))
-    # print(np.min(j_azt), np.max(j_azt))
-    # plt.figure()
-    # plt.imshow(i_elt)
-    # plt.show()
-    # plt.figure()
-    # plt.imshow(j_azt)
-    # plt.show()
-
 
     if azelguess is not None:
         # try:
@@ -2055,101 +1183,6 @@ def assign_TES(x, y, xc, yc, tolerance, doplot=True):
         plt.show()
         
     # We then iterate
-
-
-# From fitting.py of JC
-class Data:
-    def __init__(self, x, y, cov, model, pnames=None):
-        self.x = x
-        self.y = y
-        self.model = model
-        self.cov = cov
-        if np.prod(np.shape(x)) == np.prod(np.shape(cov)):
-            self.diag = True
-            self.errors = cov
-        else:
-            self.diag = False
-            self.errors = 1./np.sqrt(np.diag(cov))
-            self.invcov = np.linalg.inv(cov)
-        self.fit = None
-        self.fitinfo = None
-        self.pnames = pnames
-        
-    def __call__(self):
-        return 0
-
-    def plot(self, nn=1000, color=None, mylabel=None, nostat=False):
-        p=plt.errorbar(self.x, self.y, yerr=self.errors, fmt='o', color=color, alpha=1)
-        if self.fit is not None:
-            xx = np.linspace(np.min(self.x), np.max(self.x), nn)
-            plt.plot(xx, self.model(xx, self.fit), color=p[0].get_color(), alpha=1, label=mylabel)
-        if mylabel is None:
-            if nostat == False:
-                plt.legend(title="\n".join(self.fit_info))
-        else:
-            plt.legend()
-
-
-    
-    def fit_minuit(self, guess, fixpars = None, limits=None, scan=None, renorm=False, simplex=False, minimizer=LeastSquares):
-        ok = np.isfinite(self.x) & (self.errors != 0)
-
-        ### Prepare Minimizer
-        if self.diag == True:
-            myminimizer = minimizer(self.x[ok], self.y[ok], self.errors[ok], self.model)
-        else:
-            print('Non diagoal covariance not yet implemented: using only diagonal')
-            myminimizer = minimizer(self.x[ok], self.y[ok], self.errors[ok], self.model)
-
-        ### Instanciate the minuit object
-        if simplex == False:
-            m = iminuit.Minuit(myminimizer, guess, name=self.pnames)
-        else:
-            m = iminuit.Minuit(myminimizer, guess, name=self.pnames).simplex()
-        
-        ### Limits
-        if limits is not None:
-            mylimits = []
-            for k in range(len(guess)):
-                mylimits.append((None, None))
-            for k in range(len(limits)):
-                mylimits[limits[k][0]] = (limits[k][1], limits[k][2])
-            m.limits = mylimits
-
-        ### Fixed parameters
-        if fixpars is not None:
-            for k in range(len(guess)):
-                m.fixed["x{}".format(k)]=False
-            for k in range(len(fixpars)):
-                m.fixed["x{}".format(fixpars[k])]=True
-
-        ### If requested, perform a scan on the parameters
-        if scan is not None:
-            m.scan(ncall=scan)
-
-        ### Call the minimization
-        m.migrad()  
-
-        ### accurately computes uncertainties
-        m.hesse()   
-
-        ch2 = m.fval
-        ndf = len(self.x[ok]) - m.nfit
-        self.fit = m.values
-
-        self.fit_info = [
-            f"$\\chi^2$ / $n_\\mathrm{{dof}}$ = {ch2:.1f} / {ndf}",
-        ]
-        for i in range(len(guess)):
-            vi = m.values[i]
-            ei = m.errors[i]
-            self.fit_info.append(f"{m.parameters[i]} = ${vi:.3f} \\pm {ei:.3f}$")
-
-        if renorm:
-            m.errors *= 1./np.sqrt(ch2/ndf)
-
-        return m, ch2, ndf
-    
 
 def get_K(Nx, Ny):
     '''
@@ -2300,9 +1333,6 @@ def read_data(datadir, remove_t0=True, year_data="2022"):
     
     a = qubicfp()
     a.read_qubicstudio_dataset(datadir)
-    # if a.nodata: # added a nodata attribute in read_qubicstudio_dataset in order to get rid of the empty files easily
-    #     print("\nThis file ({}) has no data and will not be taken into account.\n".format(datadir))
-    #     return None
     try: # the nodata method is better but harder to redo everytime I update qubicpack
         tt, alltod = a.tod()
     except:
@@ -2520,16 +1550,6 @@ def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshif
     return data
 
 
-def format_data_newiter(az_qubic, start_tt, ObsSite, speedmin, data=None, datadir=None, det_pos=None, isok_arr=None):
-    print('Using data already stored in memory - not read from disk and computing different azel for each det')
-    tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath = data
-    ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
-    azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
-    # for each detector, we get a different set of azimuth elevation
-    # allnewazt, allnewelt = get_new_azel_v3(azt, elt, azmoon, elmoon, det_pos, isok_arr) # order of dimensions chenged in v5, be careful!
-    allnewazt, allnewelt = get_new_azel_v5(azt, elt, azmoon, elmoon, det_pos)
-    return tt, tinit, alltod, QPidx, azt, elt, allnewazt, allnewelt, scantype, Tbath
-
 def make_coadded_maps(allTESNum, data=None,
                       doplot=True, nside=256, parallel=False, check_back_forth=False,
                       isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsName=None,
@@ -2591,16 +1611,7 @@ def make_coadded_maps(allTESNum, data=None,
                 newazt = newazt_
                 newelt = newelt_
             print("shape pos", np.shape(det_pos))
-            # plt.figure()
-            # plt.plot(azt)
-            # plt.plot(newazt)
-            # plt.show()
 
-            # plt.figure()
-            # plt.plot(elt)
-            # plt.plot(newelt)
-            # plt.show()
-            # aert
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
                                                              Tbath=Tbath, T1K=T1K, TES_number=TESNum, nside=nside,
                                                              doplot=doplot, check_back_forth=check_back_forth,
@@ -2798,9 +1809,6 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 ### DBSCAN
 from sklearn.cluster import DBSCAN
 def run_DBSCAN(params, eps=0.5, min_samples=10):
-    # clustering = DBSCAN(eps=1.3, min_samples=10).fit(params)
-    # clustering = DBSCAN(eps=0.5, min_samples=10).fit(params)
-    # clustering = DBSCAN(eps=0.25, min_samples=10).fit(params)
     clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(params)
     labels = clustering.labels_
     return labels
@@ -2900,269 +1908,6 @@ def fun_minimise(theta_rot, data, target):
     all_dist = dist_angle(target_pts, rotated_pts)
     return np.sum(all_dist**2)
 
-
-
-def get_synthbeam_freqs(idet, nsub=16, nside=512):
-    # Not finished but the aim is to fit a synthesized beam on the Moon maps
-    # It means it should be fake TOD with synthesized beam
-
-    # I can try to change the pointing direction maybe
-    dictfilename = "pipeline_demo.dict"
-    qubic_dict = Qdictionary.qubicDict()
-    qubic_dict.read_from_file(dictfilename)
-
-    qubic_dict["nside"] = nside
-    qubic_dict["nf_sub"] = nsub
-    qubic_dict["MultiBand"] = True
-    qubic_dict["filter_nu"] = 150 * 1e9
-    qubic_dict["synthbeam_kmax"] = 1
-    qubic_dict["noiseless"] = True
-    qubic_dict["npointings"] = 2
-
-    # print(qubic_dict)
-
-    # idet = 67
-    acq = Qacquisition.QubicMultiAcquisitions(qubic_dict, nsub=qubic_dict['nf_sub'], nrec=2)
-    synthbeam_list = [acq.subacqs[ifreq].instrument[idet].get_synthbeam(acq.subacqs[0].scene)[0] for ifreq in range(nsub//2)] # only first band sub bands
-
-    return synthbeam_list, qubic_dict
-
-
-def moon_with_synthbeam(synthbeam_list, moon_spectrum, rot, reso=4, xs=401):
-    tot_signal = np.sum([synthbeam_list[i] * moon_spectrum[i] for i in range(len(synthbeam_list))])
-    # sb_img = hp.gnomview(np.log10(sb/np.max(sb)), rot=[0, 95], reso=reso, min=-3, xsize=xs, title="Synthesized Beam - log scale", return_projected_map=True, no_plot=True).data
-    sb_img = hp.gnomview(tot_signal, reso=reso, rot=rot, min=-5e3, max=1.2e4, return_projected_map=True, xsize=xs, no_plot=True).data
-    # fig, (ax, cax) = plt.subplots(1, 2, width_ratios=(1, 0.05))
-    # img = ax.imshow(sb_map, vmin=-3, origin="lower")
-    # fig.colorbar(img, cax=cax)
-    # plt.show()
-    # sys.exit()
-    return sb_img
-
-
-def get_synthbeam_fit_tod(newazt, newelt, moon_pos, reso, amp):
-    # On donne les coord des tod et on calcule des faux tod à partir du lobe synthétique centré en
-    # la position de la Lune
-    if np.any(np.isnan(moon_pos)):
-        return np.zeros_like(newazt), np.zeros_like(newazt)
-    Nx = 10000
-    Ny = Nx
-    min_azt = np.min(newazt)
-    max_azt = np.max(newazt)
-    min_elt = np.min(newelt)
-    max_elt = np.max(newelt)
-    pixsize = np.array([(max_azt - min_azt) / (Nx - 1), (max_elt - min_elt) / (Ny - 1)])
-    azt_pix = np.linspace(min_azt, max_azt, Nx)
-    elt_pix = np.linspace(min_elt, max_elt, Ny)
-    if not ((min_azt <= moon_pos[0] <= max_azt) and (min_elt <= moon_pos[1] <= max_elt)):
-        print("moon_pos = ({}, {})".format(moon_pos[0], moon_pos[1]), flush=True)
-        print("azimuth in [{}, {}], elevation in [{}, {}]".format(min_azt, max_azt, min_elt, max_elt))
-        raise TypeError("Position of the Moon outside of map... Aborting.")
-    # Moon position in pixel space
-    moon_pos_pix = [np.argmin((azt_pix - moon_pos[0])**2), np.argmin((elt_pix - moon_pos[1])**2)]
-    print("moon_pos_pix = {}".format(moon_pos_pix), flush=True)
-
-    # Do it with the synthesized beam instead of a simple gaussian
-    # synthbeam = get_synthbeam()
-    # print("np.shape(synthbeam)", np.shape(synthbeam))
-    # plt.figure()
-    # plt.imshow(synthbeam, vmin=-1e3, vmax=1e4)
-    # plt.show()
-    # sys.exit()
-
-    synthbeam_list, qubic_dict = get_synthbeam_freqs(nsub=16, nside=256) # array of the synthesized beams from the instrument for nsub//2 freqs
-    # Fixed values, not to be in the fit loop
-
-    # First thing is to fit an possible rotation
-    # Then fit the Moon spectrum
-
-    # The Moon spectrum is the changing parameter
-    moon_spectrum = np.zeros(len(synthbeam_list))
-
-    rot=[]
-    moon_with_synthbeam(synthbeam_list, moon_spectrum, rot, reso=4, xs=401)
-
-    # Gaussian centred on the position of the Moon in pixel space
-    gauss = gauss2D(Nx, Ny, moon_pos_pix[0], moon_pos_pix[1], reso=reso/pixsize, amp=amp, normal=False)
-    print("old azt in ({}, {}), old elt in ({}, {})".format(np.min(azt_pix), np.max(azt_pix), np.min(elt_pix), np.max(elt_pix)))
-    print(np.min(newazt), np.max(newazt), np.min(newelt), np.max(newelt))
-    # Create tod from this with a better version of the computing of the Moon position (much faster)
-    # grid_interp = RegularGridInterpolator( (azt_pix, elt_pix), gauss, method='nearest' ) 
-    # gauss_tod = grid_interp((newazt, newelt))
-    # mapsb, mapcount = healpix_map(newazt[scantype != 0], newelt[scantype != 0], mytod[scantype != 0], nside=nside)
-    # gauss_tod = img_to_TOD(gauss, ((min_azt + max_azt)/2, (min_elt + max_elt)/2), pixsize, newazt, newelt)
-    gauss_tod = img_to_TOD(gauss, [min_azt, max_azt], [min_elt, max_elt], newazt, newelt)
-    # img, center, pixsize, newazt, newelt
-    filt_tod = my_filt(gauss_tod)
-    return gauss_tod - filt_tod, gauss_tod
-
-
-
-def fitsb_img(mapxy, x, y, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None):
-    xx, yy = np.meshgrid(x, y, indexing="xy")
-    
-    ### Displays the image as an array
-    mm, ss = ft.meancut(mapxy, 3)
-    if mini is None:
-        mini = mm-nsig*ss
-    if maxi is None:
-        maxi = np.max(mapxy)
-
-    ### Guess where the maximum is and the other parameters with a matched filter
-    if guess is None:
-        Nx = len(mapxy)
-        Ny = len(mapxy[0])
-        lobe_pos = (Nx//2, Ny//2)
-        Kx, Ky, K = get_K(Nx, Ny)
-        ft_phase = get_ft_phase(lobe_pos, Nx, Ny)
-        cos_win = cos_window(Nx, Ny, lx=20, ly=20)
-        deltaK = 1
-        Kbin = get_Kbin(deltaK, K)
-        nKbin = len(Kbin) - 1  # nb of bins
-        Kcent = (Kbin[:-1] + Kbin[1:])/2
-        size_pix = reso/60 # degree
-        reso_instr = 0.92
-        # ft_shape = fft2(gauss2D(Nx, Ny, x0=lobe_pos[0], y0=lobe_pos[1], reso=[reso_instr/size_pix], normal=True))
-        synthbeam_list, qubic_dict = get_synthbeam_freqs(nsub=16, nside=256) # array of the synthesized beams from the instrument for nsub//2 freqs
-        tot_sb = np.sum(synthbeam_list, axis=0)
-        sb_img = hp.gnomview(tot_sb, reso=reso, rot=[0, 90], min=-5e2, max=1e6, return_projected_map=True, xsize=xs, no_plot=True).data
-        sb_img = np.flip(np.swapaxes(sb_img, 0, 1), 1)
-        ft_shape = fft2(sb_img)
-        
-        filtmapsn = get_filtmapsn(mapxy * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
-
-        # plt.figure()
-        # plt.imshow(sb_img, origin="lower")
-        # plt.show()
-    
-        # plt.figure()
-        # plt.imshow(mapxy)
-        # plt.show()
-
-        # plt.figure()
-        # plt.imshow(filtmapsn)
-        # plt.show()
-        maxii = filtmapsn == np.nanmax(filtmapsn)
-        maxx = np.mean(xx[maxii])
-        maxy = np.mean(yy[maxii])
-        guess = np.array([1e4, maxx, maxy, reso_instr])
-        if verbose:
-            print(guess)
-    else:
-        maxx = guess[1]
-        maxy = guess[2]
-        
-    ### Do the fit putting the UNSEEN to a very low weight
-    errpix = xx*0+ss
-    errpix[mapxy==0] *= 1e5
-    g2d = gauss2dfit(xx, yy)
-    sb2d = synthbeam2dfit(sb_hp_map)
-    data = fit.Data(np.ravel(xx), np.ravel(mapxy), np.ravel(errpix), sb2d)
-    m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, maxx - distok, maxx + distok], [2, maxy - distok, maxy + distok], [3, 0.6/conv_reso_fwhm, 1.2/conv_reso_fwhm]], renorm=renorm)
-
-    limits=[[0, -180, 180], [1, -180, 180], [2, -180, 180], [3, -180, 180]]
-
-    ### Image of the fitted Gaussian
-    fitted = np.reshape(g2d(x, m.values), (xs, xs))
-
-    if doplot:
-        origin = "upper" #"lower" swaps the y-axis and the guess doesn't match 
-        if axs is None:
-            fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(16, 5))
-            axs[1].imshow(fitted, origin=origin, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
-            im = axs[2].imshow(mapxy - fitted, origin=origin, extent=[np.min(x), np.max(x), np.min(y), np.max(y)], vmin=mini, vmax=maxi)
-            axs[0].set_ylabel('Degrees')
-            for i in range(3):
-                axs[i].set_xlabel('Degrees')
-            axs[2].set_title('Residuals')
-    
-    if doplot:
-        axs = pmp.plot_fit_img(mapxy, axs, x, y, xguess=guess[1], yguess=guess[2], xfit=m.values[1], yfit=m.values[2], vmin=mini, vmax=maxi, ms=ms, origin=origin)
-        return m, fitted, axs
-    return m, fitted
-    
-    
-
-def fit_one_tes_sb(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, xycreid_corr=None, axs=None):
-    ### get the gnomview back into a np.array in order to fit it
-    mm = mymap.copy()
-    badpix = mm == hp.UNSEEN
-    mm[badpix] = 0          ### Set bad pixels to zero before returning the np.array()
-    mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True).data
-
-    ### np.array coordinates
-    # Doesn't work with the fit plot but is ok with final gnomview plot of the Moon map corrected
-    # But in order to stack the maps I now have to use (azt, -elt) position fitted here (why??)
-    x = -(np.arange(xs) - (xs - 1)/2)*reso/60
-    y = x.copy()
-    x += rot[0]
-    y -= rot[1]
-
-    # Works on fit plot but then azt and elt are with the wrong sign on the final gnomview plot. Weird!!
-    # x = (np.arange(xs) - (xs - 1)/2)*reso/60
-    # y = x.copy()
-    # x -= rot[0]
-    # y += rot[1]
-
-    # Other tests
-    # x = (np.arange(xs) - (xs - 1)/2)*reso/60
-    # y = x.copy()
-    # x -= rot[0]
-    # y += rot[1]
-
-
-    # print(np.min(y), np.max(y))
-    # sys.exit()
-
-    if xycreid_corr is not None:
-        try:
-            guess = np.array([1e4, xycreid_corr[0], xycreid_corr[1], 0.92])
-            if verbose:
-                print(guess)
-        except:
-            guess = None
-            if verbose:
-                print("TES has no position on sky")
-                print(guess)
-        
-        
-    if doplot:
-        m, fitted, fig_axs = fitsb_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso)
-        if verbose:
-            print(m.values)
-    else:
-        m, fitted = fitsb_img(mapxy, x, y, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso)
-    # try:
-    #     m, fitted = fitgauss_img(mapxy, x, y, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm)
-    # except:
-    #     m = None
-    #     fitted = None
-    
-    if return_images:
-        return m, mapxy, fitted, [np.min(x), np.max(x), np.min(y), np.max(y)], fig_axs
-    return m
-    
-class synthbeam2dfit:
-    def __init__(self, sb_hp_map, newazt, newelt, scantype, xx, yy):
-        self.xx = xx
-        self.yy = yy
-        self.sb_hp_map = sb_hp_map
-        self.newazt = newazt
-        self.newelt = newelt
-        self.scantype = scantype
-        self.nside = np.sqrt(len(self.sb_hp_map)/12)
-    def __call__(self, x, pars):
-        rot1, rot2, rot3 = pars
-        rotator = hp.rotator.Rotator(rot=(rot1, rot2, rot3), eulertype="X", deg=True)
-        self.synthbeam_rot = rotator.rotate_map_alms(self.synthbeam) * self.amp_slider.val
-        fake_TOD = map_to_TOD(self.synthbeam_rot, self.newazt, self.newelt)
-        fake_TOD = my_filt(fake_TOD)
-        synthbeam_rot_filt, _ = healpix_map(self.newazt[self.scantype != 0], self.newelt[self.scantype != 0], fake_TOD[self.scantype != 0], nside=self.nside)
-        sb_map = hp.gnomview(synthbeam_rot_filt, reso=self.reso, rot=[0, 0, 0], min=-5e2, max=1e6, return_projected_map=True, xsize=self.xs, no_plot=True).data
-
-        return np.ravel(sb_map)
-    
-
 ### From ipynb pipeline_moon_fit_order1_peak.ipynb
 
 # get the spherical geodesic of length ang_dist_deg + 2*delta_angle_deg coursing through the two points A and B, +/- delta_angle_deg
@@ -3177,12 +1922,6 @@ def get_great_circle_traj(point_A, point_B, sphere_centre, sphere_radius, npoint
     delta_angle_rad = np.radians(delta_angle_deg)
     plane = get_plane(point_A, point_B, sphere_centre, offset=offset) # compute the equation of the plane with A, B and the sphere centre C
     vec_1, vec_2 = get_vect_plane(plane, point_A, sphere_centre, offset=offset) # create two orthogonal vectors on the plane, vec_1 pointing at A
-    # vec_A = point_A - sphere_centre
-    # vec_B = point_B - sphere_centre
-    # angle = np.arccos(np.dot(vec_A, vec_B)/(np.linalg.norm(vec_A) * np.linalg.norm(vec_B))) # compute the angle between CA and CB
-    # the distance is now assumed!
-    # print(angle)
-    # print(ang_dist_rad)
     theta = np.linspace(0 - delta_angle_rad, ang_dist_rad + delta_angle_rad, npoints).reshape(npoints, 1)
     great_circle = sphere_radius * (np.cos(theta) * vec_1 + np.sin(theta) * vec_2) # get the geodesic on the sphere between the two points, +/- delta_angle_deg
     return great_circle, theta.reshape(npoints)
@@ -3243,16 +1982,12 @@ def get_side_lines(hpmap, theta_gc, phi_gc, side, nlines):
     return zi_up, zi_down, coord_up, coord_down
 
 
-
-
 # from calibration_dev All_scans_demodulation_src.ipynb
 
 def match_shape(array1, shape_array2): # in the case that array2 has more or the same number of dims
     shape_array1 = np.shape(array1)
     if len(shape_array2) <= len(shape_array1):
         return array1
-    # return np.expand_dims(array1, list(np.arange(len(shape_array2))[1:])) # if array1 is 1D
-
     # even with this method, the dimensions have to be in the same order!
     # but the new dimensions don't have to be only at the end
     list_expand_dims = []
@@ -3298,29 +2033,9 @@ def get_perp_vect_horiz_great_circle(azimuth, elevation, sphere_centre=np.array(
     # print("shape perp_vect", np.shape(perp_vect))
     return perp_vect
 
-# def get_simple_rotation_matrix(axis, angle):
-#     one = np.ones_like(angle)
-#     zero = np.zeros_like(angle)
-#     if axis == "x":
-#         R = np.array([[one, zero, zero],
-#                       [zero, np.cos(angle), -np.sin(angle)],
-#                       [zero, np.sin(angle), np.cos(angle)]])
-#     elif axis == "y":
-#         R = np.array([[np.cos(angle), zero, np.sin(angle)],
-#                       [zero, one, zero],
-#                       [-np.sin(angle), zero, np.cos(angle)]])
-#     elif axis == "z":
-#         R = np.array([[np.cos(angle), -np.sin(angle), zero],
-#                       [np.sin(angle), np.cos(angle), zero],
-#                       [zero, zero, one]])
-#     else:
-#         raise ValueError("{} is not a good axis.".format(axis))
-#     return R
-
-
 def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, det_pos=None):
     """
-    This function computes the coorinates of a point or an array of points with respect to a
+    This function computes the coordinates of a point or an array of points with respect to a
     given source, taking the source as the zenith of the new coordinates system.
 
     Parameters
@@ -3360,12 +2075,9 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
                 az_zen[idx_thermom] = 0 # we remove the NaN
                 el_zen[idx_thermom] = 90 # we remove the NaN
         
-        # print("shapes before expansion", np.shape(az_zen), np.shape(el_zen))
         az_zen = np.expand_dims(az_zen, 1)
         el_zen = np.expand_dims(el_zen, 1)
-        # print("shapes after", np.shape(az_zen), np.shape(el_zen))
         # final shape in cartesian coord should be (3, ndets, ntimes) otherwise it crashed (probably linked to how arrays are stored in memory)
-        # print("shape det_pos", np.shape(az_zen))
         # below, the deltas are computed from the distance to zenith (90 - el_zen) and the direction (az_zen - 90)
         delta_az = (90 - el_zen) * np.cos(np.radians(az_zen - 90)) / np.cos(np.radians(np.expand_dims(elt_source, 0)))
         delta_el = (90 - el_zen) * np.sin(np.radians(az_zen - 90))
@@ -3376,19 +2088,14 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
         # and it might be more accurate instead of converting to az, el (?)
         # actually probably not, the azimuth conversion has to be done just for the elevation of the source (which is known)
         # and the elevation conversion is absolute
-        # print("shapes source before", np.shape(azt_source), np.shape(elt_source))
         azt_source = np.expand_dims(azt_source, 0) + delta_az
         elt_source = np.expand_dims(elt_source, 0) + delta_el
-        # print("shapes source after", np.shape(azt_source), np.shape(elt_source))
         # this should be (ndets, ntimes)?
-        # print("shape azt_source", np.shape(azt_source))
-        # print("shape elt_source", np.shape(elt_source))
         del az_zen, el_zen, delta_az, delta_el
 
     azt_zen = np.zeros_like(azt_source)
     elt_zen = np.zeros_like(azt_source)
     len_batch = int(1e5) # number of pointings treated at the same time
-    # print("shape azt", np.shape(azt))
     one_more = int(len(azt)%len_batch > 0)
     n_iter = len(azt)//len_batch + one_more
     for i_iter in range(n_iter):
@@ -3408,17 +2115,10 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
         # print("perp_vect_pointing OK", flush=True)
 
         # we get vector perpendicular to the great circle going through pointing and calsource
-        # print("shape azel source", np.shape(azt_source_i), np.shape(elt_source_i))
         calsource = spherical2cartesian(sphere_radius, azt_source_i, elt_source_i, coord="horizontal", axis="first")
-        # print("calsource OK", np.shape(calsource), flush=True)
-        # print("shape azel pointing", np.shape(azt_i), np.shape(elt_i))
         pointing = spherical2cartesian(sphere_radius, azt_i, elt_i, coord="horizontal", axis="first")
-        # print("pointing OK", np.shape(pointing), flush=True)
         del azt_i, elt_i, azt_source_i, elt_source_i
-        # print(np.shape(calsource))
-        # print(np.shape(pointing))
         perp_vec_gc_pointing_calsrc = get_perp_vect(calsource, pointing, sphere_centre)
-        # print("shape perp_vec_gc_pointing_calsrc", np.shape(perp_vec_gc_pointing_calsrc))
 
         # we want the coords to be the last axis
         vec_calsource = np.moveaxis(calsource, 0, -1) # sphere centre is [0, 0, 0]
@@ -3426,17 +2126,12 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
         # the angle between the pointing and the calsource in degrees
         angle_beta = np.abs(np.degrees(dist_angle(vec_calsource, vec_pointing)))
 
-        # print("angle_beta == 0:", np.argwhere(angle_beta == 0))
-
-        # print(np.shape(perp_vect_pointing))
-        # print(np.shape(perp_vec_gc_pointing_calsrc))
         # the angle between the horizontal great circle and the great circle with the pointing and the calsource
         angle_alpha = np.degrees(dist_angle(np.moveaxis(perp_vect_pointing, 0, -1), np.moveaxis(perp_vec_gc_pointing_calsrc, 0, -1)))
         del perp_vect_pointing, perp_vec_gc_pointing_calsrc
 
         angle_alpha[~np.isfinite(angle_alpha)] = 0 # at the pixel pointing at calsource or if problem for a scan
         angle_beta[~np.isfinite(angle_beta)] = 30 # if problem for a scan
-        # print("all angles computed", flush=True)
 
         # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
         new_pointing = spherical2cartesian(sphere_radius, angle_alpha, 90 - angle_beta, coord="horizontal", axis="first") # beta is 90 - elevation!
@@ -3448,298 +2143,8 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
         else:
             _, azt_zen[lower_bound:higher_bound], elt_zen[lower_bound:higher_bound] = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
 
-
-    ######### This is the version that was used to test the method on smaller datasets (e.g. 2026/03/13 Moon data) ##########
-
-    # # we get the vector perpendicular to the horizontal great circle at pointing
-    # perp_vect_pointing = get_perp_vect_horiz_great_circle(azt, elt, tilt_az=tilt_az, sphere_radius=sphere_radius, sphere_centre=sphere_centre)
-    # print("perp_vect_pointing OK", flush=True)
-
-    # # we get vector perpendicular to the great circle going through pointing and calsource
-    # calsource = spherical2cartesian(sphere_radius, azt_source, elt_source, coord="horizontal", axis="first")
-    # print("calsource OK", flush=True)
-    # pointing = spherical2cartesian(sphere_radius, azt, elt, coord="horizontal", axis="first")
-    # print("pointing OK", flush=True)
-    # # print(np.shape(calsource))
-    # # print(np.shape(pointing))
-    # perp_vec_gc_pointing_calsrc = get_perp_vect(calsource, pointing, sphere_centre)
-    # print(np.shape(perp_vec_gc_pointing_calsrc))
-
-    # # we want the coords to be the last axis
-    # vec_calsource = np.moveaxis(calsource, 0, -1) # sphere centre is [0, 0, 0]
-    # vec_pointing = np.moveaxis(pointing, 0, -1)
-    # # the angle between the pointing and the calsource in degrees
-    # angle_beta = np.abs(np.degrees(dist_angle(vec_calsource, vec_pointing)))
-
-    # print("angle_beta == 0:", np.argwhere(angle_beta == 0))
-
-    # # print(np.shape(perp_vect_pointing))
-    # # print(np.shape(perp_vec_gc_pointing_calsrc))
-    # # the angle between the horizontal great circle and the great circle with the pointing and the calsource
-    # angle_alpha = np.degrees(dist_angle(np.moveaxis(perp_vect_pointing, 0, -1), np.moveaxis(perp_vec_gc_pointing_calsrc, 0, -1)))
-    # angle_alpha[~np.isfinite(angle_alpha)] = 0 # at the pixel pointing at calsource or if problem for a scan
-    # angle_beta[~np.isfinite(angle_beta)] = 30 # if problem for a scan
-    # print("all angles computed", flush=True)
-
-    # if det_pos is not None:
-    #     iTES = 0 #96 - 1
-    #     plt.figure()
-    #     plt.plot(tt, angle_alpha[iTES])
-    #     plt.show()
-
-    #     plt.figure()
-    #     plt.plot(tt, angle_beta[iTES])
-    #     plt.show()
-
-
-    #     # On this plot, the Moon (red dots) should appear close to alpha, beta = 0, 0
-    #     # Careful, here the position of the Moon is hard-coded
-    #     # intervals_moon = [[4224, 4225], [4267, 4268]] # 2026-03-13
-    #     intervals_moon = [[10198, 10200], [10246, 10248]] # 2022-...
-    #     where_moon = np.logical_or(np.logical_and(tt>intervals_moon[0][0], tt<intervals_moon[0][1]), np.logical_and(tt>intervals_moon[1][0], tt<intervals_moon[1][1]))
-    #     plt.figure()
-    #     plt.scatter(angle_alpha[iTES], angle_beta[iTES], s=1)
-    #     plt.scatter(angle_alpha[iTES, where_moon], angle_beta[iTES, where_moon], s=4, c="r", zorder=1000)
-    #     plt.xlabel("angle_alpha")
-    #     plt.ylabel("angle_beta")
-    #     plt.axvline(x=0, c="k", ls="--")
-    #     plt.axhline(y=0, c="k", ls="--")
-    #     plt.show()
-    #     # ar
-
-    # # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
-    # new_pointing = spherical2cartesian(sphere_radius, angle_alpha, 90 - angle_beta, coord="horizontal", axis="first") # beta is 90 - elevation!
-    # pre_rotation_matrix = get_simple_rotation_matrix("z", np.radians(90)) # rotation x --> y
-
-    # # print(np.shape(new_pointing))
-    # # print(np.shape(pre_rotation_matrix))
-
-    # new_pointing = np.einsum("ij,j...k->i...k", pre_rotation_matrix, new_pointing) # because the definition of alpha is -90 degrees rotated w.r.t. azimuth at zenith
-        
-    # _, azt_zen, elt_zen = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
-
     return azt_zen, elt_zen
 
-# in this method, instead of correcting the azimuth to conserve the angle to the meridian at casource azimuth,
-# I want to correct it with respect to the calsource position
-# this means that the map has to be in angle with respect to source position and not in pseudo azel?
-# I consider the calsource as if it is at the zenith and compute the angular distance and the angle from the source - pointing great circle with
-# respect to the horizontal great circle? so that the horizontal great circle is at a given azimuth if the source is the zenith?
-def method_4(allscans_az, allscans_el, allscans_amp, az_source, el_source, tilt_az=0, doplot=False, azmoon=None, elmoon=None, Npix=500, reso_map=3.6): # not finalized yet
-    # az_source and el_source need to be either np.float_ or np.array
-    # tilt_az = 1. # degrees
-    # tilt_az = 0 # degrees
-    sphere_radius = 1
-    sphere_centre = np.array([0, 0, 0])
-    ang_res = reso_map/60 # degrees/pix
-
-    # we get the vector perpendicular to the horizontal great circle at pointing
-    perp_vect_pointing = get_perp_vect_horiz_great_circle(allscans_az, allscans_el, tilt_az=tilt_az, sphere_radius=sphere_radius, sphere_centre=sphere_centre)
-
-    # we get vector perpendicular to the great circle going through pointing and calsource
-    calsource = spherical2cartesian(sphere_radius, az_source, el_source, coord="horizontal", axis="first")
-    pointing = spherical2cartesian(sphere_radius, allscans_az, allscans_el, coord="horizontal", axis="first")
-    # print(np.shape(calsource))
-    # print(np.shape(pointing))
-    perp_vec_gc_pointing_calsrc = get_perp_vect(calsource, pointing, sphere_centre)
-    # print(np.shape(perp_vec_gc_pointing_calsrc))
-
-    # we want the coords to be the last axis
-    vec_calsource = np.moveaxis(calsource, 0, -1) # sphere centre is [0, 0, 0]
-    vec_pointing = np.moveaxis(pointing, 0, -1)
-    # the angle between the pointing and the calsource
-    angle_beta = np.abs(np.degrees(dist_angle(vec_calsource, vec_pointing)))
-
-    print("angle_beta == 0:", np.argwhere(angle_beta == 0))
-
-    print(np.shape(perp_vect_pointing))
-    print(np.shape(perp_vec_gc_pointing_calsrc))
-    # the angle between the horizontal great circle and the great circle with the pointing and the calsource
-    angle_alpha = np.degrees(dist_angle(np.moveaxis(perp_vect_pointing, 0, -1), np.moveaxis(perp_vec_gc_pointing_calsrc, 0, -1)))
-    angle_alpha[~np.isfinite(angle_alpha)] = 0 # at the pixel pointing at calsource or if problem for a scan
-    angle_beta[~np.isfinite(angle_beta)] = Npix*ang_res/2 # 0 # if problem for a scan
-
-    map_ii, map_jj = np.meshgrid(np.linspace(np.min(angle_beta), np.max(angle_beta), 1000), np.linspace(np.min(angle_alpha), np.max(angle_alpha), 1000))
-
-    # we want to build the map as a sphere seen from the zenith where the calsource is
-    # alpha becomes 90° - elevation and beta the azimuth + 90°
-    # Npix = 500
-    # Npix = 200 # to match moon maps?
-    # ang_res = (np.max(angle_beta) - np.min(angle_beta))*np.sqrt(2)/Npix
-    # ang_res = 30/Npix # degrees/pix
-    map_ii, map_jj = np.meshgrid(np.arange(Npix), np.arange(Npix), indexing='ij')
-    centre = np.array([map_ii[Npix//2, Npix//2], map_jj[Npix//2, Npix//2], 0])
-    beta_map = np.sqrt((map_ii-centre[0])**2+(map_jj-centre[1])**2) * ang_res
-    vec_pix = np.array([map_ii, map_jj, np.zeros_like(map_jj)]) - match_shape(centre, np.array([map_ii, map_jj, np.zeros_like(map_jj)]).shape)
-    vec_zero = np.array([map_ii[Npix//2, -1], map_jj[Npix//2, -1], 0]) - centre # this is not the usual 0 azimuth, but it suits the way I built beta
-    alpha_map = -np.degrees(dist_angle(np.moveaxis(vec_pix, 0, -1), np.moveaxis(vec_zero, 0, -1)))
-    alpha_map[~np.isfinite(alpha_map)] = 0
-
-    # in order to interpolate around the zenith, I have to first convert alpha beta into cartesian coordinates!
-    # I use beta as radius in polar coordinates and alpha as angle, in order to stay in 2D
-    cartesian_pos = polar2cartesian(angle_beta, angle_alpha, axis="last")
-    cartesian_map = polar2cartesian(beta_map, alpha_map, axis="last")
-
-    if doplot:
-        # plot azel2alphabeta
-        plot_0 = angle_alpha
-        plot_1 = angle_beta
-        # plot_0 = cartesian_pos[..., 0]
-        # plot_1 = cartesian_pos[..., 1]
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-        axs[0].set_title("alpha")
-        axs[0].imshow(plot_0, cmap=plt.cm.gray, aspect=len(allscans_amp[0])/len(allscans_amp))
-        axs[1].set_title("beta")
-        axs[1].imshow(plot_1, cmap=plt.cm.gray, aspect=len(allscans_amp[0])/len(allscans_amp))
-        for ax in axs:
-            ax.tick_params(
-                axis="both",          # changes apply to the x-axis
-                which='both',      # both major and minor ticks are affected
-                bottom=False,      # ticks along the bottom edge are off
-                left=False,         # ticks along the top edge are off
-                labelbottom=False,
-                labelleft=False) # labels along the bottom edge are off
-            ax.set_xlabel("azimuth")
-            ax.set_ylabel("elevation")
-        plt.tight_layout()
-        # plt.savefig("azel2alphabeta.pdf")
-        plt.show()
-        
-        # plot_0 = alpha_map
-        # plot_1 = beta_map
-        plot_0 = cartesian_map[..., 0]
-        plot_1 = cartesian_map[..., 1]
-        fig, axs = plt.subplots(1, 2)
-        fig.suptitle("cartesian_map")
-        axs[0].imshow(plot_0, cmap=plt.cm.gray)
-        axs[1].imshow(plot_1, cmap=plt.cm.gray)
-        plt.show()
-
-    # here we want 3D in order to rotate and get the new azimuth elevation that I can compare with the original ones
-    new_pointing = spherical2cartesian(sphere_radius, alpha_map, 90 - beta_map, coord="horizontal", axis="first") # beta is 90 - elevation!
-    print("shape new _pointing", np.shape(new_pointing))
-
-    ### simpler code
-    # rotation_matrix1 = get_simple_rotation_matrix("x", np.radians(90 - el_source)) # rotation y --> z
-    # rotation_matrix2 = get_simple_rotation_matrix("z", np.radians(90 - az_source)) # rotation x --> y
-    # more rotations but easier to understand
-    pre_rotation_matrix = get_simple_rotation_matrix("z", np.radians(90)) # rotation x --> y
-    rotation_matrix1 = get_simple_rotation_matrix("y", np.radians(90 - el_source)) # rotation z --> x
-    rotation_matrix2 = get_simple_rotation_matrix("z", np.radians(az_source)) # rotation x --> y # azimuth grows from west to east, how do I translate that in x and y? For now it grows from x to y
-    new_pointing = np.einsum("ij,jkl->ikl", pre_rotation_matrix, new_pointing) # because the definition of alpha is -90 degrees rotated w.r.t. azimuth at zenith
-    
-    ### the last axis of both arrays becomes the first one in order to use np.dot
-    # los_pos = np.moveaxis(los_pos, -1, 0)
-    # rotation_matrix = np.moveaxis(rotation_matrix, -1, 0)
-    print("shape new_pointing", np.shape(new_pointing))
-    # new_los_pos = np.einsum("il,ikl->kl", los_pos, rotation_matrix) # computation working!
-    print("shape rotation_matrix", np.shape(rotation_matrix1), np.shape(rotation_matrix2))
-
-    if len(np.shape(rotation_matrix1)) > 2: # in the case with a moving source (e.g. the Moon)
-        new_pointing = np.einsum("ijkl,jkl->ikl", rotation_matrix1, new_pointing)
-        new_pointing = np.einsum("ijkl,jkl->ikl", rotation_matrix2, new_pointing)
-    else:
-        new_pointing = np.einsum("ij,jkl->ikl", rotation_matrix1, new_pointing)
-        new_pointing = np.einsum("ij,jkl->ikl", rotation_matrix2, new_pointing)
-
-    print(np.shape(new_pointing))
-
-    _, new_az, new_el = cartesian2spherical(new_pointing[0], new_pointing[1], new_pointing[2], coord="horizontal", axis="first")
-
-    if doplot:
-        plot_0 = new_az
-        plot_1 = new_el
-        fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-        axs[0].set_title("new az")
-        axs[0].imshow(plot_0, cmap=plt.cm.gray)
-        axs[1].set_title("new el")
-        axs[1].imshow(plot_1, cmap=plt.cm.gray)
-        for ax in axs:
-            ax.tick_params(
-                axis="both",          # changes apply to the x-axis
-                which='both',      # both major and minor ticks are affected
-                bottom=False,      # ticks along the bottom edge are off
-                left=False,         # ticks along the top edge are off
-                labelbottom=False,
-                labelleft=False) # labels along the bottom edge are off
-            ax.set_xlabel("azimuth")
-            ax.set_ylabel("elevation")
-        plt.tight_layout()
-        plt.savefig("newazel.pdf")
-        plt.show()
-        # zar
-
-    # we now operate in angle from the calsource at the zenith
-    print(np.sum(np.isnan(allscans_amp)))
-    print(np.sum(np.isnan(cartesian_pos)))
-
-    original_map_interpolator4 = LinearNDInterpolator(cartesian_pos.reshape(cartesian_pos.shape[0]*cartesian_pos.shape[1], 2), allscans_amp.flatten(), fill_value=0) # we know the "real" positions of the pixels on the original map and we want to know the amplitudes on a regular grid to create the new map, not the other way around
-    return original_map_interpolator4(cartesian_map), new_az, new_el # good one
-
-
-def Lagrange_poly(x, points_x, points_y):
-    P = 0
-    for j in range(len(points_x)):
-        li_j = []
-        for i in range(len(points_x)):
-            if i != j:
-                li_j.append((x - points_x[i])/(points_x[j] - points_x[i]))
-        P += points_y[j] * np.prod(np.array(li_j), axis=0)
-    return P
-
-
-def bin_data_by_scan(xdata, ydata, scantype): # scantype is positive, negative or null
-    bin_id = np.zeros(len(scantype))
-    bin_id_i = -1
-    scan_sorted = []
-    previous = -100
-    current_scan = []
-    for i in range(len(scantype)):
-        if scantype[i] != previous:
-            bin_id_i += 1
-            previous = scantype[i]
-            current_scan.append(bin_id_i)
-            if scantype[i] == 0:
-                scan_sorted.append(current_scan)
-                current_scan = []
-                current_scan.append(bin_id_i)
-        bin_id[i] = bin_id_i
-
-    values_df = pd.DataFrame(xdata)
-    values_binned = values_df.groupby([bin_id])
-    # binned_xdata = np.array(values_binned[0].median())
-    binned_xdata = np.array(values_binned[0].mean())
-
-    values_df = pd.DataFrame(ydata)
-    values_binned = values_df.groupby([bin_id])
-    binned_ydata = np.array(values_binned[0].mean())
-
-    return binned_xdata, binned_ydata, scan_sorted, bin_id
-
-def fit_lagrange_scans(xdata, ydata, scantype):
-    binned_xdata, binned_ydata, scan_sorted, bin_id = bin_data_by_scan(xdata, ydata, scantype)
-
-
-    for i_scan in range(len(scan_sorted)):
-        points_x = []
-        points_y = []
-        x = []
-        for i_point in range(len(scan_sorted[i_scan])):
-            i_bin = scan_sorted[i_scan][i_point]
-            print("i_bin", i_bin)
-            points_x.append(binned_xdata[i_bin])
-            points_y.append(binned_ydata[i_bin])
-            x.append(xdata[bin_id == i_bin])
-        x = np.concatenate(x)
-        Poly = Lagrange_poly(x, points_x, points_y)
-
-        if i_scan == 68:
-            plt.figure()
-            plt.plot(xdata, ydata)
-            plt.plot(x, Poly)
-            plt.show()
-            ear
-    
 
 def print_keys(d, keys):
     for key in keys:
@@ -3784,7 +2189,8 @@ def get_peaks_configuration(d, doplot=False, idet=None, debug=False):
     for i in range(n_nus):
         thetas[i,:,:], phis[i,:,:], vals[i,:,:] = q_instrument.subinstruments[i]._peak_angles(q_scene, 
                                                     q_instrument.subinstruments[i].d['filter_nu'], 
-                                                    q_instrument.subinstruments[i].detector.center, 
+                                                    # q_instrument.subinstruments[i].detector.center, 
+                                                    np.full_like(q_instrument.subinstruments[i].detector.center, np.array([0, 0, -0.3])), 
                                                     q_instrument.subinstruments[i].synthbeam, 
                                                     q_instrument.subinstruments[i].horn, 
                                                     q_instrument.subinstruments[i].primary_beam)
@@ -3813,6 +2219,7 @@ def get_peaks_configuration(d, doplot=False, idet=None, debug=False):
         plt.tight_layout()
 
     return thetas, phis, vals, nus, q_instrument
+
 
 def update_dict(config, instrument_type, nf_sub, nside, dictfilename='qubic/qubic/dicts/pipeline_demo.dict', debug=True):
     d = qubicDict()
@@ -4041,7 +2448,7 @@ def do_aperture_photometry_advanced(map_in, theo_sb, rot, reso, const_el=False):
     return sky_emission, sky_emission_error
 
 
-def check_tshift_live(ObsDate, azqubic, Obs_Site, speedmin, datadir):
+def check_tshift_live(ObsDate, azqubic, Obs_Site, speedmin, datadir): # will be copy pasted from ipynb file
     """Function to check for a possible shift between science time and mount
     time by comparing the azel positions of the telescope with the variations
     of the signal measured by a TES strongly responsive to the Earth magnetic

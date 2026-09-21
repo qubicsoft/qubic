@@ -2447,33 +2447,217 @@ def do_aperture_photometry_advanced(map_in, theo_sb, rot, reso, const_el=False):
 
     return sky_emission, sky_emission_error
 
+def bin_data_by_scan(xdata, ydata, scantype): # scantype is positive, negative or null
+    bin_id = np.zeros(len(scantype))
+    bin_id_i = -1
+    scan_sorted = []
+    previous = -100
+    current_scan = []
+    for i in range(len(scantype)):
+        if scantype[i] != previous:
+            bin_id_i += 1
+            previous = scantype[i]
+            current_scan.append(bin_id_i)
+            if scantype[i] == 0:
+                scan_sorted.append(current_scan)
+                current_scan = []
+                current_scan.append(bin_id_i)
+        bin_id[i] = bin_id_i
 
-def check_tshift_live(ObsDate, azqubic, Obs_Site, speedmin, datadir): # will be copy pasted from ipynb file
+    values_df = pd.DataFrame(xdata)
+    values_binned = values_df.groupby([bin_id])
+    # binned_xdata = np.array(values_binned[0].median())
+    binned_xdata = np.array(values_binned[0].mean())
+
+    values_df = pd.DataFrame(ydata)
+    values_binned = values_df.groupby([bin_id])
+    binned_ydata = np.array(values_binned[0].mean())
+
+    return binned_xdata, binned_ydata, scan_sorted, bin_id
+
+
+def stack_TOD_scan_by_scan(data_TOD_notshift, doplot=False): # will be copy pasted from ipynb file
     """Function to check for a possible shift between science time and mount
     time by comparing the azel positions of the telescope with the variations
     of the signal measured by a TES strongly responsive to the Earth magnetic
     field.
 
-    For now, TES 128 is chosen because it seems to be a blind TES with a squid
-    strongly correlated to the Earth magnetic field.
+    TES 65, 127 and 128 seem to be blind TES with squids strongly correlated
+    to the Earth magnetic field and are therefore useful to compute tshift.
+    Other TES also have squids sensitive to the Earth magnetic field and
+    can be used.
     """
 
-    # we need to read the data in the function to be sure the tshift used is zero?
-    data_TOD = format_data(azqubic, Obs_Site, speedmin, datadir=datadir, tshift=0,
-                           year_data=ObsDate[:4],
-                           det_pos=None,
-                           doplot=True)
-    # the data we need is all here
-    tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile = data_TOD
+    # data_TOD_notshift is the data read without tshift correction
+    tt, tinit, alltod, QPidx, azt, elt, _, _, scantype, Tbath, T1K, ifile, thk, az, el = data_TOD_notshift
 
-    TESNum = 128 # TES 128 is blind and responsive to the Earth magnitic field
-    iTES = TESNum - 1
+    # parameters of pmf.butter_lowpass_filter
+    highcut = 4/110 # Hz
+    fs = 160 # Hz
+    order = 1
 
-    tod = alltod[iTES, :]
+    # TESNum = 128 # TES 128 is blind and responsive to the Earth magnitic field
+    # iTES = TESNum - 1
+    # tod = alltod[iTES, :]
+    ### We will stack multiple TOD in order to maximise the SNR
+    all_ind = np.arange(len(alltod[0]))
+    # stacked_tod = np.zeros_like(alltod[0])
+    blind_TES_ok = [[65, 127, 128], # just looked by eye, might not be the best list (blind TES that see magnitic field)
+                    [1, 1, 1]]      # sign of the signal of the TES
+    all_TES_ok = [[32, 33, 34, 61, 62, 64, 65, 66, 67, 93, 94, 95, 96, 98, 99, 100, 125, 127, 128], # these are not blind but they see the Earth magnetic field # "2026-07-24_rise" or "2026-07-25_set"
+                [-1, -1, -1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1]] # sign of the signal of the TES
+    group_2026_07_23_rise = [[65, 97, 127, 128], # not as good a result as with blind_TES_ok
+                            [1, -1, 1, 1]]
+    
+    # it seems that some TES are more sensitive to temperature change than others --> difference between blind TES and not blind ones?
+    group_2026_07_27_set = [[32, 33, 34, 93, 94, 95, 96, 98, 99, 65], # these are not blind but they see the Earth magnetic field # "2026-07-24_rise" or "2026-07-25_set"
+                [-1, -1, -1, -1, -1, -1, -1, -1, -1, 1]] # sign of the signal of the TES
+    
+    plot_scan = 131 #150 2026-07-27_set temperature change
+    only_plot = False # if we only want the plot
 
-    plt.figure()
-    plt.plot(tt, azt)
-    plt.plot(tt, elt)
-    plt.plot(tt, tod)
-    plt.show()
-    azet
+    chosen_group = all_TES_ok # blind_TES_ok works for most, but not precise enough
+    chosen_TES = chosen_group[0]
+    sign = chosen_group[1]
+    fig, ax = plt.subplots(1, 1, figsize=(15, 7))
+    tod_iTES = np.zeros((len(alltod[0]), len(chosen_TES)))
+    for i_T, TESNum in enumerate(chosen_TES):
+        iTES = TESNum - 1
+        # tod_iTES = np.zeros_like(alltod[0])
+        for i_scan in range(1, int(np.max(scantype)) + 1): # the time shift we are looking for should be small so we can do this
+            if i_scan != plot_scan and only_plot:
+                continue
+            # we want to include the zero in-between (except for normalisation purposes)
+            where_iscan = np.nonzero(np.logical_or(scantype == i_scan, scantype == -i_scan))
+            if i_scan < np.max(scantype): # we also get the zero before the next scan
+                where_next_iscan = np.nonzero(np.logical_or(scantype == i_scan + 1, scantype == -(i_scan + 1)))
+            first_ind = np.min(where_iscan)
+            last_ind = max(np.max(where_iscan) + 1, np.min(where_next_iscan))# - 1
+            mask_iscan = np.logical_and(all_ind >= first_ind, all_ind < last_ind)
+            mask_iscan_nonzero = np.logical_and(mask_iscan, scantype != 0) # in order to be able to normalise with less issues
+            smooth_scan = pmf.butter_lowpass_filter(alltod[iTES, mask_iscan], highcut, fs, order)
+            tod_iTES[mask_iscan, i_T] = sign[i_T]*(alltod[iTES, mask_iscan] - np.mean(alltod[iTES, mask_iscan_nonzero]))/np.std(alltod[iTES, mask_iscan_nonzero])
+            if i_scan == plot_scan:
+                ax.plot(tt[mask_iscan], tod_iTES[mask_iscan, i_T], label="{}".format(TESNum))
+
+    mean_tod = np.mean(tod_iTES, axis=1)
+    median_tod = np.median(tod_iTES, axis=1)
+    # fancier mean with sigma clipping
+    masked_tod = sigma_clip(tod_iTES, sigma=2, axis=1)
+    mean_tod_sigclip = np.mean(masked_tod, axis=1)
+
+    if doplot:
+        # plt.xlim(6800, 6950)
+        ax.set_xlabel("time [s]")
+        ax.set_ylabel("normalised TOD")
+        ax.legend(loc="upper right")
+        file_name = "figures/{}_{}_norm_TOD_stack.pdf".format(ObsDate, scanning)
+        fig.savefig(file_name, dpi=150)
+        print("Saved {}".format(file_name))
+        plt.show()
+
+    tod = mean_tod_sigclip
+    # tod = median_tod
+    tod_comp = alltod[128 - 1, :] # we compare with TES 128
+
+    return mean_tod, mean_tod_sigclip, median_tod, binned_tod
+
+
+
+def check_tshift_live(data_TOD_notshift, doplot=False): # will be copy pasted from ipynb file
+    """Function to check for a possible shift between science time and mount
+    time by comparing the azel positions of the telescope with the variations
+    of the signal measured by a TES strongly responsive to the Earth magnetic
+    field.
+
+    TES 65, 127 and 128 seem to be blind TES with squids strongly correlated
+    to the Earth magnetic field and are therefore useful to compute tshift.
+    Other TES also have squids sensitive to the Earth magnetic field and
+    can be used.
+    """
+    # it might be better to treat each data file separately to avoid issues with the gaps in the data
+    # tod_peaks = pmf.find_sign_change(tt, deriv_smooth_tod) # the indices of the peaks in the TOD
+    # az_peaks = pmf.find_sign_change(tt, az_vel) # the indices of the peaks in azimuth
+    # az_peaks = np.array([az_peak for az_peak in az_peaks if az_vel[az_peak] != 0]) # we remove where az_vel == 0
+    tod_peaks = []
+    az_peaks = []
+    ifile_peaks = []
+    tt_start_file = []
+    for i_f in range(np.max(ifile) + 1):
+        if i_f not in ifile:
+            continue
+        mask_f = ifile == i_f
+        arg_f = np.nonzero(mask_f)[0]
+        tt_start_file.append(tt[arg_f[0]])
+        margin = 30*160 # points excluded because too close from file change
+        first_ind_f = arg_f[0] + margin
+        last_ind_f = arg_f[-1] - margin + 1
+        tt_f = tt[first_ind_f:last_ind_f]
+        deriv_smooth_tod_f = deriv_smooth_tod[first_ind_f:last_ind_f]
+        az_vel_f = az_vel[first_ind_f:last_ind_f]
+        tod_peaks_f = pmf.find_sign_change(tt_f, deriv_smooth_tod_f) # the indices of the peaks in the TOD
+        dist_ok = 10*160
+        tod_peaks_f += first_ind_f
+        tod_peaks_f = np.array([tod_peak for tod_peak in tod_peaks_f if np.all(az_vel[max(0, tod_peak - dist_ok):tod_peak + dist_ok] != 0)]) # we remove where az_vel == 0
+        tod_peak = tod_peaks_f[0]
+        az_peaks_f = pmf.find_sign_change(tt_f, az_vel_f) # the indices of the peaks in azimuth
+        az_peaks_f += first_ind_f
+        az_peaks_f = np.array([az_peak for az_peak in az_peaks_f if np.all(az_vel[max(0, az_peak - dist_ok):az_peak + dist_ok] != 0)]) # we remove where az_vel == 0
+        tod_peaks.append(tod_peaks_f)
+        az_peaks.append(az_peaks_f)
+        ifile_peaks.append(np.full_like(tod_peaks_f, i_f))
+    tod_peaks = np.concatenate(tod_peaks)
+    az_peaks = np.concatenate(az_peaks)
+    ifile_peaks = np.concatenate(ifile_peaks)
+    tt_start_file = np.array(tt_start_file)
+
+    print(np.shape(tod_peaks))
+    print(np.shape(az_peaks))
+
+    # # to check where is the problem if not the same number of peaks between tod and az
+    # fig, ax = plt.subplots()
+    # ax.scatter(tt[tod_peaks], az_vel[tod_peaks], c="b", s=8, label="az_vel[tod_peaks]")
+    # ax.scatter(tt[az_peaks], az_vel[az_peaks], c="r", s=4, label="az_vel[az_peaks]")
+    # plt.legend()
+    # plt.show()
+
+
+    tshifts = tt[az_peaks] - tt[tod_peaks] # works only if the peaks are the same
+    print("shape tshifts", np.shape(tshifts))
+
+    median_tshift = np.median(tshifts)
+
+    # Moving average
+    win_w = 15 # npoints
+    window_width = win_w + win_w%2 # ensures an even number
+    tshifts_mean = np.pad(tshifts, int(window_width/2) , mode='edge')
+    cumsum_vec = np.cumsum(tshifts_mean)
+    tshifts_mean = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
+
+    # let's also see the moving median over nb_med tshifts
+    nb_med = 15
+    shape_pad_start = lambda i: max(0, nb_med//2 - i)
+    shape_pad_end = lambda i: max(0, i - nb_med//2)
+    padding_start = lambda x: np.full(x, tshifts[0]) # use it with shape_pad_start result
+    padding_end = lambda x: np.full(x, tshifts[-1]) # use it with shape_pad_end result
+    last_ind = lambda x: None if x == 0 else -x # use it with shape_pad_start result
+
+    # and now the median/mean? of the shift for each data file
+    tt_binned, tshifts_binned, test_f, test_f2 = pmf.bin_data_by_scan(tt[az_peaks], tshifts, ifile_peaks)
+    print(test_f)
+    print(test_f2)
+
+    # a more clever way to do it is just to create a padded array and THEN do the intermediate array
+
+    intermediate_array = np.array([np.concatenate([padding_start(shape_pad_start(i)), tshifts[shape_pad_end(i):last_ind(shape_pad_start(i))], padding_end(shape_pad_end(i))]) for i in range(nb_med)])
+    tshifts_med = np.median(intermediate_array, axis=0)
+
+    tshifts_mean_alltt = np.interp(tt, tt[tod_peaks], tshifts_mean)
+    tshifts_med_alltt = np.interp(tt, tt[tod_peaks], tshifts_med)
+    tshifts_alltt = np.interp(tt, tt[tod_peaks], tshifts)
+
+    tshifts_binned_alltt = interp1d(tt_start_file, tshifts_binned, kind='previous', fill_value='extrapolate')(tt)
+
+    file_name = "{}_tshifts_med_alltt.npy".format(ObsName)
+    np.save(file_name, tshifts_med_alltt)
+    print("Saved {}".format(file_name))

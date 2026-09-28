@@ -52,7 +52,7 @@ from qubic.lib.Instrument.Qinstrument import QubicMultibandInstrument
 from qubic.lib.Qscene import QubicScene
 #########################
 
-conv_reso_fwhm = 2.35482
+conv_reso_fwhm = 2.35482 # conversion from sigma to FWHM: sigma*conv_reso_fwhm = FWHM
 AU_meters = 149597870700 # m
 
 #########################
@@ -65,7 +65,7 @@ AU_meters = 149597870700 # m
 
 #########################
 
-def centre_coord_at_0(coord):
+def centre_coord_at_0(coord): # in order for a modulo 360° coord to be from -180° to 180° instead of from 0° to 360°
     return np.mod(coord - 180, 360) - 180
 
 def timer(f, *args):
@@ -588,7 +588,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             widths = []
             peaks_detected = []
             for i in range(np.max(ifile) + 1):
-                print("i", i)
+                # print("i", i)
                 mask_elt = None
                 mask = ifile == i
                 if np.sum(mask) == 0: # happens when we skip a bad file when reading the data
@@ -603,7 +603,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 peaks_detected_, peaks_properties = find_peaks(data_peaks[mask], height=None, threshold=None, distance=10*freq_sampling, prominence=prominence, width=(1*freq_sampling, 8*freq_sampling), wlen=10*freq_sampling, rel_height=0.5, plateau_size=None)
                 peaks_detected.append(peaks_detected_ + first_index)
                 widths.append(peaks_properties["widths"])
-            print("peaks_detected", peaks_detected)
+            # print("peaks_detected", peaks_detected)
             peaks_detected = np.concatenate(peaks_detected)
             widths = np.concatenate(widths)
 
@@ -632,19 +632,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             # tod_no_glitches = test_tod_no_glitch.copy() # you can use this for flux jumps, but there is a bit of filtering ringing around Moon
         else:
             tod_no_glitches = mytod
-        # tod_no_peak = remove_peaks(tt, mytod.copy(), peaks_detected, interval=interval_peak, mask=mask_elt)
-        # print(np.shape(peaks_detected))
-        # print(peaks_detected)
-        # print(np.shape(interval_peak))
-        # print(interval_peak)
-        # aetzr
         tod_no_peak = remove_peaks(tt, tod_no_glitches.copy(), peaks_detected, interval=interval_peak, mask=mask_elt)
         mytod_3 = my_filt(tod_no_peak.copy())
         mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, peaks_detected, interval=interval_peak, mask=mask_elt)
-
-        # tod_no_peak = remove_peaks(tt, tod_ma.copy(), peaks_detected, interval=interval_peak, mask=mask_elt)
-        # mytod_3 = my_filt(tod_no_peak.copy())
-        # mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, peaks_detected, interval=interval_peak, mask=mask_elt)
 
         if doplot and True: # these plots are peaks, Moon TOD and Moon TOD spectrum
             # Lagrange_poly(x, points_x, points_y)
@@ -690,14 +680,18 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
     
         mapsb_forth, mapcount_forth = healpix_map(newazt[scantype > 0], newelt[scantype > 0], final_tod[scantype > 0], nside=nside)
         mapsb_back, mapcount_back = healpix_map(newazt[scantype < 0], newelt[scantype < 0], final_tod[scantype < 0], nside=nside)
+        # mapsb_forth, mapcount_forth = healpix_map(newazt[scantype > 0], newelt[scantype > 0], mytod[scantype > 0], nside=nside)
+        # mapsb_back, mapcount_back = healpix_map(newazt[scantype < 0], newelt[scantype < 0], mytod[scantype < 0], nside=nside)
 
 
 
         if ObsDate[:4] == "2026":
+            mapsb_fb_proj_nointerp = []
             mapsb_fb_proj = []
             for mapsb_ in [mapsb_forth, mapsb_back]:
                 mapsb_proj = hp.gnomview(mapsb_, reso=reso, min=min_plot, max=max_plot, xsize=xsize,
                         rot=center, return_projected_map=True, no_plot=True)
+                mapsb_fb_proj_nointerp.append(mapsb_proj)
                 X = np.arange(len(mapsb_proj))
                 Y = np.arange(len(mapsb_proj[0]))
                 XX, YY = np.meshgrid(X, Y) # pixel units, just for the interpolation
@@ -712,6 +706,16 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 mapsb_fb_proj.append(new_mapsb_proj)
 
             if doplot:
+                fig, axs = plt.subplots(1, 3, figsize=(18, 6))
+                axs[0].set_title("forth")
+                axs[0].imshow(mapsb_fb_proj_nointerp[0], vmin=min_plot, vmax=max_plot)
+                axs[1].set_title("back")
+                axs[1].imshow(mapsb_fb_proj_nointerp[1], vmin=min_plot, vmax=max_plot)
+                # axs[2].set_title("back - forth")
+                # axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
+                # fig.savefig("figures/{}_{}_back-forth_plot.pdf".format(ObsName, TES_number), dpi=150)
+                plt.show()
+            
                 fig, axs = plt.subplots(1, 3, figsize=(18, 6))
                 axs[0].set_title("forth")
                 axs[0].imshow(mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
@@ -2251,7 +2255,7 @@ def find_sign_change(x, y):
     where_change = np.nonzero(sign_change)[0] #np.argwhere(sign_change)
     return where_change
 
-def observation_dirs(ObsDate, rise_or_set, datadir):
+def observation_dirs_moon(ObsDate, rise_or_set, datadir):
     """Function that returns the folders containing the chosen observation.
 
     It uses astropy to find the folders using the start date and Moon rising
@@ -2265,9 +2269,6 @@ def observation_dirs(ObsDate, rise_or_set, datadir):
         Wether the Moon is rising ("rise") or setting ("set").
     datadir: str
         The data directory where the dated folders are.
-    min_el, max_el: float
-        The minimum and maximum Moon elevations to take into account in degrees.
-        Default is respectively 15° and 85 degrees.
         
     Returns
     -------
@@ -2535,7 +2536,7 @@ def stack_TOD_scan_by_scan(data_TOD_notshift, doplot=False): # will be copy past
             last_ind = max(np.max(where_iscan) + 1, np.min(where_next_iscan))# - 1
             mask_iscan = np.logical_and(all_ind >= first_ind, all_ind < last_ind)
             mask_iscan_nonzero = np.logical_and(mask_iscan, scantype != 0) # in order to be able to normalise with less issues
-            smooth_scan = pmf.butter_lowpass_filter(alltod[iTES, mask_iscan], highcut, fs, order)
+            smooth_scan = butter_lowpass_filter(alltod[iTES, mask_iscan], highcut, fs, order)
             tod_iTES[mask_iscan, i_T] = sign[i_T]*(alltod[iTES, mask_iscan] - np.mean(alltod[iTES, mask_iscan_nonzero]))/np.std(alltod[iTES, mask_iscan_nonzero])
             if i_scan == plot_scan:
                 ax.plot(tt[mask_iscan], tod_iTES[mask_iscan, i_T], label="{}".format(TESNum))
@@ -2564,7 +2565,7 @@ def stack_TOD_scan_by_scan(data_TOD_notshift, doplot=False): # will be copy past
 
 
 
-def check_tshift_live(data_TOD_notshift, doplot=False): # will be copy pasted from ipynb file
+def check_tshift_live(ObsName, data_TOD_notshift, stacked_tod, tod_comp=None, doplot=False): # will be copy pasted from ipynb file
     """Function to check for a possible shift between science time and mount
     time by comparing the azel positions of the telescope with the variations
     of the signal measured by a TES strongly responsive to the Earth magnetic
@@ -2575,9 +2576,29 @@ def check_tshift_live(data_TOD_notshift, doplot=False): # will be copy pasted fr
     Other TES also have squids sensitive to the Earth magnetic field and
     can be used.
     """
+    # data_TOD_notshift is the data read without tshift correction
+    tt, _, _, _, azt, _, _, _, _, _, _, ifile, _, _, _ = data_TOD_notshift
+    tod = stacked_tod
+
+    highcut = 4/110 # Hz
+    fs = 160 # Hz
+    order = 1
+    smooth_tod = butter_lowpass_filter(tod, highcut, fs, order)
+    if tod_comp is not None:
+        smooth_tod_comp = butter_lowpass_filter(tod_comp, highcut, fs, order)
+    smooth_az = butter_lowpass_filter(azt, highcut, fs, order)
+
+    # v1 --> order=5000, order=2000
+    # v2 --> order=1000, order=3000
+    # v2 --> order=300, order=3000
+    deriv_smooth_tod = get_vel(tt, smooth_tod, order=1000)
+    az_vel = get_vel(tt, azt, order=500) # low order to be able to get rid of data where az_vel == 0
+    bad_az_vel = np.nonzero(az_vel == 0)[0]
+    print(np.shape(bad_az_vel))
+
     # it might be better to treat each data file separately to avoid issues with the gaps in the data
-    # tod_peaks = pmf.find_sign_change(tt, deriv_smooth_tod) # the indices of the peaks in the TOD
-    # az_peaks = pmf.find_sign_change(tt, az_vel) # the indices of the peaks in azimuth
+    # tod_peaks = find_sign_change(tt, deriv_smooth_tod) # the indices of the peaks in the TOD
+    # az_peaks = find_sign_change(tt, az_vel) # the indices of the peaks in azimuth
     # az_peaks = np.array([az_peak for az_peak in az_peaks if az_vel[az_peak] != 0]) # we remove where az_vel == 0
     tod_peaks = []
     az_peaks = []
@@ -2589,18 +2610,18 @@ def check_tshift_live(data_TOD_notshift, doplot=False): # will be copy pasted fr
         mask_f = ifile == i_f
         arg_f = np.nonzero(mask_f)[0]
         tt_start_file.append(tt[arg_f[0]])
-        margin = 30*160 # points excluded because too close from file change
+        margin = 30*fs # points excluded because too close from file change (~30 seconds)
         first_ind_f = arg_f[0] + margin
         last_ind_f = arg_f[-1] - margin + 1
         tt_f = tt[first_ind_f:last_ind_f]
         deriv_smooth_tod_f = deriv_smooth_tod[first_ind_f:last_ind_f]
         az_vel_f = az_vel[first_ind_f:last_ind_f]
-        tod_peaks_f = pmf.find_sign_change(tt_f, deriv_smooth_tod_f) # the indices of the peaks in the TOD
-        dist_ok = 10*160
+        tod_peaks_f = find_sign_change(tt_f, deriv_smooth_tod_f) # the indices of the peaks in the TOD
+        dist_ok = 10*fs # 10 s
         tod_peaks_f += first_ind_f
         tod_peaks_f = np.array([tod_peak for tod_peak in tod_peaks_f if np.all(az_vel[max(0, tod_peak - dist_ok):tod_peak + dist_ok] != 0)]) # we remove where az_vel == 0
         tod_peak = tod_peaks_f[0]
-        az_peaks_f = pmf.find_sign_change(tt_f, az_vel_f) # the indices of the peaks in azimuth
+        az_peaks_f = find_sign_change(tt_f, az_vel_f) # the indices of the peaks in azimuth
         az_peaks_f += first_ind_f
         az_peaks_f = np.array([az_peak for az_peak in az_peaks_f if np.all(az_vel[max(0, az_peak - dist_ok):az_peak + dist_ok] != 0)]) # we remove where az_vel == 0
         tod_peaks.append(tod_peaks_f)
@@ -2621,7 +2642,6 @@ def check_tshift_live(data_TOD_notshift, doplot=False): # will be copy pasted fr
     # plt.legend()
     # plt.show()
 
-
     tshifts = tt[az_peaks] - tt[tod_peaks] # works only if the peaks are the same
     print("shape tshifts", np.shape(tshifts))
 
@@ -2634,22 +2654,14 @@ def check_tshift_live(data_TOD_notshift, doplot=False): # will be copy pasted fr
     cumsum_vec = np.cumsum(tshifts_mean)
     tshifts_mean = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
 
+    # and now the median/mean? of the shift for each data file
+    tt_binned, tshifts_binned, test_f, test_f2 = bin_data_by_scan(tt[az_peaks], tshifts, ifile_peaks)
+    
     # let's also see the moving median over nb_med tshifts
     nb_med = 15
-    shape_pad_start = lambda i: max(0, nb_med//2 - i)
-    shape_pad_end = lambda i: max(0, i - nb_med//2)
-    padding_start = lambda x: np.full(x, tshifts[0]) # use it with shape_pad_start result
-    padding_end = lambda x: np.full(x, tshifts[-1]) # use it with shape_pad_end result
     last_ind = lambda x: None if x == 0 else -x # use it with shape_pad_start result
-
-    # and now the median/mean? of the shift for each data file
-    tt_binned, tshifts_binned, test_f, test_f2 = pmf.bin_data_by_scan(tt[az_peaks], tshifts, ifile_peaks)
-    print(test_f)
-    print(test_f2)
-
-    # a more clever way to do it is just to create a padded array and THEN do the intermediate array
-
-    intermediate_array = np.array([np.concatenate([padding_start(shape_pad_start(i)), tshifts[shape_pad_end(i):last_ind(shape_pad_start(i))], padding_end(shape_pad_end(i))]) for i in range(nb_med)])
+    padded_array = np.pad(tshifts, ((nb_med//2, nb_med//2)), mode="edge")
+    intermediate_array = np.array([padded_array[i:last_ind(nb_med - i - 1)] for i in range(nb_med)])
     tshifts_med = np.median(intermediate_array, axis=0)
 
     tshifts_mean_alltt = np.interp(tt, tt[tod_peaks], tshifts_mean)
@@ -2661,3 +2673,13 @@ def check_tshift_live(data_TOD_notshift, doplot=False): # will be copy pasted fr
     file_name = "{}_tshifts_med_alltt.npy".format(ObsName)
     np.save(file_name, tshifts_med_alltt)
     print("Saved {}".format(file_name))
+
+    return tshifts, tshifts_alltt, tod_peaks, az_peaks, tshifts_mean_alltt, tshifts_med_alltt, tshifts_binned_alltt, tt_start_file
+
+def stack_maps_same_TES():
+    """
+    We want to stack maps from different observations in order to
+    fill the gaps due to the scanning strategy before fitting the Moon
+    order 0 position that will give us the detector line of sight.
+    """
+    return

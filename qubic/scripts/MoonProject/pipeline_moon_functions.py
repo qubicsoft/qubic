@@ -43,6 +43,12 @@ import qubic.lib.Calibration.Qfiber as ft
 from qubic.lib import Qdictionary
 from qubic.lib.Instrument import Qacquisition
 
+from pyoperators import (
+    IdentityOperator,
+    ReshapeOperator,
+    UnpackOperator,
+)
+
 import pipeline_moon_plotting as pmp
 
 #########################
@@ -166,6 +172,26 @@ def healpix_map_(azt, elt, tod, nside=128, countcut=0, unseen_val=hp.UNSEEN):
     mapcount[unseen] = unseen_val
     mymap[~unseen] = mymap[~unseen] / mapcount[~unseen]
     return mymap, mapcount
+
+def get_remapping_operator(qubic_patch=None, shape_patch=None, shape_full=None): # taken from qubic.lib.Instrument.Qacquisition.QubicAcquisition of branch calibration_dev
+    """
+    Return the operator that maps the qubic_patch pixels into a 12 * nside**2 map of zeros.
+    """
+    if qubic_patch is not None: # we have here the issue that the shape will depend on nstokes and ncomp. a solution could be to input the shape direcly!
+        mask = np.zeros(shape_full, dtype=bool)
+        dim_patch = np.argwhere(np.array(shape_patch) == len(qubic_patch))
+        if dim_patch == 0:
+            mask[qubic_patch, ...] = True
+        elif dim_patch == 1:
+            mask[:, qubic_patch, ...] = True
+        else:
+            raise ValueError("I don't understand the shape of the map {}".format(shape_patch))
+        shapein = shape_patch
+        shapeout = (np.prod(np.array(shape_patch)),)
+        reshape = ReshapeOperator(shapein=shapein, shapeout=shapeout)
+        return UnpackOperator(mask, dtype=float)(reshape)
+    else:
+        return IdentityOperator()
 
 # Function to go from QubicSoft (Sims) indices (0-247) to QubicPack (data) indices (0-255)
 ### The 8 thermometers are not in QubicSoft
@@ -430,7 +456,7 @@ xlim = [10540, 10640]
 
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tbath=None, T1K=None, TES_number="", nside=256, doplot=True,
                           check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
-                          ObsName=None, new_method_clean=False, theo_sb=None, more="", simu=False):
+                          ObsName=None, new_method_clean=False, theo_sb=None, more="", simu=False, window=False):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -704,6 +730,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 mapsb_interpolator = LinearNDInterpolator(np.moveaxis([XX[no_UNSEEN_mask], YY[no_UNSEEN_mask]], 0, -1), mapsb_proj[no_UNSEEN_mask])
                 new_mapsb_proj = mapsb_interpolator(np.moveaxis([XX, YY], 0, -1))
                 mapsb_fb_proj.append(new_mapsb_proj)
+            mapsb_fb_proj.append(mapsb_fb_proj[1] - mapsb_fb_proj[0])
 
             if doplot:
                 fig, axs = plt.subplots(1, 3, figsize=(18, 6))
@@ -715,14 +742,15 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 # axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
                 # fig.savefig("figures/{}_{}_back-forth_plot.pdf".format(ObsName, TES_number), dpi=150)
                 plt.show()
-            
+
                 fig, axs = plt.subplots(1, 3, figsize=(18, 6))
-                axs[0].set_title("forth")
-                axs[0].imshow(mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
-                axs[1].set_title("back")
-                axs[1].imshow(mapsb_fb_proj[1], vmin=min_plot, vmax=max_plot)
-                axs[2].set_title("back - forth")
-                axs[2].imshow(mapsb_fb_proj[1] - mapsb_fb_proj[0], vmin=min_plot, vmax=max_plot)
+                titles = ["forth", "back", "back - forth"]
+                for i_plot in range(3):
+                    if window is None:
+                        window = np.array([[None, None], [None, None]])
+                    plot_ = mapsb_fb_proj[i_plot][window[0, 0]:window[0, 1], window[1, 0]:window[1, 1]]
+                    axs[i_plot].set_title(titles[i_plot])
+                    axs[i_plot].imshow(plot_, vmin=min_plot, vmax=max_plot)
                 fig.savefig("figures/{}_{}_back-forth_plot.pdf".format(ObsName, TES_number), dpi=150)
                 plt.show()
 
@@ -913,13 +941,13 @@ class gaussfitsphere:
         return np.ravel(mygauss * (1 - self.mask))
     
 class gaussfitgnomproj:
-    def __init__(self, elt, azt, nside, rot, reso, xs, mask=None): # might want to change to azt, elt to avoid mistakes
+    def __init__(self, i_elt, j_azt, nside, rot, reso, xs, mask=None):
         self.nside = nside
         self.rot = rot
         self.reso = reso
         self.xs = xs
         if mask is None:
-            self.mask = np.zeros_like(elt)
+            self.mask = np.zeros_like(i_elt)
         else:
             self.mask = mask
         # vec_centre = hp.ang2vec(self.rot[0], self.rot[1], lonlat=True)
@@ -929,19 +957,23 @@ class gaussfitgnomproj:
         self.pix_pos_patch = hp.pix2vec(self.nside, self.useful_pix) # here we save the coordinates of each pixel of the patch before proj
         # self.pix_pos_patch = np.swapaxes(self.pix_pos_patch, axis1=0, axis2=-1)
         self.pix_pos_patch = np.moveaxis(self.pix_pos_patch, source=[0, 1], destination=[1, 0])
-        self.pix_pos_proj = spherical2cartesian(1, azt, elt, coord="horizontal", axis="last") # here we save the coordinates of each pixel of the map after proj
+        self.pix_pos_proj = spherical2cartesian(1, j_azt, i_elt, coord="horizontal", axis="last") # here we save the coordinates of each pixel of the map after proj
+        self.interpolator = RegularGridInterpolator((np.arange(len(j_azt)), np.arange(len(i_elt))), self.pix_pos_proj, method='linear')
 
     def __call__(self, ij, amp, ic, jc, sig): # for curve_fit this time, not minuit
         # amp, ic, jc, sig = pars # here the position is given in pixels and later converted to azel
         if np.isnan(ic) or np.isnan(jc): # for some reason, maybe when we fall outise of the image, ic or jc can be NaNs
             shape_pix_pos = np.shape(self.pix_pos_proj)
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
-        ic = (ic - 1)*1e8 # trick to force curve_fit to do bigger steps (otherwise it stays at initial position)
-        jc = (jc - 1)*1e8
-        if not 0 < ic < self.xs or  not 0 < jc < self.xs: # if we fall outside of map
+        # ic = (ic - 1)*1e8 # trick to force curve_fit to do bigger steps (otherwise it stays at initial position)
+        # jc = (jc - 1)*1e8
+        if not 1 < ic < self.xs - 1 or not 1 < jc < self.xs - 1: # if we fall outside of map (or neighbours do)
+            # print("NOT ACCEPTED")
             shape_pix_pos = np.shape(self.pix_pos_proj)
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
-        centre_pos = self.pix_pos_proj[int(ic), int(jc)] # this is the vector associated with the pixel after proj, but it should be perfectly usable with vectors of pixels before proj
+        # change this to allow non integer pixel positions
+        # centre_pos = self.pix_pos_proj[int(ic), int(jc)] # this is the vector associated with the pixel after proj, but it should be perfectly usable with vectors of pixels before proj
+        centre_pos = self.interpolator((ic, jc))
         dist_deg = np.abs(np.degrees(dist_angle(self.pix_pos_patch, centre_pos)))
         mygauss = amp * np.exp(-0.5*dist_deg**2/sig**2)
         full_map = np.zeros(12*self.nside**2)
@@ -954,6 +986,8 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     # iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     iipos = ipos # already 2D
     jjpos = jpos
+    Ni = len(mapij)
+    Nj = len(mapij[0])
 
     # we want to keep the mask for the fit
     mask_badpix = mapij.mask
@@ -978,8 +1012,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
 
     ### Guess where the maximum is and the other parameters with a matched filter
     if guess is None:
-        Ni = len(mapij)
-        Nj = len(mapij[0])
         lobe_pos = (Ni//2, Nj//2)
         _, _, K = get_K(Ni, Nj)
         ft_phase = get_ft_phase(lobe_pos, Ni, Nj)
@@ -1049,29 +1081,20 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     xx = None
     # bounds=[[1e3, max_i - distok, max_j - distok, 0.6/conv_reso_fwhm], [1e8, max_i + distok, max_j + distok, 1.5/conv_reso_fwhm]]
     # popt, pcov = curve_fit(g2d, xx, mapij.ravel(), p0=guess, bounds=bounds)#, sigma=errpix.ravel())
-    fact_renorm = 1e8 # trick to force curve_fit to do bigger steps (otherwise it stays at initial position)
-    guess[1] = guess[1]/fact_renorm + 1
-    guess[2] = guess[2]/fact_renorm + 1
     popt, pcov = curve_fit(g2d, xx, mapij.ravel(), p0=guess)#, sigma=errpix.ravel())
     fitted = np.reshape(g2d(ipos, popt[0], popt[1], popt[2], popt[3]), (xs, xs))
-    popt[1] = (popt[1] - 1)*fact_renorm
-    popt[2] = (popt[2] - 1)*fact_renorm
-    guess[1] = (guess[1] - 1)*fact_renorm
-    guess[2] = (guess[2] - 1)*fact_renorm
-    where_res = np.array([int(popt[1]), int(popt[2])])
     m = type("Foo", (object,), {})()
     m.values = popt
-    # m.errors = pcov
     m.errors = np.diag(pcov) # to be compatible with old code
     ijerr = np.array([m.errors[1], m.errors[2]]) * reso/60 # pix to deg
     
-    ifit = where_res[0]
-    jfit = where_res[1]
-    ires = iipos[where_res[0], where_res[1]]
-    jres = jjpos[where_res[0], where_res[1]]
+    interpolator_ii = RegularGridInterpolator((np.arange(Ni), np.arange(Nj)), (iipos), method="linear")
+    interpolator_jj = RegularGridInterpolator((np.arange(Ni), np.arange(Nj)), (jjpos), method="linear")
+    ifit = popt[1]
+    jfit = popt[2]
+    ires = interpolator_ii((ifit, jfit))
+    jres = interpolator_jj((ifit, jfit))
     ijres = np.array([ires, jres])
-
-
 
 
     if doplot:
@@ -1557,7 +1580,7 @@ def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshif
 def make_coadded_maps(allTESNum, data=None,
                       doplot=True, nside=256, parallel=False, check_back_forth=False,
                       isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsName=None,
-                      new_method_clean=False, theo_sb=None, more=""):
+                      new_method_clean=False, theo_sb=None, more="", window=None):
     
     ObsDate = ObsName[:10]
     
@@ -1621,7 +1644,7 @@ def make_coadded_maps(allTESNum, data=None,
                                                              doplot=doplot, check_back_forth=check_back_forth,
                                                              det_pos=det_pos, clean_tod=clean_tod, manual=manual,
                                                              ObsName=ObsName, new_method_clean=new_method_clean,
-                                                             theo_sb=theo_sb, more=more)
+                                                             theo_sb=theo_sb, more=more, window=window)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
@@ -2302,7 +2325,8 @@ def observation_dirs_moon(ObsDate, rise_or_set, datadir):
 
     # from the beginning of the day and for 48 hours
     tinit = Time(ObsDate + "T00:00:00", format='isot', scale='utc')
-    two_days = tinit + np.arange(86400 * 2)*u.second # every second
+    n_sec_day = 86400 # number of seconds in a day
+    two_days = tinit + np.arange(n_sec_day * 2)*u.second # every second
 
     ### Moon
     moon_gcrs = get_body('Moon', two_days, ObsSite)
@@ -2310,6 +2334,7 @@ def observation_dirs_moon(ObsDate, rise_or_set, datadir):
 
     moon_el = moon_azel.alt.deg
     two_days_unix = two_days.to_value("unix")
+    tinit_unix = tinit.to_value("unix")
 
 
     ### we find the elevation extrema in order to separate Moon rising and setting
@@ -2328,7 +2353,7 @@ def observation_dirs_moon(ObsDate, rise_or_set, datadir):
     else:
         order = np.array(["set", "rise"])
 
-    def get_extremum(xleft, yleft, xright, yright): # linear approx
+    def get_extremum(xleft, yleft, xright, yright): # linear approx, y = ax + b
         b = (yright - yleft*xright/xleft)/(1 - xright/xleft)
         a = (yleft - b)/xleft
         return -b/a
@@ -2347,6 +2372,9 @@ def observation_dirs_moon(ObsDate, rise_or_set, datadir):
     # we select the files between the two extrema
     first_extr = int(np.argwhere(order == rise_or_set)) # the extremum index just before the start of the acquisition
     # first_extr = np.nonzero(order == rise_or_set) # the extremum index just before the start of the acquisition
+    if not tinit_unix < extrem_time_unix[first_extr] < tinit_unix + n_sec_day:
+        # if the start of the observation is not the right day, it means there are no files for it
+        raise ValueError("No data for the observation {}.".format(ObsDate + "_" + rise_or_set))
     selection = np.logical_and(extrem_time_unix[first_extr] < alldates_unix, alldates_unix < extrem_time_unix[first_extr + 1])
     selected_files = alldirs[selection]
 
@@ -2645,8 +2673,6 @@ def check_tshift_live(ObsName, data_TOD_notshift, stacked_tod, tod_comp=None, do
     tshifts = tt[az_peaks] - tt[tod_peaks] # works only if the peaks are the same
     print("shape tshifts", np.shape(tshifts))
 
-    median_tshift = np.median(tshifts)
-
     # Moving average
     win_w = 15 # npoints
     window_width = win_w + win_w%2 # ensures an even number
@@ -2655,11 +2681,11 @@ def check_tshift_live(ObsName, data_TOD_notshift, stacked_tod, tod_comp=None, do
     tshifts_mean = (cumsum_vec[window_width:] - cumsum_vec[:-window_width]) / window_width
 
     # and now the median/mean? of the shift for each data file
-    tt_binned, tshifts_binned, test_f, test_f2 = bin_data_by_scan(tt[az_peaks], tshifts, ifile_peaks)
+    _, tshifts_binned, _, _ = bin_data_by_scan(tt[az_peaks], tshifts, ifile_peaks)
     
     # let's also see the moving median over nb_med tshifts
     nb_med = 15
-    last_ind = lambda x: None if x == 0 else -x # use it with shape_pad_start result
+    last_ind = lambda x: None if x == 0 else -x # use it for the last index of the padded array
     padded_array = np.pad(tshifts, ((nb_med//2, nb_med//2)), mode="edge")
     intermediate_array = np.array([padded_array[i:last_ind(nb_med - i - 1)] for i in range(nb_med)])
     tshifts_med = np.median(intermediate_array, axis=0)

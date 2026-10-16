@@ -1,0 +1,20 @@
+# coordinate system Galactic
+# unit K_CMB
+planck:
+
+  frequency: 143 GHz
+  fwhm: 7.3 arcmin
+
+
+# coordinate system altazimuth
+# unit ADU
+qubic:
+  frequency: 150 GHz
+  fwhm: 0.68 deg
+
+  site:
+    latitude: -24.186 deg
+    longitude: -66.478 deg
+    altitude: 4869 m
+
+

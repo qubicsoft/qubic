@@ -1,0 +1,23 @@
+output: "output"
+
+region:
+  name: "GalacticPlane"
+  center: "325.33299999999997 -8.016" # l, b in deg
+
+qubic:
+  datapath: ""
+  tes: 95
+
+  preprocessing:
+
+    - baseline:
+        type: "median" # mean
+
+    - detrend:
+        enabled: false
+        order: 1
+
+
+planck:
+  datapath: ""
+

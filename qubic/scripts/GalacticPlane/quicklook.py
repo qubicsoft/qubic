@@ -6,6 +6,7 @@ app = marimo.App(width="full")
 
 @app.cell
 def _():
+    import os
     from dataclasses import dataclass, replace
     from pathlib import Path
 
@@ -39,6 +40,7 @@ def _():
         make_subplots,
         mo,
         np,
+        os,
         px,
         qubicfp,
         replace,
@@ -61,7 +63,7 @@ def _(mo):
 
 @app.cell
 def _(EarthLocation, Path, u):
-    root = Path("input/qubic")
+    root = Path("data/input/qubic")
     site = EarthLocation(lat=-24.18696100 * u.deg, lon=-66.47827748 * u.deg, height=4868.590 * u.m)
     return root, site
 
@@ -78,9 +80,11 @@ def _(
     hp,
     make_subplots,
     np,
+    os,
     px,
     qubicfp,
     replace,
+    tes,
     u,
 ):
     @dataclass
@@ -93,6 +97,8 @@ def _(
         ra: np.ndarray
         dec: np.ndarray
 
+        dest: Path
+
         @classmethod
         def load(cls, paths, site):
             if isinstance(paths, (str, Path)):
@@ -101,25 +107,52 @@ def _(
             chunks = []
             for path in paths:
 
-                qubic = qubicfp()
-                qubic.read_qubicstudio_dataset(str(path))
+                output = (Path(path.parts[0]) / "output").resolve()
+                dest = (output / path.name.split('_')[0] / path.name).resolve()
+                os.makedirs(dest, exist_ok=True)
 
-                time, signals = qubic.tod()
+                time_path = dest / "time.npy"
+                signals_path = dest / "signals.npz"
+                azimuth_path = dest / "azimuth.npy"
+                elevation_path = dest / "elevation.npy"
+                output_paths = [time_path, signals_path, azimuth_path, elevation_path]
 
-                # alcuni dataset hanno un endianess diverso. np.asarray uniforma
-                azimuth = np.interp(
-                    time,
-                    np.asarray(qubic.timeaxis(datatype="az"), dtype=float),
-                    np.asarray(qubic.azimuth(), dtype=float))
-    
-                elevation = np.interp(
-                    time,
-                    np.asarray(qubic.timeaxis(datatype="el"), dtype=float),
-                    np.asarray(qubic.elevation(), dtype=float))
+                # returns True if at least one path is missing
+                if any(not p.exists() for p in output_paths):
 
-                chunks.append((time, signals, azimuth, elevation))
+                    qubic = qubicfp()
+                    qubic.read_qubicstudio_dataset(str(path))
 
-                del qubic
+                    time, signals = qubic.tod()
+
+                    # alcuni dataset hanno un endianess diverso. np.asarray uniforma
+                    azimuth = np.interp(
+                        time,
+                        np.asarray(qubic.timeaxis(datatype="az"), dtype=float),
+                        np.asarray(qubic.azimuth(), dtype=float))
+
+                    elevation = np.interp(
+                        time,
+                        np.asarray(qubic.timeaxis(datatype="el"), dtype=float),
+                        np.asarray(qubic.elevation(), dtype=float))
+
+                    np.save(dest / "time.npy", time)
+                    np.save(dest / "azimuth.npy", azimuth)
+                    np.save(dest / "elevation.npy", elevation)
+                    np.savez(dest / "signals.npz", signals=signals)
+
+                    del qubic
+
+                else:
+
+                    time = np.load(time_path)
+                    signals = np.load(signals_path)['signals']
+                    azimuth = np.load(azimuth_path)
+                    elevation = np.load(elevation_path)
+
+
+                chunks.append((time, signals, azimuth, elevation, dest))
+
 
             # ordino i datasets in base al primo istante temporale di acquisizione
             # cosi da non dipendere dal nome dei dataset ma dai dati che contengono.
@@ -135,33 +168,46 @@ def _(
             azimuth = np.concatenate([c[2] for c in chunks])
             elevation = np.concatenate([c[3] for c in chunks])
 
+            dest = chunks[0][4].parent / "observations" / chunks[0][4].name
+            dest.mkdir(parents=True, exist_ok=True)
+
             sky = SkyCoord(
                 az=azimuth * u.deg,
                 alt=elevation * u.deg,
                 frame=AltAz(obstime=Time(time, format="unix", scale="utc"), location=site)).icrs
 
-            return cls(time, signals, azimuth, elevation, sky.ra.deg, sky.dec.deg)
+            return cls(time, signals, azimuth, elevation, sky.ra.deg, sky.dec.deg, dest)
+
 
         def normalize(self):
             signals = self.signals - np.median(self.signals, axis=1, keepdims=True)
             signals /= signals.std(axis=1, keepdims=True)
             return replace(self, signals=signals)
 
-        def select(self, mask):
+        def select(self, fraction: float = 0.1):
+
+            start, stop = int(fraction * len(self.time)), int((1 - fraction) * len(self.time))
+
+
             return replace(
                 self,
-                time=self.time[mask].copy(),
-                signals=self.signals[:, mask].copy(),
-                azimuth=self.azimuth[mask].copy(),
-                elevation=self.elevation[mask].copy(),
-                ra=self.ra[mask].copy(),
-                dec=self.dec[mask].copy())
+                time=self.time[start:stop].copy(),
+                signals=self.signals[:, start:stop].copy(),
+                azimuth=self.azimuth[start:stop].copy(),
+                elevation=self.elevation[start:stop].copy(),
+                ra=self.ra[start:stop].copy(),
+                dec=self.dec[start:stop].copy(),
+                dest=self.dest)
 
 
         @classmethod
-        def combine(cls, observations):
+        def combine(cls, observations, dest: Path):
 
             observations = sorted(observations, key=lambda o: o.time[0])
+
+            dest = Path(dest)
+            dest.mkdir(parents=True, exist_ok=True)
+
 
             return cls(
                 time=np.concatenate([o.time for o in observations]),
@@ -169,7 +215,8 @@ def _(
                 azimuth=np.concatenate([o.azimuth for o in observations]),
                 elevation=np.concatenate([o.elevation for o in observations]),
                 ra=np.concatenate([o.ra for o in observations]),
-                dec=np.concatenate([o.dec for o in observations]))
+                dec=np.concatenate([o.dec for o in observations]),
+                dest=dest)
 
         def make_healpix(self, tes, nside=256):
 
@@ -205,6 +252,8 @@ def _(
             fig.update_yaxes(title_text="Azimuth [deg]",
                              secondary_y=True)
 
+            fig.write_html(self.dest / f"tod_tes_{tes}.html")
+
             return fig
 
         def plot_intensity_scatter(self, tes):
@@ -224,6 +273,8 @@ def _(
                 yaxis_title="Dec [deg]")
 
             fig.update_xaxes(autorange="reversed")
+
+            fig.write_html(self.dest / f"intensity_tes_{tes}.html")
 
             return fig
 
@@ -249,6 +300,8 @@ def _(
                     "color": "Signal"})
 
             fig.update_xaxes(autorange="reversed")
+
+            fig.write_html(self.dest / f"binned_tes_{tes}.html")
 
             return fig
 
@@ -306,6 +359,8 @@ def _(
 
             fig.update_yaxes(scaleanchor="x", scaleratio=1)
 
+            fig.write_html(self.dest / f"gnomic_TES_{tes}.html")
+
             return fig
 
         def plot_mollweide(self, sky, title="Mappa globale", xsize=1000):
@@ -345,6 +400,8 @@ def _(
 
             fig.update_xaxes(visible=False)
             fig.update_yaxes(visible=False, scaleanchor="x", scaleratio=1)
+
+            fig.write_html(self.dest / f"mollweide_TES_{tes}.html")
 
             return fig
 
@@ -393,16 +450,18 @@ def _(Observation, groups, site):
 def _():
     tes = 95
     nside = 256
-    preview_index = 0
-    normalize_each = False
-    preview_plot = "gnomonic"  # "tod", "scatter", "binned", "gnomonic"
-    return normalize_each, nside, preview_index, preview_plot, tes
+    fraction = 0.1 # fraction for data cutting
+    preview_index_ = 0
+    normalize_each = True
+    preview_plot_ = "gnomonic"  # "tod", "scatter", "binned", "gnomonic"
+    return fraction, normalize_each, nside, tes
 
 
 @app.cell
-def _(normalize_each, observations):
+def _(fraction, normalize_each, observations):
     processed = [o.normalize() for o in observations] if normalize_each else observations
-    return (processed,)
+    cutted = [p.select(fraction) for p in processed] if fraction else processed
+    return (cutted,)
 
 
 @app.cell(hide_code=True)
@@ -417,18 +476,25 @@ def _(mo):
 
 
 @app.cell
-def _(nside, preview_index, preview_plot, processed, tes):
-    preview = processed[preview_index]
+def _():
+    # preview_index = range(len(observations))
+    # preview_plot = ["gnomonic", "tod", "scatter", "binned"]
 
-    figures = {
-        "tod": lambda: preview.plot_tod(tes),
-        "scatter": lambda: preview.plot_intensity_scatter(tes),
-        "binned": lambda: preview.plot_binned(tes),
-        "gnomonic": lambda: preview.plot_gnomonic(tes, nside)
-    }
+    # for idx in preview_index:
 
-    fig_gnom = figures[preview_plot]()
-    fig_gnom.write_html("gnomic.html")
+    #     for pp in preview_plot:
+
+    #         preview = cutted[idx]
+
+    #         figures = {
+    #             "tod": lambda: preview.plot_tod(tes),
+    #             "scatter": lambda: preview.plot_intensity_scatter(tes),
+    #             "binned": lambda: preview.plot_binned(tes),
+    #             "gnomonic": lambda: preview.plot_gnomonic(tes, nside)
+    #         }
+
+    #         fig = figures[pp]()
+    #         fig.write_html(f"{pp}.html")
     return
 
 
@@ -441,9 +507,15 @@ def _(mo):
 
 
 @app.cell
-def _(Observation, processed):
-    global_observation = Observation.combine(processed)
+def _(Observation, Path, cutted):
+    global_observation = Observation.combine(cutted, dest=Path("data/output/global_observation"))
     return (global_observation,)
+
+
+@app.cell
+def _():
+    # fig_tod = global_observation.plot_tod(tes)
+    return
 
 
 @app.cell
@@ -465,6 +537,12 @@ def _(global_observation):
 
 
 @app.cell
+def _(global_observation):
+    fig_gnom = global_observation.plot_gnomonic(tes=95)
+    return
+
+
+@app.cell
 def _(hits, mo, np):
     mo.md(f"""
     **Pixel osservati:** {np.count_nonzero(hits):,} · **Campioni:** {hits.sum():,}
@@ -473,8 +551,8 @@ def _(hits, mo, np):
 
 
 @app.cell
-def _(datetime, go, np, observations, timezone):
-    fig = go.Figure()
+def _(Path, datetime, go, np, observations, timezone):
+    fig_cov = go.Figure()
 
     for obs in sorted(observations, key=lambda o: o.time[0]):
 
@@ -482,22 +560,22 @@ def _(datetime, go, np, observations, timezone):
 
         elevation = np.median(obs.elevation)
 
-        fig.add_trace(go.Scattergl(
+        fig_cov.add_trace(go.Scattergl(
             x=obs.ra,
             y=obs.dec,
             mode="markers",
             marker=dict(size=2),
             name=f"{time_} - El {elevation:.1f}°"))
 
-    fig.update_layout(
+    fig_cov.update_layout(
         title="Copertura delle singole osservazioni",
         xaxis_title="RA [deg]",
         yaxis_title="Dec [deg]",
         height=800)
 
-    fig.update_xaxes(autorange="reversed")
+    fig_cov.update_xaxes(autorange="reversed")
 
-    fig.write_html("copertura_sing_obs.html")
+    fig_cov.write_html(Path("data/output/global_observation") / "copertura_sing_obs.html")
     return
 
 

@@ -455,8 +455,9 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 xlim = [10540, 10640]
 
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tbath=None, T1K=None, TES_number="", nside=256, doplot=True,
-                          check_back_forth=False, also_tod=False, det_pos=None, clean_tod=True, manual=False,
-                          ObsName=None, new_method_clean=False, theo_sb=None, more="", simu=False, window=False):
+                          check_back_forth=False, also_tod=False, clean_tod=True,
+                          ObsName=None, new_method_clean=False, theo_sb=None, more="", simu=False, window=False,
+                          boresight_angle=None):
 
     # What worked best so far:
     # - filter raw TOD (bandpass, to get rid of large and small scales)
@@ -503,12 +504,17 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
 
     if new_method_clean:
         rho = 1
-        dist_min = 2 # deg
+        dist_min_order1 = 2 #2 is not enough for order 0 # deg
+        dist_min_order0 = 3
         tod_pos = spherical2cartesian(rho, newazt, newelt, coord="horizontal", axis="last")
         protected_tod = np.zeros_like(mytod)
         mask_elt = np.ones_like(mytod, dtype=bool) # we don't mask in elevation
         for i_nu in range(n_nus):
             for i_peak in range(n_peaks):
+                if i_peak == 0: # order 0 is i_peak 0 because _peak_angles sorts the peaks by amplitude
+                    dist_min = dist_min_order0
+                else:
+                    dist_min = dist_min_order1
                 el_peak = 90 - np.degrees(thetas[i_nu, i_peak])
                 az_peak = np.degrees(phis[i_nu, i_peak])
                 # azimuth differences won't work at az=+/-180
@@ -521,6 +527,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 if not simu:
                     if np.min(dist_peak[scantype == 0]) < dist_min: # needed for real data because of low frequency noise! --> see with Noah how to remove it
                         # print("skipped the peak", i_nu, i_peak)
+                        # maybe use the data before and after the peak separately to create a fake continuum?
                         continue
                 tod_close = dist_peak < dist_min
                 protected_tod[tod_close] = 1
@@ -545,7 +552,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
         mytod_3 = my_filt(tod_no_peak.copy())
         mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, pos_peak, interval=interval_peak, mask=mask_elt)
         if doplot and True: # plot with raw tod vs filtered tod
-            pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, mytod_4, protected_tod == 1, Tbath=Tbath, T1K=T1K, savefig=True)
+            pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, tod_no_peak, mytod_4, protected_tod == 1, Tbath=Tbath, T1K=T1K, savefig=True)
         final_tod = mytod_4
 
 
@@ -572,24 +579,15 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             mask_elt = np.ones_like(elt, dtype=bool)
             # Filter the TOD
             test_tod = my_filt_4(mytod.copy()) # only a high pass to detect the glitches
-            if manual:
-                period_tt = np.mean(tt[1:] - tt[:-1])
-                intervals = [[570, 650], [3650, 3750], [3955, 4000]] #s
-                peaks_s = [(interval[1] + interval[0])/2 for interval in intervals]
-                glitches_detected = [np.argmin(np.abs(peaks_s[i_peak] - tt)) for i_peak in range(len(peaks_s))]
-                interval_glitch = np.array([(interval[1] - interval[0])/(2*period_tt) for interval in intervals]).astype(int)
-                test_tod_no_glitch = remove_peaks(tt, test_tod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt)
-            else:
-                glitches_detected, glitches_properties = find_peaks(test_tod, height=80000, threshold=None, distance=None, width=0, wlen=10*freq_sampling) # totally empirical cut at 80000 ADUs
-                interval_glitch = (glitches_properties["widths"]).astype(int) * 10
-                test_tod_no_glitch = remove_peaks(tt, test_tod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt)
-                glitches_detected_ = np.isin(np.arange(len(tt)), glitches_detected)
+            glitches_detected, glitches_properties = find_peaks(test_tod, height=80000, threshold=None, distance=None, width=0, wlen=10*freq_sampling) # totally empirical cut at 80000 ADUs
+            interval_glitch = (glitches_properties["widths"]).astype(int) * 10
+            test_tod_no_glitch = remove_peaks(tt, test_tod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt)
+            glitches_detected_ = np.isin(np.arange(len(tt)), glitches_detected)
             plt.figure()
             plt.plot(tt, mytod, label="raw TOD")
             plt.plot(tt, test_tod, label="test_tod")
             plt.plot(tt, test_tod_no_glitch, label="TOD no peak")
-            if not manual:
-                plt.scatter(tt[glitches_detected_ & mask_elt], mytod[glitches_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
+            plt.scatter(tt[glitches_detected_ & mask_elt], mytod[glitches_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
             plt.legend()
             plt.show()
 
@@ -672,7 +670,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             if mask_elt is None:
                 mask_elt = np.ones_like(peaks_detected_, dtype=bool)
 
-            pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, mytod_4, peaks_detected_ & mask_elt, Tbath=Tbath, T1K=T1K, savefig=True)
+            pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, tod_no_peak, mytod_4, peaks_detected_ & mask_elt, Tbath=Tbath, T1K=T1K, savefig=True)
 
             # fit_lagrange_scans(tt, mytod, scantype)
             # azr
@@ -693,7 +691,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
 
         final_tod = mytod_4 # good filter
         # final_tod = mytod # no filter
-        comparison_tod = mytod_1
+        # comparison_tod = mytod_1
     else:
         final_tod = mytod
     mask_scan = scantype != 0
@@ -723,6 +721,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 XX, YY = np.meshgrid(X, Y) # pixel units, just for the interpolation
 
                 no_UNSEEN_mask = ~mapsb_proj.mask
+
+                print("{}/{} UNSEEN pixels.".format(np.sum(~no_UNSEEN_mask), np.prod(np.shape(mapsb_proj))))
 
                 print(np.shape(XX))
                 print(np.shape(XX[no_UNSEEN_mask]))
@@ -769,15 +769,23 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
 
     if doplot and True:
         
-        plt.figure()
+        fig_title = "{}, TES {}".format(ObsName, TES_number)
+        fig_name = "map_TES{}".format(TES_number)
+        margins=None
+        if boresight_angle is not None:
+            fig_title += ",\nboresight angle = {} deg".format(boresight_angle)
+            fig_name += "_boresight{}".format(boresight_angle)
+            margins = (0, 0, 0, 0.1) # to fit the 2-line title
         hp.gnomview(mapsb, reso=reso, min=-5e3, max=1.2e4, xsize=xsize,
-                    title="{}, TES {}".format(ObsName, TES_number), rot=center)
+                    title=fig_title, rot=center, margins=margins)
         if theo_sb is not None: 
             for i in range(n_nus):
-                hp.projscatter(thetas[i,:], phis[i,:], c="r", 
+                hp.projscatter(thetas[i, :], phis[i, :], c="r", 
                             marker='.')
+                # for i_peak in range(len(thetas[i,:])):
+                #     hp.projtext(thetas[i, i_peak], phis[i, i_peak], i_peak)
         plt.tight_layout()
-        plt.savefig("figures/map_TES_{}.pdf".format(TES_number), dpi=300)
+        plt.savefig("figures/{}.png".format(fig_name), dpi=300)
         plt.show()
         # azr
         
@@ -950,14 +958,18 @@ class gaussfitgnomproj:
             self.mask = np.zeros_like(i_elt)
         else:
             self.mask = mask
-        # vec_centre = hp.ang2vec(self.rot[0], self.rot[1], lonlat=True)
-        # radius = 40 # radius of patch we take into account for fit in degrees
-        # self.useful_pix = hp.query_disc(self.nside, vec_centre, np.radians(radius))
-        self.useful_pix = np.arange(12*nside**2)
+        # the program is slightly faster when using only a patch of the sky
+        vec_centre = hp.ang2vec(self.rot[0], self.rot[1], lonlat=True)
+        radius = 15 # radius of patch we take into account for fit in degrees --> needs to be larger than the distance allowed in the fit + the delta telescope-detector los 
+        # --> this could be improved by putting vec_centre at the position expected for each detector, so that the patch just needs to have a margin for the fit (~5 deg?)
+        # but this improvement is only possible after doing one loop of fitting (so we can know where to expect each detector los)
+        self.useful_pix = hp.query_disc(self.nside, vec_centre, np.radians(radius))
+        # self.useful_pix = np.arange(12*nside**2)
         self.pix_pos_patch = hp.pix2vec(self.nside, self.useful_pix) # here we save the coordinates of each pixel of the patch before proj
         # self.pix_pos_patch = np.swapaxes(self.pix_pos_patch, axis1=0, axis2=-1)
         self.pix_pos_patch = np.moveaxis(self.pix_pos_patch, source=[0, 1], destination=[1, 0])
         self.pix_pos_proj = spherical2cartesian(1, j_azt, i_elt, coord="horizontal", axis="last") # here we save the coordinates of each pixel of the map after proj
+        # in order to have positions other than the centres of pixels
         self.interpolator = RegularGridInterpolator((np.arange(len(j_azt)), np.arange(len(i_elt))), self.pix_pos_proj, method='linear')
 
     def __call__(self, ij, amp, ic, jc, sig): # for curve_fit this time, not minuit
@@ -965,14 +977,9 @@ class gaussfitgnomproj:
         if np.isnan(ic) or np.isnan(jc): # for some reason, maybe when we fall outise of the image, ic or jc can be NaNs
             shape_pix_pos = np.shape(self.pix_pos_proj)
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
-        # ic = (ic - 1)*1e8 # trick to force curve_fit to do bigger steps (otherwise it stays at initial position)
-        # jc = (jc - 1)*1e8
         if not 1 < ic < self.xs - 1 or not 1 < jc < self.xs - 1: # if we fall outside of map (or neighbours do)
-            # print("NOT ACCEPTED")
             shape_pix_pos = np.shape(self.pix_pos_proj)
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
-        # change this to allow non integer pixel positions
-        # centre_pos = self.pix_pos_proj[int(ic), int(jc)] # this is the vector associated with the pixel after proj, but it should be perfectly usable with vectors of pixels before proj
         centre_pos = self.interpolator((ic, jc))
         dist_deg = np.abs(np.degrees(dist_angle(self.pix_pos_patch, centre_pos)))
         mygauss = amp * np.exp(-0.5*dist_deg**2/sig**2)
@@ -1001,15 +1008,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     if maxi is None:
         maxi = np.max(mapij)
 
-    # g2d = gauss2dfit(iipos, jjpos) # has to be in the same order as in m from the fit
-    # mask_badpix = None
-    # g2d = gaussfitsphere(iipos, jjpos, mask=mask_badpix) # elt, azt
-
-    # test_gauss = g2d(None, np.array([1, 90, 0, 1])).reshape((xs, xs))
-    # plt.figure()
-    # plt.imshow(test_gauss)
-    # plt.show()
-
     ### Guess where the maximum is and the other parameters with a matched filter
     if guess is None:
         lobe_pos = (Ni//2, Nj//2)
@@ -1029,14 +1027,7 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
 
         filtmapsn = get_filtmapsn(mapij * cos_win, nKbin, K, Kbin, Kcent, ft_shape, ft_phase)
 
-        # plt.figure()
-        # plt.imshow(filtmapsn * 1e4)
-        # plt.show()
         maxii = filtmapsn == np.nanmax(filtmapsn)
-        ### in data coords
-        # max_i = np.mean(iipos[maxii])
-        # max_j = np.mean(jjpos[maxii])
-        # guess = np.array([1e4, max_i, max_j, reso_img/conv_reso_fwhm])
         ### in pixel coords (new version, easier to plot). distok is now in pixels
         iipix, jjpix = np.meshgrid(np.arange(Ni), np.arange(Nj), indexing="ij")
         max_i = int(np.mean(iipix[maxii]))
@@ -1045,14 +1036,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         # guess = np.array([1e6, 95, 77, 0.5]) # fine-tuned for test
         if verbose:
             print("guess: amp = {}, i = {}, j = {}, sig = {}".format(guess[0], guess[1], guess[2], guess[3]))
-
-        # # we bypass Minuit
-        # fake_m = empty_class()
-        # fake_m.values = guess
-        # if doplot:
-        #     return fake_m, None, None
-        # else:
-        #     return fake_m, None
     else:
         max_i = guess[1]
         max_j = guess[2]
@@ -1060,21 +1043,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     ### Do the fit putting the UNSEEN to a very low weight
     errpix = iipos*0 + ss
     errpix[mapij==0] *= 1e5
-
-    ######### Minuit #########
-    # data = fit.Data(np.ravel(iipos), np.ravel(mapij), np.ravel(errpix), g2d)
-    # m, ch2, ndf = data.fit_minuit(guess, limits=[[0, 1e3, 1e8], [1, max_i - distok, max_i + distok], [2, max_j - distok, max_j + distok], [3, 0.6/conv_reso_fwhm, 1.5/conv_reso_fwhm]], renorm=renorm)
-    # # m: amplitude, elevation (i), azimuth ((-)j), sigma Gaussian fit
-    # where_res = np.array([int(m.values[1]), int(m.values[2])])
-    # # adjust fit "by ha,d" for testing purposes
-    # # delta_fit = np.array([5, 2])
-    # # where_res += delta_fit
-    # # ifit = m.values[1]
-    # # jfit = m.values[2]
-    # ijerr = np.array([m.errors[1], m.errors[2]]) * reso/60 # pix to deg
-    # # g2d_ = gaussfitsphere(iipos, jjpos, mask=mask_badpix) # elt, azt
-    # ### Image of the fitted Gaussian
-    # fitted = np.reshape(g2d(ipos, m.values), (xs, xs))
 
     ######## curve_fit #######
     # ii, jj = np.meshgrid(np.arange(int(max_i - distok), int(max_i + distok) + 1), np.arange(int(max_j - distok), int(max_j + distok) + 1))
@@ -1110,21 +1078,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
                 axs[i].set_xlabel('Pixel number [{} arcmin]'.format(reso))
             axs[2].set_title('Residuals')
         axs = pmp.plot_fit_img(mapij, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=ifit, jfit=jfit, vmin=mini, vmax=maxi, ms=ms, origin=origin)
-
-        # plt.show()
-        ### Look at result after shifting the fit a little (by eye)
-        # amp, ii, jj, fwhm = m.values
-        # ii += 4
-        # jj -= 0
-        # fitted_ = np.reshape(g2d(ipos, [amp, ii, jj, fwhm]), (xs, xs))
-        # fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(16, 5))
-        # axs[1].imshow(fitted_, origin=origin, vmin=mini, vmax=maxi)
-        # im = axs[2].imshow(mapij - fitted_, origin=origin, vmin=mini, vmax=maxi)
-        # axs[0].set_ylabel('Elevation [degrees]')
-        # for i in range(3):
-        #     axs[i].set_xlabel('Azimuth [degrees]')
-        # axs[2].set_title('Residuals')
-        # axs = pmp.plot_fit_img(mapij, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=ii, jfit=jj, vmin=mini, vmax=maxi, ms=ms, origin=origin)
         return m, fitted, axs, ijres, ijerr
     return m, fitted, ijres, ijerr
     
@@ -1185,8 +1138,9 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
         m, fitted, ijres, ijerr = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack, g2d=g2d)
 
     if return_images:
+        del g2d
         return m, mapxy, fitted, [np.min(i_elt), np.max(i_elt), np.min(j_azt), np.max(j_azt)], fig_axs, ijres, ijerr
-
+    del g2d
     return m, ijres, ijerr
     
 
@@ -1524,7 +1478,7 @@ def read_many_files(az_qubic, datadir=None, tt_=None, year_data="2022"):
     return data_step_one
 
 
-def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshift=0, doplot=False, simu=False):
+def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshift=0, boresight_angle=0, doplot=False, simu=False):
     # we correct for tshift and then separate data by scan
 
     # the concatenated data from the files of the observation
@@ -1552,16 +1506,16 @@ def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshif
                                             plotrange=[tt[0], tt[0] + 2000], 
                                             thr_speedmin=speedmin)
     # good solution
-    if simu:
-        boresight_angle = 0 # simus
-    else:
-        boresight_angle = -3.5 #-3.5 # real data
+    # if simu:
+    #     boresight_angle = 0 # simus
+    # else:
+    #     boresight_angle = -3.5 # real data
     print("boresight_angle =", boresight_angle)
     newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, boresight_angle=boresight_angle, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
 
     print("shape scantype", np.shape(scantype))
     print("shape newazt", np.shape(newazt))
-    data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile, thk, az, el] # the data that could be useful later in the analysis
+    data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile, thk, az, el, boresight_angle] # the data that could be useful later in the analysis
     if doplot and det_pos is None:
         fig, axs = plt.subplots(1, 2)
         axs[0].set_title("az")
@@ -1579,12 +1533,12 @@ def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshif
 
 def make_coadded_maps(allTESNum, data=None,
                       doplot=True, nside=256, parallel=False, check_back_forth=False,
-                      isok_arr=None, det_pos=None, clean_tod=True, manual=False, ObsName=None,
+                      isok_arr=None, det_pos=None, clean_tod=True, ObsName=None,
                       new_method_clean=False, theo_sb=None, more="", window=None):
     
     ObsDate = ObsName[:10]
     
-    tt, tinit, alltod, _, azt, elt, newazt_, newelt_, scantype, Tbath, T1K, ifile, _, _, _ = data
+    tt, tinit, alltod, _, azt, elt, newazt_, newelt_, scantype, Tbath, T1K, ifile, _, _, _, boresight_angle = data
     if tinit < 1774994400: # before the 01/04/2026 (might not be the best date)
         # the first data points are the telescope going to start position
         nskip = 10000
@@ -1641,10 +1595,10 @@ def make_coadded_maps(allTESNum, data=None,
 
             allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
                                                              Tbath=Tbath, T1K=T1K, TES_number=TESNum, nside=nside,
-                                                             doplot=doplot, check_back_forth=check_back_forth,
-                                                             det_pos=det_pos, clean_tod=clean_tod, manual=manual,
+                                                             doplot=doplot, check_back_forth=check_back_forth, clean_tod=clean_tod,
                                                              ObsName=ObsName, new_method_clean=new_method_clean,
-                                                             theo_sb=theo_sb, more=more, window=window)
+                                                             theo_sb=theo_sb, more=more, window=window,
+                                                             boresight_angle=boresight_angle)
             print('OK', flush=True)
     else:
         print('using a parallel loop : no output will be given while processing... be patient...')
@@ -1662,8 +1616,8 @@ def make_coadded_maps(allTESNum, data=None,
             else:
                 tod = alltod[iTES, :]
             map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
-                                                           TES_number=TESNum, nside=nside, doplot=doplot, det_pos=det_pos,
-                                                           clean_tod=clean_tod, manual=manual, ObsName=ObsName, new_method_clean=new_method_clean,
+                                                           TES_number=TESNum, nside=nside, doplot=doplot,
+                                                           clean_tod=clean_tod, ObsName=ObsName, new_method_clean=new_method_clean,
                                                            theo_sb=theo_sb, more=more)        
             # Use lock to ensure safe access to shared memory inside the inner function
             with lock:
@@ -2060,7 +2014,7 @@ def get_perp_vect_horiz_great_circle(azimuth, elevation, sphere_centre=np.array(
     # print("shape perp_vect", np.shape(perp_vect))
     return perp_vect
 
-def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, det_pos=None):
+def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, det_pos=None, det_pos_residual=None):
     """
     This function computes the coordinates of a point or an array of points with respect to a
     given source, taking the source as the zenith of the new coordinates system.
@@ -2096,6 +2050,9 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
             az_zen = det_pos[:, 0]
             el_zen = det_pos[:, 1]
             ndets = len(det_pos)
+
+            # if det_pos_residual is not None:
+            #     vec_zen_residual = 
 
             thermom = np.array([4, 36, 68, 100, 132, 164, 196, 228]) - 1 # thermometers of quadrant 3
             for idx_thermom in thermom:
@@ -2179,6 +2136,7 @@ def print_keys(d, keys):
     print('\n')
 
 ### This function retrieves the peaks information as a function of frequency, for each of the MultiBandInstrument sub-bands
+### This function retrieves the peaks information as a function of frequency, for each of the MultiBandInstrument sub-bands
 def get_peaks_configuration(d, doplot=False, idet=None, debug=False):
     if d['config'] == 'TD':
         Ndet = 248
@@ -2208,7 +2166,7 @@ def get_peaks_configuration(d, doplot=False, idet=None, debug=False):
         dnus[i] = q_instrument.subinstruments[i].d['filter_relative_bandwidth']*q_instrument.subinstruments[i].d['filter_nu']/1e9
         print('- {0:}: nu = {1:7.2f} GHz ; bw = {2:7.2f}'.format(i, nus[i], dnus[i]))
 
-        q_instrument.subinstruments[i].detector.center[0] = [0, 0, -0.3] # we take a fake central detector because we only care about theta and phi from zenith
+        # q_instrument.subinstruments[i].detector.center[0] = [0, 0, -0.3] # we take a fake central detector because we only care about theta and phi from zenith
     
     thetas = np.zeros((n_nus, Ndet, (2*d['synthbeam_kmax']+1)**2))
     phis = np.zeros((n_nus, Ndet, (2*d['synthbeam_kmax']+1)**2))
@@ -2216,8 +2174,8 @@ def get_peaks_configuration(d, doplot=False, idet=None, debug=False):
     for i in range(n_nus):
         thetas[i,:,:], phis[i,:,:], vals[i,:,:] = q_instrument.subinstruments[i]._peak_angles(q_scene, 
                                                     q_instrument.subinstruments[i].d['filter_nu'], 
-                                                    # q_instrument.subinstruments[i].detector.center, 
-                                                    np.full_like(q_instrument.subinstruments[i].detector.center, np.array([0, 0, -0.3])), 
+                                                    q_instrument.subinstruments[i].detector.center, 
+                                                    # np.full_like(q_instrument.subinstruments[i].detector.center, np.array([0, 0, -0.3])), 
                                                     q_instrument.subinstruments[i].synthbeam, 
                                                     q_instrument.subinstruments[i].horn, 
                                                     q_instrument.subinstruments[i].primary_beam)
@@ -2243,6 +2201,67 @@ def get_peaks_configuration(d, doplot=False, idet=None, debug=False):
         plt.xlabel('Frequency [GHz]')
         plt.ylabel('Bandwidth [GHz]')
         plt.title('Theory {0:} {1:7.2f} GHz: TES #{2:}'.format(d['config'], q_instrument.subinstruments[imed].d['filter_nu']/1e9, idet))
+        plt.tight_layout()
+
+    return thetas, phis, vals, nus, q_instrument
+
+def get_centredet_peak_configuration(d, doplot=False):
+
+    print_keys(d, ['config', 'instrument_type', 'synthbeam', 'use_synthbeam_file', 'synthbeam_fraction', 'synthbeam_kmax'])
+    try:
+        q_instrument = QubicMultibandInstrument(d)
+        q_scene = QubicScene(d)
+        print('done', d["config"], d['instrument_type'], 'nf_sub={}'.format(d['nf_sub']))
+    except:
+        print('oups ! failed instanciating QubicMultibandInstrument()')
+        return 0,0,0,0
+    
+    n_nus = len(q_instrument)
+    nus = np.zeros(n_nus)
+    dnus = np.zeros(n_nus)
+    print()
+    print('The instrument has {} sub-frequencies'.format(n_nus))
+    for i in range(n_nus):
+        nus[i] = q_instrument.subinstruments[i].d['filter_nu']/1e9
+        dnus[i] = q_instrument.subinstruments[i].d['filter_relative_bandwidth']*q_instrument.subinstruments[i].d['filter_nu']/1e9
+        print('- {0:}: nu = {1:7.2f} GHz ; bw = {2:7.2f}'.format(i, nus[i], dnus[i]))
+
+        q_instrument.subinstruments[i].detector.center[0] = [0, 0, -0.3] # we take a fake central detector because we only care about theta and phi from zenith
+    
+    n_peaks = (2*d['synthbeam_kmax'] + 1)**2
+    thetas = np.zeros((n_nus, n_peaks))
+    phis = np.zeros((n_nus, n_peaks))
+    vals = np.zeros((n_nus, n_peaks))
+    for i in range(n_nus):
+        thetas_, phis_, vals_ = q_instrument.subinstruments[i]._peak_angles(q_scene, 
+                                                    q_instrument.subinstruments[i].d['filter_nu'], 
+                                                    # q_instrument.subinstruments[i].detector.center, 
+                                                    np.full_like(q_instrument.subinstruments[i].detector.center, np.array([0, 0, -0.3])), 
+                                                    q_instrument.subinstruments[i].synthbeam, 
+                                                    q_instrument.subinstruments[i].horn, 
+                                                    q_instrument.subinstruments[i].primary_beam)
+        thetas[i, :], phis[i, :], vals[i, :] = thetas_[0], phis_[0], vals_[0]
+    if doplot:
+        imed = n_nus // 2
+        title = 'Theory {0:} {1:7.2f} GHz: central TES'.format(d['config'], q_instrument.subinstruments[imed].d['filter_nu']/1e9)
+        plt.figure(figsize=(8, 4))
+        hp.gnomview(np.zeros(12*32**2) - 3, rot=[0,90], reso=20, min=-5, max=0,
+             title=title, 
+             sub=(1,2,1))
+        for i in range(n_nus):
+            hp.projscatter(thetas[i, :], phis[i, :], c=vals[i, :]/np.max(vals[i, :]), 
+                           marker='x', cmap='Reds')
+        for i_peak in range(n_peaks):
+            hp.projtext(thetas[0, i_peak], phis[0, i_peak], i_peak)
+
+        plt.subplot(1,2,2)
+        plt.errorbar(nus, dnus, yerr=0, xerr=dnus/2, fmt='ro')
+        for i in range(len(nus)):
+            plt.axvline(x=nus[i]-dnus[i]/2, ls=':', color='k', alpha=0.5)
+            plt.axvline(x=nus[i]+dnus[i]/2, ls=':', color='k', alpha=0.5)
+        plt.xlabel('Frequency [GHz]')
+        plt.ylabel('Bandwidth [GHz]')
+        plt.title(title)
         plt.tight_layout()
 
     return thetas, phis, vals, nus, q_instrument
@@ -2605,7 +2624,7 @@ def check_tshift_live(ObsName, data_TOD_notshift, stacked_tod, tod_comp=None, do
     can be used.
     """
     # data_TOD_notshift is the data read without tshift correction
-    tt, _, _, _, azt, _, _, _, _, _, _, ifile, _, _, _ = data_TOD_notshift
+    tt, _, _, _, azt, _, _, _, _, _, _, ifile, _, _, _, _ = data_TOD_notshift
     tod = stacked_tod
 
     highcut = 4/110 # Hz
@@ -2664,11 +2683,11 @@ def check_tshift_live(ObsName, data_TOD_notshift, stacked_tod, tod_comp=None, do
     print(np.shape(az_peaks))
 
     # # to check where is the problem if not the same number of peaks between tod and az
-    # fig, ax = plt.subplots()
-    # ax.scatter(tt[tod_peaks], az_vel[tod_peaks], c="b", s=8, label="az_vel[tod_peaks]")
-    # ax.scatter(tt[az_peaks], az_vel[az_peaks], c="r", s=4, label="az_vel[az_peaks]")
-    # plt.legend()
-    # plt.show()
+    fig, ax = plt.subplots()
+    ax.scatter(tt[tod_peaks], az_vel[tod_peaks], c="b", s=8, label="az_vel[tod_peaks]")
+    ax.scatter(tt[az_peaks], az_vel[az_peaks], c="r", s=4, label="az_vel[az_peaks]")
+    plt.legend()
+    plt.show()
 
     tshifts = tt[az_peaks] - tt[tod_peaks] # works only if the peaks are the same
     print("shape tshifts", np.shape(tshifts))

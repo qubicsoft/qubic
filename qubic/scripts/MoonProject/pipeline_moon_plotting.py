@@ -334,10 +334,11 @@ def plots_identify_scans(thk, plotrange, az, medaz_dt, c0, cpos, cneg, dead_time
     plt.show()
 
 
-def plot_tod_filtering(ObsName, TES_number, tt, tod, tod_filtered, peaks, Tbath=None, T1K=None, savefig=False):
+def plot_tod_filtering(ObsName, TES_number, tt, tod, tod_no_peak, tod_filtered, peaks, Tbath=None, T1K=None, savefig=False):
     fig, ax = plt.subplots(1, 1, figsize=(15, 8))
     ax.set_title("{}, TES {}".format(ObsName, TES_number))
-    ax.plot(tt, tod, label="raw TOD")
+    # ax.plot(tt, tod, label="raw TOD")
+    ax.plot(tt, tod_no_peak, label="TOD no peak")
     if Tbath is not None:
         color_ax1 = "g"
         ax1 = ax.twinx()

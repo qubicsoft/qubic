@@ -38,10 +38,6 @@ from astropy.coordinates import EarthLocation, AltAz, get_moon, get_body
 import qubicpack as qp
 from qubicpack.qubicfp import qubicfp
 import qubicpack.pixel_translation as pt
-import qubic.lib.Calibration.Qfiber as ft
-
-from qubic.lib import Qdictionary
-from qubic.lib.Instrument import Qacquisition
 
 from pyoperators import (
     IdentityOperator,
@@ -60,6 +56,19 @@ from qubic.lib.Qscene import QubicScene
 
 conv_reso_fwhm = 2.35482 # conversion from sigma to FWHM: sigma*conv_reso_fwhm = FWHM
 AU_meters = 149597870700 # m
+h = 6.62607015e-34 # J.Hz-1 # Planck constant
+c = 299792458 # m.s-1 # speed of light
+k_B = 1.380649e-23 # J.K-1 # Boltzmann constant
+
+### Observing Sites
+Salta_CNEA = {'lat':-24.731358*u.deg,
+              'lon':-65.409535*u.deg,
+              'height':1152*u.m,
+              'UTC_Offset':-3*u.hour}
+LaPuna_QUBIC = {'lat':-24.186583*u.deg,
+                'lon':-66.478*u.deg,
+                'height':4869*u.m,
+                'UTC_Offset':-3*u.hour}
 
 #########################
 # import matplotlib.style as style
@@ -989,7 +998,7 @@ class gaussfitgnomproj:
         return np.ravel(proj_map * (1 - self.mask))
 
 def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1,
-                mini=None, maxi=None, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
+                mini=-5e4, maxi=5e4, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
     # iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     iipos = ipos # already 2D
     jjpos = jpos
@@ -1000,13 +1009,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     mask_badpix = mapij.mask
     mapij = mapij.data
     mapij[mask_badpix] = 0
-    
-    ### Displays the image as an array
-    mm, ss = ft.meancut(mapij[mapij>1e-3], 3)
-    if mini is None:
-        mini = mm-nsig*ss
-    if maxi is None:
-        maxi = np.max(mapij)
 
     ### Guess where the maximum is and the other parameters with a matched filter
     if guess is None:
@@ -1399,7 +1401,7 @@ def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=
     return data
 
 
-def read_many_files(az_qubic, datadir=None, tt_=None, year_data="2022"):
+def read_many_files(az_qubic, datadir=None, year_data="2022"):
     # we read data from observation files
 
     ### We flip the numbering of TOD around the diagonal of the quadrant in order to match simulations and data
@@ -1489,9 +1491,7 @@ def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshif
     # need to put tt[0] to zero, but be careful of real time
     # tshift seen in plotting back and forth images or with the Earth magnetic field. In the second case, tshift has shape (len(tt),)
     if np.shape(tshift):
-        # tshift_ = np.interp(thk - tinit, tt_, tshift)
-        tshift_ = np.interp(thk, tt, tshift) # let's use tt because it's the same as tt_ but with tinit
-        # tshift_ = np.interp(tt - tinit, tt_, tshift)
+        tshift_ = np.interp(thk, tt, tshift) # let's use tt because it's the same as tt_ but with tinit (and remove tt_)
     else:
         tshift_ = tshift
     tt -= tinit #+ tshift_
@@ -2728,3 +2728,99 @@ def stack_maps_same_TES():
     order 0 position that will give us the detector line of sight.
     """
     return
+
+
+################### Moon emission model ####################
+# namely from Martin Jörg Burgdorf's work
+
+nus_calib = np.array([89, 157, 183, 190])
+Tb0 = np.array([261, 267, 268, 272])
+Tb0_err = np.array([3, 6, 6, 3])
+Tb1 = np.array([61, 81, 72, 83])
+Tb1_err = np.array([3, 6, 6, 3])
+phi0 = np.array([19.3, 11.2, 11.2, 10.1])
+phi0_err = np.array([0.7, 0.8, 0.8, 0.4])
+Tb2 = np.array([6, 9, 15, 11])
+Tb2_err = np.array([1, 3, 3, 2])
+# delta_Tb = np.array([4.1, 4.5, 4.6, 4.6])
+
+def get_disc_integrated_Moon_TB_calib(i_nu, moon_phase_angle, dist_MS): # only calibrated Tb values
+    # dist_MS in meters
+    # phi = moon_phase_angle in degrees
+    # print("Returning the disc-integrated bightness temperature for {} GHz.".format(nus_calib[i_nu]))
+    Tb0_ = Tb0[i_nu]
+    Tb1_ = Tb1[i_nu]
+    phi0_ = phi0[i_nu]
+    Tb2_ = Tb2[i_nu]
+    delta_phi = np.radians(moon_phase_angle) - np.radians(phi0_)
+    # delta_Tb_ = delta_Tb[i_nu]
+    delta_Tb_ = (  Tb0_
+                 + Tb1_ * (np.cos(delta_phi) - 1)
+                 + Tb2_ * (np.cos(2 * delta_phi) + 1))
+    Tb = (  delta_Tb_
+          + delta_Tb_ * (AU_meters - dist_MS) / (2*AU_meters)) #(1.8 * 1e11)) # (2*AU_meters))
+    
+#     print(Tb0_)
+#     print(Tb1_ * (np.cos(delta_phi) - 1))
+#     print(Tb2_ * (np.cos(2 * delta_phi) + 1))
+#     print(delta_Tb_ * (AU_meters - dist_MS) / (0.033 * 1e11))
+    return Tb
+
+def get_disc_integrated_Moon_TB_interp(nu, moon_phase_angle, dist_MS): # linear interpolation of calib values to get Tb for any nu in nu range
+    # dist_MS in meters
+    # print("Returning the disc-integrated bightness temperature for {} GHz.".format(nu))
+    # the nu array has to contain sorted frequencies
+    nu_GHz = nu/1e9
+    nu_GHz = np.asarray(nu_GHz)
+    if np.min(nu_GHz) < np.min(nus_calib) or np.max(nu_GHz) > np.max(nus_calib): # by default, np.interp will pu the closest vaue if out of bounds
+        raise ValueError("The given frequency nu = {} GHz is out of bounds.".format(nu_GHz))
+    i_nus = np.zeros_like(nu_GHz, dtype=int)
+    if np.isscalar(nu):
+        while nus_calib[np.int_(i_nus)] < nu_GHz:
+                i_nus += 1
+    else:
+        for i_, nu_ in enumerate(nu_GHz):
+            while nus_calib[i_nus[i_]] < nu_:
+                i_nus[i_:] += 1
+    Tb_calib = []
+    for i_ in range(len(nus_calib)):
+        Tb_calib.append(get_disc_integrated_Moon_TB_calib(i_, moon_phase_angle, dist_MS))
+    print(np.shape(nu_GHz))
+    print(np.shape(nus_calib))
+    print(np.shape(Tb_calib))
+    print(np.shape(moon_phase_angle))
+    print(np.shape(dist_MS))
+    return np.interp(nu_GHz, nus_calib, Tb_calib)
+
+def Tb2I(Tb, nu): # per unit surface area per unit time per unit solid angle and in the frequency range between ν and ν + dν
+    # W m-2 Hz-1 sr-1
+    return 2 * h * nu**3 / c**2 / (np.exp(h * nu / (k_B * Tb)) - 1)
+    # Rayleigh-Jeans approx
+    # return 2 * k_B * Tb * nu**2 / c**2
+def nu2P_pix(nu_interval, nside, moon_phase_angle, dist_MS): # power emitted by Moon in a frequency range nu_interval per pixel
+    n_nus = 100
+    nus_bins = np.linspace(nu_interval[0], nu_interval[1], n_nus + 1)
+    nus = (nus_bins[1:] + nus_bins[:-1])/2
+    Tbs = get_disc_integrated_Moon_TB_interp(nus, moon_phase_angle, dist_MS)
+    I_nus = Tb2I(Tbs, nus)
+    # we get the solid angle of pixels
+    pixel_solid_angle = hp.nside2pixarea(nside) # radians**2 = steradians (checked with (180/pi)**2 conversion factor)
+    print(pixel_solid_angle)
+    # we integrate the emission for each nu and in the solid angle of a pixel
+    P = np.sum(I_nus * (nus_bins[1:] - nus_bins[:-1])) * pixel_solid_angle
+    return P
+def get_moon_map(nu_interval, nside, moon_pos, moon_angrad, moon_phase_angle, dist_MS): # map of the Moon in nu_interval
+    power_pixel = nu2P_pix(nu_interval, nside, moon_phase_angle, dist_MS)
+    print("each pixel at nside = {} precision holds a power P = {} W for 1 m2 of detecting area".format(nside, power_pixel))
+    # in order to have a good Moon map, we need to account for pixels partially covering the Moon
+    # to do so we can use a large NSIDE, put the pixels to one when in the Moon radius
+    # and then degrade the resolution!
+    high_nside = 16 * nside
+    moon_pix = hp.query_disc(nside=high_nside, vec=moon_pos, radius=moon_angrad)
+    print(len(moon_pix))
+    map_moon = np.zeros(hp.nside2npix(high_nside))
+    map_moon[moon_pix] = 1 # it will later be multiplied by power_pix
+    map_moon = hp.ud_grade(map_in=map_moon, nside_out=nside) # faster
+    # map_moon = hp.sphtfunc.harmonic_ud_grade(map_in=map_moon, nside_out=nside) # not available in healpy 1.19.0
+    # map_moon *= power_pixel
+    return map_moon, power_pixel # this should account for the coverage of the Moon

@@ -305,7 +305,7 @@ class QubicInstrument(Instrument):
             correction = [1, -8]
             print("correction = {}".format(correction))
             layout.center += np.array([0.003*correction[0], 0.003*correction[1], 0.003*0]) # fit flipped numerotation? yes
-        print(layout.center)
+        # print(layout.center)
         # aze
         return layout
 

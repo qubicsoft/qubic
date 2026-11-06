@@ -1042,10 +1042,6 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         max_i = guess[1]
         max_j = guess[2]
 
-    ### Do the fit putting the UNSEEN to a very low weight
-    errpix = iipos*0 + ss
-    errpix[mapij==0] *= 1e5
-
     ######## curve_fit #######
     # ii, jj = np.meshgrid(np.arange(int(max_i - distok), int(max_i + distok) + 1), np.arange(int(max_j - distok), int(max_j + distok) + 1))
     xx = None
@@ -2785,11 +2781,6 @@ def get_disc_integrated_Moon_TB_interp(nu, moon_phase_angle, dist_MS): # linear 
     Tb_calib = []
     for i_ in range(len(nus_calib)):
         Tb_calib.append(get_disc_integrated_Moon_TB_calib(i_, moon_phase_angle, dist_MS))
-    print(np.shape(nu_GHz))
-    print(np.shape(nus_calib))
-    print(np.shape(Tb_calib))
-    print(np.shape(moon_phase_angle))
-    print(np.shape(dist_MS))
     return np.interp(nu_GHz, nus_calib, Tb_calib)
 
 def Tb2I(Tb, nu): # per unit surface area per unit time per unit solid angle and in the frequency range between ν and ν + dν

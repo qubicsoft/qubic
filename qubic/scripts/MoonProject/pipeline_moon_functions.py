@@ -504,12 +504,16 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
         # print(reso)
 
 
-    if clean_tod:
-        min_plot = -5e3
-        max_plot = 1.2e4
-    else:
-        min_plot = np.min(mapsb[mapsb != hp.UNSEEN])
-        max_plot = np.max(mapsb[mapsb != hp.UNSEEN])
+    # if clean_tod:
+    # min_plot = -5e3
+    # max_plot = 1.2e4
+    max_plot = 1e5
+    min_plot = -max_plot
+    # else:
+    #     # min_plot = np.min(mapsb[mapsb != hp.UNSEEN])
+    #     # max_plot = np.max(mapsb[mapsb != hp.UNSEEN])
+    #     max_plot = max(np.abs(np.min(mapsb[mapsb != hp.UNSEEN]), np.abs(np.max(mapsb[mapsb != hp.UNSEEN]))))
+    #     min_plot = -max_plot
 
     if new_method_clean:
         rho = 1
@@ -785,7 +789,15 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             fig_title += ",\nboresight angle = {} deg".format(boresight_angle)
             fig_name += "_boresight{}".format(boresight_angle)
             margins = (0, 0, 0, 0.1) # to fit the 2-line title
-        hp.gnomview(mapsb, reso=reso, min=-5e3, max=1.2e4, xsize=xsize,
+        hp.gnomview(mapsb, reso=reso, min=min_plot, max=max_plot, xsize=xsize,
+                    title=fig_title, rot=center, margins=margins)
+        if theo_sb is not None: 
+            for i in range(n_nus):
+                hp.projscatter(thetas[i, :], phis[i, :], c="r", 
+                            marker='.')
+        reso_test = 1
+        xsize_test = 301
+        hp.gnomview(mapsb, reso=reso_test, min=min_plot, max=max_plot, xsize=xsize_test,
                     title=fig_title, rot=center, margins=margins)
         if theo_sb is not None: 
             for i in range(n_nus):
@@ -996,6 +1008,56 @@ class gaussfitgnomproj:
         full_map[self.useful_pix] = mygauss
         proj_map = hp.gnomview(full_map, rot=self.rot, reso=self.reso, xsize=self.xs, return_projected_map=True, no_plot=True).data
         return np.ravel(proj_map * (1 - self.mask))
+    
+class gaussfitgnomproj_:
+    def __init__(self, i_elt, j_azt, nside, rot, reso, xs, pointing_az, pointing_el, mask=None):
+        self.nside = nside
+        self.rot = rot
+        self.reso = reso
+        self.xs = xs
+        if mask is None:
+            self.mask = np.zeros_like(i_elt)
+        else:
+            self.mask = mask
+        # the program is slightly faster when using only a patch of the sky
+        vec_centre = hp.ang2vec(self.rot[0], self.rot[1], lonlat=True)
+        radius = 15 # radius of patch we take into account for fit in degrees --> needs to be larger than the distance allowed in the fit + the delta telescope-detector los 
+        # --> this could be improved by putting vec_centre at the position expected for each detector, so that the patch just needs to have a margin for the fit (~5 deg?)
+        # but this improvement is only possible after doing one loop of fitting (so we can know where to expect each detector los)
+        self.pix_pos_proj = spherical2cartesian(1, j_azt, i_elt, coord="horizontal", axis="last") # here we save the coordinates of each pixel of the map after proj
+        # in order to have positions other than the centres of pixels
+        self.interpolator = RegularGridInterpolator((np.arange(len(j_azt)), np.arange(len(i_elt))), self.pix_pos_proj, method='linear')
+        ### we want to add our knowledge on the pointings in order to better fit the Gaussian on incomplete maps
+        ## so far, we would fit a Gaussian with holes on pixels with no hitcount, but it is biased because the
+        ## other pixels values would be the centre value whereas in real data it could be a border hit on the pixel
+        ## the idea is then to reconstruct a map with Gaussian values where the true map has data in order to
+        ## have an unbiased fit even on a map with holes
+        # we select the pointings that are in the useful area
+        vec_pointings = hp.ang2vec(pointing_az, pointing_el, lonlat=True)
+        useful_pointings = np.abs(dist_angle(vec_pointings, vec_centre)) <= np.radians(radius)
+        self.pointing_az = pointing_az[useful_pointings]
+        self.pointing_el = pointing_el[useful_pointings]
+        self.vec_pointings = hp.ang2vec(self.pointing_az, self.pointing_el, lonlat=True)
+        
+    def __call__(self, ij, amp, ic, jc, sig): # for curve_fit this time, not minuit
+        # amp, ic, jc, sig = pars # here the position is given in pixels and later converted to azel
+        if np.isnan(ic) or np.isnan(jc): # for some reason, maybe when we fall outise of the image, ic or jc can be NaNs
+            shape_pix_pos = np.shape(self.pix_pos_proj)
+            return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
+        if not 1 < ic < self.xs - 1 or not 1 < jc < self.xs - 1: # if we fall outside of map (or neighbours do)
+            shape_pix_pos = np.shape(self.pix_pos_proj)
+            return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
+        centre_pos = self.interpolator((ic, jc))
+        # we compute the dist for each pointing
+        dist_deg = np.abs(np.degrees(dist_angle(self.vec_pointings, centre_pos)))
+        mygauss = amp * np.exp(-0.5*dist_deg**2/sig**2)
+        full_map, _ = healpix_map(self.pointing_az, self.pointing_el, mygauss, nside=self.nside, unseen_val=0)
+        proj_map = hp.gnomview(full_map, rot=self.rot, reso=self.reso, xsize=self.xs, return_projected_map=True, no_plot=True).data
+
+        # plt.figure()
+        # plt.imshow(proj_map)
+        # plt.show()
+        return np.ravel(proj_map * (1 - self.mask))
 
 def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1,
                 mini=-5e4, maxi=5e4, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
@@ -1065,23 +1127,13 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
 
     if doplot:
         origin = "upper" #"lower" swaps the y-axis and the guess doesn't match, default is "upper", and lower matches the hp.gnomview display orientation
-        if axs is None:
-            fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(16, 5))
-            # axs[1].imshow(fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
-            # im = axs[2].imshow(mapij - fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
-            axs[1].imshow(fitted, origin=origin, vmin=mini, vmax=maxi)
-            im = axs[2].imshow(mapij - fitted, origin=origin, vmin=mini, vmax=maxi)
-            axs[0].set_ylabel('Pixel number [{} arcmin]'.format(reso))
-            for i in range(3):
-                axs[i].set_xlabel('Pixel number [{} arcmin]'.format(reso))
-            axs[2].set_title('Residuals')
-        axs = pmp.plot_fit_img(mapij, axs, ipos, jpos, iguess=guess[1], jguess=guess[2], ifit=ifit, jfit=jfit, vmin=mini, vmax=maxi, ms=ms, origin=origin)
+        axs = pmp.plot_fit_img(mapij, axs, fitted, reso=reso, iguess=guess[1], jguess=guess[2], ifit=ifit, jfit=jfit, vmin=mini, vmax=maxi, ms=ms, origin=origin)
         return m, fitted, axs, ijres, ijerr
     return m, fitted, ijres, ijerr
     
     
 
-def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, azelguess=None, axs=None, pack=None):
+def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, azelguess=None, axs=None, pack=None, pointing_az=None, pointing_el=None):
     ### get the gnomview back into a np.array in order to fit it
     mm = mymap.copy()
     mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True)#.data
@@ -1096,7 +1148,8 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
     j_azt = azt_proj
 
     nside = int(np.sqrt(len(mm)/12))
-    g2d = gaussfitgnomproj(i_elt, j_azt, nside, rot, reso, xs, mask=mapxy.mask)
+    # g2d = gaussfitgnomproj(i_elt, j_azt, nside, rot, reso, xs, mask=mapxy.mask)
+    g2d = gaussfitgnomproj_(i_elt, j_azt, nside, rot, reso, xs, pointing_az, pointing_el)
 
     if azelguess is not None:
         # try:
@@ -2728,7 +2781,7 @@ def stack_maps_same_TES():
 
 ################### Moon emission model ####################
 # namely from Martin Jörg Burgdorf's work
-
+# need to create a class to store this data
 nus_calib = np.array([89, 157, 183, 190])
 Tb0 = np.array([261, 267, 268, 272])
 Tb0_err = np.array([3, 6, 6, 3])
@@ -2738,23 +2791,65 @@ phi0 = np.array([19.3, 11.2, 11.2, 10.1])
 phi0_err = np.array([0.7, 0.8, 0.8, 0.4])
 Tb2 = np.array([6, 9, 15, 11])
 Tb2_err = np.array([1, 3, 3, 2])
-# delta_Tb = np.array([4.1, 4.5, 4.6, 4.6])
+# https://www.star.nesdis.noaa.gov/mirs/documents/0.0_NOAA_KLM_Users_Guide.pdf, p 3-72
+MHS_channels = np.array([89, 157, 183, 183, 190]) # central freq, GHz
+MHS_channels_bw = np.array([2.8, 2.8, 1, 2, 2.2]) # bandwidth, GHz
+# 0000Burgdorf
+m_MetopA = np.array([-7.4, -6.46, -6.03, -7.14, -6.81]) * 1e-10
+m_MetopA_err = np.array([1.55, 1.83, 2.15, 1.93, 1.72]) * 1e-10
+b_MetopA = np.array([110.5, 96.6, 90, 106.6, 101.7])
+b_MetopA_err = np.array([23.1, 27.4, 32.1, 28.7, 25.7])
+m_MetopB = np.array([-5.39, -5.59, -5.75, -7.66, -6.82]) * 1e-10
+m_MetopB_err = np.array([1.37, 2.21, 2.17, 1.82, 1.72]) * 1e-10
+b_MetopB = np.array([80.3, 83.4, 85.9, 114.3, 101.8])
+b_MetopB_err = np.array([20.3, 33, 32.4, 27.2, 25.6])
+# # now we average Metop-A and Metop-B, plus channels 3 and 4 because they have the same central frequency
+# m_Metop = np.average([m_MetopA, m_MetopB], axis=0, weights=1/np.array([m_MetopA_err, m_MetopB_err])**2)
+# print("m_Metop", m_Metop)
+# print("detla_T_Mpp", AU_meters * m_Metop * 0.033)
+# m_avg_ch34 = np.average([m_MetopA[2:4], m_MetopB[2:4]], weights=1/np.array([m_MetopA_err[2:4], m_MetopB_err[2:4]])**2)
+# m_vals = np.array([m_Metop[0], m_Metop[1], m_avg_ch34, m_Metop[4]])
+# b_Metop = np.average([b_MetopA, b_MetopB], axis=0, weights=1/np.array([b_MetopA_err, b_MetopB_err])**2)
+# print("b_Metop", b_Metop)
+# m_avg_ch34 = np.average([b_MetopA[2:4], b_MetopB[2:4]], weights=1/np.array([b_MetopA_err[2:4], b_MetopB_err[2:4]])**2)
+# b_vals = np.array([b_Metop[0], b_Metop[1], m_avg_ch34, b_Metop[4]])
 
 def get_disc_integrated_Moon_TB_calib(i_nu, moon_phase_angle, dist_MS): # only calibrated Tb values
     # dist_MS in meters
     # phi = moon_phase_angle in degrees
     # print("Returning the disc-integrated bightness temperature for {} GHz.".format(nus_calib[i_nu]))
+    
     Tb0_ = Tb0[i_nu]
     Tb1_ = Tb1[i_nu]
     phi0_ = phi0[i_nu]
     Tb2_ = Tb2[i_nu]
+    # m = m_vals[i_nu]
+    # b = b_vals[i_nu]
     delta_phi = np.radians(moon_phase_angle) - np.radians(phi0_)
-    # delta_Tb_ = delta_Tb[i_nu]
-    delta_Tb_ = (  Tb0_
-                 + Tb1_ * (np.cos(delta_phi) - 1)
-                 + Tb2_ * (np.cos(2 * delta_phi) + 1))
-    Tb = (  delta_Tb_
-          + delta_Tb_ * (AU_meters - dist_MS) / (2*AU_meters)) #(1.8 * 1e11)) # (2*AU_meters))
+    # Tb = (  Tb0_
+    #         + Tb1_ * (np.cos(delta_phi) - 1)
+    #         + Tb2_ * (np.cos(2 * delta_phi) + 1)
+    #         + m * dist_MS + b  )
+
+    # now we average the values for Metop-A and Metop-B, plus channels 3 and 4 because they have the same central frequency
+    # because the errors are close, we do a simple mean
+    d_Tb_Metop = np.array([m_MetopA, m_MetopB]) * dist_MS + np.array([b_MetopA, b_MetopB])
+    d_Tb_Metop = np.mean(d_Tb_Metop, axis=0)
+    d_Tb_avg_ch34 = np.mean(d_Tb_Metop[2:4])
+    d_Tb = np.array([d_Tb_Metop[0], d_Tb_Metop[1], d_Tb_avg_ch34, d_Tb_Metop[4]])
+    # note that d_Tb should depend on delta_phi but this model doesn't include this dependancy
+    # this is just an average for all observed delta_phi?
+
+    Tb = (  Tb0_
+            + Tb1_ * (np.cos(delta_phi) - 1)
+            + Tb2_ * (np.cos(2 * delta_phi) + 1)
+            + d_Tb[i_nu]  )
+
+    # delta_Tb_ = (  Tb0_
+    #              + Tb1_ * (np.cos(delta_phi) - 1)
+    #              + Tb2_ * (np.cos(2 * delta_phi) + 1))
+    # Tb = (  delta_Tb_
+    #       + delta_Tb_ * (AU_meters - dist_MS) / (2*AU_meters)) #(1.8 * 1e11)) # (2*AU_meters))
     
 #     print(Tb0_)
 #     print(Tb1_ * (np.cos(delta_phi) - 1))
@@ -2768,7 +2863,7 @@ def get_disc_integrated_Moon_TB_interp(nu, moon_phase_angle, dist_MS): # linear 
     # the nu array has to contain sorted frequencies
     nu_GHz = nu/1e9
     nu_GHz = np.asarray(nu_GHz)
-    if np.min(nu_GHz) < np.min(nus_calib) or np.max(nu_GHz) > np.max(nus_calib): # by default, np.interp will pu the closest vaue if out of bounds
+    if np.min(nu_GHz) < np.min(nus_calib) or np.max(nu_GHz) > np.max(nus_calib): # by default, np.interp will put the closest vaue if out of bounds
         raise ValueError("The given frequency nu = {} GHz is out of bounds.".format(nu_GHz))
     i_nus = np.zeros_like(nu_GHz, dtype=int)
     if np.isscalar(nu):
@@ -2808,7 +2903,7 @@ def get_moon_map(nu_interval, nside, moon_pos, moon_angrad, moon_phase_angle, di
     # and then degrade the resolution!
     high_nside = 16 * nside
     moon_pix = hp.query_disc(nside=high_nside, vec=moon_pos, radius=moon_angrad)
-    print(len(moon_pix))
+    # print(len(moon_pix))
     map_moon = np.zeros(hp.nside2npix(high_nside))
     map_moon[moon_pix] = 1 # it will later be multiplied by power_pix
     map_moon = hp.ud_grade(map_in=map_moon, nside_out=nside) # faster

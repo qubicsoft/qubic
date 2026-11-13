@@ -57,14 +57,19 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site):
     ### We remove tt[0] but we save tinit in date_obs
     tinit = tt[0]
     tt -= tinit
-    date_obs = str(datetime.utcfromtimestamp(tinit))
+
+    # date_obs_ = str(datetime.utcfromtimestamp(tinit))
+    # print(date_obs_)
+
+    alltimes = Time(tinit, scale="utc", format="unix") + tt*u.second
+    date_obs = alltimes[0].to_value(format="iso")
+    
+    # print(date_obs)
+    # aezt
     print('Observations started at: {} UTC (old)'.format(date_obs))
-    ### This QubicSampling object is just useful for coord conversion
-    # qs = Qsamplings.QubicSampling(azimuth=azt, elevation=elt, time=tt,
-    #                date_obs=date_obs, longitude=longitude, latitude=latitude)
 
     ############################### Using Astropy #########################
-    alltimes = Time(date_obs) + tt*u.second #+ 3*u.minute
+    # alltimes = Time(date_obs) + tt*u.second
 
     ### Local coordinates
     frame_obs = AltAz(obstime=alltimes , location=Obs_Site)
@@ -136,9 +141,9 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site):
     print(lmoon_av, bmoon_av)
     uvmoon = hp.ang2vec(np.radians(90. - bmoon_av), np.radians(lmoon_av))
 
-    pixmoon = hp.query_disc(nside, uvmoon, moon_angsize/2, inclusive=True) # shouldn't I put moon_angsize/2 here?
-    map_in = np.zeros(12*nside**2)
-    map_in[pixmoon] = 1 # approximation for now
+    # pixmoon = hp.query_disc(nside, uvmoon, moon_angsize/2, inclusive=True) # shouldn't I put moon_angsize/2 here?
+    # map_in = np.zeros(12*nside**2)
+    # map_in[pixmoon] = 1 # approximation for now
     # here I should use the emission model of the Moon
     # in order to have realistic maps at the end of the pipeline
     # instead of putting 1
@@ -147,6 +152,9 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site):
             Nfreq=int(d["nf_sub"] / 2) ,
             relative_bandwidth=d["filter_relative_bandwidth"],
         )
+    
+    # print(np.shape(nus_edge))
+    # print(np.shape(nus))
     sky_nu = np.zeros((len(nus), 12*nside**2))
     pixel_power_nu = np.zeros(len(nus))
     for i_interval in range(len(nus)):

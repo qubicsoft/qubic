@@ -86,28 +86,34 @@ def display_all(mapsb, mapsb_pos, mapsb_neg, anatype='', rot=[0,50], highcontras
     do_display_all(mapsb, mapsb_pos, mapsb_neg, mapav, mapdiff, mapdiff2, rot=rot, anatype=anatype, reso=reso, myrange=myrange, TESNum=TESNum)
 
 
-def plot_fit_img(mapij, axs, ipos, jpos, iguess, jguess, ifit, jfit, vmin, vmax, ms, origin="upper"):
+def plot_fit_img(mapij, axs, fitted, iguess, jguess, ifit, jfit, vmin, vmax, ms, reso, origin="upper"):
+    if axs is None:
+        fig, axs = plt.subplots(1, 4, width_ratios=(1, 1, 1, 0.05), figsize=(14, 5))
+        # fig.suptitle("Sum residuals = {}\n{}".format(np.sum(np.abs(mapij - fitted)), m.values))
+        # axs[1].imshow(fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
+        # im = axs[2].imshow(mapij - fitted, origin=origin, extent=[np.min(ipos), np.max(ipos), np.min(jpos), np.max(jpos)], vmin=mini, vmax=maxi)
+        axs[1].imshow(fitted, origin=origin, vmin=vmin, vmax=vmax)
+        im = axs[2].imshow(mapij - fitted, origin=origin, vmin=vmin, vmax=vmax)
+        axs[0].set_ylabel("Pixel [{} arcmin]".format(reso))
+        for i in range(3):
+            axs[i].set_xlabel("Pixel [{} arcmin]".format(reso))
+        axs[0].set_title("Data")
+        axs[1].set_title("Fit")
+        axs[2].set_title("Residuals")
     ax = axs[0]
     ax.clear()
-    # im = ax.imshow(mapxy, origin=origin, extent=[np.max(ipos), np.min(ipos), np.max(jpos), np.min(jpos)], vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
-    if origin == "upper":
-        bottom = np.max(ipos)
-        top = np.min(ipos)
-    elif origin == "lower":
-        bottom = np.min(ipos)
-        top = np.max(ipos)
-    # im = ax.imshow(mapij, origin=origin, extent=[np.max(jpos), np.min(jpos), bottom, top], vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
     im = ax.imshow(mapij, origin=origin, vmin=vmin, vmax=vmax) # j = -azt = x, i = elt = y
-    ax.set_xlabel('Degrees')
-    ax.set_ylabel('Degrees')
-    # ax.plot(jguess, iguess,'mo', markerfacecolor="none", ms=ms, mew=3, label='Guess') # j = -azt = x, i = elt = y
-    # ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
+    ax.set_xlabel("Pixel [{} arcmin]".format(reso))
+    ax.set_ylabel("Pixel [{} arcmin]".format(reso))
     ax.plot(jguess, iguess, 'mo', markerfacecolor="none", ms=ms, mew=5, label='Guess') # j = azt, i = -elt
     ax.plot(jfit, ifit, 'ro', markerfacecolor="none", ms=ms, mew=1.5, label='Fit')
     ax.legend()
     cax = axs[-1]
     cax.clear()
     plt.colorbar(im, cax=cax)
+    for ax in axs[1:3]:
+        ax.set_yticklabels([])
+    plt.subplots_adjust(wspace=0)
     return axs
 
 

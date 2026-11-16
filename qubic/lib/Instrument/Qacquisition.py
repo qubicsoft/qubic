@@ -109,12 +109,9 @@ class QubicAcquisition(Acquisition):
         twosided = d["twosided"]
         sigma = d["sigma"]
         self.interp_projection = d["interp_projection"]
-<<<<<<< HEAD
-=======
         comm = d["comm"]
         nprocs_instrument = d["nprocs_instrument"]
         nprocs_sampling = d["nprocs_sampling"]
->>>>>>> origin/master
 
         Acquisition.__init__(
             self,
@@ -453,9 +450,6 @@ class QubicAcquisition(Acquisition):
         f = self.instrument.get_projection_operator
         if len(self.block) == 1:
             return BlockColumnOperator(
-<<<<<<< HEAD
-                [f(self.sampling[b], self.scene, verbose=verbose, interp_projection=self.interp_projection) for b in self.block],
-=======
                 [
                     f(
                         self.sampling[b],
@@ -465,7 +459,6 @@ class QubicAcquisition(Acquisition):
                     )
                     for b in self.block
                 ],
->>>>>>> origin/master
                 axisout=1,
             )
 
@@ -671,14 +664,6 @@ class QubicMultiAcquisitions:
         else:
             self.H = H
 
-<<<<<<< HEAD
-        print(np.shape(self.H[0].T(np.ones(self.H[0].T.shapein))))
-        if self.multiinstrument[0].config == "TD":
-            self.coverage = self.H[0].T(np.ones(self.H[0].T.shapein))
-        else:
-            self.coverage = self.H[0].T(np.ones(self.H[0].T.shapein))[:, 0]
-=======
->>>>>>> origin/master
         ### Save MPI communicator
         if self.dict["nprocs_instrument"] != 1:
             self.mpidist = self.H[0].operands[-1]

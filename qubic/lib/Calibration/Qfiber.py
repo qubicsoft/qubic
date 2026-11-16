@@ -1,13 +1,4 @@
 # -*- coding: utf-8 -*-
-<<<<<<< HEAD
-import os,sys,math,iminuit
-import matplotlib.pyplot as plt
-from pysimulators import FitsArray
-import matplotlib.mlab as mlab
-import numpy as np
-
-
-=======
 import math
 import os
 import sys
@@ -18,7 +9,6 @@ import iminuit
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import numpy as np
->>>>>>> origin/master
 import scipy.signal as scsig
 import scipy.stats
 from astropy.io import fits
@@ -55,15 +45,9 @@ def statstr(x, divide=False, median=False, cut=None):
 
 
 def qgrid():
-<<<<<<< HEAD
-        for i in range(17):
-                plt.axvline(x=i-0.5, alpha=0.3, color='k')
-                plt.axhline(y=i-0.5, alpha=0.3, color='k')
-=======
     for i in range(17):
         plt.axvline(x=i - 0.5, alpha=0.3, color="k")
         plt.axhline(y=i - 0.5, alpha=0.3, color="k")
->>>>>>> origin/master
 
 
 def image_asics(data1=None, data2=None, all1=None):
@@ -287,60 +271,6 @@ def do_minuit(
                 theguess[k] = drng[k]
         theargs.update(theguess)
 
-<<<<<<< HEAD
-        # Run Minuit
-        if verbose: print('Fitting with Minuit')
-        ver = sys.version_info
-        if ver.major < 3:
-                print("ver.major > 3")
-                theargs = dict(theguess.items() + dfix.items() + dstep.items())
-                if rangepars is not None: theargs.update(dict(theguess.items() + drng.items()))
-        else:
-                print("ver.major <= 3")
-                for k in dfix.keys():
-                        theguess[k] = dfix[k]
-                theargs = theguess
-                if rangepars is not None:
-                        for k in drng.keys():
-                                theguess[k] = drng[k]
-                theargs.update(theguess)
-        print("theargs", theargs, flush=True)
-        if isinstance(chi2, MyChi2):
-                print("a")
-                m = iminuit.Minuit(chi2, name=parnames, errordef=0.1, print_level=print_level, **theargs)
-                m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
-
-        elif isinstance(chi2, Chi2Implement):
-                print("b")
-                if True:
-                      print("Minimizer object: ", chi2.__dict__)
-                      print("Guess: ", *guess)
-                      print("ncallmax, nsplit, precision: ", ncallmax, nsplit, precision)     
-                # if iminuit.version==2.2
-                # m = iminuit.Minuit(chi2, *guess)
-                # m = iminuit.Minuit(chi2, *guess)
-                m = iminuit.Minuit(chi2, name=parnames, *guess)
-                m.migrad(ncall = ncallmax * nsplit)
-                #if iminuit.version==1.3
-                # m  = iminuit.Minuit(chi2, name=parnames, errordef=0.1, print_level=print_level, **theargs)
-                # m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
-        # print('Migrad Done')
-        if minos:
-                try:
-                        m.minos()
-                        if verbose: print('Minos Done')
-                except:
-                        if verbose: print('Minos Failed !')
-        if nohesse is False:
-                try:
-                        m.hesse()
-                        if verbose: print('Hesse Done')
-                except:
-                        if verbose: print('Hesse failed !')
-        # build np.array output
-        parfit = []
-        for i in parnames: parfit.append(m.values[i])
-=======
     if isinstance(chi2, MyChi2):
         m = iminuit.Minuit(chi2, name=parnames, errordef=0.1, print_level=print_level, **theargs)
         m.migrad(ncall=ncallmax * nsplit, nsplit=nsplit, precision=precision)
@@ -396,7 +326,6 @@ def do_minuit(
         for i in range(ndimfit):
             for j in range(ndimfit):
                 covariance[i, j] = m.covariance[(parnamesfit[i], parnamesfit[j])]
->>>>>>> origin/master
 
     if isinstance(chi2, MyChi2):
         chisq = chi2(*parfit)
@@ -487,74 +416,11 @@ def profile(xin, yin, rng=None, nbins=10, fmt=None, plot=True, dispersion=True, 
         if others is None:
             return xc[ok], yval[ok], dx[ok], dy[ok], others
         else:
-<<<<<<< HEAD
-                mini = rng[0]
-                maxi = rng[1]
-        if log is False:
-                xx = np.linspace(mini, maxi, nbins + 1)
-        else:
-                xx = np.logspace(np.log10(mini), np.log10(maxi), nbins + 1)
-        xmin = xx[0:nbins]
-        xmax = xx[1:]
-        yval = np.zeros(nbins)
-        xc = np.zeros(nbins)
-        dy = np.zeros(nbins)
-        dx = np.zeros(nbins)
-        nn = np.zeros(nbins)
-        if rebin_as_well is not None:
-                nother = len(rebin_as_well)
-                others = np.zeros((nbins, nother))
-        else:
-                others = None
-        for i in np.arange(nbins):
-                ok = (x > xmin[i]) & (x < xmax[i])
-                if ok.sum() > 0:
-                        newy = y[ok]
-                        if clip is not None:
-                                for k in np.arange(3):
-                                        newy, mini, maxi = scipy.stats.sigmaclip(newy, low=clip, high=clip)
-                        nn[i] = len(newy)
-                        if median:
-                                yval[i] = np.median(y[ok])
-                        elif mode:
-                                mm, ss = meancut(y[ok], 3)
-                                hh = np.histogram(y[ok], bins=int(np.min([len(y[ok]) / 30, 100])), range=[mm - 5 * ss, mm + 5 * ss])
-                                idmax = np.argmax(hh[0])
-                                yval[i] = 0.5 * (hh[1][idmax + 1] + hh[1][idmax])
-                        else:
-                                yval[i] = np.mean(y[ok])
-                        xc[i] = (xmax[i] + xmin[i]) / 2
-                        if rebin_as_well is not None:
-                                for o in range(nother):
-                                        others[i, o] = np.mean(rebin_as_well[o][ok])
-                        if dispersion:
-                                fact = 1
-                        else:
-                                fact = np.sqrt(len(y[ok]))
-                        dy[i] = np.std(y[ok]) / fact
-                        dx[i] = np.std(x[ok]) / fact
-        
-        if plot:
-                if fmt is None:
-                        fmt = 'ro'
-                plt.errorbar(xc, yval, xerr=dx, yerr=dy, fmt=fmt)
-        ok = (nn != 0) & (dy != 0)
-        if cutbad:
-                if others is None:
-                        return xc[ok], yval[ok], dx[ok], dy[ok], others
-                else:
-                        return xc[ok], yval[ok], dx[ok], dy[ok], others[ok, :]
-        else:
-                yval[~ok] = 0
-                dy[~ok] = 0
-                return xc, yval, dx, dy, others
-=======
             return xc[ok], yval[ok], dx[ok], dy[ok], others[ok, :]
     else:
         yval[~ok] = 0
         dy[~ok] = 0
         return xc, yval, dx, dy, others
->>>>>>> origin/master
 
 
 def exponential_filter1d(input, sigma, axis=-1, output=None, mode="reflect", cval=0.0, truncate=10.0, power=1):
@@ -1193,26 +1059,6 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
     params_av = bla[1]
     err_av = bla[2]
 
-<<<<<<< HEAD
-        if doplot:
-                plt.ion()
-                if clear:
-                        plt.clf()
-                plt.xlim(0, 1. / fff)
-                for i in range(npix):
-                        plt.plot(t, folded[i, :], alpha=0.1, color='k')
-                plt.plot(t, av, color='b', lw=4, alpha=0.3, label='Median')
-                plt.plot(t, functname(t, bla[1]), 'r--', lw=4,
-                         label='Fitted average of {8:} pixels \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(
-                                 params_av[0], err_av[0], params_av[1], err_av[1], params_av[2], err_av[2], params_av[3], err_av[3],
-                                 npix))
-                plt.legend(fontsize=7, frameon=False, loc='lower left')
-                plt.xlabel('Time(sec)')
-                plt.ylabel('Stacked')
-                plt.title('{} {}: Freq_Mod={}Hz - Cycle={}% - Vtes={}V'.format(name, fib, fff, dc * 100, Vtes))
-                plt.show()
-                time.sleep(0.1)
-=======
     if doplot:
         plt.ion()
         if clear:
@@ -1236,7 +1082,6 @@ def fit_average(t, folded, fff, dc, fib, Vtes, initpars=None, fixpars=[0, 0, 0, 
         plt.title("{} {}: Freq_Mod={}Hz - Cycle={}% - Vtes={}V".format(name, fib, fff, dc * 100, Vtes))
         plt.show()
         time.sleep(0.1)
->>>>>>> origin/master
         return av, params_av, err_av
 
 
@@ -1257,57 +1102,6 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
     Returns
     -------
 
-<<<<<<< HEAD
-        """
-        npix, nbins = np.shape(folded)
-        print('       Got {} pixels to fit'.format(npix))
-        ##### Now fit each TES fixing cycle to dc and t0 to the one fitted on the median
-        allparams = np.zeros((npix, 4))
-        allerr = np.zeros((npix, 4))
-        allchi2 = np.zeros(npix)
-        bar = progress_bar(npix, 'Detectors ')
-        ok = np.zeros(npix, dtype=bool)
-        for i in range(npix):
-                bar.update()
-                thedd = folded[i, :]
-                #### First a fit with no error correction in order to have a chi2 distribution
-                theres = do_minuit(t, thedd, np.ones(len(t)), initpars, functname=functname, fixpars=fixpars,
-                                                   rangepars=rangepars, force_chi2_ndf=True, verbose=False, nohesse=True)
-                ndf = theres[5]
-                params = theres[1]
-                err = theres[2]
-                allparams[i, :] = params
-                allerr[i, :] = err
-                allchi2[i] = theres[4]
-                if stop_each:
-                        plt.clf()
-                        plt.plot(t, thedd, color='k')
-                        plt.plot(t, av, color='b', lw=4, alpha=0.2, label='Median')
-                        plt.plot(t, functname(t, theres[1]), 'r--', lw=4,
-                                 label='Fitted: \n cycle={0:8.3f}+/-{1:8.3f} \n tau = {2:8.3f}+/-{3:8.3f}s \n t0 = {4:8.3f}+/-{5:8.3f}s \n amp = {6:8.3f}+/-{7:8.3f}'.format(
-                                         params[0], err[0], params[1], err[1], params[2], err[2], params[3], err[3]))
-                        plt.legend()
-                        plt.show()
-                        msg = 'TES #{}'.format(i)
-                        if i in [3, 35, 67, 99]:
-                                msg = 'Channel #{} - BEWARE THIS IS A THERMOMETER !'.format(i)
-                        plt.title(msg)
-                        # Changing so 'i' select prompts plot inversion
-                        bla = input("Press [y] if fit OK, [i] to invert, other key otherwise...")
-                        if bla == 'y':
-                                ok[i] = True
-                        # invert to check if TES okay,
-                        # thedd refers to the indexed TES in loop
-                        if bla == 'i':
-                                # clf()
-                                plt.plot(t, thedd * (-1.0), color='olive')
-                                plt.show()
-                                ibla = input("Press [y] if INVERTED fit OK, otherwise anykey")
-                                # and invert thedd in the original datset
-                                if ibla == 'y':
-                                        ok[i] = True
-                                        folded[i, :] = thedd * -1.0
-=======
     """
     npix, nbins = np.shape(folded)
     print("       Got {} pixels to fit".format(npix))
@@ -1361,7 +1155,6 @@ def fit_all(t, folded, av, initpars=None, fixpars=[0, 0, 0, 0], stop_each=False,
                 if ibla == "y":
                     ok[i] = True
                     folded[i, :] = thedd * -1.0
->>>>>>> origin/master
 
             print(ok[i])
     return allparams, allerr, allchi2, ndf, ok
@@ -1489,39 +1282,16 @@ def run_asic(
         if okfile is None:
             okfinal = np.array(FitsArray("TES-OK-{}{}-asic{}.fits".format(name, fib, asic))).astype(bool)
         else:
-<<<<<<< HEAD
-                plt.figure(figsize=(6, 8))
-                plt.subplot(3, 1, 1)
-                ### Now redo the fits one last time
-                av, params, err = fit_average(tt, folded[okfinal, :], fff, dc, fib, Vtes, initpars=initpars,
-                                                                          fixpars=[0, 0, 0, 0], doplot=True, clear=False, name=name)
-                print(params)
-                print(err)
-=======
             okfinal = np.array(FitsArray(okfile)).astype(bool)
         if removesat:
             #### remove pixels looking saturated, sat_value in muA
             saturated = np.min(folded_nonorm, axis=1) < removesat
             okfinal = (okfinal * ~saturated).astype(bool)
->>>>>>> origin/master
 
     if doplot is False:
         ### Now redo the fits one last time
         av, params, err = fit_average(tt, folded[okfinal, :], fff, dc, fib, Vtes, initpars=initpars, fixpars=[0, 0, 0, 0], doplot=False, clear=False, name=name)
 
-<<<<<<< HEAD
-                plt.subplot(3, 2, 3)
-                mmt, sst = meancut(allparams[okfinal, 1], 3)
-                plt.hist(allparams[okfinal, 1], range=[0, mmt + 4 * sst], bins=10, label=statstr(allparams[okfinal, 1], cut=3))
-                plt.xlabel('Tau [sec]')
-                plt.legend()
-                plt.title('Asic {} - {} {}'.format(name, asic, fib))
-                plt.subplot(3, 2, 4)
-                mma, ssa = meancut(allparams[okfinal, 3], 3)
-                plt.hist(allparams[okfinal, 3], range=[0, mma + 4 * ssa], bins=10, label=statstr(allparams[okfinal, 3], cut=3))
-                plt.legend()
-                plt.xlabel('Amp [ nA ]')
-=======
         allparams, allerr, allchi2, ndf, ok_useless = fit_all(
             tt, 1e3 * folded_nonorm, av, initpars=[dc, params[1], params[2], params[3]], fixpars=[1, 0, 1, 0], functname=simsig_nonorm, rangepars=rangepars
         )
@@ -1533,7 +1303,6 @@ def run_asic(
         av, params, err = fit_average(tt, folded[okfinal, :], fff, dc, fib, Vtes, initpars=initpars, fixpars=[0, 0, 0, 0], doplot=True, clear=False, name=name)
         print(params)
         print(err)
->>>>>>> origin/master
 
         if lastpassallfree:
             fixed = [0, 0, 0, 0]
@@ -1560,19 +1329,6 @@ def run_asic(
         amp = pars[:, 3]
         amp[~okfinal] = np.nan
 
-<<<<<<< HEAD
-                plt.subplot(3, 2, 5)
-                imtau = image_asics(data1=tau1, data2=tau2)
-                plt.imshow(imtau, vmin=0, vmax=mmt + 4 * sst, cmap='viridis', interpolation='nearest')
-                plt.title('Tau - {} {} - asic {}'.format(name, fib, asic))
-                plt.colorbar()
-                plt.subplot(3, 2, 6)
-                imamp = image_asics(data1=amp1, data2=amp2)
-                plt.imshow(imamp, vmin=0, vmax=mma + 6 * ssa, cmap='viridis', interpolation='nearest')
-                plt.colorbar()
-                plt.title('Amp - {} {} - asic {}'.format(name, fib, asic))
-                plt.tight_layout()
-=======
         if asic == 1:
             tau1 = tau
             tau2 = None
@@ -1594,7 +1350,6 @@ def run_asic(
         plt.colorbar()
         plt.title("Amp - {} {} - asic {}".format(name, fib, asic))
         plt.tight_layout()
->>>>>>> origin/master
 
     return tt, folded, okfinal, allparams, allerr, allchi2, ndf
 
@@ -1619,88 +1374,6 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
     """
     img_maynooth = image_asics(all1=pow_maynooth)
 
-<<<<<<< HEAD
-        plt.clf()
-        plt.subplot(2, 2, 1)
-        plt.plot(allparams[allok, 3], allerr[allok, 3], 'k.')
-        if cuterr is not None:
-                thecut_err = cuterr
-        else:
-                thecut_err = 1e10
-        if cutparam is not None:
-                thecut_amp = cutparam
-        else:
-                thecut_amp = 1e10
-
-        newok = allok * (allerr[:, 3] < thecut_err) * (allparams[:, 3] < thecut_amp)
-        plt.plot([np.min(allparams[allok, 3]), np.max(allparams[allok, 3])], [thecut_err, thecut_err], 'g--')
-        plt.plot([thecut_amp, thecut_amp], [np.min(allerr[allok, 3]), np.max(allerr[allok, 3])], 'g--')
-        plt.plot(allparams[newok, 3], allerr[newok, 3], 'r.')
-        allparams[~newok, :] = np.nan
-        plt.ylabel('$\sigma_{amp}$ [nA]')
-        plt.xlabel('Amp Fib{} [nA]'.format(fib))
-
-        plt.subplot(2, 2, 3)
-        plt.errorbar(pow_maynooth[newok], allparams[newok, 3], yerr=allerr[newok, 3], fmt='r.')
-        xx = pow_maynooth[newok]
-        yy = allparams[newok, 3]
-        yyerr = allerr[newok, 3]
-        res = do_minuit(xx, yy, yyerr, np.array([1., 0]), fixpars=[0, 0])
-        paramfit = res[1]
-        if bootstrap is None:
-                errfit = res[2]
-                typerr = 'Minuit'
-        else:
-                bsres = []
-                bar = progress_bar(bootstrap, 'Bootstrap')
-                for i in range(bootstrap):
-                        bar.update()
-                        order = np.argsort(np.random.rand(len(xx)))
-                        xxbs = xx.copy()
-                        yybs = yy[order]
-                        yybserr = yyerr[order]
-                        theres = do_minuit(xxbs, yybs, yybserr, np.array([1., 0]), fixpars=[0, 0], verbose=False)
-                        bsres.append(theres[1])
-                bsres = np.array(bsres)
-                errfit = np.std(bsres, axis=0)
-                typerr = 'Bootstrap'
-
-        xxx = np.linspace(0, np.max(pow_maynooth), 100)
-        plt.plot(xxx, thepolynomial(xxx, res[1]), 'g', lw=3,
-                 label='a={0:8.3f} +/- {1:8.3f} \n b={2:8.3f} +/- {3:8.3f}'.format(paramfit[0], errfit[0], paramfit[1],
-                                                                                                                                                   errfit[1]))
-        if bootstrap is not None:
-                bsdata = np.zeros((bootstrap, len(xxx)))
-                for i in range(bootstrap):
-                        bsdata[i, :] = thepolynomial(xxx, bsres[i, :])
-                mm = np.mean(bsdata, axis=0)
-                ss = np.std(bsdata, axis=0)
-                plt.fill_between(xxx, mm - ss, y2=mm + ss, color='b', alpha=0.3)
-                plt.fill_between(xxx, mm - 2 * ss, y2=mm + 2 * ss, color='b', alpha=0.2)
-                plt.fill_between(xxx, mm - 3 * ss, y2=mm + 3 * ss, color='b', alpha=0.1)
-                plt.plot(xxx, mm, 'b', label='Mean bootstrap')
-
-        # indices = np.argsort(np.random.rand(bootstrap))[0:1000]
-        # for i in range(len(indices)):
-        #       plot(xxx, thepolynomial(xxx, bsres[indices[i],:]), 'k', alpha=0.01)
-        plt.ylim(0, np.max(allparams[newok, 3]) * 1.1)
-        plt.xlim(np.min(pow_maynooth[newok]) * 0.99, np.max(pow_maynooth[newok]) * 1.01)
-        plt.ylabel('Amp Fib{} [nA]'.format(fib))
-        plt.xlabel('Maynooth [mW]')
-        plt.legend(fontsize=8, framealpha=0.5)
-
-        plt.subplot(2, 2, 2)
-        plt.imshow(img_maynooth, vmin=np.min(pow_maynooth), vmax=np.max(pow_maynooth), interpolation='nearest')
-        plt.colorbar()
-        plt.title('Maynooth [mW]')
-
-        plt.subplot(2, 2, 4)
-        img = image_asics(all1=allparams[:, 3] / res[1][0])
-        plt.imshow(img, interpolation='nearest')
-        plt.colorbar()
-        plt.title('Amp Fib{}  converted to mW'.format(fib))
-        plt.tight_layout()
-=======
     plt.clf()
     plt.subplot(2, 2, 1)
     plt.plot(allparams[allok, 3], allerr[allok, 3], "k.")
@@ -1774,6 +1447,5 @@ def calibrate(fib, pow_maynooth, allparams, allerr, allok, cutparam=None, cuterr
     plt.colorbar()
     plt.title("Amp Fib{}  converted to mW".format(fib))
     plt.tight_layout()
->>>>>>> origin/master
 
     return res[1], res[2], newok

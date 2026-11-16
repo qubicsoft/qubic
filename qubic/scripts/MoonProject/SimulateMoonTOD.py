@@ -15,7 +15,8 @@ import astroplan
 import gc
 
 import healpy as hp
-from qubic.lib import Qacquisition, Qsamplings, Qinstrument
+from qubic.lib import Qsamplings
+from qubic.lib.Instrument import Qacquisition, Qinstrument
 
 import pipeline_moon_functions as pmf
 

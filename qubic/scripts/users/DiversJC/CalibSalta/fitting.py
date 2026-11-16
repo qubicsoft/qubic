@@ -184,4 +184,4 @@ def meancut(data, nsig, med=False, disp=True):
                 return np.median(dd), np.std(dd) / sc
         else:
                 return np.mean(dd), np.std(dd) / sc
-
+        

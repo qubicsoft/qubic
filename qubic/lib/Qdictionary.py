@@ -1,6 +1,7 @@
-import os, sys
-import string
+import sys
+
 from qubic.lib.Qutilities import find_file
+
 
 def ask_for(key):
     if sys.version_info.major == 2:
@@ -16,7 +17,6 @@ def ask_for(key):
 
 
 class qubicDict(dict):
-
     def __init__(self, ask=False):
         """
         @param ask if the dict doesn't have an entry for a key, ask for the associated value and assign
@@ -38,36 +38,36 @@ class qubicDict(dict):
         return dict.__getitem__(self, key)
 
     def read_from_file(self, filename):
-        '''
+        """
         read a given dictionary file
-        '''
+        """
 
         filename_fullpath = find_file(filename)
         if filename_fullpath is None:
-            print('Could not read dictionary.  File not found: %s' % basename)
+            print("Could not read dictionary.  File not found: %s" % filename)
             return False
 
         f = open(filename_fullpath)
-        old = ''
+        old = ""
         for line in f:
             line = line.strip()
-            if len(line) == 0 or line[0] == '#':
+            if len(line) == 0 or line[0] == "#":
                 continue
-            s = line.split('#')
+            s = line.split("#")
             line = s[0]
-            s = line.split('\\')
+            s = line.split("\\")
             if len(s) > 1:
-                old = ' '.join([old, s[0]])
+                old = " ".join([old, s[0]])
                 continue
             else:
-                line = ' '.join([old, s[0]])
-                old = ''
+                line = " ".join([old, s[0]])
+                old = ""
             for i in range(len(line)):
-                if line[i] != ' ':
+                if line[i] != " ":
                     line = line[i:]
                     break
             exec(line)
-            s = line.split('=')
+            s = line.split("=")
             if len(s) != 2:
                 print("Error parsing line:")
                 print(line)
@@ -76,11 +76,10 @@ class qubicDict(dict):
             val = eval(s[1].strip())  # XXX:make safer
             self[key] = val
         f.close()
-        # self.prefix_OutputName()
 
     readFromFile = read_from_file
 
-    def write_to_file(self, filename, mode='w'):
+    def write_to_file(self, filename, mode="w"):
         f = open(filename, mode)
         keys = self.keys()
         keys.sort()
@@ -91,7 +90,6 @@ class qubicDict(dict):
     writeToFile = write_to_file
 
     def cmp(self, otherDict):
-
         diff = []
         ks = self.keys()
         for k in ks:
@@ -104,6 +102,7 @@ class qubicDict(dict):
                 diff += [k]
         return otherDict
 
+
 #    def prefix_OutputName(self):
 #
 #        import datetime
@@ -112,7 +111,7 @@ class qubicDict(dict):
 #        dir_output = str(self['output'])
 #
 #        if os.path.isdir( dir_output ):
-#            print( 'QUBIC output directory: {}'.format( dir_output ) )  
+#            print( 'QUBIC output directory: {}'.format( dir_output ) )
 #        elif not os.path.isdir( dir_output ):
 #            print( 'Building output directory' )
 #            os.mkdir( dir_output )

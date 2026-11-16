@@ -1,6 +1,13 @@
-# *.ipynb filter=clean_ipynb
+*.ipynb filter=clean_ipynb
 
-# *.ipynb	diff=jupyternotebook
+#*.ipynb	diff=jupyternotebook
 
+<<<<<<< HEAD
 # *.ipynb	merge=jupyternotebook
 *.ipynb filter=clean_ipynb
+=======
+#*.ipynb	merge=jupyternotebook
+
+*.ipynb linguist-generated=true
+*.html linguist-generated=true
+>>>>>>> origin/master

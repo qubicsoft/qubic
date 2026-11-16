@@ -1,0 +1,37 @@
+# Font e testo
+text.usetex: True
+font.family: serif
+font.size: 10
+
+# Dimensioni titoli e assi 
+axes.titlesize: 14
+axes.labelsize: 12
+xtick.labelsize: 12
+ytick.labelsize: 12
+
+# Griglia
+grid.alpha: 0.6
+grid.linestyle: :
+
+# Legenda
+legend.fontsize: 10
+legend.frameon: True
+
+# Ticks
+xtick.direction: out
+ytick.direction: out
+
+# Aspetto degli assi
+axes.linewidth: 0.8
+axes.facecolor: whitesmoke
+
+#  Linee 
+lines.linewidth: 1
+
+#  Salvataggio figure 
+savefig.dpi: 1000
+savefig.format: pdf
+
+#  Spine (rimozione top e right) 
+axes.spines.top: False
+axes.spines.right: False

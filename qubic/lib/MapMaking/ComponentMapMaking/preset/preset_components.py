@@ -1,10 +1,7 @@
-import os
-
 import healpy as hp
 import numpy as np
 import pysm3
 import pysm3.units as u
-from pysimulators.interfaces.healpy import HealpixConvolutionGaussianOperator
 from pysm3 import utils
 
 from qubic.data import PATH
@@ -63,7 +60,7 @@ class PresetComponents:
         self.params_foregrounds = self.preset_tools.params["Foregrounds"]
 
         ### Define seed for CMB generation and noise
-        #self.seed = seed
+        # self.seed = seed
 
         ### Skyconfig
         self.preset_tools.mpi._print_message("    => Creating sky configuration")
@@ -72,25 +69,19 @@ class PresetComponents:
 
         ### Define model for reconstruction
         self.preset_tools.mpi._print_message("    => Creating model")
-        self.components_model_in, self.components_name_in = (
-            self.preset_qubic.get_components_fgb(key="in")
-        )
-        self.components_model_out, self.components_name_out = (
-            self.preset_qubic.get_components_fgb(key="out")
-        )
+        self.components_model_in, self.components_name_in = self.preset_qubic.get_components_fgb(key="in")
+        self.components_model_out, self.components_name_out = self.preset_qubic.get_components_fgb(key="out")
 
         ### Compute true components
         self.preset_tools.mpi._print_message("    => Creating components")
-        self.components_in, self.components_convolved_in, _ = self.get_components(
-            self.skyconfig_in
-        )
-        self.components_out, self.components_convolved_out, self.components_iter = (
-            self.get_components(self.skyconfig_out)
-        )
+
+        self.components_in = self.get_components(self.skyconfig_in)
+        self.components_out = self.get_components(self.skyconfig_out)
+        self.components_iter = self.components_out.copy()
 
         ### Monochromatic emission
         if self.preset_tools.params["Foregrounds"]["CO"]["CO_in"]:
-            self.nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0_co"]
+            self.nu_co = self.preset_tools.params["Foregrounds"]["CO"]["nu0"]
         else:
             self.nu_co = None
 
@@ -118,18 +109,16 @@ class PresetComponents:
 
         sky = {}
         if self.params_cmb["cmb"]:
-            sky["CMB"] = self.preset_tools.params['CMB']['seed']
+            sky["CMB"] = self.preset_tools.params["CMB"]["seed"]
 
         if self.preset_tools.params["Foregrounds"]["Dust"][f"Dust_{key}"]:
-            sky["Dust"] = self.preset_tools.params["Foregrounds"]["Dust"]["model_d"]
+            sky["Dust"] = self.preset_tools.params["Foregrounds"]["Dust"]["model"]
 
         if self.preset_tools.params["Foregrounds"]["Synchrotron"][f"Synchrotron_{key}"]:
-            sky["Synchrotron"] = self.preset_tools.params["Foregrounds"]["Synchrotron"][
-                "model_s"
-            ]
+            sky["Synchrotron"] = self.preset_tools.params["Foregrounds"]["Synchrotron"]["model"]
 
         if self.preset_tools.params["Foregrounds"]["CO"][f"CO_{key}"]:
-            sky["coline"] = "co2"
+            sky["CO"] = "co2"
 
         return sky
 
@@ -153,9 +142,7 @@ class PresetComponents:
         """
 
         # Read the lensed scalar power spectrum from the FITS file
-        power_spectrum = hp.read_cl(PATH + "Cls_Planck2018_lensed_scalar.fits")[
-            :, :4000
-        ]
+        power_spectrum = hp.read_cl(PATH + "Cls_Planck2018_lensed_scalar.fits")[:, :4000]
 
         # Adjust the lensing amplitude if Alens is not the default value
         if Alens != 1.0:
@@ -163,12 +150,7 @@ class PresetComponents:
 
         # Add tensor contributions if r is not zero
         if r:
-            power_spectrum += (
-                r
-                * hp.read_cl(
-                    PATH + "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits"
-                )[:, :4000]
-            )
+            power_spectrum += r * hp.read_cl(PATH + "Cls_Planck2018_unlensed_scalar_and_tensor_r1.fits")[:, :4000]
 
         return power_spectrum
 
@@ -194,14 +176,10 @@ class PresetComponents:
         """
 
         # Read and downgrade the polarization angle map to the desired nside resolution
-        polangle = hp.ud_grade(
-            hp.read_map(PATH + "psimap_dust90_512.fits"), nside
-        )
+        polangle = hp.ud_grade(hp.read_map(PATH + "psimap_dust90_512.fits"), nside)
 
         # Read and downgrade the depolarization map to the desired nside resolution
-        depolmap = hp.ud_grade(
-            hp.read_map(PATH + "gmap_dust90_512.fits"), nside
-        )
+        depolmap = hp.ud_grade(hp.read_map(PATH + "gmap_dust90_512.fits"), nside)
 
         # Calculate the cosine of twice the polarization angle
         cospolangle = np.cos(2.0 * polangle)
@@ -244,24 +222,7 @@ class PresetComponents:
         """
 
         ### Initialization
-        components = np.zeros(
-            (len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3)
-        )
-        components_convolved = np.zeros(
-            (len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3)
-        )
-
-        ### Compute convolution operator if needed
-        if (
-            self.preset_qubic.params_qubic["convolution_in"]
-            or self.preset_qubic.params_qubic["convolution_out"]
-        ):
-            C = HealpixConvolutionGaussianOperator(
-                fwhm=self.preset_qubic.joint_in.qubic.allfwhm[-1],
-                lmax=3 * self.preset_tools.params["SKY"]["nside"],
-            )
-        else:
-            C = HealpixConvolutionGaussianOperator(fwhm=0)
+        components = np.zeros((len(skyconfig), 12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
 
         ### Compute CMB power spectrum according Planck data
         mycls = self.give_cl_cmb(r=self.params_cmb["r"], Alens=self.params_cmb["Alens"])
@@ -270,111 +231,35 @@ class PresetComponents:
         for icomp, comp_name in enumerate(skyconfig.keys()):
             # CMB case
             if comp_name == "CMB":
+                ### Compute CMB power spectrum according Planck data
+                mycls = self.give_cl_cmb(r=self.params_cmb["r"], Alens=self.params_cmb["Alens"])
+
                 np.random.seed(skyconfig[comp_name])
-                cmb = hp.synfast(
-                    mycls,
-                    self.preset_tools.params["SKY"]["nside"],
-                    verbose=False,
-                    new=True,
-                ).T
-                components[icomp] = cmb.copy()
-                components_convolved[icomp] = C(cmb).copy()
+                component_map = hp.synfast(mycls, self.preset_tools.params["SKY"]["nside"], verbose=False, new=True).T
 
-            # Dust case
-            elif comp_name == "Dust":
-                sky_dust = pysm3.Sky(
-                    nside=self.preset_tools.params["SKY"]["nside"],
-                    preset_strings=[
-                        self.preset_tools.params["Foregrounds"]["Dust"]["model_d"]
-                    ],
-                    output_unit="uK_CMB",
-                )
+            # Dust and synchrotron case
+            elif comp_name == "Dust" or comp_name == "Synchrotron":
+                model = self.preset_tools.params["Foregrounds"][comp_name]["model"]
+                reference_freq = self.preset_tools.params["Foregrounds"][comp_name]["nu0"]
+                amplification = self.preset_tools.params["Foregrounds"][comp_name]["amplification"]
 
-                sky_dust.components[0].mbb_temperature = (
-                    20 * sky_dust.components[0].mbb_temperature.unit
-                )
-                map_Dust = (
-                    np.array(
-                        sky_dust.get_emission(
-                            self.preset_tools.params["Foregrounds"]["Dust"]["nu0_d"]
-                            * u.GHz,
-                            None,
-                        ).T
-                        * utils.bandpass_unit_conversion(
-                            self.preset_tools.params["Foregrounds"]["Dust"]["nu0_d"]
-                            * u.GHz,
-                            None,
-                            u.uK_CMB,
-                        )
-                    )
-                    * self.preset_tools.params["Foregrounds"]["Dust"]["amplification_d"]
-                )
-                components[icomp] = map_Dust.copy()
-                components_convolved[icomp] = C(map_Dust).copy()
+                sky_comp = pysm3.Sky(nside=self.preset_tools.params["SKY"]["nside"], preset_strings=[model], output_unit="uK_CMB")
 
-            # Synchrotron case
-            elif comp_name == "Synchrotron":
-                sky_sync = pysm3.Sky(
-                    nside=self.preset_tools.params["SKY"]["nside"],
-                    preset_strings=[
-                        self.preset_tools.params["Foregrounds"]["Synchrotron"][
-                            "model_s"
-                        ]
-                    ],
-                    output_unit="uK_CMB",
-                )
-
-                map_sync = (
-                    np.array(
-                        sky_sync.get_emission(
-                            self.preset_tools.params["Foregrounds"]["Synchrotron"][
-                                "nu0_s"
-                            ]
-                            * u.GHz,
-                            None,
-                        ).T
-                        * utils.bandpass_unit_conversion(
-                            self.preset_tools.params["Foregrounds"]["Synchrotron"][
-                                "nu0_s"
-                            ]
-                            * u.GHz,
-                            None,
-                            u.uK_CMB,
-                        )
-                    )
-                    * self.preset_tools.params["Foregrounds"]["Synchrotron"][
-                        "amplification_s"
-                    ]
-                )
-                components[icomp] = map_sync.copy()
-                components_convolved[icomp] = C(map_sync).copy()
+                if comp_name == "Dust":
+                    sky_comp.components[0].mbb_temperature = 20 * sky_comp.components[0].mbb_temperature.unit
+                component_map = np.array(sky_comp.get_emission(reference_freq * u.GHz, None).T * utils.bandpass_unit_conversion(reference_freq * u.GHz, None, u.uK_CMB)) * amplification
 
             # CO emission case
-            elif comp_name == "coline":
-                map_co = hp.ud_grade(
-                    hp.read_map(PATH + "CO_line.fits") * 10,
-                    self.preset_tools.params["SKY"]["nside"],
-                )
-                map_co_polarised = self.polarized_I(
-                    map_co,
-                    self.preset_tools.params["SKY"]["nside"],
-                    polarization_fraction=self.preset_tools.params["Foregrounds"]["CO"][
-                        "polarization_fraction"
-                    ],
-                )
-                sky_co = np.zeros(
-                    (12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3)
-                )
-                sky_co[:, 0] = map_co.copy()
-                sky_co[:, 1:] = map_co_polarised.T.copy()
-                components[icomp] = sky_co.copy()
-                components_convolved[icomp] = C(sky_co).copy()
+            elif comp_name == "CO":
+                map_co = hp.ud_grade(hp.read_map(PATH + "CO_line.fits") * 10, self.preset_tools.params["SKY"]["nside"])
+                map_co_polarised = self.polarized_I(map_co, self.preset_tools.params["SKY"]["nside"], polarization_fraction=self.preset_tools.params["Foregrounds"]["CO"]["polarization_fraction"])
+                component_map = np.zeros((12 * self.preset_tools.params["SKY"]["nside"] ** 2, 3))
+                component_map[:, 0] = map_co.copy()
+                component_map[:, 1:] = map_co_polarised.T.copy()
 
             else:
                 raise TypeError("Choose right foreground model (d0, s0, ...)")
 
-        # if self.preset_tools.params['Foregrounds']['Dust']['nside_beta_out'] != 0:
-        #     components = components.T.copy()
-        components_iter = components.copy()
+            components[icomp] = component_map.copy()
 
-        return components, components_convolved, components_iter
+        return components

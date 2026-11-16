@@ -1,8 +1,14 @@
 import os
-import pickle
-import yaml
+from qubic.lib.Qhdf5 import HDF5Dict
+import re
+from io import BytesIO
+from pathlib import Path
+
+import cairosvg
 import imageio
 import numpy as np
+import yaml
+
 
 def yaml_to_txt(yaml_file, txt_file, comm=None):
     """
@@ -10,35 +16,20 @@ def yaml_to_txt(yaml_file, txt_file, comm=None):
     """
 
     splitted_path = os.path.split(txt_file)
-    
+
     ### Create the path if doesn't exist
     create_folder_if_not_exists(comm=comm, folder_name=splitted_path[0])
-    
+
     try:
-        with open(yaml_file, 'r') as yf:
+        with open(yaml_file, "r") as yf:
             yaml_data = yaml.safe_load(yf)
-        
-        with open(txt_file, 'w') as tf:
+
+        with open(txt_file, "w") as tf:
             yaml.dump(yaml_data, tf, default_flow_style=False, sort_keys=False)
-        
+
         print(f"Successfully converted {yaml_file} to {txt_file}")
     except Exception as e:
         print(f"Error converting YAML to TXT: {str(e)}")
-        
-def save_data(name, d):
-    """
-
-    Method to save data using pickle convention.
-
-    """
-
-    with open(name, "wb") as handle:
-        pickle.dump(d, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-def open_data(name):
-    with open(name, "rb") as f:
-        return pickle.load(f)
 
 
 def create_folder_if_not_exists(comm, folder_name):
@@ -50,7 +41,7 @@ def create_folder_if_not_exists(comm, folder_name):
                     # Create the folder if it doesn't exist
                     os.makedirs(folder_name)
                     # print(f"The folder '{folder_name}' has been created.")
-                except OSError as e:
+                except OSError:
                     pass
                     # print(f"Error creating the folder '{folder_name}': {e}")
             else:
@@ -61,67 +52,77 @@ def create_folder_if_not_exists(comm, folder_name):
                 # Create the folder if it doesn't exist
                 os.makedirs(folder_name)
                 # print(f"The folder '{folder_name}' has been created.")
-            except OSError as e:
+            except OSError:
                 pass
                 # print(f"Error creating the folder '{folder_name}': {e}")
         else:
             pass
 
 
-def do_gif(input_folder, filename, output="animation.gif", duration=0.01):
+def natural_key(s):
+    # split digits and non-digits for natural sorting
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", str(s))]
 
-    # Collect all the file paths for the images
-    file_paths = []
 
-    for n in sorted(os.listdir(input_folder)):
-        if n.startswith(filename) and n.endswith(".png"):
-            file_paths.append(os.path.join(input_folder, n))
+def do_gif(svg_folder, output="animation.gif", fps=5):
+    svg_files = sorted(Path(svg_folder).glob("*.svg"), key=natural_key)
+    images = []
 
-    # Ensure the file_paths are sorted by the numerical part of the filenames
-    file_paths = sorted(
-        file_paths, key=lambda x: int(x.split(filename)[-1].split(".png")[0])
-    )
+    for svg_path in svg_files:
+        png_bytes = cairosvg.svg2png(url=str(svg_path))
+        images.append(imageio.imread(BytesIO(png_bytes)))
 
-    # Create the GIF
-    with imageio.get_writer(
-        os.path.join(input_folder, output), mode="I", duration=duration
-    ) as writer:
-        for file_path in file_paths:
-            image = imageio.imread(file_path)
-            writer.append_data(image)
-
-    print(f"GIF saved at {os.path.join(input_folder, output)}")
+    out_path = os.path.join(svg_folder, output)
+    imageio.mimsave(out_path, images, fps=fps)
+    print(f"GIF saved at {out_path}")
 
 
 class MergeAllFiles:
-
     def __init__(self, foldername):
-
         self.foldername = foldername
 
         self.list_files = os.listdir(self.foldername)
         self.number_of_realizations = len(self.list_files)
+        
+        self.hdf5 = HDF5Dict()
 
     def _reads_one_file(self, i, key):
+        d = self.hdf5.load_dict(self.foldername + self.list_files[i])[key]
 
-        d = open_data(self.foldername + self.list_files[i])
-
-        return d[key]
+        return d
 
     def _reads_all_files(self, key, verbose=False):
-
-        arr = np.zeros(
-            (self.number_of_realizations,) + self._reads_one_file(0, key).shape
-        )
-        
+        arr = []
         list_not_readed_files = []
         for ireal in range(self.number_of_realizations):
             if verbose:
-                print(f'========= Reading realization {ireal} =========')
+                print(f"========= Reading realization {ireal} =========")
             try:
-                arr[ireal] = self._reads_one_file(ireal, key)
-            except:
+                arr.append(self._reads_one_file(ireal, key))
+            except Exception as e:
                 list_not_readed_files += [ireal]
-
+                if verbose:
+                    print(f"Warning: failed to read realization {ireal}: {e}")
+        arr = np.array(arr)
         arr = np.delete(arr, list_not_readed_files, axis=0)
         return arr
+
+    def get_frequency_comp(self, i):
+        d = self.hdf5.load_dict(self.foldername + self.list_files[i])["parameters"]
+
+        nus, comp = [], []
+        print(d.keys())
+        if d["CMB"]["cmb"]:
+            nus.append(150)
+            comp.append("CMB")
+        if d["Foregrounds"]["Dust"]["Dust_out"]:
+            nus.append(d["Foregrounds"]["Dust"]["nu0"])
+            comp.append("Dust")
+        if d["Foregrounds"]["Synchrotron"]["Synchrotron_out"]:
+            nus.append(d["Foregrounds"]["Synchrotron"]["nu0"])
+            comp.append("Synchrotron")
+        if d["Foregrounds"]["CO"]["CO_out"]:
+            nus.append(d["Foregrounds"]["CO"]["nu0"])
+            comp.append("CO")
+
+        return np.array(nus), np.array(comp)

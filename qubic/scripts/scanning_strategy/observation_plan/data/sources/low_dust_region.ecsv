@@ -1,0 +1,9 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: name, datatype: string}
+# - {name: l_deg, unit: deg, datatype: float64}
+# - {name: b_deg, unit: deg, datatype: float64}
+# schema: astropy-2.0
+name l_deg b_deg
+low_dust_region 316.4476 -58.7581

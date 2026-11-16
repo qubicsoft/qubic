@@ -1,3 +1,24 @@
+simulation_path: "FMM/test_k_max_2_1_synthbeam_fraction_0.95"
+name: "test_qubic"
+
+Spectrum:
+  sample_variance: True                                         # Add sample-variance correction in the correlation matrix
+  diagonal: False                                               # Consider only the diagonal of the noise correlation matrix
+  nbins: null                                                      # Number of power-spectrum points to keep, if null, keep all values
+
+MCMC:
+  nus_qubic: [True, True]                                       # QUBIC frequencies used for fitting. It should match Nrec value put in simulations !!!
+  nus_planck: [false, false, false, false, false, false, false] # Planck frequencies used for fitting. It should match 7 !!!
+  discard: 150                                                  # Number of iterations discarded
+  nwalkers: 50                                                  # Number of MCMC walkers
+  nsteps: 400                                                   # Number of MCMC iterations
+  verbose: False                                                # Print values
+
+# For each components' parameters : 
+# - put fit: True => mcmc will fit this parameter
+# - put fit: value => will fix the parameter to value
+# WARNING : fit: False will not work !! If you don't wont to fit a parameter, you need to give it's value !!!
+# ADVICE : if there is no dust/synchroton, we have to write fit: 0 to the value of Ad/As, to ensure that the spectrum is null.
 cmb:
   r:
     fit: True
@@ -14,13 +35,13 @@ cmb:
 
 dust:
   Ad:
-    fit: True
+    fit: 0
     bound_min: 0
     bound_max: 10
     init_average: 1
     init_std: 0.1
   alphad:
-    fit: True
+    fit: 0
     bound_min: -10
     bound_max: 10
     init_average: -1

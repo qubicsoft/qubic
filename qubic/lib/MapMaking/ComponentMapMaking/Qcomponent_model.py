@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-""" Parametric spectral energy distribution (SED)
+"""Parametric spectral energy distribution (SED)
 
 Unified API for evaluating SEDs, see :class:`Component`.
 
@@ -24,14 +24,11 @@ frequently used (e.g. power law, gray body, CMB) these are already
 prepared.
 """
 
-import numpy as np
-import sympy
-from astropy.cosmology import Planck15
-from scipy import constants
-from sympy import DiracDelta, Function, Piecewise, symbols, sympify
-from sympy.parsing.sympy_parser import parse_expr
+from fgbuster.component_model import (
+    K_RJ2K_CMB,
+    AnalyticComponent,
+)
 
-from fgbuster.component_model import *
 
 class Monochromatic(AnalyticComponent):
     """Cosmic microwave background
@@ -61,4 +58,3 @@ class Monochromatic(AnalyticComponent):
         super(Monochromatic, self).__init__(analytic_expr, **kwargs)
 
         # self._set_default_of_free_symbols()
-

@@ -1,5 +1,5 @@
-from .QanalysisMC import *
-from .Qcamb import *
-from .Qmcmc import *
-from .Qnamaster import *
-from .QreadMC import *
+# from .QanalysisMC import *
+# from .Qcamb import *
+# from .Qmcmc import *
+# from .Qnamaster import *
+# from .QreadMC import *

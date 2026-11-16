@@ -1,3 +1,7 @@
+[![Documentation](https://img.shields.io/badge/docs-sphinx-blue?logo=readthedocs&style=flat)](http://qubicsoft.github.io/qubic/)
+[![GitHub Repo Size](https://img.shields.io/github/repo-size/tomlaclavere/3DPhysicsEngine?style=flat)](https://github.com/qubicsoft/qubic)
+[![Last Commit](https://img.shields.io/github/last-commit/tomlaclavere/3DPhysicsEngine?style=flat)](https://github.com/qubicsoft/qubic)
+
 # QUBIC
 
 Simulation and map-making tools for the QUBIC experiment

@@ -1,0 +1,99 @@
+# Observation Plan
+
+This directory contains the runner, configuration files, styles, and input/output data for the observation planning workflow.
+
+The importable Python package lives in:
+
+```text
+qubic/lib/scanning_strategy/observation_plan/
+```
+
+The runner script lives in:
+
+```text
+qubic/scripts/scanning_strategy/observation_plan/
+```
+
+## How to run
+
+Move to:
+
+```bash
+cd qubic/scripts/scanning_strategy/observation_plan
+```
+
+and run:
+
+```bash
+python run_observation_plan.py configs/conf.toml
+```
+
+
+## Configuration file
+
+The configuration file is stored in:
+
+```text
+configs/conf.toml
+```
+
+Example:
+```toml
+[general]
+output_dir = "../data/output/test_date"
+time_resolution = "15 min"
+mpl_style = "../styles/modern_style.mplstyle"
+
+[observatory]
+name = "Qubic"
+lon = -66.8714
+lat = -24.1844
+height = 4820.0
+pressure = 0.5533
+relative_humidity = 0.20
+timezone = "America/Argentina/Salta"
+description = "Qubic telescope on Alto Chorrillos, Salta"
+
+[constraints]
+point = [
+    { type = "AltitudeConstraint", min = 15.0, max = 85.0 },
+    { type = "SunSeparationConstraint", min = 25.0 }
+]
+
+extended = [
+    { type = "AltitudeConstraint", min = 15.0, max = 85.0 },
+    { type = "SunSeparationConstraint", min = 25.0 },
+    { type = "MoonSeparationConstraint", min = 25.0 }
+]
+
+[sources]
+regions_file = "../data/sources/sky_regions.ecsv"
+point_sources_file = "../data/sources/point_sources.csv"
+
+[run]
+year = 2026
+month = 3
+radius = 14.0
+radial_samples = 50
+polar_angle_samples = 100
+trajectory_time_resolution = "20 min"
+monthly_visibility_start = "2026-01-01T00:00:00"
+monthly_visibility_end = "2026-12-31T23:59:59"
+monthly_heatmap_resolution = "30 min"
+
+[tasks]
+load_point_sources = true
+load_extended_sources = true
+process_moon = true
+run_constraints = true
+run_trajectory_plots = true
+write_trajectories = true
+run_monthly_visibility = true
+run_monthly_heatmaps = true
+plot_sidereal = true
+```
+Paths inside the TOML file are interpreted relative to the TOML file location.
+For this reason, files under `styles/` and `data/` are referenced with paths starting with `../`.
+
+
+

@@ -1060,7 +1060,7 @@ class gaussfitgnomproj_:
         return np.ravel(proj_map * (1 - self.mask))
 
 def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1,
-                mini=-5e4, maxi=5e4, ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
+                ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
     # iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     iipos = ipos # already 2D
     jjpos = jpos
@@ -1071,6 +1071,10 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     mask_badpix = mapij.mask
     mapij = mapij.data
     mapij[mask_badpix] = 0
+
+    maxi = max(np.abs(np.min(mapij)), np.abs(np.max(mapij)))
+    mini = -maxi
+    # mini=-5e4, maxi=5e4
 
     ### Guess where the maximum is and the other parameters with a matched filter
     if guess is None:
@@ -1148,8 +1152,8 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
     j_azt = azt_proj
 
     nside = int(np.sqrt(len(mm)/12))
-    # g2d = gaussfitgnomproj(i_elt, j_azt, nside, rot, reso, xs, mask=mapxy.mask)
-    g2d = gaussfitgnomproj_(i_elt, j_azt, nside, rot, reso, xs, pointing_az, pointing_el)
+    g2d = gaussfitgnomproj(i_elt, j_azt, nside, rot, reso, xs, mask=mapxy.mask)
+    # g2d = gaussfitgnomproj_(i_elt, j_azt, nside, rot, reso, xs, pointing_az, pointing_el)
 
     if azelguess is not None:
         # try:

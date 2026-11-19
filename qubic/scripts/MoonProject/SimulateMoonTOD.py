@@ -26,14 +26,13 @@ def get_TOD(d, qsmoon, sky_nu):
     ### We use our fake moon-frame pointing qsmoon
     qsmoon.fix_az = False
     # a = Qacquisition.QubicMultiAcquisitions(q, qsmoon, s, d, nus_edge_in)
-    a = Qacquisition.QubicMultiAcquisitions(d, nsub=d['nf_sub'], nrec=2, comps=[], H=None, nu_co=None, sampling=qsmoon) # because QAcquisition not fixed on this branch
+    a = Qacquisition.QubicMultiAcquisitions(d, nsub=d['nf_sub'], nrec=2, comps=[], H=None, nu_co=None, sampling=qsmoon)
     print("len a", len(a.multiinstrument))
     # TOD_nsub = []
-    # for ind_a, a_i in enumerate(a.subacqs[:len(a.subacqs)//2]): # only need first band (to be updated with MonoBand)
-    for ind_a, a_i in enumerate(a.subacqs): # only need first band (to be updated with MonoBand)
+    for ind_a, a_i in enumerate(a.subacqs): # MonoBand
         print("nu i", int(a_i.instrument.filter.nu/1e9))
         t0 = time.time()
-        TOD_i, _ = a_i.get_observation(sky_nu[ind_a, :], noiseless=d['noiseless'], convolution = True)
+        TOD_i, _ = a_i.get_observation(sky_nu[ind_a, :], noiseless=d['noiseless'], convolution=True)
         if ind_a == 0:
             TOD = TOD_i.copy()
         else:
@@ -131,7 +130,7 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site):
     ### This new Qsamplings object is the one used for the simulated observation
     qsmoon = Qsamplings.QubicSampling(azimuth=newaz, elevation=newel, time=tt, # time since date_obs
                     date_obs=date_obs, longitude=longitude, latitude=latitude,
-                    pitch=0) # put pitch to zero to test (might be close to 5 deg in real data?)
+                    pitch=0) # put pitch (should be called boresight) to zero to test (might be close to 5 deg in real data?)
 
     ### Now we know the equatorial/Galactic location of the moon in this referential attached to the Moon. We can create an image of the moon there
     nside = d["nside"]
@@ -150,7 +149,7 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site):
     # instead of putting 1
     _, nus_edge, nus, _, _, _ = Qinstrument.compute_freq( # this is adapted to old code, will have to be updated later
             150,
-            Nfreq=int(d["nf_sub"] / 2) ,
+            Nfreq=d["nf_sub"],
             relative_bandwidth=d["filter_relative_bandwidth"],
         )
     

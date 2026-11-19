@@ -88,11 +88,12 @@ class QubicCalibration(object):
             hdus = fits.open(self.detarray)
             version = hdus[0].header["format version"]
             vertex = hdus[2].data
-            frame = hdus[0].header["FRAME"]
-            if frame == "ONAFP":
-                # Make a pi/2 rotation from ONAFP -> GRF referential frame
-                vertex[..., [0, 1]] = vertex[..., [1, 0]]
-                vertex[..., 1] *= -1
+            # frame = hdus[0].header["FRAME"]
+            # if frame == "ONAFP":
+            #     # Make a pi/2 rotation from ONAFP -> GRF referential frame
+            #     vertex[..., [0, 1]] = vertex[..., [1, 0]]
+            #     vertex[..., 1] *= -1
+            vertex[..., 1] *= -1 # new definition, seems to fit better the data
             shape = vertex.shape[:-2]
             removed = hdus[3].data.view(bool)
             ordering = hdus[4].data

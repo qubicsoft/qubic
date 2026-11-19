@@ -465,7 +465,7 @@ xlim = [10540, 10640]
 
 def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tbath=None, T1K=None, TES_number="", nside=256, doplot=True,
                           check_back_forth=False, also_tod=False, clean_tod=True,
-                          ObsName=None, new_method_clean=False, theo_sb=None, more="", simu=False, window=False,
+                          ObsName=None, new_method_clean=False, theo_sb=None, more="", simu=False, window=None,
                           boresight_angle=None):
 
     # What worked best so far:
@@ -479,6 +479,10 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
 
     if more != "":
         more = "_" + more
+    
+    simu_str = ""
+    if simu:
+        simu_str += "_simu"
 
     if theo_sb is not None:
         # we get the theoretical synthbeam
@@ -502,18 +506,6 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
         xsize = 201
         reso = ang_size*60/xsize # arcmin/pix
         # print(reso)
-
-
-    # if clean_tod:
-    # min_plot = -5e3
-    # max_plot = 1.2e4
-    max_plot = 1e5
-    min_plot = -max_plot
-    # else:
-    #     # min_plot = np.min(mapsb[mapsb != hp.UNSEEN])
-    #     # max_plot = np.max(mapsb[mapsb != hp.UNSEEN])
-    #     max_plot = max(np.abs(np.min(mapsb[mapsb != hp.UNSEEN]), np.abs(np.max(mapsb[mapsb != hp.UNSEEN]))))
-    #     min_plot = -max_plot
 
     if new_method_clean:
         rho = 1
@@ -652,7 +644,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             # plt.axhline(y=prominence[0], c="k", ls="--", label="prominence cut") # not as easy to plot
             plt.legend()
             plt.tight_layout()
-            plt.savefig("figures/peak_detection_TES_{}.pdf".format(TES_number), dpi=300)
+            plt.savefig("figures/peak_detection_TES_{}{}.pdf".format(TES_number, simu_str), dpi=300)
             plt.show()
 
             # plt.figure()
@@ -712,6 +704,20 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
 
     center = [0, 90] # zenith
 
+    mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
+
+
+    # if clean_tod:
+    # min_plot = -5e3
+    # max_plot = 1.2e4
+    max_plot = max(np.abs(np.min(mapsb[mapsb != hp.UNSEEN])), np.abs(np.max(mapsb[mapsb != hp.UNSEEN]))) #1e5
+    min_plot = -max_plot
+    # else:
+    #     # min_plot = np.min(mapsb[mapsb != hp.UNSEEN])
+    #     # max_plot = np.max(mapsb[mapsb != hp.UNSEEN])
+    #     max_plot = max(np.abs(np.min(mapsb[mapsb != hp.UNSEEN]), np.abs(np.max(mapsb[mapsb != hp.UNSEEN]))))
+    #     min_plot = -max_plot
+
     # To compare the map created with only forth scans with the map created with only back scans
     if check_back_forth:
     
@@ -764,7 +770,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                     plot_ = mapsb_fb_proj[i_plot][window[0, 0]:window[0, 1], window[1, 0]:window[1, 1]]
                     axs[i_plot].set_title(titles[i_plot])
                     axs[i_plot].imshow(plot_, vmin=min_plot, vmax=max_plot)
-                fig.savefig("figures/{}_{}_back-forth_plot.pdf".format(ObsName, TES_number), dpi=150)
+                fig.savefig("figures/{}_{}_back-forth_plot{}.pdf".format(ObsName, TES_number, simu_str), dpi=150)
                 plt.show()
 
         else:
@@ -777,8 +783,6 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 hp.gnomview(mapsb_forth - mapsb_back, reso=reso, sub=(1, 3, 3), min=min_plot, max=max_plot, xsize=xsize,
                         title="forth - back scans", rot=center)
                 plt.show()
-
-    mapsb, mapcount = healpix_map(newazt[mask_map], newelt[mask_map], final_tod[mask_map], nside=nside)
 
     if doplot and True:
         
@@ -806,7 +810,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 # for i_peak in range(len(thetas[i,:])):
                 #     hp.projtext(thetas[i, i_peak], phis[i, i_peak], i_peak)
         plt.tight_layout()
-        plt.savefig("figures/{}.png".format(fig_name), dpi=300)
+        plt.savefig("figures/{}{}.png".format(fig_name, simu_str), dpi=300)
         plt.show()
         # azr
         
@@ -830,7 +834,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                 ax.set_xticks([], minor=minor)
                 ax.set_yticks([], minor=minor)
             plt.tight_layout()
-            plt.savefig("figures/{}{}_TES{}_v2.pdf".format(ObsDate, more, TES_number))
+            plt.savefig("figures/{}{}_TES{}_v2{}.pdf".format(ObsDate, more, TES_number, simu_str))
             plt.show()
     return mapsb, mapcount
 
@@ -1152,8 +1156,12 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
     j_azt = azt_proj
 
     nside = int(np.sqrt(len(mm)/12))
-    g2d = gaussfitgnomproj(i_elt, j_azt, nside, rot, reso, xs, mask=mapxy.mask)
-    # g2d = gaussfitgnomproj_(i_elt, j_azt, nside, rot, reso, xs, pointing_az, pointing_el)
+    if pointing_az is None or pointing_el is None:
+        print("Fitted without scanning strategy.")
+        g2d = gaussfitgnomproj(i_elt, j_azt, nside, rot, reso, xs, mask=mapxy.mask)
+    else:
+        print("Fitted with scanning strategy.")
+        g2d = gaussfitgnomproj_(i_elt, j_azt, nside, rot, reso, xs, pointing_az, pointing_el)
 
     if azelguess is not None:
         # try:
@@ -1443,14 +1451,14 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     return azmoon, elmoon
 
 
-def format_data(az_qubic, ObsSite, speedmin, datadir=None, det_pos=None, tshift=0, year_data="2022", doplot=False, simu=False):
+def format_data(az_qubic, ObsSite, speedmin, boresight_angle=0, datadir=None, det_pos=None, tshift=0, year_data="2022", doplot=False, simu=False):
     # wrapper that reads data and correct for tshift before separating scans
 
     # first read data from observation files
     data_step_one = read_many_files(az_qubic, datadir, year_data)
 
     # then correct for tshift and separate scans
-    data = compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos, tshift, doplot, simu)
+    data = compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=det_pos, tshift=tshift, boresight_angle=boresight_angle, doplot=doplot, simu=simu)
     return data
 
 

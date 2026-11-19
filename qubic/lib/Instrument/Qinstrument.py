@@ -203,7 +203,7 @@ class QubicInstrument(Instrument):
         d["optics"] = d["optics"].replace(d["optics"][-10:-8], d["config"])
         d["detarray"] = d["detarray"].replace(d["detarray"][-7:-5], d["config"])
         d["hornarray"] = d["hornarray"].replace(d["hornarray"][-7:-5], d["config"])
-        ### synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits' is usde even for TD, to be modified ('CalQubic_Synthbeam_Analytical_150_TD.fits' has to be created)
+        ### synthbeam='CalQubic_Synthbeam_Analytical_220_FI.fits' is used even for TD, to be modified ('CalQubic_Synthbeam_Analytical_150_TD.fits' has to be created)
 
         if d["nf_sub"] is None and d["MultiBand"] is True:
             raise ValueError("Error: number of subband not specified")
@@ -319,21 +319,6 @@ class QubicInstrument(Instrument):
         layout.area = surface_simple_polygon(layout.vertex[0, :, :2])
         layout.ncorr = ncorr
         layout.ngrids = ngrids
-        modif = 0 # 3 is good, 0 is no modif
-        if modif == 1:
-            print("correction = {}".format([-6, -16, 0]))
-            layout.center += np.array([0.003*(-6), 0.003*(-16), 0.003*0]) # fit unflipped numerotation? no
-        # rotation_center = Rotation3dOperator("XYZ", 0, 0, 5, degrees=True, shapein=np.shape(layout.center))
-        # layout.center = rotation_center(layout.center)
-        elif modif == 2:
-            print("correction = {}".format([-1, 8, 0]))
-            layout.center += np.array([0.003*(-1), 0.003*(+8), 0.003*0]) # fit flipped numerotation? no
-        elif modif == 3:
-            correction = [1, -8]
-            print("correction = {}".format(correction))
-            layout.center += np.array([0.003*correction[0], 0.003*correction[1], 0.003*0]) # fit flipped numerotation? yes
-        # print(layout.center)
-        # aze
         return layout
 
     def _init_beams(self, primary, secondary, filter_nu):
@@ -1599,16 +1584,13 @@ class QubicInstrument(Instrument):
 
         try:
             thetas = self.thetafits
-            phis = self.thetafits
-            vals = self.thetafits
+            phis = self.phifits
+            vals = self.valfits
+            freqs = self.freqs
         except:
             thetas, phis, vals = QubicInstrument._peak_angles(scene, self.filter.nu, self.detector.center, self.synthbeam, horn, primary_beam)
-            freqs = 0
+            freqs = 0 # not useful if usefile is None
 
-        # return QubicInstrument._get_projection_operator(
-        #     rotation, scene, self.filter.nu, self.detector.center,
-        #     self.synthbeam, horn, primary_beam, self.thetafits, self.phifits, 
-        #     self.valfits, self.use_file, self.freqs, interp_projection=interp_projection, verbose=verbose)
         return QubicInstrument._get_projection_operator(
             rotation,
             scene,
@@ -1617,11 +1599,11 @@ class QubicInstrument(Instrument):
             self.synthbeam,
             horn,
             primary_beam,
-            self.thetafits,
-            self.phifits,
-            self.valfits,
+            thetas,
+            phis,
+            vals,
             self.use_file,
-            self.freqs,
+            freqs,
             interp_projection=interp_projection,
             verbose=verbose,
         )
@@ -1978,7 +1960,9 @@ class QubicInstrument(Instrument):
         if external_A is None:
             uvec = position / np.sqrt(np.sum(position**2, axis=-1))[..., None]
             thetaphi = Cartesian2SphericalOperator("zenith,azimuth")(uvec)
-            sr = -area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3
+            # area can be positive or negative as it depends on the order of the vertices defining it (I think?)
+            # so I added an absolute value here
+            sr = np.abs(area / position[..., 2] ** 2 * np.cos(thetaphi[..., 0]) ** 3)
             tr = np.sqrt(
                 secondary_beam(thetaphi[..., 0], thetaphi[..., 1]) * sr / secondary_beam.solid_angle
             )[..., None]

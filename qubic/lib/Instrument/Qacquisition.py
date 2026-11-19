@@ -23,6 +23,8 @@ from pyoperators import (
     SymmetricBandToeplitzOperator,
     proxy_group,
     rule_manager,
+    asoperator,
+    ReciprocalOperator,
 )
 from pyoperators.utils.mpi import as_mpi
 from pysimulators import (
@@ -422,6 +424,34 @@ class QubicAcquisition(Acquisition):
                     distribution,
                 ]
             )
+
+        trans_atm_ = asoperator(trans_atm) # we need it to assign a transpose to H
+        trans_atm_.set_rule('T', lambda s: 1/trans_atm)
+
+        if self.scene.absolute: # we need it to assign a transpose to H
+            hnu_k = temp.operands[-1].operands[0].data
+            # print("hnu_k", hnu_k)
+            a = temp.operands[0].data
+            # print("a", a)
+            # res_op = asoperator(a / asoperator(np.expm1)(hnu_k * ReciprocalOperator()))
+            # "transpose" of a / (exp(hnu_k / ...) - 1) is hnu_k / log(a / ... + 1)
+            temp.set_rule('T', lambda s: CompositionOperator((hnu_k * ReciprocalOperator(), asoperator(np.log1p), a * ReciprocalOperator())))
+            # print("temp.T", temp.T)
+
+        ms = [response,
+                    trans_inst,
+                    integ,
+                    polarizer,
+                    hwp * projection,
+                    filter,
+                    aperture,
+                    trans_atm_,
+                    temp,
+                    distribution,
+            ]
+        # this is needed for the case d["absolute"] is True, that is when the temperature is
+        # the absolute temperature in K instead of the delta temperature with 2.7 K in microK
+        H.set_rule('T', lambda s: CompositionOperator([m.T for m in ms[::-1]]))
         if self.scene == "QU":
             H = self.get_subtract_grid_operator()(H)
         return H

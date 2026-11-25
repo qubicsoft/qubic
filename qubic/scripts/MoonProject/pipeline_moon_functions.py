@@ -36,6 +36,7 @@ from astropy.coordinates import EarthLocation, AltAz, get_moon, get_body
 
 #### QUBIC IMPORT
 import qubicpack as qp
+import qubicpack.pix2tes as qp_pix2tes
 from qubicpack.qubicfp import qubicfp
 import qubicpack.pixel_translation as pt
 
@@ -207,11 +208,11 @@ def get_remapping_operator(qubic_patch=None, shape_patch=None, shape_full=None):
 
 # QP is real data (QubicPack), QS is QubicSoft
 def iQS2iQP(indexQS):
-    qpnumi, qpasici = qp.pix2tes.pix2tes(indexQS+1)
+    qpnumi, qpasici = qp_pix2tes.pix2tes(indexQS+1)
     return qpnumi+(qpasici-1)*128-1
 
 def iQP2iQS(indexQP):
-    QStesnum = qp.pix2tes.tes2pix(indexQP%128+1, indexQP//128+1) # doesn't work since cloned and pip install . qubicpack? 25/06/2026
+    QStesnum = qp_pix2tes.tes2pix(indexQP%128+1, indexQP//128+1) # doesn't work since cloned and pip install . qubicpack? 25/06/2026
     # QStesnum = tes2pix(indexQP%128+1, indexQP//128+1)
     return QStesnum-1
 
@@ -463,8 +464,8 @@ def add_peaks(tt, nopeak_tod, tod, peaks_detected, interval, mask):
 # xlim = [9480, 9550]
 xlim = [10540, 10640]
 
-def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tbath=None, T1K=None, TES_number="", nside=256, doplot=True,
-                          check_back_forth=False, also_tod=False, clean_tod=True,
+def make_coadded_maps_TES(tt, tod, scantype, newazt, newelt, ifile, thk=None, Tbath=None, T1K=None, TES_number="", nside=256, doplot=True,
+                          check_back_forth=False, also_tod=False, clean_tod=True, tshift=None,
                           ObsName=None, new_method_clean=False, theo_sb=None, more="", simu=False, window=None,
                           boresight_angle=None):
 
@@ -483,6 +484,10 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
     simu_str = ""
     if simu:
         simu_str += "_simu"
+
+    tshift_str = ""
+    if tshift is not None and not np.shape(tshift):
+        tshift_str += "_tshift{}".format(tshift)
 
     if theo_sb is not None:
         # we get the theoretical synthbeam
@@ -513,7 +518,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
         dist_min_order0 = 3
         tod_pos = spherical2cartesian(rho, newazt, newelt, coord="horizontal", axis="last")
         protected_tod = np.zeros_like(mytod)
-        mask_elt = np.ones_like(mytod, dtype=bool) # we don't mask in elevation
+        # mask_elt = np.ones_like(mytod, dtype=bool) # we don't mask in elevation
         for i_nu in range(n_nus):
             for i_peak in range(n_peaks):
                 if i_peak == 0: # order 0 is i_peak 0 because _peak_angles sorts the peaks by amplitude
@@ -553,9 +558,9 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
         # ind_peak = 100
         # tod_no_peak = remove_peaks(tt, mytod.copy(), [pos_peak[ind_peak]], interval=[interval_peak[ind_peak]], mask=mask_elt)ind_peak = 100
         control_size = 1*freq_sampling # one second of data is used to compute the continuum in remove_peaks
-        tod_no_peak = remove_peaks(tt, mytod.copy(), pos_peak, interval=interval_peak, mask=mask_elt, control_size=control_size)
+        tod_no_peak = remove_peaks(tt, mytod.copy(), pos_peak, interval=interval_peak, mask=None, control_size=control_size)
         mytod_3 = my_filt(tod_no_peak.copy())
-        mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, pos_peak, interval=interval_peak, mask=mask_elt)
+        mytod_4 = add_peaks(tt, mytod_3.copy(), mytod, pos_peak, interval=interval_peak, mask=None)
         if doplot and True: # plot with raw tod vs filtered tod
             pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, tod_no_peak, mytod_4, protected_tod == 1, Tbath=Tbath, T1K=T1K, savefig=True)
         final_tod = mytod_4
@@ -581,18 +586,18 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             # kept distance=10s to remove some foregrounds
             widths = peaks_properties["widths"]
         elif ObsDate == "2026-03-11":
-            mask_elt = np.ones_like(elt, dtype=bool)
+            # mask_elt = np.ones_like(elt, dtype=bool)
             # Filter the TOD
             test_tod = my_filt_4(mytod.copy()) # only a high pass to detect the glitches
             glitches_detected, glitches_properties = find_peaks(test_tod, height=80000, threshold=None, distance=None, width=0, wlen=10*freq_sampling) # totally empirical cut at 80000 ADUs
             interval_glitch = (glitches_properties["widths"]).astype(int) * 10
-            test_tod_no_glitch = remove_peaks(tt, test_tod.copy(), glitches_detected, interval=interval_glitch, mask=mask_elt)
+            test_tod_no_glitch = remove_peaks(tt, test_tod.copy(), glitches_detected, interval=interval_glitch, mask=None)
             glitches_detected_ = np.isin(np.arange(len(tt)), glitches_detected)
             plt.figure()
             plt.plot(tt, mytod, label="raw TOD")
             plt.plot(tt, test_tod, label="test_tod")
             plt.plot(tt, test_tod_no_glitch, label="TOD no peak")
-            plt.scatter(tt[glitches_detected_ & mask_elt], mytod[glitches_detected_ & mask_elt], c="r", label="peaks_detected", zorder=1000)
+            plt.scatter(tt[glitches_detected_], mytod[glitches_detected_], c="r", label="peaks_detected", zorder=1000)
             plt.legend()
             plt.show()
 
@@ -675,7 +680,8 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
             if mask_elt is None:
                 mask_elt = np.ones_like(peaks_detected_, dtype=bool)
 
-            pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, tod_no_peak, mytod_4, peaks_detected_ & mask_elt, Tbath=Tbath, T1K=T1K, savefig=True)
+            # pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, tod_no_peak, mytod_4, peaks_detected_ & mask_elt, Tbath=Tbath, T1K=T1K, savefig=True)
+            pmp.plot_tod_filtering(ObsName, TES_number, tt, mytod, tod_no_peak, mytod_4, peaks_detected_ & mask_elt, thk=thk, Tbath=Tbath, T1K=T1K, savefig=True)
 
             # fit_lagrange_scans(tt, mytod, scantype)
             # azr
@@ -770,7 +776,7 @@ def make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile, Tb
                     plot_ = mapsb_fb_proj[i_plot][window[0, 0]:window[0, 1], window[1, 0]:window[1, 1]]
                     axs[i_plot].set_title(titles[i_plot])
                     axs[i_plot].imshow(plot_, vmin=min_plot, vmax=max_plot)
-                fig.savefig("figures/{}_{}_back-forth_plot{}.pdf".format(ObsName, TES_number, simu_str), dpi=150)
+                fig.savefig("figures/{}_TES{}_back-forth{}{}.pdf".format(ObsName, TES_number, tshift_str, simu_str), dpi=150)
                 plt.show()
 
         else:
@@ -1004,7 +1010,8 @@ class gaussfitgnomproj:
             return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
         if not 1 < ic < self.xs - 1 or not 1 < jc < self.xs - 1: # if we fall outside of map (or neighbours do)
             shape_pix_pos = np.shape(self.pix_pos_proj)
-            return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
+            # return np.zeros(shape_pix_pos[0]*shape_pix_pos[1])
+            return np.zeros(shape_pix_pos[0]*shape_pix_pos[1]) * np.nan # so it is discarded by the fitter
         centre_pos = self.interpolator((ic, jc))
         dist_deg = np.abs(np.degrees(dist_angle(self.pix_pos_patch, centre_pos)))
         mygauss = amp * np.exp(-0.5*dist_deg**2/sig**2)
@@ -1063,7 +1070,7 @@ class gaussfitgnomproj_:
         # plt.show()
         return np.ravel(proj_map * (1 - self.mask))
 
-def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1,
+def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, mytit='', nsig=1, fact=1,
                 ms=10, renorm=False, mynum=33, axs=None, verbose=False, reso=None, pack=None, g2d=None):
     # iipos, jjpos = np.meshgrid(ipos, jpos, indexing="ij")
     iipos = ipos # already 2D
@@ -1075,6 +1082,7 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     mask_badpix = mapij.mask
     mapij = mapij.data
     mapij[mask_badpix] = 0
+    mapij *= fact # test
 
     maxi = max(np.abs(np.min(mapij)), np.abs(np.max(mapij)))
     mini = -maxi
@@ -1104,7 +1112,8 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
         iipix, jjpix = np.meshgrid(np.arange(Ni), np.arange(Nj), indexing="ij")
         max_i = int(np.mean(iipix[maxii]))
         max_j = int(np.mean(jjpix[maxii]))
-        guess = np.array([1e6, max_i, max_j, reso_img/conv_reso_fwhm])
+        # guess = np.array([1e6, max_i, max_j, reso_img/conv_reso_fwhm])
+        guess = np.array([np.max(mapij), max_i, max_j, reso_img/conv_reso_fwhm])
         # guess = np.array([1e6, 95, 77, 0.5]) # fine-tuned for test
         if verbose:
             print("guess: amp = {}, i = {}, j = {}, sig = {}".format(guess[0], guess[1], guess[2], guess[3]))
@@ -1141,7 +1150,7 @@ def fitgauss_img(mapij, ipos, jpos, xs, guess=None, doplot=False, distok=3, myti
     
     
 
-def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, azelguess=None, axs=None, pack=None, pointing_az=None, pointing_el=None):
+def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbose=False, guess=None, distok=3, mytit='', return_images=False, ms=10, renorm=False, azelguess=None, axs=None, pack=None, pointing_az=None, pointing_el=None, fact=1):
     ### get the gnomview back into a np.array in order to fit it
     mm = mymap.copy()
     mapxy = hp.gnomview(mm, reso=reso, rot=rot, return_projected_map=True, xsize=xs, no_plot=True)#.data
@@ -1173,7 +1182,8 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
             argpix = np.argmin(np.abs(dist_to_guess))
             Npix_side = len(dist_to_guess)
             # guess = np.array([1e4, argpix//Npix_side, argpix%Npix_side, 0.92])
-            guess = np.array([1e6, argpix//Npix_side, argpix%Npix_side, 0.5])
+            # guess = np.array([1e6, argpix//Npix_side, argpix%Npix_side, 0.5])
+            guess = np.array([np.max(mapxy), argpix//Npix_side, argpix%Npix_side, 0.5])
 
             # plt.figure()
             # plt.imshow(dist_to_guess)
@@ -1194,11 +1204,11 @@ def fit_one_tes(mymap, xs, reso, rot=np.array([0., 0., 0.]), doplot=False, verbo
     # i_elt = j_azt.copy()
     # j_azt = i_elt_.copy()
     if doplot:
-        m, fitted, fig_axs, ijres, ijerr = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso, pack=pack, g2d=g2d)
+        m, fitted, fig_axs, ijres, ijerr = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, axs=axs, verbose=verbose, reso=reso, pack=pack, g2d=g2d, fact=fact)
         if verbose:
             print(m.values)
     else:
-        m, fitted, ijres, ijerr = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack, g2d=g2d)
+        m, fitted, ijres, ijerr = fitgauss_img(mapxy, i_elt, j_azt, xs, guess=guess, doplot=doplot, distok=distok, mytit=mytit, ms=ms, renorm=renorm, verbose=verbose, reso=reso, pack=pack, g2d=g2d, fact=fact)
 
     if return_images:
         del g2d
@@ -1378,13 +1388,23 @@ def read_data(datadir, remove_t0=True, year_data="2022"):
     a = qubicfp()
     a.read_qubicstudio_dataset(datadir)
     try: # the nodata method is better but harder to redo everytime I update qubicpack
-        tt, alltod = a.tod()
+        tt, _ = a.tod()
     except:
         print("\nThis file ({}) couldn't be read and will not be taken into account.\n".format(datadir))
         return None
-    tt, alltod = a.tod()
+    # tt, alltod = a.tod()
     az = a.azimuth()
     el = a.elevation()
+    t_raw = []
+    tod_raw = []
+    vbias = []
+    for asic in [1, 2]:
+        t_raw.append(a.timeaxis(asic=asic))
+        tod_raw_asic = a.asic(asic).timeline_array()
+        vbias.append(a.timeline_vbias(asic=asic, TES=None))
+        tod_raw.append(tod_raw_asic)
+    tinit = min(np.min(t_raw[0]), np.min(t_raw[1]))
+    # tinit = tt[0]
     tTbath = a.Tbath
     tT1K = [a.timeaxis('1K stage'), a.get_hk("1K stage")] # it is the label used when plotting temperature plots (time, temperature)
     print("tt[0]", tt[0])
@@ -1403,14 +1423,14 @@ def read_data(datadir, remove_t0=True, year_data="2022"):
         print(el)
     else:
         thk = a.timeaxis(datatype='AZ') # since qubicpack update, that's how thk is read to fit azel data
-    tinit = tt[0]
     if remove_t0:
         ### We remove tt[0]
         tinit = tt[0]
         tt -= tinit
         thk -= tinit
     del(a)
-    return tt, alltod, thk, az, el, tinit, tTbath, tT1K
+    # return tt, alltod, thk, az, el, tinit, vbias, tTbath, tT1K
+    return t_raw, tod_raw, thk, az, el, tinit, vbias, tTbath, tT1K
 
 def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     MySite = EarthLocation(lat=ObsSite['lat'], lon=ObsSite['lon'], height=ObsSite['height'])
@@ -1433,7 +1453,8 @@ def get_azel_moon(ObsSite, tt, tinit, doplot=True):
     frame_Site = AltAz(obstime=alltimes, location=MySite)
 
     ### Source
-    moon_Site = get_moon(alltimes)
+    # moon_Site = get_moon(alltimes)
+    moon_Site = get_body("moon", alltimes)
     moonaltazs_Site = moon_Site.transform_to(frame_Site)  
 
     myazmoon = moonaltazs_Site.az.value
@@ -1483,8 +1504,8 @@ def read_many_files(az_qubic, datadir=None, year_data="2022"):
     QPidx = QPidx[sort_idx_old]
     # QPidx = QPidx_old # if want old
 
-    tt_full = []
-    alltod_full = []
+    # tt_full = []
+    # alltod_full = []
     Tbath_full = []
     T1K_full = []
     ifile_full = []
@@ -1492,6 +1513,14 @@ def read_many_files(az_qubic, datadir=None, year_data="2022"):
     thk_full = []
     az_full = []
     el_full = []
+    vbias_asic1_full = []
+    vbias_asic2_full = []
+    tTbath_full = []
+    tT1K_full = []
+    t_raw_asic1_full = []
+    t_raw_asic2_full = []
+    tod_raw_asic1_full = []
+    tod_raw_asic2_full = []
 
     for i, diri in enumerate(datadir):
         print("\nreading file", i, diri)
@@ -1499,7 +1528,8 @@ def read_many_files(az_qubic, datadir=None, year_data="2022"):
         if vars is None:
             print("\nSkipping data...")
             continue
-        tt, alltod, thk, az, el, tinit_, tTbath_hk, tT1K_hk = vars
+        # tt, alltod, thk, az, el, tinit_, vbias, tTbath_hk, tT1K_hk = vars
+        t_raw, tod_raw, thk, az, el, tinit_, vbias, tTbath_hk, tT1K_hk = vars # test
         if len(thk) != len(az) or len(thk) != len(el):
             raise ValueError("thk has shape '{}' while az is '{}' and el '{}'".format(len(thk), len(az), len(el)))
         if len(thk) < 20: # in case something went wring in the acquisition, the file might be very small and unusable
@@ -1514,29 +1544,49 @@ def read_many_files(az_qubic, datadir=None, year_data="2022"):
             if tinit_ <= tinit:
                 raise ValueError("The initial time {} is smaller than the one from the first file {}. Files might not be sorted well.".format(tinit_, tinit))
         
-        Tbath = np.interp(tt + tinit, tTbath_hk[0], tTbath_hk[1])
-        T1K = np.interp(tt + tinit, tT1K_hk[0], tT1K_hk[1])
+        # Tbath = np.interp(tt + tinit, tTbath_hk[0], tTbath_hk[1])
+        # T1K = np.interp(tt + tinit, tT1K_hk[0], tT1K_hk[1])
 
-        tt_full.append(tt)
-        alltod_full.append(alltod)
-        Tbath_full.append(Tbath)
-        T1K_full.append(T1K)
-        ifile_full.append(np.full_like(tt, i, dtype=int))
+        # tt_full.append(tt)
+        # alltod_full.append(alltod)
+        # Tbath_full.append(Tbath)
+        # T1K_full.append(T1K)
+        # ifile_full.append(np.full_like(tt, i, dtype=int))
+        ifile_full.append(np.full_like(thk, i, dtype=int))
         thk_full.append(thk)
         az_full.append(az)
         el_full.append(el)
+        vbias_asic1_full.append(vbias[0])
+        vbias_asic2_full.append(vbias[1])
+        Tbath_full.append(tTbath_hk[0])
+        T1K_full.append(tT1K_hk[0])
+        t_raw_asic1_full.append(t_raw[0])
+        t_raw_asic2_full.append(t_raw[1])
+        tod_raw_asic1_full.append(tod_raw[0])
+        tod_raw_asic2_full.append(tod_raw[1])
+        tTbath_full.append(tTbath_hk[1])
+        tT1K_full.append(tT1K_hk[1])
 
-    tt = np.concatenate(tt_full)
-    alltod = np.concatenate(alltod_full, axis=1)
+    # tt = np.concatenate(tt_full)
+    # alltod = np.concatenate(alltod_full, axis=1)
     Tbath = np.concatenate(Tbath_full)
     T1K = np.concatenate(T1K_full)
     ifile = np.concatenate(ifile_full)
     thk = np.concatenate(thk_full)
     az = np.concatenate(az_full)
     el = np.concatenate(el_full)
+    vbias_asic1 = np.concatenate(vbias_asic1_full)
+    vbias_asic2 = np.concatenate(vbias_asic2_full)
+    t_raw_asic1 = np.concatenate(t_raw_asic1_full)
+    t_raw_asic2 = np.concatenate(t_raw_asic2_full)
+    tod_raw_asic1 = np.concatenate(tod_raw_asic1_full, axis=1)
+    tod_raw_asic2 = np.concatenate(tod_raw_asic2_full, axis=1)
+    tTbath = np.concatenate(tTbath_full)
+    tT1K = np.concatenate(tT1K_full)
 
     # this is the data before correcting for the time shift
-    data_step_one = [tt, tinit, alltod, QPidx, Tbath, T1K, ifile, thk, az, el] # the data that could be useful later in the analysis
+    # data_step_one = [tt, tinit, alltod, QPidx, Tbath, T1K, ifile, thk, az, el] # the data that could be useful later in the analysis
+    data_step_one = [[t_raw_asic1, t_raw_asic2], tinit, [tod_raw_asic1, tod_raw_asic2], QPidx, Tbath, T1K, ifile, thk, az, el, tTbath, tT1K, [vbias_asic1, vbias_asic2]] # the data that could be useful later in the analysis
 
     return data_step_one
 
@@ -1545,9 +1595,12 @@ def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshif
     # we correct for tshift and then separate data by scan
 
     # the concatenated data from the files of the observation
-    tt, tinit, alltod, QPidx, Tbath, T1K, ifile, thk, az, el = data_step_one
+    # tt, tinit, alltod, QPidx, Tbath, T1K, ifile, thk, az, el = data_step_one
+    t_raw, tinit, tod_raw, QPidx, Tbath, T1K, ifile_hk, thk, az, el, tTbath, tT1K, vbias = data_step_one
     thk = thk.copy() # we will modify the values in thk otherwise
-    tt = tt.copy()
+    t_raw = [t_raw_asic.copy() for t_raw_asic in t_raw]
+    # tt = tt.copy()
+    
 
     # need to put tt[0] to zero, but be careful of real time
     # tshift seen in plotting back and forth images or with the Earth magnetic field. In the second case, tshift has shape (len(tt),)
@@ -1555,28 +1608,57 @@ def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshif
         tshift_ = np.interp(thk, tt, tshift) # let's use tt because it's the same as tt_ but with tinit (and remove tt_)
     else:
         tshift_ = tshift
-    tt -= tinit #+ tshift_
+    # tt -= tinit #+ tshift_
+    t_raw = [t_raw_asic - tinit for t_raw_asic in t_raw]
     thk -= tinit - tshift_ # now correcting the thk instead of tt because we trust more tt
-
-    ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
-    azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
-
+    print(np.min(thk), np.min(t_raw[0]), np.min(t_raw[1]))
     ### Identify scan types and numbers
-    _, azt, elt, scantype, _ = identify_scans(thk, az, el, 
-                                            tt=tt, doplot=False, 
-                                            plotrange=[tt[0], tt[0] + 2000], 
-                                            thr_speedmin=speedmin)
-    # good solution
-    # if simu:
-    #     boresight_angle = 0 # simus
-    # else:
-    #     boresight_angle = -3.5 # real data
+    # _, azt, elt, scantype, _ = identify_scans(thk, az, el, 
+    #                                         tt=tt, doplot=False, 
+    #                                         plotrange=[tt[0], tt[0] + 2000], 
+    #                                         thr_speedmin=speedmin)
+    # ### Azimuth and Elevation of the Moon at the same timestamps from the observing site
+    # azmoon, elmoon = get_azel_moon(ObsSite, tt, tinit, doplot=False)
+    azmoon_hk, elmoon_hk = get_azel_moon(ObsSite, thk, tinit, doplot=False)
+    # ### Corrected azimuth and elevation
+    # newazt, newelt = get_azel_as_zenith(azt, elt, azmoon, elmoon, boresight_angle=boresight_angle, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+    # print("shape scantype", np.shape(scantype))
+    # print("shape newazt", np.shape(newazt))
+    # data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile, thk, az, el, boresight_angle] # the data that could be useful later in the analysis
+    
+    scantype_hk = identify_scans(thk, az, el, 
+                                 tt=None, doplot=False, 
+                                 thr_speedmin=speedmin)
+    
     print("boresight_angle =", boresight_angle)
-    newazt, newelt = get_azel_as_zenith(tt, azt, elt, azmoon, elmoon, boresight_angle=boresight_angle, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
+    ### Corrected azimuth and elevation
+    newazt_hk, newelt_hk = get_azel_as_zenith(az, el, azmoon_hk, elmoon_hk, boresight_angle=boresight_angle, det_pos=det_pos) # change the coordinates at the map creation level from the real posiiton of the Moon first to be able to fit the angular distance and orientation of the shift of each detector on the sky
 
-    print("shape scantype", np.shape(scantype))
-    print("shape newazt", np.shape(newazt))
-    data = [tt, tinit, alltod, QPidx, azt, elt, newazt, newelt, scantype, Tbath, T1K, ifile, thk, az, el, boresight_angle] # the data that could be useful later in the analysis
+    scantype = []
+    newazt = []
+    newelt = []
+    ifile = []
+    for i_asic in [0, 1]:
+        ### We propagate these at TOD sampling rate  (this is a "step interpolation": we do not want intermediate values")
+        # scantype_ = interp1d(thk, scantype_hk, kind='previous', fill_value='extrapolate')(t_raw[i_asic])
+        scantype_ = interp1d(thk, scantype_hk, kind='previous', bounds_error=False, fill_value=(scantype_hk[0], scantype_hk[-1]))(t_raw[i_asic])
+        # should also be changed in identify_scans but it works as before scipy 1.9 (I don't see how it is possible)
+        scantype_ = scantype_.astype(int)
+        scantype.append(scantype_)
+        count_them = np.sum(scantype_ == 0) + np.sum(scantype_ <= -1) + np.sum(scantype_ >= 1)
+        if count_them != len(scantype):
+            ValueError('Bad Scan counting at data sampling level - Error')
+        ### Interpolate azimuth and elevation to TOD sampling
+        newazt.append(np.interp(t_raw[i_asic], thk, newazt_hk))
+        newelt.append(np.interp(t_raw[i_asic], thk, newelt_hk))
+        ifile.append(interp1d(thk, ifile_hk, kind='previous', bounds_error=False, fill_value=(ifile_hk[0], ifile_hk[-1]))(t_raw[i_asic]).astype(int))
+    # reduce the number of variables
+    Tbath = np.interp(thk, tTbath, Tbath)
+    T1K = np.interp(thk, tT1K, T1K)
+    
+    # print("shape scantype", np.shape(scantype))
+    # print("shape newazt", np.shape(newazt))
+    data = [t_raw, tinit, tod_raw, QPidx, newazt, newelt, scantype, Tbath, T1K, ifile, thk, az, el, boresight_angle, vbias] # the data that could be useful later in the analysis
     if doplot and det_pos is None:
         fig, axs = plt.subplots(1, 2)
         axs[0].set_title("az")
@@ -1592,17 +1674,20 @@ def compute_secondary_data(ObsSite, speedmin, data_step_one, det_pos=None, tshif
     return data
 
 
-def make_coadded_maps(allTESNum, data=None,
+def make_coadded_maps(allTESNum, data=None, tshift=None,
                       doplot=True, nside=256, parallel=False, check_back_forth=False,
                       isok_arr=None, det_pos=None, clean_tod=True, ObsName=None,
                       new_method_clean=False, theo_sb=None, more="", window=None):
     
     ObsDate = ObsName[:10]
-    
-    tt, tinit, alltod, _, azt, elt, newazt_, newelt_, scantype, Tbath, T1K, ifile, _, _, _, boresight_angle = data
+    if tshift is not None:
+        if np.shape(tshift):
+            tshift = None
+    # tt, tinit, alltod, _, azt, elt, newazt_, newelt_, scantype, Tbath, T1K, ifile, _, _, _, boresight_angle = data
+    t_raw, tinit, tod_raw, _, newazt_, newelt_, scantype, Tbath, T1K, ifile, thk, _, _, boresight_angle, _ = data
     if tinit < 1774994400: # before the 01/04/2026 (might not be the best date)
         # the first data points are the telescope going to start position
-        nskip = 10000
+        nskip = 10000 # not adapted to t_hk, to be changed if test works
         tinit += tt[nskip]
         tt = tt[nskip:]
         alltod = alltod[:, nskip:]
@@ -1630,34 +1715,64 @@ def make_coadded_maps(allTESNum, data=None,
                 if not isok_arr[i]:
                     continue
             TESNum = allTESNum[i]
-            print('TES# {}'.format(TESNum), end=" ")
             iTES = TESNum - 1
+            ndet_per_asic = 128
+            i_asic = iTES // ndet_per_asic
+            iTES_asic = iTES % ndet_per_asic
+            print('TES# {}'.format(TESNum), end=" ")
             if ObsDate[:4] == "2022":
                 tod = alltod[iTES, :]
                 # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before? (use this in 2022 analysis?)
             else:
-                tod = alltod[iTES, :]
+                # tod = alltod[iTES, :]
+                tod = tod_raw[i_asic][iTES_asic, :]
+                tt = t_raw[i_asic]
+                newazt_asic = newazt_[i_asic]
+                newelt_asic = newelt_[i_asic]
+                ifile_asic = ifile[i_asic]
+                scantype_asic = scantype[i_asic]
+            # if det_pos is not None:
+            #     if len(np.shape(newazt_)) == 1:
+            #         newazt = newazt_
+            #         newelt = newelt_
+            #     elif np.shape(newazt_)[0] == 1:
+            #         newazt = newazt_[0]
+            #         newelt = newelt_[0]
+            #         # det_pos_i = det_pos
+            #     else:
+            #         newazt = newazt_[iTES]
+            #         newelt = newelt_[iTES]
+            #         # det_pos_i = det_pos[iTES]
+            # else:
+            #     newazt = newazt_
+            #     newelt = newelt_
             if det_pos is not None:
                 if len(np.shape(newazt_)) == 1:
-                    newazt = newazt_
-                    newelt = newelt_
-                elif np.shape(newazt_)[0] == 1:
-                    newazt = newazt_[0]
-                    newelt = newelt_[0]
+                    newazt = newazt_asic
+                    newelt = newelt_asic
+                elif np.shape(newazt_asic)[0] == 1:
+                    newazt = newazt_asic[0]
+                    newelt = newelt_asic[0]
                     # det_pos_i = det_pos
                 else:
-                    newazt = newazt_[iTES]
-                    newelt = newelt_[iTES]
+                    newazt = newazt_asic[iTES_asic]
+                    newelt = newelt_asic[iTES_asic]
                     # det_pos_i = det_pos[iTES]
             else:
-                newazt = newazt_
-                newelt = newelt_
+                newazt = newazt_asic
+                newelt = newelt_asic
             print("shape pos", np.shape(det_pos))
 
-            allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
+            # allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, scantype, newazt, newelt, ifile,
+            #                                                  Tbath=Tbath, T1K=T1K, TES_number=TESNum, nside=nside,
+            #                                                  doplot=doplot, check_back_forth=check_back_forth, clean_tod=clean_tod,
+            #                                                  ObsName=ObsName, new_method_clean=new_method_clean, tshift=tshift,
+            #                                                  theo_sb=theo_sb, more=more, window=window,
+            #                                                  boresight_angle=boresight_angle)
+            allmaps[i,:], mapscounts = make_coadded_maps_TES(tt, tod, scantype_asic, newazt, newelt, ifile_asic, thk=thk,
                                                              Tbath=Tbath, T1K=T1K, TES_number=TESNum, nside=nside,
                                                              doplot=doplot, check_back_forth=check_back_forth, clean_tod=clean_tod,
-                                                             ObsName=ObsName, new_method_clean=new_method_clean,
+                                                             ObsName=ObsName, new_method_clean=new_method_clean, tshift=tshift,
                                                              theo_sb=theo_sb, more=more, window=window,
                                                              boresight_angle=boresight_angle)
             print('OK', flush=True)
@@ -1676,8 +1791,8 @@ def make_coadded_maps(allTESNum, data=None,
                 # tod = alltod[iTES == QPidx][0] # order of TES not well-implemented before? (use this in 2022 analysis?)
             else:
                 tod = alltod[iTES, :]
-            map_result, mapscounts = make_coadded_maps_TES(tt, tod, azt, elt, scantype, newazt, newelt, ifile,
-                                                           TES_number=TESNum, nside=nside, doplot=doplot,
+            map_result, mapscounts = make_coadded_maps_TES(tt, tod, scantype, newazt, newelt, ifile,
+                                                           TES_number=TESNum, nside=nside, doplot=doplot, tshift=tshift,
                                                            clean_tod=clean_tod, ObsName=ObsName, new_method_clean=new_method_clean,
                                                            theo_sb=theo_sb, more=more)        
             # Use lock to ensure safe access to shared memory inside the inner function
@@ -1833,7 +1948,7 @@ def identify_scans(thk, az, el, tt=None, median_size=101, thr_speedmin=0.1, dopl
 
     vmean = 0.5 * (np.abs(np.mean(medaz_dt[cpos])) +  np.abs(np.mean(medaz_dt[cneg])))
     if tt is not None:
-        ### We propagate these at TOD sampling rate  (this is an "step interpolation": we do not want intermediatee values")
+        ### We propagate these at TOD sampling rate  (this is a "step interpolation": we do not want intermediate values")
         scantype = interp1d(thk, scantype_hk, kind='previous', fill_value='extrapolate')(tt)
         scantype = scantype.astype(int)
         count_them = np.sum(scantype == 0) + np.sum(scantype <= -1) + np.sum(scantype >= 1)
@@ -2075,7 +2190,7 @@ def get_perp_vect_horiz_great_circle(azimuth, elevation, sphere_centre=np.array(
     # print("shape perp_vect", np.shape(perp_vect))
     return perp_vect
 
-def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, det_pos=None, det_pos_residual=None):
+def get_azel_as_zenith(azt, elt, azt_source, elt_source, boresight_angle=0, det_pos=None):
     """
     This function computes the coordinates of a point or an array of points with respect to a
     given source, taking the source as the zenith of the new coordinates system.
@@ -2111,9 +2226,6 @@ def get_azel_as_zenith(tt, azt, elt, azt_source, elt_source, boresight_angle=0, 
             az_zen = det_pos[:, 0]
             el_zen = det_pos[:, 1]
             ndets = len(det_pos)
-
-            # if det_pos_residual is not None:
-            #     vec_zen_residual = 
 
             thermom = np.array([4, 36, 68, 100, 132, 164, 196, 228]) - 1 # thermometers of quadrant 3
             for idx_thermom in thermom:
@@ -2791,134 +2903,131 @@ def stack_maps_same_TES():
     return
 
 
-################### Moon emission model ####################
-# namely from Martin Jörg Burgdorf's work
-# need to create a class to store this data
-nus_calib = np.array([89, 157, 183, 190])
-Tb0 = np.array([261, 267, 268, 272])
-Tb0_err = np.array([3, 6, 6, 3])
-Tb1 = np.array([61, 81, 72, 83])
-Tb1_err = np.array([3, 6, 6, 3])
-phi0 = np.array([19.3, 11.2, 11.2, 10.1])
-phi0_err = np.array([0.7, 0.8, 0.8, 0.4])
-Tb2 = np.array([6, 9, 15, 11])
-Tb2_err = np.array([1, 3, 3, 2])
-# https://www.star.nesdis.noaa.gov/mirs/documents/0.0_NOAA_KLM_Users_Guide.pdf, p 3-72
-MHS_channels = np.array([89, 157, 183, 183, 190]) # central freq, GHz
-MHS_channels_bw = np.array([2.8, 2.8, 1, 2, 2.2]) # bandwidth, GHz
-# 0000Burgdorf
-m_MetopA = np.array([-7.4, -6.46, -6.03, -7.14, -6.81]) * 1e-10
-m_MetopA_err = np.array([1.55, 1.83, 2.15, 1.93, 1.72]) * 1e-10
-b_MetopA = np.array([110.5, 96.6, 90, 106.6, 101.7])
-b_MetopA_err = np.array([23.1, 27.4, 32.1, 28.7, 25.7])
-m_MetopB = np.array([-5.39, -5.59, -5.75, -7.66, -6.82]) * 1e-10
-m_MetopB_err = np.array([1.37, 2.21, 2.17, 1.82, 1.72]) * 1e-10
-b_MetopB = np.array([80.3, 83.4, 85.9, 114.3, 101.8])
-b_MetopB_err = np.array([20.3, 33, 32.4, 27.2, 25.6])
-# # now we average Metop-A and Metop-B, plus channels 3 and 4 because they have the same central frequency
-# m_Metop = np.average([m_MetopA, m_MetopB], axis=0, weights=1/np.array([m_MetopA_err, m_MetopB_err])**2)
-# print("m_Metop", m_Metop)
-# print("detla_T_Mpp", AU_meters * m_Metop * 0.033)
-# m_avg_ch34 = np.average([m_MetopA[2:4], m_MetopB[2:4]], weights=1/np.array([m_MetopA_err[2:4], m_MetopB_err[2:4]])**2)
-# m_vals = np.array([m_Metop[0], m_Metop[1], m_avg_ch34, m_Metop[4]])
-# b_Metop = np.average([b_MetopA, b_MetopB], axis=0, weights=1/np.array([b_MetopA_err, b_MetopB_err])**2)
-# print("b_Metop", b_Metop)
-# m_avg_ch34 = np.average([b_MetopA[2:4], b_MetopB[2:4]], weights=1/np.array([b_MetopA_err[2:4], b_MetopB_err[2:4]])**2)
-# b_vals = np.array([b_Metop[0], b_Metop[1], m_avg_ch34, b_Metop[4]])
 
-def get_disc_integrated_Moon_TB_calib(i_nu, moon_phase_angle, dist_MS): # only calibrated Tb values
-    # dist_MS in meters
-    # phi = moon_phase_angle in degrees
-    # print("Returning the disc-integrated bightness temperature for {} GHz.".format(nus_calib[i_nu]))
-    
-    Tb0_ = Tb0[i_nu]
-    Tb1_ = Tb1[i_nu]
-    phi0_ = phi0[i_nu]
-    Tb2_ = Tb2[i_nu]
-    # m = m_vals[i_nu]
-    # b = b_vals[i_nu]
-    delta_phi = np.radians(moon_phase_angle) - np.radians(phi0_)
-    # Tb = (  Tb0_
-    #         + Tb1_ * (np.cos(delta_phi) - 1)
-    #         + Tb2_ * (np.cos(2 * delta_phi) + 1)
-    #         + m * dist_MS + b  )
+class moon_model_burgdorf(): # quite a clumsy class, just to simplify code
 
-    # now we average the values for Metop-A and Metop-B, plus channels 3 and 4 because they have the same central frequency
-    # because the errors are close, we do a simple mean
-    d_Tb_Metop = np.array([m_MetopA, m_MetopB]) * dist_MS + np.array([b_MetopA, b_MetopB])
-    d_Tb_Metop = np.mean(d_Tb_Metop, axis=0)
-    d_Tb_avg_ch34 = np.mean(d_Tb_Metop[2:4])
-    d_Tb = np.array([d_Tb_Metop[0], d_Tb_Metop[1], d_Tb_avg_ch34, d_Tb_Metop[4]])
-    # note that d_Tb should depend on delta_phi but this model doesn't include this dependancy
-    # this is just an average for all observed delta_phi?
+    def __init__(self, nu_interval, nside, moon_pos, moon_angrad, moon_phase_angle, dist_MS, nu_resol=None):
 
-    Tb = (  Tb0_
-            + Tb1_ * (np.cos(delta_phi) - 1)
-            + Tb2_ * (np.cos(2 * delta_phi) + 1)
-            + d_Tb[i_nu]  )
+        ################### Moon emission model ####################
+        # namely from Martin Jörg Burgdorf's work
+        # need to create a class to store this data
+        self.nus_calib = np.array([89, 157, 183, 190])
+        self.Tb0 = np.array([261, 267, 268, 272])
+        self.Tb0_err = np.array([3, 6, 6, 3])
+        self.Tb1 = np.array([61, 81, 72, 83])
+        self.Tb1_err = np.array([3, 6, 6, 3])
+        self.phi0 = np.array([19.3, 11.2, 11.2, 10.1])
+        self.phi0_err = np.array([0.7, 0.8, 0.8, 0.4])
+        self.Tb2 = np.array([6, 9, 15, 11])
+        self.Tb2_err = np.array([1, 3, 3, 2])
+        # https://www.star.nesdis.noaa.gov/mirs/documents/0.0_NOAA_KLM_Users_Guide.pdf, p 3-72
+        self.MHS_channels = np.array([89, 157, 183, 183, 190]) # central freq, GHz
+        self.MHS_channels_bw = np.array([2.8, 2.8, 1, 2, 2.2]) # bandwidth, GHz
+        # 0000Burgdorf
+        self.m_MetopA = np.array([-7.4, -6.46, -6.03, -7.14, -6.81]) * 1e-10
+        self.m_MetopA_err = np.array([1.55, 1.83, 2.15, 1.93, 1.72]) * 1e-10
+        self.b_MetopA = np.array([110.5, 96.6, 90, 106.6, 101.7])
+        self.b_MetopA_err = np.array([23.1, 27.4, 32.1, 28.7, 25.7])
+        self.m_MetopB = np.array([-5.39, -5.59, -5.75, -7.66, -6.82]) * 1e-10
+        self.m_MetopB_err = np.array([1.37, 2.21, 2.17, 1.82, 1.72]) * 1e-10
+        self.b_MetopB = np.array([80.3, 83.4, 85.9, 114.3, 101.8])
+        self.b_MetopB_err = np.array([20.3, 33, 32.4, 27.2, 25.6])
+        # # now we average Metop-A and Metop-B, plus channels 3 and 4 because they have the same central frequency
+        # m_Metop = np.average([m_MetopA, m_MetopB], axis=0, weights=1/np.array([m_MetopA_err, m_MetopB_err])**2)
+        # print("m_Metop", m_Metop)
+        # print("detla_T_Mpp", AU_meters * m_Metop * 0.033)
+        # m_avg_ch34 = np.average([m_MetopA[2:4], m_MetopB[2:4]], weights=1/np.array([m_MetopA_err[2:4], m_MetopB_err[2:4]])**2)
+        # m_vals = np.array([m_Metop[0], m_Metop[1], m_avg_ch34, m_Metop[4]])
+        # b_Metop = np.average([b_MetopA, b_MetopB], axis=0, weights=1/np.array([b_MetopA_err, b_MetopB_err])**2)
+        # print("b_Metop", b_Metop)
+        # m_avg_ch34 = np.average([b_MetopA[2:4], b_MetopB[2:4]], weights=1/np.array([b_MetopA_err[2:4], b_MetopB_err[2:4]])**2)
+        # b_vals = np.array([b_Metop[0], b_Metop[1], m_avg_ch34, b_Metop[4]])
 
-    # delta_Tb_ = (  Tb0_
-    #              + Tb1_ * (np.cos(delta_phi) - 1)
-    #              + Tb2_ * (np.cos(2 * delta_phi) + 1))
-    # Tb = (  delta_Tb_
-    #       + delta_Tb_ * (AU_meters - dist_MS) / (2*AU_meters)) #(1.8 * 1e11)) # (2*AU_meters))
-    
-#     print(Tb0_)
-#     print(Tb1_ * (np.cos(delta_phi) - 1))
-#     print(Tb2_ * (np.cos(2 * delta_phi) + 1))
-#     print(delta_Tb_ * (AU_meters - dist_MS) / (0.033 * 1e11))
-    return Tb
+        self.nside = nside
+        self.moon_pos = moon_pos
+        self.moon_angrad = moon_angrad
+        self.moon_phase_angle = moon_phase_angle # deg
+        self.dist_MS = dist_MS # m
+        self.pixel_solid_angle = hp.nside2pixarea(nside) # radians**2 = steradians (checked with (180/pi)**2 conversion factor)
+        if nu_resol is None:
+            n_nus = 100
+            self.nu_resol = (nu_interval[1] - nu_interval[0])/n_nus # Hz
+            print("nu_resol = {} Hz".format(round(self.nu_resol, 2)))
+        else:
+            self.nu_resol = nu_resol
+            n_nus = int((nu_interval[1] - nu_interval[0])/nu_resol)
+        self.nus_bins = np.linspace(nu_interval[0], nu_interval[1], n_nus + 1)
+        self.nus = (self.nus_bins[1:] + self.nus_bins[:-1])/2
 
-def get_disc_integrated_Moon_TB_interp(nu, moon_phase_angle, dist_MS): # linear interpolation of calib values to get Tb for any nu in nu range
-    # dist_MS in meters
-    # print("Returning the disc-integrated bightness temperature for {} GHz.".format(nu))
-    # the nu array has to contain sorted frequencies
-    nu_GHz = nu/1e9
-    nu_GHz = np.asarray(nu_GHz)
-    if np.min(nu_GHz) < np.min(nus_calib) or np.max(nu_GHz) > np.max(nus_calib): # by default, np.interp will put the closest vaue if out of bounds
-        raise ValueError("The given frequency nu = {} GHz is out of bounds.".format(nu_GHz))
-    i_nus = np.zeros_like(nu_GHz, dtype=int)
-    if np.isscalar(nu):
-        while nus_calib[np.int_(i_nus)] < nu_GHz:
-                i_nus += 1
-    else:
-        for i_, nu_ in enumerate(nu_GHz):
-            while nus_calib[i_nus[i_]] < nu_:
-                i_nus[i_:] += 1
-    Tb_calib = []
-    for i_ in range(len(nus_calib)):
-        Tb_calib.append(get_disc_integrated_Moon_TB_calib(i_, moon_phase_angle, dist_MS))
-    return np.interp(nu_GHz, nus_calib, Tb_calib)
+    def get_disc_integrated_Moon_TB_calib(self, i_nu): # only calibrated Tb values
+        Tb0_ = self.Tb0[i_nu]
+        Tb1_ = self.Tb1[i_nu]
+        phi0_ = self.phi0[i_nu]
+        Tb2_ = self.Tb2[i_nu]
+        delta_phi = np.radians(self.moon_phase_angle) - np.radians(phi0_)
+        # now we average the values for Metop-A and Metop-B, plus channels 3 and 4 because they have the same central frequency
+        # because the errors are close, we do a simple mean
+        d_Tb_Metop = np.array([self.m_MetopA, self.m_MetopB]) * self.dist_MS + np.array([self.b_MetopA, self.b_MetopB])
+        d_Tb_Metop = np.mean(d_Tb_Metop, axis=0)
+        d_Tb_avg_ch34 = np.mean(d_Tb_Metop[2:4])
+        d_Tb = np.array([d_Tb_Metop[0], d_Tb_Metop[1], d_Tb_avg_ch34, d_Tb_Metop[4]])
+        # note that d_Tb should depend on delta_phi but this model doesn't include this dependancy
+        # this is just an average for all observed delta_phi?
+        Tb = (  Tb0_
+                + Tb1_ * (np.cos(delta_phi) - 1)
+                + Tb2_ * (np.cos(2 * delta_phi) + 1)
+                + d_Tb[i_nu]  )
+        return Tb
 
-def Tb2I(Tb, nu): # per unit surface area per unit time per unit solid angle and in the frequency range between ν and ν + dν
-    # W m-2 Hz-1 sr-1
-    return 2 * h * nu**3 / c**2 / (np.exp(h * nu / (k_B * Tb)) - 1)
-    # Rayleigh-Jeans approx
-    # return 2 * k_B * Tb * nu**2 / c**2
-def nu2P_pix(nu_interval, nside, moon_phase_angle, dist_MS): # power emitted by Moon in a frequency range nu_interval per pixel
-    n_nus = 100
-    nus_bins = np.linspace(nu_interval[0], nu_interval[1], n_nus + 1)
-    nus = (nus_bins[1:] + nus_bins[:-1])/2
-    Tbs = get_disc_integrated_Moon_TB_interp(nus, moon_phase_angle, dist_MS)
-    I_nus = Tb2I(Tbs, nus)
-    # we get the solid angle of pixels
-    pixel_solid_angle = hp.nside2pixarea(nside) # radians**2 = steradians (checked with (180/pi)**2 conversion factor)
-    print(pixel_solid_angle)
-    # we integrate the emission for each nu and in the solid angle of a pixel
-    P = np.sum(I_nus * (nus_bins[1:] - nus_bins[:-1])) * pixel_solid_angle
-    return P
-def get_moon_map(nu_interval, nside, moon_pos, moon_angrad, moon_phase_angle, dist_MS): # map of the Moon in nu_interval
-    power_pixel = nu2P_pix(nu_interval, nside, moon_phase_angle, dist_MS)
-    print("each pixel at nside = {} precision holds a power P = {} W for 1 m2 of detecting area".format(nside, power_pixel))
-    # in order to have a good Moon map, we need to account for pixels partially covering the Moon
-    # to do so we can use a large NSIDE, put the pixels to one when in the Moon radius
-    # and then degrade the resolution!
-    high_nside = 16 * nside
-    moon_pix = hp.query_disc(nside=high_nside, vec=moon_pos, radius=moon_angrad)
-    # print(len(moon_pix))
-    map_moon = np.zeros(hp.nside2npix(high_nside))
-    map_moon[moon_pix] = 1 # it will later be multiplied by power_pix
-    map_moon = hp.ud_grade(map_in=map_moon, nside_out=nside) # faster
-    # map_moon = hp.sphtfunc.harmonic_ud_grade(map_in=map_moon, nside_out=nside) # not available in healpy 1.19.0
-    # map_moon *= power_pixel
-    return map_moon, power_pixel # this should account for the coverage of the Moon
+    def get_disc_integrated_Moon_TB_interp(self, nu): # linear interpolation of calib values to get Tb for any nu in nu range
+        # the nu array has to contain sorted frequencies
+        nu_GHz = nu/1e9
+        nu_GHz = np.asarray(nu_GHz) # in case only one nu
+        if np.min(nu_GHz) < np.min(self.nus_calib) or np.max(nu_GHz) > np.max(self.nus_calib): # by default, np.interp will put the closest vaue if out of bounds
+            raise ValueError("The given frequency nu = {} GHz is out of bounds.".format(nu_GHz))
+        Tb_calib = []
+        for i_nu in range(len(self.nus_calib)):
+            Tb_calib.append(self.get_disc_integrated_Moon_TB_calib(i_nu))
+        return np.interp(nu_GHz, self.nus_calib, Tb_calib)
+
+    def Tb2I(self, Tb, nu): # per unit surface area per unit time per unit solid angle and in the frequency range between nu and nu + dnu
+        # W m-2 Hz-1 sr-1
+        return 2 * h * nu**3 / c**2 / (np.exp(h * nu / (k_B * Tb)) - 1)
+        # Rayleigh-Jeans approx
+        # return 2 * k_B * Tb * nu**2 / c**2
+    def nu2P_pix(self, ): # power emitted by Moon in a frequency range nu_interval per pixel
+        Tbs = self.get_disc_integrated_Moon_TB_interp(self.nus)
+        I_nus = self.Tb2I(Tbs, self.nus)
+        # we integrate the emission for each nu and in the solid angle of a pixel
+        P = np.sum(I_nus * (self.nus_bins[1:] - self.nus_bins[:-1])) / (self.nus_bins[-1] - self.nus_bins[0]) * self.pixel_solid_angle
+        return P
+    def get_moon_map_W(self, ): # map of the Moon in nu_interval in Watt
+        power_pixel = self.nu2P_pix()
+        # print("each pixel at nside = {} precision holds a power P = {} W for 1 m2 of detecting area".format(nside, power_pixel))
+        # in order to have a good Moon map, we need to account for pixels partially covering the Moon
+        # to do so we can use a large NSIDE, put the pixels to one when in the Moon radius
+        # and then degrade the resolution!
+        high_nside = 16 * self.nside
+        moon_pix = hp.query_disc(nside=high_nside, vec=self.moon_pos, radius=self.moon_angrad)
+        # print(len(moon_pix))
+        map_moon_W = np.zeros(hp.nside2npix(high_nside))
+        map_moon_W[moon_pix] = 1 # it will later be multiplied by power_pix
+        map_moon_W = hp.ud_grade(map_in=map_moon_W, nside_out=self.nside) # faster
+        # map_moon_W = hp.sphtfunc.harmonic_ud_grade(map_in=map_moon_W, nside_out=nside) # not available in healpy 1.19.0
+        map_moon_W *= power_pixel
+        return map_moon_W, power_pixel # this should account for the coverage of the Moon
+
+    def P2Tb(self, P, nu): # TB at one given nu
+        # W m-2 Hz-1 sr-1
+        fact = 2 * h * nu**3 / c**2 * self.pixel_solid_angle
+        hnu_kB = h * nu / k_B
+        return hnu_kB / np.log(fact / P + 1)
+
+    def get_moon_map_K(self, ): # map of the Moon averaged in nu_interval in Kelvin (Tb)
+        # we need to go to power P before coming back to integrated Tb beccause P is not proportional to Tb
+        map_moon_W, power_pixel = self.get_moon_map_W()
+        print("max map_moon_W, power_pixel", np.max(map_moon_W), power_pixel)
+        map_moon_K = self.P2Tb(map_moon_W, np.mean(self.nus))
+        Tb_pixel = self.P2Tb(power_pixel, np.mean(self.nus))
+        print("max map_moon_K, Tb_pixel", np.max(map_moon_K), Tb_pixel)
+        return map_moon_K, Tb_pixel # this should account for the coverage of the Moon

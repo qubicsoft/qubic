@@ -340,21 +340,25 @@ def plots_identify_scans(thk, plotrange, az, medaz_dt, c0, cpos, cneg, dead_time
     plt.show()
 
 
-def plot_tod_filtering(ObsName, TES_number, tt, tod, tod_no_peak, tod_filtered, peaks, Tbath=None, T1K=None, savefig=False):
+def plot_tod_filtering(ObsName, TES_number, tt, tod, tod_no_peak, tod_filtered, peaks, thk=None, Tbath=None, T1K=None, savefig=False):
     fig, ax = plt.subplots(1, 1, figsize=(15, 8))
     ax.set_title("{}, TES {}".format(ObsName, TES_number))
-    # ax.plot(tt, tod, label="raw TOD")
-    ax.plot(tt, tod_no_peak, label="TOD no peak")
+    ax.plot(tt, tod, label="raw TOD")
+    # ax.plot(tt, tod_no_peak, label="TOD no peak")
+    if thk is None:
+        xplot_T = tt
+    else:
+        xplot_T = thk
     if Tbath is not None:
         color_ax1 = "g"
         ax1 = ax.twinx()
-        ax1.plot(tt, Tbath, c=color_ax1, ls="--")
+        ax1.plot(xplot_T, Tbath, c=color_ax1, ls="--")
         ax1.set_ylabel("Tbath [K]", color=color_ax1)
         ax1.tick_params(axis='y', labelcolor=color_ax1)
     if T1K is not None:
         color_ax2 = "r"
         ax2 = ax.twinx()
-        ax2.plot(tt, T1K, c=color_ax2, ls="--")
+        ax2.plot(xplot_T, T1K, c=color_ax2, ls="--")
         ax2.set_ylabel("T1K [K]", color=color_ax2)
         ax2.tick_params(axis='y', labelcolor=color_ax2)
         if Tbath is not None:
@@ -365,5 +369,5 @@ def plot_tod_filtering(ObsName, TES_number, tt, tod, tod_no_peak, tod_filtered, 
     ax.legend()
     fig.tight_layout()
     if savefig:
-        plt.savefig("figures/{}_TES{}_TOD.pdf".format(ObsName, TES_number), dpi=150)
+        plt.savefig("figures/{}_TES{}_TOD.png".format(ObsName, TES_number), dpi=150)
     plt.show()

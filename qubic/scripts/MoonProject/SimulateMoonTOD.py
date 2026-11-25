@@ -155,13 +155,12 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site):
     
     # print(np.shape(nus_edge))
     # print(np.shape(nus))
-    sky_nu = np.zeros((len(nus), 12*nside**2))
+    sky_nu_K = np.zeros((len(nus), 12*nside**2))
     pixel_power_nu = np.zeros(len(nus))
     for i_interval in range(len(nus)):
         nu_interval = np.array([nus_edge[i_interval], nus_edge[i_interval + 1]]) * 1e9 # We want the sky map for this band in Hz
-        sky_nu[i_interval], pixel_power_nu[i_interval] = pmf.get_moon_map(nu_interval, nside, moon_pos=uvmoon, moon_angrad=moon_angsize/2, moon_phase_angle=moon_phase_angle, dist_MS=dist_MS)
-
-
+        moon_model = pmf.moon_model_burgdorf(nu_interval, nside, moon_pos=uvmoon, moon_angrad=moon_angsize/2, moon_phase_angle=moon_phase_angle, dist_MS=dist_MS, nu_resol=None)
+        sky_nu_K[i_interval], pixel_power_nu[i_interval] = moon_model.get_moon_map_K()
     # plt.figure()
     # hp.mollview(map_in, sub=(2, 2, 1))
     # hp.gnomview(map_in, rot=[lmoon_av, bmoon_av], reso=10, sub=(2, 2, 2))
@@ -182,9 +181,14 @@ def create_moon_tod(d, azt, elt, tt, Obs_Site):
     # for i in range(d['n_nu_fit']):
     #     sky_nu[i, :] = map_in * moon_spectrum[i]
 
-
-    print("len sky_nu", len(sky_nu))
-    TOD = get_TOD(d, qsmoon, sky_nu)
+    # for i_nu in range(len(sky_nu_K)):
+    #     print("pixel_power_nu", pixel_power_nu[i_nu])
+    #     print(np.max(sky_nu_K[i_nu]))
+    #     hp.mollview(sky_nu_K[i_nu])
+    #     plt.show()
+    # eratz
+    print("len sky_nu", len(sky_nu_K))
+    TOD = get_TOD(d, qsmoon, sky_nu_K)
 
     return TOD, pixel_power_nu
     
